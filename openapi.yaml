@@ -2145,7 +2145,7 @@ paths:
         Existing `decision_id` and `execution_intent_id` filters remain supported.
         `failed_only=true` excludes `COMMITTED` outcomes.
         `recent_only=true` returns only receipts within the last 24 hours from server clock.
-        Default sort is `newest`; `limit` defaults to unbounded when omitted and is capped at 200 when specified.
+        Cursor pagination is stable across equal timestamps by using timestamp + bind_receipt_id ordering.
       parameters:
         - in: query
           name: decision_id
@@ -2205,11 +2205,17 @@ paths:
         - in: query
           name: limit
           required: false
-          description: Maximum receipts to return (safe upper bound is 200).
+          description: Maximum receipts per page (safe upper bound is 200).
           schema:
             type: integer
             minimum: 1
             maximum: 200
+        - in: query
+          name: cursor
+          required: false
+          description: Opaque cursor from `next_cursor` to continue current filtered/sorted result set.
+          schema:
+            type: string
         - in: query
           name: sort
           required: false
@@ -2220,7 +2226,7 @@ paths:
             default: "newest"
       responses:
         "200":
-          description: Bind receipts by filter
+          description: Bind receipts by filter with cursor pagination metadata
           content:
             application/json:
               schema:
@@ -2230,12 +2236,32 @@ paths:
                     type: boolean
                   count:
                     type: integer
+                    description: Current page item count (backward-compatible field).
+                  returned_count:
+                    type: integer
+                  has_more:
+                    type: boolean
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  sort:
+                    type: string
+                    enum: ["newest", "oldest"]
+                  limit:
+                    type: integer
+                    nullable: true
+                  total_count:
+                    type: integer
+                    nullable: true
+                  applied_filters:
+                    type: object
+                    additionalProperties: true
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/BindReceipt'
         "400":
-          description: Invalid bind receipt query parameter
+          description: Invalid bind receipt query parameter or cursor
           content:
             application/json:
               schema:
@@ -2247,6 +2273,94 @@ paths:
                     type: string
                   detail:
                     type: string
+
+  /v1/governance/bind-receipts/export:
+    get:
+      summary: Bind receipt export with list-filter parity
+      description: |
+        Exports bind receipts using the same filter/sort semantics as `/v1/governance/bind-receipts`.
+        This guarantees operator UI filtered-set parity for audit handoff.
+      parameters:
+        - in: query
+          name: decision_id
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: execution_intent_id
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: target_path
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: target_type
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: outcome
+          required: false
+          schema:
+            type: string
+            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+        - in: query
+          name: reason_code
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: lineage_query
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: failed_only
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: recent_only
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum: ["newest", "oldest"]
+            default: "newest"
+      responses:
+        "200":
+          description: Bind receipt export payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  count:
+                    type: integer
+                  sort:
+                    type: string
+                    enum: ["newest", "oldest"]
+                  total_count:
+                    type: integer
+                    nullable: true
+                  applied_filters:
+                    type: object
+                    additionalProperties: true
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BindReceipt'
+        "400":
+          description: Invalid bind receipt export parameter
 
   /v1/governance/bind-receipts/{bind_receipt_id}:
     get:

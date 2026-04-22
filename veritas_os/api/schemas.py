@@ -1434,5 +1434,24 @@ class GovernanceBindReceiptListResponse(BaseModel):
 
     ok: bool = True
     count: int = 0
+    returned_count: int = 0
+    has_more: bool = False
+    next_cursor: Optional[str] = None
+    sort: Literal["newest", "oldest"] = "newest"
+    limit: Optional[int] = None
+    applied_filters: Dict[str, Any] = Field(default_factory=dict)
+    total_count: Optional[int] = None
+    items: List[BindReceipt] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class GovernanceBindReceiptExportResponse(BaseModel):
+    """Response envelope for GET /v1/governance/bind-receipts/export."""
+
+    ok: bool = True
+    count: int = 0
+    sort: Literal["newest", "oldest"] = "newest"
+    applied_filters: Dict[str, Any] = Field(default_factory=dict)
+    total_count: Optional[int] = None
     items: List[BindReceipt] = Field(default_factory=list)
     error: Optional[str] = None

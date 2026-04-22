@@ -27,9 +27,9 @@ const PATH_TYPE_TO_TARGET_PATH: Record<Exclude<BindFilterState["pathType"], "all
   compliance_config_update: "/v1/compliance/config",
 };
 
-const DEFAULT_LIST_LIMIT = 200;
+const DEFAULT_LIST_LIMIT = 50;
 
-function buildBindReceiptListQuery(filters: BindFilterState): string {
+function buildBindReceiptListQuery(filters: BindFilterState, cursor?: string | null): string {
   const params = new URLSearchParams();
   params.set("sort", "newest");
   params.set("limit", String(DEFAULT_LIST_LIMIT));
@@ -51,6 +51,9 @@ function buildBindReceiptListQuery(filters: BindFilterState): string {
   }
   if (filters.recentOnly) {
     params.set("recent_only", "true");
+  }
+  if (cursor) {
+    params.set("cursor", cursor);
   }
 
   return params.toString();
@@ -98,34 +101,50 @@ export function BindCockpit(): JSX.Element {
   const [receipts, setReceipts] = useState<CanonicalBindReceipt[]>([]);
   const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<CanonicalBindReceipt | null>(null);
+  const [returnedCount, setReturnedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [currentSort, setCurrentSort] = useState<"newest" | "oldest">("newest");
 
   const listQuery = useMemo(() => buildBindReceiptListQuery(filters), [filters]);
+  const exportUrl = useMemo(() => `/api/veritas/v1/governance/bind-receipts/export?${buildBindReceiptListQuery(filters)}`, [filters]);
 
-  const loadReceipts = useCallback(async (): Promise<void> => {
+  const loadReceipts = useCallback(async (cursor?: string | null, append = false): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      const response = await veritasFetch(`/api/veritas/v1/governance/bind-receipts?${listQuery}`);
+      const query = buildBindReceiptListQuery(filters, cursor);
+      const response = await veritasFetch(`/api/veritas/v1/governance/bind-receipts?${query}`);
       if (!response.ok) {
         setError(`HTTP ${response.status}: Failed to load bind receipts.`);
-        setReceipts([]);
+        if (!append) {
+          setReceipts([]);
+        }
         return;
       }
       const payload = parseBindReceiptListPayload(await response.json());
-      const normalized = payload.map(normalizeBindReceipt);
-      setReceipts(normalized);
+      const normalized = payload.items.map(normalizeBindReceipt);
+      setReturnedCount(payload.meta.returnedCount);
+      setTotalCount(payload.meta.totalCount);
+      setHasMore(payload.meta.hasMore);
+      setNextCursor(payload.meta.nextCursor);
+      setCurrentSort(payload.meta.sort);
+      setReceipts((prev) => (append ? [...prev, ...normalized] : normalized));
     } catch (caught: unknown) {
       console.error("loadReceipts failed", caught);
       setError("Network error: failed to load bind receipts.");
-      setReceipts([]);
+      if (!append) {
+        setReceipts([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [listQuery]);
+  }, [filters]);
 
   useEffect(() => {
-    void loadReceipts();
-  }, [loadReceipts]);
+    void loadReceipts(null, false);
+  }, [loadReceipts, listQuery]);
 
   useEffect(() => {
     if (receipts.length > 0 && !selectedReceiptId) {
@@ -272,12 +291,16 @@ export function BindCockpit(): JSX.Element {
           <button
             type="button"
             className="rounded border px-2 py-1"
-            onClick={() => void loadReceipts()}
+            onClick={() => void loadReceipts(null, false)}
             disabled={loading}
           >
             {loading ? "loading..." : "refresh receipts"}
           </button>
-          <span className="text-muted-foreground">{filteredReceipts.length} receipts</span>
+          <span className="text-muted-foreground">returned {returnedCount} / total {totalCount ?? filteredReceipts.length} (sort: {currentSort})</span>
+          <span className="text-muted-foreground">{hasMore ? "more available" : "end of results"}</span>
+          <a className="rounded border px-2 py-1" href={exportUrl}>
+            export current filtered set (json)
+          </a>
         </div>
 
         {error ? <p className="rounded border border-danger/30 bg-danger/10 px-2 py-1 text-xs">{error}</p> : null}
@@ -328,6 +351,17 @@ export function BindCockpit(): JSX.Element {
               No bind receipts matched filters. Check path/outcome filters or refresh.
             </p>
           ) : null}
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            className="rounded border px-2 py-1"
+            disabled={!hasMore || loading || !nextCursor}
+            onClick={() => void loadReceipts(nextCursor, true)}
+          >
+            load more receipts
+          </button>
+          <span className="text-muted-foreground">{hasMore ? "has more pages" : "no more pages"}</span>
         </div>
 
         <div className="rounded border p-3">

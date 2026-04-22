@@ -65,6 +65,22 @@ export interface CanonicalBindReceipt {
   raw: BindCockpitReceipt;
 }
 
+export interface BindReceiptListResponseMeta {
+  count: number;
+  returnedCount: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  sort: "newest" | "oldest";
+  limit: number | null;
+  appliedFilters: Record<string, unknown>;
+  totalCount: number | null;
+}
+
+export interface BindReceiptListParsedPayload {
+  items: BindCockpitReceipt[];
+  meta: BindReceiptListResponseMeta;
+}
+
 export interface BindFilterState {
   pathType: CanonicalTargetPathType | "all";
   outcome: CanonicalBindOutcome | "all";
@@ -249,13 +265,43 @@ export function filterCanonicalReceipts(
   });
 }
 
-export function parseBindReceiptListPayload(value: unknown): BindCockpitReceipt[] {
+export function parseBindReceiptListPayload(value: unknown): BindReceiptListParsedPayload {
   if (!isRecord(value) || !Array.isArray(value.items)) {
-    return [];
+    return {
+      items: [],
+      meta: {
+        count: 0,
+        returnedCount: 0,
+        hasMore: false,
+        nextCursor: null,
+        sort: "newest",
+        limit: null,
+        appliedFilters: {},
+        totalCount: null,
+      },
+    };
   }
-  return value.items.filter((item): item is BindCockpitReceipt => {
+
+  const items = value.items.filter((item): item is BindCockpitReceipt => {
     return isRecord(item) && typeof item.bind_receipt_id === "string";
   });
+  const nextCursor = typeof value.next_cursor === "string" ? value.next_cursor : null;
+  const sort = value.sort === "oldest" ? "oldest" : "newest";
+  const appliedFilters = isRecord(value.applied_filters) ? value.applied_filters : {};
+
+  return {
+    items,
+    meta: {
+      count: typeof value.count === "number" ? value.count : items.length,
+      returnedCount: typeof value.returned_count === "number" ? value.returned_count : items.length,
+      hasMore: Boolean(value.has_more),
+      nextCursor,
+      sort,
+      limit: typeof value.limit === "number" ? value.limit : null,
+      appliedFilters,
+      totalCount: typeof value.total_count === "number" ? value.total_count : null,
+    },
+  };
 }
 
 export function parseBindReceiptDetailPayload(value: unknown): BindCockpitReceipt | null {
