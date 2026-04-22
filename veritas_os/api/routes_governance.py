@@ -127,8 +127,13 @@ def _governance_decision_hash_payload(body: Dict[str, Any]) -> Dict[str, Any]:
 def _bind_failure_status_and_error(bind_receipt: Dict[str, Any]) -> tuple[int, str]:
     """Map bind outcomes to legacy governance API status/error semantics."""
     outcome = str(bind_receipt.get("final_outcome") or "")
-    if outcome in {FinalOutcome.APPLY_FAILED.value, FinalOutcome.PRECONDITION_FAILED.value}:
+    rollback_reason = str(bind_receipt.get("rollback_reason") or "")
+    if outcome == FinalOutcome.PRECONDITION_FAILED.value:
         return 400, "Governance policy validation failed"
+    if outcome == FinalOutcome.APPLY_FAILED.value:
+        if "GOVERNANCE_POLICY_VALIDATION_FAILED" in rollback_reason:
+            return 400, "Governance policy validation failed"
+        return 500, "Failed to update governance policy"
     if outcome in {FinalOutcome.BLOCKED.value, FinalOutcome.ESCALATED.value}:
         return 403, "governance approval validation failed"
     return 500, "Failed to update governance policy"

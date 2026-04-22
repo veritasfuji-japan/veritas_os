@@ -82,7 +82,12 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
     def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         """Apply governed policy patch via existing update path."""
         del intent, snapshot
-        updated = self.policy_updater(self.policy_patch)
+        try:
+            updated = self.policy_updater(self.policy_patch)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"GOVERNANCE_POLICY_VALIDATION_FAILED:{exc}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"GOVERNANCE_POLICY_UPDATE_INTERNAL:{exc}") from exc
         if not isinstance(updated, dict):
             raise ValueError("BIND_POLICY_UPDATE_INVALID")
         self._last_updated_policy = updated

@@ -257,7 +257,9 @@ class TestPutPolicy:
                 execution_intent_id="ei-gov-apply-failed",
                 decision_id="dec-gov-apply-failed",
                 final_outcome=FinalOutcome.APPLY_FAILED,
-                rollback_reason="BIND_APPLY_FAILED:invalid audit level",
+                rollback_reason=(
+                    "BIND_APPLY_FAILED:GOVERNANCE_POLICY_VALIDATION_FAILED:invalid audit level"
+                ),
             ),
         )
         resp = client.put(
@@ -269,6 +271,27 @@ class TestPutPolicy:
         body = resp.json()
         assert body["ok"] is False
         assert body["error"] == "Governance policy validation failed"
+
+    def test_put_returns_500_on_bind_apply_failed_internal_error(self, monkeypatch):
+        monkeypatch.setattr(
+            "veritas_os.api.routes_governance.update_governance_policy_with_bind_boundary",
+            lambda **_kwargs: BindReceipt(
+                bind_receipt_id="br-gov-apply-internal",
+                execution_intent_id="ei-gov-apply-internal",
+                decision_id="dec-gov-apply-internal",
+                final_outcome=FinalOutcome.APPLY_FAILED,
+                rollback_reason="BIND_APPLY_FAILED:GOVERNANCE_POLICY_UPDATE_INTERNAL:db write fail",
+            ),
+        )
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"log_retention": {"audit_level": "strict"}}),
+        )
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+        assert body["error"] == "Failed to update governance policy"
 
 
 class TestGovernanceModule:
