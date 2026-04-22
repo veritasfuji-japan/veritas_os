@@ -32,6 +32,17 @@ English version: [../en/README.md](../en/README.md)
 - [FUJI EU AI Act & Enterprise Strict Pack 使い方](guides/fuji-eu-enterprise-strict-usage.md)
 - [自己修復ループ解説](guides/self-healing-loop.md)
 - [金融 PoC パック（1日クイックスタート）](guides/poc-pack-financial-quickstart.md)
+- [Regulated Beachhead Pack（AML/KYC・承認ワークフロー）](guides/regulated-beachhead-pack.md)
+- [Operator Playbook / Demo Flow](guides/operator-playbook-demo-flow.md)
+- [Evidence Handoff / Audit Pack Template](guides/evidence-handoff-audit-pack-template.md)
+
+
+### ポジショニング
+- [公開ポジショニングガイド](positioning/public-positioning.md)
+- [Messaging Assets Kit（Investor / Customer / Operator）](positioning/messaging-assets-regulated-pack.md)
+
+### アーキテクチャ（日本語）
+- [Runtime Governance Layer 共存 Reference Architecture](architecture/runtime-governance-coexistence-reference-architecture.md)
 
 ### コードレビュー
 - [レビュー文書インデックス](reviews/README.md)
