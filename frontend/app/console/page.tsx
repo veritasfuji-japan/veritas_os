@@ -29,6 +29,10 @@ function safeNumber(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : "n/a";
 }
 
+function isoUtcSecondsNow(): string {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
@@ -59,6 +63,21 @@ function resolveWatIntegrity(
     replay_status: legacyShadow.replay_status,
     revocation_status: legacyShadow.revocation_status,
     action_summary: "observer_only_validation",
+  };
+}
+
+function resolveWatOperatorSummary(resultRecord: Record<string, unknown>): Record<string, unknown> {
+  const summary = toRecord(resultRecord.wat_operator_summary);
+  if (Object.keys(summary).length > 0) {
+    return summary;
+  }
+  const legacyIntegrity = toRecord(resultRecord.wat_integrity);
+  return {
+    integrity_severity: legacyIntegrity.integrity_state ?? "warning",
+    affected_lanes: ["wat_shadow"],
+    event_ts: typeof legacyIntegrity.event_ts === "string" ? legacyIntegrity.event_ts : isoUtcSecondsNow(),
+    correlation_id: String(resultRecord.request_id ?? legacyIntegrity.wat_id ?? ""),
+    operator_verbosity: "minimal",
   };
 }
 
@@ -118,7 +137,12 @@ export default function DecisionConsolePage(): JSX.Element {
     toRecord(resultRecord.wat_drift_vector),
     watShadowRecord,
   );
-  const integrityState = safeText(watIntegrityRecord.integrity_state, "warning");
+  const watOperatorSummary = resolveWatOperatorSummary(resultRecord);
+  const integrityState = safeText(
+    watOperatorSummary.integrity_severity ?? watIntegrityRecord.integrity_state,
+    "warning",
+  );
+  const operatorVerbosity = safeText(watOperatorSummary.operator_verbosity, "minimal");
   const integrityAccent = integrityState === "critical" ? "danger" : integrityState === "warning" ? "warning" : "success";
 
   return (
@@ -169,26 +193,25 @@ export default function DecisionConsolePage(): JSX.Element {
 
       {result ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <Card title="WAT Integrity Status" titleSize="sm" variant="elevated" accent={integrityAccent}>
+          <Card title="WAT Operator Summary (v1 minimal)" titleSize="sm" variant="elevated" accent={integrityAccent}>
             <div className="grid gap-1 text-xs">
-              <p>status: <span className="font-mono">{integrityState}</span></p>
-              <p>wat_id: <span className="font-mono">{safeText(watIntegrityRecord.wat_id)}</span></p>
-              <p>psid_display: <span className="font-mono">{safeText(watIntegrityRecord.psid_display)}</span></p>
-              <p>validation_status: <span className="font-mono">{safeText(watIntegrityRecord.validation_status)}</span></p>
-              <p>admissibility_state: <span className="font-mono">{safeText(watIntegrityRecord.admissibility_state)}</span></p>
-              <p>replay status: <span className="font-mono">{safeText(watIntegrityRecord.replay_status)}</span></p>
-              <p>revocation status: <span className="font-mono">{safeText(watIntegrityRecord.revocation_status)}</span></p>
-              <p>action summary: <span className="font-mono">{safeText(watIntegrityRecord.action_summary)}</span></p>
+              <p>integrity_severity: <span className="font-mono">{integrityState}</span></p>
+              <p>affected_lanes: <span className="font-mono">{toArray(watOperatorSummary.affected_lanes).join(", ") || "wat_shadow"}</span></p>
+              <p>event_ts: <span className="font-mono">{safeText(watOperatorSummary.event_ts)}</span></p>
+              <p>correlation_id: <span className="font-mono">{safeText(watOperatorSummary.correlation_id)}</span></p>
+              <p>operator_verbosity: <span className="font-mono">{operatorVerbosity}</span></p>
             </div>
           </Card>
-          <Card title="Drift Vector Breakdown" titleSize="sm" variant="elevated">
-            <div className="grid gap-1 text-xs">
-              <p>policy: <span className="font-mono">{safeNumber(watDriftRecord.policy)}</span></p>
-              <p>signature: <span className="font-mono">{safeNumber(watDriftRecord.signature)}</span></p>
-              <p>observable: <span className="font-mono">{safeNumber(watDriftRecord.observable)}</span></p>
-              <p>temporal: <span className="font-mono">{safeNumber(watDriftRecord.temporal)}</span></p>
-            </div>
-          </Card>
+          {operatorVerbosity === "expanded" ? (
+            <Card title="Drift Vector Breakdown (expanded)" titleSize="sm" variant="elevated">
+              <div className="grid gap-1 text-xs">
+                <p>policy: <span className="font-mono">{safeNumber(watDriftRecord.policy)}</span></p>
+                <p>signature: <span className="font-mono">{safeNumber(watDriftRecord.signature)}</span></p>
+                <p>observable: <span className="font-mono">{safeNumber(watDriftRecord.observable)}</span></p>
+                <p>temporal: <span className="font-mono">{safeNumber(watDriftRecord.temporal)}</span></p>
+              </div>
+            </Card>
+          ) : null}
         </div>
       ) : null}
 

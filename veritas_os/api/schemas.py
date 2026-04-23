@@ -881,6 +881,21 @@ class DecideResponse(BaseModel):
             "policy, signature, observable, temporal."
         ),
     )
+    wat_operator_summary: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Canonical v1 minimal operator-facing WAT summary surface. "
+            "Contains only integrity_severity, affected_lanes, event_ts, "
+            "correlation_id, and operator_verbosity."
+        ),
+    )
+    wat_operator_detail: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Expanded WAT drill-down payload emitted only when "
+            "operator_verbosity=expanded."
+        ),
+    )
 
     # User-facing summary for simple_qa mode.
     # When present, frontends should display this instead of raw chosen/meta fields.

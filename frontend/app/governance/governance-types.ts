@@ -7,6 +7,7 @@ export type ApprovalStatus = "approved" | "pending" | "rejected" | "draft";
 export type WatIssuanceMode = "shadow_only" | "disabled";
 export type PartialValidationDefault = "non_admissible";
 export type RevocationMode = "bounded_eventual_consistency";
+export type OperatorVerbosity = "minimal" | "expanded";
 
 export interface WatConfigUI {
   enabled: boolean;
@@ -50,6 +51,7 @@ export interface GovernancePolicyUI extends GovernancePolicy {
   shadow_validation: ShadowValidationConfigUI;
   revocation: RevocationConfigUI;
   drift_scoring: DriftScoringConfigUI;
+  operator_verbosity: OperatorVerbosity;
 }
 
 export interface DiffChange {

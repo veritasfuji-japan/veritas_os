@@ -112,6 +112,10 @@ export function getDefaultDriftScoringConfig(): DriftScoringConfigUI {
   };
 }
 
+export function getDefaultOperatorVerbosity(): "minimal" | "expanded" {
+  return "minimal";
+}
+
 /**
  * Normalizes governance payload sections to backend schema-aligned WAT controls.
  *
@@ -123,6 +127,7 @@ export function normalizeGovernancePolicyWatFields(policy: GovernancePolicyUI): 
   const shadowDefaults = getDefaultShadowValidationConfig();
   const revocationDefaults = getDefaultRevocationConfig();
   const driftDefaults = getDefaultDriftScoringConfig();
+  const operatorVerbosityDefault = getDefaultOperatorVerbosity();
 
   const watValue = asRecord(policy.wat);
   const psidValue = asRecord(policy.psid);
@@ -178,5 +183,6 @@ export function normalizeGovernancePolicyWatFields(policy: GovernancePolicyUI): 
       healthy_threshold: toNumberOrFallback(driftValue.healthy_threshold, driftDefaults.healthy_threshold),
       critical_threshold: toNumberOrFallback(driftValue.critical_threshold, driftDefaults.critical_threshold),
     },
+    operator_verbosity: policy.operator_verbosity === "expanded" ? "expanded" : operatorVerbosityDefault,
   };
 }
