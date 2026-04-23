@@ -1,6 +1,6 @@
-# VERITAS OS v2.0 — Decision Governance OS for AI Agents
+# VERITAS OS v2.0 — Decision Governance and Bind-Boundary Control Plane for AI Agents
 
-**Reviewable, traceable, replayable, and enforceable AI decisions through decision and bind boundaries before real-world effect.**
+**Reviewable, traceable, replayable, auditable, and enforceable AI decisions through decision and bind boundaries before real-world effect.**
 
 [![DOI](https://doi.org/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI (JP Paper)](https://zenodo.org/badge/DOI/10.5281/zenodo.17838456.svg)](https://doi.org/10.5281/zenodo.17838456)
@@ -17,10 +17,10 @@
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
 
 VERITAS OS is a **Decision Governance and Bind-Boundary Control Plane** for AI agents.
-Instead of passing model output directly to execution, VERITAS routes each decision through a **reproducible, fail-closed, safety-gated, hash-chained governance pipeline** with operational visibility through **Mission Control**.
+Instead of passing model output directly to execution, VERITAS routes each decision through a **reproducible, fail-closed, safety-gated, hash-chained governance pipeline** with an operator-facing governance surface in **Mission Control** and governance APIs.
 
 This project is not only about running agents.
-It is about making AI decisions **reviewable, traceable, replayable, auditable, and enforceable** inside real organizational workflows before they have real-world effect.
+It is about making AI decisions **reviewable, traceable, replayable, auditable, and enforceable** inside real organizational workflows before they have real-world effect, with bind artifacts exposed as full bind receipts and compact bind summaries.
 
 > **Mental model:** LLM = CPU, VERITAS OS = Decision / Agent Governance OS on top
 
@@ -49,6 +49,12 @@ VERITAS addresses this by making decisions:
 - **Auditable** through tamper-evident artifacts
 - **Enforceable** through fail-closed policy and safety gates
 
+### Why bind-boundary control matters
+
+Decision approval alone is not commitment.
+VERITAS keeps this boundary explicit by carrying governance lineage from decision adjudication into bind-time control,
+so operators can verify whether an approved decision was committed, blocked, escalated, rolled back, or failed safely before real-world effect.
+
 ### How it differs from runtime/orchestration tools
 
 Many agent stacks optimize task execution and tool wiring.
@@ -65,6 +71,9 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 - Evidence capture and replay pathways for post-incident review
 - Signed and hash-linked governance artifacts for accountability
 - Posture-based secure/prod startup checks to reduce permissive misconfiguration
+
+This opening reflects current implemented fact: bind-governed adjudication is already active on at least three operator-governed effect paths,
+while broader effect-path coverage remains roadmap direction.
 
 ## What VERITAS OS is / is not
 
