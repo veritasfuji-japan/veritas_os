@@ -60,11 +60,13 @@ VERITAS OS は次を実現します。
 ## 事実とロードマップの境界
 
 - **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済みで、公開上は **ベータ品質のガバナンス基盤** として位置づけます
-- **現時点の事実（bind policy surface）**: bind-boundary adjudication は少なくとも次の2つの運用経路で実装されています。
+- **現時点の事実（bind policy surface）**: bind-boundary adjudication は少なくとも次の3つの運用経路で実装されています。
   1) `PUT /v1/governance/policy`（governance policy update path）
   2) `POST /v1/governance/policy-bundles/promote`（policy bundle promotion path）
-- **現時点の事実（bind outcome公開契約）**: ガバナンス系レスポンスでは `bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id` を返し、`/v1/governance/bind-receipts*` でレシート本体を取得可能です
-- **現時点の事実（replay/運用フロー）**: bind receipt はガバナンス成果物として保存され、運用・監査フローで再検証（revalidation/replay）に使える形へ進んでいます
+  3) `PUT /v1/compliance/config`（runtime compliance config mutation path）
+- **現時点の事実（bind outcome公開契約）**: ガバナンス系レスポンスでは従来のフラットな bind フィールド（`bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id`）に加えて、共通のコンパクト語彙として加算的 `bind_summary` も返却されます
+- **現時点の事実（bind artifact family）**: `BindReceipt` は完全なガバナンス成果物として永続化され、成果物契約に canonical target metadata を含みます
+- **現時点の事実（replay/運用フロー）**: 運用画面/API は bind 成果物の list/export/detail エンドポイント（`/v1/governance/bind-receipts` / `/v1/governance/bind-receipts/export` / `/v1/governance/bind-receipts/{bind_receipt_id}`）を提供し、mutation/export レスポンスでは監査トリアージ向けに `bind_summary` を再利用します
 - **現時点の境界**: 本番適用には環境ごとのハードニング・統合・運用審査が必要
 - **将来方向（標準化）**: bind-boundary は複数の effect path を統治する標準枠組みへ拡張していく方針ですが、現時点で全経路完了を主張するものではありません
 - **ロードマップ**: IdP/JWT スコープ連携の深耕、分散障害モード検証の拡張
@@ -81,6 +83,11 @@ VERITAS OS は次を実現します。
 
 ## クイックリンク
 
+- **AML/KYC Beachhead（1-day PoC quickstart）**: [`docs/en/guides/poc-pack-financial-quickstart.md`](docs/en/guides/poc-pack-financial-quickstart.md)
+- **AML/KYC Governance Template Contract**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
+- **External Audit / Evidence Bundle Readiness**: [`docs/en/validation/external-audit-readiness.md`](docs/en/validation/external-audit-readiness.md)
+- **External Technical Proof Pack（review/pilot/DD/audit）**: [`docs/en/validation/technical-proof-pack.md`](docs/en/validation/technical-proof-pack.md)
+- **AML/KYC Short Positioning（customer / operator / investor）**: [`docs/en/positioning/aml-kyc-beachhead-short-positioning.md`](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
 - **Zenodo論文（英語）**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo論文（日本語）**: https://doi.org/10.5281/zenodo.17838456
@@ -101,11 +108,31 @@ VERITAS OS は次を実現します。
 - **ドキュメント入口（日本語）**: [`docs/ja/README.md`](docs/ja/README.md)
 - **公開ポジショニングガイド（英語）**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
 - **公開ポジショニングガイド（日本語）**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
+- **Decision Semantics Contract**: [`docs/en/architecture/decision-semantics.md`](docs/en/architecture/decision-semantics.md)
+- **Bind-Boundary Governance Artifacts**: [`docs/en/architecture/bind-boundary-governance-artifacts.md`](docs/en/architecture/bind-boundary-governance-artifacts.md)
+- **Bind-Time Admissibility Evaluator**: [`docs/en/architecture/bind_time_admissibility_evaluator.md`](docs/en/architecture/bind_time_admissibility_evaluator.md)
+- **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
+- **AML/KYC contract hardening（canonical gate + evidence profile）**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
 - **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
 - **運用Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 - **ガバナンス署名運用Runbook**: [`docs/en/operations/governance-artifact-signing.md`](docs/en/operations/governance-artifact-signing.md)
 - **ポリシーバンドル昇格ガイド（EN）**: [`docs/en/guides/governance-policy-bundle-promotion.md`](docs/en/guides/governance-policy-bundle-promotion.md)
 - **ガバナンスアップグレード概要（Press）**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
+
+## AML/KYC Beachhead PoC Pack（1日で試せる内容）
+
+AML/KYC ワークフローで VERITAS OS を評価する規制領域チーム向けに、beachhead
+pack はポジショニング文書ではなく、実行可能な手順として整備されています。
+
+1. 1-day PoC fixture セットを実行し、pass/fail/warning を定量化する。
+2. 運用者チェックポイント（fail-closed gate、evidence-first 差分、replay consistency）を確認する。
+3. 外部レビュー準備向け evidence-bundle handoff 成果物を出力する。
+
+開始リンク:
+- [1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+- [Financial Governance Templates](docs/en/guides/financial-governance-templates.md)
+- [External Audit Readiness](docs/en/validation/external-audit-readiness.md)
+- [Short Positioning by audience](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 
 ## 🚀 Quick Start（TL;DR）
 
@@ -601,6 +628,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 | GET | `/v1/governance/decisions/export` | ガバナンス監査用意思決定エクスポート |
 | POST | `/v1/governance/policy-bundles/promote` | bind-boundaryガバナンスワークフローでポリシーバンドル昇格を実行（bind receipt系譜を返却。governance write権限が必要） |
 | GET | `/v1/governance/bind-receipts` | bind receipt一覧（decision / execution intent 系譜 + target/outcome/reason/failed/recent/sort/limit でフィルタ可） |
+| GET | `/v1/governance/bind-receipts/export` | list と同じフィルタ語彙で、運用/監査パイプライン向けに bind receipt をエクスポート |
 | GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | 単一bind receipt成果物を取得 |
 
 > **署名付きガバナンス成果物** — secure/prodポスチャでは、ポリシーバンドルにEd25519署名が必須です。
