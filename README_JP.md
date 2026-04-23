@@ -1,4 +1,4 @@
-# VERITAS OS v2.0 — LLMエージェント向け意思決定ガバナンスOS
+# VERITAS OS v2.0 — Decision Governance and Bind-Boundary Control Plane for AI Agents
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.17838349-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI（日本語論文）](https://img.shields.io/badge/DOI%20(JP)-10.5281%2Fzenodo.17838456-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838456)

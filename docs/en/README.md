@@ -1,6 +1,7 @@
 # Documentation (English)
 
 This directory is the English documentation entrypoint.
+VERITAS OS is a **Decision Governance and Bind-Boundary Control Plane for AI Agents**.
 
 For the universal bilingual index, see [../INDEX.md](../INDEX.md).
 For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMENTATION_MAP.md).

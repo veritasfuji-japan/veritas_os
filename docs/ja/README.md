@@ -1,6 +1,7 @@
 # ドキュメント（日本語）
 
 このディレクトリは日本語ドキュメントの入口です。
+VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agents** です。
 
 総合バイリンガルインデックス: [../INDEX.md](../INDEX.md)
 英日対応状況: [../DOCUMENTATION_MAP.md](../DOCUMENTATION_MAP.md)
