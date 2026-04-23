@@ -246,3 +246,20 @@ def test_openapi_wat_operator_summary_and_governance_defaults_locked() -> None:
 
     policy_props = spec["components"]["schemas"]["GovernancePolicy"]["properties"]
     assert policy_props["operator_verbosity"]["default"] == "minimal"
+
+
+def test_openapi_bind_operator_summary_surface_locked() -> None:
+    """Bind operator summary must preserve minimal-default contract semantics."""
+    spec = _load_openapi_spec()
+    bind_summary = spec["components"]["schemas"]["BindOperatorSummary"]
+    summary_props = bind_summary["properties"]
+    assert "bind_state" in summary_props
+    assert "bind_outcome" in summary_props
+    assert "bind_reason_code" in summary_props
+    assert "bind_receipt_id" in summary_props
+    assert "execution_intent_id" in summary_props
+    assert summary_props["operator_verbosity"]["default"] == "minimal"
+
+    decide_props = spec["components"]["schemas"]["DecideResponse"]["properties"]
+    assert "bind_operator_summary" in decide_props
+    assert "bind_operator_detail" in decide_props

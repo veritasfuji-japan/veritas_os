@@ -1261,6 +1261,34 @@ components:
       - warning_context
       - warning_correlation_id
       additionalProperties: false
+    BindOperatorSummary:
+      type: object
+      description: Compact operator-facing bind governance summary surface.
+      properties:
+        bind_state:
+          type: string
+        bind_outcome:
+          type: string
+        bind_reason_code:
+          type: string
+        bind_receipt_id:
+          type: string
+        execution_intent_id:
+          type: string
+        operator_verbosity:
+          type: string
+          enum:
+          - minimal
+          - expanded
+          default: minimal
+      required:
+      - bind_state
+      - bind_outcome
+      - bind_reason_code
+      - bind_receipt_id
+      - execution_intent_id
+      - operator_verbosity
+      additionalProperties: false
     DecideResponse:
       type: object
       properties:
@@ -1551,6 +1579,15 @@ components:
           nullable: true
           additionalProperties: true
           description: Expanded drill-down payload, emitted only when operator_verbosity=expanded.
+        bind_operator_summary:
+          $ref: '#/components/schemas/BindOperatorSummary'
+          nullable: true
+          description: Compact bind governance summary (minimal default surface).
+        bind_operator_detail:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Expanded bind drill-down payload emitted only for expanded verbosity and permitted roles.
         bind_summary:
           anyOf:
           - $ref: '#/components/schemas/BindSummary'
