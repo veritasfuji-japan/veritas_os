@@ -130,7 +130,7 @@ describe("BindCockpit", () => {
       .mockResolvedValue({ ok: true, json: async () => ({ ok: true, count: 1, returned_count: 1, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 1, items: [LIST_PAYLOAD.items[1]] }) });
 
     render(<BindCockpit />);
-    await screen.findByText("br-blocked");
+    await screen.findAllByText("br-blocked");
     expect(screen.getByRole("option", { name: "compliance config update" })).toBeInTheDocument();
     expect(screen.getByText("governance policy update canonical")).toBeInTheDocument();
 
@@ -161,7 +161,7 @@ describe("BindCockpit", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, count: 0, returned_count: 0, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 0, items: [] }) });
 
     render(<BindCockpit />);
-    await screen.findByText("br-blocked");
+    await screen.findAllByText("br-blocked");
 
     fireEvent.change(screen.getByLabelText("bind-outcome"), { target: { value: "SNAPSHOT_FAILED" } });
 
@@ -210,12 +210,12 @@ describe("BindCockpit", () => {
     });
 
     render(<BindCockpit />);
-    await screen.findByText("br-committed");
+    await screen.findAllByText("br-committed");
 
     expect(screen.getByText(/has more pages/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /load more receipts/i }));
 
-    await screen.findByText("br-blocked");
+    await screen.findAllByText("br-blocked");
     expect(screen.getByText(/no more pages/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("bind-outcome"), { target: { value: "BLOCKED" } });
@@ -237,9 +237,10 @@ describe("BindCockpit", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => DETAIL_PAYLOAD });
 
     render(<BindCockpit />);
-    await screen.findByText("br-blocked");
+    await screen.findAllByText("br-blocked");
 
-    fireEvent.click(screen.getByText("br-blocked"));
+    const blockedReceiptCells = await screen.findAllByText("br-blocked");
+    fireEvent.click(blockedReceiptCells[blockedReceiptCells.length - 1]);
 
     await waitFor(() => {
       const calledUrls = mockFetch.mock.calls.map((call) => String(call[0]));
@@ -254,6 +255,25 @@ describe("BindCockpit", () => {
     expect(screen.getByRole("link", { name: "relevant governance/compliance surface" })).toHaveAttribute("href", "/system");
   });
 
+  it("surfaces blocked/escalated queue with direct reason inspection action", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => LIST_PAYLOAD })
+      .mockResolvedValueOnce({ ok: true, json: async () => DETAIL_PAYLOAD })
+      .mockResolvedValueOnce({ ok: true, json: async () => DETAIL_PAYLOAD });
+
+    render(<BindCockpit />);
+    expect(await screen.findByText("Blocked / Escalated queue")).toBeInTheDocument();
+    expect(screen.getByText("policy denied")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "inspect blocked/escalated reason" }));
+
+    await waitFor(() => {
+      const calledUrls = mockFetch.mock.calls.map((call) => String(call[0]));
+      expect(calledUrls).toContain("/api/veritas/v1/governance/bind-receipts/br-blocked");
+    });
+    expect(screen.getByText("Next operator step")).toBeInTheDocument();
+  });
+
   it("derives minimal filter catalog from receipt-level canonical fields when target_catalog is absent", async () => {
     mockFetch
       .mockResolvedValueOnce({
@@ -266,7 +286,7 @@ describe("BindCockpit", () => {
       .mockResolvedValue({ ok: true, json: async () => ({ ok: true, count: 0, returned_count: 0, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 0, target_catalog: [], items: [] }) });
 
     render(<BindCockpit />);
-    await screen.findByText("br-blocked");
+    await screen.findAllByText("br-blocked");
     expect(screen.getByRole("option", { name: "compliance config update" })).toBeInTheDocument();
   });
 });
