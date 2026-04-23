@@ -64,6 +64,7 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 - FUJI gate behavior is **fail-closed by default** on unsafe/undefined paths.
 - TrustLog + governance identity create **audit-grade decision lineage**.
 - Mission Control + governance APIs provide an operator-facing governance surface with bind-phase outcomes, bind receipts, and compact bind summaries, not only developer telemetry.
+- `/v1/decide` now follows a shared operator-facing contract pattern: `*_operator_summary` is minimal-by-default, while `*_operator_detail` is only emitted when `operator_verbosity=expanded` and role policy permits.
 
 ### Why this fits regulated / enterprise use
 

@@ -901,6 +901,22 @@ class DecideResponse(BaseModel):
             "operator_verbosity=expanded."
         ),
     )
+    bind_operator_summary: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Compact operator-facing bind governance summary. "
+            "Minimal by default and includes only bind_state, bind_outcome, "
+            "bind_reason_code, bind_receipt_id, execution_intent_id, and "
+            "operator_verbosity."
+        ),
+    )
+    bind_operator_detail: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Expanded bind drill-down payload emitted only when "
+            "operator_verbosity=expanded for permitted roles."
+        ),
+    )
 
     # User-facing summary for simple_qa mode.
     # When present, frontends should display this instead of raw chosen/meta fields.

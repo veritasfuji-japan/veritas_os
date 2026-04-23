@@ -569,6 +569,15 @@ export interface WatOperatorSummary {
   operator_verbosity: "minimal" | "expanded";
 }
 
+export interface BindOperatorSummary {
+  bind_state: string;
+  bind_outcome: string;
+  bind_reason_code: string;
+  bind_receipt_id: string;
+  execution_intent_id: string;
+  operator_verbosity: "minimal" | "expanded";
+}
+
 export interface DecideResponse extends DecideResponseMeta {
   /* ------------------------------------------------------------------ */
   /* Core decision contract fields                                      */
@@ -669,6 +678,10 @@ export interface DecideResponse extends DecideResponseMeta {
   wat_operator_summary?: WatOperatorSummary | null;
   /** Expanded drill-down data emitted only when verbosity is expanded. */
   wat_operator_detail?: Record<string, unknown> | null;
+  /** Compact operator-facing bind summary surface. */
+  bind_operator_summary?: BindOperatorSummary | null;
+  /** Expanded bind drill-down data for permitted roles at expanded verbosity. */
+  bind_operator_detail?: Record<string, unknown> | null;
 
   /**
    * Continuation runtime output (shadow/observe — phase-1).
@@ -742,7 +755,9 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     (value.wat_integrity === null || value.wat_integrity === undefined || isRecord(value.wat_integrity)) &&
     (value.wat_drift_vector === null || value.wat_drift_vector === undefined || isRecord(value.wat_drift_vector)) &&
     (value.wat_operator_summary === null || value.wat_operator_summary === undefined || isRecord(value.wat_operator_summary)) &&
-    (value.wat_operator_detail === null || value.wat_operator_detail === undefined || isRecord(value.wat_operator_detail))
+    (value.wat_operator_detail === null || value.wat_operator_detail === undefined || isRecord(value.wat_operator_detail)) &&
+    (value.bind_operator_summary === null || value.bind_operator_summary === undefined || isRecord(value.bind_operator_summary)) &&
+    (value.bind_operator_detail === null || value.bind_operator_detail === undefined || isRecord(value.bind_operator_detail))
   );
 }
 

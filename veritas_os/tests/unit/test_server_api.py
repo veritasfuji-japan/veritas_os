@@ -1188,6 +1188,113 @@ def test_decide_wat_shadow_expanded_operator_verbosity_surfaces_detail(monkeypat
     assert "drift_vector" in detail
 
 
+def test_decide_bind_operator_surface_defaults_to_minimal_summary(monkeypatch):
+    """Bind operator surface must remain compact by default."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-bind-min",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+                "bind_outcome": "COMMITTED",
+                "bind_reason_code": "bind_ok",
+                "bind_receipt_id": "br-001",
+                "execution_intent_id": "ei-001",
+                "bind_summary": {
+                    "outcome": "COMMITTED",
+                    "reason_code": "bind_ok",
+                    "bind_receipt_id": "br-001",
+                    "execution_intent_id": "ei-001",
+                },
+                "authority_check_result": {"status": "ok"},
+            }
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: {"operator_verbosity": "minimal"})
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    summary = payload.get("bind_operator_summary", {})
+    assert summary == {
+        "bind_state": "committed",
+        "bind_outcome": "COMMITTED",
+        "bind_reason_code": "bind_ok",
+        "bind_receipt_id": "br-001",
+        "execution_intent_id": "ei-001",
+        "operator_verbosity": "minimal",
+    }
+    assert payload.get("bind_operator_detail") is None
+
+
+def test_decide_bind_operator_surface_expanded_is_role_gated(monkeypatch):
+    """Expanded bind detail is shown only for admin role."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-bind-exp",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+                "bind_outcome": "BLOCKED",
+                "bind_reason_code": "policy_block",
+                "bind_receipt_id": "br-002",
+                "execution_intent_id": "ei-002",
+                "bind_summary": {
+                    "outcome": "BLOCKED",
+                    "reason_code": "policy_block",
+                    "bind_receipt_id": "br-002",
+                    "execution_intent_id": "ei-002",
+                },
+                "authority_check_result": {"status": "denied"},
+                "constraint_check_result": {"status": "blocked"},
+                "drift_check_result": {"status": "stable"},
+                "risk_check_result": {"status": "high"},
+            }
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: {"operator_verbosity": "expanded"})
+    monkeypatch.setattr(routes_decide, "_resolve_operator_role", lambda request: "operator")
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    summary = payload.get("bind_operator_summary", {})
+    assert summary.get("operator_verbosity") == "minimal"
+    assert payload.get("bind_operator_detail") is None
+
+    monkeypatch.setattr(routes_decide, "_resolve_operator_role", lambda request: "admin")
+    admin_response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert admin_response.status_code == 200
+    admin_payload = admin_response.json()
+    admin_summary = admin_payload.get("bind_operator_summary", {})
+    assert admin_summary.get("operator_verbosity") == "expanded"
+    admin_detail = admin_payload.get("bind_operator_detail", {})
+    assert admin_detail.get("authority_check_result") == {"status": "denied"}
+    assert admin_detail.get("risk_check_result") == {"status": "high"}
+
+
 def test_decide_wat_shadow_uses_sign_wat(monkeypatch):
     """Shadow lane must build/sign WAT instead of using placeholder signatures."""
 
