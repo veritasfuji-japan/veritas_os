@@ -72,7 +72,7 @@ def test_metrics_endpoint():
 class _FakeHaltController:
     @staticmethod
     def halt(reason, operator):
-        return {"halted": True, "reason": reason}
+        return {"halted": True, "halted_by": operator, "reason": reason}
 
     @staticmethod
     def resume(operator, comment=""):
@@ -80,19 +80,67 @@ class _FakeHaltController:
 
     @staticmethod
     def status():
-        return {"halted": False, "reason": None}
+        return {"halted": True, "halted_by": "tester", "reason": "emergency test"}
 
 
 def test_system_halt(monkeypatch):
     monkeypatch.setattr(server, "SystemHaltController", _FakeHaltController)
+    monkeypatch.setattr(
+        server,
+        "get_policy",
+        lambda: {"version": "test-policy", "updated_at": "2026-04-01T00:00:00Z"},
+    )
     resp = client.post(
         "/v1/system/halt",
         json={"reason": "emergency test", "operator": "tester"},
         headers=_AUTH,
     )
     assert resp.status_code == 200
-    assert resp.json()["ok"] is True
-    assert resp.json()["halted"] is True
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["halted"] is True
+    assert body["bind_outcome"] == "COMMITTED"
+    assert body["bind_summary"]["bind_outcome"] == "COMMITTED"
+    assert body["bind_receipt_id"]
+    assert body["execution_intent_id"]
+
+
+def test_system_halt_blocked_returns_bind_lineage(monkeypatch):
+    monkeypatch.setattr(server, "SystemHaltController", _FakeHaltController)
+    monkeypatch.setattr(
+        server,
+        "get_policy",
+        lambda: {"version": "test-policy", "updated_at": "2026-04-01T00:00:00Z"},
+    )
+
+    def _blocked(*args, **kwargs):
+        from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome
+
+        del args, kwargs
+        return BindReceipt(
+            bind_receipt_id="br-halt-blocked-1",
+            execution_intent_id="ei-halt-blocked-1",
+            decision_id="dec-halt-blocked-1",
+            final_outcome=FinalOutcome.BLOCKED,
+            target_path="/v1/system/halt",
+            target_type="system_halt",
+            bind_reason_code="authority_denied",
+            bind_failure_reason="approval denied",
+        )
+
+    monkeypatch.setattr("veritas_os.api.routes_system.halt_system_with_bind_boundary", _blocked)
+    resp = client.post(
+        "/v1/system/halt",
+        json={"reason": "emergency test", "operator": "tester"},
+        headers=_AUTH,
+    )
+    assert resp.status_code == 403
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["bind_outcome"] == "BLOCKED"
+    assert body["bind_summary"]["bind_outcome"] == "BLOCKED"
+    assert body["bind_receipt_id"] == "br-halt-blocked-1"
+    assert body["execution_intent_id"] == "ei-halt-blocked-1"
 
 
 def test_system_halt_error(monkeypatch):

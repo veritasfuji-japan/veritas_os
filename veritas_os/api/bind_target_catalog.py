@@ -55,6 +55,14 @@ CATALOG: tuple[BindTargetCatalogEntry, ...] = (
         operator_surface="compliance",
         relevant_ui_href="/system",
     ),
+    BindTargetCatalogEntry(
+        target_path="/v1/system/halt",
+        target_type="system_halt",
+        target_path_type="system_halt",
+        label="system emergency halt",
+        operator_surface="compliance",
+        relevant_ui_href="/system",
+    ),
 )
 
 _INDEX_BY_PATH_AND_TYPE = {
