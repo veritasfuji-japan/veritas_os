@@ -44,6 +44,24 @@ export interface BindCockpitReceipt {
   [key: string]: unknown;
 }
 
+export interface BindSummaryPayload {
+  bind_outcome?: string;
+  bind_failure_reason?: string;
+  bind_reason_code?: string;
+  bind_receipt_id?: string;
+  execution_intent_id?: string;
+  authority_check_result?: BindCheckPayload;
+  constraint_check_result?: BindCheckPayload;
+  drift_check_result?: BindCheckPayload;
+  risk_check_result?: BindCheckPayload;
+  target_path?: string;
+  target_type?: string;
+  target_path_type?: string;
+  target_label?: string;
+  operator_surface?: string;
+  relevant_ui_href?: string;
+}
+
 export interface CanonicalBindReceipt {
   bindReceiptId: string;
   executionIntentId: string | null;
@@ -362,9 +380,28 @@ export function parseBindReceiptDetailPayload(value: unknown): BindCockpitReceip
   if (!isRecord(value) || !isRecord(value.bind_receipt)) {
     return null;
   }
+  const bindSummary = isRecord(value.bind_summary) ? (value.bind_summary as BindSummaryPayload) : null;
   const payload = value.bind_receipt;
-  if (typeof payload.bind_receipt_id !== "string") {
+  const resolvedBindReceiptId = pickString(payload.bind_receipt_id, bindSummary?.bind_receipt_id);
+  if (resolvedBindReceiptId === null) {
     return null;
   }
-  return payload as BindCockpitReceipt;
+  return {
+    ...payload,
+    bind_receipt_id: resolvedBindReceiptId,
+    execution_intent_id: pickString(payload.execution_intent_id, bindSummary?.execution_intent_id) ?? undefined,
+    final_outcome: pickString(payload.final_outcome, bindSummary?.bind_outcome) ?? undefined,
+    bind_failure_reason: pickString(payload.bind_failure_reason, bindSummary?.bind_failure_reason) ?? undefined,
+    bind_reason_code: pickString(payload.bind_reason_code, bindSummary?.bind_reason_code) ?? undefined,
+    authority_check_result: (payload.authority_check_result ?? bindSummary?.authority_check_result) as BindCheckPayload,
+    constraint_check_result: (payload.constraint_check_result ?? bindSummary?.constraint_check_result) as BindCheckPayload,
+    drift_check_result: (payload.drift_check_result ?? bindSummary?.drift_check_result) as BindCheckPayload,
+    risk_check_result: (payload.risk_check_result ?? bindSummary?.risk_check_result) as BindCheckPayload,
+    target_path: pickString(payload.target_path, bindSummary?.target_path) ?? undefined,
+    target_type: pickString(payload.target_type, bindSummary?.target_type) ?? undefined,
+    target_path_type: pickString(payload.target_path_type, bindSummary?.target_path_type) ?? undefined,
+    target_label: pickString(payload.target_label, bindSummary?.target_label) ?? undefined,
+    operator_surface: pickString(payload.operator_surface, bindSummary?.operator_surface) ?? undefined,
+    relevant_ui_href: pickString(payload.relevant_ui_href, bindSummary?.relevant_ui_href) ?? undefined,
+  } as BindCockpitReceipt;
 }

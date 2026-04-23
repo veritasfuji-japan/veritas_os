@@ -35,6 +35,24 @@ describe("bind-cockpit-normalization", () => {
     expect(parseBindReceiptDetailPayload({ bind_receipt: {} })).toBeNull();
   });
 
+  it("hydrates detail payload from bind_summary vocabulary when receipt fields are sparse", () => {
+    const parsed = parseBindReceiptDetailPayload({
+      bind_receipt: { bind_receipt_id: "br-2" },
+      bind_summary: {
+        bind_outcome: "BLOCKED",
+        bind_reason_code: "POLICY_MISSING",
+        bind_failure_reason: "policy missing",
+        execution_intent_id: "ei-2",
+        target_path_type: "governance_policy_update",
+      },
+    });
+    expect(parsed?.bind_receipt_id).toBe("br-2");
+    expect(parsed?.final_outcome).toBe("BLOCKED");
+    expect(parsed?.bind_reason_code).toBe("POLICY_MISSING");
+    expect(parsed?.execution_intent_id).toBe("ei-2");
+    expect(parsed?.target_path_type).toBe("governance_policy_update");
+  });
+
   it("normalizes path, checks, and operator step", () => {
     const normalized = normalizeBindReceipt({
       bind_receipt_id: "br-7",

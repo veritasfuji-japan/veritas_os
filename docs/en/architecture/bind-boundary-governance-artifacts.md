@@ -76,6 +76,18 @@ full artifact (`/v1/governance/bind-receipts*`).
 This keeps full-artifact and summary-object semantics explicit rather than
 merging them into a single overloaded shape.
 
+Canonical vocabulary used across backend schema, OpenAPI, and frontend surfaces:
+
+- `bind_summary`: compact, shared operator-facing bind envelope.
+- `bind_receipt` / `bind_receipt_id`: full artifact and stable lineage pointer.
+- `execution_intent_id`: lineage pointer linking decision → execution intent → bind receipt.
+- target metadata fields (`target_path_type`, `target_label`, `operator_surface`, `relevant_ui_href`):
+  backend-owned canonical metadata for operator rendering.
+- bind outcome/reason fields (`bind_outcome`, `bind_reason_code`, `bind_failure_reason`):
+  compact triage vocabulary; full diagnostics remain in `BindReceipt` check payloads.
+
+Legacy flat bind fields remain intentionally additive for compatibility.
+
 ## Runtime behavior impact
 
 Additive to existing decision flows. Decision-phase semantics remain primary;
