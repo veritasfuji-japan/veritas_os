@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "veritas-os"
 version = "2.0.0"
-description = "Auditable Decision OS for LLM Agents"
+description = "Decision Governance and Bind-Boundary Control Plane for AI Agents"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
