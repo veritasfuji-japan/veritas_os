@@ -389,7 +389,12 @@ class BindReceipt(BaseModel):
 
 
 class BindSummary(BaseModel):
-    """Compact bind artifact summary shared across mutation/export responses."""
+    """Compact canonical bind vocabulary shared across mutation/export responses.
+
+    Full bind artifact data remains in ``BindReceipt`` while this summary keeps
+    stable operator-facing lineage and triage fields. Legacy flat bind fields
+    remain additive compatibility mirrors in response envelopes.
+    """
 
     model_config = ConfigDict(extra="allow")
 

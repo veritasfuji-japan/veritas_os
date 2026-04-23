@@ -2774,6 +2774,11 @@ paths:
                     type: boolean
                   bind_receipt:
                     $ref: '#/components/schemas/BindReceipt'
+                  bind_summary:
+                    anyOf:
+                    - $ref: '#/components/schemas/BindSummary'
+                    - type: 'null'
+                    description: Shared compact bind summary object.
                   bind_outcome:
                     type: string
                     nullable: true
@@ -2884,6 +2889,11 @@ paths:
                     nullable: true
                   bind_receipt:
                     $ref: '#/components/schemas/BindReceipt'
+                  bind_summary:
+                    anyOf:
+                    - $ref: '#/components/schemas/BindSummary'
+                    - type: 'null'
+                    description: Shared compact bind summary object.
   /v1/compliance/config:
     get:
       summary: Compliance config read
