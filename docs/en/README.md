@@ -39,6 +39,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 ### Validation & Testing
 - [Production Validation Strategy](validation/production-validation.md)
 - [Backend Parity Coverage](validation/backend-parity-coverage.md)
+- [PostgreSQL Production Proof Map (compact)](validation/postgresql-production-proof-map.md)
 - [External Audit Readiness](validation/external-audit-readiness.md)
 - [Technical Proof Pack (external review)](validation/technical-proof-pack.md)
 

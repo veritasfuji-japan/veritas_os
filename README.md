@@ -126,6 +126,7 @@ while broader effect-path coverage remains roadmap direction.
 - **Security Hardening**: [`docs/en/operations/security-hardening.md`](docs/en/operations/security-hardening.md)
 - **Database Migrations**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
 - **Backend Parity Coverage**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
+- **PostgreSQL Production Proof Map (compact)**: [`docs/en/validation/postgresql-production-proof-map.md`](docs/en/validation/postgresql-production-proof-map.md)
 - **Live PostgreSQL Validation Evidence**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
 - **Legacy Path Cleanup**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
 - **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
@@ -200,6 +201,7 @@ development and migration workflows, not as the recommended production baseline.
 
 Verification-oriented docs:
 
+- [`docs/en/validation/postgresql-production-proof-map.md` — compact reviewer entrypoint for production-path proof, automation evidence, and guarantee boundary](docs/en/validation/postgresql-production-proof-map.md)
 - [`docs/en/validation/backend-parity-coverage.md` — canonical parity/implementation verification source](docs/en/validation/backend-parity-coverage.md)
 - [`docs/en/validation/production-validation.md` — canonical tier/promotion/release-gate source](docs/en/validation/production-validation.md)
 - [`docs/en/operations/postgresql-production-guide.md` — canonical PostgreSQL operations/monitoring/recovery source](docs/en/operations/postgresql-production-guide.md)
