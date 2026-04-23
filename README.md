@@ -2,7 +2,7 @@
 
 **Reviewable, traceable, replayable, auditable, and enforceable AI decisions through decision and bind boundaries before real-world effect.**
 
-[![DOI](https://doi.org/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI (JP Paper)](https://zenodo.org/badge/DOI/10.5281/zenodo.17838456.svg)](https://doi.org/10.5281/zenodo.17838456)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
