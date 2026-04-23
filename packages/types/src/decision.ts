@@ -561,6 +561,14 @@ export interface WatDriftVector {
   temporal: number;
 }
 
+export interface WatOperatorSummary {
+  integrity_severity: "healthy" | "warning" | "critical";
+  affected_lanes: string[];
+  event_ts: string;
+  correlation_id: string;
+  operator_verbosity: "minimal" | "expanded";
+}
+
 export interface DecideResponse extends DecideResponseMeta {
   /* ------------------------------------------------------------------ */
   /* Core decision contract fields                                      */
@@ -657,6 +665,10 @@ export interface DecideResponse extends DecideResponseMeta {
   wat_integrity?: WatIntegrity | null;
   /** Canonical additive WAT drift vector with normalized keys. */
   wat_drift_vector?: WatDriftVector | null;
+  /** Canonical v1 minimal operator-facing WAT summary surface. */
+  wat_operator_summary?: WatOperatorSummary | null;
+  /** Expanded drill-down data emitted only when verbosity is expanded. */
+  wat_operator_detail?: Record<string, unknown> | null;
 
   /**
    * Continuation runtime output (shadow/observe — phase-1).
@@ -728,7 +740,9 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     (value.pipeline_steps === null || value.pipeline_steps === undefined || Array.isArray(value.pipeline_steps)) &&
     (value.deterministic_replay === null || value.deterministic_replay === undefined || isRecord(value.deterministic_replay)) &&
     (value.wat_integrity === null || value.wat_integrity === undefined || isRecord(value.wat_integrity)) &&
-    (value.wat_drift_vector === null || value.wat_drift_vector === undefined || isRecord(value.wat_drift_vector))
+    (value.wat_drift_vector === null || value.wat_drift_vector === undefined || isRecord(value.wat_drift_vector)) &&
+    (value.wat_operator_summary === null || value.wat_operator_summary === undefined || isRecord(value.wat_operator_summary)) &&
+    (value.wat_operator_detail === null || value.wat_operator_detail === undefined || isRecord(value.wat_operator_detail))
   );
 }
 

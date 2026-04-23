@@ -4,6 +4,7 @@ import {
   collectChanges,
   deepEqual,
   getDefaultDriftScoringConfig,
+  getDefaultOperatorVerbosity,
   getDefaultPsidConfig,
   getDefaultRevocationConfig,
   getDefaultShadowValidationConfig,
@@ -112,6 +113,7 @@ describe("normalizeGovernancePolicyWatFields", () => {
     expect(normalized.shadow_validation).toEqual(getDefaultShadowValidationConfig());
     expect(normalized.revocation).toEqual(getDefaultRevocationConfig());
     expect(normalized.drift_scoring).toEqual(getDefaultDriftScoringConfig());
+    expect(normalized.operator_verbosity).toBe(getDefaultOperatorVerbosity());
   });
 
   it("normalizes malformed enums to backend-supported values", () => {

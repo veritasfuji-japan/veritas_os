@@ -717,6 +717,13 @@ components:
           $ref: '#/components/schemas/DriftScoringConfig'
         bind_adjudication:
           $ref: '#/components/schemas/BindAdjudicationPolicyConfig'
+        operator_verbosity:
+          type: string
+          enum:
+          - minimal
+          - expanded
+          default: minimal
+          description: v1 operator-facing summary verbosity. Default stays minimal.
         updated_at:
           type: string
           format: date-time
@@ -1102,6 +1109,38 @@ components:
           type: number
           default: 0.0
       additionalProperties: false
+    WatOperatorSummary:
+      type: object
+      description: Canonical v1 minimal operator-facing WAT summary surface.
+      properties:
+        integrity_severity:
+          type: string
+          enum:
+          - healthy
+          - warning
+          - critical
+        affected_lanes:
+          type: array
+          items:
+            type: string
+        event_ts:
+          type: string
+          description: ISO-8601 UTC timestamp (YYYY-MM-DDTHH:MM:SSZ).
+        correlation_id:
+          type: string
+        operator_verbosity:
+          type: string
+          enum:
+          - minimal
+          - expanded
+          default: minimal
+      required:
+      - integrity_severity
+      - affected_lanes
+      - event_ts
+      - correlation_id
+      - operator_verbosity
+      additionalProperties: false
     DecideResponse:
       type: object
       properties:
@@ -1383,6 +1422,15 @@ components:
           $ref: '#/components/schemas/WatDriftVector'
           nullable: true
           description: Canonical additive WAT drift vector with normalized keys.
+        wat_operator_summary:
+          $ref: '#/components/schemas/WatOperatorSummary'
+          nullable: true
+          description: Minimal v1 operator-facing WAT summary (default surface).
+        wat_operator_detail:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Expanded drill-down payload, emitted only when operator_verbosity=expanded.
         bind_summary:
           anyOf:
           - $ref: '#/components/schemas/BindSummary'

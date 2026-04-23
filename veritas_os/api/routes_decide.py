@@ -25,6 +25,7 @@ from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.pipeline_orchestrator import resolve_dynamic_steps
 from veritas_os.audit.wat_events import (
     derive_latest_revocation_state,
+    format_event_ts_utc,
     persist_wat_issuance_event,
     persist_wat_replay_event,
     persist_wat_validation_event,
@@ -363,8 +364,23 @@ def _run_wat_shadow_observer(
         "observable_digest_list": observable_digest_list,
         "pointer_missing_digest_alive": bool(not observables and aggregate_observable_digest),
     }
+    integrity_severity = "healthy" if validation_status == "valid" else "warning"
+    if str(verifier_result.get("admissibility_state")) in {"non_admissible", "blocked"}:
+        integrity_severity = "critical"
+    operator_verbosity = str(policy.get("operator_verbosity") or "minimal")
+    if operator_verbosity not in {"minimal", "expanded"}:
+        operator_verbosity = "minimal"
+    correlation_id = request_id or str(issue_event.get("event_id") or wat_id)
+    event_ts = format_event_ts_utc(
+        persisted_validation.get("event_ts") or persisted_validation.get("ts")
+    )
     summary = {
         "observer_only": True,
+        "operator_verbosity": operator_verbosity,
+        "integrity_severity": integrity_severity,
+        "affected_lanes": ["wat_shadow"],
+        "event_ts": event_ts,
+        "correlation_id": correlation_id,
         "wat_id": wat_id,
         "psid_display": psid_display,
         "validation_status": validation_status,
@@ -434,6 +450,25 @@ def _attach_wat_contract_fields(payload: Dict[str, Any], wat_shadow: Dict[str, A
         "action_summary": "observer_only_validation",
     }
     payload["wat_drift_vector"] = _normalize_wat_drift_vector(wat_shadow.get("drift_vector"))
+    operator_verbosity = str(wat_shadow.get("operator_verbosity") or "minimal")
+    if operator_verbosity not in {"minimal", "expanded"}:
+        operator_verbosity = "minimal"
+    payload["wat_operator_summary"] = {
+        # v1 lock-in: intentionally minimal operator-facing default surface.
+        "integrity_severity": integrity_state,
+        "affected_lanes": list(wat_shadow.get("affected_lanes") or ["wat_shadow"]),
+        "event_ts": format_event_ts_utc(wat_shadow.get("event_ts") or wat_shadow.get("ts")),
+        "correlation_id": str(
+            wat_shadow.get("correlation_id") or payload.get("request_id") or wat_shadow.get("wat_id") or ""
+        ),
+        "operator_verbosity": operator_verbosity,
+    }
+    if operator_verbosity == "expanded":
+        payload["wat_operator_detail"] = {
+            "drift_vector": _normalize_wat_drift_vector(wat_shadow.get("drift_vector")),
+            "verifier_output_raw": wat_shadow.get("verifier_output_raw"),
+            "historical_drift_trend": wat_shadow.get("historical_drift_trend"),
+        }
 
 
 # ------------------------------------------------------------------

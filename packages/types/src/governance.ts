@@ -76,6 +76,7 @@ export interface GovernancePolicy {
   log_retention: LogRetention;
   rollout_controls: RolloutControls;
   approval_workflow: ApprovalWorkflowConfig;
+  operator_verbosity: "minimal" | "expanded";
   updated_at: string;
   updated_by: string;
 }

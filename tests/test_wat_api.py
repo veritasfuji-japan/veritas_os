@@ -157,3 +157,14 @@ def test_auth_rbac_read_vs_mutation(monkeypatch, tmp_path: Path) -> None:
 
     assert read_response.status_code == 200
     assert mutate_response.status_code == 403
+
+
+def test_wat_events_emit_canonical_event_ts(monkeypatch, tmp_path: Path) -> None:
+    _configure_wat_store(monkeypatch, tmp_path)
+    event = wat_events.persist_wat_issuance_event(
+        wat_id="wat-ts-1",
+        actor="test",
+        details={"request_id": "rid-ts-1"},
+    )
+    assert event["event_ts"].endswith("Z")
+    assert event["event_ts"] == event["ts"]

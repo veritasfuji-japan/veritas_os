@@ -309,6 +309,21 @@ export default function GovernanceControlPage(): JSX.Element {
                         <option value="bounded_eventual_consistency">bounded_eventual_consistency</option>
                       </select>
                     </label>
+                    <label className="text-xs">operator_verbosity
+                      <select
+                        aria-label="operator_verbosity"
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={draft.operator_verbosity}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          operator_verbosity: event.target.value as typeof prev.operator_verbosity,
+                        }))}
+                      >
+                        <option value="minimal">minimal</option>
+                        <option value="expanded">expanded</option>
+                      </select>
+                    </label>
                   </div>
                   <div>
                     <p className="text-xs font-semibold">drift_scoring</p>

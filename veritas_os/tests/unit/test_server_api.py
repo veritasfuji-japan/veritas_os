@@ -18,6 +18,7 @@ pytestmark = pytest.mark.unit
 import asyncio
 import json
 import os
+import re
 import time
 import hmac
 import hashlib
@@ -1056,6 +1057,19 @@ def test_decide_wat_shadow_enabled_emits_events_without_mutating_action(monkeypa
     assert body.get("wat_integrity", {}).get("wat_id") == wat_shadow.get("wat_id")
     drift_vector = body.get("wat_drift_vector", {})
     assert set(drift_vector.keys()) == {"policy", "signature", "observable", "temporal"}
+    summary = body.get("wat_operator_summary", {})
+    assert set(summary.keys()) == {
+        "integrity_severity",
+        "affected_lanes",
+        "event_ts",
+        "correlation_id",
+        "operator_verbosity",
+    }
+    assert summary.get("operator_verbosity") == "minimal"
+    assert summary.get("affected_lanes") == ["wat_shadow"]
+    assert summary.get("correlation_id") == "rid-shadow"
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", str(summary.get("event_ts", "")))
+    assert body.get("wat_operator_detail") is None
 
 
 def test_decide_wat_shadow_validation_failure_does_not_change_decision(monkeypatch):
@@ -1116,6 +1130,58 @@ def test_decide_wat_shadow_validation_failure_does_not_change_decision(monkeypat
         "observable": 0.0,
         "temporal": 0.0,
     }
+
+
+def test_decide_wat_shadow_expanded_operator_verbosity_surfaces_detail(monkeypatch):
+    """Expanded verbosity keeps default summary stable while enabling drill-down."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-expanded",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+        "operator_verbosity": "expanded",
+    }
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    summary = payload.get("wat_operator_summary", {})
+    assert summary.get("operator_verbosity") == "expanded"
+    assert set(summary.keys()) == {
+        "integrity_severity",
+        "affected_lanes",
+        "event_ts",
+        "correlation_id",
+        "operator_verbosity",
+    }
+    detail = payload.get("wat_operator_detail", {})
+    assert "drift_vector" in detail
 
 
 def test_decide_wat_shadow_uses_sign_wat(monkeypatch):

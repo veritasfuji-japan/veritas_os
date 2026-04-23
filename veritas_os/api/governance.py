@@ -177,6 +177,7 @@ class GovernancePolicy(BaseModel):
     revocation: RevocationConfig = Field(default_factory=RevocationConfig)
     drift_scoring: DriftScoringConfig = Field(default_factory=DriftScoringConfig)
     bind_adjudication: BindAdjudicationPolicyConfig = Field(default_factory=BindAdjudicationPolicyConfig)
+    operator_verbosity: Literal["minimal", "expanded"] = "minimal"
     updated_at: str = ""
     updated_by: str = "system"
 

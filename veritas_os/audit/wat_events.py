@@ -40,7 +40,34 @@ SUPPORTED_WAT_EVENT_TYPES: frozenset[str] = frozenset({
 
 def _utc_now_iso_z() -> str:
     """Return current UTC timestamp in RFC3339-like ``Z`` format."""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return format_event_ts_utc()
+
+
+def format_event_ts_utc(value: Any = None) -> str:
+    """Normalize event timestamps to canonical ISO-8601 UTC ``YYYY-MM-DDTHH:MM:SSZ``.
+
+    The operator-facing v1 minimal surface requires a single stable timestamp
+    representation across WAT lane storage, decide summaries, and frontend
+    rendering paths. This helper centralizes the normalization rule.
+    """
+    if value is None:
+        dt = datetime.now(timezone.utc)
+    elif isinstance(value, datetime):
+        dt = value.astimezone(timezone.utc)
+    elif isinstance(value, (int, float)):
+        dt = datetime.fromtimestamp(float(value), tz=timezone.utc)
+    else:
+        text = str(value).strip()
+        if not text:
+            dt = datetime.now(timezone.utc)
+        else:
+            normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+            try:
+                parsed = datetime.fromisoformat(normalized)
+                dt = parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            except ValueError:
+                dt = datetime.now(timezone.utc)
+    return dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _resolve_events_path(path: Optional[Path] = None) -> Path:
@@ -112,9 +139,11 @@ def _persist_wat_event(
     if normalized_event_type not in SUPPORTED_WAT_EVENT_TYPES:
         raise ValueError(f"unsupported_wat_event_type: {normalized_event_type}")
 
+    now_event_ts = _utc_now_iso_z()
     record: Dict[str, Any] = {
         "event_id": str(uuid.uuid4()),
-        "ts": _utc_now_iso_z(),
+        "ts": now_event_ts,
+        "event_ts": now_event_ts,
         "lane": "wat_shadow",
         "wat_id": str(wat_id).strip(),
         "event_type": normalized_event_type,
