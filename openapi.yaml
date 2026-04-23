@@ -1180,6 +1180,7 @@ components:
             type: string
         event_ts:
           type: string
+          format: date-time
           description: ISO-8601 UTC timestamp (YYYY-MM-DDTHH:MM:SSZ).
         correlation_id:
           type: string
@@ -1191,8 +1192,10 @@ components:
           default: minimal
         warning_context:
           type: string
+          default: ""
         warning_correlation_id:
           type: string
+          default: ""
       required:
       - integrity_severity
       - affected_lanes

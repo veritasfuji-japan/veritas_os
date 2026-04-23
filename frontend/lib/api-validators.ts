@@ -77,6 +77,19 @@ function issue(category: "format" | "semantic", path: string, message: string): 
   return { category, path, message };
 }
 
+
+function validateBooleanField(parent: Record<string, unknown>, key: string, pathPrefix: string): GovernanceValidationIssue[] {
+  return hasBooleanField(parent, key) ? [] : [issue("format", `${pathPrefix}.${key}`, "boolean である必要があります。")];
+}
+
+function validateNumberField(parent: Record<string, unknown>, key: string, pathPrefix: string): GovernanceValidationIssue[] {
+  return hasNumberField(parent, key) ? [] : [issue("format", `${pathPrefix}.${key}`, "number である必要があります。")];
+}
+
+function validateStringField(parent: Record<string, unknown>, key: string, pathPrefix: string): GovernanceValidationIssue[] {
+  return hasStringField(parent, key) ? [] : [issue("format", `${pathPrefix}.${key}`, "string である必要があります。")];
+}
+
 function validateFujiRules(value: unknown, pathPrefix: string): GovernanceValidationIssue[] {
   if (!isRecord(value)) {
     return [issue("format", pathPrefix, "object である必要があります。")];
@@ -287,6 +300,41 @@ function validateGovernancePolicy(value: unknown, pathPrefix: string): Governanc
     ) {
       issues.push(issue("format", `${pathPrefix}.approval_workflow.approver_identities`, "string の配列である必要があります。"));
     }
+  }
+
+  if (!isRecord(value.wat)) {
+    issues.push(issue("format", `${pathPrefix}.wat`, "object である必要があります。"));
+  } else {
+    issues.push(...validateBooleanField(value.wat, "enabled", `${pathPrefix}.wat`));
+    issues.push(...validateStringField(value.wat, "issuance_mode", `${pathPrefix}.wat`));
+    issues.push(...validateNumberField(value.wat, "wat_metadata_retention_ttl_seconds", `${pathPrefix}.wat`));
+    issues.push(...validateNumberField(value.wat, "wat_event_pointer_retention_ttl_seconds", `${pathPrefix}.wat`));
+    issues.push(...validateNumberField(value.wat, "observable_digest_retention_ttl_seconds", `${pathPrefix}.wat`));
+    issues.push(...validateStringField(value.wat, "retention_policy_version", `${pathPrefix}.wat`));
+    issues.push(...validateBooleanField(value.wat, "retention_enforced_at_write", `${pathPrefix}.wat`));
+  }
+
+  if (!isRecord(value.shadow_validation)) {
+    issues.push(issue("format", `${pathPrefix}.shadow_validation`, "object である必要があります。"));
+  } else {
+    issues.push(...validateStringField(value.shadow_validation, "partial_validation_default", `${pathPrefix}.shadow_validation`));
+    issues.push(...validateBooleanField(value.shadow_validation, "replay_binding_required", `${pathPrefix}.shadow_validation`));
+    issues.push(...validateNumberField(value.shadow_validation, "replay_binding_escalation_threshold", `${pathPrefix}.shadow_validation`));
+    issues.push(...validateBooleanField(value.shadow_validation, "partial_validation_requires_confirmation", `${pathPrefix}.shadow_validation`));
+  }
+
+  if (!isRecord(value.revocation)) {
+    issues.push(issue("format", `${pathPrefix}.revocation`, "object である必要があります。"));
+  } else {
+    issues.push(...validateStringField(value.revocation, "mode", `${pathPrefix}.revocation`));
+    issues.push(...validateBooleanField(value.revocation, "revocation_confirmation_required", `${pathPrefix}.revocation`));
+    issues.push(...validateBooleanField(value.revocation, "auto_escalate_confirmed_revocations", `${pathPrefix}.revocation`));
+  }
+
+  if (!hasStringField(value, "operator_verbosity")) {
+    issues.push(issue("format", `${pathPrefix}.operator_verbosity`, "string である必要があります。"));
+  } else if (value.operator_verbosity !== "minimal" && value.operator_verbosity !== "expanded") {
+    issues.push(issue("semantic", `${pathPrefix}.operator_verbosity`, "minimal または expanded である必要があります。"));
   }
 
   if (!hasStringField(value, "updated_at")) {

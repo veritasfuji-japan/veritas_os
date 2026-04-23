@@ -3,6 +3,7 @@ import {
   bumpDraftVersion,
   collectChanges,
   deepEqual,
+  getDefaultBindAdjudicationConfig,
   getDefaultDriftScoringConfig,
   getDefaultOperatorVerbosity,
   getDefaultPsidConfig,
@@ -113,6 +114,7 @@ describe("normalizeGovernancePolicyWatFields", () => {
     expect(normalized.shadow_validation).toEqual(getDefaultShadowValidationConfig());
     expect(normalized.revocation).toEqual(getDefaultRevocationConfig());
     expect(normalized.drift_scoring).toEqual(getDefaultDriftScoringConfig());
+    expect(normalized.bind_adjudication).toEqual(getDefaultBindAdjudicationConfig());
     expect(normalized.operator_verbosity).toBe(getDefaultOperatorVerbosity());
   });
 
