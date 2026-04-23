@@ -82,3 +82,18 @@ def test_retention_policy_version_immutable_after_enforcement(tmp_path: Path) ->
             },
             path=path,
         )
+
+
+def test_warning_events_include_traceability_context_and_correlation(tmp_path: Path) -> None:
+    path = tmp_path / "wat_events.jsonl"
+    event = persist_wat_validation_event(
+        wat_id="wat-warning-1",
+        actor="test",
+        event_type="wat_validation_failed",
+        status="warning",
+        details={"reason": "revocation_pending"},
+        path=path,
+    )
+    metadata = event["details"]["metadata"]
+    assert metadata["warning_context"] == "wat_shadow_warning"
+    assert metadata["warning_correlation_id"]

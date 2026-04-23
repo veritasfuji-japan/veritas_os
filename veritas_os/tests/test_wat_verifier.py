@@ -434,6 +434,8 @@ def test_validate_local_revoked_pending_is_warning_only(tmp_path: Path) -> None:
     )
     assert result["validation_status"] == "revoked_pending"
     assert result["admissibility_state"] == "warning_only_shadow"
+    assert result["warning_context"] == "wat_shadow_warning"
+    assert result["warning_correlation_id"]
 
 
 def test_validate_local_revoked_pending_blocks_when_degrade_disabled(tmp_path: Path) -> None:
@@ -478,6 +480,74 @@ def test_validate_local_revoked_confirmed_is_hard_fail(tmp_path: Path) -> None:
     assert result["admissibility_state"] == "non_admissible"
 
 
+def test_validate_local_unknown_revocation_status_defaults_to_active(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat(tmp_path)
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(signed_wat["claims"]["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(signed_wat["claims"]["observable_digest"]),
+        issuance_ts_local=1_712_000_000,
+        expiry_ts_local=1_712_000_600,
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="legacy_unknown_status",
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "valid"
+
+
+def test_validate_local_replay_binding_escalation_threshold_exists_and_applies(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat_with_claim_overrides(tmp_path, remove_keys={"nonce"})
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="active",
+        config={
+            "replay_binding_required": True,
+            "replay_binding_escalation_threshold": 1,
+        },
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["failure_type"] == "replay_binding_missing"
+
+
+def test_validate_local_partial_requires_confirmation_field_exists_and_applies(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat(tmp_path)
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(signed_wat["claims"]["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(signed_wat["claims"]["observable_digest"]),
+        issuance_ts_local=1_712_000_000,
+        expiry_ts_local=1_712_000_600,
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="active",
+        signer=signer,
+        now_ts=1_712_000_100,
+        config={
+            "allow_partial_validation": True,
+            "partial_validation_requires_confirmation": True,
+            "partial_validation_confirmation": False,
+        },
+    )
+    assert result["validation_status"] == "invalid"
+    assert result["failure_type"] == "partial_validation_confirmation_required"
+
+
 def test_validate_local_partial_requires_timebox(tmp_path: Path) -> None:
     signer, signed_wat = _signed_wat(tmp_path)
     expired_timebox = validate_local(
@@ -497,6 +567,7 @@ def test_validate_local_partial_requires_timebox(tmp_path: Path) -> None:
             "allow_partial_validation": True,
             "observer_only_mode": True,
             "warning_only_until": 1_712_000_050,
+            "partial_validation_confirmation": True,
         },
     )
     active_timebox = validate_local(
@@ -516,6 +587,7 @@ def test_validate_local_partial_requires_timebox(tmp_path: Path) -> None:
             "allow_partial_validation": True,
             "observer_only_mode": True,
             "warning_only_until": 1_712_000_500,
+            "partial_validation_confirmation": True,
         },
     )
     assert expired_timebox["admissibility_state"] == "non_admissible"

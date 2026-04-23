@@ -17,6 +17,7 @@ from veritas_os.security.wat_token import compute_observable_digests, verify_wat
 
 ValidationStatus = str
 AdmissibilityState = str
+_REVOCATION_STATUS_ENUM = {"active", "revoked_pending", "revoked_confirmed"}
 
 _DEFAULT_THRESHOLDS: dict[str, float] = {
     "healthy": 0.2,
@@ -60,6 +61,8 @@ class VerifierResult:
     audit_event_ref: str
     mission_control_event_name: str
     operator_message: str
+    warning_context: str
+    warning_correlation_id: str
 
     def to_dict(self) -> dict[str, Any]:
         """Return JSON-safe dictionary representation."""
@@ -149,14 +152,17 @@ def _to_epoch(ts: Any) -> int | None:
 
 
 def _derive_revocation_status(revocation_state: Any) -> str:
+    """Derive lock-in revocation enum from runtime state payload."""
     if revocation_state is None:
         return "active"
     if isinstance(revocation_state, str):
-        return revocation_state
-    if isinstance(revocation_state, Mapping):
+        value = revocation_state
+    elif isinstance(revocation_state, Mapping):
         value = revocation_state.get("status")
-        if isinstance(value, str):
-            return value
+    else:
+        value = None
+    if isinstance(value, str) and value in _REVOCATION_STATUS_ENUM:
+        return value
     return "active"
 
 
@@ -229,6 +235,7 @@ def _resolve_replay_binding_failure(
     execution_nonce: str,
     claim_session_id: str,
     session_id: str,
+    escalation_threshold: int,
 ) -> str | None:
     """Resolve replay-binding failures for strict and observer-only modes.
 
@@ -251,7 +258,11 @@ def _resolve_replay_binding_failure(
         missing_any = any(claim_missing.values()) or any(local_missing.values())
         if missing_any:
             missing_count = sum(claim_missing.values()) + sum(local_missing.values())
-            return "replay_binding_missing" if missing_count >= 4 else "replay_binding_incomplete"
+            return (
+                "replay_binding_missing"
+                if missing_count >= max(1, int(escalation_threshold))
+                else "replay_binding_incomplete"
+            )
 
     if claim_action_digest != action_digest_local:
         return "action_digest_mismatch"
@@ -304,6 +315,8 @@ def validate_local(
             mission_control_event_name="wat.local.invalid",
             operator_message="WAT local verification status=invalid; "
             "failure=malformed_signed_wat; admissibility=non_admissible.",
+            warning_context="",
+            warning_correlation_id="malformed",
         )
         return result.to_dict()
 
@@ -322,6 +335,7 @@ def validate_local(
     revocation_status = _derive_revocation_status(revocation_state)
     partial_allowed = _is_partial_allowed(cfg, current_ts)
     replay_binding_required = bool(cfg.get("replay_binding_required", False))
+    replay_binding_escalation_threshold = int(cfg.get("replay_binding_escalation_threshold", 4))
 
     if revocation_status == "revoked_confirmed":
         drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
@@ -349,6 +363,7 @@ def validate_local(
             execution_nonce=execution_nonce,
             claim_session_id=claim_session_id,
             session_id=session_id,
+            escalation_threshold=replay_binding_escalation_threshold,
         )
         if replay_binding_failure is not None:
             drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
@@ -377,9 +392,16 @@ def validate_local(
                 status = "revoked_pending"
                 failure_type = "revocation_pending"
             elif bool(cfg.get("allow_partial_validation", False)):
-                drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
-                status = "partial"
-                failure_type = "partial_validation_mode"
+                if bool(cfg.get("partial_validation_requires_confirmation", True)) and not bool(
+                    cfg.get("partial_validation_confirmation", False)
+                ):
+                    drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
+                    status = "invalid"
+                    failure_type = "partial_validation_confirmation_required"
+                else:
+                    drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
+                    status = "partial"
+                    failure_type = "partial_validation_mode"
             else:
                 temporal_drift = 0.0
                 failure_type = None
@@ -411,9 +433,16 @@ def validate_local(
             status = "revoked_pending"
             failure_type = "revocation_pending"
         elif bool(cfg.get("allow_partial_validation", False)):
-            drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
-            status = "partial"
-            failure_type = "partial_validation_mode"
+            if bool(cfg.get("partial_validation_requires_confirmation", True)) and not bool(
+                cfg.get("partial_validation_confirmation", False)
+            ):
+                drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
+                status = "invalid"
+                failure_type = "partial_validation_confirmation_required"
+            else:
+                drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
+                status = "partial"
+                failure_type = "partial_validation_mode"
         else:
             temporal_drift = 0.0
             failure_type = None
@@ -452,6 +481,10 @@ def validate_local(
         failure_type = "partial_validation_timebox_expired"
 
     event_name = f"wat.local.{status}"
+    warning_context = ""
+    if status in {"revoked_pending", "partial"} or admissibility_state == "warning_only_shadow":
+        warning_context = "wat_shadow_warning"
+    warning_correlation_id = binding_key
     result = VerifierResult(
         validation_status=status,
         admissibility_state=admissibility_state,
@@ -464,6 +497,8 @@ def validate_local(
         ),
         mission_control_event_name=event_name,
         operator_message="",
+        warning_context=warning_context,
+        warning_correlation_id=warning_correlation_id,
     )
     operator_message = build_operator_message(result)
     result = VerifierResult(
@@ -474,5 +509,7 @@ def validate_local(
         audit_event_ref=result.audit_event_ref,
         mission_control_event_name=result.mission_control_event_name,
         operator_message=operator_message,
+        warning_context=result.warning_context,
+        warning_correlation_id=result.warning_correlation_id,
     )
     return result.to_dict()

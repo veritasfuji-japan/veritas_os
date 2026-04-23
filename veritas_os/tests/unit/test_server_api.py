@@ -1064,6 +1064,8 @@ def test_decide_wat_shadow_enabled_emits_events_without_mutating_action(monkeypa
         "event_ts",
         "correlation_id",
         "operator_verbosity",
+        "warning_context",
+        "warning_correlation_id",
     }
     assert summary.get("operator_verbosity") == "minimal"
     assert summary.get("affected_lanes") == ["wat_shadow"]
@@ -1179,6 +1181,8 @@ def test_decide_wat_shadow_expanded_operator_verbosity_surfaces_detail(monkeypat
         "event_ts",
         "correlation_id",
         "operator_verbosity",
+        "warning_context",
+        "warning_correlation_id",
     }
     detail = payload.get("wat_operator_detail", {})
     assert "drift_vector" in detail
