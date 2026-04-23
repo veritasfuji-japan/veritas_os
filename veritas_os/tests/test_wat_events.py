@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from veritas_os.audit.wat_events import (
     derive_latest_revocation_state,
+    persist_wat_validation_event,
     persist_wat_issuance_event,
     persist_wat_revocation_event,
 )
@@ -34,3 +37,48 @@ def test_derive_latest_revocation_state_confirmed(tmp_path: Path) -> None:
     state = derive_latest_revocation_state("wat-2", path=path)
     assert state["status"] == "revoked_confirmed"
     assert state["source"] == "wat_events"
+
+
+def test_primary_audit_path_stores_metadata_and_pointers_only(tmp_path: Path) -> None:
+    path = tmp_path / "wat_events.jsonl"
+    event = persist_wat_issuance_event(
+        wat_id="wat-boundary-1",
+        actor="test",
+        details={
+            "psid": "psid-1",
+            "metadata": {"request_id": "rid-1"},
+            "observable_digest": "digest-ref-001",
+            "observable_digest_payload": {"raw": "must-not-persist"},
+        },
+        path=path,
+    )
+
+    details = event["details"]
+    assert "metadata" in details
+    assert "event_pointers" in details
+    assert details["event_pointers"]["observable_digest_ref"] == "digest-ref-001"
+    assert "observable_digest_payload" not in details
+
+
+def test_retention_policy_version_immutable_after_enforcement(tmp_path: Path) -> None:
+    path = tmp_path / "wat_events.jsonl"
+    persist_wat_issuance_event(
+        wat_id="wat-boundary-2",
+        actor="test",
+        details={
+            "retention_policy_version": "wat_retention_v1",
+            "retention_enforced_at_write": True,
+        },
+        path=path,
+    )
+
+    with pytest.raises(ValueError, match="immutable"):
+        persist_wat_validation_event(
+            wat_id="wat-boundary-2",
+            actor="test",
+            details={
+                "retention_policy_version": "wat_retention_v2",
+                "retention_enforced_at_write": True,
+            },
+            path=path,
+        )

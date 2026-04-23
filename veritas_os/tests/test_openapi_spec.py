@@ -177,3 +177,24 @@ def test_openapi_compliance_config_put_response_includes_bind_fields() -> None:
     assert "execution_intent_id" in properties
     assert "bind_receipt" in properties
     assert "bind_summary" in properties
+
+
+def test_openapi_wat_config_includes_retention_boundary_fields() -> None:
+    """WAT config schema must expose retention boundary lock-in controls."""
+    spec = _load_openapi_spec()
+    wat_props = spec["components"]["schemas"]["WatConfig"]["properties"]
+
+    expected = {
+        "wat_metadata_retention_ttl_seconds",
+        "wat_event_pointer_retention_ttl_seconds",
+        "observable_digest_retention_ttl_seconds",
+        "observable_digest_access_class",
+        "observable_digest_ref",
+        "retention_policy_version",
+        "retention_enforced_at_write",
+    }
+    assert expected.issubset(set(wat_props.keys()))
+    assert wat_props["observable_digest_access_class"]["enum"] == [
+        "restricted",
+        "privileged",
+    ]

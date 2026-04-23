@@ -562,6 +562,43 @@ components:
         signer_backend:
           type: string
           default: existing_signer
+        wat_metadata_retention_ttl_seconds:
+          type: integer
+          default: 7776000
+          minimum: 60
+          maximum: 315360000
+          description: Primary audit path metadata retention TTL (seconds).
+        wat_event_pointer_retention_ttl_seconds:
+          type: integer
+          default: 7776000
+          minimum: 60
+          maximum: 315360000
+          description: Primary audit path event-pointer retention TTL (seconds).
+        observable_digest_retention_ttl_seconds:
+          type: integer
+          default: 31536000
+          minimum: 60
+          maximum: 315360000
+          description: Separate-store full observable digest retention TTL (seconds).
+        observable_digest_access_class:
+          type: string
+          enum:
+          - restricted
+          - privileged
+          default: restricted
+          description: Access control class for separate-store digest payloads.
+        observable_digest_ref:
+          type: string
+          default: separate_store://wat_observables
+          description: Separate-store digest reference prefix.
+        retention_policy_version:
+          type: string
+          default: wat_retention_v1
+          description: Immutable once retention_enforced_at_write=true.
+        retention_enforced_at_write:
+          type: boolean
+          default: true
+          description: Enables write-time retention boundary enforcement.
     PsidConfig:
       type: object
       description: PSID 表示・適用設定
@@ -1619,6 +1656,7 @@ components:
         details:
           type: object
           additionalProperties: true
+          description: Lean primary audit payload; metadata + pointers only.
         trustlog_anchor_ref:
           type: object
           additionalProperties: true

@@ -1329,6 +1329,29 @@ class TestUpdatePolicyValidation:
         result = gov_mod.update_policy({})
         assert result["updated_by"] == "api"
 
+    def test_wat_observable_digest_access_class_enum_validation(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            gov_mod.update_policy(
+                {"wat": {"observable_digest_access_class": "internal_only"}}
+            )
+
+    def test_wat_retention_policy_version_immutable_when_enforced(self):
+        gov_mod.update_policy(
+            {
+                "wat": {
+                    "retention_enforced_at_write": True,
+                    "retention_policy_version": "wat_retention_v1",
+                }
+            }
+        )
+
+        with pytest.raises(ValueError, match="immutable"):
+            gov_mod.update_policy(
+                {"wat": {"retention_policy_version": "wat_retention_v2"}}
+            )
+
 
 class TestUpdatedBySanitization:
     """Ensure updated_by is safe for persistence, display, and audit logging."""

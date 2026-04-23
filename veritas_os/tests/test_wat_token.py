@@ -143,3 +143,21 @@ def test_canonicalization_contains_observable_digest_list_field() -> None:
     )
     canonical = canonicalize_wat_claims(claims).decode("utf-8")
     assert '"observable_digest_list"' in canonical
+
+
+def test_build_wat_claims_includes_observable_digest_ref_linkage() -> None:
+    claims = build_wat_claims(
+        version=WAT_VERSION_V1,
+        psid_full="psid-full-005",
+        action_payload={"action": "allow"},
+        observable_refs=[{"obs": "A"}],
+        issuance_ts=1_712_000_000,
+        expiry_ts=1_712_000_600,
+        session_id="s-5",
+        nonce="n-5",
+        signer_metadata={"source": "unit-test"},
+        observable_digest_ref="separate_store://digests/wat-5",
+        observable_digest_access_class="restricted",
+    )
+    assert claims["observable_digest_ref"] == "separate_store://digests/wat-5"
+    assert claims["observable_digest_access_class"] == "restricted"

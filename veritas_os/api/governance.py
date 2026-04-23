@@ -113,6 +113,49 @@ class WatConfig(BaseModel):
     require_observable_digest: bool = True
     default_ttl_seconds: int = Field(default=300, ge=1, le=86_400)
     signer_backend: str = "existing_signer"
+    wat_metadata_retention_ttl_seconds: int = Field(
+        default=7_776_000,
+        ge=60,
+        le=315_360_000,
+        description="Retention TTL for lean WAT metadata in the primary audit path.",
+    )
+    wat_event_pointer_retention_ttl_seconds: int = Field(
+        default=7_776_000,
+        ge=60,
+        le=315_360_000,
+        description="Retention TTL for event-pointer records in the primary audit path.",
+    )
+    observable_digest_retention_ttl_seconds: int = Field(
+        default=31_536_000,
+        ge=60,
+        le=315_360_000,
+        description="Retention TTL for full observable digests in a separate store.",
+    )
+    observable_digest_access_class: Literal["restricted", "privileged"] = Field(
+        default="restricted",
+        description="Access class for full observable digest store linkage.",
+    )
+    observable_digest_ref: str = Field(
+        default="separate_store://wat_observables",
+        max_length=500,
+        description="Reference prefix for separate full-observable digest storage.",
+    )
+    retention_policy_version: str = Field(
+        default="wat_retention_v1",
+        min_length=1,
+        max_length=120,
+        description=(
+            "Immutable once retention_enforced_at_write=true; identifies retention"
+            " boundary policy revision used at write time."
+        ),
+    )
+    retention_enforced_at_write: bool = Field(
+        default=True,
+        description=(
+            "When true, write-time retention guards are active and "
+            "retention_policy_version becomes immutable."
+        ),
+    )
 
 
 class PsidConfig(BaseModel):
@@ -417,6 +460,8 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     previous = _load()
     current = deepcopy(previous)
 
+    previous_wat = current.get("wat") if isinstance(current.get("wat"), dict) else {}
+
     # Validate and deep-merge nested patches immediately.
     # This prevents silently skipping non-dict payloads and validates each
     # section before it is written into the in-memory aggregate state.
@@ -437,6 +482,20 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
 
         validated_section = model_cls.model_validate(merged_section)
         current[key] = validated_section.model_dump()
+
+    # Retention boundary lock-in:
+    # once retention_enforced_at_write=true, retention_policy_version must not
+    # change for this persisted policy path.
+    current_wat = current.get("wat") if isinstance(current.get("wat"), dict) else {}
+    previous_enforced = bool(previous_wat.get("retention_enforced_at_write"))
+    if previous_enforced:
+        previous_version = str(previous_wat.get("retention_policy_version", "")).strip()
+        current_version = str(current_wat.get("retention_policy_version", "")).strip()
+        if previous_version and current_version and current_version != previous_version:
+            raise ValueError(
+                "wat.retention_policy_version is immutable after "
+                "retention_enforced_at_write=true"
+            )
 
     # Scalar overrides
     for key in ("version",):
