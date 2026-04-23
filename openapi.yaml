@@ -847,6 +847,61 @@ components:
           - $ref: '#/components/schemas/BindSummary'
           - type: 'null'
           description: Shared compact bind summary object.
+    SystemHaltResponse:
+      type: object
+      description: System halt response with bind lineage fields.
+      properties:
+        ok:
+          type: boolean
+        halted:
+          type: boolean
+        halted_by:
+          type: string
+          nullable: true
+        halted_at:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        bind_outcome:
+          type: string
+          nullable: true
+          description: Present when bind adjudication runs for system halt mutation.
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
+        bind_failure_reason:
+          type: string
+          nullable: true
+          description: Compact bind failure reason resolved from receipt checks.
+        bind_reason_code:
+          type: string
+          nullable: true
+          description: Stable bind reason code when available.
+        bind_receipt_id:
+          type: string
+          nullable: true
+        execution_intent_id:
+          type: string
+          nullable: true
+        bind_receipt:
+          allOf:
+          - $ref: '#/components/schemas/BindReceipt'
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        bind_summary:
+          anyOf:
+          - $ref: '#/components/schemas/BindSummary'
+          - type: 'null'
+          description: Shared compact bind summary object.
     ExecutionIntent:
       type: object
       description: Decision-linked execution attempt descriptor.
@@ -2972,12 +3027,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  halted:
-                    type: boolean
+                $ref: '#/components/schemas/SystemHaltResponse'
   /v1/system/resume:
     post:
       summary: System resume

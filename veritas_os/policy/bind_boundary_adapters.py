@@ -428,3 +428,78 @@ class ComplianceConfigUpdateAdapter(BindAdapterContract):
     def describe_target(self) -> str:
         """Return human-readable target descriptor."""
         return self.target_description
+
+
+@dataclass
+class SystemHaltAdapter(BindAdapterContract):
+    """Bind adapter for operator-governed emergency system halt."""
+
+    status_reader: Callable[[], dict[str, Any]]
+    halt_executor: Callable[..., dict[str, Any]]
+    reason: str
+    operator: str
+    target_description: str = "system/halt"
+
+    def __post_init__(self) -> None:
+        self._last_halt_result: dict[str, Any] | None = None
+
+    def snapshot(self) -> dict[str, Any]:
+        """Capture deterministic pre-halt status snapshot."""
+        return {"status": dict(self.status_reader())}
+
+    def fingerprint_state(self, snapshot: Any) -> str:
+        """Return deterministic fingerprint for halt status snapshot."""
+        if not isinstance(snapshot, dict):
+            raise ValueError("BIND_STATE_SNAPSHOT_INVALID")
+        status = snapshot.get("status")
+        if not isinstance(status, dict):
+            raise ValueError("BIND_SYSTEM_HALT_SNAPSHOT_INVALID")
+        return sha256_of_canonical_json(status)
+
+    def validate_authority(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Require explicit authority flag in bind approval context."""
+        del snapshot
+        if not isinstance(intent.approval_context, dict):
+            return False
+        return bool(intent.approval_context.get("system_halt_approved"))
+
+    def validate_constraints(self, intent: ExecutionIntent, snapshot: Any) -> dict[str, bool] | None:
+        """Validate input constraints and snapshot shape."""
+        del intent
+        status = snapshot.get("status") if isinstance(snapshot, dict) else None
+        return {
+            "snapshot_has_status": isinstance(status, dict),
+            "reason_present": bool(self.reason.strip()),
+            "operator_present": bool(self.operator.strip()),
+        }
+
+    def assess_runtime_risk(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Emergency halt path is always admissible from runtime risk perspective."""
+        del intent, snapshot
+        return True
+
+    def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Execute system halt through existing oversight controller."""
+        del intent, snapshot
+        result = self.halt_executor(reason=self.reason, operator=self.operator)
+        if not isinstance(result, dict):
+            raise ValueError("BIND_SYSTEM_HALT_RESULT_INVALID")
+        self._last_halt_result = result
+        return True
+
+    def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Verify system is halted after apply execution."""
+        del intent, snapshot
+        status = self.status_reader()
+        if not isinstance(status, dict):
+            return False
+        return bool(status.get("halted"))
+
+    def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """No-op revert: halt action is operator-controlled and intentionally sticky."""
+        del intent, snapshot
+        return True
+
+    def describe_target(self) -> str:
+        """Return human-readable target descriptor."""
+        return self.target_description

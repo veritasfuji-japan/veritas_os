@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from veritas_os.api.auth import require_permission
 from veritas_os.api.bind_summary import build_bind_response_payload
 from veritas_os.api.rbac import Permission
-from veritas_os.api.schemas import ComplianceConfigResponse
+from veritas_os.api.schemas import ComplianceConfigResponse, SystemHaltResponse
 from veritas_os.api.utils import _is_direct_fuji_api_enabled
 from veritas_os.api.pipeline_orchestrator import (
     get_runtime_config,
@@ -31,6 +31,7 @@ from veritas_os.policy.bind_artifacts import FinalOutcome
 from veritas_os.policy.compliance_config_update import (
     update_compliance_config_with_bind_boundary,
 )
+from veritas_os.policy.system_halt_update import halt_system_with_bind_boundary
 from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.storage.factory import get_backend_info
 # Note: report/compliance functions accessed via _get_server() to support
@@ -776,15 +777,50 @@ def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="t
 # System halt / resume (Art. 14(4))
 # ------------------------------------------------------------------
 
-@router.post("/v1/system/halt", dependencies=[Depends(require_permission(Permission.config_write))])
+@router.post(
+    "/v1/system/halt",
+    response_model=SystemHaltResponse,
+    dependencies=[Depends(require_permission(Permission.config_write))],
+)
 def system_halt(body: SystemHaltRequest):
     """Halt the AI decision system (Art. 14(4) emergency stop)."""
     srv = _get_server()
     try:
-        result = srv.SystemHaltController.halt(
-            reason=body.reason, operator=body.operator,
-        )
-        return {"ok": True, **result}
+        current_policy = srv.get_policy()
+        payload = {"reason": body.reason, "operator": body.operator}
+        decision_id = uuid4().hex
+        bind_receipt = halt_system_with_bind_boundary(
+            decision_id=decision_id,
+            request_id=decision_id,
+            actor_identity=body.operator,
+            policy_snapshot_id=str(
+                current_policy.get("updated_at")
+                or current_policy.get("version")
+                or "system_halt"
+            ),
+            decision_hash=sha256_of_canonical_json(payload),
+            reason=body.reason,
+            operator=body.operator,
+            status_reader=srv.SystemHaltController.status,
+            halt_executor=srv.SystemHaltController.halt,
+            approval_context={"system_halt_approved": True},
+            governance_policy=current_policy if isinstance(current_policy, dict) else None,
+        ).to_dict()
+        bind_receipt.setdefault("target_path", "/v1/system/halt")
+        bind_receipt.setdefault("target_type", "system_halt")
+        bind_payload = build_bind_response_payload(bind_receipt)
+        status = srv.SystemHaltController.status()
+        if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": "system halt bind approval validation failed",
+                    **status,
+                    **bind_payload,
+                },
+            )
+        return {"ok": True, **status, **bind_payload}
     except Exception as e:
         logger.error("system_halt failed: %s", e)
         return JSONResponse(

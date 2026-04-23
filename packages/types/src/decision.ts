@@ -1286,6 +1286,18 @@ export interface DeploymentReadinessResponse {
 export interface SystemHaltResponse {
   ok: boolean;
   halted: boolean;
+  halted_by?: string | null;
+  halted_at?: string | null;
+  reason?: string | null;
+  bind_outcome?: FinalOutcomeStatus | null;
+  bind_failure_reason?: string | null;
+  bind_reason_code?: string | null;
+  bind_receipt_id?: string | null;
+  execution_intent_id?: string | null;
+  bind_receipt?: Record<string, unknown> | null;
+  bind_summary?: Record<string, unknown> | null;
+  target_metadata?: Record<string, unknown> | null;
+  error?: string | null;
   [key: string]: unknown;
 }
 

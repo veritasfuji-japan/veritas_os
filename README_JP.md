@@ -60,10 +60,11 @@ VERITAS OS は次を実現します。
 ## 事実とロードマップの境界
 
 - **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済みで、公開上は **ベータ品質のガバナンス基盤** として位置づけます
-- **現時点の事実（bind policy surface）**: bind-boundary adjudication は少なくとも次の3つの運用経路で実装されています。
+- **現時点の事実（bind policy surface）**: bind-boundary adjudication は少なくとも次の4つの運用経路で実装されています。
   1) `PUT /v1/governance/policy`（governance policy update path）
   2) `POST /v1/governance/policy-bundles/promote`（policy bundle promotion path）
   3) `PUT /v1/compliance/config`（runtime compliance config mutation path）
+  4) `POST /v1/system/halt`（operator emergency halt mutation path）
 - **現時点の事実（bind outcome公開契約）**: ガバナンス系レスポンスでは従来のフラットな bind フィールド（`bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id`）に加えて、共通のコンパクト語彙として加算的 `bind_summary` も返却されます
 - **現時点の事実（bind artifact family）**: `BindReceipt` は完全なガバナンス成果物として永続化され、成果物契約に canonical target metadata を含みます
 - **現時点の事実（replay/運用フロー）**: 運用画面/API は bind 成果物の list/export/detail エンドポイント（`/v1/governance/bind-receipts` / `/v1/governance/bind-receipts/export` / `/v1/governance/bind-receipts/{bind_receipt_id}`）を提供し、mutation/export レスポンスでは監査トリアージ向けに `bind_summary` を再利用します

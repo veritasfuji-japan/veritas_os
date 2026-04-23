@@ -179,6 +179,26 @@ def test_openapi_compliance_config_put_response_includes_bind_fields() -> None:
     assert "bind_summary" in properties
 
 
+def test_openapi_system_halt_response_includes_bind_fields() -> None:
+    """System halt mutation route should document bind lineage fields."""
+    spec = _load_openapi_spec()
+    schema = (
+        spec["paths"]["/v1/system/halt"]["post"]["responses"]["200"]["content"]
+        ["application/json"]["schema"]
+    )
+    if "$ref" in schema:
+        ref_name = str(schema["$ref"]).split("/")[-1]
+        schema = spec["components"]["schemas"][ref_name]
+    properties = schema["properties"]
+    assert "bind_outcome" in properties
+    assert "bind_failure_reason" in properties
+    assert "bind_reason_code" in properties
+    assert "bind_receipt_id" in properties
+    assert "execution_intent_id" in properties
+    assert "bind_receipt" in properties
+    assert "bind_summary" in properties
+
+
 def test_openapi_wat_config_includes_retention_boundary_fields() -> None:
     """WAT config schema must expose retention boundary lock-in controls."""
     spec = _load_openapi_spec()
