@@ -47,6 +47,10 @@ class WatRevocationRequest(BaseModel):
     """Request body for WAT revocation transitions."""
 
     confirmed: bool = True
+    confirmation: str = Field(
+        default="",
+        description="Explicit confirmation phrase required for confirmed revocation state changes.",
+    )
     reason: str = Field(default="", max_length=2000)
     details: Dict[str, Any] = Field(default_factory=dict)
 
@@ -169,7 +173,8 @@ def revoke_wat(wat_id: str, body: WatRevocationRequest, request: Request) -> Dic
     )
 
     confirmed_event: Optional[Dict[str, Any]] = None
-    if body.confirmed:
+    explicit_confirmation = body.confirmation.strip() == "CONFIRM_REVOKED_CONFIRMED"
+    if body.confirmed and explicit_confirmation:
         confirmed_event = persist_wat_revocation_event(
             wat_id=wat_id,
             actor=actor,
@@ -182,4 +187,5 @@ def revoke_wat(wat_id: str, body: WatRevocationRequest, request: Request) -> Dic
         "wat_id": wat_id,
         "pending": pending,
         "confirmed": confirmed_event,
+        "revocation_confirmation_required": True,
     }

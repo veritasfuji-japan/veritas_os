@@ -138,7 +138,15 @@ def _normalize_retention_boundary_details(
 
     metadata = raw.get("metadata")
     normalized_metadata: Dict[str, Any] = dict(metadata) if isinstance(metadata, dict) else {}
-    for key in ("psid", "ttl_seconds", "mode", "reason", "request_id"):
+    for key in (
+        "psid",
+        "ttl_seconds",
+        "mode",
+        "reason",
+        "request_id",
+        "warning_context",
+        "warning_correlation_id",
+    ):
         if key in raw:
             normalized_metadata[key] = raw.get(key)
 
@@ -209,7 +217,11 @@ def _persist_wat_event(
         raise ValueError(f"unsupported_wat_event_type: {normalized_event_type}")
 
     now_event_ts = _utc_now_iso_z()
-    normalized_details = _normalize_retention_boundary_details(details)
+    raw_details = dict(details) if isinstance(details, dict) else {}
+    if str(status or "").strip().lower() == "warning":
+        raw_details.setdefault("warning_context", "wat_shadow_warning")
+        raw_details.setdefault("warning_correlation_id", str(uuid.uuid4()))
+    normalized_details = _normalize_retention_boundary_details(raw_details)
     record: Dict[str, Any] = {
         "event_id": str(uuid.uuid4()),
         "ts": now_event_ts,

@@ -128,13 +128,41 @@ def test_revoke_path(monkeypatch, tmp_path: Path) -> None:
     response = client.post(
         f"/v1/wat/revocation/{issue['wat_id']}",
         headers=_headers("k-operator"),
-        json={"confirmed": True, "reason": "manual"},
+        json={
+            "confirmed": True,
+            "confirmation": "CONFIRM_REVOKED_CONFIRMED",
+            "reason": "manual",
+        },
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["pending"]["event_type"] == "wat_revocation_pending"
     assert data["confirmed"]["event_type"] == "wat_revoked_confirmed"
+    assert data["revocation_confirmation_required"] is True
+
+
+def test_revoke_confirmed_requires_explicit_confirmation(monkeypatch, tmp_path: Path) -> None:
+    _configure_auth(monkeypatch)
+    _configure_wat_store(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    issue = client.post(
+        "/v1/wat/issue-shadow",
+        headers=_headers("k-operator"),
+        json={"psid": "psid-r2"},
+    ).json()
+
+    response = client.post(
+        f"/v1/wat/revocation/{issue['wat_id']}",
+        headers=_headers("k-operator"),
+        json={"confirmed": True, "reason": "manual"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pending"]["event_type"] == "wat_revocation_pending"
+    assert data["confirmed"] is None
 
 
 def test_auth_rbac_read_vs_mutation(monkeypatch, tmp_path: Path) -> None:

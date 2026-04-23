@@ -173,6 +173,8 @@ class ShadowValidationConfig(BaseModel):
     warning_only_until: str = ""
     timestamp_skew_tolerance_seconds: int = Field(default=5, ge=0, le=3600)
     replay_binding_required: bool = False
+    replay_binding_escalation_threshold: int = Field(default=4, ge=1, le=16)
+    partial_validation_requires_confirmation: bool = True
 
 
 class RevocationConfig(BaseModel):
@@ -183,6 +185,8 @@ class RevocationConfig(BaseModel):
     alert_target_seconds: int = Field(default=30, ge=1, le=86_400)
     convergence_target_p95_seconds: int = Field(default=60, ge=1, le=86_400)
     degrade_on_pending: bool = True
+    revocation_confirmation_required: bool = True
+    auto_escalate_confirmed_revocations: bool = False
 
 
 class DriftScoringConfig(BaseModel):

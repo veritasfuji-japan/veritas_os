@@ -636,6 +636,14 @@ components:
         replay_binding_required:
           type: boolean
           default: false
+        replay_binding_escalation_threshold:
+          type: integer
+          default: 4
+          minimum: 1
+          maximum: 16
+        partial_validation_requires_confirmation:
+          type: boolean
+          default: true
     RevocationConfig:
       type: object
       description: 失効反映の整合性設定
@@ -661,6 +669,12 @@ components:
         degrade_on_pending:
           type: boolean
           default: true
+        revocation_confirmation_required:
+          type: boolean
+          default: true
+        auto_escalate_confirmed_revocations:
+          type: boolean
+          default: false
     DriftScoringConfig:
       type: object
       description: ドリフト評価スコア重み
@@ -1125,6 +1139,10 @@ components:
           nullable: true
         revocation_status:
           type: string
+          enum:
+          - active
+          - revoked_pending
+          - revoked_confirmed
           nullable: true
         action_summary:
           type: string
@@ -1171,12 +1189,18 @@ components:
           - minimal
           - expanded
           default: minimal
+        warning_context:
+          type: string
+        warning_correlation_id:
+          type: string
       required:
       - integrity_severity
       - affected_lanes
       - event_ts
       - correlation_id
       - operator_verbosity
+      - warning_context
+      - warning_correlation_id
       additionalProperties: false
     DecideResponse:
       type: object
@@ -1705,6 +1729,10 @@ components:
         confirmed:
           type: boolean
           default: true
+        confirmation:
+          type: string
+          default: ''
+          description: Must be CONFIRM_REVOKED_CONFIRMED for confirmed state changes.
         reason:
           type: string
         details:

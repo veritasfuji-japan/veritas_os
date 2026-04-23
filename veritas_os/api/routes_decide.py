@@ -297,6 +297,12 @@ def _run_wat_shadow_observer(
     revocation_state = _resolve_shadow_revocation_state(wat_id=wat_id)
     effective_revocation_status = str(revocation_state.get("status", "active"))
     degrade_on_pending = bool(revocation_cfg.get("degrade_on_pending", True))
+    replay_binding_escalation_threshold = int(
+        shadow_cfg.get("replay_binding_escalation_threshold", 4)
+    )
+    partial_validation_requires_confirmation = bool(
+        shadow_cfg.get("partial_validation_requires_confirmation", True)
+    )
 
     verifier_result = validate_local(
         signed_wat=signed_wat,
@@ -320,6 +326,8 @@ def _run_wat_shadow_observer(
                 shadow_cfg.get("warning_only_until")
             ),
             "replay_binding_required": shadow_cfg.get("replay_binding_required", False),
+            "replay_binding_escalation_threshold": replay_binding_escalation_threshold,
+            "partial_validation_requires_confirmation": partial_validation_requires_confirmation,
             "drift_weights": drift_runtime_cfg["drift_weights"],
             "drift_thresholds": drift_runtime_cfg["drift_thresholds"],
         },
@@ -353,6 +361,8 @@ def _run_wat_shadow_observer(
                 "validation_status": validation_status,
                 "failure_type": failure_type or None,
                 "observable_digest_list": observable_digest_list,
+                "warning_context": "wat_shadow_warning" if event_type != "wat_validated" else "",
+                "warning_correlation_id": request_id or str(issue_event.get("event_id") or wat_id),
             },
         )
         replay_status = "suspected" if failure_type == "replay_detected" else "clear"
@@ -371,6 +381,16 @@ def _run_wat_shadow_observer(
     if operator_verbosity not in {"minimal", "expanded"}:
         operator_verbosity = "minimal"
     correlation_id = request_id or str(issue_event.get("event_id") or wat_id)
+    warning_context = ""
+    if validation_status in {"revoked_pending", "partial"} or integrity_severity == "warning":
+        warning_context = "wat_shadow_warning"
+        logger.warning(
+            "WAT shadow warning context=%s correlation_id=%s status=%s failure_type=%s",
+            warning_context,
+            correlation_id,
+            validation_status,
+            failure_type or "",
+        )
     event_ts = format_event_ts_utc(
         persisted_validation.get("event_ts") or persisted_validation.get("ts")
     )
@@ -388,6 +408,8 @@ def _run_wat_shadow_observer(
         "drift_vector": drift_vector,
         "replay_status": replay_status,
         "revocation_status": effective_revocation_status,
+        "warning_context": warning_context,
+        "warning_correlation_id": correlation_id,
         "integrity_summary": integrity_summary,
         "issue_event_id": issue_event.get("event_id"),
         "validation_event_id": persisted_validation.get("event_id"),
@@ -462,6 +484,14 @@ def _attach_wat_contract_fields(payload: Dict[str, Any], wat_shadow: Dict[str, A
             wat_shadow.get("correlation_id") or payload.get("request_id") or wat_shadow.get("wat_id") or ""
         ),
         "operator_verbosity": operator_verbosity,
+        "warning_context": str(wat_shadow.get("warning_context") or ""),
+        "warning_correlation_id": str(
+            wat_shadow.get("warning_correlation_id")
+            or wat_shadow.get("correlation_id")
+            or payload.get("request_id")
+            or wat_shadow.get("wat_id")
+            or ""
+        ),
     }
     if operator_verbosity == "expanded":
         payload["wat_operator_detail"] = {
