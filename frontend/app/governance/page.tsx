@@ -209,6 +209,45 @@ export default function GovernanceControlPage(): JSX.Element {
                         onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat: { ...prev.wat, require_observable_digest: event.target.checked } }))}
                       />
                     </label>
+                    <label className="text-xs">wat.wat_metadata_retention_ttl_seconds
+                      <input
+                        type="number"
+                        min={60}
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={draft.wat.wat_metadata_retention_ttl_seconds}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          wat: { ...prev.wat, wat_metadata_retention_ttl_seconds: Math.max(60, Number(event.target.value) || 60) },
+                        }))}
+                      />
+                    </label>
+                    <label className="text-xs">wat.wat_event_pointer_retention_ttl_seconds
+                      <input
+                        type="number"
+                        min={60}
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={draft.wat.wat_event_pointer_retention_ttl_seconds}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          wat: { ...prev.wat, wat_event_pointer_retention_ttl_seconds: Math.max(60, Number(event.target.value) || 60) },
+                        }))}
+                      />
+                    </label>
+                    <label className="text-xs">wat.observable_digest_retention_ttl_seconds
+                      <input
+                        type="number"
+                        min={60}
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={draft.wat.observable_digest_retention_ttl_seconds}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          wat: { ...prev.wat, observable_digest_retention_ttl_seconds: Math.max(60, Number(event.target.value) || 60) },
+                        }))}
+                      />
+                    </label>
                     <label className="text-xs">wat.default_ttl_seconds
                       <input
                         type="number"
@@ -309,6 +348,58 @@ export default function GovernanceControlPage(): JSX.Element {
                         <option value="bounded_eventual_consistency">bounded_eventual_consistency</option>
                       </select>
                     </label>
+                    <label className="text-xs">shadow_validation.replay_binding_escalation_threshold
+                      <input
+                        type="number"
+                        min={1}
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={draft.shadow_validation.replay_binding_escalation_threshold}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          shadow_validation: {
+                            ...prev.shadow_validation,
+                            replay_binding_escalation_threshold: Math.max(1, Number(event.target.value) || 1),
+                          },
+                        }))}
+                      />
+                    </label>
+                    <label className="text-xs">shadow_validation.partial_validation_requires_confirmation
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={draft.shadow_validation.partial_validation_requires_confirmation}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          shadow_validation: { ...prev.shadow_validation, partial_validation_requires_confirmation: event.target.checked },
+                        }))}
+                      />
+                    </label>
+                    <label className="text-xs">revocation.revocation_confirmation_required
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={draft.revocation.revocation_confirmation_required}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          revocation: { ...prev.revocation, revocation_confirmation_required: event.target.checked },
+                        }))}
+                      />
+                    </label>
+                    <label className="text-xs">revocation.auto_escalate_confirmed_revocations
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={draft.revocation.auto_escalate_confirmed_revocations}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({
+                          ...prev,
+                          revocation: { ...prev.revocation, auto_escalate_confirmed_revocations: event.target.checked },
+                        }))}
+                      />
+                    </label>
                     <label className="text-xs">operator_verbosity
                       <select
                         aria-label="operator_verbosity"
@@ -320,7 +411,7 @@ export default function GovernanceControlPage(): JSX.Element {
                           operator_verbosity: event.target.value as typeof prev.operator_verbosity,
                         }))}
                       >
-                        <option value="minimal">minimal</option>
+                        <option value="minimal">minimal (default)</option>
                         <option value="expanded">expanded</option>
                       </select>
                     </label>

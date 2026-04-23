@@ -63,6 +63,69 @@ export interface ApprovalWorkflowConfig {
   approver_identities: string[];
 }
 
+/** WAT issuance + retention boundary controls. */
+export interface WatConfig {
+  enabled: boolean;
+  issuance_mode: "shadow_only" | "disabled";
+  require_observable_digest: boolean;
+  default_ttl_seconds: number;
+  signer_backend: string;
+  wat_metadata_retention_ttl_seconds: number;
+  wat_event_pointer_retention_ttl_seconds: number;
+  observable_digest_retention_ttl_seconds: number;
+  observable_digest_access_class: "restricted" | "privileged";
+  observable_digest_ref: string;
+  retention_policy_version: string;
+  retention_enforced_at_write: boolean;
+}
+
+/** Policy-scoped identifier display and enforcement settings. */
+export interface PsidConfig {
+  enforcement_mode: "full_digest_only";
+  display_length: number;
+}
+
+/** Shadow validation rollout guardrails. */
+export interface ShadowValidationConfig {
+  enabled: boolean;
+  partial_validation_default: "non_admissible";
+  warning_only_until: string;
+  timestamp_skew_tolerance_seconds: number;
+  replay_binding_required: boolean;
+  replay_binding_escalation_threshold: number;
+  partial_validation_requires_confirmation: boolean;
+}
+
+/** Revocation propagation consistency controls. */
+export interface RevocationConfig {
+  enabled: boolean;
+  mode: "bounded_eventual_consistency";
+  alert_target_seconds: number;
+  convergence_target_p95_seconds: number;
+  degrade_on_pending: boolean;
+  revocation_confirmation_required: boolean;
+  auto_escalate_confirmed_revocations: boolean;
+}
+
+/** Drift-score vector weights and threshold boundaries. */
+export interface DriftScoringConfig {
+  policy_weight: number;
+  signature_weight: number;
+  observable_weight: number;
+  temporal_weight: number;
+  healthy_threshold: number;
+  critical_threshold: number;
+}
+
+/** Runtime bind adjudication safety controls. */
+export interface BindAdjudicationPolicyConfig {
+  missing_signal_default: "block" | "escalate";
+  drift_required: boolean;
+  ttl_required: boolean;
+  approval_freshness_required: boolean;
+  rollback_on_apply_failure: boolean;
+}
+
 /**
  * Full governance policy object returned by the backend.
  *
@@ -76,6 +139,12 @@ export interface GovernancePolicy {
   log_retention: LogRetention;
   rollout_controls: RolloutControls;
   approval_workflow: ApprovalWorkflowConfig;
+  wat: WatConfig;
+  psid: PsidConfig;
+  shadow_validation: ShadowValidationConfig;
+  revocation: RevocationConfig;
+  drift_scoring: DriftScoringConfig;
+  bind_adjudication: BindAdjudicationPolicyConfig;
   operator_verbosity: "minimal" | "expanded";
   updated_at: string;
   updated_by: string;

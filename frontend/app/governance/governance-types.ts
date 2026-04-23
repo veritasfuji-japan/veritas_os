@@ -14,21 +14,48 @@ export interface WatConfigUI {
   issuance_mode: WatIssuanceMode;
   require_observable_digest: boolean;
   default_ttl_seconds: number;
+  signer_backend: string;
+  wat_metadata_retention_ttl_seconds: number;
+  wat_event_pointer_retention_ttl_seconds: number;
+  observable_digest_retention_ttl_seconds: number;
+  observable_digest_access_class: "restricted" | "privileged";
+  observable_digest_ref: string;
+  retention_policy_version: string;
+  retention_enforced_at_write: boolean;
 }
 
 export interface PsidConfigUI {
+  enforcement_mode: "full_digest_only";
   display_length: number;
 }
 
 export interface ShadowValidationConfigUI {
+  enabled: boolean;
   replay_binding_required: boolean;
+  replay_binding_escalation_threshold: number;
   partial_validation_default: PartialValidationDefault;
+  partial_validation_requires_confirmation: boolean;
   warning_only_until: string;
   timestamp_skew_tolerance_seconds: number;
 }
 
 export interface RevocationConfigUI {
+  enabled: boolean;
   mode: RevocationMode;
+  alert_target_seconds: number;
+  convergence_target_p95_seconds: number;
+  degrade_on_pending: boolean;
+  revocation_confirmation_required: boolean;
+  auto_escalate_confirmed_revocations: boolean;
+}
+
+
+export interface BindAdjudicationConfigUI {
+  missing_signal_default: "block" | "escalate";
+  drift_required: boolean;
+  ttl_required: boolean;
+  approval_freshness_required: boolean;
+  rollback_on_apply_failure: boolean;
 }
 
 export interface DriftScoringConfigUI {
@@ -51,6 +78,7 @@ export interface GovernancePolicyUI extends GovernancePolicy {
   shadow_validation: ShadowValidationConfigUI;
   revocation: RevocationConfigUI;
   drift_scoring: DriftScoringConfigUI;
+  bind_adjudication: BindAdjudicationConfigUI;
   operator_verbosity: OperatorVerbosity;
 }
 

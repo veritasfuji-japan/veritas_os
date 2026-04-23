@@ -56,18 +56,36 @@ const MOCK_POLICY = {
       issuance_mode: "shadow_only",
       require_observable_digest: true,
       default_ttl_seconds: 300,
+      signer_backend: "existing_signer",
+      wat_metadata_retention_ttl_seconds: 7776000,
+      wat_event_pointer_retention_ttl_seconds: 7776000,
+      observable_digest_retention_ttl_seconds: 31536000,
+      observable_digest_access_class: "restricted",
+      observable_digest_ref: "separate_store://wat_observables",
+      retention_policy_version: "wat_retention_v1",
+      retention_enforced_at_write: true,
     },
     psid: {
+      enforcement_mode: "full_digest_only",
       display_length: 12,
     },
     shadow_validation: {
+      enabled: true,
       replay_binding_required: true,
+      replay_binding_escalation_threshold: 4,
       partial_validation_default: "non_admissible",
+      partial_validation_requires_confirmation: true,
       warning_only_until: "2026-12-31T00:00:00Z",
       timestamp_skew_tolerance_seconds: 30,
     },
     revocation: {
+      enabled: true,
       mode: "bounded_eventual_consistency",
+      alert_target_seconds: 30,
+      convergence_target_p95_seconds: 60,
+      degrade_on_pending: true,
+      revocation_confirmation_required: true,
+      auto_escalate_confirmed_revocations: false,
     },
     drift_scoring: {
       policy_weight: 0.4,
@@ -77,6 +95,14 @@ const MOCK_POLICY = {
       healthy_threshold: 0.2,
       critical_threshold: 0.5,
     },
+    bind_adjudication: {
+      missing_signal_default: "block",
+      drift_required: true,
+      ttl_required: false,
+      approval_freshness_required: false,
+      rollback_on_apply_failure: false,
+    },
+    operator_verbosity: "minimal",
     updated_at: "2026-02-12T00:00:00+00:00",
     updated_by: "system",
   },
@@ -150,6 +176,10 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByText("psid.display_length")).toBeInTheDocument();
       expect(screen.getByText("shadow_validation.replay_binding_required")).toBeInTheDocument();
       expect(screen.getByLabelText("revocation.mode")).toBeInTheDocument();
+      expect(screen.getByText("wat.wat_metadata_retention_ttl_seconds")).toBeInTheDocument();
+      expect(screen.getByText("shadow_validation.replay_binding_escalation_threshold")).toBeInTheDocument();
+      expect(screen.getByText("revocation.revocation_confirmation_required")).toBeInTheDocument();
+      expect(screen.getByLabelText("operator_verbosity")).toHaveTextContent("minimal (default)");
       expect(screen.queryByText("wat_settings")).not.toBeInTheDocument();
     });
   });

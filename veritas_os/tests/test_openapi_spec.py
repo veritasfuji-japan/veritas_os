@@ -198,3 +198,31 @@ def test_openapi_wat_config_includes_retention_boundary_fields() -> None:
         "restricted",
         "privileged",
     ]
+
+
+def test_openapi_wat_operator_summary_and_governance_defaults_locked() -> None:
+    """WAT summary and governance defaults must stay synchronized with runtime lock-in."""
+    spec = _load_openapi_spec()
+
+    wat_summary = spec["components"]["schemas"]["WatOperatorSummary"]
+    summary_props = wat_summary["properties"]
+    assert summary_props["integrity_severity"]["enum"] == ["healthy", "warning", "critical"]
+    assert "affected_lanes" in summary_props
+    assert "event_ts" in summary_props
+    assert "correlation_id" in summary_props
+    assert summary_props["operator_verbosity"]["default"] == "minimal"
+    assert "warning_context" in summary_props
+    assert "warning_correlation_id" in summary_props
+
+    shadow_props = spec["components"]["schemas"]["ShadowValidationConfig"]["properties"]
+    assert shadow_props["partial_validation_default"]["default"] == "non_admissible"
+    assert shadow_props["replay_binding_escalation_threshold"]["default"] == 4
+    assert shadow_props["partial_validation_requires_confirmation"]["default"] is True
+
+    revocation_props = spec["components"]["schemas"]["RevocationConfig"]["properties"]
+    assert revocation_props["mode"]["enum"] == ["bounded_eventual_consistency"]
+    assert revocation_props["revocation_confirmation_required"]["default"] is True
+    assert revocation_props["auto_escalate_confirmed_revocations"]["default"] is False
+
+    policy_props = spec["components"]["schemas"]["GovernancePolicy"]["properties"]
+    assert policy_props["operator_verbosity"]["default"] == "minimal"
