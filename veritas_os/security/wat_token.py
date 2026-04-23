@@ -13,6 +13,10 @@ from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 from veritas_os.security.signing import Signer
 
 WAT_VERSION_V1 = "1"
+ALLOWED_OBSERVABLE_DIGEST_ACCESS_CLASSES: frozenset[str] = frozenset({
+    "restricted",
+    "privileged",
+})
 
 
 def canonicalize_wat_claims(claims: Mapping[str, Any]) -> bytes:
@@ -74,8 +78,17 @@ def build_wat_claims(
     action_summary: str | None = None,
     resource_summary: str | None = None,
     psid_display_length: int = 12,
+    observable_digest_ref: str | None = None,
+    observable_digest_access_class: str = "restricted",
+    retention_policy_version: str = "wat_retention_v1",
+    retention_enforced_at_write: bool = True,
 ) -> dict[str, Any]:
     """Build immutable WAT claims with required fields for v1."""
+    normalized_access_class = str(observable_digest_access_class).strip().lower()
+    if normalized_access_class not in ALLOWED_OBSERVABLE_DIGEST_ACCESS_CLASSES:
+        raise ValueError(
+            f"invalid_observable_digest_access_class: {observable_digest_access_class}"
+        )
     observable_digest_list = compute_observable_digests(observable_refs)
     claims: dict[str, Any] = {
         "wat_id": wat_id or str(uuid4()),
@@ -91,6 +104,11 @@ def build_wat_claims(
         "session_id": session_id,
         "nonce": nonce,
         "signer": dict(signer_metadata),
+        "observable_digest_ref": str(observable_digest_ref or "").strip(),
+        "observable_digest_access_class": normalized_access_class,
+        "retention_policy_version": str(retention_policy_version).strip()
+        or "wat_retention_v1",
+        "retention_enforced_at_write": bool(retention_enforced_at_write),
     }
 
     if decision_reason is not None:

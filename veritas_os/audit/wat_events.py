@@ -37,6 +37,15 @@ SUPPORTED_WAT_EVENT_TYPES: frozenset[str] = frozenset({
     "wat_partial_validation_blocked",
 })
 
+_DEFAULT_WAT_METADATA_RETENTION_TTL_SECONDS = 7_776_000
+_DEFAULT_WAT_EVENT_POINTER_RETENTION_TTL_SECONDS = 7_776_000
+_DEFAULT_OBSERVABLE_DIGEST_RETENTION_TTL_SECONDS = 31_536_000
+_DEFAULT_RETENTION_POLICY_VERSION = "wat_retention_v1"
+_ALLOWED_OBSERVABLE_DIGEST_ACCESS_CLASSES: frozenset[str] = frozenset({
+    "restricted",
+    "privileged",
+})
+
 
 def _utc_now_iso_z() -> str:
     """Return current UTC timestamp in RFC3339-like ``Z`` format."""
@@ -116,6 +125,66 @@ def _build_anchor_reference(event_payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"error": "anchor_append_failed"}
 
 
+def _normalize_retention_boundary_details(
+    details: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Normalize event details to retention boundary-safe payloads.
+
+    Primary audit path remains lean: only metadata and event-pointer fields are
+    persisted. Full observable digests are represented by
+    ``observable_digest_ref`` linkage to a separate store.
+    """
+    raw = details if isinstance(details, dict) else {}
+
+    metadata = raw.get("metadata")
+    normalized_metadata: Dict[str, Any] = dict(metadata) if isinstance(metadata, dict) else {}
+    for key in ("psid", "ttl_seconds", "mode", "reason", "request_id"):
+        if key in raw:
+            normalized_metadata[key] = raw.get(key)
+
+    pointers = raw.get("event_pointers")
+    normalized_pointers: Dict[str, Any] = dict(pointers) if isinstance(pointers, dict) else {}
+
+    observable_digest_ref = str(
+        raw.get("observable_digest_ref") or raw.get("observable_digest") or ""
+    ).strip()
+    if observable_digest_ref:
+        normalized_pointers["observable_digest_ref"] = observable_digest_ref
+
+    access_class = str(raw.get("observable_digest_access_class") or "restricted").strip().lower()
+    if access_class not in _ALLOWED_OBSERVABLE_DIGEST_ACCESS_CLASSES:
+        raise ValueError(f"invalid_observable_digest_access_class: {access_class}")
+
+    def _coerce_ttl(value: Any, default_value: int) -> int:
+        try:
+            return max(60, int(value))
+        except (TypeError, ValueError):
+            return default_value
+
+    return {
+        "metadata": normalized_metadata,
+        "event_pointers": normalized_pointers,
+        "wat_metadata_retention_ttl_seconds": _coerce_ttl(
+            raw.get("wat_metadata_retention_ttl_seconds"),
+            _DEFAULT_WAT_METADATA_RETENTION_TTL_SECONDS,
+        ),
+        "wat_event_pointer_retention_ttl_seconds": _coerce_ttl(
+            raw.get("wat_event_pointer_retention_ttl_seconds"),
+            _DEFAULT_WAT_EVENT_POINTER_RETENTION_TTL_SECONDS,
+        ),
+        "observable_digest_retention_ttl_seconds": _coerce_ttl(
+            raw.get("observable_digest_retention_ttl_seconds"),
+            _DEFAULT_OBSERVABLE_DIGEST_RETENTION_TTL_SECONDS,
+        ),
+        "observable_digest_access_class": access_class,
+        "observable_digest_ref": observable_digest_ref,
+        "retention_policy_version": str(
+            raw.get("retention_policy_version") or _DEFAULT_RETENTION_POLICY_VERSION
+        ).strip(),
+        "retention_enforced_at_write": bool(raw.get("retention_enforced_at_write", True)),
+    }
+
+
 def _persist_wat_event(
     *,
     wat_id: str,
@@ -140,6 +209,7 @@ def _persist_wat_event(
         raise ValueError(f"unsupported_wat_event_type: {normalized_event_type}")
 
     now_event_ts = _utc_now_iso_z()
+    normalized_details = _normalize_retention_boundary_details(details)
     record: Dict[str, Any] = {
         "event_id": str(uuid.uuid4()),
         "ts": now_event_ts,
@@ -149,7 +219,7 @@ def _persist_wat_event(
         "event_type": normalized_event_type,
         "actor": str(actor or "system")[:500],
         "status": str(status or "ok")[:50],
-        "details": details or {},
+        "details": normalized_details,
     }
     record["trustlog_anchor_ref"] = _build_anchor_reference(record)
 
@@ -157,6 +227,31 @@ def _persist_wat_event(
     events_path.parent.mkdir(parents=True, exist_ok=True)
 
     with _WAT_LOCK:
+        existing_events = _load_wat_events(events_path)
+        previous_for_wat: Optional[Dict[str, Any]] = None
+        for existing in reversed(existing_events):
+            if str(existing.get("wat_id", "")).strip() == str(wat_id).strip():
+                previous_for_wat = existing
+                break
+
+        previous_details = (
+            previous_for_wat.get("details", {}) if isinstance(previous_for_wat, dict) else {}
+        )
+        if isinstance(previous_details, dict) and bool(previous_details.get("retention_enforced_at_write")):
+            previous_policy_version = str(previous_details.get("retention_policy_version", "")).strip()
+            current_policy_version = str(
+                record["details"].get("retention_policy_version", "")
+            ).strip()
+            if (
+                previous_policy_version
+                and current_policy_version
+                and previous_policy_version != current_policy_version
+            ):
+                raise ValueError(
+                    "retention_policy_version is immutable after "
+                    "retention_enforced_at_write=true"
+                )
+
         with events_path.open("a", encoding="utf-8") as file_obj:
             file_obj.write(json.dumps(record, ensure_ascii=False) + "\n")
             file_obj.flush()
