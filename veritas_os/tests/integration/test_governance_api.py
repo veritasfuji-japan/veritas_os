@@ -14,6 +14,7 @@ pytestmark = pytest.mark.integration
 
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -630,6 +631,7 @@ def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
         def to_dict(self) -> dict:
             return dict(self._payload)
 
+    now_utc = datetime.now(timezone.utc)
     receipts = [
         _Receipt(
             {
@@ -641,7 +643,7 @@ def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
                 "target_type": "governance_policy",
                 "final_outcome": "COMMITTED",
                 "bind_reason_code": "OK",
-                "occurred_at": "2026-04-22T11:00:00Z",
+                "occurred_at": (now_utc - timedelta(hours=1)).isoformat(),
             }
         ),
         _Receipt(
@@ -654,7 +656,7 @@ def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
                 "target_type": "compliance_config",
                 "final_outcome": "BLOCKED",
                 "bind_reason_code": "POLICY_DENY",
-                "occurred_at": "2026-04-22T10:00:00Z",
+                "occurred_at": (now_utc - timedelta(hours=2)).isoformat(),
             }
         ),
         _Receipt(
@@ -667,7 +669,7 @@ def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
                 "target_type": "governance_policy",
                 "final_outcome": "ESCALATED",
                 "bind_reason_code": "APPROVAL_MISSING",
-                "occurred_at": "2026-04-20T10:00:00Z",
+                "occurred_at": (now_utc - timedelta(hours=72)).isoformat(),
             }
         ),
     ]

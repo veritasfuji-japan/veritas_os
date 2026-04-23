@@ -38,7 +38,7 @@ describe("RootLayout", () => {
 
   it("exports correct metadata", () => {
     expect(metadata.title).toBe("Mission Control IA");
-    expect(metadata.description).toBe("Governance OS operations console");
+    expect(metadata.description).toBe("Decision Governance and Bind-Boundary Control Plane operations console");
     expect(metadata.icons).toEqual({ icon: "/icon.svg" });
   });
 
