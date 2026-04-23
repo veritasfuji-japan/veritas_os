@@ -119,6 +119,10 @@ function resolveOutcomeVariant(
   return "muted";
 }
 
+function isActionRequiredOutcome(outcome: CanonicalBindReceipt["outcome"]): boolean {
+  return outcome === "BLOCKED" || outcome === "ESCALATED";
+}
+
 /**
  * Bind Cockpit: operator-facing cross-path surface for bind lifecycle triage.
  */
@@ -238,6 +242,11 @@ export function BindCockpit(): JSX.Element {
     return receipts.filter((receipt) => receipt.targetPathType === "other");
   }, [receipts, filters.pathType]);
 
+  const blockedOrEscalatedReceipts = useMemo(
+    () => filteredReceipts.filter((receipt) => isActionRequiredOutcome(receipt.outcome)).slice(0, 5),
+    [filteredReceipts],
+  );
+
   return (
     <Card
       title="Bind Cockpit"
@@ -356,6 +365,38 @@ export function BindCockpit(): JSX.Element {
         </div>
 
         {error ? <p className="rounded border border-danger/30 bg-danger/10 px-2 py-1 text-xs">{error}</p> : null}
+
+        {blockedOrEscalatedReceipts.length > 0 ? (
+          <div className="rounded border border-warning/40 bg-warning/10 p-3">
+            <h4 className="text-sm font-semibold">Blocked / Escalated queue</h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Why it is blocked and what to inspect next.
+            </p>
+            <ul className="mt-2 space-y-2 text-xs">
+              {blockedOrEscalatedReceipts.map((receipt) => (
+                <li key={`action-required-${receipt.bindReceiptId}`} className="rounded border border-warning/30 bg-background/80 px-2 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge label={receipt.outcome} variant={resolveOutcomeVariant(receipt.outcome)} />
+                    <span className="font-mono">{receipt.bindReceiptId}</span>
+                    <span className="text-muted-foreground">reason_code: {receipt.reasonCode}</span>
+                  </div>
+                  <p className="mt-1">
+                    {receipt.failureReason !== "-" ? receipt.failureReason : "No bind_failure_reason; inspect detail checks."}
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-2 rounded border px-2 py-1"
+                    onClick={() => {
+                      setSelectedReceiptId(receipt.bindReceiptId);
+                    }}
+                  >
+                    inspect blocked/escalated reason
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="overflow-x-auto rounded border">
           <table className="w-full min-w-[980px] text-xs">
