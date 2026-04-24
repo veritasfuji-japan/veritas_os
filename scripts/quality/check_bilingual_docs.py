@@ -38,9 +38,34 @@ EN_JA_PAIRS = {
     "docs/en/architecture/bind-boundary-governance-artifacts.md": "docs/ja/architecture/bind-boundary-governance-artifacts.md",
     "docs/en/architecture/bind_time_admissibility_evaluator.md": "docs/ja/architecture/bind_time_admissibility_evaluator.md",
     "docs/en/governance/required-evidence-taxonomy.md": "docs/ja/governance/required-evidence-taxonomy.md",
+    "docs/en/governance/governance-artifact-lifecycle.md": "docs/ja/governance/governance-artifact-lifecycle.md",
     "docs/en/guides/governance-policy-bundle-promotion.md": "docs/ja/guides/governance-policy-bundle-promotion.md",
     "docs/en/positioning/aml-kyc-beachhead-short-positioning.md": "docs/ja/positioning/aml-kyc-beachhead-short-positioning.md",
 }
+
+
+def extract_bind_governed_block(markdown: str) -> str | None:
+    """Extract a bounded README_JP block for bind-governed effect paths."""
+    lines = markdown.splitlines()
+    section_start: int | None = None
+    heading_pattern = re.compile(r"^#{2,6}\s+")
+    marker_pattern = re.compile(
+        r"(bind-boundary adjudication|bind-governed|effect path|bind policy surface)",
+        re.IGNORECASE,
+    )
+    for index, line in enumerate(lines):
+        if marker_pattern.search(line):
+            section_start = index
+            break
+    if section_start is None:
+        return None
+
+    section_end = len(lines)
+    for index in range(section_start + 1, len(lines)):
+        if heading_pattern.match(lines[index]):
+            section_end = index
+            break
+    return "\n".join(lines[section_start:section_end])
 
 
 def local_links(markdown: str) -> list[str]:
@@ -56,14 +81,25 @@ def local_links(markdown: str) -> list[str]:
 
 
 def check_readme_bind_sync(errors: list[str]) -> None:
-    """Check that README_JP carries all bind-governed endpoints from README."""
+    """Check README_JP bind-governed section carries all required endpoints."""
     en_text = README_EN.read_text(encoding="utf-8")
     ja_text = README_JA.read_text(encoding="utf-8")
+    bind_block = extract_bind_governed_block(ja_text)
+    if bind_block is None:
+        errors.append(
+            "README_JP.md missing bind-governed effect path section "
+            "(marker: bind-boundary adjudication / bind-governed / effect path)"
+        )
+        return
+
     for endpoint in ENDPOINTS:
         if endpoint not in en_text:
             errors.append(f"README.md missing required endpoint marker: {endpoint}")
-        if endpoint not in ja_text:
-            errors.append(f"README_JP.md missing bind-governed endpoint: {endpoint}")
+        if endpoint not in bind_block:
+            errors.append(
+                "README_JP.md bind-governed section missing endpoint: "
+                f"{endpoint} (must appear in bind policy surface block)"
+            )
 
 
 def check_readme_japanese_first(errors: list[str]) -> None:
