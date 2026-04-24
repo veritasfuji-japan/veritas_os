@@ -1,0 +1,35 @@
+{
+  "scenario_id": "aml_kyc_high_risk_wire_manual_review_fixture",
+  "domain": "aml_kyc",
+  "execution_intent": "bind:hold_wire_transfer",
+  "risk_flags": {
+    "pep_association": true,
+    "sanctions_partial_match": true,
+    "high_risk_country_corridor": true
+  },
+  "required_evidence": [
+    "kyc_profile",
+    "sanctions_screening_trace",
+    "pep_screening_result",
+    "source_of_funds_record",
+    "approval_matrix",
+    "audit_trail_export",
+    "secure_controls_attestation",
+    "policy_definition_record"
+  ],
+  "provided_evidence": [
+    "kyc_profile",
+    "sanctions_screening_trace",
+    "pep_screening_result",
+    "source_of_funds_record",
+    "approval_matrix",
+    "audit_trail_export",
+    "secure_controls_attestation",
+    "policy_definition_record"
+  ],
+  "governance_identity": {
+    "tenant_id": "tenant-synthetic-poc",
+    "policy_pack": "aml_kyc_poc_pack_v1",
+    "policy_hash": "sha256:6d5f5ad8fae0e58d463f2ea3d32fa948f24b7d2e5be5f6541a9f0fdd8a15c6ec"
+  }
+}
