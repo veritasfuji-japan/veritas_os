@@ -79,3 +79,7 @@
 3. runtime/orchestration との差分
 4. regulated / enterprise 適合理由
 5. 事実とロードマップの境界
+
+## 英語正本
+
+- [docs/en/positioning/public-positioning.md](../../en/positioning/public-positioning.md)

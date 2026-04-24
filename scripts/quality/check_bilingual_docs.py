@@ -28,6 +28,7 @@ EN_JA_PAIRS = {
     "docs/en/validation/third-party-review-readiness.md": "docs/ja/validation/third-party-review-readiness.md",
     "docs/en/validation/backend-parity-coverage.md": "docs/ja/validation/backend-parity-coverage.md",
     "docs/en/validation/production-validation.md": "docs/ja/validation/production-validation.md",
+    "docs/en/validation/postgresql-production-proof-map.md": "docs/ja/validation/postgresql-production-proof-map.md",
     "docs/en/operations/postgresql-production-guide.md": "docs/ja/operations/postgresql-production-guide.md",
     "docs/en/operations/postgresql-drill-runbook.md": "docs/ja/operations/postgresql-drill-runbook.md",
     "docs/en/operations/security-hardening.md": "docs/ja/operations/security-hardening.md",
@@ -38,6 +39,7 @@ EN_JA_PAIRS = {
     "docs/en/architecture/bind_time_admissibility_evaluator.md": "docs/ja/architecture/bind_time_admissibility_evaluator.md",
     "docs/en/governance/required-evidence-taxonomy.md": "docs/ja/governance/required-evidence-taxonomy.md",
     "docs/en/guides/governance-policy-bundle-promotion.md": "docs/ja/guides/governance-policy-bundle-promotion.md",
+    "docs/en/positioning/aml-kyc-beachhead-short-positioning.md": "docs/ja/positioning/aml-kyc-beachhead-short-positioning.md",
 }
 
 

@@ -161,3 +161,7 @@ PoC レビュー会では、次の順序で示すと伝わりやすいです。
 - **実データ禁止**: 顧客情報・口座番号・実在個人データは投入しない。
 - **鍵管理**: `.env` の API secret/鍵は共有しない。PoC 用にローテーション前提の値を使う。
 - **外部連携**: 本番の承認系/送金系への接続は PoC で行わない（read-only 参照に限定）。
+
+## 英語正本
+
+- [docs/en/guides/poc-pack-financial-quickstart.md](../../en/guides/poc-pack-financial-quickstart.md)

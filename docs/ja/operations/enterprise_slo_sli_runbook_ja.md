@@ -176,3 +176,7 @@
 - `trace_id` は監査相関用であり、認可判定には使用しない。
 - 外部入力の `trace_id` は形式検証を行い、ヘッダ/ログインジェクションを防止する。
 - `trace_id` に秘密情報（APIキー、トークン、PII）を含めない。
+
+## 英語正本
+
+- [docs/en/operations/README.md](../../en/operations/README.md)
