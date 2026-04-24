@@ -59,23 +59,29 @@ Reference semantics and taxonomy:
 
 - `veritas_os/sample_data/governance/aml_kyc_pilot_cases.json`
 
-### 4) Expected evidence bundle examples
+### 4) Deterministic runnable scenario fixture (bind/compliance output)
+
+- Runner: `scripts/run_aml_kyc_poc_fixture.py`
+- Fixture: `veritas_os/sample_data/governance/aml_kyc_poc_pack/scenario_high_risk_manual_review.json`
+- Expected output: `veritas_os/sample_data/governance/aml_kyc_poc_pack/expected_high_risk_manual_review_output.json`
+
+### 5) Expected evidence bundle examples
 
 - `veritas_os/sample_data/governance/aml_kyc_expected_evidence_bundle_examples.json`
 
-### 5) Red-team / failure scenarios
+### 6) Red-team / failure scenarios
 
 - `veritas_os/sample_data/governance/aml_kyc_failure_scenarios.json`
 
-### 6) Acceptance criteria summary
+### 7) Acceptance criteria summary
 
 - [Financial PoC Success Criteria](financial-poc-success-criteria.md)
 
-### 7) Customer handoff path
+### 8) Customer handoff path
 
 - [AML/KYC Customer Handoff Path](aml-kyc-customer-handoff-path.md)
 
-### 8) Security / privacy boundaries
+### 9) Security / privacy boundaries
 
 - [AML/KYC Pilot Checklist](aml-kyc-pilot-checklist.md#security-and-privacy-boundaries-must-not-cross)
 
@@ -117,6 +123,25 @@ python scripts/run_financial_poc.py \
   --dry-run \
   --output-json veritas_os/scripts/logs/aml_kyc_pilot_dry_run_report.json
 ```
+
+
+### Step 1b — Deterministic governance-output check (10 min)
+
+Run one executable AML/KYC fixture and verify expected governance outcome,
+bind result, and compliance-oriented output:
+
+```bash
+python scripts/run_aml_kyc_poc_fixture.py \
+  --input veritas_os/sample_data/governance/aml_kyc_poc_pack/scenario_high_risk_manual_review.json \
+  --verify-expected veritas_os/sample_data/governance/aml_kyc_poc_pack/expected_high_risk_manual_review_output.json \
+  --output-json veritas_os/scripts/logs/aml_kyc_poc_fixture_output.json
+```
+
+Expected fixture behavior:
+
+- `governance_outcome.gate_decision = human_review_required`
+- `bind_result.admissible = false` (bind-boundary hold path)
+- `compliance_view.status = conformant` for synthetic expected evidence coverage
 
 ### Step 2 — Live governance run (30-60 min)
 

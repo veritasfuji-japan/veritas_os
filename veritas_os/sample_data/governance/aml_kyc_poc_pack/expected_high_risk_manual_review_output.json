@@ -1,0 +1,30 @@
+{
+  "scenario_id": "aml_kyc_high_risk_wire_manual_review_fixture",
+  "domain": "aml_kyc",
+  "governance_outcome": {
+    "gate_decision": "human_review_required",
+    "business_decision": "REVIEW_REQUIRED",
+    "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
+    "human_review_required": true
+  },
+  "evidence_summary": {
+    "required_count": 8,
+    "provided_count": 8,
+    "missing_count": 0,
+    "missing_evidence": [],
+    "evidence_coverage_ratio": 1.0
+  },
+  "bind_result": {
+    "execution_intent": "bind:hold_wire_transfer",
+    "admissible": false,
+    "bind_receipt_id": "bind_receipt::aml_kyc_high_risk_wire_manual_review_fixture",
+    "reason": "risk-triggered-manual-review"
+  },
+  "compliance_view": {
+    "control_plane": "bind-boundary",
+    "policy_pack": "aml_kyc_poc_pack_v1",
+    "policy_hash": "sha256:6d5f5ad8fae0e58d463f2ea3d32fa948f24b7d2e5be5f6541a9f0fdd8a15c6ec",
+    "status": "conformant",
+    "scope": "synthetic_poc"
+  }
+}

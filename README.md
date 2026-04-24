@@ -156,6 +156,7 @@ pack is documented as an executable path, not only positioning text:
 
 Start here:
 - [1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+- Deterministic fixture scenario: `scripts/run_aml_kyc_poc_fixture.py` with `veritas_os/sample_data/governance/aml_kyc_poc_pack/`
 - [Financial Governance Templates](docs/en/guides/financial-governance-templates.md)
 - [External Audit Readiness](docs/en/validation/external-audit-readiness.md)
 - [Short Positioning by audience](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
