@@ -21,6 +21,44 @@ def _load_openapi_spec() -> dict:
         return yaml.safe_load(file_obj)
 
 
+def _extract_bind_summary_property_keys_from_yaml() -> list[str]:
+    """Extract BindSummary property keys from raw YAML to detect duplicate keys."""
+    repo_root = Path(__file__).resolve().parents[2]
+    spec_path = repo_root / "openapi.yaml"
+    lines = spec_path.read_text(encoding="utf-8").splitlines()
+
+    in_bind_summary = False
+    in_properties = False
+    keys: list[str] = []
+
+    for raw_line in lines:
+        if raw_line.startswith("    BindSummary:"):
+            in_bind_summary = True
+            in_properties = False
+            continue
+        if in_bind_summary and raw_line.startswith("    ") and not raw_line.startswith("      "):
+            break
+        if not in_bind_summary:
+            continue
+        if raw_line.startswith("      properties:"):
+            in_properties = True
+            continue
+        if in_properties and raw_line.startswith("      ") and not raw_line.startswith("        "):
+            break
+        if (
+            not in_properties
+            or not raw_line.startswith("        ")
+            or raw_line.startswith("          ")
+        ):
+            continue
+
+        stripped = raw_line.strip()
+        if stripped.endswith(":") and not stripped.startswith("- "):
+            keys.append(stripped[:-1])
+
+    return keys
+
+
 def test_openapi_yaml_is_parseable() -> None:
     """The OpenAPI document must be valid YAML."""
     spec = _load_openapi_spec()
@@ -263,3 +301,26 @@ def test_openapi_bind_operator_summary_surface_locked() -> None:
     decide_props = spec["components"]["schemas"]["DecideResponse"]["properties"]
     assert "bind_operator_summary" in decide_props
     assert "bind_operator_detail" in decide_props
+
+
+def test_openapi_bind_summary_surface_nullable_and_duplicate_free() -> None:
+    """BindSummary must preserve optional target fields without YAML key shadowing."""
+    spec = _load_openapi_spec()
+    bind_summary_props = spec["components"]["schemas"]["BindSummary"]["properties"]
+    expected_optional_target_fields = {
+        "target_path",
+        "target_type",
+        "target_path_type",
+        "target_label",
+        "operator_surface",
+        "relevant_ui_href",
+    }
+
+    for field in expected_optional_target_fields:
+        schema = bind_summary_props[field]
+        assert "anyOf" in schema
+        assert any(branch.get("type") == "null" for branch in schema["anyOf"])
+
+    raw_property_keys = _extract_bind_summary_property_keys_from_yaml()
+    assert len(raw_property_keys) == len(set(raw_property_keys))
+    assert expected_optional_target_fields.issubset(set(raw_property_keys))
