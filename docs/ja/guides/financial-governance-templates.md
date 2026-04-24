@@ -1,25 +1,25 @@
 # 金融ガバナンステンプレート（日本語解説）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+AML/KYC PoC と実運用検討で使うテンプレート群の読み方を整理する日本語解説です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- テンプレートは Decision Governance の最小運用単位（判定基準・証拠要件・昇格条件）を定義します。
+- required_evidence taxonomy と policy bundle promotion を前提に運用します。
+- 過大主張を避け、betaで実装済み範囲を明確化します。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- 金融領域での operator-facing governance surface を標準化する入口です。
+- `bind_summary` と `BindReceipt` を使い、審査・監査・運用の会話を揃えます。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- テンプレート適用時の required/missing evidence を API で確認する。
+- ポリシーバンドル昇格と署名検証の運用手順を確認する。
+- 詳細は英語正本または実装ファイルを確認してください。
+
+## 現時点の制限
+- テンプレートは組織固有要件に合わせた調整が必要です。
+- 規制当局承認や法的適合を自動保証するものではありません。
 
 ## 英語正本
 - [docs/en/guides/financial-governance-templates.md](../../en/guides/financial-governance-templates.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

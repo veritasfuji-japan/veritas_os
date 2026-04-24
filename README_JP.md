@@ -60,7 +60,7 @@ VERITAS OS は次を実現します。
 ## 事実とロードマップの境界
 
 - **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済みで、公開上は **ベータ品質のガバナンス基盤** として位置づけます
-- **現時点の事実（bind policy surface）**: bind-boundary adjudication は少なくとも次の5つの運用経路で実装されています。
+- **現時点の事実（bind policy surface）**: bind-boundary adjudication は少なくとも次の5つの運用者管理 effect path に接続されています。
   1) `PUT /v1/governance/policy`（governance policy update path）
   2) `POST /v1/governance/policy-bundles/promote`（policy bundle promotion path）
   3) `PUT /v1/compliance/config`（runtime compliance config mutation path）
@@ -69,7 +69,7 @@ VERITAS OS は次を実現します。
 - **現時点の事実（bind outcome公開契約）**: ガバナンス系レスポンスでは従来のフラットな bind フィールド（`bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id`）に加えて、共通のコンパクト語彙として加算的 `bind_summary` も返却されます
 - **現時点の事実（bind artifact family）**: `BindReceipt` は完全なガバナンス成果物として永続化され、成果物契約に canonical target metadata を含みます
 - **現時点の事実（replay/運用フロー）**: 運用画面/API は bind 成果物の list/export/detail エンドポイント（`/v1/governance/bind-receipts` / `/v1/governance/bind-receipts/export` / `/v1/governance/bind-receipts/{bind_receipt_id}`）を提供し、mutation/export レスポンスでは監査トリアージ向けに `bind_summary` を再利用します
-- **現時点の境界**: 本番適用には環境ごとのハードニング・統合・運用審査が必要
+- **現時点の境界**: 現時点で全ての副作用経路が bind-governed であると主張するものではありません。本番適用には環境ごとのハードニング、統合、鍵管理、監査設計、運用審査が必要です。
 - **将来方向（標準化）**: bind-boundary は複数の effect path を統治する標準枠組みへ拡張していく方針ですが、現時点で全経路完了を主張するものではありません
 - **ロードマップ**: IdP/JWT スコープ連携の深耕、分散障害モード検証の拡張
 
@@ -104,16 +104,16 @@ VERITAS OS は次を実現します。
 - **データベースマイグレーション**: [`docs/ja/operations/database-migrations.md`](docs/ja/operations/database-migrations.md)
 - **バックエンドパリティカバレッジ**: [`docs/ja/validation/backend-parity-coverage.md`](docs/ja/validation/backend-parity-coverage.md)
 - **ライブPostgreSQL検証エビデンス**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
-- **レガシーパスクリーンアップ**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
+- **レガシーパスクリーンアップ**: [`docs/ja/operations/legacy-path-cleanup.md`](docs/ja/operations/legacy-path-cleanup.md)
 - **レビュー文書マップ**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **ドキュメント入口（英語）**: [`docs/en/README.md`](docs/en/README.md)
 - **ドキュメント入口（日本語）**: [`docs/ja/README.md`](docs/ja/README.md)
-- **公開ポジショニングガイド（英語）**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
+- **公開ポジショニングガイド（英語）**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
 - **公開ポジショニングガイド（日本語）**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
 - **Decision Semantics Contract**: [`docs/ja/architecture/decision-semantics.md`](docs/ja/architecture/decision-semantics.md)
 - **Bind-Boundary Governance Artifacts**: [`docs/ja/architecture/bind-boundary-governance-artifacts.md`](docs/ja/architecture/bind-boundary-governance-artifacts.md)
-- **Bind-Time Admissibility Evaluator**: [`docs/ja/architecture/bind-time-admissibility-evaluator.md`](docs/ja/architecture/bind-time-admissibility-evaluator.md)
-- **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
+- **Bind-Time Admissibility Evaluator**: [`docs/ja/architecture/bind_time_admissibility_evaluator.md`](docs/ja/architecture/bind_time_admissibility_evaluator.md)
+- **Required Evidence Taxonomy v0**: [`docs/ja/governance/required-evidence-taxonomy.md`](docs/ja/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening（canonical gate + evidence profile）**: [`docs/ja/guides/financial-governance-templates.md`](docs/ja/guides/financial-governance-templates.md)
 - **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
 - **運用Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
@@ -179,6 +179,7 @@ JSON/JSONL バックエンドは、軽量なローカル開発や移行ワーク
 検証志向ドキュメント:
 
 - [`docs/ja/validation/backend-parity-coverage.md` — パリティ/実装検証の正本ソース](docs/ja/validation/backend-parity-coverage.md)
+- [`docs/ja/validation/postgresql-production-proof-map.md` — 本番パス証跡のコンパクト入口](docs/ja/validation/postgresql-production-proof-map.md)
 - [`docs/ja/validation/production-validation.md` — tier/promotion/release-gate の正本ソース](docs/ja/validation/production-validation.md)
 - [`docs/ja/operations/postgresql-production-guide.md` — PostgreSQL運用/監視/復旧の正本ソース](docs/ja/operations/postgresql-production-guide.md)
 - [`docs/live-postgresql-validation.md` — ライブ PostgreSQL 検証の公開エビデンス入口](docs/live-postgresql-validation.md)
@@ -542,7 +543,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 - インシデントレスポンスプレイブック（破損、改ざん）
 - `make drill-backup`、`make drill-restore`、`make drill-recovery`、`make drill-recovery-ci`
 
-関連: [`docs/database-migrations.md`](docs/ja/operations/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/ja/validation/backend-parity-coverage.md) | [`docs/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
+関連: [`docs/database-migrations.md`](docs/ja/operations/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/ja/validation/backend-parity-coverage.md) | [`docs/legacy-path-cleanup.md`](docs/ja/operations/legacy-path-cleanup.md)
 
 ---
 
@@ -636,7 +637,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 > **署名付きガバナンス成果物** — secure/prodポスチャでは、ポリシーバンドルにEd25519署名が必須です。
 > 意思決定成果物には、適用中のガバナンスポリシー（バージョン、ダイジェスト、署名検証結果、署名者ID）を
 > 示す `governance_identity` フィールドが含まれます。
-> ライフサイクル全体、鍵管理、移行ガイドは [`docs/governance_artifact_lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md) を参照してください。
+> ライフサイクル全体、鍵管理、移行ガイドは [`docs/governance_artifact_lifecycle.md`](docs/ja/governance/governance-artifact-lifecycle.md) を参照してください。
 
 ### コンプライアンス & レポート
 
@@ -1457,7 +1458,7 @@ make validate
 - ✅ PostgreSQLストレージバックエンド: MemoryOS・TrustLog用プラガブルバックエンド（Alembicマイグレーション、アドバイザリロックチェーン直列化、195+パリティテスト）。JSONL → PostgreSQLインポート手順、スモーク/リリースバリデーション統合、レガシーパスクリーンアップ含む。[`docs/postgresql-production-guide.md`](docs/ja/operations/postgresql-production-guide.md) 参照。
 - ✅ PostgreSQL本番ハードニング: 競合テスト（25テスト）、プール/アクティビティメトリクス（28テスト）、バックアップ/リストア/リカバリドリルスクリプトとテスト（31テスト）。[`docs/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) 参照。
 - ✅ Continuation Runtime（Phase-1）: チェーンレベル継続観測レイヤー、スナップショット/レシート/エンフォースメントイベントアーキテクチャ。`docs/architecture/continuation_runtime_adr.md` 参照。
-- ✅ ガバナンス成果物署名: Ed25519署名ポリシーバンドル、ランタイム署名検証、意思決定出力へのガバナンスID。[`docs/governance_artifact_lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md) 参照。
+- ✅ ガバナンス成果物署名: Ed25519署名ポリシーバンドル、ランタイム署名検証、意思決定出力へのガバナンスID。[`docs/governance_artifact_lifecycle.md`](docs/ja/governance/governance-artifact-lifecycle.md) 参照。
 - ✅ S3 Object Lock TrustLogミラー: WORM準拠ミラーバックエンド（保持、legal hold、リモート検証）。[`docs/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) 参照。
 
 **今後のマイルストーン**:

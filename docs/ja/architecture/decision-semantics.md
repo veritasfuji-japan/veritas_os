@@ -1,27 +1,27 @@
 # Decision Semantics（日本語解説）
 
 ## 位置づけ
-本ページは `docs/en/architecture/decision-semantics.md` の日本語解説です。
-Decision Governance を評価・監査・実装する担当者が、意思決定契約の読みどころを短時間で共有するために使います。
+この文書は、意思決定結果と bind フェーズ結果の公開契約を確認するための日本語解説です。対象読者は、運用者・監査担当・実装担当です。
 
 ## 要点
-- decision 結果と bind 結果は別フェーズで管理されます。
-- 公開契約では `bind_summary` と `BindReceipt` により、運用者が最小情報で triage しつつ詳細追跡できます。
-- fail-closed を前提に、未定義・不整合経路では安全側に倒れる設計です。
+- Decision Governance / 意思決定ガバナンス では、`decision` と `bind` を別フェーズで扱います。
+- operator-facing governance surface / 運用者向けガバナンス面 では、`bind_summary` を最小表示語彙として扱います。
+- 詳細証跡は `BindReceipt` / bind証跡 に連結され、Replay / 再現実行と監査で追跡できます。
 
 ## VERITASにおける意味
-Decision Semantics は、FUJI Gate・TrustLog・Mission Control を横断する共通語彙です。
-`governance_identity` と bind 系譜を揃えることで、Replay 時に「なぜその判断になったか」を再検証可能にします。
+- FUJI Gate は bind 境界で fail-closed / 安全側停止 の最終判定点になります。
+- TrustLog と `governance_identity` / ガバナンス識別子 を合わせることで、意思決定から副作用までの系譜を監査可能にします。
+- Mission Control は `bind_summary` / bind概要 と `BindReceipt` を併用して、運用 triage と証跡確認を分離します。
 
 ## 実装上の確認ポイント
-- `/v1/decide` とガバナンス mutation API のレスポンス契約が整合していること。
-- `bind_summary` が mutation/export で再利用されていること。
-- BindReceipt detail API で canonical target metadata が取得できること。
+- `/v1/decide` とガバナンス mutation API の bind 公開フィールドが整合しているか。
+- `/v1/governance/bind-receipts`（list/export/detail）で `BindReceipt` を再取得できるか。
+- スキーマ変更時は Replay と API 契約テストを併せて確認すること。
+- 詳細は英語正本または実装ファイルを確認してください。
+
+## 現時点の制限
+- ベータ段階のため、全 effect path が bind-governed / bind統制対象 とまでは主張しません。
+- 本番導入には環境別の鍵管理、監査設計、運用審査が必要です。
 
 ## 英語正本
 - [docs/en/architecture/decision-semantics.md](../../en/architecture/decision-semantics.md)
-
-## 注意
-- このページは英語正本の補助であり、仕様の最終判断は英語正本で行います。
-- 現在の実装事実と将来方向を混同しないでください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

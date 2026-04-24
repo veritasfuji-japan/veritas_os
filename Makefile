@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -152,7 +152,7 @@ quality-checks:
 	@python scripts/architecture/check_core_complexity_budget.py
 	@python scripts/quality/check_operational_docs_consistency.py
 	@python scripts/quality/check_frontend_docs_consistency.py
-	@python scripts/check_bilingual_docs.py
+	@python scripts/quality/check_bilingual_docs.py
 	@python scripts/quality/check_review_improvements_consistency.py
 	@python scripts/quality/check_requirements_sync.py
 	@python scripts/quality/check_frontend_api_contract_consistency.py
@@ -269,4 +269,4 @@ drill-recovery-ci:
 	@bash scripts/drill_postgres_recovery.sh --ci
 
 check-bilingual-docs:
-	@python scripts/check_bilingual_docs.py
+	@python scripts/quality/check_bilingual_docs.py

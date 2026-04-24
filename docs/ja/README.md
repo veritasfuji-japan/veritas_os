@@ -1,64 +1,98 @@
 # ドキュメント（日本語）
 
-VERITAS OS の日本語ドキュメント入口です。
-英語正本が必要な箇所でも、まず日本語で「何を確認すべきか」を把握できる構成にしています。
-
-- 総合インデックス: [../INDEX.md](../INDEX.md)
-- 英日対応表: [../DOCUMENTATION_MAP.md](../DOCUMENTATION_MAP.md)
-- 英語Hub: [../en/README.md](../en/README.md)
-
 ## はじめに
+VERITAS OS の日本語ハブです。まず本ページと README_JP から全体像を把握し、詳細仕様は各ページの「英語正本」を参照してください。
+
 - [README_JP（製品概要）](../../README_JP.md)
-- [ユーザーマニュアル](guides/user-manual.md)
+- [英日対応表](../DOCUMENTATION_MAP.md)
+- [総合インデックス](../INDEX.md)
 
 ## クイックスタート
 - [金融 PoC パック（1日クイックスタート）](guides/poc-pack-financial-quickstart.md)
+- [金融ガバナンステンプレート](guides/financial-governance-templates.md)
 - [Regulated Beachhead Pack](guides/regulated-beachhead-pack.md)
-- [Operator Playbook / Demo Flow](guides/operator-playbook-demo-flow.md)
 
-## アーキテクチャ
-- [Decision Semantics（日本語解説）](architecture/decision-semantics.md)
-- [Bind-Boundary Governance Artifacts（日本語解説）](architecture/bind-boundary-governance-artifacts.md)
-- [Bind-Time Admissibility Evaluator（日本語解説）](architecture/bind-time-admissibility-evaluator.md)
-- [Runtime Governance Layer 参照アーキテクチャ](architecture/runtime-governance-coexistence-reference-architecture.md)
+## VERITASの基本概念
+- [Decision Semantics](architecture/decision-semantics.md)
+- [Bind-Boundary Governance Artifacts](architecture/bind-boundary-governance-artifacts.md)
+- [Bind-Time Admissibility Evaluator](architecture/bind_time_admissibility_evaluator.md)
 
-## Bind-Boundary
-- [Bind-Boundary Governance Artifacts（日本語解説）](architecture/bind-boundary-governance-artifacts.md)
-- [ガバナンス署名運用（日本語解説）](operations/governance-artifact-signing.md)
-- [ポリシーバンドル昇格（日本語解説）](guides/governance-policy-bundle-promotion.md)
-
-## ガバナンス
+## Decision Governance
 - [Policy-as-Code 解説](governance/policy-as-code.md)
-- [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
-- [金融ガバナンステンプレート（日本語解説）](guides/financial-governance-templates.md)
+- [Required Evidence Taxonomy](governance/required-evidence-taxonomy.md)
+- [Governance Artifact Lifecycle](governance/governance-artifact-lifecycle.md)
+
+## Bind-Boundary Control
+- [Bind-Boundary Governance Artifacts](architecture/bind-boundary-governance-artifacts.md)
+- [ポリシーバンドル昇格](guides/governance-policy-bundle-promotion.md)
+- [ガバナンス成果物署名](operations/governance-artifact-signing.md)
+
+## FUJI Gate
+- [ユーザーマニュアル（FUJI / 判定フロー）](guides/user-manual.md)
+- [ポスチャ/安全設定（英語正本）](../en/operations/security-hardening.md)
+
+## TrustLog
+- [外部監査準備性](validation/external-audit-readiness.md)
+- [本番検証](validation/production-validation.md)
+
+## Mission Control
+- [Operator Playbook / Demo Flow](guides/operator-playbook-demo-flow.md)
+- [UI Preview Pages（日本語）](../ui/PREVIEW_PAGES_JP.md)
+
+## Replay
+- [技術証明パック](validation/technical-proof-pack.md)
+- [第三者レビュー準備性](validation/third-party-review-readiness.md)
+
+## Governance Identity / BindReceipt / bind_summary
+- [Decision Semantics](architecture/decision-semantics.md)
+- [Bind-Boundary Governance Artifacts](architecture/bind-boundary-governance-artifacts.md)
+- [外部監査準備性](validation/external-audit-readiness.md)
+
+## ガバナンス・ポリシー
+- [ポリシーバンドル昇格](guides/governance-policy-bundle-promotion.md)
+- [Governance Artifact Lifecycle](governance/governance-artifact-lifecycle.md)
 
 ## 監査・外部レビュー
-- [External Audit Readiness（日本語解説）](validation/external-audit-readiness.md)
-- [Technical Proof Pack（日本語解説）](validation/technical-proof-pack.md)
-- [Third-Party Review Readiness（日本語解説）](validation/third-party-review-readiness.md)
+- [外部監査準備性](validation/external-audit-readiness.md)
+- [第三者レビュー準備性](validation/third-party-review-readiness.md)
 - [レビュー文書マップ](reviews/code-review-document-map.md)
 
-## 運用
-- [PostgreSQL本番運用ガイド（日本語解説）](operations/postgresql-production-guide.md)
-- [PostgreSQLドリルRunbook（日本語解説）](operations/postgresql-drill-runbook.md)
-- [セキュリティ強化（日本語解説）](operations/security-hardening.md)
-- [データベースマイグレーション（日本語解説）](operations/database-migrations.md)
-- [Enterprise SLO/SLI 運用Runbook](operations/enterprise_slo_sli_runbook_ja.md)
+## 技術証明・検証
+- [技術証明パック](validation/technical-proof-pack.md)
+- [バックエンドパリティカバレッジ](validation/backend-parity-coverage.md)
+- [本番検証](validation/production-validation.md)
+- [PostgreSQL Production Proof Map](validation/postgresql-production-proof-map.md)
+
+## 本番運用・PostgreSQL
+- [PostgreSQL本番運用ガイド](operations/postgresql-production-guide.md)
+- [PostgreSQLドリルRunbook](operations/postgresql-drill-runbook.md)
+
+## セキュリティハードニング
+- [セキュリティハードニング](operations/security-hardening.md)
+- [ガバナンス成果物署名](operations/governance-artifact-signing.md)
+
+## Database / Migration
+- [データベースマイグレーション](operations/database-migrations.md)
+- [レガシーパスクリーンアップ](operations/legacy-path-cleanup.md)
 
 ## 金融 / AML-KYC PoC
 - [金融 PoC パック（1日クイックスタート）](guides/poc-pack-financial-quickstart.md)
-- [金融ガバナンステンプレート（日本語解説）](guides/financial-governance-templates.md)
-- [AML/KYC ポジショニング（日本語解説）](positioning/aml-kyc-beachhead-short-positioning.md)
+- [金融ガバナンステンプレート](guides/financial-governance-templates.md)
+- [AML/KYC ポジショニング](positioning/aml-kyc-beachhead-short-positioning.md)
 
-## UI / Mission Control
-- [UI Docs（英語正本）](../ui/README_UI.md)
+## UI / Frontend
 - [UI Preview Pages（日本語）](../ui/PREVIEW_PAGES_JP.md)
+- [UI Docs（英語正本）](../ui/README_UI.md)
 
 ## レビュー・監査文書
 - [レビュー入口](reviews/README.md)
-- [監査レポート](audits/)
+- [監査文書（日本語）](audits/)
 
-## 英語正本への導線
+## 英語正本との関係
+日本語ページは public-facing の理解入口です。厳密な仕様・運用手順の最終基準は各ページの「英語正本」を参照してください。
+
 - [English Documentation Hub](../en/README.md)
-- [Architecture（EN canonical）](../architecture/)
-- [EU AI Act artifacts（EN canonical）](../eu_ai_act/)
+
+## ドキュメント対応表
+- [docs/DOCUMENTATION_MAP.md](../DOCUMENTATION_MAP.md)
+- [docs/BILINGUAL_RULES.md](../BILINGUAL_RULES.md)

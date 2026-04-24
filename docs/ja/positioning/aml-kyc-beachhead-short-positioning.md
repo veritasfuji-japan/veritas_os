@@ -1,25 +1,25 @@
 # AML/KYC Beachhead Short Positioning（日本語解説）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+顧客・運用者・投資家向けに、AML/KYC 領域での VERITAS の現実的な訴求点を整理する文書です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- VERITAS は「実行前の意思決定ガバナンス」と「bind境界統制」を中核価値として提示します。
+- PoC では evidence-first、fail-closed、Replay 可能性を優先評価します。
+- 実装済み事実とロードマップを分離し、過大な成熟主張を避けます。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- Decision Governance を金融ユースケースで説明するための外部向け要約です。
+- `governance_identity`、`bind_summary`、`BindReceipt` を使った監査説明が差別化要素になります。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- 1-day PoC quickstart とテンプレート文書の導線を確認する。
+- 外部監査準備性・技術証明パックと整合した説明になっているか確認する。
+- 詳細は英語正本または実装ファイルを確認してください。
+
+## 現時点の制限
+- 本文書は市場ポジショニング資料であり、規制承認や本番適合を保証しません。
+- 導入判断には個別環境の統合・監査設計が必要です。
 
 ## 英語正本
 - [docs/en/positioning/aml-kyc-beachhead-short-positioning.md](../../en/positioning/aml-kyc-beachhead-short-positioning.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

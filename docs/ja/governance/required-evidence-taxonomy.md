@@ -1,40 +1,25 @@
-# Required Evidence Taxonomy v0（金融向け）
+# Required Evidence Taxonomy（日本語解説）
 
-## Current behavior
+## 位置づけ
+`required_evidence` 系の語彙統制を理解するための日本語解説です。審査担当・テンプレート設計者・実装者向けです。
 
-現状ランタイムでは `required_evidence` / `missing_evidence` / `satisfied_evidence` は free string ベースで扱われます。
+## 要点
+- 必須証拠（required_evidence）と不足証拠（missing_evidence）を共通キーで扱います。
+- alias を許容しつつ canonical key へ寄せる方針です。
+- AML/KYC テンプレートと bind 判定の整合が重要です。
 
-## Legacy / alias values
+## VERITASにおける意味
+- Decision Governance の説明責任をデータ語彙で支える基盤です。
+- bind_summary / bind概要 で不足証拠の要点を示し、BindReceipt で詳細を追跡します。
 
-- free string は当面維持。
-- taxonomy v0 で canonical key と alias を追加し、正本化を開始。
+## 実装上の確認ポイント
+- taxonomy JSON の canonical key と UI/API 表示語彙を合わせる。
+- テンプレート更新時に evidence key 差分レビューを実施する。
+- 詳細は英語正本または実装ファイルを確認してください。
 
-## Future tightening candidates
+## 現時点の制限
+- すべてのドメインで strict schema 強制は未完了です。
+- 本番適用時は業務要件に沿った証拠キー拡張が必要です。
 
-- 取り込み時に alias から canonical key へ正規化。
-- 業界テンプレート単位で必須証拠プロファイルを強制。
-- 移行が安定した後に未知キー拒否を段階導入。
-
-## 用語
-
-- `required_evidence`: 判定に必要な証拠キー群。
-- `satisfied_evidence`: すでに充足済みの証拠キー群。
-- `missing_evidence`: `required_evidence - satisfied_evidence` で算出。
-
-機械可読の正本: `veritas_os/sample_data/governance/required_evidence_taxonomy_v0.json`。
-
-## v0 カタログ
-
-| canonical key | 表示名 | category | aliases |
-|---|---|---|---|
-| `credit_bureau_report` | Credit Bureau Report | credit_underwriting | `bureau_report`, `credit_report`, `credit_file` |
-| `kyc_profile` | KYC Profile | identity_and_aml | `know_your_customer_profile`, `customer_identity_profile` |
-| `pep_screening_result` | PEP Screening Result | identity_and_aml | `pep_check`, `politically_exposed_person_screen` |
-| `sanctions_screening_trace` | Sanctions Screening Trace | sanctions | `sanctions_trace`, `ofac_screening_trace` |
-| `source_of_funds_record` | Source of Funds Record | aml_enhanced_due_diligence | `source_of_funds_document`, `sof_record` |
-| `approval_matrix` | Approval Matrix | governance_control | `approval_boundary_matrix`, `authority_matrix` |
-| `transaction_monitoring_trace` | Transaction Monitoring Trace | transaction_monitoring | `transaction_monitoring_log`, `tml_trace` |
-| `audit_trail_export` | Audit Trail Export | audit_and_attestation | `audit_log_export`, `audit_evidence_export` |
-| `secure_controls_attestation` | Secure Controls Attestation | security_controls | `security_controls_attestation`, `secure_controls_ready_attestation` |
-| `rollback_plan` | Rollback Plan | operational_resilience | `rollback_strategy`, `rollback_support_plan` |
-| `policy_definition_record` | Policy Definition Record | policy_governance | `policy_owner_confirmation`, `policy_definition_required_record` |
+## 英語正本
+- [docs/en/governance/required-evidence-taxonomy.md](../../en/governance/required-evidence-taxonomy.md)
