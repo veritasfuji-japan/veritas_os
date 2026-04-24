@@ -33,6 +33,7 @@ from veritas_os.api.schemas import (
     GovernancePolicyResponse,
     GovernancePolicyHistoryResponse,
 )
+from veritas_os.policy.bind_route_markers import requires_bind_boundary
 from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome, find_bind_receipts
 from veritas_os.policy.governance_policy_update import update_governance_policy_with_bind_boundary
 from veritas_os.policy.policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
@@ -453,6 +454,11 @@ def governance_get():
     response_model=GovernancePolicyResponse,
     dependencies=[Depends(require_permission(Permission.governance_write))],
 )
+@requires_bind_boundary(
+    target_path="/v1/governance/policy",
+    target_type="governance_policy",
+    target_path_type="governance_policy_update",
+)
 def governance_put(body: dict):
     """Update the governance policy (partial merge)."""
     srv = _get_server()
@@ -814,6 +820,11 @@ def governance_bind_receipt(bind_receipt_id: str):
     "/v1/governance/policy-bundles/promote",
     response_model=GovernancePolicyBundlePromoteResponse,
     dependencies=[Depends(require_permission(Permission.governance_write))],
+)
+@requires_bind_boundary(
+    target_path="/v1/governance/policy-bundles/promote",
+    target_type="policy_bundle",
+    target_path_type="policy_bundle_promotion",
 )
 def governance_promote_policy_bundle(
     body: GovernancePolicyBundlePromoteRequest,

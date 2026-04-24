@@ -129,3 +129,5 @@ bind-phase commitment.
 
 `GET /v1/governance/bind-receipts/br-9001` returns the linked bind receipt
 artifact with authority/constraint/drift/risk check payloads.
+
+- VERITAS now keeps a tested bind coverage registry for API effect paths. Effect-bearing routes must be classified as `bind_governed` or documented as explicit `audited_exemption` entries (reason/risk/owner/review cadence), reducing the risk of TrustLog(recorded) being misread as execution permission without bind lineage.

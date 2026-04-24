@@ -141,6 +141,16 @@ def test_openapi_decide_response_decision_semantics_contract() -> None:
         "EVIDENCE_REQUIRED",
     ]
     assert decide_schema["next_action"]["type"] == "string"
+    assert decide_schema["actionability_status"]["enum"] == [
+        "reviewable_only",
+        "bind_required_before_execution",
+        "actionable_after_bind",
+        "blocked",
+        "human_review_required",
+    ]
+    assert decide_schema["requires_bind_before_execution"]["type"] == "boolean"
+    assert decide_schema["bound_execution_intent_id"]["nullable"] is True
+    assert decide_schema["unbound_execution_warning"]["nullable"] is True
     assert "governance_identity" in decide_schema
 
 

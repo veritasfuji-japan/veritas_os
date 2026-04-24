@@ -68,6 +68,13 @@ BusinessDecisionLiteral = Literal[
     "POLICY_DEFINITION_REQUIRED",
     "EVIDENCE_REQUIRED",
 ]
+ActionabilityStatusLiteral = Literal[
+    "reviewable_only",
+    "bind_required_before_execution",
+    "actionable_after_bind",
+    "blocked",
+    "human_review_required",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -771,6 +778,34 @@ class DecideResponse(BaseModel):
     )
     business_decision: BusinessDecisionLiteral = "HOLD"
     next_action: str = "REVISE_AND_RESUBMIT"
+    actionability_status: ActionabilityStatusLiteral = Field(
+        default="reviewable_only",
+        description=(
+            "Explicit execution boundary state. "
+            "A recorded decision is reviewable and does not grant execution "
+            "permission without bind lineage."
+        ),
+    )
+    requires_bind_before_execution: bool = Field(
+        default=True,
+        description=(
+            "True when execution requires bind before operational action. "
+            "This remains true unless a bind receipt is present and committed."
+        ),
+    )
+    bound_execution_intent_id: Optional[str] = Field(
+        default=None,
+        max_length=MAX_ID_LENGTH,
+        description="Execution intent identifier that is already bound, when available.",
+    )
+    unbound_execution_warning: Optional[str] = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+        description=(
+            "Operator-facing warning that decision output is not executable "
+            "until bind receipt lineage is present."
+        ),
+    )
     required_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     missing_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     satisfied_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)

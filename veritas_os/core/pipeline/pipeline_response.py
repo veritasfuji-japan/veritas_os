@@ -86,6 +86,63 @@ AML_KYC_PROFILE_ENFORCEMENT_KEYS = {
 }
 
 
+def _derive_actionability_fields(
+    *,
+    gate_decision: str,
+    business_decision: str,
+    human_review_required: bool,
+    next_action: str,
+    bind_outcome: Any,
+    bind_receipt_id: Any,
+    execution_intent_id: Any,
+) -> Dict[str, Any]:
+    """Derive explicit reviewable-vs-actionable boundary fields."""
+    normalized_outcome = str(bind_outcome or "").strip().upper()
+    normalized_bind_receipt_id = str(bind_receipt_id or "").strip() or None
+    normalized_execution_intent_id = str(execution_intent_id or "").strip() or None
+    has_bound_lineage = (
+        normalized_outcome == "COMMITTED"
+        and normalized_bind_receipt_id is not None
+        and normalized_execution_intent_id is not None
+    )
+    implies_execution = next_action in {
+        "EXECUTE_WITH_STANDARD_MONITORING",
+        "RUN_TARGETED_VALIDATION_CHECKS",
+    }
+
+    if gate_decision == "block" or business_decision == "DENY":
+        status = "blocked"
+        requires_bind = False
+    elif human_review_required or gate_decision == "human_review_required":
+        status = "human_review_required"
+        requires_bind = True
+    elif has_bound_lineage:
+        status = "actionable_after_bind"
+        requires_bind = False
+    elif implies_execution or business_decision == "APPROVE":
+        status = "bind_required_before_execution"
+        requires_bind = True
+    else:
+        status = "reviewable_only"
+        requires_bind = True
+
+    warning = None
+    if requires_bind:
+        warning = (
+            "Decision is reviewable only; bind receipt is required before "
+            "execution permission."
+        )
+
+    return {
+        "actionability_status": status,
+        "requires_bind_before_execution": requires_bind,
+        "bound_execution_intent_id": normalized_execution_intent_id if has_bound_lineage else None,
+        "bind_receipt_id": normalized_bind_receipt_id,
+        "execution_intent_id": normalized_execution_intent_id,
+        "unbound_execution_warning": warning,
+    }
+
+
 def _is_dev_mode_enabled(context: Dict[str, Any]) -> bool:
     """Return whether action-candidate diagnostics should be exposed."""
     explicit_flag = context.get("dev_mode") or context.get("debug")
@@ -688,6 +745,18 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
             "candidates_considered": len(action_candidates),
         },
     }
+    raw_payload = ctx.raw if isinstance(ctx.raw, dict) else {}
+    result.update(
+        _derive_actionability_fields(
+            gate_decision=gate_decision,
+            business_decision=business_decision,
+            human_review_required=human_review_required,
+            next_action=next_action,
+            bind_outcome=raw_payload.get("bind_outcome"),
+            bind_receipt_id=raw_payload.get("bind_receipt_id"),
+            execution_intent_id=raw_payload.get("execution_intent_id"),
+        )
+    )
     if structured_answer is not None:
         result["structured_answer"] = structured_answer
     if unknown_keys:
