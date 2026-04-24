@@ -34,6 +34,7 @@
 - [Bilingual Maintenance Rules](BILINGUAL_RULES.md)
 - [Path Migration Table](PATH_MIGRATION.md)
 - [Operator Guide: Policy Bundle Promotion (EN)](en/guides/governance-policy-bundle-promotion.md)
+- [Third-Party Review Readiness (EN, compact)](en/validation/third-party-review-readiness.md)
 - [金融 PoC パック（JA）](ja/guides/poc-pack-financial-quickstart.md)
 
 ## Directory Structure
