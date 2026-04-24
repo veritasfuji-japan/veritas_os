@@ -1,4 +1,4 @@
-# Decision Semantics（意思決定セマンティクス）
+# PostgreSQL 本番運用ガイド
 
 ## 位置づけ
 この文書は、英語正本の要点を日本語で把握するための説明ページです。対象読者は、運用責任者・監査担当・技術評価者です。
@@ -28,4 +28,4 @@
 - 外部監査や第三者検証は、実施範囲と証拠提出範囲を個別に定義する必要があります。
 
 ## 英語正本
-- [../../en/architecture/decision-semantics.md](../../en/architecture/decision-semantics.md)
+- [../../en/operations/postgresql-production-guide.md](../../en/operations/postgresql-production-guide.md)

@@ -1,81 +1,31 @@
-# VERITAS OS 公開ポジショニングガイド（日本語）
+# 公開ポジショニング（public positioning）
 
-## 公式の公開ポジション
+## 位置づけ
+この文書は、英語正本の要点を日本語で把握するための説明ページです。対象読者は、運用責任者・監査担当・技術評価者です。
 
-**VERITAS OS = Decision Governance and Bind-Boundary Control Plane for AI Agents**
+## 要点
+- VERITAS OS は Decision Governance / 意思決定ガバナンス と Bind-Boundary / bind境界 の統制を実装する beta 段階のシステムです。
+- 本ページは実装済み事実と運用上の確認観点を整理するもので、認証取得・規制承認・本番適合を主張するものではありません。
+- 詳細仕様は英語正本が canonical であり、差分がある場合は英語正本を優先します。
 
-コアメッセージ:
+## VERITASにおける意味
+- Decision Governance / 意思決定ガバナンス: `gate_decision` と `business_decision` の境界を明示します。
+- Bind-Boundary / bind境界: 承認後の副作用を bind 時に再評価し、fail-closed / 安全側停止 を優先します。
+- FUJI Gate と TrustLog: 実行判断と監査系譜を接続し、Mission Control で operator-facing governance surface / 運用者向けガバナンス面 を確認できます。
+- Replay / 再現実行: 再実行時の差分確認により、ガバナンス適用状況を検証します。
+- governance_identity / ガバナンス識別子、bind_summary / bind概要、BindReceipt / bind証跡: 監査・レビュー向けの成果物連携キーです。
 
-- AIの意思決定を、現実世界に作用する前に **reviewable / traceable / replayable / auditable / enforceable** にする。
-- VERITAS OS は **governance layer before execution** であり、実行ランタイムそのものとは役割が異なる。
-- bind の公開契約として、`bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id` を運用側で扱える。
+## 実装上の確認ポイント
+- API 境界: `/v1/decide`、`/v1/governance/*`、`/v1/compliance/config`、`/v1/system/halt`、`/v1/system/resume` の現行契約を確認します。
+- 成果物: TrustLog、BindReceipt、bind_summary、governance_identity の保存/表示経路を確認します。
+- UI: Mission Control の Governance / Audit / Replay 画面で表示契約を確認します。
+- テスト・スキーマ: 英語正本または実装ファイルを確認してください。
 
-## VERITAS OS が「あるもの / ないもの」
+## 現時点の制限
+- 本リポジトリは、実装済みの統制境界と検証可能な証跡を示すbeta段階のシステムです。
+- 現時点で全ての副作用経路がbind-governedであると主張するものではありません。
+- 本番環境での利用には、環境ごとのハードニング、鍵管理、監査設計、運用手順の確立が必要です。
+- 外部監査や第三者検証は、実施範囲と証拠提出範囲を個別に定義する必要があります。
 
-- **あるもの:** 企業・規制領域のワークフローで意思決定統制を担うガバナンス中心のOS層。
-- **ないもの:** すべてのオーケストレーション/ランタイムを置換する基盤、または投機的AGI物語を前面に出す製品。
-
-## 現時点の事実 / 将来方向
-
-### 現時点の事実（実装済み）
-
-- bind-boundary は少なくとも次の2つの運用経路で実装済み:
-  1. `PUT /v1/governance/policy`（governance policy update path）
-  2. `POST /v1/governance/policy-bundles/promote`（policy bundle promotion path）
-- `GET /v1/governance/bind-receipts` と
-  `GET /v1/governance/bind-receipts/{bind_receipt_id}` でレシート系譜を取得可能。
-- replay/revalidation helper により、receipt は replayable governance artifact に近づいている。
-
-### 将来方向（未完了）
-
-- bind-boundary の適用範囲を追加の effect path へ拡張する。
-- 複数 effect path を一貫統治する標準枠組みへ収束させる。
-- これは方向性であり、現時点で全 effect path 完了を主張しない。
-
-## 推奨表現
-
-- Decision Governance OS
-- governance layer before execution
-- reviewable / traceable / replayable / auditable / enforceable
-- fail-closed safety gate
-- tamper-evident TrustLog lineage
-- decision -> execution_intent -> bind_receipt lineage
-- operator-facing governance surface
-- bind outcome public contract
-
-## 注意表現（限定利用）
-
-以下は歴史的・研究的文脈を明示した場合に限定:
-
-- Proto-AGI
-- AGI framework
-- self-improvement OS
-
-タイトル・サブタイトル・冒頭説明段落での無注釈利用は禁止。
-
-## Technical Maturity Snapshot（内部自己評価）
-
-> このセクションは **internal re-evaluation / self-assessment（内部再評価）** であり、第三者認証ではありません。
-
-| カテゴリ | 2026-03-15 | 2026-04-15 | 変動 |
-|---|---|---|---|
-| Architecture | 82 | 85 | +3 |
-| Code Quality | 83 | 84 | +1 |
-| Security | 80 | 86 | +6 |
-| Testing | 88 | 89 | +1 |
-| Production Readiness | 80 | 85 | +5 |
-| Governance | 82 | 86 | +4 |
-| Docs | 80 | 83 | +3 |
-| Differentiation | 84 | 86 | +2 |
-| **Overall** | **82** | **85 / 100** | **+3** |
-
-基準レビュー:
-- `docs/ja/reviews/technical_dd_review_ja_20260315.md`
-
-## README要約方針（冒頭3〜5画面）
-
-1. 何の製品か
-2. 何を解決するか
-3. runtime/orchestration との差分
-4. regulated / enterprise 適合理由
-5. 事実とロードマップの境界
+## 英語正本
+- [../../en/positioning/public-positioning.md](../../en/positioning/public-positioning.md)
