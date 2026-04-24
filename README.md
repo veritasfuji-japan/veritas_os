@@ -73,7 +73,7 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 - Signed and hash-linked governance artifacts for accountability
 - Posture-based secure/prod startup checks to reduce permissive misconfiguration
 
-This opening reflects current implemented fact: bind-governed adjudication is already active on at least three operator-governed effect paths,
+This opening reflects current implemented fact: bind-governed adjudication is already active on at least five operator-governed effect paths,
 while broader effect-path coverage remains roadmap direction.
 
 ## What VERITAS OS is / is not
@@ -84,11 +84,12 @@ while broader effect-path coverage remains roadmap direction.
 ## Fact vs roadmap (read this first)
 
 - **Current fact (beta):** Core decision pipeline, bind artifact lineage (`decision -> execution_intent -> bind_receipt`), bind-time admissibility checks, FUJI fail-closed gating, TrustLog lineage, Mission Control workflows, and governance endpoints are implemented.
-- **Current fact (bind policy surface):** Bind-boundary adjudication is currently wired on at least four operator-governed effect paths:
+- **Current fact (bind policy surface):** Bind-boundary adjudication is currently wired on at least five operator-governed effect paths:
   1) `PUT /v1/governance/policy` (governance policy update path),
   2) `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path), and
   3) `PUT /v1/compliance/config` (runtime compliance config mutation path), and
-  4) `POST /v1/system/halt` (operator emergency halt mutation path).
+  4) `POST /v1/system/halt` (operator emergency halt mutation path), and
+  5) `POST /v1/system/resume` (operator system resume mutation path).
 - **Current fact (bind outcome public contract):** Governance bind responses expose legacy flat bind fields (`bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, `bind_receipt_id`) and additive `bind_summary` objects as a shared compact bind vocabulary.
 - **Current fact (bind artifact family):** `BindReceipt` is persisted as a full governance artifact and carries canonical target metadata as part of the artifact contract.
 - **Current fact (replay/operator flow):** Operator surfaces expose bind artifacts via list/export/detail endpoints (`/v1/governance/bind-receipts`, `/v1/governance/bind-receipts/export`, `/v1/governance/bind-receipts/{bind_receipt_id}`), with mutation/export responses reusing `bind_summary` for triage and audit workflows.

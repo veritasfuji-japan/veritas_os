@@ -158,14 +158,73 @@ def test_system_halt_error(monkeypatch):
 
 
 def test_system_resume(monkeypatch):
-    monkeypatch.setattr(server, "SystemHaltController", _FakeHaltController)
+    class _ResumeCommittedController:
+        @staticmethod
+        def resume(operator, comment=""):
+            del operator, comment
+            return {"halted": False}
+
+        @staticmethod
+        def status():
+            return {"halted": False, "halted_by": None, "reason": None}
+
+    monkeypatch.setattr(server, "SystemHaltController", _ResumeCommittedController)
+    monkeypatch.setattr(
+        server,
+        "get_policy",
+        lambda: {"version": "test-policy", "updated_at": "2026-04-01T00:00:00Z"},
+    )
     resp = client.post(
         "/v1/system/resume",
         json={"operator": "tester", "comment": "all clear"},
         headers=_AUTH,
     )
     assert resp.status_code == 200
-    assert resp.json()["ok"] is True
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["halted"] is False
+    assert body["bind_outcome"] == "COMMITTED"
+    assert body["bind_summary"]["bind_outcome"] == "COMMITTED"
+    assert body["bind_receipt_id"]
+    assert body["execution_intent_id"]
+
+
+def test_system_resume_blocked_returns_bind_lineage(monkeypatch):
+    monkeypatch.setattr(server, "SystemHaltController", _FakeHaltController)
+    monkeypatch.setattr(
+        server,
+        "get_policy",
+        lambda: {"version": "test-policy", "updated_at": "2026-04-01T00:00:00Z"},
+    )
+
+    def _blocked(*args, **kwargs):
+        from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome
+
+        del args, kwargs
+        return BindReceipt(
+            bind_receipt_id="br-resume-blocked-1",
+            execution_intent_id="ei-resume-blocked-1",
+            decision_id="dec-resume-blocked-1",
+            final_outcome=FinalOutcome.BLOCKED,
+            target_path="/v1/system/resume",
+            target_type="system_resume",
+            bind_reason_code="authority_denied",
+            bind_failure_reason="approval denied",
+        )
+
+    monkeypatch.setattr("veritas_os.api.routes_system.resume_system_with_bind_boundary", _blocked)
+    resp = client.post(
+        "/v1/system/resume",
+        json={"operator": "tester", "comment": "all clear"},
+        headers=_AUTH,
+    )
+    assert resp.status_code == 403
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["bind_outcome"] == "BLOCKED"
+    assert body["bind_summary"]["bind_outcome"] == "BLOCKED"
+    assert body["bind_receipt_id"] == "br-resume-blocked-1"
+    assert body["execution_intent_id"] == "ei-resume-blocked-1"
 
 
 def test_system_resume_error(monkeypatch):
