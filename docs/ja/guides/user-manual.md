@@ -452,3 +452,7 @@ curl -sS -X POST "http://localhost:8000/v1/decide" \
 2. 新規機能の責務境界（Planner/Kernel/FUJI/MemoryOS）確認
 3. セキュリティ章への影響有無確認
 4. 運用フローへの追記漏れ確認
+
+## 英語正本
+
+- [docs/en/README.md](../../en/README.md)

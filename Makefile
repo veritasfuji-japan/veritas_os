@@ -152,7 +152,7 @@ quality-checks:
 	@python scripts/architecture/check_core_complexity_budget.py
 	@python scripts/quality/check_operational_docs_consistency.py
 	@python scripts/quality/check_frontend_docs_consistency.py
-	@python scripts/quality/check_bilingual_docs.py
+	@$(MAKE) check-bilingual-docs
 	@python scripts/quality/check_review_improvements_consistency.py
 	@python scripts/quality/check_requirements_sync.py
 	@python scripts/quality/check_frontend_api_contract_consistency.py
@@ -162,6 +162,7 @@ quality-checks:
 	@python scripts/quality/check_replay_pipeline_version_unknown_rate.py --max-unknown-rate 0.0
 	@python scripts/quality/check_deployment_env_defaults.py
 	@python scripts/security/check_runtime_pickle_artifacts.py
+
 
 verify: verify-backend verify-frontend
 	@echo "[veritas] Verification suite completed."
