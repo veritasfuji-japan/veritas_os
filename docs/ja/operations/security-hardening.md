@@ -1,25 +1,25 @@
-# セキュリティ強化（日本語解説）
+# セキュリティハードニング（日本語解説）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+VERITAS の secure/prod 運用に向けたハードニング観点を日本語で把握するための文書です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- fail-closed を前提に、秘密情報管理・署名検証・監査ログ保全を強化します。
+- posture 設定（dev/staging/secure/prod）で安全既定値を明示的に分離します。
+- 運用変更は監査可能な手順と証跡を伴う必要があります。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- Decision Governance の有効性は、ハードニングされた運用環境で初めて成立します。
+- FUJI Gate・TrustLog・governance artifact signing を横断した統制が必要です。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- posture関連環境変数と override 利用条件を確認する。
+- 外部シークレットマネージャー、署名鍵、監査ログ保全設定を確認する。
+- 詳細は英語正本または実装ファイルを確認してください。
+
+## 現時点の制限
+- 本文書はチェックリストであり、第三者セキュリティ認証ではありません。
+- 本番導入前に脅威モデルと運用審査を実施してください。
 
 ## 英語正本
 - [docs/en/operations/security-hardening.md](../../en/operations/security-hardening.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

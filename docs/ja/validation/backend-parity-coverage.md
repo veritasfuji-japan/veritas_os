@@ -1,25 +1,25 @@
-# Backend Parity Coverage（日本語解説）
+# バックエンドパリティカバレッジ（日本語解説）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+Memory / TrustLog バックエンド間の実装差分と検証範囲を確認する日本語解説です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- PostgreSQL を本番パスとし、JSON/JSONL は軽量開発用途として扱います。
+- パリティは API 契約・整合性・失敗時挙動の観点で確認します。
+- fail-closed での挙動差異は監査向けに明示する必要があります。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- Bind-Boundary の結果がストレージ差異で変わらないことは、監査と運用信頼性の基礎です。
+- Mission Control と Replay の整合にも直結します。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- `/health` の `storage_backends` で有効バックエンドを確認する。
+- parity テストと production/smoke 検証の結果を証跡化する。
+- 詳細は英語正本または実装ファイルを確認してください。
+
+## 現時点の制限
+- 本ページは全構成での性能同等性を保証するものではありません。
+- 本番導入時はDB設定、監視、復旧訓練を環境別に実施してください。
 
 ## 英語正本
 - [docs/en/validation/backend-parity-coverage.md](../../en/validation/backend-parity-coverage.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

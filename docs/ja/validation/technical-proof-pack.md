@@ -1,25 +1,25 @@
-# Technical Proof Pack（日本語解説）
+# 技術証明パック（Technical Proof Pack）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+レビュー、PoC、監査前審査で「何を技術的に証明するか」を整理する日本語解説です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- 技術証明パックは、実装済み事実と未保証範囲を分離して示します。
+- bind境界、Replay、TrustLog、運用Runbook の証拠セットを束ねます。
+- 過大主張を避け、beta段階の制限を明記します。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- Decision Governance を「説明可能」から「検証可能」へ進めるための提出単位です。
+- `bind_summary` と `BindReceipt` を接続し、監査・投資家・顧客の確認負担を下げます。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- 技術証明に含めるテスト、API出力、ログ、Runbook の版を固定する。
+- production validation / backend parity と整合した証拠を使う。
+- 詳細は英語正本または実装ファイルを確認してください。
+
+## 現時点の制限
+- 本資料のみで本番適合を保証しません。
+- 環境依存の性能・可用性・運用成熟度は別途検証が必要です。
 
 ## 英語正本
 - [docs/en/validation/technical-proof-pack.md](../../en/validation/technical-proof-pack.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

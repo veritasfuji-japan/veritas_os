@@ -1,25 +1,25 @@
 # PostgreSQL本番運用ガイド（日本語解説）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+PostgreSQL を本番で運用する際の確認観点を、日本語で短く整理した案内です。対象は運用者、SRE、監査担当です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- VERITAS は PostgreSQL を本番パスとして想定し、軽量バックエンドは開発用途と区別します。
+- 監視、バックアップ/復旧、権限管理、設定固定を運用の基準点にします。
+- bind証跡の保存可用性は Decision Governance の前提条件です。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- TrustLog と Replay の再現性は DB運用品質に依存します。
+- FUJI Gate の fail-closed 結果を保持するため、DB障害時の安全側停止設計が重要です。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- `/health` で backend 種別を確認する。
+- バックアップ/リストア手順とドリル結果を証跡化する。
+- Migration 手順とロールバック手順を運用Runbookに統合する。
+
+## 現時点の制限
+- ここで示す内容は一般指針で、各環境のHA/DR要件を代替しません。
+- 本番適用前に監査設計・鍵管理・アクセス統制を追加してください。
 
 ## 英語正本
 - [docs/en/operations/postgresql-production-guide.md](../../en/operations/postgresql-production-guide.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

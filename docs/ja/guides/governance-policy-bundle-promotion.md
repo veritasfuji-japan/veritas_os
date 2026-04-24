@@ -1,25 +1,25 @@
-# ポリシーバンドル昇格ガイド（日本語解説）
+# ポリシーバンドル昇格（日本語解説）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+`POST /v1/governance/policy-bundles/promote` を中心とした昇格運用の日本語解説です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- 昇格は「作成済みポリシーを運用有効化する統制イベント」です。
+- 署名検証、承認履歴、rollback 経路をセットで管理します。
+- bind-governed effect path として監査対象になるため、証跡保全が必須です。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- Decision Governance と Bind-Boundary / bind境界 の接続点です。
+- FUJI Gate・TrustLog・Mission Control で同一昇格イベントを追跡できます。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- promotion API の入力条件と失敗コードを確認する。
+- 昇格後に `governance_identity` と bind結果が期待通りか確認する。
+- 詳細は英語正本または実装ファイルを確認してください。
+
+## 現時点の制限
+- 組織固有の承認ワークフローは追加設計が必要です。
+- 本文書は全環境での自動昇格安全性を保証しません。
 
 ## 英語正本
 - [docs/en/guides/governance-policy-bundle-promotion.md](../../en/guides/governance-policy-bundle-promotion.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

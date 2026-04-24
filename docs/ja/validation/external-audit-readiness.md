@@ -1,25 +1,25 @@
-# External Audit Readiness（日本語解説）
+# 外部監査準備性（External Audit Readiness）
 
 ## 位置づけ
-この文書は、英語正本の要点を日本語で把握するための解説ページです。経営層・監査担当・運用担当・実装担当が、読むべき観点を短時間で揃えることを目的にしています。
+外部監査人・DD担当・内部統制担当が、VERITAS の監査提出準備を確認するための日本語解説です。
 
 ## 要点
-- VERITAS OS は Decision Governance と Bind-Boundary を分離し、実行前に fail-closed で統制します。
-- 本ページは意思決定、FUJI Gate、TrustLog、Mission Control、Replay、compliance の接点を中心に要点を整理します。
-- 監査・審査では `governance_identity`、`bind_summary`、`BindReceipt` の系譜一貫性を確認します。
+- 監査では Decision Governance、bind境界、TrustLog の連結証跡を確認します。
+- 主要証跡は `governance_identity`、`bind_summary`、`BindReceipt`、Replay 出力です。
+- Mission Control と API の両経路で同一証跡を参照できることが重要です。
 
 ## VERITASにおける意味
-このトピックは operator-facing governance surface の中核です。意思決定（decision）で承認された内容が bind 時点でどう評価され、`COMMITTED` / `BLOCKED` / `ESCALATED` などの結果になるかを、FUJI Gate と TrustLog で追跡可能にします。
+- operator-facing governance surface を監査説明可能な形で提示するための基礎文書です。
+- fail-closed 運用や bind判定理由を、監査時に再現可能な情報へ落とし込みます。
 
 ## 実装上の確認ポイント
-- Mission Control とガバナンス API で bind 系譜（decision / execution intent / bind receipt）を確認する。
-- `/v1/governance/bind-receipts` と export/detail を使い、監査提出向けの証跡を再取得できることを確認する。
-- fail-closed 設定・権限モデル・運用手順は環境ごとに検証し、本番審査で過不足がないかを確認する。
+- bind-receipts list/export/detail が取得できるか。
+- エビデンスバンドルの作成手順と保管責任分界が明確か。
+- 監査時に参照する API・ログ・Runbook を環境ごとに固定しているか。
+
+## 現時点の制限
+- 外部監査実施済み・認証取得済みを意味する文書ではありません。
+- 本番導入前に証跡保存方針、アクセス統制、鍵管理設計を確定してください。
 
 ## 英語正本
 - [docs/en/validation/external-audit-readiness.md](../../en/validation/external-audit-readiness.md)
-
-## 注意
-- 本ページは製品の現在実装を過大主張しないための日本語解説です。
-- 現在の実装事実とロードマップは分離して扱ってください。
-- 本番適用には環境ごとのハードニング・統合・運用審査が必要です。

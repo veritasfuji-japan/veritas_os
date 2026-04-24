@@ -1,0 +1,127 @@
+"""Bilingual documentation drift checks for Japanese-first public surface."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+README_EN = REPO_ROOT / "README.md"
+README_JA = REPO_ROOT / "README_JP.md"
+DOCS_JA_README = REPO_ROOT / "docs/ja/README.md"
+DOCS_INDEX = REPO_ROOT / "docs/INDEX.md"
+DOCS_MAP = REPO_ROOT / "docs/DOCUMENTATION_MAP.md"
+
+ENDPOINTS = (
+    "PUT /v1/governance/policy",
+    "POST /v1/governance/policy-bundles/promote",
+    "PUT /v1/compliance/config",
+    "POST /v1/system/halt",
+    "POST /v1/system/resume",
+)
+
+EN_JA_PAIRS = {
+    "docs/en/guides/poc-pack-financial-quickstart.md": "docs/ja/guides/poc-pack-financial-quickstart.md",
+    "docs/en/guides/financial-governance-templates.md": "docs/ja/guides/financial-governance-templates.md",
+    "docs/en/validation/external-audit-readiness.md": "docs/ja/validation/external-audit-readiness.md",
+    "docs/en/validation/technical-proof-pack.md": "docs/ja/validation/technical-proof-pack.md",
+    "docs/en/validation/third-party-review-readiness.md": "docs/ja/validation/third-party-review-readiness.md",
+    "docs/en/validation/backend-parity-coverage.md": "docs/ja/validation/backend-parity-coverage.md",
+    "docs/en/validation/production-validation.md": "docs/ja/validation/production-validation.md",
+    "docs/en/operations/postgresql-production-guide.md": "docs/ja/operations/postgresql-production-guide.md",
+    "docs/en/operations/postgresql-drill-runbook.md": "docs/ja/operations/postgresql-drill-runbook.md",
+    "docs/en/operations/security-hardening.md": "docs/ja/operations/security-hardening.md",
+    "docs/en/operations/database-migrations.md": "docs/ja/operations/database-migrations.md",
+    "docs/en/operations/governance-artifact-signing.md": "docs/ja/operations/governance-artifact-signing.md",
+    "docs/en/architecture/decision-semantics.md": "docs/ja/architecture/decision-semantics.md",
+    "docs/en/architecture/bind-boundary-governance-artifacts.md": "docs/ja/architecture/bind-boundary-governance-artifacts.md",
+    "docs/en/architecture/bind_time_admissibility_evaluator.md": "docs/ja/architecture/bind_time_admissibility_evaluator.md",
+    "docs/en/governance/required-evidence-taxonomy.md": "docs/ja/governance/required-evidence-taxonomy.md",
+    "docs/en/guides/governance-policy-bundle-promotion.md": "docs/ja/guides/governance-policy-bundle-promotion.md",
+}
+
+
+def local_links(markdown: str) -> list[str]:
+    """Extract markdown links that should resolve inside the repository."""
+    links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", markdown)
+    results: list[str] = []
+    for raw in links:
+        candidate = raw.split("#", maxsplit=1)[0].strip()
+        if not candidate or candidate.startswith(("http://", "https://", "mailto:", "#")):
+            continue
+        results.append(candidate)
+    return results
+
+
+def check_readme_bind_sync(errors: list[str]) -> None:
+    """Check that README_JP carries all bind-governed endpoints from README."""
+    en_text = README_EN.read_text(encoding="utf-8")
+    ja_text = README_JA.read_text(encoding="utf-8")
+    for endpoint in ENDPOINTS:
+        if endpoint not in en_text:
+            errors.append(f"README.md missing required endpoint marker: {endpoint}")
+        if endpoint not in ja_text:
+            errors.append(f"README_JP.md missing bind-governed endpoint: {endpoint}")
+
+
+def check_readme_japanese_first(errors: list[str]) -> None:
+    """Check README_JP avoids direct EN links when JA counterpart exists."""
+    ja_text = README_JA.read_text(encoding="utf-8")
+    for en_path, ja_path in EN_JA_PAIRS.items():
+        ja_exists = (REPO_ROOT / ja_path).exists()
+        if ja_exists and en_path in ja_text:
+            errors.append(
+                f"README_JP.md uses EN link despite JA page existing: {en_path} -> {ja_path}"
+            )
+
+
+def check_links_exist(markdown_path: Path, errors: list[str]) -> None:
+    """Check all local links in a markdown file resolve."""
+    text = markdown_path.read_text(encoding="utf-8")
+    for link in local_links(text):
+        resolved = (markdown_path.parent / link).resolve()
+        if not resolved.exists():
+            errors.append(
+                f"{markdown_path.relative_to(REPO_ROOT)} broken link: {link} -> "
+                f"{resolved.relative_to(REPO_ROOT) if resolved.is_relative_to(REPO_ROOT) else resolved}"
+            )
+
+
+def check_map_paths(errors: list[str]) -> None:
+    """Check all repo-local code spans in DOCUMENTATION_MAP.md exist."""
+    text = DOCS_MAP.read_text(encoding="utf-8")
+    for raw in re.findall(r"`([^`]+)`", text):
+        if raw in {"—", "-"} or raw.startswith("http"):
+            continue
+        if "/" not in raw:
+            continue
+        path = REPO_ROOT / raw
+        if not path.exists():
+            errors.append(f"docs/DOCUMENTATION_MAP.md stale path: {raw}")
+
+
+def run() -> list[str]:
+    """Run all checks and return actionable errors."""
+    errors: list[str] = []
+    check_readme_bind_sync(errors)
+    check_readme_japanese_first(errors)
+    check_links_exist(DOCS_JA_README, errors)
+    check_links_exist(DOCS_INDEX, errors)
+    check_map_paths(errors)
+    return errors
+
+
+def main() -> int:
+    """CLI entrypoint."""
+    errors = run()
+    if errors:
+        print("[check-bilingual-docs] failed")
+        for error in errors:
+            print(f" - {error}")
+        return 1
+    print("[check-bilingual-docs] all checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
