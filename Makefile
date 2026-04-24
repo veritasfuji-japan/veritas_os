@@ -152,6 +152,7 @@ quality-checks:
 	@python scripts/architecture/check_core_complexity_budget.py
 	@python scripts/quality/check_operational_docs_consistency.py
 	@python scripts/quality/check_frontend_docs_consistency.py
+	@python scripts/check_bilingual_docs.py
 	@python scripts/quality/check_review_improvements_consistency.py
 	@python scripts/quality/check_requirements_sync.py
 	@python scripts/quality/check_frontend_api_contract_consistency.py
@@ -266,3 +267,6 @@ drill-recovery:
 drill-recovery-ci:
 	@echo "[veritas] Running CI-safe PostgreSQL recovery drill..."
 	@bash scripts/drill_postgres_recovery.sh --ci
+
+check-bilingual-docs:
+	@python scripts/check_bilingual_docs.py
