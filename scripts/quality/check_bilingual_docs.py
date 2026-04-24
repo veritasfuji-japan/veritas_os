@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 README_EN = REPO_ROOT / "README.md"
@@ -11,6 +12,7 @@ README_JA = REPO_ROOT / "README_JP.md"
 DOCS_JA_README = REPO_ROOT / "docs/ja/README.md"
 DOCS_INDEX = REPO_ROOT / "docs/INDEX.md"
 DOCS_MAP = REPO_ROOT / "docs/DOCUMENTATION_MAP.md"
+DOCS_BILINGUAL_RULES = REPO_ROOT / "docs/BILINGUAL_RULES.md"
 
 ENDPOINTS = (
     "PUT /v1/governance/policy",
@@ -42,6 +44,18 @@ EN_JA_PAIRS = {
     "docs/en/guides/governance-policy-bundle-promotion.md": "docs/ja/guides/governance-policy-bundle-promotion.md",
     "docs/en/positioning/aml-kyc-beachhead-short-positioning.md": "docs/ja/positioning/aml-kyc-beachhead-short-positioning.md",
 }
+
+MARKDOWN_FORMAT_GUARD_TARGETS = (
+    README_JA,
+    DOCS_JA_README,
+    DOCS_INDEX,
+    DOCS_MAP,
+    DOCS_BILINGUAL_RULES,
+)
+MARKDOWN_LINE_HARD_LIMIT = 1000
+MARKDOWN_MIN_LINES = 5
+MARKDOWN_MIN_CHARS_FOR_SHORT_FILE = 2000
+URL_PATTERN = re.compile(r"https?://[^\s)>\"]+")
 
 
 def extract_bind_governed_block(markdown: str) -> str | None:
@@ -138,6 +152,75 @@ def check_map_paths(errors: list[str]) -> None:
             errors.append(f"docs/DOCUMENTATION_MAP.md stale path: {raw}")
 
 
+def _is_fence_line(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("```") or stripped.startswith("~~~")
+
+
+def _is_table_line(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("|") and "|" in stripped[1:]
+
+
+def _extract_urls(line: str) -> list[str]:
+    """Extract HTTP(S) URLs from a markdown line."""
+    return URL_PATTERN.findall(line)
+
+
+def _is_shields_badge_url(url: str) -> bool:
+    """Return True when the URL host is exactly img.shields.io."""
+    parsed = urlparse(url)
+    return parsed.hostname == "img.shields.io"
+
+
+def _is_long_url_or_generated_badge(line: str) -> bool:
+    urls = _extract_urls(line)
+    if any(_is_shields_badge_url(url) for url in urls):
+        return True
+    if urls:
+        return len(line.strip()) > MARKDOWN_LINE_HARD_LIMIT
+    return False
+
+
+def _check_markdown_line_lengths(markdown_path: Path, errors: list[str]) -> None:
+    text = markdown_path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    if len(lines) < MARKDOWN_MIN_LINES and len(text) > MARKDOWN_MIN_CHARS_FOR_SHORT_FILE:
+        errors.append(
+            f"{markdown_path.relative_to(REPO_ROOT)} has {len(lines)} lines and "
+            f"{len(text)} characters. Reformat Markdown into readable line breaks."
+        )
+
+    in_fenced_block = False
+    for idx, raw_line in enumerate(lines, start=1):
+        if _is_fence_line(raw_line):
+            in_fenced_block = not in_fenced_block
+            continue
+        if in_fenced_block:
+            continue
+
+        if _is_table_line(raw_line):
+            continue
+        if _is_long_url_or_generated_badge(raw_line):
+            continue
+
+        line_length = len(raw_line)
+        if line_length > MARKDOWN_LINE_HARD_LIMIT:
+            errors.append(
+                f"{markdown_path.relative_to(REPO_ROOT)}: line {idx} is {line_length} "
+                "characters. Reformat Markdown into readable line breaks."
+            )
+
+
+def check_markdown_readability(errors: list[str]) -> None:
+    """Guard against markdown files compressed into unreadable long lines."""
+    targets = {path.resolve() for path in MARKDOWN_FORMAT_GUARD_TARGETS}
+    targets.update(path.resolve() for path in (REPO_ROOT / "docs/ja").rglob("*.md"))
+    for markdown_path in sorted(targets):
+        if markdown_path.exists():
+            _check_markdown_line_lengths(markdown_path, errors)
+
+
 def run() -> list[str]:
     """Run all checks and return actionable errors."""
     errors: list[str] = []
@@ -146,6 +229,7 @@ def run() -> list[str]:
     check_links_exist(DOCS_JA_README, errors)
     check_links_exist(DOCS_INDEX, errors)
     check_map_paths(errors)
+    check_markdown_readability(errors)
     return errors
 
 

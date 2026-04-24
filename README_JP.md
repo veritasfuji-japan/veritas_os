@@ -109,7 +109,7 @@ VERITAS OS は次を実現します。
 - **レビュー文書マップ**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **ドキュメント入口（英語）**: [`docs/en/README.md`](docs/en/README.md)
 - **ドキュメント入口（日本語）**: [`docs/ja/README.md`](docs/ja/README.md)
-- **公開ポジショニングガイド（英語）**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
+- **公開ポジショニングガイド（英語）**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
 - **公開ポジショニングガイド（日本語）**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
 - **Decision Semantics Contract**: [`docs/ja/architecture/decision-semantics.md`](docs/ja/architecture/decision-semantics.md)
 - **Bind-Boundary Governance Artifacts**: [`docs/ja/architecture/bind-boundary-governance-artifacts.md`](docs/ja/architecture/bind-boundary-governance-artifacts.md)
@@ -119,7 +119,7 @@ VERITAS OS は次を実現します。
 - **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
 - **運用Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 - **ガバナンス署名運用Runbook**: [`docs/ja/operations/governance-artifact-signing.md`](docs/ja/operations/governance-artifact-signing.md)
-- **ポリシーバンドル昇格ガイド（EN）**: [`docs/ja/guides/governance-policy-bundle-promotion.md`](docs/ja/guides/governance-policy-bundle-promotion.md)
+- **ポリシーバンドル昇格ガイド（日本語）**: [`docs/ja/guides/governance-policy-bundle-promotion.md`](docs/ja/guides/governance-policy-bundle-promotion.md)
 - **ガバナンスアップグレード概要（Press）**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
 
 ## AML/KYC Beachhead PoC Pack（1日で試せる内容）
