@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generate a governance readiness report for VERITAS OS releases.
+"""Generate release-gate governance artifacts for VERITAS OS releases.
 
 This script runs all governance-critical checks and produces a structured
-JSON report plus a human-readable text summary. It is called by the
+JSON report, a human-readable text summary, and an external-facing
+release proof summary. It is called by the
 release-gate.yml workflow during the Tier 2 governance-report job.
 
 Usage:
@@ -10,7 +11,8 @@ Usage:
         --ref v2.0.1 \
         --sha abc1234 \
         --output release-artifacts/governance-readiness-report.json \
-        --text-output release-artifacts/governance-readiness-report.txt
+        --text-output release-artifacts/governance-readiness-report.txt \
+        --proof-output release-artifacts/release-proof-summary.md
 
 Exit code:
     0  — all blocking checks passed (release is governance-ready)
@@ -130,6 +132,59 @@ CHECKS: list[tuple[str, str, list[str], bool]] = [
         False,
     ),
 ]
+
+CHECK_CLASSES: dict[str, tuple[str, ...]] = {
+    "security": (
+        "runtime-pickle-ban",
+        "bare-except-ban",
+        "subprocess-shell-ban",
+        "unsafe-dynamic-execution",
+        "httpx-raw-upload-ban",
+        "next-public-key-exposure",
+    ),
+    "architecture": (
+        "responsibility-boundaries",
+        "core-complexity-budget",
+    ),
+    "quality": (
+        "replay-pipeline-version-rate",
+        "deployment-env-defaults",
+        "requirements-sync",
+    ),
+    "documentation": (
+        "operational-docs-consistency",
+        "frontend-docs-consistency",
+    ),
+}
+
+
+def classify_check(label: str) -> str:
+    """Map a check label to its high-level class name."""
+    for class_name, labels in CHECK_CLASSES.items():
+        if label in labels:
+            return class_name
+    return "other"
+
+
+def summarize_check_classes(results: list[dict]) -> list[dict[str, object]]:
+    """Return status counts grouped by high-level check class."""
+    grouped: dict[str, dict[str, int | str]] = {}
+    for result in results:
+        class_name = classify_check(result["label"])
+        if class_name not in grouped:
+            grouped[class_name] = {
+                "class_name": class_name,
+                "total": 0,
+                "pass": 0,
+                "fail": 0,
+                "skipped": 0,
+            }
+        grouped[class_name]["total"] += 1
+        if result["passed"]:
+            grouped[class_name]["pass"] += 1
+        else:
+            grouped[class_name]["fail"] += 1
+    return sorted(grouped.values(), key=lambda item: str(item["class_name"]))
 
 
 def run_check(
@@ -261,6 +316,76 @@ def render_text_report(report: dict) -> str:
     return "\n".join(lines)
 
 
+def render_release_proof_summary(report: dict) -> str:
+    """Render an external-facing release proof summary in Markdown."""
+    summary = report["summary"]
+    readiness_state = "Ready" if summary["governance_ready"] else "Not Ready"
+    class_rows = summarize_check_classes(report["checks"])
+    sha_value = report["release_sha"]
+    sha_display = f"{sha_value[:12]}..." if len(sha_value) > 12 else sha_value
+
+    lines = [
+        "# VERITAS OS — Release Proof Summary",
+        "",
+        "## Snapshot",
+        f"- Release reference: `{report['release_ref']}`",
+        f"- Commit: `{sha_display}`",
+        f"- Generated at (UTC): `{report['generated_at']}`",
+        f"- Release readiness: **{readiness_state}**",
+        "",
+        "## Check classes executed",
+        "",
+        "| Check class | Pass | Fail | Skipped | Notes |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for class_row in class_rows:
+        notes = (
+            "Blocking for release readiness."
+            if class_row["class_name"] != "documentation"
+            else "Advisory only; does not block release readiness."
+        )
+        lines.append(
+            "| "
+            f"{class_row['class_name']} | "
+            f"{class_row['pass']} | "
+            f"{class_row['fail']} | "
+            f"{class_row['skipped']} | "
+            f"{notes} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## What release readiness means",
+            (
+                "- `release-readiness` means Tier 1 and Tier 2 blocking controls "
+                "completed without failures, and governance checks reported no "
+                "blocking failure."
+            ),
+            "- Advisory checks can still report warnings; those are visible in artifacts.",
+            "",
+            "## Assurance boundary (conservative statement)",
+            (
+                "- This summary is an **internal assurance artifact** based on "
+                "VERITAS OS release-gate evidence."
+            ),
+            (
+                "- It is **not an external certification** and must not be "
+                "represented as a regulatory, legal, or auditor-issued attestation."
+            ),
+            (
+                "- External certification requires independent scope definition, "
+                "evidence collection, and assessor judgment."
+            ),
+            "",
+            "## Canonical artifacts",
+            "- `governance-readiness-report.json` (machine-readable status + raw check outputs)",
+            "- `governance-readiness-report.txt` (operator-readable detailed report)",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     """Run all governance checks and emit a readiness report.
 
@@ -279,6 +404,11 @@ def main() -> int:
         "--text-output",
         default="governance-readiness-report.txt",
         help="Path for human-readable text report",
+    )
+    parser.add_argument(
+        "--proof-output",
+        default="release-proof-summary.md",
+        help="Path for human-readable release proof summary (Markdown)",
     )
     args = parser.parse_args()
 
@@ -314,6 +444,12 @@ def main() -> int:
     text_path.parent.mkdir(parents=True, exist_ok=True)
     text_path.write_text(text_report, encoding="utf-8")
     logger.info("Text report written: %s", text_path)
+
+    proof_summary = render_release_proof_summary(report)
+    proof_path = Path(args.proof_output)
+    proof_path.parent.mkdir(parents=True, exist_ok=True)
+    proof_path.write_text(proof_summary, encoding="utf-8")
+    logger.info("Release proof summary written: %s", proof_path)
 
     # Print text report to stdout
     print(text_report)

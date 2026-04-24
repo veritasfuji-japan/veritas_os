@@ -577,13 +577,19 @@ jobs:
             --ref "${VERITAS_RELEASE_REF}" \
             --sha "${VERITAS_RELEASE_SHA}" \
             --output release-artifacts/governance-readiness-report.json \
-            --text-output release-artifacts/governance-readiness-report.txt
+            --text-output release-artifacts/governance-readiness-report.txt \
+            --proof-output release-artifacts/release-proof-summary.md
 
       - name: Print governance readiness report
         if: always()
         run: |
           if [ -f release-artifacts/governance-readiness-report.txt ]; then
             cat release-artifacts/governance-readiness-report.txt
+          fi
+          if [ -f release-artifacts/release-proof-summary.md ]; then
+            echo ""
+            echo "---- release-proof-summary.md ----"
+            cat release-artifacts/release-proof-summary.md
           fi
 
       - name: Upload governance readiness report

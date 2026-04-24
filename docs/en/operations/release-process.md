@@ -79,6 +79,9 @@ gh run download --name release-governance-readiness-report \
 # View the text summary
 cat governance-readiness-report.txt
 
+# View the external-facing proof summary
+cat release-proof-summary.md
+
 # Check the JSON summary
 python3 -c "
 import json
@@ -114,6 +117,7 @@ Attach the governance readiness report as a release asset:
 ```bash
 gh release upload v2.1.0 governance-readiness-report.json
 gh release upload v2.1.0 governance-readiness-report.txt
+gh release upload v2.1.0 release-proof-summary.md
 ```
 
 Publish when ready:

@@ -1329,6 +1329,7 @@ Additional CI workflows:
 - Production-like test suite (`pytest -m "production or smoke"` + TLS + load)
 - Full-stack Docker Compose health check
 - Governance readiness report artifact generated and uploaded
+- Human-readable `release-proof-summary.md` generated for enterprise review / diligence handoff
 
 **Tier 3** (`production-validation.yml`) — weekly schedule + manual dispatch:
 - Long-running production tests, load tests, external live tests
@@ -1344,6 +1345,7 @@ tier model and [`docs/RELEASE_PROCESS.md`](docs/en/operations/release-process.md
 1. Find the `Release Gate` workflow run for the target tag in the [Actions tab](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
 2. The `✅ Release Readiness Gate` job must show **🟢 RELEASE IS GOVERNANCE-READY**
 3. Download the `release-governance-readiness-report` artifact and verify `"governance_ready": true`
+4. Read `release-proof-summary.md` for check-class pass/fail/skipped counts and assurance-boundary wording for external technical review
 
 ### Production-like Validation
 
