@@ -112,6 +112,7 @@ while broader effect-path coverage remains roadmap direction.
 - **AML/KYC Governance Template Contract**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
 - **External Audit / Evidence Bundle Readiness**: [`docs/en/validation/external-audit-readiness.md`](docs/en/validation/external-audit-readiness.md)
 - **External Technical Proof Pack (review/pilot/DD/audit)**: [`docs/en/validation/technical-proof-pack.md`](docs/en/validation/technical-proof-pack.md)
+- **Third-Party Review Readiness (compact index)**: [`docs/en/validation/third-party-review-readiness.md`](docs/en/validation/third-party-review-readiness.md)
 - **AML/KYC Short Positioning (customer / operator / investor)**: [`docs/en/positioning/aml-kyc-beachhead-short-positioning.md`](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349

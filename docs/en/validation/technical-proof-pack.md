@@ -21,13 +21,14 @@ Use this as the top-level entrypoint before reading detailed maps and checklists
 ## 2) Proof-pack document set (read in order)
 
 1. [Short DD Summary](short-dd-summary.md)
-2. [Implemented vs Pending Boundary](implemented-vs-pending-boundary.md)
-3. [Governance Capability Matrix](governance-capability-matrix.md)
-4. [Validation Evidence Map](validation-evidence-map.md)
-5. [AML/KYC Pilot Evidence Map](aml-kyc-pilot-evidence-map.md)
-6. [External Reviewer Checklist](external-reviewer-checklist.md)
-7. [External Audit Readiness Pack](external-audit-readiness.md)
-8. Optional: [Benchmark / Reproducibility Appendix](benchmark-reproducibility-appendix.md)
+2. [Third-Party Review Readiness (compact index)](third-party-review-readiness.md)
+3. [Implemented vs Pending Boundary](implemented-vs-pending-boundary.md)
+4. [Governance Capability Matrix](governance-capability-matrix.md)
+5. [Validation Evidence Map](validation-evidence-map.md)
+6. [AML/KYC Pilot Evidence Map](aml-kyc-pilot-evidence-map.md)
+7. [External Reviewer Checklist](external-reviewer-checklist.md)
+8. [External Audit Readiness Pack](external-audit-readiness.md)
+9. Optional: [Benchmark / Reproducibility Appendix](benchmark-reproducibility-appendix.md)
 
 ---
 
@@ -68,4 +69,3 @@ If you are an external reviewer, start with:
 1. `short-dd-summary.md` (5–10 minutes)
 2. `implemented-vs-pending-boundary.md` (boundary control)
 3. `external-reviewer-checklist.md` (evidence verification flow)
-

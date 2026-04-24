@@ -42,6 +42,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [PostgreSQL Production Proof Map (compact)](validation/postgresql-production-proof-map.md)
 - [External Audit Readiness](validation/external-audit-readiness.md)
 - [Technical Proof Pack (external review)](validation/technical-proof-pack.md)
+- [Third-Party Review Readiness (compact index)](validation/third-party-review-readiness.md)
 
 ### Governance & Compliance
 - [Decision Semantics Contract](architecture/decision-semantics.md)
