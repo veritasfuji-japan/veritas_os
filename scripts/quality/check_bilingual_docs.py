@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 README_EN = REPO_ROOT / "README.md"
@@ -54,6 +55,7 @@ MARKDOWN_FORMAT_GUARD_TARGETS = (
 MARKDOWN_LINE_HARD_LIMIT = 1000
 MARKDOWN_MIN_LINES = 5
 MARKDOWN_MIN_CHARS_FOR_SHORT_FILE = 2000
+URL_PATTERN = re.compile(r"https?://[^\s)>\"]+")
 
 
 def extract_bind_governed_block(markdown: str) -> str | None:
@@ -160,12 +162,23 @@ def _is_table_line(line: str) -> bool:
     return stripped.startswith("|") and "|" in stripped[1:]
 
 
+def _extract_urls(line: str) -> list[str]:
+    """Extract HTTP(S) URLs from a markdown line."""
+    return URL_PATTERN.findall(line)
+
+
+def _is_shields_badge_url(url: str) -> bool:
+    """Return True when the URL host is exactly img.shields.io."""
+    parsed = urlparse(url)
+    return parsed.hostname == "img.shields.io"
+
+
 def _is_long_url_or_generated_badge(line: str) -> bool:
-    stripped = line.strip()
-    if "img.shields.io" in stripped:
+    urls = _extract_urls(line)
+    if any(_is_shields_badge_url(url) for url in urls):
         return True
-    if "http://" in stripped or "https://" in stripped:
-        return len(stripped) > MARKDOWN_LINE_HARD_LIMIT
+    if urls:
+        return len(line.strip()) > MARKDOWN_LINE_HARD_LIMIT
     return False
 
 
