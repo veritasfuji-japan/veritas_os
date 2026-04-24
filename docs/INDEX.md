@@ -27,6 +27,7 @@
 | Governance Artifact Signing | [Governance artifact signing (EN)](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名 (JA)](ja/operations/governance-artifact-signing.md) |
 | Governance | [Governance (EN)](en/governance/) | [Governance (JA)](ja/governance/) |
 | Required Evidence Taxonomy | [Required evidence taxonomy (EN)](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy (JA)](ja/governance/required-evidence-taxonomy.md) |
+| Governance Artifact Lifecycle | [Governance artifact lifecycle (EN)](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle (JA)](ja/governance/governance-artifact-lifecycle.md) |
 | Guides | [Guides (EN)](en/guides/) | [Guides (JA)](ja/guides/) |
 | Financial / AML-KYC | [AML/KYC quickstart (EN)](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート (JA)](ja/guides/poc-pack-financial-quickstart.md) |
 | Financial Governance Templates | [Financial governance templates (EN)](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート (JA)](ja/guides/financial-governance-templates.md) |
@@ -73,6 +74,7 @@
 | ガバナンス成果物署名 | [Governance artifact signing（英語正本）](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名（日本語解説）](ja/operations/governance-artifact-signing.md) |
 | ガバナンス | [Governance（英語正本）](en/governance/) | [Governance（日本語）](ja/governance/) |
 | Required Evidence Taxonomy | [Required evidence taxonomy（英語正本）](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy（日本語解説）](ja/governance/required-evidence-taxonomy.md) |
+| Governance Artifact Lifecycle | [Governance artifact lifecycle（英語正本）](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle（日本語解説）](ja/governance/governance-artifact-lifecycle.md) |
 | ガイド | [Guides（英語正本）](en/guides/) | [Guides（日本語）](ja/guides/) |
 | 金融 / AML-KYC | [AML/KYC quickstart（英語正本）](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート（日本語）](ja/guides/poc-pack-financial-quickstart.md) |
 | 金融ガバナンステンプレート | [Financial governance templates（英語正本）](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート（日本語解説）](ja/guides/financial-governance-templates.md) |
