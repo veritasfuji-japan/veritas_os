@@ -20,7 +20,11 @@ from pydantic import BaseModel, Field
 from veritas_os.api.auth import require_permission
 from veritas_os.api.bind_summary import build_bind_response_payload
 from veritas_os.api.rbac import Permission
-from veritas_os.api.schemas import ComplianceConfigResponse, SystemHaltResponse
+from veritas_os.api.schemas import (
+    ComplianceConfigResponse,
+    SystemHaltResponse,
+    SystemResumeResponse,
+)
 from veritas_os.api.utils import _is_direct_fuji_api_enabled
 from veritas_os.api.pipeline_orchestrator import (
     get_runtime_config,
@@ -31,7 +35,10 @@ from veritas_os.policy.bind_artifacts import FinalOutcome
 from veritas_os.policy.compliance_config_update import (
     update_compliance_config_with_bind_boundary,
 )
-from veritas_os.policy.system_halt_update import halt_system_with_bind_boundary
+from veritas_os.policy.system_halt_update import (
+    halt_system_with_bind_boundary,
+    resume_system_with_bind_boundary,
+)
 from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.storage.factory import get_backend_info
 # Note: report/compliance functions accessed via _get_server() to support
@@ -829,15 +836,50 @@ def system_halt(body: SystemHaltRequest):
         )
 
 
-@router.post("/v1/system/resume", dependencies=[Depends(require_permission(Permission.config_write))])
+@router.post(
+    "/v1/system/resume",
+    response_model=SystemResumeResponse,
+    dependencies=[Depends(require_permission(Permission.config_write))],
+)
 def system_resume(body: SystemResumeRequest):
     """Resume the AI decision system after a halt (Art. 14(4))."""
     srv = _get_server()
     try:
-        result = srv.SystemHaltController.resume(
-            operator=body.operator, comment=body.comment,
-        )
-        return {"ok": True, **result}
+        current_policy = srv.get_policy()
+        payload = {"operator": body.operator, "comment": body.comment}
+        decision_id = uuid4().hex
+        bind_receipt = resume_system_with_bind_boundary(
+            decision_id=decision_id,
+            request_id=decision_id,
+            actor_identity=body.operator,
+            policy_snapshot_id=str(
+                current_policy.get("updated_at")
+                or current_policy.get("version")
+                or "system_resume"
+            ),
+            decision_hash=sha256_of_canonical_json(payload),
+            operator=body.operator,
+            comment=body.comment,
+            status_reader=srv.SystemHaltController.status,
+            resume_executor=srv.SystemHaltController.resume,
+            approval_context={"system_resume_approved": True},
+            governance_policy=current_policy if isinstance(current_policy, dict) else None,
+        ).to_dict()
+        bind_receipt.setdefault("target_path", "/v1/system/resume")
+        bind_receipt.setdefault("target_type", "system_resume")
+        bind_payload = build_bind_response_payload(bind_receipt)
+        status = srv.SystemHaltController.status()
+        if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": "system resume bind approval validation failed",
+                    **status,
+                    **bind_payload,
+                },
+            )
+        return {"ok": True, **status, **bind_payload}
     except Exception as e:
         logger.error("system_resume failed: %s", e)
         return JSONResponse(
