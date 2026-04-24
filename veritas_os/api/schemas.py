@@ -1534,6 +1534,25 @@ class SystemHaltResponse(BaseModel):
     error: Optional[str] = None
 
 
+class SystemResumeResponse(BaseModel):
+    """Response envelope for POST /v1/system/resume."""
+
+    ok: bool = True
+    halted: bool = False
+    halted_by: Optional[str] = None
+    halted_at: Optional[str] = None
+    reason: Optional[str] = None
+    bind_receipt: Optional[BindReceipt] = None
+    bind_outcome: Optional[FinalOutcome] = None
+    bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    bind_summary: Optional[BindSummary] = None
+    target_metadata: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
 class GovernanceBindReceiptListResponse(BaseModel):
     """Response envelope for GET /v1/governance/bind-receipts."""
 

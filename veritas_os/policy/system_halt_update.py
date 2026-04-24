@@ -7,7 +7,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent
-from veritas_os.policy.bind_boundary_adapters import SystemHaltAdapter
+from veritas_os.policy.bind_boundary_adapters import SystemHaltAdapter, SystemResumeAdapter
 from veritas_os.policy.bind_core import execute_bind_adjudication
 
 
@@ -53,6 +53,67 @@ def halt_system_with_bind_boundary(
         target_system="system",
         target_resource="system/halt",
         intended_action="halt_system",
+        decision_hash=decision_hash,
+        decision_ts=decision_ts or _utc_now_iso8601(),
+        expected_state_fingerprint=expected_fingerprint,
+        approval_context=merged_approval_context,
+        policy_lineage=_with_bind_policy_lineage(
+            lineage=policy_lineage,
+            governance_policy=governance_policy,
+        ),
+    )
+
+    return execute_bind_adjudication(
+        execution_intent=intent,
+        adapter=adapter,
+        bind_ts=bind_ts,
+        bind_receipt_id=bind_receipt_id,
+        append_trustlog=append_trustlog,
+    )
+
+
+def resume_system_with_bind_boundary(
+    *,
+    decision_id: str,
+    request_id: str,
+    actor_identity: str,
+    policy_snapshot_id: str,
+    decision_hash: str,
+    operator: str,
+    comment: str,
+    status_reader: Callable[[], dict[str, Any]],
+    resume_executor: Callable[..., dict[str, Any]],
+    approval_context: dict[str, Any] | None = None,
+    policy_lineage: dict[str, Any] | None = None,
+    governance_policy: dict[str, Any] | None = None,
+    decision_ts: str | None = None,
+    append_trustlog: bool = True,
+    bind_ts: str | None = None,
+    execution_intent_id: str | None = None,
+    bind_receipt_id: str | None = None,
+) -> BindReceipt:
+    """Execute operator system resume through bind-boundary adjudication."""
+    adapter = SystemResumeAdapter(
+        status_reader=status_reader,
+        resume_executor=resume_executor,
+        operator=operator,
+        comment=comment,
+    )
+    pre_snapshot = adapter.snapshot()
+    expected_fingerprint = adapter.fingerprint_state(pre_snapshot)
+
+    merged_approval_context: dict[str, Any] = dict(approval_context or {})
+    merged_approval_context.setdefault("system_resume_approved", True)
+
+    intent = ExecutionIntent(
+        execution_intent_id=execution_intent_id or uuid4().hex,
+        decision_id=decision_id,
+        request_id=request_id,
+        policy_snapshot_id=policy_snapshot_id,
+        actor_identity=actor_identity,
+        target_system="system",
+        target_resource="system/resume",
+        intended_action="resume_system",
         decision_hash=decision_hash,
         decision_ts=decision_ts or _utc_now_iso8601(),
         expected_state_fingerprint=expected_fingerprint,
