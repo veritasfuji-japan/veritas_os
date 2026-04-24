@@ -34,8 +34,8 @@ def requires_bind_boundary(
     )
 
     def _decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        setattr(func, "_requires_bind_boundary", True)
-        setattr(func, "_bind_boundary_metadata", metadata)
+        func._requires_bind_boundary = True  # type: ignore[attr-defined]
+        func._bind_boundary_metadata = metadata  # type: ignore[attr-defined]
         return func
 
     return _decorator
