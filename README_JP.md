@@ -544,7 +544,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 - インシデントレスポンスプレイブック（破損、改ざん）
 - `make drill-backup`、`make drill-restore`、`make drill-recovery`、`make drill-recovery-ci`
 
-関連: [`docs/database-migrations.md`](docs/ja/operations/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/ja/validation/backend-parity-coverage.md) | [`docs/legacy-path-cleanup.md`](docs/ja/operations/legacy-path-cleanup.md)
+関連: [`docs/ja/operations/database-migrations.md`](docs/ja/operations/database-migrations.md) | [`docs/ja/validation/backend-parity-coverage.md`](docs/ja/validation/backend-parity-coverage.md) | [`docs/ja/operations/legacy-path-cleanup.md`](docs/ja/operations/legacy-path-cleanup.md)
 
 ---
 

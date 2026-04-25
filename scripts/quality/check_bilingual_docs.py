@@ -173,12 +173,24 @@ def _is_shields_badge_url(url: str) -> bool:
     return parsed.hostname == "img.shields.io"
 
 
+def _is_external_url_only_line(line: str) -> bool:
+    """Return True when a markdown line is effectively just one URL."""
+    stripped = line.strip().lstrip("-*").strip()
+    if not stripped or " " in stripped:
+        return False
+    urls = _extract_urls(stripped)
+    if len(urls) != 1:
+        return False
+    return stripped == urls[0]
+
+
 def _is_long_url_or_generated_badge(line: str) -> bool:
+    """Return True when a long line should be exempted from readability checks."""
+    if _is_external_url_only_line(line):
+        return True
     urls = _extract_urls(line)
     if any(_is_shields_badge_url(url) for url in urls):
         return True
-    if urls:
-        return len(line.strip()) > MARKDOWN_LINE_HARD_LIMIT
     return False
 
 

@@ -93,6 +93,28 @@ describe("matchPolicy", () => {
     expect(result!.policy.roles).toEqual(["admin"]);
   });
 
+  it("matches POST governance policy bundle promotion for admin only", () => {
+    const result = matchPolicy(["v1", "governance", "policy-bundles", "promote"], "POST");
+    expect(result).not.toBeNull();
+    expect(result!.policy.roles).toEqual(["admin"]);
+  });
+
+  it("matches GET governance bind receipts list for viewer/operator/admin", () => {
+    const result = matchPolicy(["v1", "governance", "bind-receipts"], "GET");
+    expect(result).not.toBeNull();
+    expect(result!.policy.roles).toContain("viewer");
+    expect(result!.policy.roles).toContain("operator");
+    expect(result!.policy.roles).toContain("admin");
+  });
+
+  it("matches GET governance bind receipt detail for viewer/operator/admin", () => {
+    const result = matchPolicy(["v1", "governance", "bind-receipts", "br-123"], "GET");
+    expect(result).not.toBeNull();
+    expect(result!.policy.roles).toContain("viewer");
+    expect(result!.policy.roles).toContain("operator");
+    expect(result!.policy.roles).toContain("admin");
+  });
+
   it("matches POST decide for operator/admin", () => {
     const result = matchPolicy(["v1", "decide"], "POST");
     expect(result).not.toBeNull();
