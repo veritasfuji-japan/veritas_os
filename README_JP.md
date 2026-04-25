@@ -67,6 +67,7 @@ VERITAS OS は次を実現します。
   - `POST /v1/system/halt`
   - `POST /v1/system/resume`
 - **現時点の事実（bind outcome公開契約）**: ガバナンス系レスポンスでは従来のフラットな bind フィールド（`bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id`）に加えて、共通のコンパクト語彙として加算的 `bind_summary` も返却されます
+- **現時点の事実（bind coverage registry）**: VERITAS は API 上の effect-bearing path に対して、テスト可能な bind coverage registry を持つ。現実世界に影響する route は `bind_governed` として分類されるか、明示的な `audited_exemption` として理由・リスク付きで記録されるため、記録済み意思決定が binding artifact なしで実行許可と誤認されるリスクを低減します。
 - **現時点の事実（bind artifact family）**: `BindReceipt` は完全なガバナンス成果物として永続化され、成果物契約に canonical target metadata を含みます
 - **現時点の事実（replay/運用フロー）**: 運用画面/API は bind 成果物の list/export/detail エンドポイント（`/v1/governance/bind-receipts` / `/v1/governance/bind-receipts/export` / `/v1/governance/bind-receipts/{bind_receipt_id}`）を提供し、mutation/export レスポンスでは監査トリアージ向けに `bind_summary` を再利用します
 - **現時点の境界**: これは現時点で全ての副作用経路が bind-governed であると主張するものではありません。  
