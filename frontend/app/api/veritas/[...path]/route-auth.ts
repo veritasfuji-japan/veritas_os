@@ -36,6 +36,21 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     method: "GET",
     roles: ["viewer", "operator", "admin"],
   },
+  {
+    pathPattern: /^v1\/governance\/bind-receipts$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/governance\/bind-receipts\/[^/]+$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/governance\/policy-bundles\/promote$/,
+    method: "POST",
+    roles: ["operator", "admin"],
+  },
 
   // Trust logs
   {
