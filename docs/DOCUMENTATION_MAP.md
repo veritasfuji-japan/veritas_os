@@ -21,6 +21,7 @@
 | Validation: Backend parity coverage | `docs/en/validation/backend-parity-coverage.md` | `docs/ja/validation/backend-parity-coverage.md` | JA explanation / EN canonical | バックエンド差分確認 |
 | Validation: Production validation | `docs/en/validation/production-validation.md` | `docs/ja/validation/production-validation.md` | JA explanation / EN canonical | 本番検証導線 |
 | Validation: PostgreSQL proof map | `docs/en/validation/postgresql-production-proof-map.md` | `docs/ja/validation/postgresql-production-proof-map.md` | JA explanation / EN canonical | 本番証跡索引 |
+| Validation: Bilingual docs quality gate | — | `docs/ja/validation/bilingual-docs-quality-gate.md` | JA primary | 日本語ファースト導線と英日整合性チェックの実行確認 |
 | Operations: PostgreSQL production | `docs/en/operations/postgresql-production-guide.md` | `docs/ja/operations/postgresql-production-guide.md` | JA explanation / EN canonical | PostgreSQL本番運用 |
 | Operations: PostgreSQL drill | `docs/en/operations/postgresql-drill-runbook.md` | `docs/ja/operations/postgresql-drill-runbook.md` | JA explanation / EN canonical | 復旧ドリル |
 | Operations: Security hardening | `docs/en/operations/security-hardening.md` | `docs/ja/operations/security-hardening.md` | JA explanation / EN canonical | ハードニング観点 |
