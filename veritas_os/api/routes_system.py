@@ -31,6 +31,7 @@ from veritas_os.api.pipeline_orchestrator import (
     update_runtime_config,
 )
 from veritas_os.logging.encryption import get_encryption_status
+from veritas_os.policy.bind_route_markers import requires_bind_boundary
 from veritas_os.policy.bind_artifacts import FinalOutcome
 from veritas_os.policy.compliance_config_update import (
     update_compliance_config_with_bind_boundary,
@@ -697,6 +698,11 @@ def compliance_get_config() -> Dict[str, Any]:
     response_model=ComplianceConfigResponse,
     dependencies=[Depends(require_permission(Permission.config_write))],
 )
+@requires_bind_boundary(
+    target_path="/v1/compliance/config",
+    target_type="compliance_config",
+    target_path_type="compliance_config_update",
+)
 def compliance_put_config(body: ComplianceConfigBody) -> Dict[str, Any]:
     """Update runtime compliance config via bind-boundary adjudication."""
     srv = _get_server()
@@ -789,6 +795,11 @@ def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="t
     response_model=SystemHaltResponse,
     dependencies=[Depends(require_permission(Permission.config_write))],
 )
+@requires_bind_boundary(
+    target_path="/v1/system/halt",
+    target_type="system_halt",
+    target_path_type="system_halt",
+)
 def system_halt(body: SystemHaltRequest):
     """Halt the AI decision system (Art. 14(4) emergency stop)."""
     srv = _get_server()
@@ -840,6 +851,11 @@ def system_halt(body: SystemHaltRequest):
     "/v1/system/resume",
     response_model=SystemResumeResponse,
     dependencies=[Depends(require_permission(Permission.config_write))],
+)
+@requires_bind_boundary(
+    target_path="/v1/system/resume",
+    target_type="system_resume",
+    target_path_type="system_resume",
 )
 def system_resume(body: SystemResumeRequest):
     """Resume the AI decision system after a halt (Art. 14(4))."""

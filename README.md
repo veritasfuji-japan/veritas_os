@@ -91,6 +91,7 @@ while broader effect-path coverage remains roadmap direction.
   4) `POST /v1/system/halt` (operator emergency halt mutation path), and
   5) `POST /v1/system/resume` (operator system resume mutation path).
 - **Current fact (bind outcome public contract):** Governance bind responses expose legacy flat bind fields (`bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, `bind_receipt_id`) and additive `bind_summary` objects as a shared compact bind vocabulary.
+- **Current fact (bind coverage registry):** VERITAS maintains a tested bind coverage registry for API effect paths. Effect-bearing routes must be classified as `bind_governed` or explicitly documented as `audited_exemption` with reason/risk metadata, reducing the risk that recorded decisions are treated as execution permission without a binding artifact.
 - **Current fact (bind artifact family):** `BindReceipt` is persisted as a full governance artifact and carries canonical target metadata as part of the artifact contract.
 - **Current fact (replay/operator flow):** Operator surfaces expose bind artifacts via list/export/detail endpoints (`/v1/governance/bind-receipts`, `/v1/governance/bind-receipts/export`, `/v1/governance/bind-receipts/{bind_receipt_id}`), with mutation/export responses reusing `bind_summary` for triage and audit workflows.
 - **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.

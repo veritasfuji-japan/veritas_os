@@ -1468,6 +1468,31 @@ components:
           default: REVISE_AND_RESUBMIT
           description: Operational guidance action; separate from business_decision
             state.
+        actionability_status:
+          type: string
+          enum:
+          - reviewable_only
+          - bind_required_before_execution
+          - actionable_after_bind
+          - blocked
+          - human_review_required
+          default: reviewable_only
+          description: Explicit execution boundary state. A recorded decision is reviewable
+            and does not grant execution permission without bind lineage.
+        requires_bind_before_execution:
+          type: boolean
+          default: true
+          description: True when execution requires bind before operational action.
+            This remains true unless a bind receipt is present and committed.
+        bound_execution_intent_id:
+          type: string
+          nullable: true
+          description: Execution intent identifier that is already bound, when available.
+        unbound_execution_warning:
+          type: string
+          nullable: true
+          description: Operator-facing warning that decision output is not executable
+            until bind receipt lineage is present.
         required_evidence:
           type: array
           default: []
