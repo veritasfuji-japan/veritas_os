@@ -69,6 +69,9 @@ def enrich_bind_receipt_payload(bind_receipt: dict[str, Any]) -> dict[str, Any]:
 def build_bind_summary_from_receipt(bind_receipt: dict[str, Any]) -> dict[str, Any]:
     """Build shared compact bind summary from a bind receipt payload."""
     enriched_receipt = enrich_bind_receipt_payload(bind_receipt)
+    failed_predicates = enriched_receipt.get("failed_predicates")
+    stale_predicates = enriched_receipt.get("stale_predicates")
+    missing_predicates = enriched_receipt.get("missing_predicates")
     return {
         "bind_outcome": enriched_receipt.get("final_outcome"),
         "bind_failure_reason": resolve_bind_failure_reason(enriched_receipt),
@@ -85,6 +88,18 @@ def build_bind_summary_from_receipt(bind_receipt: dict[str, Any]) -> dict[str, A
         "target_label": enriched_receipt.get("target_label"),
         "operator_surface": enriched_receipt.get("operator_surface"),
         "relevant_ui_href": enriched_receipt.get("relevant_ui_href"),
+        "action_contract_id": enriched_receipt.get("action_contract_id"),
+        "authority_evidence_id": enriched_receipt.get("authority_evidence_id"),
+        "authority_validation_status": enriched_receipt.get("authority_validation_status"),
+        "commit_boundary_result": enriched_receipt.get("commit_boundary_result"),
+        "failed_predicate_count": len(failed_predicates) if isinstance(failed_predicates, list) else None,
+        "stale_predicate_count": len(stale_predicates) if isinstance(stale_predicates, list) else None,
+        "missing_predicate_count": (
+            len(missing_predicates) if isinstance(missing_predicates, list) else None
+        ),
+        "refusal_basis": enriched_receipt.get("refusal_basis"),
+        "escalation_basis": enriched_receipt.get("escalation_basis"),
+        "irreversibility_boundary_id": enriched_receipt.get("irreversibility_boundary_id"),
     }
 
 

@@ -99,4 +99,69 @@ def normalize_bind_receipt(payload: BindReceipt | dict[str, Any]) -> BindReceipt
         target_label=str(data.get("target_label") or "other"),
         operator_surface=str(data.get("operator_surface") or "audit"),
         relevant_ui_href=str(data.get("relevant_ui_href") or "/audit"),
+        regulated_action_path_id=(
+            str(data.get("regulated_action_path_id"))
+            if data.get("regulated_action_path_id")
+            else None
+        ),
+        action_contract_id=(
+            str(data.get("action_contract_id")) if data.get("action_contract_id") else None
+        ),
+        action_contract_version=(
+            str(data.get("action_contract_version"))
+            if data.get("action_contract_version")
+            else None
+        ),
+        authority_evidence_id=(
+            str(data.get("authority_evidence_id"))
+            if data.get("authority_evidence_id")
+            else None
+        ),
+        authority_evidence_hash=(
+            str(data.get("authority_evidence_hash"))
+            if data.get("authority_evidence_hash")
+            else None
+        ),
+        authority_validation_status=(
+            str(data.get("authority_validation_status"))
+            if data.get("authority_validation_status")
+            else None
+        ),
+        admissibility_predicates=_normalize_dict_list(data.get("admissibility_predicates")),
+        failed_predicates=_normalize_dict_list(data.get("failed_predicates")),
+        stale_predicates=_normalize_dict_list(data.get("stale_predicates")),
+        missing_predicates=_normalize_dict_list(data.get("missing_predicates")),
+        irreversibility_boundary_id=(
+            str(data.get("irreversibility_boundary_id"))
+            if data.get("irreversibility_boundary_id")
+            else None
+        ),
+        commit_boundary_result=(
+            str(data.get("commit_boundary_result"))
+            if data.get("commit_boundary_result")
+            else None
+        ),
+        refusal_basis=_normalize_string_list(data.get("refusal_basis")),
+        escalation_basis=_normalize_string_list(data.get("escalation_basis")),
+        authority_evidence_summary=(
+            dict(data.get("authority_evidence_summary"))
+            if isinstance(data.get("authority_evidence_summary"), dict)
+            else None
+        ),
     )
+
+
+def _normalize_string_list(raw_value: Any) -> list[str] | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, list):
+        return None
+    return [str(item) for item in raw_value]
+
+
+def _normalize_dict_list(raw_value: Any) -> list[dict[str, Any]] | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, list):
+        return None
+    return [dict(item) for item in raw_value if isinstance(item, dict)]

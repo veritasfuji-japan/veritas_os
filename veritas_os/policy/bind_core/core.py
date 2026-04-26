@@ -12,6 +12,12 @@ from veritas_os.core.continuation_runtime.bind_admissibility import (
     CheckStatus,
     evaluate_bind_admissibility,
 )
+from veritas_os.governance.action_contracts import (
+    ActionClassContract,
+    validate_action_class_contract,
+)
+from veritas_os.governance.authority_evidence import AuthorityEvidence, VerificationResult
+from veritas_os.governance.commit_boundary import CommitBoundaryResult, evaluate_commit_boundary
 from veritas_os.policy.bind_artifacts import (
     BindReceipt,
     ExecutionIntent,
@@ -293,6 +299,7 @@ def execute_bind_adjudication(
     constraint_result = _check_from_runtime(admissibility.constraint_check_result)
     drift_result = _check_from_runtime(admissibility.drift_check_result)
     risk_result = _check_from_runtime(admissibility.risk_check_result)
+    regulated_context = _resolve_regulated_action_context(normalized_intent)
 
     if not admissibility.admissibility_result:
         blocked_outcome = FinalOutcome.BLOCKED
@@ -319,8 +326,79 @@ def execute_bind_adjudication(
                 },
                 final_outcome=blocked_outcome,
                 escalation_reason=escalation_reason,
+                **_regulated_receipt_updates(regulated_context, None),
             ),
         )
+
+    regulated_boundary_result = _evaluate_regulated_commit_boundary(
+        execution_intent=normalized_intent,
+        regulated_context=regulated_context,
+    )
+    if regulated_boundary_result is not None:
+        if regulated_boundary_result.commit_boundary_result == "block":
+            return _finalize_receipt(
+                execution_intent=normalized_intent,
+                append_trustlog=append_trustlog,
+                receipt=_with_receipt(
+                    base_receipt,
+                    live_state_fingerprint_before=pre_fingerprint,
+                    authority_check_result=authority_result,
+                    constraint_check_result=constraint_result,
+                    drift_check_result=drift_result,
+                    risk_check_result=risk_result,
+                    admissibility_result={
+                        "admissible": False,
+                        "recommended_outcome": "block",
+                        "reason_codes": ["BIND_COMMIT_BOUNDARY_BLOCKED"],
+                        "target": adapter.describe_target(),
+                    },
+                    final_outcome=FinalOutcome.BLOCKED,
+                    **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
+                ),
+            )
+        if regulated_boundary_result.commit_boundary_result == "escalate":
+            return _finalize_receipt(
+                execution_intent=normalized_intent,
+                append_trustlog=append_trustlog,
+                receipt=_with_receipt(
+                    base_receipt,
+                    live_state_fingerprint_before=pre_fingerprint,
+                    authority_check_result=authority_result,
+                    constraint_check_result=constraint_result,
+                    drift_check_result=drift_result,
+                    risk_check_result=risk_result,
+                    admissibility_result={
+                        "admissible": False,
+                        "recommended_outcome": "escalate",
+                        "reason_codes": ["BIND_COMMIT_BOUNDARY_ESCALATED"],
+                        "target": adapter.describe_target(),
+                    },
+                    final_outcome=FinalOutcome.ESCALATED,
+                    escalation_reason="BIND_COMMIT_BOUNDARY_ESCALATED",
+                    **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
+                ),
+            )
+        if regulated_boundary_result.commit_boundary_result == "refuse":
+            return _finalize_receipt(
+                execution_intent=normalized_intent,
+                append_trustlog=append_trustlog,
+                receipt=_with_receipt(
+                    base_receipt,
+                    live_state_fingerprint_before=pre_fingerprint,
+                    authority_check_result=authority_result,
+                    constraint_check_result=constraint_result,
+                    drift_check_result=drift_result,
+                    risk_check_result=risk_result,
+                    admissibility_result={
+                        "admissible": False,
+                        "recommended_outcome": "block",
+                        "reason_codes": ["BIND_COMMIT_BOUNDARY_REFUSED"],
+                        "target": adapter.describe_target(),
+                    },
+                    final_outcome=FinalOutcome.BLOCKED,
+                    **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
+                ),
+            )
 
     try:
         adapter.apply(normalized_intent, pre_snapshot)
@@ -422,8 +500,133 @@ def execute_bind_adjudication(
                 "target": adapter.describe_target(),
             },
             final_outcome=FinalOutcome.COMMITTED,
+            **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
         ),
     )
+
+
+def _resolve_regulated_action_context(execution_intent: ExecutionIntent) -> dict[str, Any]:
+    """Resolve regulated action governance context from intent lineage."""
+    for container in (execution_intent.approval_context, execution_intent.policy_lineage):
+        if not isinstance(container, dict):
+            continue
+        candidate = container.get("regulated_action_governance")
+        if isinstance(candidate, dict):
+            return dict(candidate)
+    return {}
+
+
+def _evaluate_regulated_commit_boundary(
+    *,
+    execution_intent: ExecutionIntent,
+    regulated_context: dict[str, Any],
+) -> CommitBoundaryResult | None:
+    """Evaluate commit boundary only when action-contract context is declared."""
+    action_contract_payload = regulated_context.get("action_contract")
+    action_contract_id = str(
+        regulated_context.get("action_contract_id")
+        or (action_contract_payload or {}).get("id")
+        or ""
+    ).strip()
+    if not action_contract_id:
+        return None
+
+    authority_evidence_payload = regulated_context.get("authority_evidence")
+    requested_scope = regulated_context.get("requested_scope")
+    if not isinstance(requested_scope, list):
+        requested_scope = []
+
+    try:
+        action_contract = (
+            validate_action_class_contract(action_contract_payload)
+            if isinstance(action_contract_payload, dict)
+            else None
+        )
+        authority_evidence = (
+            _build_authority_evidence(authority_evidence_payload)
+            if isinstance(authority_evidence_payload, dict)
+            else None
+        )
+        return evaluate_commit_boundary(
+            execution_intent={
+                "execution_intent_id": execution_intent.execution_intent_id,
+                "action_class": str(regulated_context.get("action_class") or "").strip(),
+                "admissible": True,
+            },
+            action_contract=action_contract,
+            authority_evidence=authority_evidence,
+            requested_scope=[str(item) for item in requested_scope],
+            required_evidence_metadata=dict(regulated_context.get("required_evidence_metadata") or {}),
+            evidence_freshness_metadata=dict(
+                regulated_context.get("evidence_freshness_metadata") or {}
+            ),
+            policy_snapshot_id=execution_intent.policy_snapshot_id,
+            actor_identity=execution_intent.actor_identity,
+            human_approval_state=dict(regulated_context.get("human_approval_state") or {}),
+            bind_context_metadata=dict(regulated_context.get("bind_context_metadata") or {}),
+        )
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"BIND_COMMIT_BOUNDARY_EVALUATION_FAILED:{exc}") from exc
+
+
+def _regulated_receipt_updates(
+    regulated_context: dict[str, Any],
+    result: CommitBoundaryResult | None,
+) -> dict[str, Any]:
+    """Build additive regulated-governance bind receipt fields."""
+    if not regulated_context:
+        return {}
+    updates: dict[str, Any] = {
+        "regulated_action_path_id": str(regulated_context.get("regulated_action_path_id") or "")
+        or None,
+    }
+    if result is None:
+        return {key: value for key, value in updates.items() if value is not None}
+
+    updates.update(
+        {
+            "action_contract_id": result.action_contract_id or None,
+            "action_contract_version": result.action_contract_version or None,
+            "authority_evidence_id": result.authority_evidence_id or None,
+            "authority_evidence_hash": result.authority_evidence_hash or None,
+            "authority_validation_status": result.authority_validation_status or None,
+            "admissibility_predicates": [_predicate_to_dict(item) for item in result.admissibility_predicates],
+            "failed_predicates": [_predicate_to_dict(item) for item in result.failed_predicates],
+            "stale_predicates": [_predicate_to_dict(item) for item in result.stale_predicates],
+            "missing_predicates": [_predicate_to_dict(item) for item in result.missing_predicates],
+            "irreversibility_boundary_id": result.irreversibility_boundary_id or None,
+            "commit_boundary_result": result.commit_boundary_result,
+            "refusal_basis": list(result.refusal_basis),
+            "escalation_basis": list(result.escalation_basis),
+            "authority_evidence_summary": {
+                "reason_summary": result.reason_summary,
+                "evaluated_at": result.evaluated_at,
+            },
+        }
+    )
+    return {key: value for key, value in updates.items() if value is not None}
+
+
+def _predicate_to_dict(predicate: Any) -> dict[str, Any]:
+    return {
+        "predicate_id": str(getattr(predicate, "predicate_id", "")),
+        "predicate_type": str(getattr(predicate, "predicate_type", "")),
+        "status": str(getattr(predicate, "status", "")),
+        "reason": str(getattr(predicate, "reason", "")),
+        "evidence_ref": getattr(predicate, "evidence_ref", None),
+        "severity": str(getattr(predicate, "severity", "")),
+        "evaluated_at": str(getattr(predicate, "evaluated_at", "")),
+        "metadata": dict(getattr(predicate, "metadata", {}) or {}),
+    }
+
+
+def _build_authority_evidence(payload: dict[str, Any]) -> AuthorityEvidence:
+    """Build AuthorityEvidence from mapping with enum normalization."""
+    normalized = dict(payload)
+    verification_result = normalized.get("verification_result")
+    if isinstance(verification_result, str):
+        normalized["verification_result"] = VerificationResult(verification_result)
+    return AuthorityEvidence(**normalized)
 
 
 def _validate_intent_preconditions(execution_intent: ExecutionIntent) -> str | None:
