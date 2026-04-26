@@ -1,0 +1,86 @@
+id: aml_kyc_customer_risk_escalation
+version: v1
+domain: financial_compliance
+action_class: customer_risk_escalation
+description: >-
+  VERITAS-native contract for AI-assisted AML/KYC customer risk escalation
+  workflows limited to internal compliance handling.
+declared_intent: >-
+  Allow internal risk escalation support with evidence capture while blocking
+  customer-impacting irreversible actions and external regulatory side effects.
+allowed_scope:
+  - create_internal_risk_escalation
+  - attach_evidence_snapshot
+  - notify_internal_compliance_queue
+  - recommend_human_review
+  - create_internal_case_record
+prohibited_scope:
+  - freeze_account
+  - close_account
+  - file_external_regulatory_report
+  - notify_customer
+  - modify_customer_risk_status_without_human_approval
+  - place_irreversible_customer_access_restriction
+  - execute_external_side_effect_outside_defined_workflow
+authority_sources:
+  - policy_snapshot_id
+  - compliance_role_or_policy_basis
+required_evidence:
+  - kyc_profile
+  - sanctions_screening_trace
+  - transaction_pattern_summary
+  - policy_snapshot_id
+  - model_output_hash
+  - actor_identity
+  - approval_matrix
+  - timestamped_evidence_freshness_metadata
+evidence_freshness:
+  duration_convention: iso8601_duration
+  rules:
+    sanctions_screening_trace:
+      max_age: P1D
+      requirement: must_be_recent
+    kyc_profile:
+      max_age: P7D
+      requirement: must_not_be_stale
+    policy_snapshot_id:
+      requirement: must_be_current_or_explicitly_pinned
+    approval_matrix:
+      requirement: valid_at_bind_time
+irreversibility:
+  internal_escalation: low_to_medium
+  customer_affecting_restriction: high
+  external_regulatory_filing: high
+  account_closure: high
+human_approval_rules:
+  required_when:
+    - irreversibility_high
+    - customer_status_change
+    - external_side_effect
+    - customer_access_restriction
+  minimum_approvals: 1
+  approver_role_hint:
+    - compliance_officer
+refusal_conditions:
+  - missing_authority_source
+  - stale_required_evidence
+  - scope_mismatch
+  - prohibited_scope_requested
+  - unresolved_policy_identity
+  - missing_human_approval_when_required
+  - missing_actor_identity
+  - indeterminate_authority
+escalation_conditions:
+  - high_risk_score
+  - conflicting_evidence
+  - policy_uncertainty
+  - evidence_near_stale
+  - human_review_required
+default_failure_mode: fail_closed
+metadata:
+  regulated: true
+  contract_tier: action_class
+  taxonomy_alignment:
+    customer_profile_snapshot: kyc_profile
+    sanctions_screening_result: sanctions_screening_trace
+    compliance_role_or_policy_basis: approval_matrix
