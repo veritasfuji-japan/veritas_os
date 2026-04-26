@@ -131,6 +131,21 @@ class BindReceipt:
     target_label: str = "other"
     operator_surface: str = "audit"
     relevant_ui_href: str = "/audit"
+    regulated_action_path_id: str | None = None
+    action_contract_id: str | None = None
+    action_contract_version: str | None = None
+    authority_evidence_id: str | None = None
+    authority_evidence_hash: str | None = None
+    authority_validation_status: str | None = None
+    admissibility_predicates: list[dict[str, Any]] | None = None
+    failed_predicates: list[dict[str, Any]] | None = None
+    stale_predicates: list[dict[str, Any]] | None = None
+    missing_predicates: list[dict[str, Any]] | None = None
+    irreversibility_boundary_id: str | None = None
+    commit_boundary_result: str | None = None
+    refusal_basis: list[str] | None = None
+    escalation_basis: list[str] | None = None
+    authority_evidence_summary: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -145,7 +160,7 @@ class BindReceipt:
         target_label = str(self.target_label or "").strip() or "other"
         operator_surface = str(self.operator_surface or "").strip() or "audit"
         relevant_ui_href = str(self.relevant_ui_href or "").strip() or "/audit"
-        return {
+        payload: dict[str, Any] = {
             "bind_receipt_id": self.bind_receipt_id,
             "execution_intent_id": self.execution_intent_id,
             "decision_id": self.decision_id,
@@ -183,6 +198,27 @@ class BindReceipt:
             "operator_surface": operator_surface,
             "relevant_ui_href": relevant_ui_href,
         }
+        optional_fields = {
+            "regulated_action_path_id": self.regulated_action_path_id,
+            "action_contract_id": self.action_contract_id,
+            "action_contract_version": self.action_contract_version,
+            "authority_evidence_id": self.authority_evidence_id,
+            "authority_evidence_hash": self.authority_evidence_hash,
+            "authority_validation_status": self.authority_validation_status,
+            "admissibility_predicates": self.admissibility_predicates,
+            "failed_predicates": self.failed_predicates,
+            "stale_predicates": self.stale_predicates,
+            "missing_predicates": self.missing_predicates,
+            "irreversibility_boundary_id": self.irreversibility_boundary_id,
+            "commit_boundary_result": self.commit_boundary_result,
+            "refusal_basis": self.refusal_basis,
+            "escalation_basis": self.escalation_basis,
+            "authority_evidence_summary": self.authority_evidence_summary,
+        }
+        for key, value in optional_fields.items():
+            if value is not None:
+                payload[key] = value
+        return payload
 
 
 
@@ -300,9 +336,78 @@ def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
             target_label=str(payload.get("target_label") or "other"),
             operator_surface=str(payload.get("operator_surface") or "audit"),
             relevant_ui_href=str(payload.get("relevant_ui_href") or "/audit"),
+            regulated_action_path_id=(
+                str(payload.get("regulated_action_path_id"))
+                if payload.get("regulated_action_path_id")
+                else None
+            ),
+            action_contract_id=(
+                str(payload.get("action_contract_id"))
+                if payload.get("action_contract_id")
+                else None
+            ),
+            action_contract_version=(
+                str(payload.get("action_contract_version"))
+                if payload.get("action_contract_version")
+                else None
+            ),
+            authority_evidence_id=(
+                str(payload.get("authority_evidence_id"))
+                if payload.get("authority_evidence_id")
+                else None
+            ),
+            authority_evidence_hash=(
+                str(payload.get("authority_evidence_hash"))
+                if payload.get("authority_evidence_hash")
+                else None
+            ),
+            authority_validation_status=(
+                str(payload.get("authority_validation_status"))
+                if payload.get("authority_validation_status")
+                else None
+            ),
+            admissibility_predicates=_normalize_dict_list(payload.get("admissibility_predicates")),
+            failed_predicates=_normalize_dict_list(payload.get("failed_predicates")),
+            stale_predicates=_normalize_dict_list(payload.get("stale_predicates")),
+            missing_predicates=_normalize_dict_list(payload.get("missing_predicates")),
+            irreversibility_boundary_id=(
+                str(payload.get("irreversibility_boundary_id"))
+                if payload.get("irreversibility_boundary_id")
+                else None
+            ),
+            commit_boundary_result=(
+                str(payload.get("commit_boundary_result"))
+                if payload.get("commit_boundary_result")
+                else None
+            ),
+            refusal_basis=_normalize_string_list(payload.get("refusal_basis")),
+            escalation_basis=_normalize_string_list(payload.get("escalation_basis")),
+            authority_evidence_summary=(
+                dict(payload.get("authority_evidence_summary"))
+                if isinstance(payload.get("authority_evidence_summary"), dict)
+                else None
+            ),
         )
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_string_list(raw_value: Any) -> list[str] | None:
+    """Normalize optional list payloads into a homogeneous string list."""
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, list):
+        return None
+    return [str(item) for item in raw_value]
+
+
+def _normalize_dict_list(raw_value: Any) -> list[dict[str, Any]] | None:
+    """Normalize optional list payloads into dictionary items."""
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, list):
+        return None
+    return [dict(item) for item in raw_value if isinstance(item, dict)]
 
 
 def get_previous_bind_hash(*, decision_id: str = "", execution_intent_id: str = "") -> str | None:

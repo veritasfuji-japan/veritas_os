@@ -393,6 +393,21 @@ class BindReceipt(BaseModel):
     target_label: str = Field(default="other", max_length=MAX_TITLE_LENGTH)
     operator_surface: str = Field(default="audit", max_length=MAX_TITLE_LENGTH)
     relevant_ui_href: str = Field(default="/audit", max_length=MAX_URI_LENGTH)
+    regulated_action_path_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    action_contract_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    action_contract_version: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    authority_evidence_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    authority_evidence_hash: Optional[str] = Field(default=None, max_length=256)
+    authority_validation_status: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    admissibility_predicates: Optional[List[Dict[str, Any]]] = None
+    failed_predicates: Optional[List[Dict[str, Any]]] = None
+    stale_predicates: Optional[List[Dict[str, Any]]] = None
+    missing_predicates: Optional[List[Dict[str, Any]]] = None
+    irreversibility_boundary_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    commit_boundary_result: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    refusal_basis: Optional[List[str]] = None
+    escalation_basis: Optional[List[str]] = None
+    authority_evidence_summary: Optional[Dict[str, Any]] = None
 
 
 class BindSummary(BaseModel):
@@ -420,6 +435,16 @@ class BindSummary(BaseModel):
     target_label: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     operator_surface: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     relevant_ui_href: Optional[str] = Field(default=None, max_length=MAX_URI_LENGTH)
+    action_contract_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    authority_evidence_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    authority_validation_status: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    commit_boundary_result: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    failed_predicate_count: Optional[int] = Field(default=None, ge=0)
+    stale_predicate_count: Optional[int] = Field(default=None, ge=0)
+    missing_predicate_count: Optional[int] = Field(default=None, ge=0)
+    refusal_basis: Optional[List[str]] = None
+    escalation_basis: Optional[List[str]] = None
+    irreversibility_boundary_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
 
 
 # =========================
