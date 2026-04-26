@@ -17,6 +17,12 @@ from veritas_os.governance.action_contracts import (
     load_action_class_contract,
     validate_action_class_contract,
 )
+from veritas_os.governance.commit_boundary import (
+    CommitBoundaryResult,
+    CommitBoundaryEvaluator,
+    evaluate_commit_boundary,
+)
+
 from veritas_os.governance.config import (
     get_governance_backend,
     validate_governance_backend,
@@ -43,6 +49,8 @@ __all__ = [
     "ActionClassContract",
     "ActionClassContractValidationError",
     "create_governance_repository",
+    "CommitBoundaryResult",
+    "CommitBoundaryEvaluator",
     "FileGovernanceRepository",
     "load_action_class_contract",
     "get_governance_backend",
@@ -60,6 +68,7 @@ __all__ = [
     "is_scope_granting",
     "is_valid",
     "validate_authority_evidence",
+    "evaluate_commit_boundary",
     "validate_governance_backend",
     "validate_runtime_authority",
 ]
