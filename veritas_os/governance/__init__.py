@@ -1,5 +1,16 @@
 """Governance domain persistence abstractions."""
 
+from veritas_os.governance.authority_evidence import (
+    AuthorityEvidence,
+    AuthorityEvidenceValidationResult,
+    VerificationResult,
+    is_expired,
+    is_indeterminate,
+    is_present,
+    is_scope_granting,
+    is_valid,
+    validate_authority_evidence,
+)
 from veritas_os.governance.action_contracts import (
     ActionClassContract,
     ActionClassContractValidationError,
@@ -20,6 +31,9 @@ from veritas_os.governance.postgresql_repository import PostgresGovernanceReposi
 from veritas_os.governance.repository import GovernanceRepository
 
 __all__ = [
+    "AuthorityEvidence",
+    "AuthorityEvidenceValidationResult",
+    "VerificationResult",
     "ActionClassContract",
     "ActionClassContractValidationError",
     "create_governance_repository",
@@ -31,5 +45,11 @@ __all__ = [
     "PostgresGovernanceRepository",
     "GovernanceRepository",
     "validate_action_class_contract",
+    "is_expired",
+    "is_indeterminate",
+    "is_present",
+    "is_scope_granting",
+    "is_valid",
+    "validate_authority_evidence",
     "validate_governance_backend",
 ]
