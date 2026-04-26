@@ -23,6 +23,12 @@ from veritas_os.governance.config import (
 )
 from veritas_os.governance.factory import create_governance_repository
 from veritas_os.governance.file_repository import FileGovernanceRepository
+from veritas_os.governance.predicates import PredicateResult
+from veritas_os.governance.runtime_authority import (
+    RuntimeAuthorityValidationResult,
+    RuntimeAuthorityValidator,
+    validate_runtime_authority,
+)
 from veritas_os.governance.models import (
     GovernancePolicyEventRecord,
     GovernancePolicyRecord,
@@ -43,6 +49,9 @@ __all__ = [
     "GovernancePolicyEventRecord",
     "GovernancePolicyRecord",
     "PostgresGovernanceRepository",
+    "PredicateResult",
+    "RuntimeAuthorityValidationResult",
+    "RuntimeAuthorityValidator",
     "GovernanceRepository",
     "validate_action_class_contract",
     "is_expired",
@@ -52,4 +61,5 @@ __all__ = [
     "is_valid",
     "validate_authority_evidence",
     "validate_governance_backend",
+    "validate_runtime_authority",
 ]
