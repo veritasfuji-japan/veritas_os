@@ -12,9 +12,12 @@
 | Decision Semantics | [Decision semantics (EN)](en/architecture/decision-semantics.md) | [Decision semantics (JA)](ja/architecture/decision-semantics.md) |
 | Bind Boundary | [Bind-Boundary artifacts (EN)](en/architecture/bind-boundary-governance-artifacts.md) | [Bind-Boundary artifacts (JA)](ja/architecture/bind-boundary-governance-artifacts.md) |
 | Bind-Time Admissibility Evaluator | [Bind-time admissibility evaluator (EN)](en/architecture/bind_time_admissibility_evaluator.md) | [Bind-time admissibility evaluator (JA)](ja/architecture/bind_time_admissibility_evaluator.md) |
+| Regulated Action Governance Kernel | [Regulated action governance kernel (EN)](en/architecture/regulated-action-governance-kernel.md) | — |
+| Authority Evidence vs Audit Log | [Authority evidence vs audit log (EN)](en/architecture/authority-evidence-vs-audit-log.md) | — |
 | Validation | [Validation (EN)](en/validation/) | [Validation (JA)](ja/validation/) |
 | External Audit | [External audit readiness (EN)](en/validation/external-audit-readiness.md) | [外部監査準備性 (JA)](ja/validation/external-audit-readiness.md) |
 | Technical Proof Pack | [Technical proof pack (EN)](en/validation/technical-proof-pack.md) | [技術証明パック (JA)](ja/validation/technical-proof-pack.md) |
+| Regulated Action Governance Proof Pack | [Regulated action governance proof pack (EN)](en/validation/regulated-action-governance-proof-pack.md) | — |
 | Third-Party Review Readiness | [Third-party review readiness (EN)](en/validation/third-party-review-readiness.md) | [第三者レビュー準備性 (JA)](ja/validation/third-party-review-readiness.md) |
 | Backend Parity Coverage | [Backend parity coverage (EN)](en/validation/backend-parity-coverage.md) | [バックエンドパリティカバレッジ (JA)](ja/validation/backend-parity-coverage.md) |
 | Production Validation | [Production validation (EN)](en/validation/production-validation.md) | [本番検証 (JA)](ja/validation/production-validation.md) |
@@ -31,6 +34,7 @@
 | Governance Artifact Lifecycle | [Governance artifact lifecycle (EN)](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle (JA)](ja/governance/governance-artifact-lifecycle.md) |
 | Guides | [Guides (EN)](en/guides/) | [Guides (JA)](ja/guides/) |
 | Financial / AML-KYC | [AML/KYC quickstart (EN)](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート (JA)](ja/guides/poc-pack-financial-quickstart.md) |
+| AML/KYC Regulated Action Path | [AML/KYC regulated action path (EN)](en/use-cases/aml-kyc-regulated-action-path.md) | — |
 | Financial Governance Templates | [Financial governance templates (EN)](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート (JA)](ja/guides/financial-governance-templates.md) |
 | Governance Policy Bundle Promotion | [Policy bundle promotion (EN)](en/guides/governance-policy-bundle-promotion.md) | [ポリシーバンドル昇格 (JA)](ja/guides/governance-policy-bundle-promotion.md) |
 | AML/KYC Beachhead Positioning | [AML/KYC short positioning (EN)](en/positioning/aml-kyc-beachhead-short-positioning.md) | [AML/KYCポジショニング (JA)](ja/positioning/aml-kyc-beachhead-short-positioning.md) |
@@ -60,9 +64,12 @@
 | Decision Semantics | [Decision Semantics（英語正本）](en/architecture/decision-semantics.md) | [Decision Semantics（日本語解説）](ja/architecture/decision-semantics.md) |
 | Bind-Boundary | [Bind-Boundary（英語正本）](en/architecture/bind-boundary-governance-artifacts.md) | [Bind-Boundary（日本語解説）](ja/architecture/bind-boundary-governance-artifacts.md) |
 | Bind-Time Admissibility Evaluator | [Bind-Time Admissibility Evaluator（英語正本）](en/architecture/bind_time_admissibility_evaluator.md) | [Bind-Time Admissibility Evaluator（日本語解説）](ja/architecture/bind_time_admissibility_evaluator.md) |
+| Regulated Action Governance Kernel | [Regulated Action Governance Kernel（英語正本）](en/architecture/regulated-action-governance-kernel.md) | — |
+| Authority Evidence vs Audit Log | [Authority Evidence vs Audit Log（英語正本）](en/architecture/authority-evidence-vs-audit-log.md) | — |
 | 検証 | [Validation（英語正本）](en/validation/) | [Validation（日本語）](ja/validation/) |
 | 外部監査 | [External audit readiness（英語正本）](en/validation/external-audit-readiness.md) | [外部監査準備性（日本語）](ja/validation/external-audit-readiness.md) |
 | 技術証明パック | [Technical proof pack（英語正本）](en/validation/technical-proof-pack.md) | [技術証明パック（日本語解説）](ja/validation/technical-proof-pack.md) |
+| Regulated Action Governance Proof Pack | [Regulated Action Governance Proof Pack（英語正本）](en/validation/regulated-action-governance-proof-pack.md) | — |
 | 第三者レビュー準備性 | [Third-party review readiness（英語正本）](en/validation/third-party-review-readiness.md) | [第三者レビュー準備性（日本語解説）](ja/validation/third-party-review-readiness.md) |
 | バックエンドパリティカバレッジ | [Backend parity coverage（英語正本）](en/validation/backend-parity-coverage.md) | [バックエンドパリティカバレッジ（日本語解説）](ja/validation/backend-parity-coverage.md) |
 | 本番検証 | [Production validation（英語正本）](en/validation/production-validation.md) | [本番検証（日本語解説）](ja/validation/production-validation.md) |
@@ -79,6 +86,7 @@
 | Governance Artifact Lifecycle | [Governance artifact lifecycle（英語正本）](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle（日本語解説）](ja/governance/governance-artifact-lifecycle.md) |
 | ガイド | [Guides（英語正本）](en/guides/) | [Guides（日本語）](ja/guides/) |
 | 金融 / AML-KYC | [AML/KYC quickstart（英語正本）](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート（日本語）](ja/guides/poc-pack-financial-quickstart.md) |
+| AML/KYC Regulated Action Path | [AML/KYC Regulated Action Path（英語正本）](en/use-cases/aml-kyc-regulated-action-path.md) | — |
 | 金融ガバナンステンプレート | [Financial governance templates（英語正本）](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート（日本語解説）](ja/guides/financial-governance-templates.md) |
 | ポリシーバンドル昇格 | [Policy bundle promotion（英語正本）](en/guides/governance-policy-bundle-promotion.md) | [ポリシーバンドル昇格（日本語解説）](ja/guides/governance-policy-bundle-promotion.md) |
 | AML/KYCポジショニング | [AML/KYC short positioning（英語正本）](en/positioning/aml-kyc-beachhead-short-positioning.md) | [AML/KYCポジショニング（日本語解説）](ja/positioning/aml-kyc-beachhead-short-positioning.md) |

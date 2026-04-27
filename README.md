@@ -76,6 +76,10 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 This opening reflects current implemented fact: bind-governed adjudication is already active on at least five operator-governed effect paths,
 while broader effect-path coverage remains roadmap direction.
 
+VERITAS OS includes a Regulated Action Governance Kernel that makes selected AI-agent action paths reviewable at the bind boundary. It uses action-class contracts, runtime authority validation, authority evidence, admissibility predicates, and irreversible commit-boundary checks to determine whether an execution intent may commit, block, escalate, or refuse.
+
+This is not legal advice, regulatory approval, third-party certification, or a claim of compliance by itself.
+
 ## What VERITAS OS is / is not
 
 - **Is:** a Decision Governance and Bind-Boundary Control Plane for AI agents, covering decision governance and bind-boundary governance before real-world effect.
@@ -140,6 +144,10 @@ while broader effect-path coverage remains roadmap direction.
 - **Decision Semantics Contract**: [`docs/en/architecture/decision-semantics.md`](docs/en/architecture/decision-semantics.md)
 - **Bind-Boundary Governance Artifacts**: [`docs/en/architecture/bind-boundary-governance-artifacts.md`](docs/en/architecture/bind-boundary-governance-artifacts.md)
 - **Bind-Time Admissibility Evaluator**: [`docs/en/architecture/bind_time_admissibility_evaluator.md`](docs/en/architecture/bind_time_admissibility_evaluator.md)
+- **Regulated Action Governance Kernel**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
+- **Authority Evidence vs Audit Log**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)
+- **AML/KYC Regulated Action Path (Use Case)**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
+- **Regulated Action Governance Proof Pack**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
 - **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening (canonical gate + evidence profile)**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
 - **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)

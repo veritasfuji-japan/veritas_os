@@ -42,12 +42,15 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [PostgreSQL Production Proof Map (compact)](validation/postgresql-production-proof-map.md)
 - [External Audit Readiness](validation/external-audit-readiness.md)
 - [Technical Proof Pack (external review)](validation/technical-proof-pack.md)
+- [Regulated Action Governance Proof Pack](validation/regulated-action-governance-proof-pack.md)
 - [Third-Party Review Readiness (compact index)](validation/third-party-review-readiness.md)
 
 ### Governance & Compliance
 - [Decision Semantics Contract](architecture/decision-semantics.md)
 - [Bind-Boundary Governance Artifacts](architecture/bind-boundary-governance-artifacts.md)
 - [Bind-Time Admissibility Evaluator](architecture/bind_time_admissibility_evaluator.md)
+- [Regulated Action Governance Kernel](architecture/regulated-action-governance-kernel.md)
+- [Authority Evidence vs Audit Log](architecture/authority-evidence-vs-audit-log.md)
 - [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
 - [Governance Artifact Lifecycle](governance/governance-artifact-lifecycle.md)
 
@@ -58,6 +61,9 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Operator Guide: Policy Bundle Promotion](guides/governance-policy-bundle-promotion.md)
 - [File-to-PostgreSQL Migration Guide](guides/migration-guide.md) (bilingual)
 - [Financial PoC Pack (1-day quickstart, JA)](../ja/guides/poc-pack-financial-quickstart.md)
+
+### Use Cases
+- [AML/KYC Regulated Action Path](use-cases/aml-kyc-regulated-action-path.md)
 
 ### Reviews
 - [Reviews Index](reviews/README.md)

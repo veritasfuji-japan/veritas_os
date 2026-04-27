@@ -15,6 +15,10 @@
 | Architecture: Decision Semantics | `docs/en/architecture/decision-semantics.md` | `docs/ja/architecture/decision-semantics.md` | JA explanation / EN canonical | 仕様判断は EN |
 | Architecture: Bind artifacts | `docs/en/architecture/bind-boundary-governance-artifacts.md` | `docs/ja/architecture/bind-boundary-governance-artifacts.md` | JA explanation / EN canonical | bind成果物解説 |
 | Architecture: Bind admissibility | `docs/en/architecture/bind_time_admissibility_evaluator.md` | `docs/ja/architecture/bind_time_admissibility_evaluator.md` | JA explanation / EN canonical | 互換リンクあり |
+| Architecture: Regulated action governance kernel | `docs/en/architecture/regulated-action-governance-kernel.md` | — | EN canonical only | Regulated action governance primitives |
+| Architecture: Authority evidence vs audit log | `docs/en/architecture/authority-evidence-vs-audit-log.md` | — | EN canonical only | 役割分離の明確化 |
+| Use case: AML/KYC regulated action path | `docs/en/use-cases/aml-kyc-regulated-action-path.md` | — | EN canonical only | 決定論fixture実行手順 |
+| Validation: Regulated action governance proof pack | `docs/en/validation/regulated-action-governance-proof-pack.md` | — | EN canonical only | レビュー証跡パック |
 | Validation: External audit readiness | `docs/en/validation/external-audit-readiness.md` | `docs/ja/validation/external-audit-readiness.md` | JA explanation / EN canonical | 外部監査準備性 |
 | Validation: Technical proof pack | `docs/en/validation/technical-proof-pack.md` | `docs/ja/validation/technical-proof-pack.md` | JA explanation / EN canonical | DD/監査前の提出導線 |
 | Validation: Third-party review readiness | `docs/en/validation/third-party-review-readiness.md` | `docs/ja/validation/third-party-review-readiness.md` | JA explanation / EN canonical | 省略版レビュー入口 |
