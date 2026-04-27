@@ -188,8 +188,21 @@ class RevocationConfig(BaseModel):
     alert_target_seconds: int = Field(default=30, ge=1, le=86_400)
     convergence_target_p95_seconds: int = Field(default=60, ge=1, le=86_400)
     degrade_on_pending: bool = True
-    revocation_confirmation_required: bool = True
-    auto_escalate_confirmed_revocations: bool = False
+    revocation_confirmation_required: bool = Field(
+        default=True,
+        description=(
+            "Requires explicit confirmation phrase for confirmed revocation state "
+            "changes. Runtime behavior is always enforced in v1."
+        ),
+    )
+    auto_escalate_confirmed_revocations: bool = Field(
+        default=False,
+        description=(
+            "Schema-only v1 placeholder. Accepted and persisted for policy "
+            "forward-compatibility, but intentionally ignored by runtime "
+            "decision/revocation handlers."
+        ),
+    )
 
 
 class DriftScoringConfig(BaseModel):

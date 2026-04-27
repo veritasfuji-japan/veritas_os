@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from veritas_os.api.auth import require_permission
+from veritas_os.api.governance import get_policy
 from veritas_os.api.rbac import Permission
 from veritas_os.audit.wat_events import (
     SUPPORTED_WAT_EVENT_TYPES,
@@ -63,6 +64,25 @@ def _actor_from_request(request: Request) -> str:
     if isinstance(role, str) and role.strip():
         return f"api:{role.strip()}"
     return "api:unknown"
+
+
+def _auto_escalate_confirmed_revocations_runtime_active(policy: Dict[str, Any]) -> bool:
+    """Return v1 runtime activation state for auto escalation.
+
+    Security warning:
+        In v1 this policy flag is intentionally schema-only and MUST NOT
+        auto-transition any revocation to confirmed state. Explicit operator
+        confirmation remains mandatory for confirmed transitions.
+    """
+    revocation_cfg = policy.get("revocation")
+    configured = False
+    if isinstance(revocation_cfg, dict):
+        configured = bool(revocation_cfg.get("auto_escalate_confirmed_revocations", False))
+    if configured:
+        # Intentional no-op for v1 boundary lock-in; we retain visibility that
+        # the field was set while preserving explicit confirmation semantics.
+        return False
+    return False
 
 
 @router.post(
@@ -170,11 +190,23 @@ def get_wat_by_id(wat_id: str) -> Dict[str, Any]:
 def revoke_wat(wat_id: str, body: WatRevocationRequest, request: Request) -> Dict[str, Any]:
     """Persist shadow revocation events (pending + optional confirmed)."""
     actor = _actor_from_request(request)
+    try:
+        policy = get_policy()
+    except Exception:
+        policy = {}
+    if not isinstance(policy, dict):
+        policy = {}
+    auto_escalation_runtime_active = _auto_escalate_confirmed_revocations_runtime_active(policy)
     pending = persist_wat_revocation_event(
         wat_id=wat_id,
         actor=actor,
         confirmed=False,
-        details={"mode": "shadow", "reason": body.reason, **body.details},
+        details={
+            "mode": "shadow",
+            "reason": body.reason,
+            "auto_escalation_runtime_active": auto_escalation_runtime_active,
+            **body.details,
+        },
     )
 
     confirmed_event: Optional[Dict[str, Any]] = None
@@ -184,7 +216,12 @@ def revoke_wat(wat_id: str, body: WatRevocationRequest, request: Request) -> Dic
             wat_id=wat_id,
             actor=actor,
             confirmed=True,
-            details={"mode": "shadow", "reason": body.reason, **body.details},
+            details={
+                "mode": "shadow",
+                "reason": body.reason,
+                "auto_escalation_runtime_active": auto_escalation_runtime_active,
+                **body.details,
+            },
         )
 
     return {
