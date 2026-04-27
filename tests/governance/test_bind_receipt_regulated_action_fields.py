@@ -88,10 +88,11 @@ def _intent_with_regulated_context() -> dict[str, object]:
     }
 
 
-def _run_bind(intent: dict[str, object]):
+def _run_bind(intent: dict[str, object], adapter: ReferenceBindAdapter | None = None):
     return execute_bind_adjudication(
         execution_intent=intent,
-        adapter=ReferenceBindAdapter(state={"mode": "safe"}, pending_changes={"mode": "strict"}),
+        adapter=adapter
+        or ReferenceBindAdapter(state={"mode": "safe"}, pending_changes={"mode": "strict"}),
         append_trustlog=False,
     )
 
@@ -206,6 +207,26 @@ def test_evaluator_exception_does_not_silent_commit() -> None:
 
     with pytest.raises(RuntimeError, match="BIND_COMMIT_BOUNDARY_EVALUATION_FAILED"):
         _run_bind(bad_intent)
+
+
+def test_commit_boundary_serialization_error_does_not_silent_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = ReferenceBindAdapter(state={"mode": "safe"}, pending_changes={"mode": "strict"})
+    intent = _intent_with_regulated_context()
+
+    def _raise_serialization_error(*_: object, **__: object) -> dict[str, object]:
+        raise TypeError("cannot serialize predicate metadata")
+
+    monkeypatch.setattr(
+        "veritas_os.policy.bind_core.core._regulated_receipt_updates",
+        _raise_serialization_error,
+    )
+
+    with pytest.raises(RuntimeError, match="BIND_COMMIT_BOUNDARY_SERIALIZATION_FAILED"):
+        _run_bind(intent, adapter=adapter)
+
+    assert adapter.state["mode"] == "safe"
 
 
 def test_export_payload_remains_backward_compatible() -> None:

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import AuthorityEvidence, VerificationResult
+from veritas_os.governance.predicates import PredicateResult
 from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
 
 
@@ -177,3 +178,30 @@ def test_validator_exception_is_fail_closed() -> None:
     assert result.status == "fail"
     assert result.recommended_outcome == "block"
     assert "validator_exception" in result.refusal_basis
+
+
+def test_unknown_critical_predicate_is_fail_closed_block() -> None:
+    validator = RuntimeAuthorityValidator()
+    result = validator._build_result(
+        predicates=[
+            PredicateResult(
+                predicate_id="p-unknown-critical",
+                predicate_type="unknown_predicate_type",  # type: ignore[arg-type]
+                status="pass",
+                reason="unknown_runtime_signal",
+                severity="critical",
+                metadata={"runtime_predicate_type": "unknown_predicate_type"},
+            ),
+            PredicateResult(
+                predicate_id="p-known",
+                predicate_type="action_contract_valid",
+                status="pass",
+                reason="action_contract_valid",
+            ),
+        ],
+        action_contract=_contract(),
+    )
+
+    assert result.status == "fail"
+    assert result.recommended_outcome == "block"
+    assert "unknown_critical_predicate" in result.reason_summary

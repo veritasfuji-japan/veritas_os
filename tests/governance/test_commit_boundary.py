@@ -202,3 +202,10 @@ def test_repeated_evaluation_is_deterministic() -> None:
     second = _evaluate()
 
     assert first == second
+
+
+def test_predicate_order_is_deterministic() -> None:
+    result = _evaluate()
+    predicate_ids = [item.predicate_id for item in result.admissibility_predicates]
+
+    assert predicate_ids == sorted(predicate_ids)

@@ -334,6 +334,14 @@ def execute_bind_adjudication(
         execution_intent=normalized_intent,
         regulated_context=regulated_context,
     )
+    try:
+        regulated_receipt_updates = _regulated_receipt_updates(
+            regulated_context,
+            regulated_boundary_result,
+        )
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"BIND_COMMIT_BOUNDARY_SERIALIZATION_FAILED:{exc}") from exc
+
     if regulated_boundary_result is not None:
         if regulated_boundary_result.commit_boundary_result == "block":
             return _finalize_receipt(
@@ -353,7 +361,7 @@ def execute_bind_adjudication(
                         "target": adapter.describe_target(),
                     },
                     final_outcome=FinalOutcome.BLOCKED,
-                    **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
+                    **regulated_receipt_updates,
                 ),
             )
         if regulated_boundary_result.commit_boundary_result == "escalate":
@@ -375,7 +383,7 @@ def execute_bind_adjudication(
                     },
                     final_outcome=FinalOutcome.ESCALATED,
                     escalation_reason="BIND_COMMIT_BOUNDARY_ESCALATED",
-                    **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
+                    **regulated_receipt_updates,
                 ),
             )
         if regulated_boundary_result.commit_boundary_result == "refuse":
@@ -396,7 +404,7 @@ def execute_bind_adjudication(
                         "target": adapter.describe_target(),
                     },
                     final_outcome=FinalOutcome.BLOCKED,
-                    **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
+                    **regulated_receipt_updates,
                 ),
             )
 
@@ -500,7 +508,7 @@ def execute_bind_adjudication(
                 "target": adapter.describe_target(),
             },
             final_outcome=FinalOutcome.COMMITTED,
-            **_regulated_receipt_updates(regulated_context, regulated_boundary_result),
+            **regulated_receipt_updates,
         ),
     )
 
