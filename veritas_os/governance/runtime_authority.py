@@ -16,6 +16,22 @@ from veritas_os.governance.predicates import PredicateResult
 
 RuntimeValidationStatus = Literal["pass", "fail"]
 RecommendedOutcome = Literal["commit", "block", "escalate", "refuse"]
+KNOWN_PREDICATE_TYPES = {
+    "action_contract_present",
+    "action_contract_valid",
+    "authority_present",
+    "authority_valid",
+    "authority_not_expired",
+    "scope_allowed",
+    "prohibited_scope_absent",
+    "evidence_present",
+    "evidence_fresh",
+    "policy_snapshot_resolved",
+    "human_approval_present",
+    "irreversibility_boundary_defined",
+    "actor_identity_resolved",
+    "bind_context_valid",
+}
 
 
 @dataclass(frozen=True)
@@ -287,13 +303,21 @@ class RuntimeAuthorityValidator:
         predicates: list[PredicateResult],
         action_contract: ActionClassContract | None,
     ) -> RuntimeAuthorityValidationResult:
+        unknown_critical_predicates = [
+            item
+            for item in predicates
+            if str(item.predicate_type) not in KNOWN_PREDICATE_TYPES
+            and str(item.severity) == "critical"
+        ]
         passed = [item for item in predicates if item.status == "pass"]
         failed = [item for item in predicates if item.status == "fail"]
         stale = [item for item in predicates if item.status == "stale"]
         missing = [item for item in predicates if item.status == "missing"]
         indeterminate = [item for item in predicates if item.status == "indeterminate"]
 
-        has_critical = bool(failed or stale or missing or indeterminate)
+        has_critical = bool(
+            failed or stale or missing or indeterminate or unknown_critical_predicates
+        )
         status: RuntimeValidationStatus = "fail" if has_critical else "pass"
         recommended: RecommendedOutcome = "commit"
         refusal_basis: list[str] = []
@@ -308,10 +332,12 @@ class RuntimeAuthorityValidator:
                 escalation_basis = sorted({item.reason for item in stale})
             else:
                 recommended = "block"
-        elif failed or missing:
+        elif failed or missing or unknown_critical_predicates:
             recommended = "block"
 
         reason_tokens = [item.reason for item in failed + stale + missing + indeterminate]
+        if unknown_critical_predicates:
+            reason_tokens.append("unknown_critical_predicate")
         summary = ", ".join(reason_tokens) if reason_tokens else "all_predicates_passed"
 
         return RuntimeAuthorityValidationResult(

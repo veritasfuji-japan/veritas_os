@@ -284,7 +284,7 @@ describe("BindCockpit", () => {
 
     render(<BindCockpit />);
     expect(await screen.findByText("Blocked / Escalated queue")).toBeInTheDocument();
-    expect(screen.getByText("policy denied")).toBeInTheDocument();
+    expect(screen.getAllByText(/reason_code: POLICY_DENY/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "inspect blocked/escalated reason" }));
 
