@@ -47,6 +47,37 @@ _ALLOWED_OBSERVABLE_DIGEST_ACCESS_CLASSES: frozenset[str] = frozenset({
 })
 
 
+def _looks_like_locator(value: str) -> bool:
+    """Return ``True`` only for values that look like external locators."""
+    return "://" in value
+
+
+def _resolve_observable_digest_ref(raw: Dict[str, Any]) -> tuple[str, list[str]]:
+    """Resolve ``observable_digest_ref`` as locator-first with v1-safe fallback.
+
+    Contract lock-in for v1:
+    - canonical ``observable_digest_ref`` is a separate-store locator/reference.
+    - digest payload text is never accepted as canonical reference content.
+    """
+    failed_reasons: list[str] = []
+    observable_digest_ref = str(raw.get("observable_digest_ref") or "").strip()
+    legacy_observable_digest = str(raw.get("observable_digest") or "").strip()
+
+    if observable_digest_ref and not _looks_like_locator(observable_digest_ref):
+        failed_reasons.append("observable_digest_ref_not_locator")
+        observable_digest_ref = ""
+
+    if not observable_digest_ref and legacy_observable_digest:
+        if _looks_like_locator(legacy_observable_digest):
+            failed_reasons.append("legacy_observable_digest_ref_fallback_used")
+            observable_digest_ref = legacy_observable_digest
+        else:
+            failed_reasons.append("observable_digest_ref_missing")
+            failed_reasons.append("observable_digest_payload_not_accepted_as_ref")
+
+    return observable_digest_ref, failed_reasons
+
+
 def _utc_now_iso_z() -> str:
     """Return current UTC timestamp in RFC3339-like ``Z`` format."""
     return format_event_ts_utc()
@@ -159,19 +190,7 @@ def _normalize_retention_boundary_details(
     pointers = raw.get("event_pointers")
     normalized_pointers: Dict[str, Any] = dict(pointers) if isinstance(pointers, dict) else {}
 
-    observable_digest_ref = str(raw.get("observable_digest_ref") or "").strip()
-    legacy_observable_digest = str(raw.get("observable_digest") or "").strip()
-    legacy_ref_adopted = False
-    if (
-        not observable_digest_ref
-        and legacy_observable_digest
-        and "://" in legacy_observable_digest
-    ):
-        # Transitional compatibility path:
-        # Older callers overloaded ``observable_digest`` for locator strings.
-        # We only adopt that legacy value when it looks like a reference.
-        observable_digest_ref = legacy_observable_digest
-        legacy_ref_adopted = True
+    observable_digest_ref, observable_ref_failed_reasons = _resolve_observable_digest_ref(raw)
     if observable_digest_ref:
         normalized_pointers["observable_digest_ref"] = observable_digest_ref
 
@@ -207,15 +226,9 @@ def _normalize_retention_boundary_details(
         ).strip(),
         "retention_enforced_at_write": bool(raw.get("retention_enforced_at_write", True)),
     }
-    assertion_failed_reasons: list[str] = []
+    assertion_failed_reasons: list[str] = list(observable_ref_failed_reasons)
     if normalized_retention["retention_enforced_at_write"] and not normalized_retention["retention_policy_version"]:
         assertion_failed_reasons.append("missing_retention_policy_version")
-    if legacy_observable_digest and not normalized_retention["observable_digest_ref"]:
-        assertion_failed_reasons.append("observable_digest_ref_missing")
-    if legacy_observable_digest and not legacy_ref_adopted:
-        assertion_failed_reasons.append("observable_digest_payload_not_accepted_as_ref")
-    if legacy_ref_adopted:
-        assertion_failed_reasons.append("legacy_observable_digest_ref_fallback_used")
     normalized_retention["retention_boundary_assertion"] = {
         "outcome": "passed" if not assertion_failed_reasons else "failed",
         "failed_reasons": assertion_failed_reasons,
