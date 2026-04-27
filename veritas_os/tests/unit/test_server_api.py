@@ -1185,7 +1185,114 @@ def test_decide_wat_shadow_expanded_operator_verbosity_surfaces_detail(monkeypat
         "warning_correlation_id",
     }
     detail = payload.get("wat_operator_detail", {})
-    assert "drift_vector" in detail
+    assert set(detail.keys()) == {
+        "drift_vector",
+        "verifier_output_raw",
+        "historical_drift_trend",
+    }
+
+
+def test_decide_wat_operator_summary_minimal_shape_snapshot(monkeypatch):
+    """Minimal verbosity must freeze the exact v1 WAT operator summary keys."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-minimal-contract",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+        "operator_verbosity": "minimal",
+    }
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("wat_operator_detail") is None
+    summary = payload.get("wat_operator_summary", {})
+    assert set(summary.keys()) == {
+        "integrity_severity",
+        "affected_lanes",
+        "event_ts",
+        "correlation_id",
+        "operator_verbosity",
+        "warning_context",
+        "warning_correlation_id",
+    }
+    assert summary["operator_verbosity"] == "minimal"
+    assert "drift_vector" not in summary
+    assert "verifier_output_raw" not in summary
+    assert "historical_drift_trend" not in summary
+
+
+@pytest.mark.parametrize("operator_verbosity", [None, "verbose", ""])
+def test_decide_wat_operator_summary_invalid_or_missing_verbosity_defaults_to_minimal(
+    monkeypatch,
+    operator_verbosity,
+):
+    """Missing/invalid verbosity policy values must resolve to minimal summary mode."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-minimal-default",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
+    if operator_verbosity is not None:
+        policy["operator_verbosity"] = operator_verbosity
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("wat_operator_summary", {}).get("operator_verbosity") == "minimal"
+    assert payload.get("wat_operator_detail") is None
 
 
 def test_decide_bind_operator_surface_defaults_to_minimal_summary(monkeypatch):
