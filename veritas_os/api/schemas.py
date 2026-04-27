@@ -951,7 +951,8 @@ class DecideResponse(BaseModel):
         description=(
             "Canonical v1 minimal operator-facing WAT summary surface. "
             "Contains only integrity_severity, affected_lanes, event_ts, "
-            "correlation_id, and operator_verbosity."
+            "correlation_id, operator_verbosity, warning_context, and "
+            "warning_correlation_id."
         ),
     )
     wat_operator_detail: Optional[Dict[str, Any]] = Field(
