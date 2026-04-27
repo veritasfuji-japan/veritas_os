@@ -340,6 +340,17 @@ describe("useAuditData", () => {
               execution_intent_id: "ei-777",
               final_outcome: "ESCALATED",
               escalation_reason: "manual-review",
+              action_contract_id: "ac-777",
+              authority_evidence_id: "ae-777",
+              authority_evidence_hash: "hash-777",
+              authority_validation_status: "stale",
+              commit_boundary_result: "escalate",
+              failed_predicates: [{ predicate_id: "p-1" }],
+              stale_predicates: [{ predicate_id: "p-2" }],
+              missing_predicates: [{ predicate_id: "p-3" }],
+              refusal_basis: ["scope_denied"],
+              escalation_basis: ["manual_review_required"],
+              irreversibility_boundary_id: "ib-777",
               authority_check_result: { passed: true },
               constraint_check_result: { passed: false },
               drift_check_result: { result: "stable" },
@@ -374,7 +385,18 @@ describe("useAuditData", () => {
       executionIntentId: "ei-777",
       finalOutcome: "ESCALATED",
       bindFailureReason: "manual-review",
+      actionContractId: "ac-777",
+      authorityEvidenceId: "ae-777",
+      authorityEvidenceHash: "hash-777",
+      authorityValidationStatus: "stale",
+      commitBoundaryResult: "escalate",
+      irreversibilityBoundaryId: "ib-777",
+      refusalBasis: ["scope_denied"],
+      escalationBasis: ["manual_review_required"],
     });
+    expect(result.current.bindReceiptLookupDetail?.failedPredicates).toHaveLength(1);
+    expect(result.current.bindReceiptLookupDetail?.stalePredicates).toHaveLength(1);
+    expect(result.current.bindReceiptLookupDetail?.missingPredicates).toHaveLength(1);
   });
 
   it("includes bind receipt identifiers in cross-search all-field matching", async () => {

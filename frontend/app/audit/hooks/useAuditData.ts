@@ -101,6 +101,17 @@ interface BindReceiptLookupDetail {
   executionIntentId: string | null;
   finalOutcome: string | null;
   bindFailureReason: string | null;
+  actionContractId: string | null;
+  authorityEvidenceId: string | null;
+  authorityEvidenceHash: string | null;
+  authorityValidationStatus: string | null;
+  commitBoundaryResult: string | null;
+  irreversibilityBoundaryId: string | null;
+  failedPredicates: Record<string, unknown>[];
+  stalePredicates: Record<string, unknown>[];
+  missingPredicates: Record<string, unknown>[];
+  refusalBasis: string[];
+  escalationBasis: string[];
   authorityCheckResult: Record<string, unknown> | null;
   constraintCheckResult: Record<string, unknown> | null;
   driftCheckResult: Record<string, unknown> | null;
@@ -185,6 +196,12 @@ export function useAuditData(): AuditDataState {
 
   const asRecordOrNull = (value: unknown): Record<string, unknown> | null => (isRecord(value) ? value : null);
 
+  const asRecordArray = (value: unknown): Record<string, unknown>[] =>
+    Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => isRecord(item)) : [];
+
+  const asStringArray = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
   const parseBindReceiptLookupDetail = (
     payload: unknown,
     fallbackBindReceiptId: string,
@@ -212,6 +229,35 @@ export function useAuditData(): AuditDataState {
         asStringOrNull(nested?.bind_failure_reason) ??
         asStringOrNull(nested?.rollback_reason) ??
         asStringOrNull(nested?.escalation_reason),
+      actionContractId:
+        asStringOrNull(payload.action_contract_id) ??
+        asStringOrNull(nested?.action_contract_id),
+      authorityEvidenceId:
+        asStringOrNull(payload.authority_evidence_id) ??
+        asStringOrNull(nested?.authority_evidence_id),
+      authorityEvidenceHash:
+        asStringOrNull(payload.authority_evidence_hash) ??
+        asStringOrNull(nested?.authority_evidence_hash),
+      authorityValidationStatus:
+        asStringOrNull(payload.authority_validation_status) ??
+        asStringOrNull(nested?.authority_validation_status),
+      commitBoundaryResult:
+        asStringOrNull(payload.commit_boundary_result) ??
+        asStringOrNull(nested?.commit_boundary_result),
+      irreversibilityBoundaryId:
+        asStringOrNull(payload.irreversibility_boundary_id) ??
+        asStringOrNull(nested?.irreversibility_boundary_id),
+      failedPredicates:
+        asRecordArray(payload.failed_predicates)
+        .concat(asRecordArray(nested?.failed_predicates)),
+      stalePredicates:
+        asRecordArray(payload.stale_predicates)
+        .concat(asRecordArray(nested?.stale_predicates)),
+      missingPredicates:
+        asRecordArray(payload.missing_predicates)
+        .concat(asRecordArray(nested?.missing_predicates)),
+      refusalBasis: asStringArray(payload.refusal_basis).concat(asStringArray(nested?.refusal_basis)),
+      escalationBasis: asStringArray(payload.escalation_basis).concat(asStringArray(nested?.escalation_basis)),
       authorityCheckResult:
         asRecordOrNull(payload.authority_check_result) ??
         asRecordOrNull(nested?.authority_check_result),

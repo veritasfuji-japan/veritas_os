@@ -586,6 +586,59 @@ def test_governance_bind_receipt_endpoint(monkeypatch) -> None:
     assert missing_body["ok"] is False
 
 
+
+
+def test_governance_bind_receipts_expose_regulated_action_optional_fields(monkeypatch) -> None:
+    class _Receipt:
+        def to_dict(self) -> dict:
+            return {
+                "bind_receipt_id": "br-reg-1",
+                "execution_intent_id": "ei-reg-1",
+                "decision_id": "dec-reg-1",
+                "final_outcome": "BLOCKED",
+                "action_contract_id": "ac-reg-1",
+                "authority_evidence_id": "ae-reg-1",
+                "authority_evidence_hash": "hash-reg-1",
+                "authority_validation_status": "invalid",
+                "commit_boundary_result": "block",
+                "failed_predicates": [{"predicate_id": "p1"}],
+                "stale_predicates": [{"predicate_id": "p2"}],
+                "missing_predicates": [{"predicate_id": "p3"}],
+                "refusal_basis": ["authority_indeterminate"],
+                "escalation_basis": ["manual_review_required"],
+                "irreversibility_boundary_id": "ib-reg-1",
+            }
+
+    monkeypatch.setattr("veritas_os.api.routes_governance.find_bind_receipts", lambda **_kwargs: [_Receipt()])
+
+    detail = client.get("/v1/governance/bind-receipts/br-reg-1", headers=HEADERS)
+    assert detail.status_code == 200
+    detail_body = detail.json()
+    assert detail_body["bind_receipt"]["action_contract_id"] == "ac-reg-1"
+    assert detail_body["bind_receipt"]["authority_evidence_hash"] == "hash-reg-1"
+    assert detail_body["bind_receipt"]["commit_boundary_result"] == "block"
+    assert detail_body["bind_receipt"]["irreversibility_boundary_id"] == "ib-reg-1"
+    assert detail_body["bind_summary"]["action_contract_id"] == "ac-reg-1"
+    assert detail_body["bind_summary"]["authority_validation_status"] == "invalid"
+    assert detail_body["bind_summary"]["failed_predicate_count"] == 1
+    assert detail_body["bind_summary"]["stale_predicate_count"] == 1
+    assert detail_body["bind_summary"]["missing_predicate_count"] == 1
+    assert detail_body["bind_summary"]["refusal_basis"] == ["authority_indeterminate"]
+    assert detail_body["bind_summary"]["escalation_basis"] == ["manual_review_required"]
+
+    listed = client.get("/v1/governance/bind-receipts", headers=HEADERS)
+    assert listed.status_code == 200
+    listed_body = listed.json()
+    assert listed_body["items"][0]["action_contract_id"] == "ac-reg-1"
+    assert listed_body["items"][0]["authority_evidence_hash"] == "hash-reg-1"
+
+    exported = client.get("/v1/governance/bind-receipts/export", headers=HEADERS)
+    assert exported.status_code == 200
+    exported_body = exported.json()
+    assert exported_body["items"][0]["action_contract_id"] == "ac-reg-1"
+    assert exported_body["items"][0]["failed_predicates"][0]["predicate_id"] == "p1"
+
+
 def test_governance_bind_receipts_list_endpoint(monkeypatch) -> None:
     monkeypatch.setattr(
         "veritas_os.api.routes_governance.find_bind_receipts",

@@ -393,6 +393,17 @@ describe("TrustLogExplorerPage", () => {
           execution_intent_id: "exec-001",
           final_outcome: "BLOCKED",
           bind_failure_reason: "policy_denied",
+          action_contract_id: "ac-1",
+          authority_evidence_id: "ae-1",
+          authority_evidence_hash: "hash-1",
+          authority_validation_status: "valid",
+          commit_boundary_result: "block",
+          failed_predicates: [{ predicate_id: "p1" }],
+          stale_predicates: [{ predicate_id: "p2" }],
+          missing_predicates: [{ predicate_id: "p3" }],
+          refusal_basis: ["authority_missing"],
+          escalation_basis: ["manual_review_required"],
+          irreversibility_boundary_id: "ib-1",
           authority_check_result: { passed: true },
           constraint_check_result: { passed: false },
           drift_check_result: { result: "warn" },
@@ -415,12 +426,20 @@ describe("TrustLogExplorerPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Bind Receipt Trace")).toBeInTheDocument();
-      expect(screen.getByText("Bind check summary")).toBeInTheDocument();
+      expect(screen.getByText("Runtime Authority")).toBeInTheDocument();
       expect(screen.getByText("bindFailureReason")).toBeInTheDocument();
       expect(screen.getByText("policy_denied")).toBeInTheDocument();
       expect(screen.getByText("execution_intent_id")).toBeInTheDocument();
       expect(screen.getByText("exec-001")).toBeInTheDocument();
       expect(screen.getByText("BLOCKED")).toBeInTheDocument();
+      expect(screen.getByText("Regulated action governance")).toBeInTheDocument();
+      expect(screen.getByText("Action Contract")).toBeInTheDocument();
+      expect(screen.getByText("Authority Evidence")).toBeInTheDocument();
+      expect(screen.getByText("Commit Boundary")).toBeInTheDocument();
+      expect(screen.getByText("Failed Predicates")).toBeInTheDocument();
+      expect(screen.getByText("Refusal Basis")).toBeInTheDocument();
+      expect(screen.getByText("Escalation Basis")).toBeInTheDocument();
+      expect(screen.getByText("Irreversibility Boundary")).toBeInTheDocument();
       expect(screen.getByText("authorityCheckResult")).toBeInTheDocument();
       expect(screen.getByText("PASS")).toBeInTheDocument();
       expect(screen.getByText("FAIL")).toBeInTheDocument();

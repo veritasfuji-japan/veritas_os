@@ -123,6 +123,21 @@ function isActionRequiredOutcome(outcome: CanonicalBindReceipt["outcome"]): bool
   return outcome === "BLOCKED" || outcome === "ESCALATED";
 }
 
+function summarizeBasis(items: unknown): string {
+  if (!Array.isArray(items)) {
+    return "-";
+  }
+  const values = items.filter((item): item is string => typeof item === "string");
+  return values.length > 0 ? values.join(", ") : "-";
+}
+
+function countPredicates(items: unknown): number {
+  if (!Array.isArray(items)) {
+    return 0;
+  }
+  return items.filter((item) => typeof item === "object" && item !== null).length;
+}
+
 /**
  * Bind Cockpit: operator-facing cross-path surface for bind lifecycle triage.
  */
@@ -466,6 +481,8 @@ export function BindCockpit(): JSX.Element {
           {selectedDetail ? (
             <div className="mt-2 space-y-2 text-xs">
               <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+                <dt>Audit Log</dt>
+                <dd className="font-mono">{selectedDetail.bindReceiptId}</dd>
                 <dt>bind_outcome</dt>
                 <dd><StatusBadge label={selectedDetail.outcome} variant={resolveOutcomeVariant(selectedDetail.outcome)} /></dd>
                 <dt>bind_failure_reason</dt>
@@ -476,11 +493,56 @@ export function BindCockpit(): JSX.Element {
                 <dd className="font-mono">
                   decision:{selectedDetail.decisionId ?? "-"} / execution_intent:{selectedDetail.executionIntentId ?? "-"}
                 </dd>
-                <dt>check summary</dt>
-                <dd className="font-mono">
-                  authority {selectedDetail.checks.authority} / constraint {selectedDetail.checks.constraint} / drift {selectedDetail.checks.drift} / risk {selectedDetail.checks.risk}
-                </dd>
               </dl>
+
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Action Contract</p>
+                <p className="font-mono">{String(selectedDetail.raw.action_contract_id ?? "-")}</p>
+              </div>
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Authority Evidence</p>
+                <p className="font-mono">
+                  id: {String(selectedDetail.raw.authority_evidence_id ?? "-")} / validation: {String(selectedDetail.raw.authority_validation_status ?? "-")}
+                </p>
+              </div>
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Runtime Authority</p>
+                <p className="font-mono">
+                  authority {selectedDetail.checks.authority} / constraint {selectedDetail.checks.constraint} / drift {selectedDetail.checks.drift} / risk {selectedDetail.checks.risk}
+                </p>
+              </div>
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Predicate Results</p>
+                <p className="font-mono">
+                  Failed Predicates: {countPredicates(selectedDetail.raw.failed_predicates)} / Stale Predicates: {countPredicates(selectedDetail.raw.stale_predicates)} / Missing Predicates: {countPredicates(selectedDetail.raw.missing_predicates)}
+                </p>
+              </div>
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Commit Boundary Result</p>
+                <p className="font-mono">{String(selectedDetail.raw.commit_boundary_result ?? "-")}</p>
+              </div>
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Refusal Basis</p>
+                <p>{summarizeBasis(selectedDetail.raw.refusal_basis)}</p>
+              </div>
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Escalation Basis</p>
+                <p>{summarizeBasis(selectedDetail.raw.escalation_basis)}</p>
+              </div>
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Irreversibility Boundary</p>
+                <p className="font-mono">{String(selectedDetail.raw.irreversibility_boundary_id ?? "-")}</p>
+              </div>
+
+              <details>
+                <summary className="cursor-pointer text-muted-foreground">Expanded governance detail</summary>
+                <div className="mt-2 rounded border border-border/60 bg-background/70 p-2 text-[11px]">
+                  <p className="font-mono">authority_evidence_hash: {String(selectedDetail.raw.authority_evidence_hash ?? "-")}</p>
+                  <p className="font-mono">failed_predicates: {JSON.stringify(selectedDetail.raw.failed_predicates ?? [])}</p>
+                  <p className="font-mono">stale_predicates: {JSON.stringify(selectedDetail.raw.stale_predicates ?? [])}</p>
+                  <p className="font-mono">missing_predicates: {JSON.stringify(selectedDetail.raw.missing_predicates ?? [])}</p>
+                </div>
+              </details>
 
               <div className="rounded border border-warning/30 bg-warning/10 px-2 py-2">
                 <p className="font-semibold">Next operator step</p>
