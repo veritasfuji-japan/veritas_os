@@ -154,6 +154,11 @@ REQUIRED_REGULATED_ACTION_LINKS = (
     "docs/en/validation/regulated-action-governance-quality-gate.md",
 )
 
+REQUIRED_EXTERNAL_REVIEW_HANDOFF_DOCS = (
+    "docs/en/validation/external-review-handoff-regulated-action-governance.md",
+    "docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md",
+)
+
 FORBIDDEN_OVERCLAIM_PATTERNS = (
     "implements OTANIS",
     "implements ISDAIRE",
@@ -335,6 +340,16 @@ def check_readme_regulated_action_and_disclaimer(errors: list[str]) -> None:
             errors.append(f"README_JP.md: missing link {path}.")
 
 
+def check_external_review_handoff_docs_exist(errors: list[str]) -> None:
+    """Ensure regulated-action external review handoff docs are present."""
+    for raw_path in REQUIRED_EXTERNAL_REVIEW_HANDOFF_DOCS:
+        path = REPO_ROOT / raw_path
+        if not path.exists():
+            errors.append(
+                f"missing required external review handoff doc: {raw_path}"
+            )
+
+
 def check_forbidden_framework_overclaims(errors: list[str]) -> None:
     """Reject external-framework implementation/certification overclaims in READMEs."""
     readme_en = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
@@ -437,6 +452,7 @@ def run() -> list[str]:
     check_local_markdown_links(errors)
     check_documentation_map_paths(errors)
     check_readme_regulated_action_and_disclaimer(errors)
+    check_external_review_handoff_docs_exist(errors)
     check_forbidden_framework_overclaims(errors)
     check_extreme_markdown_compression(errors)
     return errors

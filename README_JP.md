@@ -82,6 +82,8 @@ Authority Evidence と Audit Log の違いは明確です。
 - **Authority Evidence** = bind time でその action が authorized / admissible だった理由の証跡
 - audit log 単体では commit を許可しない
 
+外部レビュー向けには、Regulated Action Governance 外部レビュー引き渡しパックを入口として参照してください。実装済み AML/KYC action path、証跡、Quality Gate、制限事項への導線をまとめています。
+
 ### Regulated action governance の事実（実装済み）
 
 - Action Class Contract
@@ -156,6 +158,8 @@ Authority Evidence と Audit Log の違いは明確です。
 - **AML/KYC Regulated Action Path（英語正本）**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
 - **Regulated Action Governance Proof Pack（英語正本）**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
 - **Regulated Action Governance Quality Gate（英語正本）**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
+- **Regulated Action Governance External Review Handoff Pack（英語正本）**: [`docs/en/validation/external-review-handoff-regulated-action-governance.md`](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+- **Regulated Action Governance External Review Handoff Pack（日本語要約）**: [`docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md`](docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md)
 - **Regulated Action Governance Proof Pack（日本語要約）**: [`docs/ja/validation/regulated-action-governance-proof-pack-summary.md`](docs/ja/validation/regulated-action-governance-proof-pack-summary.md)
 - **Regulated Action Governance Quality Gate（日本語要約）**: [`docs/ja/validation/regulated-action-governance-quality-gate-summary.md`](docs/ja/validation/regulated-action-governance-quality-gate-summary.md)
 

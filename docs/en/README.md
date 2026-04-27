@@ -44,6 +44,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Technical Proof Pack (external review)](validation/technical-proof-pack.md)
 - [Regulated Action Governance Proof Pack](validation/regulated-action-governance-proof-pack.md)
 - [Regulated Action Governance Quality Gate](validation/regulated-action-governance-quality-gate.md)
+- [Regulated Action Governance External Review Handoff Pack](validation/external-review-handoff-regulated-action-governance.md)
 - [Third-Party Review Readiness (compact index)](validation/third-party-review-readiness.md)
 
 ### Governance & Compliance
