@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from veritas_os.api import routes_wat
 from veritas_os.api.server import app
 from veritas_os.audit import wat_events
 
@@ -170,6 +171,44 @@ def test_revoke_confirmed_requires_explicit_confirmation(monkeypatch, tmp_path: 
     data = response.json()
     assert data["pending"]["event_type"] == "wat_revocation_pending"
     assert data["confirmed"] is None
+
+
+def test_revoke_auto_escalate_policy_flag_is_schema_only_in_v1(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """Runtime must ignore auto_escalate_confirmed_revocations in v1."""
+    _configure_auth(monkeypatch)
+    _configure_wat_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        routes_wat,
+        "get_policy",
+        lambda: {"revocation": {"auto_escalate_confirmed_revocations": True}},
+    )
+    client = TestClient(app)
+
+    issue = client.post(
+        "/v1/wat/issue-shadow",
+        headers=_headers("k-operator"),
+        json={"psid": "psid-r3"},
+    ).json()
+
+    response = client.post(
+        f"/v1/wat/revocation/{issue['wat_id']}",
+        headers=_headers("k-operator"),
+        json={"confirmed": True, "reason": "manual"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pending"]["event_type"] == "wat_revocation_pending"
+    assert data["confirmed"] is None
+    assert (
+        routes_wat._auto_escalate_confirmed_revocations_runtime_active(
+            {"revocation": {"auto_escalate_confirmed_revocations": True}}
+        )
+        is False
+    )
 
 
 def test_auth_rbac_read_vs_mutation(monkeypatch, tmp_path: Path) -> None:

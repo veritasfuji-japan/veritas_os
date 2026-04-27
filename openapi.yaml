@@ -673,9 +673,11 @@ components:
         revocation_confirmation_required:
           type: boolean
           default: true
+          description: Confirmed revocation state changes always require explicit confirmation in v1 runtime.
         auto_escalate_confirmed_revocations:
           type: boolean
           default: false
+          description: Schema-only v1 placeholder; accepted for forward-compatibility but intentionally ignored by runtime handlers.
     DriftScoringConfig:
       type: object
       description: ドリフト評価スコア重み

@@ -327,6 +327,8 @@ def test_openapi_wat_operator_summary_and_governance_defaults_locked() -> None:
     assert revocation_props["mode"]["enum"] == ["bounded_eventual_consistency"]
     assert revocation_props["revocation_confirmation_required"]["default"] is True
     assert revocation_props["auto_escalate_confirmed_revocations"]["default"] is False
+    assert "always require explicit confirmation" in revocation_props["revocation_confirmation_required"]["description"]
+    assert "Schema-only v1 placeholder" in revocation_props["auto_escalate_confirmed_revocations"]["description"]
 
     policy_props = spec["components"]["schemas"]["GovernancePolicy"]["properties"]
     assert policy_props["operator_verbosity"]["default"] == "minimal"
