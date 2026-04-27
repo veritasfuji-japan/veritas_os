@@ -849,6 +849,7 @@ def _build_response_layers(
         "version": os.getenv("VERITAS_API_VERSION", "veritas-api 1.x"),
         "decision_status": ctx.decision_status,
         "rejection_reason": ctx.rejection_reason,
+        "participation_signal": ctx.response_extras.get("participation_signal"),
     }
     core.update(_derive_business_fields(ctx))
 
