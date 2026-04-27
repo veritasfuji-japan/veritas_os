@@ -19,7 +19,7 @@
 **Author**: Takeshi Fujishita
 
 VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agents**（AIエージェント向け意思決定ガバナンス / bind-boundary 制御プレーン）です。
-エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。
+エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。これは、AIエージェントの意思決定と実行境界を統治するコントロールプレーンという現在のプロダクトポジショニングを示します。
 
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
 
@@ -75,6 +75,42 @@ VERITAS OS は次を実現します。
 - **将来方向（標準化）**: bind-boundary は複数の effect path を統治する標準枠組みへ拡張していく方針ですが、現時点で全経路完了を主張するものではありません
 - **ロードマップ**: IdP/JWT スコープ連携の深耕、分散障害モード検証の拡張
 
+VERITAS には、選択された AI エージェントの action path を bind boundary で reviewable にする **Regulated Action Governance Kernel** が含まれます。Action Class Contract、Authority Evidence、Runtime Authority Validation、Admissibility Predicate、Irreversible Commit Boundary を用いて、execution intent の `commit / block / escalate / refuse` を判定します。AML/KYC customer risk escalation fixture は、この regulated action path を決定論的に確認するための実装済み経路です。
+
+Authority Evidence と Audit Log の違いは明確です。
+- **Audit Log** = 何が起きたかの記録
+- **Authority Evidence** = bind time でその action が authorized / admissible だった理由の証跡
+- audit log 単体では commit を許可しない
+
+### Regulated action governance の事実（実装済み）
+
+- Action Class Contract
+- AML/KYC Customer Risk Escalation contract
+- Authority Evidence artifact
+- Runtime Authority Validation
+- Admissibility Predicate evaluation
+- Commit Boundary Evaluator
+- BindReceipt / BindSummary regulated-action fields
+- AML/KYC deterministic regulated action path
+- Mission Control / Bind Cockpit regulated action display
+- Proof Pack / Quality Gate docs
+
+### Regulated action governance のロードマップ（未実装）
+
+- Real external authority source integration
+- Real bank / sanctions / compliance system integration
+- Third-party review
+- Broader regulated action-class coverage
+- Production customer workflow validation
+
+### Disclaimer
+
+- 本READMEは法的助言ではありません。
+- 規制当局の承認を示すものではありません。
+- 第三者認証を示すものではありません。
+- それ自体で法令適合を保証するものではありません。
+- 外部ガバナンスフレームワークの実装または認証を主張するものではありません。
+
 ### Technical Maturity Snapshot（内部）
 
 > 本セクションは **self-assessment / internal re-evaluation**（内部再評価）であり、第三者認証ではありません。
@@ -115,6 +151,11 @@ VERITAS OS は次を実現します。
 - **Decision Semantics Contract**: [`docs/ja/architecture/decision-semantics.md`](docs/ja/architecture/decision-semantics.md)
 - **Bind-Boundary Governance Artifacts**: [`docs/ja/architecture/bind-boundary-governance-artifacts.md`](docs/ja/architecture/bind-boundary-governance-artifacts.md)
 - **Bind-Time Admissibility Evaluator**: [`docs/ja/architecture/bind_time_admissibility_evaluator.md`](docs/ja/architecture/bind_time_admissibility_evaluator.md)
+- **Regulated Action Governance Kernel（英語正本）**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
+- **Authority Evidence vs Audit Log（英語正本）**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)
+- **AML/KYC Regulated Action Path（英語正本）**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
+- **Regulated Action Governance Proof Pack（英語正本）**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
+- **Regulated Action Governance Quality Gate（英語正本）**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
 - **Required Evidence Taxonomy v0**: [`docs/ja/governance/required-evidence-taxonomy.md`](docs/ja/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening（canonical gate + evidence profile）**: [`docs/ja/guides/financial-governance-templates.md`](docs/ja/guides/financial-governance-templates.md)
 - **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
@@ -312,7 +353,7 @@ VERITAS は **ガバナンス** を最適化します。
 - **エンタープライズガバナンス** — ポリシー変更の**4-eyes承認**、**RBAC/ABAC**アクセス制御、**SSEリアルタイムガバナンスアラート**、外部シークレットマネージャー強制
 - **MemoryOS**（ベクトル検索）+ **WorldModel**（因果遷移）を一次入力として扱う
 - フルスタック **Mission Controlダッシュボード**（Next.js）によるリアルタイムイベントストリーミング、リスク分析、ガバナンスポリシー管理
-- **EU AI Act準拠** — コンプライアンスレポート生成、監査エクスポート、デプロイメント準備チェック
+- **規制対応支援機能（実装）** — コンプライアンス向けレポート生成・監査エクスポート・デプロイメント準備チェックを提供（これ自体は法令適合保証を意味しない）
 
 **想定ユーザー**
 - AI safety / エージェント研究者
