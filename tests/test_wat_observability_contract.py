@@ -99,8 +99,9 @@ def test_retention_boundary_assertion_telemetry_recorded(monkeypatch, tmp_path: 
     )
 
     assertion = event["details"]["retention_boundary_assertion"]
-    assert assertion["outcome"] == "passed"
-    assert assertion["failed_reasons"] == []
+    assert assertion["outcome"] == "failed"
+    assert "observable_digest_ref_missing" in assertion["failed_reasons"]
+    assert "observable_digest_payload_not_accepted_as_ref" in assertion["failed_reasons"]
 
 
 def test_partial_validation_confirmation_failure_observable_in_logs_and_events(caplog) -> None:

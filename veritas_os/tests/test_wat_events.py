@@ -47,7 +47,7 @@ def test_primary_audit_path_stores_metadata_and_pointers_only(tmp_path: Path) ->
         details={
             "psid": "psid-1",
             "metadata": {"request_id": "rid-1"},
-            "observable_digest": "digest-ref-001",
+            "observable_digest_ref": "separate_store://digests/wat-boundary-1",
             "observable_digest_payload": {"raw": "must-not-persist"},
         },
         path=path,
@@ -56,8 +56,46 @@ def test_primary_audit_path_stores_metadata_and_pointers_only(tmp_path: Path) ->
     details = event["details"]
     assert "metadata" in details
     assert "event_pointers" in details
-    assert details["event_pointers"]["observable_digest_ref"] == "digest-ref-001"
+    assert (
+        details["event_pointers"]["observable_digest_ref"]
+        == "separate_store://digests/wat-boundary-1"
+    )
     assert "observable_digest_payload" not in details
+
+
+def test_observable_digest_payload_not_accepted_as_ref(tmp_path: Path) -> None:
+    path = tmp_path / "wat_events.jsonl"
+    event = persist_wat_issuance_event(
+        wat_id="wat-boundary-legacy-1",
+        actor="test",
+        details={
+            "observable_digest": "sha256:deadbeef",
+        },
+        path=path,
+    )
+
+    assertion = event["details"]["retention_boundary_assertion"]
+    assert assertion["outcome"] == "failed"
+    assert "observable_digest_payload_not_accepted_as_ref" in assertion["failed_reasons"]
+
+
+def test_legacy_locator_fallback_is_transitional_and_flagged(tmp_path: Path) -> None:
+    path = tmp_path / "wat_events.jsonl"
+    event = persist_wat_issuance_event(
+        wat_id="wat-boundary-legacy-2",
+        actor="test",
+        details={
+            "observable_digest": "separate_store://digests/wat-boundary-legacy-2",
+        },
+        path=path,
+    )
+
+    assertion = event["details"]["retention_boundary_assertion"]
+    assert event["details"]["event_pointers"]["observable_digest_ref"].startswith(
+        "separate_store://digests/"
+    )
+    assert assertion["outcome"] == "failed"
+    assert "legacy_observable_digest_ref_fallback_used" in assertion["failed_reasons"]
 
 
 def test_retention_policy_version_immutable_after_enforcement(tmp_path: Path) -> None:

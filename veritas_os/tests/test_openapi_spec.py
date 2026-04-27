@@ -286,6 +286,22 @@ def test_openapi_wat_config_includes_retention_boundary_fields() -> None:
         "restricted",
         "privileged",
     ]
+    assert "Reference/locator" in wat_props["observable_digest_ref"]["description"]
+
+
+def test_openapi_wat_shadow_requests_define_observable_digest_ref_contract() -> None:
+    """WAT shadow request schemas should expose locator-first digest linkage."""
+    spec = _load_openapi_spec()
+    issue_props = spec["components"]["schemas"]["WatIssueShadowRequest"]["properties"]
+    validate_props = spec["components"]["schemas"]["WatValidateShadowRequest"]["properties"]
+
+    assert "observable_digest_ref" in issue_props
+    assert "locator/reference" in issue_props["observable_digest_ref"]["description"]
+    assert "Legacy transitional field" in issue_props["observable_digest"]["description"]
+
+    assert "observable_digest_ref" in validate_props
+    assert "locator/reference" in validate_props["observable_digest_ref"]["description"]
+    assert "Legacy transitional field" in validate_props["observable_digest"]["description"]
 
 
 def test_openapi_wat_operator_summary_and_governance_defaults_locked() -> None:

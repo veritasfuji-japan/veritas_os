@@ -304,6 +304,15 @@ def _run_wat_shadow_observer(
     ttl = int(wat_cfg.get("default_ttl_seconds", 300))
     expiry_ts = now_ts + max(1, ttl)
     wat_id = f"wat_{uuid4().hex}"
+    observable_digest_ref_prefix = str(
+        wat_cfg.get("observable_digest_ref") or "separate_store://wat_observables"
+    ).strip()
+    normalized_observable_digest_ref_prefix = observable_digest_ref_prefix.rstrip("/")
+    observable_digest_ref = (
+        f"{normalized_observable_digest_ref_prefix}/{wat_id}"
+        if normalized_observable_digest_ref_prefix
+        else f"separate_store://wat_observables/{wat_id}"
+    )
 
     issue_event = persist_wat_issuance_event(
         wat_id=wat_id,
@@ -314,7 +323,7 @@ def _run_wat_shadow_observer(
             "psid": psid_full,
             "psid_display": psid_display,
             "action_digest": action_digest,
-            "observable_digest": aggregate_observable_digest,
+            "observable_digest_ref": observable_digest_ref,
             "observable_digest_list": observable_digest_list,
             "ttl_seconds": ttl,
         },

@@ -159,9 +159,19 @@ def _normalize_retention_boundary_details(
     pointers = raw.get("event_pointers")
     normalized_pointers: Dict[str, Any] = dict(pointers) if isinstance(pointers, dict) else {}
 
-    observable_digest_ref = str(
-        raw.get("observable_digest_ref") or raw.get("observable_digest") or ""
-    ).strip()
+    observable_digest_ref = str(raw.get("observable_digest_ref") or "").strip()
+    legacy_observable_digest = str(raw.get("observable_digest") or "").strip()
+    legacy_ref_adopted = False
+    if (
+        not observable_digest_ref
+        and legacy_observable_digest
+        and "://" in legacy_observable_digest
+    ):
+        # Transitional compatibility path:
+        # Older callers overloaded ``observable_digest`` for locator strings.
+        # We only adopt that legacy value when it looks like a reference.
+        observable_digest_ref = legacy_observable_digest
+        legacy_ref_adopted = True
     if observable_digest_ref:
         normalized_pointers["observable_digest_ref"] = observable_digest_ref
 
@@ -200,8 +210,12 @@ def _normalize_retention_boundary_details(
     assertion_failed_reasons: list[str] = []
     if normalized_retention["retention_enforced_at_write"] and not normalized_retention["retention_policy_version"]:
         assertion_failed_reasons.append("missing_retention_policy_version")
-    if raw.get("observable_digest") and not normalized_retention["observable_digest_ref"]:
+    if legacy_observable_digest and not normalized_retention["observable_digest_ref"]:
         assertion_failed_reasons.append("observable_digest_ref_missing")
+    if legacy_observable_digest and not legacy_ref_adopted:
+        assertion_failed_reasons.append("observable_digest_payload_not_accepted_as_ref")
+    if legacy_ref_adopted:
+        assertion_failed_reasons.append("legacy_observable_digest_ref_fallback_used")
     normalized_retention["retention_boundary_assertion"] = {
         "outcome": "passed" if not assertion_failed_reasons else "failed",
         "failed_reasons": assertion_failed_reasons,

@@ -591,7 +591,7 @@ components:
         observable_digest_ref:
           type: string
           default: separate_store://wat_observables
-          description: Separate-store digest reference prefix.
+          description: Reference/locator prefix for separate-store digest material (not digest payload content).
         retention_policy_version:
           type: string
           default: wat_retention_v1
@@ -1869,9 +1869,14 @@ components:
           type: string
         psid:
           type: string
+        observable_digest_ref:
+          type: string
+          nullable: true
+          description: Separate-store observable digest locator/reference.
         observable_digest:
           type: string
           nullable: true
+          description: Legacy transitional field; digest payloads are not treated as observable_digest_ref.
         ttl_seconds:
           type: integer
           minimum: 1
@@ -1893,9 +1898,14 @@ components:
         psid:
           type: string
           nullable: true
+        observable_digest_ref:
+          type: string
+          nullable: true
+          description: Separate-store observable digest locator/reference.
         observable_digest:
           type: string
           nullable: true
+          description: Legacy transitional field; digest payloads are not treated as observable_digest_ref.
         details:
           type: object
           additionalProperties: true

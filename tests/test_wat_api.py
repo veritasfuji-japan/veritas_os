@@ -44,13 +44,20 @@ def test_issue_shadow_success(monkeypatch, tmp_path: Path) -> None:
     response = client.post(
         "/v1/wat/issue-shadow",
         headers=_headers("k-operator"),
-        json={"psid": "psid-1", "observable_digest": "abc"},
+        json={
+            "psid": "psid-1",
+            "observable_digest_ref": "separate_store://digests/wat-api-1",
+        },
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
     assert data["event"]["event_type"] == "wat_issued"
+    assert (
+        data["event"]["details"]["event_pointers"]["observable_digest_ref"]
+        == "separate_store://digests/wat-api-1"
+    )
 
 
 def test_validate_shadow_success(monkeypatch, tmp_path: Path) -> None:
