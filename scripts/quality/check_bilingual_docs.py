@@ -157,6 +157,8 @@ REQUIRED_REGULATED_ACTION_LINKS = (
 REQUIRED_EXTERNAL_REVIEW_HANDOFF_DOCS = (
     "docs/en/validation/external-review-handoff-regulated-action-governance.md",
     "docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md",
+    "docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md",
+    "docs/ja/validation/external-reviewer-feedback-template-regulated-action-governance-summary.md",
 )
 
 FORBIDDEN_OVERCLAIM_PATTERNS = (

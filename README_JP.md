@@ -83,6 +83,7 @@ Authority Evidence と Audit Log の違いは明確です。
 - audit log 単体では commit を許可しない
 
 外部レビュー向けには、Regulated Action Governance 外部レビュー引き渡しパックを入口として参照してください。実装済み AML/KYC action path、証跡、Quality Gate、制限事項への導線をまとめています。
+外部レビュアーは、Regulated Action Governance 外部レビューフィードバックテンプレートを使って、レビュー範囲、評価基準、指摘事項、証拠要求、推奨事項を記録できます。
 
 ### Regulated action governance の事実（実装済み）
 
@@ -160,6 +161,8 @@ Authority Evidence と Audit Log の違いは明確です。
 - **Regulated Action Governance Quality Gate（英語正本）**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
 - **Regulated Action Governance External Review Handoff Pack（英語正本）**: [`docs/en/validation/external-review-handoff-regulated-action-governance.md`](docs/en/validation/external-review-handoff-regulated-action-governance.md)
 - **Regulated Action Governance External Review Handoff Pack（日本語要約）**: [`docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md`](docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md)
+- **Regulated Action Governance External Reviewer Feedback Template（英語正本）**: [`docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md`](docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md)
+- **Regulated Action Governance 外部レビューフィードバックテンプレート（日本語要約）**: [`docs/ja/validation/external-reviewer-feedback-template-regulated-action-governance-summary.md`](docs/ja/validation/external-reviewer-feedback-template-regulated-action-governance-summary.md)
 - **Regulated Action Governance Proof Pack（日本語要約）**: [`docs/ja/validation/regulated-action-governance-proof-pack-summary.md`](docs/ja/validation/regulated-action-governance-proof-pack-summary.md)
 - **Regulated Action Governance Quality Gate（日本語要約）**: [`docs/ja/validation/regulated-action-governance-quality-gate-summary.md`](docs/ja/validation/regulated-action-governance-quality-gate-summary.md)
 
