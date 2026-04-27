@@ -156,6 +156,10 @@ Authority Evidence と Audit Log の違いは明確です。
 - **AML/KYC Regulated Action Path（英語正本）**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
 - **Regulated Action Governance Proof Pack（英語正本）**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
 - **Regulated Action Governance Quality Gate（英語正本）**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
+- **Regulated Action Governance Proof Pack（日本語要約）**: [`docs/ja/validation/regulated-action-governance-proof-pack-summary.md`](docs/ja/validation/regulated-action-governance-proof-pack-summary.md)
+- **Regulated Action Governance Quality Gate（日本語要約）**: [`docs/ja/validation/regulated-action-governance-quality-gate-summary.md`](docs/ja/validation/regulated-action-governance-quality-gate-summary.md)
+
+- Regulated Action Governance の Proof Pack / Quality Gate については、上記の日本語要約ページと英語版詳細ドキュメントを併せて参照してください。
 - **Required Evidence Taxonomy v0**: [`docs/ja/governance/required-evidence-taxonomy.md`](docs/ja/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening（canonical gate + evidence profile）**: [`docs/ja/guides/financial-governance-templates.md`](docs/ja/guides/financial-governance-templates.md)
 - **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
