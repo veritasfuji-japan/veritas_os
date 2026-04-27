@@ -211,6 +211,48 @@ def _resolve_shadow_revocation_state(*, wat_id: str) -> Dict[str, Any]:
     return state
 
 
+def _build_wat_event_lane_details(
+    *,
+    failure_type: str,
+    validation_status: str,
+    revocation_state: Dict[str, Any],
+    replay_binding_required: bool,
+    replay_binding_escalation_threshold: int,
+    partial_validation_requires_confirmation: bool,
+) -> Dict[str, Any]:
+    """Build structured event-lane observability detail for drill-down paths."""
+    details: Dict[str, Any] = {
+        "validation_status": validation_status,
+    }
+    replay_failure_reasons = {
+        "replay_binding_missing",
+        "replay_binding_incomplete",
+        "action_digest_mismatch",
+        "replay_detected",
+    }
+    if failure_type in replay_failure_reasons:
+        details["replay_binding_failure"] = {
+            "reason": failure_type,
+            "required": replay_binding_required,
+            "escalation_threshold": replay_binding_escalation_threshold,
+        }
+    revocation_status = str(revocation_state.get("status", "active") or "active")
+    details["revocation_transition_trace"] = {
+        "status": revocation_status,
+        "event_type": revocation_state.get("event_type"),
+        "event_id": revocation_state.get("event_id"),
+        "event_ts": revocation_state.get("ts"),
+        "source": revocation_state.get("source", "wat_events"),
+    }
+    if failure_type == "partial_validation_confirmation_required":
+        details["partial_validation_confirmation_failure"] = {
+            "reason": failure_type,
+            "requires_confirmation": partial_validation_requires_confirmation,
+            "confirmation_received": False,
+        }
+    return details
+
+
 def _run_wat_shadow_observer(
     *,
     srv: Any,
@@ -337,6 +379,14 @@ def _run_wat_shadow_observer(
 
     failure_type = str(verifier_result.get("failure_type") or "")
     validation_status = str(verifier_result.get("validation_status") or "invalid")
+    event_lane_details = _build_wat_event_lane_details(
+        failure_type=failure_type,
+        validation_status=validation_status,
+        revocation_state=revocation_state,
+        replay_binding_required=bool(shadow_cfg.get("replay_binding_required", False)),
+        replay_binding_escalation_threshold=replay_binding_escalation_threshold,
+        partial_validation_requires_confirmation=partial_validation_requires_confirmation,
+    )
     if failure_type == "replay_detected":
         persisted_validation = persist_wat_replay_event(
             wat_id=wat_id,
@@ -345,6 +395,7 @@ def _run_wat_shadow_observer(
                 "request_id": request_id,
                 "psid_display": psid_display,
                 "validation_status": validation_status,
+                "event_lane_details": event_lane_details,
             },
         )
         replay_status = "suspected"
@@ -363,6 +414,7 @@ def _run_wat_shadow_observer(
                 "observable_digest_list": observable_digest_list,
                 "warning_context": "wat_shadow_warning" if event_type != "wat_validated" else "",
                 "warning_correlation_id": request_id or str(issue_event.get("event_id") or wat_id),
+                "event_lane_details": event_lane_details,
             },
         )
         replay_status = "suspected" if failure_type == "replay_detected" else "clear"
@@ -391,6 +443,13 @@ def _run_wat_shadow_observer(
             validation_status,
             failure_type or "",
         )
+    if failure_type == "partial_validation_confirmation_required":
+        logger.warning(
+            "WAT shadow partial-validation confirmation failure "
+            "correlation_id=%s wat_id=%s",
+            correlation_id,
+            wat_id,
+        )
     event_ts = format_event_ts_utc(
         persisted_validation.get("event_ts") or persisted_validation.get("ts")
     )
@@ -411,6 +470,7 @@ def _run_wat_shadow_observer(
         "warning_context": warning_context,
         "warning_correlation_id": correlation_id,
         "integrity_summary": integrity_summary,
+        "event_lane_details": event_lane_details,
         "issue_event_id": issue_event.get("event_id"),
         "validation_event_id": persisted_validation.get("event_id"),
     }
@@ -527,6 +587,7 @@ def _attach_wat_contract_fields(payload: Dict[str, Any], wat_shadow: Dict[str, A
             "drift_vector": _normalize_wat_drift_vector(wat_shadow.get("drift_vector")),
             "verifier_output_raw": wat_shadow.get("verifier_output_raw"),
             "historical_drift_trend": wat_shadow.get("historical_drift_trend"),
+            "event_lane_details": wat_shadow.get("event_lane_details"),
         },
         operator_verbosity=operator_verbosity,
         role="admin",
