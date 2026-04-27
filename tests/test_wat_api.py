@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from veritas_os.api import routes_wat
@@ -173,9 +174,11 @@ def test_revoke_confirmed_requires_explicit_confirmation(monkeypatch, tmp_path: 
     assert data["confirmed"] is None
 
 
+@pytest.mark.parametrize("auto_escalate_flag", [False, True])
 def test_revoke_auto_escalate_policy_flag_is_schema_only_in_v1(
     monkeypatch,
     tmp_path: Path,
+    auto_escalate_flag: bool,
 ) -> None:
     """Runtime must ignore auto_escalate_confirmed_revocations in v1."""
     _configure_auth(monkeypatch)
@@ -183,7 +186,7 @@ def test_revoke_auto_escalate_policy_flag_is_schema_only_in_v1(
     monkeypatch.setattr(
         routes_wat,
         "get_policy",
-        lambda: {"revocation": {"auto_escalate_confirmed_revocations": True}},
+        lambda: {"revocation": {"auto_escalate_confirmed_revocations": auto_escalate_flag}},
     )
     client = TestClient(app)
 
@@ -205,7 +208,7 @@ def test_revoke_auto_escalate_policy_flag_is_schema_only_in_v1(
     assert data["confirmed"] is None
     assert (
         routes_wat._auto_escalate_confirmed_revocations_runtime_active(
-            {"revocation": {"auto_escalate_confirmed_revocations": True}}
+            {"revocation": {"auto_escalate_confirmed_revocations": auto_escalate_flag}}
         )
         is False
     )

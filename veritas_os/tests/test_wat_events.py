@@ -79,6 +79,24 @@ def test_observable_digest_payload_not_accepted_as_ref(tmp_path: Path) -> None:
     assert "observable_digest_payload_not_accepted_as_ref" in assertion["failed_reasons"]
 
 
+def test_observable_digest_ref_must_be_locator_not_payload(tmp_path: Path) -> None:
+    path = tmp_path / "wat_events.jsonl"
+    event = persist_wat_issuance_event(
+        wat_id="wat-boundary-legacy-3",
+        actor="test",
+        details={
+            "observable_digest_ref": "sha256:deadbeef",
+        },
+        path=path,
+    )
+
+    assertion = event["details"]["retention_boundary_assertion"]
+    pointers = event["details"]["event_pointers"]
+    assert "observable_digest_ref" not in pointers
+    assert assertion["outcome"] == "failed"
+    assert "observable_digest_ref_not_locator" in assertion["failed_reasons"]
+
+
 def test_legacy_locator_fallback_is_transitional_and_flagged(tmp_path: Path) -> None:
     path = tmp_path / "wat_events.jsonl"
     event = persist_wat_issuance_event(

@@ -29,8 +29,19 @@ class WatIssueShadowRequest(BaseModel):
 
     wat_id: Optional[str] = None
     psid: str = Field(min_length=1, max_length=500)
-    observable_digest_ref: Optional[str] = Field(default=None, max_length=500)
-    observable_digest: Optional[str] = Field(default=None, max_length=500)
+    observable_digest_ref: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Separate-store observable digest locator/reference.",
+    )
+    observable_digest: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "Legacy transitional field. v1 canonical contract is "
+            "observable_digest_ref locator/reference."
+        ),
+    )
     ttl_seconds: int = Field(default=300, ge=1, le=86_400)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -41,8 +52,19 @@ class WatValidateShadowRequest(BaseModel):
     wat_id: str = Field(min_length=1, max_length=500)
     outcome_event: str = Field(default="wat_validated")
     psid: Optional[str] = Field(default=None, max_length=500)
-    observable_digest_ref: Optional[str] = Field(default=None, max_length=500)
-    observable_digest: Optional[str] = Field(default=None, max_length=500)
+    observable_digest_ref: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Separate-store observable digest locator/reference.",
+    )
+    observable_digest: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "Legacy transitional field. v1 canonical contract is "
+            "observable_digest_ref locator/reference."
+        ),
+    )
     details: Dict[str, Any] = Field(default_factory=dict)
 
 
