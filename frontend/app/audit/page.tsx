@@ -45,6 +45,17 @@ export default function TrustLogExplorerPage(): JSX.Element {
     return "muted";
   };
 
+
+  const summarizePredicateList = (items: Record<string, unknown>[] | undefined): string => {
+    if (!items || items.length === 0) return "0";
+    return String(items.length);
+  };
+
+  const summarizeBasis = (items: string[] | undefined): string => {
+    if (!items || items.length === 0) return "-";
+    return items.join(", ");
+  };
+
   const verifySelectedDecision = (): void => {
     if (!data.selectedDecisionEntry) {
       data.setVerificationMessage(
@@ -171,7 +182,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
                   <dd>{data.bindReceiptLookupDetail.bindFailureReason ?? "-"}</dd>
                 </dl>
                 <div className="mt-2 rounded border border-border/70 bg-background/60 px-2 py-1.5">
-                  <p className="font-semibold text-muted-foreground">Bind check summary</p>
+                  <p className="font-semibold text-muted-foreground">Runtime Authority</p>
                   <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
                     <dt>authorityCheckResult</dt>
                     <dd className="font-mono">
@@ -189,6 +200,33 @@ export default function TrustLogExplorerPage(): JSX.Element {
                     <dd className="font-mono">
                       {summarizeBindCheck(data.bindReceiptLookupDetail.riskCheckResult)}
                     </dd>
+                  </dl>
+                </div>
+                <div className="mt-2 rounded border border-border/70 bg-background/60 px-2 py-1.5">
+                  <p className="font-semibold text-muted-foreground">Regulated action governance</p>
+                  <dl className="mt-1 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+                    <dt>Action Contract</dt>
+                    <dd className="font-mono">{data.bindReceiptLookupDetail.actionContractId ?? "-"}</dd>
+                    <dt>Authority Evidence</dt>
+                    <dd className="font-mono">{data.bindReceiptLookupDetail.authorityEvidenceId ?? "-"}</dd>
+                    <dt>Authority Evidence Hash</dt>
+                    <dd className="font-mono">{data.bindReceiptLookupDetail.authorityEvidenceHash ?? "-"}</dd>
+                    <dt>Authority Validation</dt>
+                    <dd className="font-mono">{data.bindReceiptLookupDetail.authorityValidationStatus ?? "-"}</dd>
+                    <dt>Commit Boundary</dt>
+                    <dd className="font-mono">{data.bindReceiptLookupDetail.commitBoundaryResult ?? "-"}</dd>
+                    <dt>Failed Predicates</dt>
+                    <dd className="font-mono">{summarizePredicateList(data.bindReceiptLookupDetail.failedPredicates)}</dd>
+                    <dt>Stale Predicates</dt>
+                    <dd className="font-mono">{summarizePredicateList(data.bindReceiptLookupDetail.stalePredicates)}</dd>
+                    <dt>Missing Predicates</dt>
+                    <dd className="font-mono">{summarizePredicateList(data.bindReceiptLookupDetail.missingPredicates)}</dd>
+                    <dt>Refusal Basis</dt>
+                    <dd>{summarizeBasis(data.bindReceiptLookupDetail.refusalBasis)}</dd>
+                    <dt>Escalation Basis</dt>
+                    <dd>{summarizeBasis(data.bindReceiptLookupDetail.escalationBasis)}</dd>
+                    <dt>Irreversibility Boundary</dt>
+                    <dd className="font-mono">{data.bindReceiptLookupDetail.irreversibilityBoundaryId ?? "-"}</dd>
                   </dl>
                 </div>
                 <details className="mt-2">

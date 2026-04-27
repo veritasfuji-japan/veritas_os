@@ -109,6 +109,17 @@ const DETAIL_PAYLOAD = {
     constraint_check_result: { passed: false },
     drift_check_result: { result: "ok" },
     risk_check_result: { result: "deny" },
+    action_contract_id: "ac-9",
+    authority_evidence_id: "ae-9",
+    authority_evidence_hash: "hash-9",
+    authority_validation_status: "invalid",
+    commit_boundary_result: "block",
+    failed_predicates: [{ predicate_id: "p-fail" }],
+    stale_predicates: [{ predicate_id: "p-stale" }],
+    missing_predicates: [{ predicate_id: "p-missing" }],
+    refusal_basis: ["authority_indeterminate"],
+    escalation_basis: ["manual_review_required"],
+    irreversibility_boundary_id: "ib-9",
   },
 };
 
@@ -239,15 +250,25 @@ describe("BindCockpit", () => {
     render(<BindCockpit />);
     await screen.findAllByText("br-blocked");
 
-    const blockedReceiptCells = await screen.findAllByText("br-blocked");
-    fireEvent.click(blockedReceiptCells[blockedReceiptCells.length - 1]);
+    const blockedDecision = await screen.findByText("decision-2");
+    fireEvent.click(blockedDecision.closest("tr") as HTMLElement);
 
     await waitFor(() => {
       const calledUrls = mockFetch.mock.calls.map((call) => String(call[0]));
-      expect(calledUrls).toContain("/api/veritas/v1/governance/bind-receipts/br-blocked");
+      expect(calledUrls.some((url) => url.includes("/api/veritas/v1/governance/bind-receipts/br-blocked"))).toBe(true);
     });
 
     expect(await screen.findByText("Receipt Drill-down")).toBeInTheDocument();
+    expect(screen.getByText("Action Contract")).toBeInTheDocument();
+    expect(screen.getByText("Authority Evidence")).toBeInTheDocument();
+    expect(screen.getByText("Runtime Authority")).toBeInTheDocument();
+    expect(screen.getByText("Predicate Results")).toBeInTheDocument();
+    expect(screen.getByText("Commit Boundary Result")).toBeInTheDocument();
+    expect(screen.getByText("Refusal Basis")).toBeInTheDocument();
+    expect(screen.getByText("Escalation Basis")).toBeInTheDocument();
+    expect(screen.getByText("Irreversibility Boundary")).toBeInTheDocument();
+    expect(screen.getByText(/Expanded governance detail/i)).toBeInTheDocument();
+    expect(screen.getByText(/authority_evidence_hash: hash-9/i)).toBeInTheDocument();
     expect(screen.getByText(/Next operator step/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "related decision" })).toHaveAttribute("href", "/audit?decision_id=decision-2");
     expect(screen.getByRole("link", { name: "related execution intent" })).toHaveAttribute("href", "/audit?cross=exec-2");

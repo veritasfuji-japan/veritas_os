@@ -136,7 +136,7 @@ describe("TrustLogExplorerPage bind receipt fallback rendering", () => {
 
     expect(screen.getByText("Bind Receipt Trace")).toBeInTheDocument();
     expect(screen.getByText(/Matched audit log has been focused/i)).toBeInTheDocument();
-    expect(screen.queryByText("Bind check summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Runtime Authority")).not.toBeInTheDocument();
   });
 
   it("Case C: shows fallback details with required fields on timeline miss", () => {
@@ -184,7 +184,7 @@ describe("TrustLogExplorerPage bind receipt fallback rendering", () => {
 
     render(<TrustLogExplorerPage />);
 
-    expect(screen.getByText("Bind check summary")).toBeInTheDocument();
+    expect(screen.getByText("Runtime Authority")).toBeInTheDocument();
     expect(screen.getByText("authorityCheckResult")).toBeInTheDocument();
     expect(screen.getByText("constraintCheckResult")).toBeInTheDocument();
     expect(screen.getByText("driftCheckResult")).toBeInTheDocument();
@@ -220,7 +220,7 @@ describe("TrustLogExplorerPage bind receipt fallback rendering", () => {
     render(<TrustLogExplorerPage />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("lookup failed");
-    expect(screen.queryByText("Bind check summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Runtime Authority")).not.toBeInTheDocument();
     expect(screen.queryByText("Raw fallback detail")).not.toBeInTheDocument();
   });
 });

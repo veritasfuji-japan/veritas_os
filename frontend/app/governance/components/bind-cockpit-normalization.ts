@@ -41,6 +41,17 @@ export interface BindCockpitReceipt {
   constraint_check_result?: BindCheckPayload;
   drift_check_result?: BindCheckPayload;
   risk_check_result?: BindCheckPayload;
+  action_contract_id?: string;
+  authority_evidence_id?: string;
+  authority_evidence_hash?: string;
+  authority_validation_status?: string;
+  commit_boundary_result?: string;
+  failed_predicates?: Array<Record<string, unknown>>;
+  stale_predicates?: Array<Record<string, unknown>>;
+  missing_predicates?: Array<Record<string, unknown>>;
+  refusal_basis?: string[];
+  escalation_basis?: string[];
+  irreversibility_boundary_id?: string;
   [key: string]: unknown;
 }
 
@@ -60,6 +71,16 @@ export interface BindSummaryPayload {
   target_label?: string;
   operator_surface?: string;
   relevant_ui_href?: string;
+  action_contract_id?: string;
+  authority_evidence_id?: string;
+  authority_validation_status?: string;
+  commit_boundary_result?: string;
+  failed_predicate_count?: number;
+  stale_predicate_count?: number;
+  missing_predicate_count?: number;
+  refusal_basis?: string[];
+  escalation_basis?: string[];
+  irreversibility_boundary_id?: string;
 }
 
 export interface CanonicalBindReceipt {
@@ -403,5 +424,40 @@ export function parseBindReceiptDetailPayload(value: unknown): BindCockpitReceip
     target_label: pickString(payload.target_label, bindSummary?.target_label) ?? undefined,
     operator_surface: pickString(payload.operator_surface, bindSummary?.operator_surface) ?? undefined,
     relevant_ui_href: pickString(payload.relevant_ui_href, bindSummary?.relevant_ui_href) ?? undefined,
+    action_contract_id: pickString(payload.action_contract_id, bindSummary?.action_contract_id) ?? undefined,
+    authority_evidence_id: pickString(payload.authority_evidence_id, bindSummary?.authority_evidence_id) ?? undefined,
+    authority_validation_status: pickString(
+      payload.authority_validation_status,
+      bindSummary?.authority_validation_status,
+    ) ?? undefined,
+    commit_boundary_result: pickString(payload.commit_boundary_result, bindSummary?.commit_boundary_result) ?? undefined,
+    failed_predicates:
+      Array.isArray(payload.failed_predicates)
+        ? payload.failed_predicates as Array<Record<string, unknown>>
+        : undefined,
+    stale_predicates:
+      Array.isArray(payload.stale_predicates)
+        ? payload.stale_predicates as Array<Record<string, unknown>>
+        : undefined,
+    missing_predicates:
+      Array.isArray(payload.missing_predicates)
+        ? payload.missing_predicates as Array<Record<string, unknown>>
+        : undefined,
+    refusal_basis:
+      Array.isArray(payload.refusal_basis)
+        ? payload.refusal_basis as string[]
+        : Array.isArray(bindSummary?.refusal_basis)
+          ? bindSummary.refusal_basis
+          : undefined,
+    escalation_basis:
+      Array.isArray(payload.escalation_basis)
+        ? payload.escalation_basis as string[]
+        : Array.isArray(bindSummary?.escalation_basis)
+          ? bindSummary.escalation_basis
+          : undefined,
+    irreversibility_boundary_id: pickString(
+      payload.irreversibility_boundary_id,
+      bindSummary?.irreversibility_boundary_id,
+    ) ?? undefined,
   } as BindCockpitReceipt;
 }
