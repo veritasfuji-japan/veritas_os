@@ -564,6 +564,15 @@ def _attach_wat_contract_fields(payload: Dict[str, Any], wat_shadow: Dict[str, A
         "action_summary": "observer_only_validation",
     }
     payload["wat_drift_vector"] = _normalize_wat_drift_vector(wat_shadow.get("drift_vector"))
+    verifier_output_raw = wat_shadow.get("verifier_output_raw")
+    if isinstance(verifier_output_raw, dict):
+        expanded_verifier_output_raw = dict(verifier_output_raw)
+    else:
+        expanded_verifier_output_raw = {}
+    if isinstance(wat_shadow.get("event_lane_details"), dict):
+        expanded_verifier_output_raw["event_lane_details"] = dict(
+            wat_shadow["event_lane_details"]
+        )
     operator_verbosity = _resolve_operator_verbosity(wat_shadow.get("operator_verbosity"))
     summary, detail = _build_operator_surface(
         summary={
@@ -585,9 +594,8 @@ def _attach_wat_contract_fields(payload: Dict[str, Any], wat_shadow: Dict[str, A
         },
         detail={
             "drift_vector": _normalize_wat_drift_vector(wat_shadow.get("drift_vector")),
-            "verifier_output_raw": wat_shadow.get("verifier_output_raw"),
+            "verifier_output_raw": expanded_verifier_output_raw,
             "historical_drift_trend": wat_shadow.get("historical_drift_trend"),
-            "event_lane_details": wat_shadow.get("event_lane_details"),
         },
         operator_verbosity=operator_verbosity,
         role="admin",

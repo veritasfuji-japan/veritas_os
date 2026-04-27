@@ -43,7 +43,12 @@ def test_replay_binding_failure_stays_in_detail_not_minimal_summary() -> None:
     summary = payload["wat_operator_summary"]
     detail = payload["wat_operator_detail"]
     assert "event_lane_details" not in summary
-    assert detail["event_lane_details"]["replay_binding_failure"]["reason"] == "replay_binding_incomplete"
+    assert (
+        detail["verifier_output_raw"]["event_lane_details"][
+            "replay_binding_failure"
+        ]["reason"]
+        == "replay_binding_incomplete"
+    )
 
 
 def test_revocation_transition_trace_stays_in_detail_not_minimal_summary() -> None:
@@ -72,7 +77,12 @@ def test_revocation_transition_trace_stays_in_detail_not_minimal_summary() -> No
     summary = payload["wat_operator_summary"]
     detail = payload["wat_operator_detail"]
     assert "revocation_transition_trace" not in summary
-    assert detail["event_lane_details"]["revocation_transition_trace"]["event_type"] == "wat_revocation_pending"
+    assert (
+        detail["verifier_output_raw"]["event_lane_details"][
+            "revocation_transition_trace"
+        ]["event_type"]
+        == "wat_revocation_pending"
+    )
 
 
 def test_retention_boundary_assertion_telemetry_recorded(monkeypatch, tmp_path: Path) -> None:
