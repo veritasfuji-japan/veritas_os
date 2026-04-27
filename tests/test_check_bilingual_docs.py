@@ -1,26 +1,41 @@
 """Tests for bilingual documentation consistency checks."""
 
-from scripts.quality.check_bilingual_docs import (
-    _is_long_url_or_generated_badge,
-    run,
-)
+from scripts.quality import check_bilingual_docs
 
 
 def test_bilingual_docs_checks_pass() -> None:
     """Repository documentation entrypoints should satisfy bilingual checks."""
-    assert run() == []
+    assert check_bilingual_docs.run() == []
 
 
-def test_badge_url_is_ignored_for_length_check() -> None:
-    """Shields badge URLs should be ignored by markdown readability guard."""
-    line = (
-        "[![CI](https://img.shields.io/badge/ci-passing-brightgreen.svg)]"
-        "(https://github.com/example/repo/actions)"
+def test_markdown_compression_guard_detects_overlong_line() -> None:
+    """Compression guard should flag excessive non-fenced line length."""
+    temp = check_bilingual_docs.REPO_ROOT / "tmp_bilingual_guard.md"
+    temp.write_text(
+        "x" * (check_bilingual_docs.MARKDOWN_LINE_HARD_LIMIT + 1),
+        encoding="utf-8",
     )
-    assert _is_long_url_or_generated_badge(line) is True
+
+    errors: list[str] = []
+    check_bilingual_docs._check_markdown_compression_guard(temp, errors)
+    temp.unlink()
+
+    assert errors
+    assert ("exceeds" in errors[0]) or ("likely compressed" in errors[0])
 
 
-def test_non_badge_url_is_not_auto_ignored() -> None:
-    """Normal URLs should not be ignored unless line length is excessive."""
-    line = "Reference: https://example.com/docs/ja/guide"
-    assert _is_long_url_or_generated_badge(line) is False
+def test_markdown_compression_guard_ignores_long_fenced_line() -> None:
+    """Compression guard should ignore long lines inside fenced code blocks."""
+    temp = check_bilingual_docs.REPO_ROOT / "tmp_bilingual_guard_fenced.md"
+    temp.write_text(
+        "```\n"
+        + "x" * (check_bilingual_docs.MARKDOWN_LINE_HARD_LIMIT + 5)
+        + "\n```\n",
+        encoding="utf-8",
+    )
+
+    errors: list[str] = []
+    check_bilingual_docs._check_markdown_compression_guard(temp, errors)
+    temp.unlink()
+
+    assert errors == []

@@ -19,6 +19,7 @@
 | Architecture: Authority evidence vs audit log | `docs/en/architecture/authority-evidence-vs-audit-log.md` | — | EN canonical only | 役割分離の明確化 |
 | Use case: AML/KYC regulated action path | `docs/en/use-cases/aml-kyc-regulated-action-path.md` | — | EN canonical only | 決定論fixture実行手順 |
 | Validation: Regulated action governance proof pack | `docs/en/validation/regulated-action-governance-proof-pack.md` | — | EN canonical only | レビュー証跡パック |
+| Validation: Regulated action governance quality gate | `docs/en/validation/regulated-action-governance-quality-gate.md` | — | EN canonical only | 品質ゲートと実行証跡 |
 | Validation: External audit readiness | `docs/en/validation/external-audit-readiness.md` | `docs/ja/validation/external-audit-readiness.md` | JA explanation / EN canonical | 外部監査準備性 |
 | Validation: Technical proof pack | `docs/en/validation/technical-proof-pack.md` | `docs/ja/validation/technical-proof-pack.md` | JA explanation / EN canonical | DD/監査前の提出導線 |
 | Validation: Third-party review readiness | `docs/en/validation/third-party-review-readiness.md` | `docs/ja/validation/third-party-review-readiness.md` | JA explanation / EN canonical | 省略版レビュー入口 |
