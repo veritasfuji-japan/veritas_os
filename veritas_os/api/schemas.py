@@ -22,6 +22,10 @@ from veritas_os.core.decision_semantics import (
     unique_preserve_order,
     validate_gate_business_combination,
 )
+from veritas_os.core.participation_semantics import (
+    PARTICIPATION_SIGNAL_FAMILY,
+    normalize_participation_signal_payload,
+)
 
 # =========================
 # Input Length Constraints (Security)
@@ -74,6 +78,21 @@ ActionabilityStatusLiteral = Literal[
     "actionable_after_bind",
     "blocked",
     "human_review_required",
+]
+InterpretationSpaceNarrowingLiteral = Literal[
+    "open",
+    "narrowing",
+    "constrained",
+    "closed",
+]
+CounterfactualAvailabilityLiteral = Literal["high", "medium", "low", "none"]
+InterventionHeadroomLiteral = Literal["high", "medium", "low", "none"]
+StructuralOpennessLiteral = Literal["open", "partially_open", "fragile", "closed"]
+ParticipationAdmissibilityLiteral = Literal[
+    "admissible",
+    "review_required",
+    "inadmissible",
+    "unknown",
 ]
 
 logger = logging.getLogger(__name__)
@@ -445,6 +464,47 @@ class BindSummary(BaseModel):
     refusal_basis: Optional[List[str]] = None
     escalation_basis: Optional[List[str]] = None
     irreversibility_boundary_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+
+
+class ParticipationSignal(BaseModel):
+    """Upstream participation admissibility signal (pre-bind, additive).
+
+    This schema models whether decision formation remains governable before the
+    system reaches commitment admissibility at the bind boundary.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    participation_signal_id: str = Field(
+        default_factory=lambda: uuid4().hex,
+        max_length=MAX_ID_LENGTH,
+    )
+    signal_family: Literal["participation_signal"] = PARTICIPATION_SIGNAL_FAMILY
+    interpretation_space_narrowing: InterpretationSpaceNarrowingLiteral = "open"
+    counterfactual_availability: CounterfactualAvailabilityLiteral = "medium"
+    intervention_headroom: InterventionHeadroomLiteral = "medium"
+    structural_openness: StructuralOpennessLiteral = "open"
+    participation_admissibility: ParticipationAdmissibilityLiteral = "unknown"
+    rationale: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    evidence_refs: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    observation_ts: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _normalize_levels(self) -> "ParticipationSignal":
+        normalized = normalize_participation_signal_payload(self.model_dump())
+        self.signal_family = PARTICIPATION_SIGNAL_FAMILY
+        self.interpretation_space_narrowing = normalized[
+            "interpretation_space_narrowing"
+        ]
+        self.counterfactual_availability = normalized[
+            "counterfactual_availability"
+        ]
+        self.intervention_headroom = normalized["intervention_headroom"]
+        self.structural_openness = normalized["structural_openness"]
+        self.participation_admissibility = normalized[
+            "participation_admissibility"
+        ]
+        return self
 
 
 # =========================
@@ -930,6 +990,14 @@ class DecideResponse(BaseModel):
     bind_summary: Optional[BindSummary] = Field(
         default=None,
         description="Compact bind summary object; additive companion to flat bind compatibility fields.",
+    )
+    participation_signal: Optional[ParticipationSignal] = Field(
+        default=None,
+        description=(
+            "Optional pre-bind participation admissibility signal. "
+            "This is additive to bind-time commitment admissibility fields and "
+            "does not replace bind artifacts."
+        ),
     )
     wat_integrity: Optional[Dict[str, Any]] = Field(
         default=None,

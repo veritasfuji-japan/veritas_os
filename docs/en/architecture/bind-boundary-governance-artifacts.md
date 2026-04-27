@@ -63,6 +63,17 @@ Not guaranteed by this document alone:
 This keeps decision artifacts primary while extending native VERITAS governance
 lineage toward bind-boundary control.
 
+## Participation vs commitment admissibility
+
+Bind artifacts govern **admissibility of commitment** at the bind boundary.
+The additive pre-bind `participation_signal` family governs
+**admissibility of participation** during decision formation.
+
+The two layers are intentionally separate and composable:
+
+- participation layer (upstream): governability signals before commit
+- bind layer (boundary): commitment adjudication before real-world effect
+
 
 ## Companion summary vocabulary (`bind_summary`)
 

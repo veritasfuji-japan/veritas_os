@@ -578,6 +578,26 @@ export interface BindOperatorSummary {
   operator_verbosity: "minimal" | "expanded";
 }
 
+/**
+ * Pre-bind participation admissibility signal.
+ *
+ * This is an additive upstream schema and does not replace bind-time
+ * commitment admissibility artifacts.
+ */
+export interface ParticipationSignal {
+  participation_signal_id: string;
+  signal_family: "participation_signal";
+  interpretation_space_narrowing: "open" | "narrowing" | "constrained" | "closed";
+  counterfactual_availability: "high" | "medium" | "low" | "none";
+  intervention_headroom: "high" | "medium" | "low" | "none";
+  structural_openness: "open" | "partially_open" | "fragile" | "closed";
+  participation_admissibility: "admissible" | "review_required" | "inadmissible" | "unknown";
+  rationale?: string | null;
+  evidence_refs?: string[];
+  observation_ts?: string | null;
+  [key: string]: unknown;
+}
+
 export interface DecideResponse extends DecideResponseMeta {
   /* ------------------------------------------------------------------ */
   /* Core decision contract fields                                      */
@@ -682,6 +702,8 @@ export interface DecideResponse extends DecideResponseMeta {
   bind_operator_summary?: BindOperatorSummary | null;
   /** Expanded bind drill-down data for permitted roles at expanded verbosity. */
   bind_operator_detail?: Record<string, unknown> | null;
+  /** Optional upstream participation admissibility signal (pre-bind). */
+  participation_signal?: ParticipationSignal | null;
 
   /**
    * Continuation runtime output (shadow/observe — phase-1).
@@ -757,7 +779,8 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     (value.wat_operator_summary === null || value.wat_operator_summary === undefined || isRecord(value.wat_operator_summary)) &&
     (value.wat_operator_detail === null || value.wat_operator_detail === undefined || isRecord(value.wat_operator_detail)) &&
     (value.bind_operator_summary === null || value.bind_operator_summary === undefined || isRecord(value.bind_operator_summary)) &&
-    (value.bind_operator_detail === null || value.bind_operator_detail === undefined || isRecord(value.bind_operator_detail))
+    (value.bind_operator_detail === null || value.bind_operator_detail === undefined || isRecord(value.bind_operator_detail)) &&
+    (value.participation_signal === null || value.participation_signal === undefined || isRecord(value.participation_signal))
   );
 }
 
