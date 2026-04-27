@@ -7,6 +7,7 @@ higher layers without wiring into runtime API routes.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, MutableSet, Sequence
@@ -14,6 +15,8 @@ from typing import Any, Mapping, MutableSet, Sequence
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 from veritas_os.security.signing import Signer
 from veritas_os.security.wat_token import compute_observable_digests, verify_wat_signature
+
+logger = logging.getLogger(__name__)
 
 ValidationStatus = str
 AdmissibilityState = str
@@ -398,6 +401,13 @@ def validate_local(
                     drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
                     status = "invalid"
                     failure_type = "partial_validation_confirmation_required"
+                    logger.warning(
+                        "WAT partial-validation confirmation failure "
+                        "status=%s failure_type=%s binding_key=%s",
+                        status,
+                        failure_type,
+                        binding_key,
+                    )
                 else:
                     drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
                     status = "partial"
@@ -439,6 +449,13 @@ def validate_local(
                 drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
                 status = "invalid"
                 failure_type = "partial_validation_confirmation_required"
+                logger.warning(
+                    "WAT partial-validation confirmation failure "
+                    "status=%s failure_type=%s binding_key=%s",
+                    status,
+                    failure_type,
+                    binding_key,
+                )
             else:
                 drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
                 status = "partial"

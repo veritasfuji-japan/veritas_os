@@ -146,9 +146,15 @@ def _normalize_retention_boundary_details(
         "request_id",
         "warning_context",
         "warning_correlation_id",
+        "validation_status",
+        "failure_type",
+        "psid_display",
     ):
         if key in raw:
             normalized_metadata[key] = raw.get(key)
+    event_lane_details = raw.get("event_lane_details")
+    if isinstance(event_lane_details, dict):
+        normalized_metadata["event_lane_details"] = dict(event_lane_details)
 
     pointers = raw.get("event_pointers")
     normalized_pointers: Dict[str, Any] = dict(pointers) if isinstance(pointers, dict) else {}
@@ -169,7 +175,7 @@ def _normalize_retention_boundary_details(
         except (TypeError, ValueError):
             return default_value
 
-    return {
+    normalized_retention: Dict[str, Any] = {
         "metadata": normalized_metadata,
         "event_pointers": normalized_pointers,
         "wat_metadata_retention_ttl_seconds": _coerce_ttl(
@@ -191,6 +197,16 @@ def _normalize_retention_boundary_details(
         ).strip(),
         "retention_enforced_at_write": bool(raw.get("retention_enforced_at_write", True)),
     }
+    assertion_failed_reasons: list[str] = []
+    if normalized_retention["retention_enforced_at_write"] and not normalized_retention["retention_policy_version"]:
+        assertion_failed_reasons.append("missing_retention_policy_version")
+    if raw.get("observable_digest") and not normalized_retention["observable_digest_ref"]:
+        assertion_failed_reasons.append("observable_digest_ref_missing")
+    normalized_retention["retention_boundary_assertion"] = {
+        "outcome": "passed" if not assertion_failed_reasons else "failed",
+        "failed_reasons": assertion_failed_reasons,
+    }
+    return normalized_retention
 
 
 def _persist_wat_event(
