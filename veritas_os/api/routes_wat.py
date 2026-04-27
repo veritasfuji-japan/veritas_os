@@ -28,6 +28,7 @@ class WatIssueShadowRequest(BaseModel):
 
     wat_id: Optional[str] = None
     psid: str = Field(min_length=1, max_length=500)
+    observable_digest_ref: Optional[str] = Field(default=None, max_length=500)
     observable_digest: Optional[str] = Field(default=None, max_length=500)
     ttl_seconds: int = Field(default=300, ge=1, le=86_400)
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -39,6 +40,7 @@ class WatValidateShadowRequest(BaseModel):
     wat_id: str = Field(min_length=1, max_length=500)
     outcome_event: str = Field(default="wat_validated")
     psid: Optional[str] = Field(default=None, max_length=500)
+    observable_digest_ref: Optional[str] = Field(default=None, max_length=500)
     observable_digest: Optional[str] = Field(default=None, max_length=500)
     details: Dict[str, Any] = Field(default_factory=dict)
 
@@ -75,6 +77,7 @@ def issue_shadow_wat(body: WatIssueShadowRequest, request: Request) -> Dict[str,
         actor=_actor_from_request(request),
         details={
             "psid": body.psid,
+            "observable_digest_ref": body.observable_digest_ref,
             "observable_digest": body.observable_digest,
             "ttl_seconds": body.ttl_seconds,
             "metadata": body.metadata,
@@ -96,6 +99,7 @@ def validate_shadow_wat(body: WatValidateShadowRequest, request: Request) -> Dic
             actor=_actor_from_request(request),
             details={
                 "psid": body.psid,
+                "observable_digest_ref": body.observable_digest_ref,
                 "observable_digest": body.observable_digest,
                 "mode": "shadow",
                 **body.details,
@@ -117,6 +121,7 @@ def validate_shadow_wat(body: WatValidateShadowRequest, request: Request) -> Dic
         status=status,
         details={
             "psid": body.psid,
+            "observable_digest_ref": body.observable_digest_ref,
             "observable_digest": body.observable_digest,
             "mode": "shadow",
             **body.details,

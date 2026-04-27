@@ -138,7 +138,10 @@ class WatConfig(BaseModel):
     observable_digest_ref: str = Field(
         default="separate_store://wat_observables",
         max_length=500,
-        description="Reference prefix for separate full-observable digest storage.",
+        description=(
+            "Reference/locator prefix for separate-store observable digest material; "
+            "never an inline digest payload."
+        ),
     )
     retention_policy_version: str = Field(
         default="wat_retention_v1",
