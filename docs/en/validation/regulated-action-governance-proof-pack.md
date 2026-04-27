@@ -82,6 +82,16 @@ For regulated-action paths, reviewers should inspect availability/values of:
 - `refusal_basis`
 - `escalation_basis`
 
+## Validation status (PR11 refresh)
+
+- Validation snapshot date: **2026-04-27 (UTC)**
+- Regulated action governance tests: `84 passed`
+- AML/KYC deterministic fixture runner tests: `2 passed`
+- Bilingual docs checker script: `PASS`
+- Frontend regulated-action compatibility tests: `12 passed`
+
+See the detailed command/result ledger in: `docs/en/validation/regulated-action-governance-quality-gate.md`.
+
 ## Quality checks
 
 Recommended checks for this proof pack:
@@ -89,6 +99,7 @@ Recommended checks for this proof pack:
 1. Run deterministic fixture runner and confirm expected outcomes.
 2. Run governance tests covering authority evidence, runtime predicates, commit boundary, and bind receipt enrichment.
 3. Run docs consistency checks available in repository quality tooling.
+4. Run frontend bind cockpit compatibility tests and build checks.
 
 ## Known limitations
 

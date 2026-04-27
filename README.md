@@ -76,7 +76,7 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 This opening reflects current implemented fact: bind-governed adjudication is already active on at least five operator-governed effect paths,
 while broader effect-path coverage remains roadmap direction.
 
-VERITAS OS includes a Regulated Action Governance Kernel that makes selected AI-agent action paths reviewable at the bind boundary. It uses action-class contracts, runtime authority validation, authority evidence, admissibility predicates, and irreversible commit-boundary checks to determine whether an execution intent may commit, block, escalate, or refuse.
+VERITAS OS includes a Regulated Action Governance Kernel for selected AI-agent action paths. It uses Action Class Contracts, Authority Evidence, Runtime Authority Validation, Admissibility Predicates, and Irreversible Commit Boundary checks to determine whether an execution intent should commit, block, escalate, or refuse at the bind boundary.
 
 This is not legal advice, regulatory approval, third-party certification, or a claim of compliance by itself.
 
@@ -101,6 +101,27 @@ This is not legal advice, regulatory approval, third-party certification, or a c
 - **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.
 - **Roadmap / future direction:** Bind-boundary policy surface is expected to expand to more effect paths and become a broader standardization framework for multi-path effect governance; this is direction, not a claim of full completion today.
 - **Roadmap:** Expanded enterprise integrations (for example deeper IdP/JWT scope models and broader distributed failure-mode validation).
+
+### Regulated action governance fact (implemented)
+
+- Action Class Contract
+- AML/KYC Customer Risk Escalation contract
+- Authority Evidence artifact
+- Runtime Authority Validation
+- Admissibility Predicate evaluation
+- Commit Boundary Evaluator
+- BindReceipt / BindSummary regulated-action fields
+- AML/KYC deterministic regulated action path
+- Mission Control / Bind Cockpit regulated action display
+- Proof Pack / Quality Gate docs
+
+### Regulated action governance roadmap (not yet implemented)
+
+- Real external authority source integration
+- Real bank / sanctions / compliance system integration
+- Third-party review
+- Broader regulated action-class coverage
+- Production customer workflow validation
 
 ### Technical Maturity Snapshot (internal)
 
@@ -148,6 +169,7 @@ This is not legal advice, regulatory approval, third-party certification, or a c
 - **Authority Evidence vs Audit Log**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)
 - **AML/KYC Regulated Action Path (Use Case)**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
 - **Regulated Action Governance Proof Pack**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
+- **Regulated Action Governance Quality Gate**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
 - **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening (canonical gate + evidence profile)**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
 - **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)

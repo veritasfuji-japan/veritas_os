@@ -18,6 +18,7 @@
 | External Audit | [External audit readiness (EN)](en/validation/external-audit-readiness.md) | [外部監査準備性 (JA)](ja/validation/external-audit-readiness.md) |
 | Technical Proof Pack | [Technical proof pack (EN)](en/validation/technical-proof-pack.md) | [技術証明パック (JA)](ja/validation/technical-proof-pack.md) |
 | Regulated Action Governance Proof Pack | [Regulated action governance proof pack (EN)](en/validation/regulated-action-governance-proof-pack.md) | — |
+| Regulated Action Governance Quality Gate | [Regulated action governance quality gate (EN)](en/validation/regulated-action-governance-quality-gate.md) | — |
 | Third-Party Review Readiness | [Third-party review readiness (EN)](en/validation/third-party-review-readiness.md) | [第三者レビュー準備性 (JA)](ja/validation/third-party-review-readiness.md) |
 | Backend Parity Coverage | [Backend parity coverage (EN)](en/validation/backend-parity-coverage.md) | [バックエンドパリティカバレッジ (JA)](ja/validation/backend-parity-coverage.md) |
 | Production Validation | [Production validation (EN)](en/validation/production-validation.md) | [本番検証 (JA)](ja/validation/production-validation.md) |
@@ -70,6 +71,7 @@
 | 外部監査 | [External audit readiness（英語正本）](en/validation/external-audit-readiness.md) | [外部監査準備性（日本語）](ja/validation/external-audit-readiness.md) |
 | 技術証明パック | [Technical proof pack（英語正本）](en/validation/technical-proof-pack.md) | [技術証明パック（日本語解説）](ja/validation/technical-proof-pack.md) |
 | Regulated Action Governance Proof Pack | [Regulated Action Governance Proof Pack（英語正本）](en/validation/regulated-action-governance-proof-pack.md) | — |
+| Regulated Action Governance Quality Gate | [Regulated Action Governance Quality Gate（英語正本）](en/validation/regulated-action-governance-quality-gate.md) | — |
 | 第三者レビュー準備性 | [Third-party review readiness（英語正本）](en/validation/third-party-review-readiness.md) | [第三者レビュー準備性（日本語解説）](ja/validation/third-party-review-readiness.md) |
 | バックエンドパリティカバレッジ | [Backend parity coverage（英語正本）](en/validation/backend-parity-coverage.md) | [バックエンドパリティカバレッジ（日本語解説）](ja/validation/backend-parity-coverage.md) |
 | 本番検証 | [Production validation（英語正本）](en/validation/production-validation.md) | [本番検証（日本語解説）](ja/validation/production-validation.md) |
