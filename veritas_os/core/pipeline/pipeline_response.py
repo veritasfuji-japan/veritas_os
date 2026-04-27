@@ -30,6 +30,9 @@ from veritas_os.core.decision_semantics import (
     unique_preserve_order,
     validate_gate_business_combination,
 )
+from veritas_os.core.participation_detection import (
+    evaluate_pre_bind_structural_detection,
+)
 from veritas_os.observability.metrics import record_required_evidence_telemetry
 
 logger = logging.getLogger(__name__)
@@ -825,6 +828,11 @@ def _build_response_layers(
 
     Layering is documentation-oriented: callers still receive one flat dict.
     """
+    participation_signal = ctx.response_extras.get("participation_signal")
+    pre_bind_detection: Dict[str, Any] = {}
+    if isinstance(participation_signal, dict):
+        pre_bind_detection = evaluate_pre_bind_structural_detection(participation_signal)
+
     core = {
         "ok": True,
         "error": None,
@@ -849,7 +857,13 @@ def _build_response_layers(
         "version": os.getenv("VERITAS_API_VERSION", "veritas-api 1.x"),
         "decision_status": ctx.decision_status,
         "rejection_reason": ctx.rejection_reason,
-        "participation_signal": ctx.response_extras.get("participation_signal"),
+        "participation_signal": participation_signal,
+        "pre_bind_detection_summary": pre_bind_detection.get(
+            "pre_bind_detection_summary"
+        ),
+        "pre_bind_detection_detail": pre_bind_detection.get(
+            "pre_bind_detection_detail"
+        ),
     }
     core.update(_derive_business_fields(ctx))
 

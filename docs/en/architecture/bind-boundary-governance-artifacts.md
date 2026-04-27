@@ -74,6 +74,11 @@ The two layers are intentionally separate and composable:
 - participation layer (upstream): governability signals before commit
 - bind layer (boundary): commitment adjudication before real-world effect
 
+Current upstream participation detection now includes an additive pre-bind
+structural state classifier (`informative|participatory|decision_shaping`) on
+`/v1/decide` via optional `pre_bind_detection_summary/detail` fields. This
+remains non-binding and does not alter bind-time fail-closed adjudication.
+
 
 ## Companion summary vocabulary (`bind_summary`)
 
