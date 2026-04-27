@@ -113,6 +113,55 @@ MARKDOWN_SHORT_FILE_MAX_LINES = 2
 MARKDOWN_SHORT_FILE_MIN_CHARS = 10_001
 
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
+REQUIRED_REGULATED_ACTION_TERMS_EN = (
+    "Regulated Action Governance Kernel",
+    "Action Class Contract",
+    "Authority Evidence",
+    "Runtime Authority Validation",
+    "Admissibility Predicate",
+    "Irreversible Commit Boundary",
+)
+
+REQUIRED_REGULATED_ACTION_TERMS_JA = (
+    "Regulated Action Governance Kernel",
+    "Action Class Contract",
+    "Authority Evidence",
+    "Runtime Authority Validation",
+    "Admissibility Predicate",
+    "Irreversible Commit Boundary",
+    "commit / block / escalate / refuse",
+    "AML/KYC customer risk escalation fixture",
+)
+
+REQUIRED_DISCLAIMER_TERMS_EN = (
+    "not legal advice",
+    "not regulatory approval",
+    "not third-party certification",
+)
+
+REQUIRED_DISCLAIMER_TERMS_JA = (
+    "法的助言ではありません",
+    "規制当局の承認",
+    "第三者認証",
+)
+
+REQUIRED_REGULATED_ACTION_LINKS = (
+    "docs/en/architecture/regulated-action-governance-kernel.md",
+    "docs/en/architecture/authority-evidence-vs-audit-log.md",
+    "docs/en/use-cases/aml-kyc-regulated-action-path.md",
+    "docs/en/validation/regulated-action-governance-proof-pack.md",
+    "docs/en/validation/regulated-action-governance-quality-gate.md",
+)
+
+FORBIDDEN_OVERCLAIM_PATTERNS = (
+    "implements OTANIS",
+    "implements ISDAIRE",
+    "implements ARETABA",
+    "regulatory approval",
+    "third-party certification",
+    "legal compliance guaranteed",
+)
 CODE_PATH_PATTERN = re.compile(
     r"(?<![\w.-])(?:README(?:_JP)?\.md|docs/(?:en|ja)/[^\s`\)\]\(]+\.md)"
 )
@@ -236,6 +285,74 @@ def check_readme_japanese_first_links(errors: list[str]) -> None:
         )
 
 
+
+
+def _missing_terms(markdown: str, terms: tuple[str, ...]) -> list[str]:
+    lowered = markdown.lower()
+    return [term for term in terms if term.lower() not in lowered]
+
+
+def check_readme_regulated_action_and_disclaimer(errors: list[str]) -> None:
+    """Validate core regulated-action framing and disclaimer presence in README pair."""
+    readme_en = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    readme_ja = README_JA.read_text(encoding="utf-8")
+
+    missing_en = _missing_terms(readme_en, REQUIRED_REGULATED_ACTION_TERMS_EN)
+    if missing_en:
+        errors.append(
+            "README.md: missing regulated-action terms: " + ", ".join(missing_en)
+        )
+
+    missing_ja = _missing_terms(readme_ja, REQUIRED_REGULATED_ACTION_TERMS_JA)
+    if missing_ja:
+        errors.append(
+            "README_JP.md: missing regulated-action terms: " + ", ".join(missing_ja)
+        )
+
+    if "Audit Log" not in readme_ja or "Authority Evidence" not in readme_ja:
+        errors.append(
+            "README_JP.md: Authority Evidence vs Audit Log distinction is missing."
+        )
+
+    missing_disclaimer_en = _missing_terms(readme_en, REQUIRED_DISCLAIMER_TERMS_EN)
+    if missing_disclaimer_en:
+        errors.append(
+            "README.md: missing disclaimer terms: "
+            + ", ".join(missing_disclaimer_en)
+        )
+
+    missing_disclaimer_ja = _missing_terms(readme_ja, REQUIRED_DISCLAIMER_TERMS_JA)
+    if missing_disclaimer_ja:
+        errors.append(
+            "README_JP.md: missing disclaimer terms: "
+            + ", ".join(missing_disclaimer_ja)
+        )
+
+    for path in REQUIRED_REGULATED_ACTION_LINKS:
+        if path not in readme_en:
+            errors.append(f"README.md: missing link {path}.")
+        if path not in readme_ja:
+            errors.append(f"README_JP.md: missing link {path}.")
+
+
+def check_forbidden_framework_overclaims(errors: list[str]) -> None:
+    """Reject external-framework implementation/certification overclaims in READMEs."""
+    readme_en = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    readme_ja = README_JA.read_text(encoding="utf-8")
+
+    for marker in FORBIDDEN_OVERCLAIM_PATTERNS:
+        lower = marker.lower()
+        if lower in readme_en.lower() and "not " + lower not in readme_en.lower():
+            errors.append(f"README.md: potential overclaim phrase detected: {marker}")
+
+    forbidden_ja_terms = ("OTANIS", "ISDAIRE", "ARETABA", "法令適合を保証")
+    for marker in forbidden_ja_terms:
+        if marker.lower() in readme_ja.lower() and "ではありません" not in readme_ja:
+            errors.append(
+                f"README_JP.md: potential overclaim phrase detected: {marker}"
+            )
+
+
 def check_local_markdown_links(errors: list[str]) -> None:
     """Validate local markdown links in designated documentation files."""
     for source_file in LOCAL_LINK_CHECK_TARGETS:
@@ -319,6 +436,8 @@ def run() -> list[str]:
     check_readme_japanese_first_links(errors)
     check_local_markdown_links(errors)
     check_documentation_map_paths(errors)
+    check_readme_regulated_action_and_disclaimer(errors)
+    check_forbidden_framework_overclaims(errors)
     check_extreme_markdown_compression(errors)
     return errors
 

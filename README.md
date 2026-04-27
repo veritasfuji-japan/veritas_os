@@ -76,9 +76,11 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 This opening reflects current implemented fact: bind-governed adjudication is already active on at least five operator-governed effect paths,
 while broader effect-path coverage remains roadmap direction.
 
-VERITAS OS includes a Regulated Action Governance Kernel for selected AI-agent action paths. It uses Action Class Contracts, Authority Evidence, Runtime Authority Validation, Admissibility Predicates, and Irreversible Commit Boundary checks to determine whether an execution intent should commit, block, escalate, or refuse at the bind boundary.
+VERITAS OS includes a Regulated Action Governance Kernel for selected AI-agent action paths. It uses Action Class Contracts, Authority Evidence, Runtime Authority Validation, Admissibility Predicates, and Irreversible Commit Boundary checks to determine whether an execution intent should commit, block, escalate, or refuse at the bind boundary, including an AML/KYC customer risk escalation fixture path.
 
-This is not legal advice, regulatory approval, third-party certification, or a claim of compliance by itself.
+Audit Log records what happened. Authority Evidence records why an action was authorized and admissible at bind time; audit log records alone do not authorize commit.
+
+This is not legal advice, not regulatory approval, not third-party certification, or a claim of compliance by itself.
 
 ## What VERITAS OS is / is not
 
