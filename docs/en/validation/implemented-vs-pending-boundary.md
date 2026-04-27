@@ -32,4 +32,5 @@
 - [Decision Semantics Contract](../architecture/decision-semantics.md)
 - [Required Evidence Taxonomy](../governance/required-evidence-taxonomy.md)
 - [External Audit Readiness](external-audit-readiness.md)
+- [WAT v1 Tightening Trade-offs](wat-v1-tightening-trade-offs.md)
 - [AML/KYC Pilot Checklist](../guides/aml-kyc-pilot-checklist.md)
