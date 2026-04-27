@@ -45,6 +45,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Regulated Action Governance Proof Pack](validation/regulated-action-governance-proof-pack.md)
 - [Regulated Action Governance Quality Gate](validation/regulated-action-governance-quality-gate.md)
 - [Regulated Action Governance External Review Handoff Pack](validation/external-review-handoff-regulated-action-governance.md)
+- [Regulated Action Governance External Reviewer Feedback Template](validation/external-reviewer-feedback-template-regulated-action-governance.md)
 - [Third-Party Review Readiness (compact index)](validation/third-party-review-readiness.md)
 
 ### Governance & Compliance

@@ -83,6 +83,7 @@ Audit Log records what happened. Authority Evidence records why an action was au
 This is not legal advice, not regulatory approval, not third-party certification, or a claim of compliance by itself.
 
 External reviewers can start from the Regulated Action Governance External Review Handoff Pack, which links the implemented AML/KYC action path, evidence artifacts, quality gate, and known limitations.
+External reviewers can use the Regulated Action Governance External Reviewer Feedback Template to record review scope, assessment criteria, findings, evidence requests, and recommendations.
 
 ## What VERITAS OS is / is not
 
@@ -175,6 +176,7 @@ External reviewers can start from the Regulated Action Governance External Revie
 - **Regulated Action Governance Proof Pack**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
 - **Regulated Action Governance Quality Gate**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
 - **Regulated Action Governance External Review Handoff Pack**: [`docs/en/validation/external-review-handoff-regulated-action-governance.md`](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+- **Regulated Action Governance External Reviewer Feedback Template**: [`docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md`](docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md)
 - **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening (canonical gate + evidence profile)**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
 - **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
