@@ -52,6 +52,10 @@ export interface BindCockpitReceipt {
   refusal_basis?: string[];
   escalation_basis?: string[];
   irreversibility_boundary_id?: string;
+  pre_bind_detection_summary?: Record<string, unknown>;
+  pre_bind_detection_detail?: Record<string, unknown>;
+  pre_bind_preservation_summary?: Record<string, unknown>;
+  pre_bind_preservation_detail?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -81,6 +85,10 @@ export interface BindSummaryPayload {
   refusal_basis?: string[];
   escalation_basis?: string[];
   irreversibility_boundary_id?: string;
+  pre_bind_detection_summary?: Record<string, unknown>;
+  pre_bind_detection_detail?: Record<string, unknown>;
+  pre_bind_preservation_summary?: Record<string, unknown>;
+  pre_bind_preservation_detail?: Record<string, unknown>;
 }
 
 export interface CanonicalBindReceipt {
@@ -165,6 +173,15 @@ const TARGET_PATH_TYPE_MAP: Record<string, CanonicalTargetPathType> = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function pickRecord(...values: unknown[]): Record<string, unknown> | undefined {
+  for (const value of values) {
+    if (isRecord(value)) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 export function normalizeBindOutcome(outcome: unknown): CanonicalBindOutcome | "UNKNOWN" {
@@ -459,5 +476,21 @@ export function parseBindReceiptDetailPayload(value: unknown): BindCockpitReceip
       payload.irreversibility_boundary_id,
       bindSummary?.irreversibility_boundary_id,
     ) ?? undefined,
+    pre_bind_detection_summary: pickRecord(
+      payload.pre_bind_detection_summary,
+      bindSummary?.pre_bind_detection_summary,
+    ),
+    pre_bind_detection_detail: pickRecord(
+      payload.pre_bind_detection_detail,
+      bindSummary?.pre_bind_detection_detail,
+    ),
+    pre_bind_preservation_summary: pickRecord(
+      payload.pre_bind_preservation_summary,
+      bindSummary?.pre_bind_preservation_summary,
+    ),
+    pre_bind_preservation_detail: pickRecord(
+      payload.pre_bind_preservation_detail,
+      bindSummary?.pre_bind_preservation_detail,
+    ),
   } as BindCockpitReceipt;
 }

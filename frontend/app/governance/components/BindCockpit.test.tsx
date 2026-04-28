@@ -120,6 +120,19 @@ const DETAIL_PAYLOAD = {
     refusal_basis: ["authority_indeterminate"],
     escalation_basis: ["manual_review_required"],
     irreversibility_boundary_id: "ib-9",
+    pre_bind_detection_summary: {
+      detection_family: "pre_bind_structural_detection",
+      participation_state: "decision_shaping",
+      concise_rationale: "Interpretation space is narrowing.",
+      primary_contributing_signals: ["interpretation_space_narrowing"],
+    },
+    pre_bind_preservation_summary: {
+      preservation_family: "pre_bind_preservation",
+      preservation_state: "degrading",
+      intervention_viability: "minimal",
+      concise_rationale: "Alternatives are materially constrained.",
+      main_contributing_conditions: ["structural_openness"],
+    },
   },
 };
 
@@ -259,6 +272,17 @@ describe("BindCockpit", () => {
     });
 
     expect(await screen.findByText("Receipt Drill-down")).toBeInTheDocument();
+    expect(screen.getByText("Pre-bind governance surface")).toBeInTheDocument();
+    expect(screen.getByText("Bind-time governance surface")).toBeInTheDocument();
+    expect(screen.getByText(/participation_state:/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/decision_shaping/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/preservation_state:/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/degrading/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/intervention_viability:/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/minimal/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/1. participation \(pre_bind_detection_summary\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/2. preservation \(pre_bind_preservation_summary\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/3. bind gate \(bind_outcome\)/i)).toBeInTheDocument();
     expect(screen.getByText("Action Contract")).toBeInTheDocument();
     expect(screen.getByText("Authority Evidence")).toBeInTheDocument();
     expect(screen.getByText("Runtime Authority")).toBeInTheDocument();
@@ -274,6 +298,31 @@ describe("BindCockpit", () => {
     expect(screen.getByRole("link", { name: "related execution intent" })).toHaveAttribute("href", "/audit?cross=exec-2");
     expect(screen.getByRole("link", { name: "related bind receipt" })).toHaveAttribute("href", "/audit?bind_receipt_id=br-blocked");
     expect(screen.getByRole("link", { name: "relevant governance/compliance surface" })).toHaveAttribute("href", "/system");
+  });
+
+  it("handles absent pre-bind governance summaries without breaking receipt drill-down", async () => {
+    const detailWithoutPreBind = {
+      ...DETAIL_PAYLOAD,
+      bind_receipt: {
+        ...DETAIL_PAYLOAD.bind_receipt,
+        pre_bind_detection_summary: undefined,
+        pre_bind_preservation_summary: undefined,
+      },
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => LIST_PAYLOAD })
+      .mockResolvedValueOnce({ ok: true, json: async () => detailWithoutPreBind })
+      .mockResolvedValueOnce({ ok: true, json: async () => detailWithoutPreBind });
+
+    render(<BindCockpit />);
+    await screen.findAllByText("br-blocked");
+    fireEvent.click((await screen.findByText("decision-2")).closest("tr") as HTMLElement);
+
+    expect(await screen.findByText("Pre-bind governance surface")).toBeInTheDocument();
+    expect(screen.getByText(/pre_bind_detection_summary \/ pre_bind_preservation_summary are absent/i)).toBeInTheDocument();
+    expect(screen.getByText("Bind-time governance surface")).toBeInTheDocument();
+    expect(screen.getByText("Action Contract")).toBeInTheDocument();
   });
 
   it("surfaces blocked/escalated queue with direct reason inspection action", async () => {
