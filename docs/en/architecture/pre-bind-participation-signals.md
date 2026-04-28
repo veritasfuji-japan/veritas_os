@@ -44,6 +44,9 @@ The signal family name is fixed as `participation_signal`.
 - `DecideResponse.pre_bind_detection_summary` and
   `DecideResponse.pre_bind_detection_detail` are optional additive operator
   surfaces derived from structural participation signals.
+- `DecideResponse.pre_bind_preservation_summary` and
+  `DecideResponse.pre_bind_preservation_detail` are optional additive operator
+  surfaces describing whether meaningful intervention is still realistic.
 - Existing bind family contracts (`ExecutionIntent`, `BindReceipt`,
   `BindSummary`, flat bind compatibility fields) remain backward-compatible.
 - Runtime behavior is unchanged unless producers explicitly attach a
@@ -71,12 +74,31 @@ frequency/length). The v1 evaluator consumes:
 This layer reports threshold crossing only. It does **not** trigger a
 preservation policy action in this PR.
 
+## Pre-bind preservation semantics (v1, additive)
+
+Preservation is a separate layer from detection:
+
+- detection: **was** a structural threshold crossed?
+- preservation: **when observed now**, is meaningful intervention still viable?
+
+The preservation state family is:
+
+- `open`: intervention/correction/counterfactual recovery remain viable.
+- `degrading`: intervention remains possible but structural openness is eroding.
+- `collapsed`: meaningful intervention is no longer realistically available
+  even if bind has not happened yet.
+
+The minimal preservation evaluator uses structural openness plus intervention
+viability and counterfactual recovery possibility. It does not replace
+bind-time commitment admissibility and does not auto-enforce heavy policy
+actions in this PR.
+
 ## Why this shape
 
 The schema is intentionally minimal but first-class so future PRs can add:
 
 - pre-bind detection scoring
-- preservation safeguards (next layer, separate from detection)
+- preservation safeguards (without collapsing into detection semantics)
 - operator-facing detection timelines
 
 without redefining public vocabulary or breaking existing bind contracts.

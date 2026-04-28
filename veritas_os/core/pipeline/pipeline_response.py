@@ -33,6 +33,7 @@ from veritas_os.core.decision_semantics import (
 from veritas_os.core.participation_detection import (
     evaluate_pre_bind_structural_detection,
 )
+from veritas_os.core.preservation_evaluator import evaluate_pre_bind_preservation
 from veritas_os.observability.metrics import record_required_evidence_telemetry
 
 logger = logging.getLogger(__name__)
@@ -830,8 +831,15 @@ def _build_response_layers(
     """
     participation_signal = ctx.response_extras.get("participation_signal")
     pre_bind_detection: Dict[str, Any] = {}
+    pre_bind_preservation: Dict[str, Any] = {}
     if isinstance(participation_signal, dict):
         pre_bind_detection = evaluate_pre_bind_structural_detection(participation_signal)
+        pre_bind_preservation = evaluate_pre_bind_preservation(
+            participation_signal,
+            pre_bind_detection_summary=pre_bind_detection.get(
+                "pre_bind_detection_summary"
+            ),
+        )
 
     core = {
         "ok": True,
@@ -863,6 +871,12 @@ def _build_response_layers(
         ),
         "pre_bind_detection_detail": pre_bind_detection.get(
             "pre_bind_detection_detail"
+        ),
+        "pre_bind_preservation_summary": pre_bind_preservation.get(
+            "pre_bind_preservation_summary"
+        ),
+        "pre_bind_preservation_detail": pre_bind_preservation.get(
+            "pre_bind_preservation_detail"
         ),
     }
     core.update(_derive_business_fields(ctx))
