@@ -94,6 +94,11 @@ ParticipationAdmissibilityLiteral = Literal[
     "inadmissible",
     "unknown",
 ]
+PreBindParticipationStateLiteral = Literal[
+    "informative",
+    "participatory",
+    "decision_shaping",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -505,6 +510,38 @@ class ParticipationSignal(BaseModel):
             "participation_admissibility"
         ]
         return self
+
+
+class PreBindDetectionSummary(BaseModel):
+    """Compact operator-facing summary for pre-bind structural detection."""
+
+    model_config = ConfigDict(extra="allow")
+
+    detection_family: Literal["pre_bind_structural_detection"] = (
+        "pre_bind_structural_detection"
+    )
+    detection_version: str = Field(default="v1", max_length=MAX_TITLE_LENGTH)
+    participation_state: PreBindParticipationStateLiteral = "informative"
+    primary_contributing_signals: List[str] = Field(
+        default_factory=list,
+        max_length=MAX_LIST_ITEMS,
+    )
+    concise_rationale: Optional[str] = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+    )
+
+
+class PreBindDetectionDetail(BaseModel):
+    """Expanded normalized structural signal detail for pre-bind detection."""
+
+    model_config = ConfigDict(extra="allow")
+
+    normalized_signal_levels: Dict[str, str] = Field(default_factory=dict)
+    signal_severity: Dict[str, int] = Field(default_factory=dict)
+    aggregate_index: float = Field(default=0.0, ge=0.0, le=1.0)
+    high_signal_count: int = Field(default=0, ge=0)
+    moderate_signal_count: int = Field(default=0, ge=0)
 
 
 # =========================
@@ -997,6 +1034,22 @@ class DecideResponse(BaseModel):
             "Optional pre-bind participation admissibility signal. "
             "This is additive to bind-time commitment admissibility fields and "
             "does not replace bind artifacts."
+        ),
+    )
+    pre_bind_detection_summary: Optional[PreBindDetectionSummary] = Field(
+        default=None,
+        description=(
+            "Optional additive pre-bind structural detection summary. "
+            "This is upstream participation-state detection and not a bind "
+            "outcome."
+        ),
+    )
+    pre_bind_detection_detail: Optional[PreBindDetectionDetail] = Field(
+        default=None,
+        description=(
+            "Optional additive pre-bind structural detection detail. "
+            "Contains normalized structural signal levels and aggregate "
+            "threshold telemetry for operator interpretation."
         ),
     )
     wat_integrity: Optional[Dict[str, Any]] = Field(

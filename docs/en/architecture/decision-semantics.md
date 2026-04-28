@@ -168,3 +168,19 @@ Freeze policy:
   `proceed|hold|block|human_review_required`.
 - Legacy aliases remain accepted only for migration compatibility.
 - `allow` MUST NOT be reintroduced as public canonical label.
+
+## H. Relationship to pre-bind participation detection (additive)
+
+Pre-bind participation detection is a separate upstream classifier and does not
+replace decision semantics or bind semantics:
+
+- Detection states: `informative|participatory|decision_shaping`
+- Source signals: participation structural signal family
+  (`interpretation_space_narrowing`, `counterfactual_availability`,
+  `intervention_headroom`, `structural_openness`)
+- Response fields: optional
+  `pre_bind_detection_summary` / `pre_bind_detection_detail`
+
+This classifier expresses whether decision formation appears structurally
+informative vs participatory before commitment. It does **not** imply commit
+permission and does not alter bind-time admissibility or fail-closed gating.

@@ -41,17 +41,42 @@ The signal family name is fixed as `participation_signal`.
 ## Current integration scope
 
 - `DecideResponse.participation_signal` is optional and additive.
+- `DecideResponse.pre_bind_detection_summary` and
+  `DecideResponse.pre_bind_detection_detail` are optional additive operator
+  surfaces derived from structural participation signals.
 - Existing bind family contracts (`ExecutionIntent`, `BindReceipt`,
   `BindSummary`, flat bind compatibility fields) remain backward-compatible.
 - Runtime behavior is unchanged unless producers explicitly attach a
   `participation_signal` payload.
+
+## Pre-bind structural detection semantics (v1)
+
+The repository now fixes a minimal structural classifier upstream of bind:
+
+- `informative`: system behavior remains primarily informational and does not
+  materially narrow interpretation or option space.
+- `participatory`: structural participation impact is emerging through framing,
+  reinforcement, or alignment while alternatives remain open.
+- `decision_shaping`: structural signals indicate interpretation/option space is
+  materially narrowed and counterfactual availability is reduced.
+
+Detection is based on the participation signal family only (not interaction
+frequency/length). The v1 evaluator consumes:
+
+- `interpretation_space_narrowing`
+- `counterfactual_availability`
+- `intervention_headroom`
+- `structural_openness`
+
+This layer reports threshold crossing only. It does **not** trigger a
+preservation policy action in this PR.
 
 ## Why this shape
 
 The schema is intentionally minimal but first-class so future PRs can add:
 
 - pre-bind detection scoring
-- preservation safeguards
+- preservation safeguards (next layer, separate from detection)
 - operator-facing detection timelines
 
 without redefining public vocabulary or breaking existing bind contracts.
