@@ -79,6 +79,11 @@ structural state classifier (`informative|participatory|decision_shaping`) on
 `/v1/decide` via optional `pre_bind_detection_summary/detail` fields. This
 remains non-binding and does not alter bind-time fail-closed adjudication.
 
+An adjacent additive preservation layer now exposes
+`pre_bind_preservation_summary/detail` (`open|degrading|collapsed`) to indicate
+whether meaningful intervention remains viable at observation time. This is not
+a bind outcome and not a rename of pre-bind detection.
+
 
 ## Companion summary vocabulary (`bind_summary`)
 

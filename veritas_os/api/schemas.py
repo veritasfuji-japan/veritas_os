@@ -26,6 +26,12 @@ from veritas_os.core.participation_semantics import (
     PARTICIPATION_SIGNAL_FAMILY,
     normalize_participation_signal_payload,
 )
+from veritas_os.core.preservation_semantics import (
+    OPENNESS_FLOOR_STATUS_VALUES,
+    PRESERVATION_FAMILY,
+    PRESERVATION_STATE_VALUES,
+    PRESERVATION_VERSION,
+)
 
 # =========================
 # Input Length Constraints (Security)
@@ -99,6 +105,9 @@ PreBindParticipationStateLiteral = Literal[
     "participatory",
     "decision_shaping",
 ]
+PreservationStateLiteral = Literal["open", "degrading", "collapsed"]
+InterventionViabilityLevelLiteral = Literal["high", "partial", "minimal", "none"]
+OpennessFloorStatusLiteral = Literal["met", "at_risk", "breached"]
 
 logger = logging.getLogger(__name__)
 
@@ -542,6 +551,75 @@ class PreBindDetectionDetail(BaseModel):
     aggregate_index: float = Field(default=0.0, ge=0.0, le=1.0)
     high_signal_count: int = Field(default=0, ge=0)
     moderate_signal_count: int = Field(default=0, ge=0)
+
+
+class InterventionViability(BaseModel):
+    """Intervention viability surface for pre-bind preservation."""
+
+    model_config = ConfigDict(extra="allow")
+
+    level: InterventionViabilityLevelLiteral = "partial"
+    meaningful_intervention_possible: bool = True
+
+
+class OpennessFloor(BaseModel):
+    """Structural openness floor state for pre-bind preservation."""
+
+    model_config = ConfigDict(extra="allow")
+
+    status: OpennessFloorStatusLiteral = "met"
+    structural_openness_level: StructuralOpennessLiteral = "open"
+
+
+class PreBindPreservationSummary(BaseModel):
+    """Compact operator-facing summary for pre-bind preservation state."""
+
+    model_config = ConfigDict(extra="allow")
+
+    preservation_family: Literal["pre_bind_preservation"] = PRESERVATION_FAMILY
+    preservation_version: str = Field(default=PRESERVATION_VERSION, max_length=MAX_TITLE_LENGTH)
+    preservation_state: PreservationStateLiteral = "open"
+    preservation_outcome: PreservationStateLiteral = "open"
+    intervention_viability: InterventionViabilityLevelLiteral = "partial"
+    openness_floor: OpennessFloorStatusLiteral = "met"
+    counterfactual_recovery_possible: bool = True
+    concise_rationale: Optional[str] = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+    )
+    main_contributing_conditions: List[str] = Field(
+        default_factory=list,
+        max_length=MAX_LIST_ITEMS,
+    )
+
+    @model_validator(mode="after")
+    def _normalize_state_fields(self) -> "PreBindPreservationSummary":
+        if self.preservation_state not in PRESERVATION_STATE_VALUES:
+            self.preservation_state = "open"
+        if self.preservation_outcome not in PRESERVATION_STATE_VALUES:
+            self.preservation_outcome = self.preservation_state
+        if self.openness_floor not in OPENNESS_FLOOR_STATUS_VALUES:
+            self.openness_floor = "met"
+        self.preservation_family = PRESERVATION_FAMILY
+        return self
+
+
+class PreBindPreservationDetail(BaseModel):
+    """Expanded normalized detail for pre-bind preservation diagnostics."""
+
+    model_config = ConfigDict(extra="allow")
+
+    normalized_signal_levels: Dict[str, str] = Field(default_factory=dict)
+    intervention_viability: InterventionViability = Field(
+        default_factory=InterventionViability
+    )
+    openness_floor: OpennessFloor = Field(default_factory=OpennessFloor)
+    counterfactual_recovery_possible: bool = True
+    detection_context: Dict[str, str] = Field(default_factory=dict)
+    main_contributing_conditions: List[str] = Field(
+        default_factory=list,
+        max_length=MAX_LIST_ITEMS,
+    )
 
 
 # =========================
@@ -1050,6 +1128,22 @@ class DecideResponse(BaseModel):
             "Optional additive pre-bind structural detection detail. "
             "Contains normalized structural signal levels and aggregate "
             "threshold telemetry for operator interpretation."
+        ),
+    )
+    pre_bind_preservation_summary: Optional[PreBindPreservationSummary] = Field(
+        default=None,
+        description=(
+            "Optional additive pre-bind preservation summary. "
+            "This reports whether meaningful intervention/correction/recovery "
+            "is still realistically available and is distinct from detection."
+        ),
+    )
+    pre_bind_preservation_detail: Optional[PreBindPreservationDetail] = Field(
+        default=None,
+        description=(
+            "Optional additive pre-bind preservation detail. "
+            "Contains intervention viability, openness floor status, and "
+            "counterfactual recovery context for operator review."
         ),
     )
     wat_integrity: Optional[Dict[str, Any]] = Field(
