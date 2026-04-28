@@ -30,10 +30,10 @@ from veritas_os.core.decision_semantics import (
     unique_preserve_order,
     validate_gate_business_combination,
 )
-from veritas_os.core.participation_detection import (
-    evaluate_pre_bind_structural_detection,
+from veritas_os.core.pipeline.governance_layers import (
+    assemble_governance_public_fields,
+    evaluate_governance_layers,
 )
-from veritas_os.core.preservation_evaluator import evaluate_pre_bind_preservation
 from veritas_os.observability.metrics import record_required_evidence_telemetry
 
 logger = logging.getLogger(__name__)
@@ -829,17 +829,9 @@ def _build_response_layers(
 
     Layering is documentation-oriented: callers still receive one flat dict.
     """
-    participation_signal = ctx.response_extras.get("participation_signal")
-    pre_bind_detection: Dict[str, Any] = {}
-    pre_bind_preservation: Dict[str, Any] = {}
-    if isinstance(participation_signal, dict):
-        pre_bind_detection = evaluate_pre_bind_structural_detection(participation_signal)
-        pre_bind_preservation = evaluate_pre_bind_preservation(
-            participation_signal,
-            pre_bind_detection_summary=pre_bind_detection.get(
-                "pre_bind_detection_summary"
-            ),
-        )
+    governance_snapshot = evaluate_governance_layers(
+        participation_signal=ctx.response_extras.get("participation_signal")
+    )
 
     core = {
         "ok": True,
@@ -865,20 +857,8 @@ def _build_response_layers(
         "version": os.getenv("VERITAS_API_VERSION", "veritas-api 1.x"),
         "decision_status": ctx.decision_status,
         "rejection_reason": ctx.rejection_reason,
-        "participation_signal": participation_signal,
-        "pre_bind_detection_summary": pre_bind_detection.get(
-            "pre_bind_detection_summary"
-        ),
-        "pre_bind_detection_detail": pre_bind_detection.get(
-            "pre_bind_detection_detail"
-        ),
-        "pre_bind_preservation_summary": pre_bind_preservation.get(
-            "pre_bind_preservation_summary"
-        ),
-        "pre_bind_preservation_detail": pre_bind_preservation.get(
-            "pre_bind_preservation_detail"
-        ),
     }
+    core.update(assemble_governance_public_fields(governance_snapshot))
     core.update(_derive_business_fields(ctx))
 
     audit_debug_internal = {

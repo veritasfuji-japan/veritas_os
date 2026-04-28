@@ -102,3 +102,23 @@ The schema is intentionally minimal but first-class so future PRs can add:
 - operator-facing detection timelines
 
 without redefining public vocabulary or breaking existing bind contracts.
+
+## Internal composition boundaries (non-breaking refactor)
+
+To keep future governance layers reviewable without changing public contracts,
+`/v1/decide` now follows a contract-centered split:
+
+- **Route orchestration:** `veritas_os.api.routes_decide`
+  - receives request, delegates orchestration, returns response.
+- **Operator/public assembly:** `veritas_os.api.decide_operator_assembly`
+  - assembles bind/WAT operator summary/detail and canonical drift vocabulary.
+- **Pre-bind evaluators:**
+  - detection: `veritas_os.core.participation_detection`
+  - preservation: `veritas_os.core.preservation_evaluator`
+- **Evaluation-to-assembly adapter:** `veritas_os.core.pipeline.governance_layers`
+  - computes typed governance snapshot and maps it into additive
+    `DecideResponse` fields.
+
+This split keeps `decision`, `execution_intent`, `bind_receipt`, and
+`bind_summary` contracts stable while making additional governance layers easier
+to add without route bloat.
