@@ -138,6 +138,32 @@ function countPredicates(items: unknown): number {
   return items.filter((item) => typeof item === "object" && item !== null).length;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function formatStringList(items: unknown): string {
+  if (!Array.isArray(items)) {
+    return "-";
+  }
+  const values = items.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return values.length > 0 ? values.join(", ") : "-";
+}
+
+function pickStringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : "-";
+}
+
+function hasPreBindSurface(detail: CanonicalBindReceipt): boolean {
+  return (
+    isRecord(detail.raw.pre_bind_detection_summary)
+    || isRecord(detail.raw.pre_bind_preservation_summary)
+    || isRecord(detail.raw.pre_bind_detection_detail)
+    || isRecord(detail.raw.pre_bind_preservation_detail)
+  );
+}
+
 /**
  * Bind Cockpit: operator-facing cross-path surface for bind lifecycle triage.
  */
@@ -495,6 +521,57 @@ export function BindCockpit(): JSX.Element {
                 </dd>
               </dl>
 
+              <div className="rounded border border-border/70 bg-surface/20 px-2 py-2">
+                <p className="font-semibold">Pre-bind governance surface</p>
+                <p className="text-muted-foreground">
+                  Upstream state before bind gate. Keep separate from bind_outcome.
+                </p>
+                {hasPreBindSurface(selectedDetail) ? (
+                  <div className="mt-2 space-y-2">
+                    <ol className="space-y-2">
+                      <li className="rounded border border-border/60 bg-background/70 px-2 py-2">
+                        <p className="font-semibold">1. participation (pre_bind_detection_summary)</p>
+                        {isRecord(selectedDetail.raw.pre_bind_detection_summary) ? (
+                          <div className="mt-1 space-y-1">
+                            <p>participation_state: <span className="font-mono">{pickStringField(selectedDetail.raw.pre_bind_detection_summary, "participation_state")}</span></p>
+                            <p>concise_rationale: <span>{pickStringField(selectedDetail.raw.pre_bind_detection_summary, "concise_rationale")}</span></p>
+                            <p>primary_contributing_signals: <span>{formatStringList(selectedDetail.raw.pre_bind_detection_summary.primary_contributing_signals)}</span></p>
+                          </div>
+                        ) : (
+                          <p className="text-muted-foreground">pre_bind_detection_summary is not present.</p>
+                        )}
+                      </li>
+                      <li className="rounded border border-border/60 bg-background/70 px-2 py-2">
+                        <p className="font-semibold">2. preservation (pre_bind_preservation_summary)</p>
+                        {isRecord(selectedDetail.raw.pre_bind_preservation_summary) ? (
+                          <div className="mt-1 space-y-1">
+                            <p>preservation_state: <span className="font-mono">{pickStringField(selectedDetail.raw.pre_bind_preservation_summary, "preservation_state")}</span></p>
+                            <p>intervention_viability: <span className="font-mono">{pickStringField(selectedDetail.raw.pre_bind_preservation_summary, "intervention_viability")}</span></p>
+                            <p>concise_rationale: <span>{pickStringField(selectedDetail.raw.pre_bind_preservation_summary, "concise_rationale")}</span></p>
+                            <p>main_contributing_conditions: <span>{formatStringList(selectedDetail.raw.pre_bind_preservation_summary.main_contributing_conditions)}</span></p>
+                          </div>
+                        ) : (
+                          <p className="text-muted-foreground">pre_bind_preservation_summary is not present.</p>
+                        )}
+                      </li>
+                      <li className="rounded border border-border/60 bg-background/70 px-2 py-2">
+                        <p className="font-semibold">3. bind gate (bind_outcome)</p>
+                        <p>bind_outcome: <span className="font-mono">{selectedDetail.outcome}</span></p>
+                        <p>bind_reason_code: <span className="font-mono">{selectedDetail.reasonCode}</span></p>
+                      </li>
+                    </ol>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-muted-foreground">
+                    pre_bind_detection_summary / pre_bind_preservation_summary are absent in this bind receipt payload.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
+                <p className="font-semibold">Bind-time governance surface</p>
+                <p className="text-muted-foreground">Bind checks and artifacts after gate adjudication.</p>
+              </div>
               <div className="rounded border border-border/70 bg-surface/40 px-2 py-2">
                 <p className="font-semibold">Action Contract</p>
                 <p className="font-mono">{String(selectedDetail.raw.action_contract_id ?? "-")}</p>

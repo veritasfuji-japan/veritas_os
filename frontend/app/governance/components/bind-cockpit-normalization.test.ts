@@ -44,6 +44,17 @@ describe("bind-cockpit-normalization", () => {
         bind_failure_reason: "policy missing",
         execution_intent_id: "ei-2",
         target_path_type: "governance_policy_update",
+        pre_bind_detection_summary: {
+          participation_state: "participatory",
+          concise_rationale: "Interpretation space is still open.",
+          primary_contributing_signals: ["interpretation_space_narrowing"],
+        },
+        pre_bind_preservation_summary: {
+          preservation_state: "open",
+          intervention_viability: "high",
+          concise_rationale: "Meaningful intervention remains possible.",
+          main_contributing_conditions: ["structural_openness"],
+        },
       },
     });
     expect(parsed?.bind_receipt_id).toBe("br-2");
@@ -51,6 +62,8 @@ describe("bind-cockpit-normalization", () => {
     expect(parsed?.bind_reason_code).toBe("POLICY_MISSING");
     expect(parsed?.execution_intent_id).toBe("ei-2");
     expect(parsed?.target_path_type).toBe("governance_policy_update");
+    expect((parsed?.pre_bind_detection_summary as Record<string, unknown> | undefined)?.participation_state).toBe("participatory");
+    expect((parsed?.pre_bind_preservation_summary as Record<string, unknown> | undefined)?.intervention_viability).toBe("high");
   });
 
   it("normalizes path, checks, and operator step", () => {

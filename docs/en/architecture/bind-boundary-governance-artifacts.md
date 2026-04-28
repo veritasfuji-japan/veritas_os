@@ -127,6 +127,21 @@ bind-phase as a lower-layer execution-governance outcome:
 This distinction prevents operators from misreading decision-phase approval as
 bind-phase commitment.
 
+Mission Control Bind Cockpit also provides an additive **pre-bind governance
+surface** in the receipt drill-down when optional payload fields are present:
+
+- `pre_bind_detection_summary.participation_state`
+- `pre_bind_detection_summary.concise_rationale`
+- `pre_bind_detection_summary.primary_contributing_signals`
+- `pre_bind_preservation_summary.preservation_state`
+- `pre_bind_preservation_summary.intervention_viability`
+- `pre_bind_preservation_summary.concise_rationale`
+- `pre_bind_preservation_summary.main_contributing_conditions`
+
+The UI renders these as an ordered pre-bind flow (`participation` →
+`preservation` → `bind gate`) and keeps them visually separate from
+`bind_outcome`/`bind_reason_code` to avoid vocabulary mixing.
+
 ## Minimal API example
 
 `GET /v1/governance/decisions/export?limit=1`
