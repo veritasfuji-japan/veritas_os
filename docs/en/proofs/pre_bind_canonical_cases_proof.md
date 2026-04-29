@@ -73,3 +73,5 @@ pre-bind state combinations.
 - Fixtures: `veritas_os/tests/fixtures/pre_bind/`
 - Goldens: `veritas_os/tests/golden/pre_bind/`
 - Canonical tests: `veritas_os/tests/test_pre_bind_canonical_golden.py`
+- Vocabulary consistency + rationale-linked assertions: `test_canonical_case_naming_and_vocabulary_consistency` and
+  `test_canonical_pre_bind_signals_and_rationales_are_explanatory` in the same test module.
