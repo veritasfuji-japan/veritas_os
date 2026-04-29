@@ -1,0 +1,14 @@
+{
+  "case_id": "pre_bind_case_participatory_degrading",
+  "description": "Canonical pre-bind case B: participatory participation with degrading preservation.",
+  "participation_signal": {
+    "interpretation_space_narrowing": "narrowing",
+    "counterfactual_availability": "low",
+    "intervention_headroom": "medium",
+    "structural_openness": "fragile"
+  },
+  "expected": {
+    "participation_state": "participatory",
+    "preservation_state": "degrading"
+  }
+}

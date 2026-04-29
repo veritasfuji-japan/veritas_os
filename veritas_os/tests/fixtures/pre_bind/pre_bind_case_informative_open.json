@@ -1,0 +1,14 @@
+{
+  "case_id": "pre_bind_case_informative_open",
+  "description": "Canonical pre-bind case A: informative participation with open preservation.",
+  "participation_signal": {
+    "interpretation_space_narrowing": "open",
+    "counterfactual_availability": "high",
+    "intervention_headroom": "high",
+    "structural_openness": "open"
+  },
+  "expected": {
+    "participation_state": "informative",
+    "preservation_state": "open"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "case_id": "pre_bind_case_participatory_degrading",
+  "participation_signal": {
+    "counterfactual_availability": "low",
+    "interpretation_space_narrowing": "narrowing",
+    "intervention_headroom": "medium",
+    "structural_openness": "fragile"
+  },
+  "pre_bind_detection_detail": {
+    "aggregate_index": 0.5,
+    "high_signal_count": 2,
+    "moderate_signal_count": 4,
+    "normalized_signal_levels": {
+      "counterfactual_availability": "low",
+      "interpretation_space_narrowing": "narrowing",
+      "intervention_headroom": "medium",
+      "structural_openness": "fragile"
+    },
+    "signal_severity": {
+      "counterfactual_availability": 2,
+      "interpretation_space_narrowing": 1,
+      "intervention_headroom": 1,
+      "structural_openness": 2
+    }
+  },
+  "pre_bind_detection_summary": {
+    "concise_rationale": "Structural participation signals indicate decision formation impact is emerging while alternative space remains available.",
+    "detection_family": "pre_bind_structural_detection",
+    "detection_version": "v1",
+    "participation_state": "participatory",
+    "primary_contributing_signals": [
+      "counterfactual_availability",
+      "structural_openness"
+    ]
+  },
+  "pre_bind_preservation_detail": {
+    "counterfactual_recovery_possible": true,
+    "detection_context": {
+      "participation_state": "participatory"
+    },
+    "intervention_viability": {
+      "level": "partial",
+      "meaningful_intervention_possible": true
+    },
+    "main_contributing_conditions": [
+      "counterfactual_availability",
+      "structural_openness",
+      "pre_bind_detection_state"
+    ],
+    "normalized_signal_levels": {
+      "counterfactual_availability": "low",
+      "interpretation_space_narrowing": "narrowing",
+      "intervention_headroom": "medium",
+      "structural_openness": "fragile"
+    },
+    "openness_floor": {
+      "status": "at_risk",
+      "structural_openness_level": "fragile"
+    }
+  },
+  "pre_bind_preservation_summary": {
+    "concise_rationale": "Intervention and recovery remain possible, but structural openness is degrading and reversal difficulty is increasing.",
+    "counterfactual_recovery_possible": true,
+    "intervention_viability": "partial",
+    "main_contributing_conditions": [
+      "counterfactual_availability",
+      "structural_openness",
+      "pre_bind_detection_state"
+    ],
+    "openness_floor": "at_risk",
+    "preservation_family": "pre_bind_preservation",
+    "preservation_outcome": "degrading",
+    "preservation_state": "degrading",
+    "preservation_version": "v1"
+  }
+}

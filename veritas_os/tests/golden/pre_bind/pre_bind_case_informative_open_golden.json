@@ -1,0 +1,69 @@
+{
+  "case_id": "pre_bind_case_informative_open",
+  "participation_signal": {
+    "counterfactual_availability": "high",
+    "interpretation_space_narrowing": "open",
+    "intervention_headroom": "high",
+    "structural_openness": "open"
+  },
+  "pre_bind_detection_detail": {
+    "aggregate_index": 0.0,
+    "high_signal_count": 0,
+    "moderate_signal_count": 0,
+    "normalized_signal_levels": {
+      "counterfactual_availability": "high",
+      "interpretation_space_narrowing": "open",
+      "intervention_headroom": "high",
+      "structural_openness": "open"
+    },
+    "signal_severity": {
+      "counterfactual_availability": 0,
+      "interpretation_space_narrowing": 0,
+      "intervention_headroom": 0,
+      "structural_openness": 0
+    }
+  },
+  "pre_bind_detection_summary": {
+    "concise_rationale": "Structural participation signals indicate support remains primarily informative and intervention headroom is preserved.",
+    "detection_family": "pre_bind_structural_detection",
+    "detection_version": "v1",
+    "participation_state": "informative",
+    "primary_contributing_signals": []
+  },
+  "pre_bind_preservation_detail": {
+    "counterfactual_recovery_possible": true,
+    "detection_context": {
+      "participation_state": "informative"
+    },
+    "intervention_viability": {
+      "level": "high",
+      "meaningful_intervention_possible": true
+    },
+    "main_contributing_conditions": [
+      "pre_bind_detection_state"
+    ],
+    "normalized_signal_levels": {
+      "counterfactual_availability": "high",
+      "interpretation_space_narrowing": "open",
+      "intervention_headroom": "high",
+      "structural_openness": "open"
+    },
+    "openness_floor": {
+      "status": "met",
+      "structural_openness_level": "open"
+    }
+  },
+  "pre_bind_preservation_summary": {
+    "concise_rationale": "Intervention, correction, and counterfactual exploration remain meaningfully available before bind.",
+    "counterfactual_recovery_possible": true,
+    "intervention_viability": "high",
+    "main_contributing_conditions": [
+      "pre_bind_detection_state"
+    ],
+    "openness_floor": "met",
+    "preservation_family": "pre_bind_preservation",
+    "preservation_outcome": "open",
+    "preservation_state": "open",
+    "preservation_version": "v1"
+  }
+}
