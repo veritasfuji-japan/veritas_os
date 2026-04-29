@@ -53,9 +53,10 @@ pnpm -r test
 - Mission Control の pre-bind governance snapshot は `frontend/components/dashboard-types.ts` の shared frontend contract を参照してください。
 - `participation_state` / `preservation_state` / `intervention_viability` / `concise_rationale` / `bind_outcome` は backend vocabulary をそのまま表示する契約です。
 - Mission Control は bind outcome だけでなく pre-bind state を timeline で扱うため、component-local 型ではなく shared type (`PreBindGovernanceSnapshot`) を利用してください。
-- Mission Control の live ingress 層は `frontend/components/mission-control-container.tsx` です。container が dashboard / loader 由来 payload を受け取り、`frontend/components/mission-governance-adapter.ts` の `resolveMissionGovernanceSnapshot` を経由して shared contract に正規化します。
-- `resolveMissionGovernanceSnapshot` は `governance_layer_snapshot`（主経路）→ `pre_bind_governance_snapshot`（互換経路）→ render safety fallback（安全経路）の順で解決します。fallback は main path ではありません。
-- `frontend/components/mission-page.tsx` は adapter/container で解決済みの shared contract を受け取って render する責務に限定し、将来の real API fetch・server-side hydration・polling 追加時の接続点を固定します。
+- Mission Control の backend-fed main path は `frontend/app/mission-control-ingress.ts` の `loadMissionControlIngressPayload` です。`/api/veritas/v1/report/governance` から governance feed を取得し、`mapGovernanceFeedToIngressPayload` で ingress contract に明示マッピングします。
+- Mission Control の live ingress 層は `frontend/components/mission-control-container.tsx` です。container が page loader 由来 payload を受け取り、`frontend/components/mission-governance-adapter.ts` の `resolveMissionGovernanceSnapshot` を経由して shared contract に正規化します。
+- `resolveMissionGovernanceSnapshot` は `governance_layer_snapshot`（主経路）→ `pre_bind_governance_snapshot`（互換経路）→ render safety fallback（安全経路）の順で解決します。fallback は render safety 専用であり、live verification 完了を示しません。
+- `frontend/components/mission-page.tsx` は adapter/container で解決済みの shared contract を受け取って render する責務に限定し、将来の server-side hydration・polling・streaming 追加時の接続点を固定します。
 
 
 ## Docker Compose で一括起動
