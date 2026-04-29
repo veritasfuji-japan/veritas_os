@@ -53,8 +53,10 @@ jobs:
       - name: Python dependency audit (pip-audit)
         run: pip-audit -r veritas_os/requirements.txt
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup pnpm (Corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
