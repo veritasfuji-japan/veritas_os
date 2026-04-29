@@ -20,18 +20,21 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     });
 
     await page.goto("/");
+    await page.waitForResponse((response) => response.url().includes("/api/veritas/v1/report/governance"));
+    const timeline = page.getByRole("region", { name: "governance layer timeline" });
 
     await expect(
       page.getByRole("heading", { name: /(コマンドダッシュボード|Command Dashboard)/ }),
     ).toBeVisible();
-    await expect(page.getByText("participation_state:", { exact: true })).toBeVisible();
-    await expect(page.getByText("decision_shaping", { exact: true })).toBeVisible();
-    await expect(page.getByText("preservation_state:", { exact: true })).toBeVisible();
-    await expect(page.getByText("degrading", { exact: true })).toBeVisible();
-    await expect(page.getByText("intervention_viability:", { exact: true })).toBeVisible();
-    await expect(page.getByText("minimal", { exact: true })).toBeVisible();
-    await expect(page.getByText("bind_outcome:", { exact: true })).toBeVisible();
-    await expect(page.getByText("ESCALATED", { exact: true })).toBeVisible();
+    await expect(timeline).toBeVisible();
+    await expect(timeline.getByText(/^participation_state:/)).toBeVisible();
+    await expect(timeline.getByText(/^decision_shaping$/)).toBeVisible();
+    await expect(timeline.getByText(/^preservation_state:/)).toBeVisible();
+    await expect(timeline.getByText(/^degrading$/)).toBeVisible();
+    await expect(timeline.getByText(/intervention_viability:/)).toBeVisible();
+    await expect(timeline.getByText(/^minimal$/)).toBeVisible();
+    await expect(timeline.getByText(/^bind_outcome:/)).toBeVisible();
+    await expect(timeline.getByText(/^ESCALATED$/)).toBeVisible();
 
     await expect(page.getByText("BLOCKED", { exact: true })).toHaveCount(0);
   });
@@ -46,18 +49,21 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     });
 
     await page.goto("/");
+    await page.waitForResponse((response) => response.url().includes("/api/veritas/v1/report/governance"));
+    const timeline = page.getByRole("region", { name: "governance layer timeline" });
 
     await expect(
       page.getByRole("heading", { name: /(コマンドダッシュボード|Command Dashboard)/ }),
     ).toBeVisible();
-    await expect(page.getByText("participation_state:", { exact: true })).toBeVisible();
-    await expect(page.getByText("participatory", { exact: true })).toBeVisible();
-    await expect(page.getByText("preservation_state:", { exact: true })).toBeVisible();
-    await expect(page.getByText("open", { exact: true })).toBeVisible();
-    await expect(page.getByText("intervention_viability:", { exact: true })).toBeVisible();
-    await expect(page.getByText("high", { exact: true })).toBeVisible();
-    await expect(page.getByText("bind_outcome:", { exact: true })).toBeVisible();
-    await expect(page.getByText("BLOCKED", { exact: true })).toBeVisible();
+    await expect(timeline).toBeVisible();
+    await expect(timeline.getByText(/^participation_state:/)).toBeVisible();
+    await expect(timeline.getByText(/^participatory$/)).toBeVisible();
+    await expect(timeline.getByText(/^preservation_state:/)).toBeVisible();
+    await expect(timeline.getByText(/^open$/)).toBeVisible();
+    await expect(timeline.getByText(/intervention_viability:/)).toBeVisible();
+    await expect(timeline.getByText(/^high$/)).toBeVisible();
+    await expect(timeline.getByText(/^bind_outcome:/)).toBeVisible();
+    await expect(timeline.getByText(/^BLOCKED$/)).toBeVisible();
 
     await expect(page.getByText("decision_shaping", { exact: true })).toHaveCount(0);
     await expect(page.getByText("ESCALATED", { exact: true })).toHaveCount(0);
