@@ -46,7 +46,11 @@ def _inject_canonical_participation_signal(
     monkeypatch,
     participation_signal: dict[str, Any],
 ) -> None:
-    """Inject canonical participation_signal via core decide output extras."""
+    """Inject canonical signal at the raw-extras boundary before response assembly.
+
+    This keeps the HTTP -> route -> pipeline -> response-layer governance evaluation
+    path real while making canonical case inputs deterministic.
+    """
     import veritas_os.core.pipeline as pipeline_module
 
     original_call_core_decide = pipeline_module.call_core_decide
@@ -590,8 +594,14 @@ class TestBackwardCompatibility:
         assert "risk" in fuji
 
 
-class TestCanonicalPreBindRealPipeline:
-    """Canonical pre-bind cases must stay reproducible on the real /v1/decide path."""
+class TestCanonicalPreBindRealPipelineRawExtrasInjection:
+    """Canonical pre-bind reproducibility on /v1/decide with raw-extras injection.
+
+    Scope:
+      - Real HTTP/route/pipeline/response assembly path is exercised.
+      - Deterministic control is limited to core decide raw extras injection.
+      - Response-layer governance evaluator is not monkeypatched here.
+    """
 
     @pytest.mark.parametrize(
         ("case_id", "expected_participation", "expected_preservation"),
@@ -608,10 +618,13 @@ class TestCanonicalPreBindRealPipeline:
         expected_participation: str,
         expected_preservation: str,
     ):
-        """Real pipeline response must preserve canonical state/rationale parity."""
+        """Real-path response preserves canonical state/rationale and bind parity."""
         client = _make_client(monkeypatch)
         fixture = _load_json(_PRE_BIND_FIXTURE_DIR / f"{case_id}.json")
         golden = _load_json(_PRE_BIND_GOLDEN_DIR / f"{case_id}_golden.json")
+        import veritas_os.core.pipeline.governance_layers as pipeline_response_module
+
+        evaluator_before = pipeline_response_module.evaluate_governance_layers
         _inject_canonical_participation_signal(
             monkeypatch,
             fixture["participation_signal"],
@@ -627,6 +640,7 @@ class TestCanonicalPreBindRealPipeline:
 
         assert response.status_code == 200
         body = response.json()
+        assert pipeline_response_module.evaluate_governance_layers is evaluator_before
 
         assert body["participation_signal"]["participation_admissibility"] in {
             "admissible",
@@ -664,7 +678,7 @@ class TestCanonicalPreBindRealPipeline:
             assert bind_key in body
 
     def test_pre_bind_additive_fields_remain_optional_on_real_pipeline(self, monkeypatch):
-        """Absence of participation_signal keeps pre-bind additive fields optional."""
+        """Without injected signal, pre-bind additive evidence fields stay optional."""
         client = _make_client(monkeypatch)
         response = _post_decide(
             client,

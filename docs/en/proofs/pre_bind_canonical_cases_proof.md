@@ -75,7 +75,7 @@ pre-bind state combinations.
 - Canonical tests: `veritas_os/tests/test_pre_bind_canonical_golden.py`
 - HTTP endpoint E2E parity tests for `/v1/decide`: `veritas_os/tests/test_pre_bind_http_e2e.py`
 - Real pipeline `/v1/decide` reliability extension for canonical cases:
-  `veritas_os/tests/test_decide_e2e_reliability.py` (`TestCanonicalPreBindRealPipeline`)
+  `veritas_os/tests/test_decide_e2e_reliability.py` (`TestCanonicalPreBindRealPipelineRawExtrasInjection`)
 - Vocabulary consistency + rationale-linked assertions: `test_canonical_case_naming_and_vocabulary_consistency` and
   `test_canonical_pre_bind_signals_and_rationales_are_explanatory` in the same test module.
 
@@ -86,6 +86,8 @@ pre-bind state combinations.
 - HTTP E2E tests protect `/v1/decide` endpoint wiring, response contract shape, additive optionality, and bind-field non-regression.
 - Real pipeline reliability E2E protects the non-stubbed HTTP → route → pipeline → response assembly path for canonical
   cases (including additive field optionality and bind-family field presence).
-- Real pipeline reliability E2E now injects canonical `participation_signal` at the core decide raw-extras boundary,
-  so governance-layer evaluation is exercised without monkeypatching response-layer evaluator calls.
+- Deterministic control in that layer is intentionally limited to injecting canonical `participation_signal` into
+  `core.pipeline.call_core_decide(...)->raw["extras"]` before response assembly.
+- Response-layer governance evaluation is still executed through the normal implementation
+  (`pipeline_response.evaluate_governance_layers`) without monkeypatch replacement in canonical reliability tests.
 - Bind behavior is unchanged: pre-bind signals remain additive governance evidence only.
