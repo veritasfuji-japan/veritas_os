@@ -20,7 +20,24 @@ interface MissionPageProps {
   title: string;
   subtitle: string;
   chips: [string, string, string];
+  governanceLayerSnapshot?: GovernanceLayerSnapshot;
 }
+
+interface GovernanceLayerSnapshot {
+  participation_state?: string;
+  preservation_state?: string;
+  intervention_viability?: string;
+  concise_rationale?: string;
+  bind_outcome?: string;
+}
+
+const DEFAULT_GOVERNANCE_LAYER_SNAPSHOT: GovernanceLayerSnapshot = {
+  participation_state: "participatory",
+  preservation_state: "open",
+  intervention_viability: "high",
+  concise_rationale: "pre-bind participation and preservation signals remain stable before bind classification.",
+  bind_outcome: "BLOCKED",
+};
 
 const CRITICAL_RAIL_ITEMS: CriticalRailMetric[] = [
   {
@@ -185,9 +202,14 @@ const HEALTH_SECURITY_POSTURE = {
  * The page surfaces the highest-risk anomaly first, then gives direct
  * intervention cards so operators can transition from monitoring to action.
  */
-export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.Element {
+export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }: MissionPageProps): JSX.Element {
   const { t } = useI18n();
   const uiState: MissionUiState = TRUST_CHAIN_INTEGRITY.verificationStatus === "broken" ? "degraded" : "operational";
+  const governanceSnapshot = governanceLayerSnapshot ?? DEFAULT_GOVERNANCE_LAYER_SNAPSHOT;
+
+  const hasPreBindGovernance = Boolean(
+    governanceSnapshot.participation_state || governanceSnapshot.preservation_state || governanceSnapshot.intervention_viability,
+  );
 
   const statusMessage = {
     loading: t("データ同期中: 信頼状態の確定前です。", "Syncing data: trust state not yet confirmed."),
@@ -215,6 +237,36 @@ export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.E
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">System state</p>
         <p className={["mt-1 text-sm font-semibold", uiState === "degraded" ? "text-danger" : "text-foreground"].join(" ")}>{statusMessage}</p>
       </section>
+
+      {hasPreBindGovernance ? (
+        <section aria-label="governance layer timeline" className="rounded-xl border border-info/40 bg-info/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-info">Governance layer timeline (pre-bind → bind)</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs">
+            <li>
+              <span className="font-semibold">participation_state:</span>{" "}
+              <span className="font-mono">{governanceSnapshot.participation_state ?? "n/a"}</span>
+            </li>
+            <li>
+              <span className="font-semibold">preservation_state:</span>{" "}
+              <span className="font-mono">{governanceSnapshot.preservation_state ?? "n/a"}</span>
+              {governanceSnapshot.intervention_viability ? (
+                <span className="text-muted-foreground"> (intervention_viability: <span className="font-mono">{governanceSnapshot.intervention_viability}</span>)</span>
+              ) : null}
+            </li>
+            {governanceSnapshot.bind_outcome ? (
+              <li>
+                <span className="font-semibold">bind_outcome:</span>{" "}
+                <span className="font-mono">{governanceSnapshot.bind_outcome}</span>
+              </li>
+            ) : null}
+          </ol>
+          {governanceSnapshot.concise_rationale ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              <span className="font-semibold">concise_rationale:</span> {governanceSnapshot.concise_rationale}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="trust and governance highlights">
         <Card title="Trust Chain Integrity" titleSize="sm" variant="elevated" accent="danger" className="border-danger/40">
