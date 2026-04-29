@@ -381,7 +381,7 @@ Most "agent frameworks" optimize autonomy and tool use.
 VERITAS optimizes for **governance**:
 
 - **Fail-closed safety & compliance** enforced by a final gate (**FUJI Gate**) with PII detection, harmful content blocking, prompt injection defense, toxicity filtering for web search results, and policy-driven rules — all safety paths return `rejected` / `risk=1.0` on exception (fail-closed)
-- **High-fidelity reproducible decision pipeline** (20+ stages, structured outputs, replay with divergence detection, retrieval snapshot checksum, model version verification)
+- **High-fidelity reproducible decision pipeline** (17 traced stages, structured outputs, replay with divergence detection, retrieval snapshot checksum, model version verification)
 - **Auditability** via a **hash-chained TrustLog** (tamper-evident, Ed25519-signed, WORM hard-fail mirror, **Transparency log anchor**, **W3C PROV export**)
 - **Enterprise governance** — **4-eyes approval** for policy changes, **RBAC/ABAC** access control, **SSE real-time governance alerts**, external secret manager enforcement
 - **Memory & world state** as first-class inputs (MemoryOS with vector search + WorldModel with causal transitions)
@@ -485,7 +485,7 @@ This separation is one of the reasons VERITAS is easier to audit and safer to ev
 veritas_os/                  ← Monorepo root
 ├── veritas_os/              ← Python backend (FastAPI)
 │   ├── api/                 ← REST API server, schemas, governance
-│   │   ├── server.py        ← FastAPI app with 40+ endpoints
+│   │   ├── server.py        ← FastAPI app with 37 endpoints
 │   │   ├── routes_decide.py ← Decision & replay endpoints
 │   │   ├── routes_trust.py  ← TrustLog & audit endpoints
 │   │   ├── routes_memory.py ← Memory CRUD endpoints
@@ -496,7 +496,7 @@ veritas_os/                  ← Monorepo root
 │   ├── core/                ← Decision engine
 │   │   ├── kernel.py        ← Decision computation engine
 │   │   ├── kernel_*.py      ← Kernel extensions (doctor, intent, QA, stages, episode, post_choice)
-│   │   ├── pipeline/        ← 20+ stage orchestrator (package with stage modules)
+│   │   ├── pipeline/        ← 17-stage orchestrator (package with stage modules)
 │   │   ├── fuji/            ← FUJI safety gate (package — policy, injection, safety head)
 │   │   ├── memory/          ← MemoryOS (package — store, vector, search, security, compliance)
 │   │   ├── continuation_runtime/ ← Chain-level continuation observation (Phase-1)
@@ -1115,7 +1115,7 @@ Dockerfile `CMD` accordingly before building the image.
 | Module | Responsibility |
 |---|---|
 | `veritas_os/core/kernel.py` | Decision computation — intent detection, option generation, alternative scoring |
-| `veritas_os/core/pipeline/` | 20+ stage orchestrator for `/v1/decide` — validation through audit persistence (package with per-stage modules) |
+| `veritas_os/core/pipeline/` | 17-stage orchestrator for `/v1/decide` — validation through audit persistence (package with per-stage modules) |
 | `veritas_os/core/llm_client.py` | Multi-provider LLM gateway with connection pooling, circuit breaker, retry with backoff |
 
 ### Safety & governance
