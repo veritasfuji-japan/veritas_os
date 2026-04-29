@@ -68,3 +68,21 @@ export interface DecisionEvidenceRouteModel {
 }
 
 export type MissionUiState = "loading" | "empty" | "degraded" | "operational";
+
+export interface PreBindGovernanceSnapshot {
+  participation_state?: string;
+  preservation_state?: string;
+  intervention_viability?: string;
+  concise_rationale?: string;
+  bind_outcome?: string;
+}
+
+export const PRE_BIND_GOVERNANCE_VOCABULARY_LABELS = {
+  participation_state: "participation_state",
+  preservation_state: "preservation_state",
+  intervention_viability: "intervention_viability",
+  concise_rationale: "concise_rationale",
+  bind_outcome: "bind_outcome",
+  heading: "Governance layer timeline (pre-bind → bind)",
+  unavailable: "n/a",
+} as const;

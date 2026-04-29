@@ -48,6 +48,12 @@ pnpm -r test
 - Mission Control Console 用の金融サンプルは `frontend/features/console/fixtures/financial-case.ts` を利用してください。
 - 本フィクスチャは `financial.high_risk_wire_transfer` 想定で、`required_evidence` / `missing_evidence` / `next_action` / `human_review_required` の視認回帰をテストします。
 
+## Mission Control pre-bind governance vocabulary
+
+- Mission Control の pre-bind governance snapshot は `frontend/components/dashboard-types.ts` の shared frontend contract を参照してください。
+- `participation_state` / `preservation_state` / `intervention_viability` / `concise_rationale` / `bind_outcome` は backend vocabulary をそのまま表示する契約です。
+- Mission Control は bind outcome だけでなく pre-bind state を timeline で扱うため、component-local 型ではなく shared type (`PreBindGovernanceSnapshot`) を利用してください。
+
 
 ## Docker Compose で一括起動
 
