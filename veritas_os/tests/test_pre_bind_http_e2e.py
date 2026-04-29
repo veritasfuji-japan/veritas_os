@@ -11,6 +11,12 @@ from fastapi.testclient import TestClient
 
 from veritas_os.core.pipeline.governance_layers import assemble_governance_public_fields
 
+_BIND_SENTINEL = {
+    "bind_outcome": "ESCALATED",
+    "bind_reason_code": "AUTHORITY_INSUFFICIENT",
+    "bind_failure_reason": "authority evidence missing",
+}
+
 _FIXTURE_DIR = Path("veritas_os/tests/fixtures/pre_bind")
 _GOLDEN_DIR = Path("veritas_os/tests/golden/pre_bind")
 _HEADERS = {"X-API-Key": "test-key"}
@@ -42,9 +48,7 @@ def _build_payload(case_id: str, include_pre_bind: bool = True) -> dict[str, Any
         "rejection_reason": None,
         "extras": {},
         "trust_log": None,
-        "bind_outcome": "ESCALATED",
-        "bind_reason_code": "AUTHORITY_INSUFFICIENT",
-        "bind_failure_reason": "authority evidence missing",
+        **_BIND_SENTINEL,
     }
     if include_pre_bind:
         golden = _load_json(_GOLDEN_DIR / f"{case_id}_golden.json")
@@ -64,6 +68,31 @@ def _build_payload(case_id: str, include_pre_bind: bool = True) -> dict[str, Any
         payload.update(snapshot)
     return payload
 
+
+
+
+def _assert_bind_family_regression_guard(body: dict[str, Any]) -> None:
+    """Bind family fields must remain unchanged even with additive pre-bind fields."""
+    for key, expected in _BIND_SENTINEL.items():
+        assert body[key] == expected
+
+
+def _assert_pre_bind_parity_with_golden(body: dict[str, Any], case_id: str) -> None:
+    """HTTP response should preserve canonical state/rationale from golden assets."""
+    golden = _load_json(_GOLDEN_DIR / f"{case_id}_golden.json")
+
+    assert body["pre_bind_detection_summary"]["participation_state"] == (
+        golden["pre_bind_detection_summary"]["participation_state"]
+    )
+    assert body["pre_bind_preservation_summary"]["preservation_state"] == (
+        golden["pre_bind_preservation_summary"]["preservation_state"]
+    )
+    assert body["pre_bind_detection_summary"]["concise_rationale"] == (
+        golden["pre_bind_detection_summary"]["concise_rationale"]
+    )
+    assert body["pre_bind_preservation_summary"]["concise_rationale"] == (
+        golden["pre_bind_preservation_summary"]["concise_rationale"]
+    )
 
 def _client_with_stubbed_pipeline(monkeypatch, payload: dict[str, Any]) -> TestClient:
     monkeypatch.setenv("VERITAS_API_KEY", "test-key")
@@ -85,9 +114,10 @@ def test_decide_http_canonical_case_a_informative_open(monkeypatch) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["participation_signal"]["participation_admissibility"] in {"admissible", "review_required", "unknown"}
-    assert body["pre_bind_detection_summary"]["participation_state"] == "informative"
-    assert body["pre_bind_preservation_summary"]["preservation_state"] == "open"
-    assert body["bind_outcome"] == "ESCALATED"
+    _assert_pre_bind_parity_with_golden(body, case_id)
+    assert "aggregate_index" in body["pre_bind_detection_detail"]
+    assert body["pre_bind_preservation_detail"]["detection_context"]["participation_state"] == "informative"
+    _assert_bind_family_regression_guard(body)
 
 
 def test_decide_http_canonical_case_b_participatory_degrading(monkeypatch) -> None:
@@ -97,10 +127,11 @@ def test_decide_http_canonical_case_b_participatory_degrading(monkeypatch) -> No
 
     assert response.status_code == 200
     body = response.json()
-    assert body["pre_bind_detection_summary"]["participation_state"] == "participatory"
-    assert body["pre_bind_preservation_summary"]["preservation_state"] == "degrading"
+    _assert_pre_bind_parity_with_golden(body, case_id)
+    assert "aggregate_index" in body["pre_bind_detection_detail"]
+    assert body["pre_bind_preservation_detail"]["detection_context"]["participation_state"] == "participatory"
     assert "primary_contributing_signals" in body["pre_bind_detection_summary"]
-    assert body["bind_reason_code"] == "AUTHORITY_INSUFFICIENT"
+    _assert_bind_family_regression_guard(body)
 
 
 def test_decide_http_canonical_case_c_decision_shaping_collapsed(monkeypatch) -> None:
@@ -110,9 +141,11 @@ def test_decide_http_canonical_case_c_decision_shaping_collapsed(monkeypatch) ->
 
     assert response.status_code == 200
     body = response.json()
-    assert body["pre_bind_detection_summary"]["participation_state"] == "decision_shaping"
-    assert body["pre_bind_preservation_summary"]["preservation_state"] == "collapsed"
+    _assert_pre_bind_parity_with_golden(body, case_id)
+    assert "aggregate_index" in body["pre_bind_detection_detail"]
     assert body["pre_bind_preservation_detail"]["detection_context"]["participation_state"] == "decision_shaping"
+    assert body["pre_bind_preservation_detail"]["detection_context"]["participation_state"] == "decision_shaping"
+    _assert_bind_family_regression_guard(body)
 
 
 def test_decide_http_pre_bind_optionality_absent_is_backward_compatible(monkeypatch) -> None:
@@ -124,7 +157,7 @@ def test_decide_http_pre_bind_optionality_absent_is_backward_compatible(monkeypa
 
     assert response.status_code == 200
     body = response.json()
-    assert body["bind_outcome"] == "ESCALATED"
+    _assert_bind_family_regression_guard(body)
     assert body["pre_bind_detection_summary"] is None
     assert body["pre_bind_detection_detail"] is None
     assert body["pre_bind_preservation_summary"] is None
