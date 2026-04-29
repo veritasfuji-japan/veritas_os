@@ -74,6 +74,8 @@ pre-bind state combinations.
 - Goldens: `veritas_os/tests/golden/pre_bind/`
 - Canonical tests: `veritas_os/tests/test_pre_bind_canonical_golden.py`
 - HTTP endpoint E2E parity tests for `/v1/decide`: `veritas_os/tests/test_pre_bind_http_e2e.py`
+- Real pipeline `/v1/decide` reliability extension for canonical cases:
+  `veritas_os/tests/test_decide_e2e_reliability.py` (`TestCanonicalPreBindRealPipeline`)
 - Vocabulary consistency + rationale-linked assertions: `test_canonical_case_naming_and_vocabulary_consistency` and
   `test_canonical_pre_bind_signals_and_rationales_are_explanatory` in the same test module.
 
@@ -82,4 +84,6 @@ pre-bind state combinations.
 
 - Golden canonical tests protect detection/preservation semantics and rationale drift at evaluator-level snapshots.
 - HTTP E2E tests protect `/v1/decide` endpoint wiring, response contract shape, additive optionality, and bind-field non-regression.
+- Real pipeline reliability E2E protects the non-stubbed HTTP → route → pipeline → response assembly path for canonical
+  cases (including additive field optionality and bind-family field presence).
 - Bind behavior is unchanged: pre-bind signals remain additive governance evidence only.
