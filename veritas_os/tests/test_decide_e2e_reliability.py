@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -37,6 +38,12 @@ _VALID_PAYLOAD = {
 }
 
 _HEADERS = {"X-API-Key": "test-key"}
+_PRE_BIND_FIXTURE_DIR = Path("veritas_os/tests/fixtures/pre_bind")
+_PRE_BIND_GOLDEN_DIR = Path("veritas_os/tests/golden/pre_bind")
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _make_client(monkeypatch) -> TestClient:
@@ -561,6 +568,113 @@ class TestBackwardCompatibility:
 
         assert "status" in fuji
         assert "risk" in fuji
+
+
+class TestCanonicalPreBindRealPipeline:
+    """Canonical pre-bind cases must stay reproducible on the real /v1/decide path."""
+
+    @pytest.mark.parametrize(
+        ("case_id", "expected_participation", "expected_preservation"),
+        [
+            ("pre_bind_case_informative_open", "informative", "open"),
+            ("pre_bind_case_participatory_degrading", "participatory", "degrading"),
+            ("pre_bind_case_decision_shaping_collapsed", "decision_shaping", "collapsed"),
+        ],
+    )
+    def test_canonical_cases_keep_golden_state_and_rationale_parity(
+        self,
+        monkeypatch,
+        case_id: str,
+        expected_participation: str,
+        expected_preservation: str,
+    ):
+        """Real pipeline response must preserve canonical state/rationale parity."""
+        client = _make_client(monkeypatch)
+        fixture = _load_json(_PRE_BIND_FIXTURE_DIR / f"{case_id}.json")
+        golden = _load_json(_PRE_BIND_GOLDEN_DIR / f"{case_id}_golden.json")
+        from veritas_os.core.pipeline import pipeline_response as pipeline_response_module
+        from veritas_os.core.pipeline.governance_layers import evaluate_governance_layers
+
+        monkeypatch.setattr(
+            pipeline_response_module,
+            "evaluate_governance_layers",
+            lambda participation_signal=None: evaluate_governance_layers(
+                participation_signal=fixture["participation_signal"],
+            ),
+        )
+
+        response = _post_decide(
+            client,
+            {
+                "query": f"canonical pre-bind real pipeline: {case_id}",
+                "context": {"user_id": f"real_pipeline_{case_id}"},
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+
+        assert body["participation_signal"]["participation_admissibility"] in {
+            "admissible",
+            "review_required",
+            "unknown",
+        }
+        assert body["pre_bind_detection_summary"]["participation_state"] == expected_participation
+        assert body["pre_bind_preservation_summary"]["preservation_state"] == expected_preservation
+        assert (
+            body["pre_bind_detection_summary"]["participation_state"]
+            == golden["pre_bind_detection_summary"]["participation_state"]
+        )
+        assert (
+            body["pre_bind_preservation_summary"]["preservation_state"]
+            == golden["pre_bind_preservation_summary"]["preservation_state"]
+        )
+        assert (
+            body["pre_bind_detection_summary"]["concise_rationale"]
+            == golden["pre_bind_detection_summary"]["concise_rationale"]
+        )
+        assert (
+            body["pre_bind_preservation_summary"]["concise_rationale"]
+            == golden["pre_bind_preservation_summary"]["concise_rationale"]
+        )
+        assert "aggregate_index" in body["pre_bind_detection_detail"]
+        assert "detection_context" in body["pre_bind_preservation_detail"]
+        for bind_key in (
+            "bind_outcome",
+            "bind_reason_code",
+            "bind_failure_reason",
+            "bind_receipt_id",
+            "execution_intent_id",
+            "bind_summary",
+        ):
+            assert bind_key in body
+
+    def test_pre_bind_additive_fields_remain_optional_on_real_pipeline(self, monkeypatch):
+        """Absence of participation_signal keeps pre-bind additive fields optional."""
+        client = _make_client(monkeypatch)
+        response = _post_decide(
+            client,
+            {
+                "query": "canonical pre-bind real pipeline optionality",
+                "context": {"user_id": "real_pipeline_optional"},
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["pre_bind_detection_summary"] is None
+        assert body["pre_bind_detection_detail"] is None
+        assert body["pre_bind_preservation_summary"] is None
+        assert body["pre_bind_preservation_detail"] is None
+        for bind_key in (
+            "bind_outcome",
+            "bind_reason_code",
+            "bind_failure_reason",
+            "bind_receipt_id",
+            "execution_intent_id",
+            "bind_summary",
+        ):
+            assert bind_key in body
 
 
 # ---------------------------------------------------------------------------
