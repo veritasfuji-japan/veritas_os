@@ -1,0 +1,14 @@
+{
+  "case_id": "pre_bind_case_decision_shaping_collapsed",
+  "description": "Canonical pre-bind case C: decision_shaping participation with collapsed preservation.",
+  "participation_signal": {
+    "interpretation_space_narrowing": "closed",
+    "counterfactual_availability": "none",
+    "intervention_headroom": "low",
+    "structural_openness": "closed"
+  },
+  "expected": {
+    "participation_state": "decision_shaping",
+    "preservation_state": "collapsed"
+  }
+}

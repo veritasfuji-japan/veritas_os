@@ -1,0 +1,78 @@
+{
+  "case_id": "pre_bind_case_decision_shaping_collapsed",
+  "participation_signal": {
+    "counterfactual_availability": "none",
+    "interpretation_space_narrowing": "closed",
+    "intervention_headroom": "low",
+    "structural_openness": "closed"
+  },
+  "pre_bind_detection_detail": {
+    "aggregate_index": 0.9167,
+    "high_signal_count": 4,
+    "moderate_signal_count": 4,
+    "normalized_signal_levels": {
+      "counterfactual_availability": "none",
+      "interpretation_space_narrowing": "closed",
+      "intervention_headroom": "low",
+      "structural_openness": "closed"
+    },
+    "signal_severity": {
+      "counterfactual_availability": 3,
+      "interpretation_space_narrowing": 3,
+      "intervention_headroom": 2,
+      "structural_openness": 3
+    }
+  },
+  "pre_bind_detection_summary": {
+    "concise_rationale": "Structural participation signals indicate interpretation and option space are materially constrained before bind.",
+    "detection_family": "pre_bind_structural_detection",
+    "detection_version": "v1",
+    "participation_state": "decision_shaping",
+    "primary_contributing_signals": [
+      "counterfactual_availability",
+      "interpretation_space_narrowing"
+    ]
+  },
+  "pre_bind_preservation_detail": {
+    "counterfactual_recovery_possible": false,
+    "detection_context": {
+      "participation_state": "decision_shaping"
+    },
+    "intervention_viability": {
+      "level": "minimal",
+      "meaningful_intervention_possible": false
+    },
+    "main_contributing_conditions": [
+      "intervention_headroom",
+      "counterfactual_availability",
+      "structural_openness",
+      "interpretation_space_narrowing",
+      "pre_bind_detection_state"
+    ],
+    "normalized_signal_levels": {
+      "counterfactual_availability": "none",
+      "interpretation_space_narrowing": "closed",
+      "intervention_headroom": "low",
+      "structural_openness": "closed"
+    },
+    "openness_floor": {
+      "status": "breached",
+      "structural_openness_level": "closed"
+    }
+  },
+  "pre_bind_preservation_summary": {
+    "concise_rationale": "Decision-space openness is materially lost and meaningful intervention is no longer realistically available.",
+    "counterfactual_recovery_possible": false,
+    "intervention_viability": "minimal",
+    "main_contributing_conditions": [
+      "intervention_headroom",
+      "counterfactual_availability",
+      "structural_openness"
+    ],
+    "openness_floor": "breached",
+    "preservation_family": "pre_bind_preservation",
+    "preservation_outcome": "collapsed",
+    "preservation_state": "collapsed",
+    "preservation_version": "v1"
+  }
+}

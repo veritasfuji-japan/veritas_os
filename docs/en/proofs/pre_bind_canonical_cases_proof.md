@@ -1,0 +1,75 @@
+# Pre-bind participation / detection / preservation canonical proof cases
+
+This proof document provides reproducible reviewer evidence for the canonical
+pre-bind state combinations.
+
+## Scope and non-goal
+
+- Scope: pre-bind **participation detection** (`informative|participatory|decision_shaping`)
+  and pre-bind **preservation** (`open|degrading|collapsed`) reproducibility.
+- Non-goal: bind permission changes. These cases are not bind-time authorization.
+
+## Canonical case matrix
+
+| Case ID | Input signal profile | Expected participation state | Expected preservation state |
+| --- | --- | --- | --- |
+| `pre_bind_case_informative_open` | open/high/high/open | `informative` | `open` |
+| `pre_bind_case_participatory_degrading` | narrowing/low/medium/fragile | `participatory` | `degrading` |
+| `pre_bind_case_decision_shaping_collapsed` | closed/none/low/closed | `decision_shaping` | `collapsed` |
+
+## Case A: pre_bind_case_informative_open
+
+- Input signals
+  - `interpretation_space_narrowing: open`
+  - `counterfactual_availability: high`
+  - `intervention_headroom: high`
+  - `structural_openness: open`
+- Expected pre-bind detection state: `informative`
+- Expected preservation state: `open`
+- Why this state:
+  - Interpretation space is not narrowed.
+  - Counterfactual exploration remains available.
+  - Intervention remains meaningfully available.
+  - Structural openness floor is preserved.
+- Bind-time governance relation:
+  - This is an upstream governability signal only.
+  - Bind decision remains controlled by bind-time contracts.
+
+## Case B: pre_bind_case_participatory_degrading
+
+- Input signals
+  - `interpretation_space_narrowing: narrowing`
+  - `counterfactual_availability: low`
+  - `intervention_headroom: medium`
+  - `structural_openness: fragile`
+- Expected pre-bind detection state: `participatory`
+- Expected preservation state: `degrading`
+- Why this state:
+  - Decision formation influence is emerging.
+  - Counterfactual space remains but is weakened.
+  - Intervention remains possible, yet recovery difficulty increases.
+- Bind-time governance relation:
+  - Still pre-bind only; not bind permission.
+
+## Case C: pre_bind_case_decision_shaping_collapsed
+
+- Input signals
+  - `interpretation_space_narrowing: closed`
+  - `counterfactual_availability: none`
+  - `intervention_headroom: low`
+  - `structural_openness: closed`
+- Expected pre-bind detection state: `decision_shaping`
+- Expected preservation state: `collapsed`
+- Why this state:
+  - Interpretation/option space is materially constrained.
+  - Counterfactual recovery is unavailable.
+  - Meaningful intervention viability is no longer realistic.
+- Bind-time governance relation:
+  - This does not auto-grant or auto-deny bind.
+  - Bind remains separate downstream governance.
+
+## Repro artifacts
+
+- Fixtures: `veritas_os/tests/fixtures/pre_bind/`
+- Goldens: `veritas_os/tests/golden/pre_bind/`
+- Canonical tests: `veritas_os/tests/test_pre_bind_canonical_golden.py`
