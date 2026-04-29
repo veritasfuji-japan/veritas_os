@@ -1,3 +1,5 @@
+# API spec version is intentionally decoupled from the product version
+# (pyproject.toml). It tracks public-API contract changes only.
 openapi: 3.1.0
 info:
   title: VERITAS Public API

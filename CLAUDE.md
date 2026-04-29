@@ -44,7 +44,7 @@
 veritas_os/                     ← Monorepo root
 ├── veritas_os/                 ← Python backend
 │   ├── api/                    ← FastAPI server, routes, schemas, governance
-│   │   ├── server.py           ← FastAPI app (40+ endpoints)
+│   │   ├── server.py           ← FastAPI app (37 endpoints)
 │   │   ├── routes_decide.py    ← /v1/decide & replay
 │   │   ├── routes_trust.py     ← TrustLog & audit
 │   │   ├── routes_memory.py    ← Memory CRUD
@@ -54,7 +54,7 @@ veritas_os/                     ← Monorepo root
 │   │   └── governance.py       ← Policy mgmt, 4-eyes approval, RBAC/ABAC
 │   ├── core/                   ← Decision engine
 │   │   ├── kernel.py           ← Decision computation
-│   │   ├── pipeline/           ← 20+ stage orchestrator (package)
+│   │   ├── pipeline/           ← 17-stage orchestrator (package)
 │   │   ├── fuji/               ← FUJI safety gate (package)
 │   │   ├── memory/             ← MemoryOS (package)
 │   │   ├── continuation_runtime/ ← Phase-1 observe/shadow
@@ -121,15 +121,15 @@ These boundaries are verified by `scripts/architecture/check_responsibility_boun
 
 ### 4.3 Pipeline Architecture
 
-The `/v1/decide` pipeline has 20+ stages. Respect stage ordering:
+The `/v1/decide` pipeline has 17 traced stages (FUJI/ValueCore/Replay-snapshot
+substeps run inside their parent stages). Respect stage ordering:
 
 ```
-Input Normalize → Memory Retrieval → Web Search → Options Normalize
-  → Core Execute → Absorb Results → Fallback Alternatives → Model Boost
-  → Debate → Critique → FUJI Precheck → ValueCore → Gate Decision
-  → Value Learning (EMA) → Compute Metrics → Evidence Hardening
-  → Response Assembly → Persist (Audit + Memory + World) → Finalize Evidence
-  → Build Replay Snapshot
+input_norm → memory_retrieval → web_search → normalize_options
+  → kernel_execute → absorb_raw_results → fallback_alternatives → model_boost
+  → debate → critique → continuation_shadow → fuji_gate
+  → value_learning_ema → compute_metrics → evidence_hardening → build_response
+  → persist
 ```
 
 ### 4.4 LLM Client
