@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { PRE_BIND_GOVERNANCE_VOCABULARY_LABELS } from "./dashboard-types";
 import { I18nProvider } from "./i18n-provider";
 import { MissionPage } from "./mission-page";
 
@@ -79,7 +80,7 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText(/Governance layer timeline/)).toBeInTheDocument();
+    expect(screen.getByText(PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.heading)).toBeInTheDocument();
     expect(screen.getByText(/participation_state:/)).toBeInTheDocument();
     expect(screen.getByText("decision_shaping")).toBeInTheDocument();
     expect(screen.getByText(/preservation_state:/)).toBeInTheDocument();
@@ -89,6 +90,25 @@ describe("MissionPage", () => {
     expect(screen.getByText(/bind_outcome:/)).toBeInTheDocument();
     expect(screen.getByText("ESCALATED")).toBeInTheDocument();
     expect(screen.getByText(/concise_rationale:/)).toBeInTheDocument();
+  });
+
+  it("uses shared pre-bind governance vocabulary labels", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            participation_state: "participatory",
+            preservation_state: "open",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText(`${PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.participation_state}:`)).toBeInTheDocument();
+    expect(screen.getByText(`${PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.preservation_state}:`)).toBeInTheDocument();
   });
 
   it("omits governance timeline when additive pre-bind fields are absent", () => {
