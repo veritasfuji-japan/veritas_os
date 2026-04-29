@@ -86,4 +86,6 @@ pre-bind state combinations.
 - HTTP E2E tests protect `/v1/decide` endpoint wiring, response contract shape, additive optionality, and bind-field non-regression.
 - Real pipeline reliability E2E protects the non-stubbed HTTP → route → pipeline → response assembly path for canonical
   cases (including additive field optionality and bind-family field presence).
+- Real pipeline reliability E2E now injects canonical `participation_signal` at the core decide raw-extras boundary,
+  so governance-layer evaluation is exercised without monkeypatching response-layer evaluator calls.
 - Bind behavior is unchanged: pre-bind signals remain additive governance evidence only.

@@ -42,6 +42,26 @@ _PRE_BIND_FIXTURE_DIR = Path("veritas_os/tests/fixtures/pre_bind")
 _PRE_BIND_GOLDEN_DIR = Path("veritas_os/tests/golden/pre_bind")
 
 
+def _inject_canonical_participation_signal(
+    monkeypatch,
+    participation_signal: dict[str, Any],
+) -> None:
+    """Inject canonical participation_signal via core decide output extras."""
+    import veritas_os.core.pipeline as pipeline_module
+
+    original_call_core_decide = pipeline_module.call_core_decide
+
+    async def _patched_call_core_decide(*args: Any, **kwargs: Any) -> Any:
+        raw = await original_call_core_decide(*args, **kwargs)
+        if isinstance(raw, dict):
+            raw_extras = raw.setdefault("extras", {})
+            if isinstance(raw_extras, dict):
+                raw_extras["participation_signal"] = participation_signal
+        return raw
+
+    monkeypatch.setattr(pipeline_module, "call_core_decide", _patched_call_core_decide)
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -592,15 +612,9 @@ class TestCanonicalPreBindRealPipeline:
         client = _make_client(monkeypatch)
         fixture = _load_json(_PRE_BIND_FIXTURE_DIR / f"{case_id}.json")
         golden = _load_json(_PRE_BIND_GOLDEN_DIR / f"{case_id}_golden.json")
-        from veritas_os.core.pipeline import pipeline_response as pipeline_response_module
-        from veritas_os.core.pipeline.governance_layers import evaluate_governance_layers
-
-        monkeypatch.setattr(
-            pipeline_response_module,
-            "evaluate_governance_layers",
-            lambda participation_signal=None: evaluate_governance_layers(
-                participation_signal=fixture["participation_signal"],
-            ),
+        _inject_canonical_participation_signal(
+            monkeypatch,
+            fixture["participation_signal"],
         )
 
         response = _post_decide(
