@@ -53,8 +53,9 @@ pnpm -r test
 - Mission Control の pre-bind governance snapshot は `frontend/components/dashboard-types.ts` の shared frontend contract を参照してください。
 - `participation_state` / `preservation_state` / `intervention_viability` / `concise_rationale` / `bind_outcome` は backend vocabulary をそのまま表示する契約です。
 - Mission Control は bind outcome だけでなく pre-bind state を timeline で扱うため、component-local 型ではなく shared type (`PreBindGovernanceSnapshot`) を利用してください。
-- Mission Control の pre-bind timeline への main path は `frontend/components/mission-governance-adapter.ts` の `resolveMissionGovernanceSnapshot` です。dashboard feed の `governance_layer_snapshot`（優先）→ `pre_bind_governance_snapshot`（互換）→ render safety fallback の順で解決します。
-- `frontend/components/mission-page.tsx` は fallback object を内包せず、adapter で解決済みの shared contract を受け取って render する責務に限定します（default snapshot は fallback 専用）。
+- Mission Control の live ingress 層は `frontend/components/mission-control-container.tsx` です。container が dashboard / loader 由来 payload を受け取り、`frontend/components/mission-governance-adapter.ts` の `resolveMissionGovernanceSnapshot` を経由して shared contract に正規化します。
+- `resolveMissionGovernanceSnapshot` は `governance_layer_snapshot`（主経路）→ `pre_bind_governance_snapshot`（互換経路）→ render safety fallback（安全経路）の順で解決します。fallback は main path ではありません。
+- `frontend/components/mission-page.tsx` は adapter/container で解決済みの shared contract を受け取って render する責務に限定し、将来の real API fetch・server-side hydration・polling 追加時の接続点を固定します。
 
 
 ## Docker Compose で一括起動

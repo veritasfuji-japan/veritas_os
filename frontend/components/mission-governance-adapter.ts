@@ -9,9 +9,15 @@ const DEFAULT_GOVERNANCE_LAYER_SNAPSHOT: PreBindGovernanceSnapshot = {
   bind_outcome: "BLOCKED",
 };
 
-interface MissionGovernanceIngressPayload {
+export interface MissionGovernanceIngressPayload {
   governance_layer_snapshot?: PreBindGovernanceSnapshot;
   pre_bind_governance_snapshot?: PreBindGovernanceSnapshot;
+}
+
+function selectLiveGovernanceSnapshot(
+  payload?: MissionGovernanceIngressPayload | null,
+): PreBindGovernanceSnapshot | undefined {
+  return payload?.governance_layer_snapshot ?? payload?.pre_bind_governance_snapshot;
 }
 
 /**
@@ -21,14 +27,5 @@ interface MissionGovernanceIngressPayload {
 export function resolveMissionGovernanceSnapshot(
   payload?: MissionGovernanceIngressPayload | null,
 ): PreBindGovernanceSnapshot {
-  if (payload?.governance_layer_snapshot) {
-    return payload.governance_layer_snapshot;
-  }
-
-  if (payload?.pre_bind_governance_snapshot) {
-    return payload.pre_bind_governance_snapshot;
-  }
-
-  return DEFAULT_GOVERNANCE_LAYER_SNAPSHOT;
+  return selectLiveGovernanceSnapshot(payload) ?? DEFAULT_GOVERNANCE_LAYER_SNAPSHOT;
 }
-
