@@ -65,6 +65,11 @@ describe("loadMissionControlIngressPayload", () => {
         preservation_state: "degrading",
       },
     });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
+      method: "GET",
+      cache: "no-store",
+    });
   });
 
   it("returns null when backend feed is unavailable", async () => {
