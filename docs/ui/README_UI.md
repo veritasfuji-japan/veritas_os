@@ -71,6 +71,8 @@ pnpm -r test
   - container fallback/main selection: `frontend/components/mission-control-container.test.tsx`
   - page integration(main + fallback): `frontend/app/page.integration.test.tsx`
   - shared vocabulary drift regression: `frontend/components/mission-governance-adapter.test.ts`
+- full frontend E2E (`frontend/e2e/mission-control-governance-feed.spec.ts`) は browser 相当で `GET /api/veritas/v1/report/governance` を route interception し、main path（backend payload 到達）と endpoint unavailable fallback path（safety snapshot 描画）をそれぞれ固定します。
+- 役割分担は「route/ingress/container/page integration が層内契約を検証」「full frontend E2E が route → ingress → container → page の end-to-end 到達性と画面語彙維持を検証」です。
 
 
 ## Docker Compose で一括起動
