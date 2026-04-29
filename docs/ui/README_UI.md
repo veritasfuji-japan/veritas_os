@@ -59,6 +59,19 @@ pnpm -r test
 - `resolveMissionGovernanceSnapshot` は `governance_layer_snapshot`（主経路）→ `pre_bind_governance_snapshot`（互換経路）→ render safety fallback（安全経路）の順で解決します。fallback は render safety 専用であり、live verification 完了を示しません。
 - `frontend/components/mission-page.tsx` は adapter/container で解決済みの shared contract を受け取って render する責務に限定し、将来の server-side hydration・polling・streaming 追加時の接続点を固定します。
 
+### Mission Control governance feed main path (repo-verifiable)
+
+- Main path endpoint は `GET /api/veritas/v1/report/governance`（`frontend/app/api/veritas/v1/report/governance/route.ts`）です。
+- 経路は `frontend/app/page.tsx` → `frontend/app/mission-control-ingress.ts` → `frontend/components/mission-control-container.tsx` → `frontend/components/mission-page.tsx` です。
+- `MissionPage` は presentational component のまま維持し、data ingress は保持しません。
+- endpoint unavailable 時は fallback snapshot を使う safety path を維持します。
+- 回帰テストは以下で追跡できます。
+  - route contract: `frontend/app/api/veritas/v1/report/governance/route.test.ts`
+  - ingress mapping: `frontend/app/mission-control-ingress.test.ts`
+  - container fallback/main selection: `frontend/components/mission-control-container.test.tsx`
+  - page integration(main + fallback): `frontend/app/page.integration.test.tsx`
+  - shared vocabulary drift regression: `frontend/components/mission-governance-adapter.test.ts`
+
 
 ## Docker Compose で一括起動
 
