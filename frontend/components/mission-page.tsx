@@ -25,14 +25,6 @@ interface MissionPageProps {
   governanceLayerSnapshot?: PreBindGovernanceSnapshot;
 }
 
-const DEFAULT_GOVERNANCE_LAYER_SNAPSHOT: PreBindGovernanceSnapshot = {
-  participation_state: "participatory",
-  preservation_state: "open",
-  intervention_viability: "high",
-  concise_rationale: "pre-bind participation and preservation signals remain stable before bind classification.",
-  bind_outcome: "BLOCKED",
-};
-
 const CRITICAL_RAIL_ITEMS: CriticalRailMetric[] = [
   {
     key: "fuji-reject",
@@ -199,10 +191,12 @@ const HEALTH_SECURITY_POSTURE = {
 export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }: MissionPageProps): JSX.Element {
   const { t } = useI18n();
   const uiState: MissionUiState = TRUST_CHAIN_INTEGRITY.verificationStatus === "broken" ? "degraded" : "operational";
-  const governanceSnapshot = governanceLayerSnapshot ?? DEFAULT_GOVERNANCE_LAYER_SNAPSHOT;
+  const governanceSnapshot = governanceLayerSnapshot;
 
   const hasPreBindGovernance = Boolean(
-    governanceSnapshot.participation_state || governanceSnapshot.preservation_state || governanceSnapshot.intervention_viability,
+    governanceSnapshot?.participation_state ||
+      governanceSnapshot?.preservation_state ||
+      governanceSnapshot?.intervention_viability,
   );
 
   const statusMessage = {
@@ -238,25 +232,25 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
           <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs">
             <li>
               <span className="font-semibold">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.participation_state}:</span>{" "}
-              <span className="font-mono">{governanceSnapshot.participation_state ?? PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.unavailable}</span>
+              <span className="font-mono">{governanceSnapshot?.participation_state ?? PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.unavailable}</span>
             </li>
             <li>
               <span className="font-semibold">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.preservation_state}:</span>{" "}
-              <span className="font-mono">{governanceSnapshot.preservation_state ?? PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.unavailable}</span>
-              {governanceSnapshot.intervention_viability ? (
-                <span className="text-muted-foreground"> ({PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.intervention_viability}: <span className="font-mono">{governanceSnapshot.intervention_viability}</span>)</span>
+              <span className="font-mono">{governanceSnapshot?.preservation_state ?? PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.unavailable}</span>
+              {governanceSnapshot?.intervention_viability ? (
+                <span className="text-muted-foreground"> ({PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.intervention_viability}: <span className="font-mono">{governanceSnapshot?.intervention_viability}</span>)</span>
               ) : null}
             </li>
-            {governanceSnapshot.bind_outcome ? (
+            {governanceSnapshot?.bind_outcome ? (
               <li>
                 <span className="font-semibold">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.bind_outcome}:</span>{" "}
-                <span className="font-mono">{governanceSnapshot.bind_outcome}</span>
+                <span className="font-mono">{governanceSnapshot?.bind_outcome}</span>
               </li>
             ) : null}
           </ol>
-          {governanceSnapshot.concise_rationale ? (
+          {governanceSnapshot?.concise_rationale ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              <span className="font-semibold">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.concise_rationale}:</span> {governanceSnapshot.concise_rationale}
+              <span className="font-semibold">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.concise_rationale}:</span> {governanceSnapshot?.concise_rationale}
             </p>
           ) : null}
         </section>
