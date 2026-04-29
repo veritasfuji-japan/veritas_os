@@ -1675,6 +1675,163 @@ components:
           - $ref: '#/components/schemas/BindSummary'
           - type: 'null'
           description: Shared compact bind summary object.
+        participation_signal:
+          $ref: '#/components/schemas/ParticipationSignal'
+          nullable: true
+          description: Optional additive pre-bind participation signal family payload.
+        pre_bind_detection_summary:
+          $ref: '#/components/schemas/PreBindDetectionSummary'
+          nullable: true
+          description: Optional additive compact structural pre-bind detection summary.
+        pre_bind_detection_detail:
+          $ref: '#/components/schemas/PreBindDetectionDetail'
+          nullable: true
+          description: Optional additive expanded structural pre-bind detection detail.
+        pre_bind_preservation_summary:
+          $ref: '#/components/schemas/PreBindPreservationSummary'
+          nullable: true
+          description: Optional additive compact pre-bind preservation state summary.
+        pre_bind_preservation_detail:
+          $ref: '#/components/schemas/PreBindPreservationDetail'
+          nullable: true
+          description: Optional additive expanded pre-bind preservation diagnostics.
+    ParticipationSignal:
+      type: object
+      additionalProperties: true
+      properties:
+        participation_signal_id:
+          type: string
+        signal_family:
+          type: string
+          enum: [participation_signal]
+          default: participation_signal
+        interpretation_space_narrowing:
+          type: string
+        counterfactual_availability:
+          type: string
+        intervention_headroom:
+          type: string
+        structural_openness:
+          type: string
+        participation_admissibility:
+          type: string
+        rationale:
+          type: string
+          nullable: true
+        evidence_refs:
+          type: array
+          items: {type: string}
+        observation_ts:
+          type: string
+          nullable: true
+    PreBindDetectionSummary:
+      type: object
+      additionalProperties: true
+      properties:
+        detection_family:
+          type: string
+          enum: [pre_bind_structural_detection]
+          default: pre_bind_structural_detection
+        detection_version:
+          type: string
+          default: v1
+        participation_state:
+          type: string
+          enum: [informative, participatory, decision_shaping]
+          default: informative
+        primary_contributing_signals:
+          type: array
+          items: {type: string}
+        concise_rationale:
+          type: string
+          nullable: true
+    PreBindDetectionDetail:
+      type: object
+      additionalProperties: true
+      properties:
+        normalized_signal_levels:
+          type: object
+          additionalProperties: {type: string}
+        signal_severity:
+          type: object
+          additionalProperties: {type: integer}
+        aggregate_index:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.0
+        high_signal_count:
+          type: integer
+          minimum: 0
+          default: 0
+        moderate_signal_count:
+          type: integer
+          minimum: 0
+          default: 0
+    PreBindPreservationSummary:
+      type: object
+      additionalProperties: true
+      properties:
+        preservation_family:
+          type: string
+          enum: [pre_bind_preservation]
+          default: pre_bind_preservation
+        preservation_version:
+          type: string
+          default: v1
+        preservation_state:
+          type: string
+          enum: [open, degrading, collapsed]
+          default: open
+        preservation_outcome:
+          type: string
+          enum: [open, degrading, collapsed]
+          default: open
+        intervention_viability:
+          type: string
+        openness_floor:
+          type: string
+        counterfactual_recovery_possible:
+          type: boolean
+          default: true
+        concise_rationale:
+          type: string
+          nullable: true
+        main_contributing_conditions:
+          type: array
+          items: {type: string}
+    PreBindPreservationDetail:
+      type: object
+      additionalProperties: true
+      properties:
+        normalized_signal_levels:
+          type: object
+          additionalProperties: {type: string}
+        intervention_viability:
+          type: object
+          additionalProperties: true
+          properties:
+            level:
+              type: string
+            meaningful_intervention_possible:
+              type: boolean
+        openness_floor:
+          type: object
+          additionalProperties: true
+          properties:
+            status:
+              type: string
+            structural_openness_level:
+              type: string
+        counterfactual_recovery_possible:
+          type: boolean
+          default: true
+        detection_context:
+          type: object
+          additionalProperties: {type: string}
+        main_contributing_conditions:
+          type: array
+          items: {type: string}
     DecideRequest:
       type: object
       description: 意思決定リクエスト（全フィールドにデフォルト値あり、alternatives/options互換）
