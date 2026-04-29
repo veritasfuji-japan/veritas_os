@@ -72,6 +72,11 @@ pnpm -r test
   - page integration(main + fallback): `frontend/app/page.integration.test.tsx`
   - shared vocabulary drift regression: `frontend/components/mission-governance-adapter.test.ts`
 
+- full frontend E2E (browser 相当): `frontend/e2e/mission-control-governance-feed.spec.ts`
+  - main path: endpoint (`/api/veritas/v1/report/governance`) を Playwright route interception で deterministic に固定し、timeline vocabulary が UI まで到達することを検証
+  - fallback path: endpoint unavailable (503) を再現し、ページ非破壊・safety fallback snapshot・timeline vocabulary 維持を検証
+- 役割分担: 既存の route/ingress/container/page integration test は層ごとの契約を守り、full frontend E2E は route → ingress → container → page の接続がブラウザ実行で破綻しないことを守ります。
+
 
 ## Docker Compose で一括起動
 
