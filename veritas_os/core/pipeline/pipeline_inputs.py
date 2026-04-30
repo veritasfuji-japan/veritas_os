@@ -28,6 +28,7 @@ _PIPELINE_PRIVATE_PREFIXES = (
     "_daily_plans_",
     "_world_sim_result",
 )
+_TEST_ONLY_PRE_BIND_SIGNAL_KEY = "pre_bind_participation_signal"
 
 
 def _to_bool(v: Any) -> bool:
@@ -151,6 +152,14 @@ def normalize_pipeline_inputs(
     response_extras["fast_mode"] = fast_mode
     response_extras["metrics"]["fast_mode"] = fast_mode
     response_extras["memory_meta"] = {"context": dict(context)}
+
+    # Canonical pre-bind deterministic seam:
+    # Keep production semantics unchanged (absent by default), while allowing
+    # reliability tests to inject participation signal at the request-input
+    # boundary instead of patching call_core_decide/raw extras.
+    pre_bind_signal = context.get(_TEST_ONLY_PRE_BIND_SIGNAL_KEY)
+    if isinstance(pre_bind_signal, dict):
+        response_extras["participation_signal"] = dict(pre_bind_signal)
 
     # --- WorldOS: inject state ---
     world_model = (

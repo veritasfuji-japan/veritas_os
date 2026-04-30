@@ -42,28 +42,18 @@ _PRE_BIND_FIXTURE_DIR = Path("veritas_os/tests/fixtures/pre_bind")
 _PRE_BIND_GOLDEN_DIR = Path("veritas_os/tests/golden/pre_bind")
 
 
-def _inject_canonical_participation_signal(
-    monkeypatch,
+def _build_pre_bind_real_pipeline_payload(
+    case_id: str,
     participation_signal: dict[str, Any],
-) -> None:
-    """Inject canonical signal at the raw-extras boundary before response assembly.
-
-    This keeps the HTTP -> route -> pipeline -> response-layer governance evaluation
-    path real while making canonical case inputs deterministic.
-    """
-    import veritas_os.core.pipeline as pipeline_module
-
-    original_call_core_decide = pipeline_module.call_core_decide
-
-    async def _patched_call_core_decide(*args: Any, **kwargs: Any) -> Any:
-        raw = await original_call_core_decide(*args, **kwargs)
-        if isinstance(raw, dict):
-            raw_extras = raw.setdefault("extras", {})
-            if isinstance(raw_extras, dict):
-                raw_extras["participation_signal"] = participation_signal
-        return raw
-
-    monkeypatch.setattr(pipeline_module, "call_core_decide", _patched_call_core_decide)
+) -> dict[str, Any]:
+    """Build deterministic canonical payload at the pipeline-input boundary."""
+    return {
+        "query": f"canonical pre-bind real pipeline: {case_id}",
+        "context": {
+            "user_id": f"real_pipeline_{case_id}",
+            "pre_bind_participation_signal": participation_signal,
+        },
+    }
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -594,12 +584,12 @@ class TestBackwardCompatibility:
         assert "risk" in fuji
 
 
-class TestCanonicalPreBindRealPipelineRawExtrasInjection:
-    """Canonical pre-bind reproducibility on /v1/decide with raw-extras injection.
+class TestCanonicalPreBindRealPipelineInputBoundaryInjection:
+    """Canonical pre-bind reproducibility on /v1/decide with input-boundary injection.
 
     Scope:
       - Real HTTP/route/pipeline/response assembly path is exercised.
-      - Deterministic control is limited to core decide raw extras injection.
+      - Deterministic control is limited to request context input shaping.
       - Response-layer governance evaluator is not monkeypatched here.
     """
 
@@ -625,17 +615,12 @@ class TestCanonicalPreBindRealPipelineRawExtrasInjection:
         import veritas_os.core.pipeline.governance_layers as pipeline_response_module
 
         evaluator_before = pipeline_response_module.evaluate_governance_layers
-        _inject_canonical_participation_signal(
-            monkeypatch,
-            fixture["participation_signal"],
-        )
-
         response = _post_decide(
             client,
-            {
-                "query": f"canonical pre-bind real pipeline: {case_id}",
-                "context": {"user_id": f"real_pipeline_{case_id}"},
-            },
+            _build_pre_bind_real_pipeline_payload(
+                case_id=case_id,
+                participation_signal=fixture["participation_signal"],
+            ),
         )
 
         assert response.status_code == 200
@@ -649,6 +634,7 @@ class TestCanonicalPreBindRealPipelineRawExtrasInjection:
         }
         assert body["pre_bind_detection_summary"]["participation_state"] == expected_participation
         assert body["pre_bind_preservation_summary"]["preservation_state"] == expected_preservation
+        assert body["extras"]["participation_signal"] == fixture["participation_signal"]
         assert (
             body["pre_bind_detection_summary"]["participation_state"]
             == golden["pre_bind_detection_summary"]["participation_state"]
