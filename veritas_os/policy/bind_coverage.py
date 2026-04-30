@@ -101,6 +101,7 @@ BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
     BindCoverageEntry("/v1/governance/bind-receipts", "GET", BindCoverageClass.READ_ONLY),
     BindCoverageEntry("/v1/governance/bind-receipts/export", "GET", BindCoverageClass.READ_ONLY),
     BindCoverageEntry("/v1/governance/bind-receipts/{bind_receipt_id}", "GET", BindCoverageClass.READ_ONLY),
+    BindCoverageEntry("/v1/governance/live-snapshot", "GET", BindCoverageClass.READ_ONLY),
     BindCoverageEntry("/v1/governance/policy-bundles/promote", "POST", BindCoverageClass.BIND_GOVERNED),
     BindCoverageEntry("/v1/compliance/config", "GET", BindCoverageClass.READ_ONLY),
     BindCoverageEntry("/v1/compliance/config", "PUT", BindCoverageClass.BIND_GOVERNED),
