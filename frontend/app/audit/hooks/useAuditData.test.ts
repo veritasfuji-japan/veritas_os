@@ -443,7 +443,7 @@ describe("useAuditData", () => {
     const { result } = renderHook(() => useAuditData());
 
     await vi.waitFor(() => {
-      expect(result.current.bindReceiptLookupError).toContain("Invalid bind_receipt_id");
+      expect(result.current.queryTargetInvalidError).toContain("Invalid artifact ID");
     });
     expect(result.current.bindReceiptLookupDetail).toBeNull();
     expect(result.current.showBindReceiptFallback).toBe(false);
@@ -474,5 +474,85 @@ describe("useAuditData", () => {
     });
     expect(result.current.bindReceiptLookupDetail).toBeNull();
     expect(result.current.showBindReceiptFallback).toBe(false);
+  });
+
+  it("consumes decision_id query and focuses matched timeline item", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=43");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    await vi.waitFor(() => {
+      expect(result.current.queryTarget?.kind).toBe("decision_id");
+      expect(result.current.queryTarget?.value).toBe("43");
+      expect(result.current.queryTargetFoundInTimeline).toBe(true);
+      expect(result.current.selected?.decision_id).toBe("43");
+      expect(result.current.detailTab).toBe("related");
+    });
+  });
+
+  it("consumes execution_intent_id query from metadata and focuses item", async () => {
+    window.history.replaceState({}, "", "/audit?execution_intent_id=ei-002");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [
+            MOCK_ITEMS[0],
+            {
+              ...MOCK_ITEMS[1],
+              metadata: { execution_intent_id: "ei-002" },
+            },
+          ],
+          next_cursor: null,
+          has_more: false,
+        }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    await vi.waitFor(() => {
+      expect(result.current.queryTarget?.kind).toBe("execution_intent_id");
+      expect(result.current.queryTargetFoundInTimeline).toBe(true);
+      expect(result.current.selected?.request_id).toBe("req-002");
+    });
+  });
+
+  it("marks timeline miss for decision_id when not loaded", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=missing-dec");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    await vi.waitFor(() => {
+      expect(result.current.queryTarget?.kind).toBe("decision_id");
+      expect(result.current.queryTargetTimelineMiss).toBe(true);
+      expect(result.current.queryTargetFoundInTimeline).toBe(false);
+    });
+  });
+
+  it("rejects invalid decision_id query", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=bad%20value");
+
+    const { result } = renderHook(() => useAuditData());
+    await vi.waitFor(() => {
+      expect(result.current.queryTargetInvalidError).toContain("Invalid artifact ID");
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

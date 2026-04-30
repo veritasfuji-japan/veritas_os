@@ -241,6 +241,34 @@ export default function TrustLogExplorerPage(): JSX.Element {
         </Card>
       ) : null}
 
+      {data.queryTarget && data.queryTarget.kind !== "bind_receipt_id" ? (
+        <Card
+          title="Artifact Trace"
+          description={t(
+            "Governance から指定された artifact ID を追跡中です。",
+            "Tracing artifact ID specified from Governance.",
+          )}
+          variant="elevated"
+        >
+          <div className="space-y-2 text-xs">
+            <p>
+              {data.queryTarget.kind}: <span className="font-mono">{data.queryTarget.value}</span>
+            </p>
+            <p className={data.queryTargetFoundInTimeline ? "text-success" : "text-warning"}>
+              {data.queryTargetFoundInTimeline
+                ? t(
+                    "関連する監査ログをタイムラインで選択しました。",
+                    "Matched audit log has been focused in the timeline.",
+                  )
+                : t(
+                    "指定された artifact ID は現在読み込まれているタイムラインでは未検出です。",
+                    "Specified artifact ID was not found in loaded timeline.",
+                  )}
+            </p>
+          </div>
+        </Card>
+      ) : null}
+
       {data.error ? (
         <ErrorBanner
           message={data.error}
@@ -251,6 +279,9 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
       {data.bindReceiptLookupError ? (
         <ErrorBanner message={data.bindReceiptLookupError} />
+      ) : null}
+      {data.queryTargetInvalidError ? (
+        <ErrorBanner message={data.queryTargetInvalidError} />
       ) : null}
 
       {/* Summary */}

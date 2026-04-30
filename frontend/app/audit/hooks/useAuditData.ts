@@ -40,6 +40,10 @@ export interface AuditDataState {
   bindReceiptLookupSucceeded: boolean;
   bindReceiptTimelineMiss: boolean;
   showBindReceiptFallback: boolean;
+  queryTarget: AuditQueryTarget | null;
+  queryTargetInvalidError: string | null;
+  queryTargetFoundInTimeline: boolean;
+  queryTargetTimelineMiss: boolean;
 
   /* selected */
   selected: TrustLogItem | null;
@@ -118,6 +122,15 @@ interface BindReceiptLookupDetail {
   riskCheckResult: Record<string, unknown> | null;
 }
 
+type AuditQueryTargetKind = "bind_receipt_id" | "decision_id" | "execution_intent_id";
+
+interface AuditQueryTarget {
+  kind: AuditQueryTargetKind;
+  value: string;
+}
+
+const AUDIT_ARTIFACT_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+
 /* ------------------------------------------------------------------ */
 /*  Hook                                                               */
 /* ------------------------------------------------------------------ */
@@ -136,6 +149,8 @@ export function useAuditData(): AuditDataState {
   const [bindReceiptLookupLoading, setBindReceiptLookupLoading] = useState(false);
   const [bindReceiptIdFromQuery, setBindReceiptIdFromQuery] = useState<string | null>(null);
   const [bindReceiptLookupDetail, setBindReceiptLookupDetail] = useState<BindReceiptLookupDetail | null>(null);
+  const [queryTarget, setQueryTarget] = useState<AuditQueryTarget | null>(null);
+  const [queryTargetInvalidError, setQueryTargetInvalidError] = useState<string | null>(null);
 
   const bindReceiptBootstrappedRef = useRef(false);
 
@@ -186,6 +201,32 @@ export function useAuditData(): AuditDataState {
       return true;
     }
 
+    return false;
+  };
+
+  const matchesDecisionId = (item: TrustLogItem, decisionId: string): boolean =>
+    String(item.decision_id ?? "") === decisionId;
+
+  const matchesExecutionIntentId = (item: TrustLogItem, executionIntentId: string): boolean => {
+    if (String((item as Record<string, unknown>).execution_intent_id ?? "") === executionIntentId) {
+      return true;
+    }
+    if (
+      item.metadata &&
+      typeof item.metadata === "object" &&
+      item.metadata !== null &&
+      String((item.metadata as Record<string, unknown>).execution_intent_id ?? "") === executionIntentId
+    ) {
+      return true;
+    }
+    if (
+      item.bind_receipt &&
+      typeof item.bind_receipt === "object" &&
+      item.bind_receipt !== null &&
+      String((item.bind_receipt as Record<string, unknown>).execution_intent_id ?? "") === executionIntentId
+    ) {
+      return true;
+    }
     return false;
   };
 
@@ -403,6 +444,23 @@ export function useAuditData(): AuditDataState {
     () => bindReceiptTimelineMiss && bindReceiptLookupDetail !== null,
     [bindReceiptLookupDetail, bindReceiptTimelineMiss],
   );
+  const queryTargetFoundInTimeline = useMemo(() => {
+    if (!queryTarget) {
+      return false;
+    }
+    if (queryTarget.kind === "bind_receipt_id") {
+      return sortedItems.some((item) => matchesBindReceiptId(item, queryTarget.value));
+    }
+    if (queryTarget.kind === "decision_id") {
+      return sortedItems.some((item) => matchesDecisionId(item, queryTarget.value));
+    }
+    return sortedItems.some((item) => matchesExecutionIntentId(item, queryTarget.value));
+  }, [queryTarget, sortedItems]);
+
+  const queryTargetTimelineMiss = useMemo(
+    () => Boolean(queryTarget) && !queryTargetFoundInTimeline,
+    [queryTarget, queryTargetFoundInTimeline],
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Actions                                                          */
@@ -542,23 +600,34 @@ export function useAuditData(): AuditDataState {
 
     const params = new URLSearchParams(window.location.search);
     const bindReceiptId = params.get("bind_receipt_id")?.trim() ?? "";
-    if (!bindReceiptId) {
-      return;
+    const decisionId = params.get("decision_id")?.trim() ?? "";
+    const executionIntentId = params.get("execution_intent_id")?.trim() ?? "";
+    const queryTargets: AuditQueryTarget[] = [];
+    if (bindReceiptId) queryTargets.push({ kind: "bind_receipt_id", value: bindReceiptId });
+    if (decisionId) queryTargets.push({ kind: "decision_id", value: decisionId });
+    if (executionIntentId) queryTargets.push({ kind: "execution_intent_id", value: executionIntentId });
+    const prioritizedTarget = queryTargets[0] ?? null;
+    if (prioritizedTarget) {
+      setQueryTarget(prioritizedTarget);
+      setCrossSearch({ query: prioritizedTarget.value, field: "all" });
     }
 
-    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(bindReceiptId)) {
+    if (queryTargets.some((target) => !AUDIT_ARTIFACT_ID_PATTERN.test(target.value))) {
       setBindReceiptLookupDetail(null);
-      setBindReceiptLookupError(
+      setQueryTargetInvalidError(
         t(
-          "無効な bind_receipt_id が指定されました。",
-          "Invalid bind_receipt_id query parameter.",
+          "無効な artifact ID query parameter が指定されました。",
+          "Invalid artifact ID query parameter.",
         ),
       );
       return;
     }
 
+    if (!bindReceiptId) {
+      return;
+    }
+
     setBindReceiptIdFromQuery(bindReceiptId);
-    setCrossSearch({ query: bindReceiptId, field: "all" });
 
     const loadFromQuery = async (): Promise<void> => {
       setBindReceiptLookupLoading(true);
@@ -605,16 +674,20 @@ export function useAuditData(): AuditDataState {
   }, [t]);
 
   useEffect(() => {
-    if (!bindReceiptIdFromQuery || sortedItems.length === 0) {
+    if (!queryTarget || sortedItems.length === 0) {
       return;
     }
 
-    const matched = sortedItems.find((item) => matchesBindReceiptId(item, bindReceiptIdFromQuery));
+    const matched = sortedItems.find((item) => {
+      if (queryTarget.kind === "bind_receipt_id") return matchesBindReceiptId(item, queryTarget.value);
+      if (queryTarget.kind === "decision_id") return matchesDecisionId(item, queryTarget.value);
+      return matchesExecutionIntentId(item, queryTarget.value);
+    });
     if (matched) {
       setSelected(matched);
       setDetailTab("related");
     }
-  }, [bindReceiptIdFromQuery, sortedItems]);
+  }, [queryTarget, sortedItems]);
 
   /* ---------------------------------------------------------------- */
   /*  Return                                                           */
@@ -634,6 +707,10 @@ export function useAuditData(): AuditDataState {
     bindReceiptLookupSucceeded,
     bindReceiptTimelineMiss,
     showBindReceiptFallback,
+    queryTarget,
+    queryTargetInvalidError,
+    queryTargetFoundInTimeline,
+    queryTargetTimelineMiss,
     selected,
     setSelected,
     requestId,
