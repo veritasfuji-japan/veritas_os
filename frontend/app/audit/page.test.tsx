@@ -63,6 +63,27 @@ async function loadLogs() {
 }
 
 describe("TrustLogExplorerPage", () => {
+  it("renders decision trace card and matched status from decision_id query", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=dec-100");
+    mockFetchWithItems();
+    render(<TrustLogExplorerPage />);
+    await loadLogs();
+    expect(screen.getByText("Decision Artifact Trace")).toBeInTheDocument();
+    expect(screen.getAllByText("decision_id:").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("dec-100").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Matched decision artifact in timeline|関連する decision artifact をタイムラインで選択しました/)).toBeInTheDocument();
+  });
+
+  it("renders execution intent trace not-found status", async () => {
+    window.history.replaceState({}, "", "/audit?execution_intent_id=ei-missing");
+    mockFetchWithItems();
+    render(<TrustLogExplorerPage />);
+    await loadLogs();
+    expect(screen.getByText("Execution Intent Trace")).toBeInTheDocument();
+    expect(screen.getAllByText("ei-missing").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Execution intent was not found in the currently loaded timeline|execution intent は現在読み込まれているタイムラインに見つかりません/)).toBeInTheDocument();
+  });
+
   it("loads paged trust logs and renders timeline items", async () => {
     const fetchMock = vi.spyOn(global, "fetch").mockResolvedValueOnce({
       ok: true,

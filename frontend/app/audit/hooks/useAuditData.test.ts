@@ -475,4 +475,61 @@ describe("useAuditData", () => {
     expect(result.current.bindReceiptLookupDetail).toBeNull();
     expect(result.current.showBindReceiptFallback).toBe(false);
   });
+
+  it("consumes decision_id query and focuses matched timeline item", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=42");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    await vi.waitFor(() => {
+      expect(result.current.decisionIdFromQuery).toBe("42");
+      expect(result.current.selected?.decision_id).toBe("42");
+      expect(result.current.queryTraceStatus).toBe("decision:matched");
+    });
+  });
+
+  it("shows decision_id not found status when no timeline entry matches", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=dec_missing");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+    await vi.waitFor(() => {
+      expect(result.current.queryTraceStatus).toBe("decision:not-found");
+    });
+  });
+
+  it("consumes execution_intent_id query and focuses matched timeline item", async () => {
+    window.history.replaceState({}, "", "/audit?execution_intent_id=ei-123");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [{ ...MOCK_ITEMS[0], metadata: { execution_intent_id: "ei-123" } }],
+          next_cursor: null,
+          has_more: false,
+        }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+    await vi.waitFor(() => {
+      expect(result.current.executionIntentIdFromQuery).toBe("ei-123");
+      expect(result.current.queryTraceStatus).toBe("execution-intent:matched");
+      expect(result.current.selected?.request_id).toBe("req-001");
+    });
+  });
 });
