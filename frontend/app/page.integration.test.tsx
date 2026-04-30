@@ -23,10 +23,15 @@ describe("CommandDashboardPage integration", () => {
 
     render(await CommandDashboardPage());
 
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
-      method: "GET",
-      cache: "no-store",
-    });
+    const fetchCalls = vi.mocked(globalThis.fetch).mock.calls;
+    expect(
+      fetchCalls.some(
+        ([input, init]) =>
+          input === "/api/veritas/v1/report/governance" &&
+          (init as RequestInit | undefined)?.method === "GET" &&
+          (init as RequestInit | undefined)?.cache === "no-store",
+      ),
+    ).toBe(true);
     expect(screen.getByText("decision_shaping")).toBeInTheDocument();
     expect(screen.getByText("degrading")).toBeInTheDocument();
     expect(screen.getByText("ESCALATED")).toBeInTheDocument();
