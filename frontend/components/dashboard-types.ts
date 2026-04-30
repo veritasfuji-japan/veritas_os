@@ -81,6 +81,9 @@ export interface PreBindGovernanceSnapshot {
   pre_bind_detection_detail?: unknown | null;
   pre_bind_preservation_detail?: unknown | null;
   bind_summary?: unknown | null;
+  bind_receipt_id?: string | null;
+  execution_intent_id?: string | null;
+  decision_id?: string | null;
   bind_reason_code?: string | null;
   bind_failure_reason?: string | null;
   failure_category?: string | null;
