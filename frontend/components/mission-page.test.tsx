@@ -148,11 +148,13 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText("trustlog_matching_decision")).toBeInTheDocument();
+    expect(screen.getAllByText("trustlog_matching_decision").length).toBeGreaterThan(0);
     expect(screen.getByText("AUTHORITY_MISSING")).toBeInTheDocument();
     expect(screen.getByText("Authority evidence missing")).toBeInTheDocument();
     expect(screen.getByText("Governance policy")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "/governance" })).toHaveAttribute("href", "/governance");
+    expect(screen.getAllByRole("link", { name: "/governance" })[0]).toHaveAttribute("href", "/governance");
+    expect(screen.getByText("Operator actions")).toBeInTheDocument();
+    expect(screen.getByText(/Open target surface:/)).toBeInTheDocument();
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
@@ -170,7 +172,7 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByRole("link", { name: href })).toHaveAttribute("href", href);
+    expect(screen.getAllByRole("link", { name: href })[0]).toHaveAttribute("href", href);
   });
 
   it.each([
@@ -236,6 +238,120 @@ describe("MissionPage", () => {
     expect(screen.getByText(/relevant_ui_href:/)).toBeInTheDocument();
     expect(screen.getAllByText("not available").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /relevant_ui_href/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Open target surface:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/not available/).length).toBeGreaterThan(0);
+  });
+
+  it("renders target surface action as link only when relevant_ui_href is safe", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            target_label: "Governance policy",
+            relevant_ui_href: "/governance",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getAllByRole("link", { name: "/governance" })[0]).toHaveAttribute("href", "/governance");
+  });
+
+  it("does not render target surface action link when relevant_ui_href is unsafe", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            relevant_ui_href: "https://evil.example",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole("link", { name: "https://evil.example" })).not.toBeInTheDocument();
+    expect(screen.getByText(/unsafe or external link not rendered/)).toBeInTheDocument();
+  });
+
+  it("shows bind receipt id without creating a fake route link", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            bind_receipt_id: "br_123",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Review bind receipt:")).toBeInTheDocument();
+    expect(screen.getByText("br_123")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "br_123" })).not.toBeInTheDocument();
+  });
+
+  it("shows decision id without creating a fake route link", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            decision_id: "dec_123",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("View decision artifact:")).toBeInTheDocument();
+    expect(screen.getByText("dec_123")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "dec_123" })).not.toBeInTheDocument();
+  });
+
+  it("shows execution intent id without creating a fake route link", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            execution_intent_id: "ei_123",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("View execution intent:")).toBeInTheDocument();
+    expect(screen.getByText("ei_123")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "ei_123" })).not.toBeInTheDocument();
+  });
+
+  it("shows pre-bind source without creating a fake trustlog route", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "trustlog_matching_decision",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("View pre-bind source:")).toBeInTheDocument();
+    expect(screen.getAllByText("trustlog_matching_decision").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: /trustlog_matching_decision/i })).not.toBeInTheDocument();
   });
 
   it("renders fallback text for null pre-bind summaries", () => {
@@ -256,7 +372,7 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText("none")).toBeInTheDocument();
+    expect(screen.getAllByText("none").length).toBeGreaterThan(0);
     expect(screen.getAllByText("No pre-bind summary available").length).toBeGreaterThan(0);
   });
 
@@ -275,7 +391,7 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText("malformed_pre_bind_artifact")).toBeInTheDocument();
+    expect(screen.getAllByText("malformed_pre_bind_artifact").length).toBeGreaterThan(0);
     expect(screen.getByText(/classification: degraded/)).toBeInTheDocument();
   });
 });

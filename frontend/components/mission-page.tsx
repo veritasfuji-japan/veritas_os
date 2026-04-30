@@ -362,6 +362,31 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
             <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot?.risk_check_result)}</pre>
           </div>
         </div>
+        <div className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+          <p className="font-semibold">Operator actions</p>
+          <ul className="mt-2 space-y-1">
+            <li>
+              Open target surface:{" "}
+              {relevantUiHref ? <Link className="underline" href={relevantUiHref}>{relevantUiHref}</Link> : <span className="font-mono">not available</span>}
+            </li>
+            <li>
+              Review bind receipt: <span className="font-mono">{governanceSnapshot?.bind_receipt_id ?? "not available"}</span>{" "}
+              <span className="text-muted-foreground">(route unavailable)</span>
+            </li>
+            <li>
+              View decision artifact: <span className="font-mono">{governanceSnapshot?.decision_id ?? "not available"}</span>{" "}
+              <span className="text-muted-foreground">(route unavailable)</span>
+            </li>
+            <li>
+              View execution intent: <span className="font-mono">{governanceSnapshot?.execution_intent_id ?? "not available"}</span>{" "}
+              <span className="text-muted-foreground">(route unavailable)</span>
+            </li>
+            <li>
+              View pre-bind source: <span className="font-mono">{governanceSnapshot?.pre_bind_source ?? "unknown"}</span>{" "}
+              <span className="text-muted-foreground">(route unavailable)</span>
+            </li>
+          </ul>
+        </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="trust and governance highlights">

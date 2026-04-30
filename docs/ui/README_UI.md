@@ -109,3 +109,7 @@ docker compose up --build
 - Mission Control UI は `relevant_ui_href` が app 内部 path（例: `/governance`, `/audit?receipt=...`）の場合のみ Link として表示します。
 - external URL / protocol 付き URL / malformed href（`\\`, 改行, タブなど）は Link 化せず、plain text または `not available` として表示します。
 - unsafe input から fake internal link は生成しません。
+- `Governance artifacts` パネル内の `Operator actions` は artifact 由来 metadata を compact に表示します。
+- `Open target surface` は `normalizeSafeInternalHref()` で safe internal path と判定できる場合のみ Link 化します。
+- `bind_receipt_id` / `decision_id` / `execution_intent_id` は operator 向けに表示しますが、対応 route が repository で確認できない場合は Link 化せず `route unavailable` として扱います。
+- `pre_bind_source` は source state として表示し、TrustLog 含む未確認 route への fake navigation は生成しません。
