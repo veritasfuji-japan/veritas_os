@@ -99,11 +99,14 @@ describe("loadMissionControlIngressPayload", () => {
 
     await loadMissionControlIngressPayload();
 
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
-      method: "GET",
-      cache: "no-store",
-      headers: { "x-veritas-e2e-governance-scenario": "main" },
-    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/veritas/v1/report/governance?e2e_governance_scenario=main",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: { "x-veritas-e2e-governance-scenario": "main" },
+      },
+    );
   });
 
   it("returns null when backend feed is unavailable", async () => {

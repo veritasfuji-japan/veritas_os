@@ -4,9 +4,11 @@ import { resolveApiBaseUrl } from "../../../[...path]/route-config";
 
 const GOVERNANCE_REPORT_PATH = "/v1/report/governance";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
+const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
 
 function resolveE2EScenarioPayload(request: Request): Record<string, unknown> | null {
-  const scenario = request.headers.get(E2E_SCENARIO_HEADER)?.trim();
+  const scenarioFromQuery = new URL(request.url).searchParams.get(E2E_SCENARIO_QUERY)?.trim();
+  const scenario = scenarioFromQuery || request.headers.get(E2E_SCENARIO_HEADER)?.trim();
   if (scenario === "main") {
     return {
       governance_layer_snapshot: {

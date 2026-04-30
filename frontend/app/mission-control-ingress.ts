@@ -4,6 +4,7 @@ import { type MissionGovernanceIngressPayload } from "../components/mission-gove
 
 const GOVERNANCE_REPORT_ENDPOINT = "/api/veritas/v1/report/governance";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
+const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -49,10 +50,15 @@ async function resolveE2EScenarioHeader(): Promise<string | null> {
   }
 }
 
-export async function loadMissionControlIngressPayload(): Promise<MissionGovernanceIngressPayload | null> {
+export async function loadMissionControlIngressPayload(
+  scenarioOverride?: string | null,
+): Promise<MissionGovernanceIngressPayload | null> {
   try {
-    const scenario = await resolveE2EScenarioHeader();
-    const response = await fetch(GOVERNANCE_REPORT_ENDPOINT, {
+    const scenario = scenarioOverride?.trim() || (await resolveE2EScenarioHeader());
+    const endpoint = scenario
+      ? `${GOVERNANCE_REPORT_ENDPOINT}?${E2E_SCENARIO_QUERY}=${encodeURIComponent(scenario)}`
+      : GOVERNANCE_REPORT_ENDPOINT;
+    const response = await fetch(endpoint, {
       method: "GET",
       cache: "no-store",
       headers: scenario ? { [E2E_SCENARIO_HEADER]: scenario } : undefined,

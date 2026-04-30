@@ -24,6 +24,21 @@ describe("/api/veritas/v1/report/governance", () => {
     });
   });
 
+
+  it("returns deterministic fallback scenario payload for query parameter", async () => {
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?e2e_governance_scenario=fallback"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      governance_layer_snapshot: {
+        participation_state: "participatory",
+        preservation_state: "open",
+        intervention_viability: "high",
+        bind_outcome: "BLOCKED",
+      },
+    });
+  });
+
   it("returns governance_layer_snapshot as backend-fed main path", async () => {
     vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
     vi.stubEnv("VERITAS_API_KEY", "test-key");
