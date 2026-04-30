@@ -40,6 +40,9 @@ export interface AuditDataState {
   bindReceiptLookupSucceeded: boolean;
   bindReceiptTimelineMiss: boolean;
   showBindReceiptFallback: boolean;
+  decisionIdFromQuery: string | null;
+  executionIntentIdFromQuery: string | null;
+  queryTraceStatus: string | null;
 
   /* selected */
   selected: TrustLogItem | null;
@@ -135,6 +138,9 @@ export function useAuditData(): AuditDataState {
   const [bindReceiptLookupError, setBindReceiptLookupError] = useState<string | null>(null);
   const [bindReceiptLookupLoading, setBindReceiptLookupLoading] = useState(false);
   const [bindReceiptIdFromQuery, setBindReceiptIdFromQuery] = useState<string | null>(null);
+  const [decisionIdFromQuery, setDecisionIdFromQuery] = useState<string | null>(null);
+  const [executionIntentIdFromQuery, setExecutionIntentIdFromQuery] = useState<string | null>(null);
+  const [queryTraceStatus, setQueryTraceStatus] = useState<string | null>(null);
   const [bindReceiptLookupDetail, setBindReceiptLookupDetail] = useState<BindReceiptLookupDetail | null>(null);
 
   const bindReceiptBootstrappedRef = useRef(false);
@@ -186,6 +192,33 @@ export function useAuditData(): AuditDataState {
       return true;
     }
 
+    return false;
+  };
+  const AUDIT_ARTIFACT_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+
+  const matchesDecisionId = (item: TrustLogItem, decisionId: string): boolean =>
+    String(item.decision_id ?? "") === decisionId;
+
+  const matchesExecutionIntentId = (item: TrustLogItem, executionIntentId: string): boolean => {
+    if (String((item as Record<string, unknown>).execution_intent_id ?? "") === executionIntentId) {
+      return true;
+    }
+    if (
+      item.metadata &&
+      typeof item.metadata === "object" &&
+      item.metadata !== null &&
+      String((item.metadata as Record<string, unknown>).execution_intent_id ?? "") === executionIntentId
+    ) {
+      return true;
+    }
+    if (
+      item.bind_receipt &&
+      typeof item.bind_receipt === "object" &&
+      item.bind_receipt !== null &&
+      String((item.bind_receipt as Record<string, unknown>).execution_intent_id ?? "") === executionIntentId
+    ) {
+      return true;
+    }
     return false;
   };
 
@@ -542,31 +575,31 @@ export function useAuditData(): AuditDataState {
 
     const params = new URLSearchParams(window.location.search);
     const bindReceiptId = params.get("bind_receipt_id")?.trim() ?? "";
-    if (!bindReceiptId) {
-      return;
-    }
+    const decisionId = params.get("decision_id")?.trim() ?? "";
+    const executionIntentId = params.get("execution_intent_id")?.trim() ?? "";
 
-    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(bindReceiptId)) {
-      setBindReceiptLookupDetail(null);
-      setBindReceiptLookupError(
-        t(
-          "無効な bind_receipt_id が指定されました。",
-          "Invalid bind_receipt_id query parameter.",
-        ),
-      );
-      return;
-    }
-
-    setBindReceiptIdFromQuery(bindReceiptId);
-    setCrossSearch({ query: bindReceiptId, field: "all" });
-
-    const loadFromQuery = async (): Promise<void> => {
-      setBindReceiptLookupLoading(true);
-      setBindReceiptLookupError(null);
-      try {
-        const response = await veritasFetch(
-          `/api/veritas/v1/governance/bind-receipts/${encodeURIComponent(bindReceiptId)}`,
+    if (bindReceiptId) {
+      if (!AUDIT_ARTIFACT_ID_PATTERN.test(bindReceiptId)) {
+        setBindReceiptLookupDetail(null);
+        setBindReceiptLookupError(
+          t(
+            "無効な bind_receipt_id が指定されました。",
+            "Invalid bind_receipt_id query parameter.",
+          ),
         );
+        return;
+      }
+
+      setBindReceiptIdFromQuery(bindReceiptId);
+      setCrossSearch({ query: bindReceiptId, field: "all" });
+
+      const loadFromQuery = async (): Promise<void> => {
+        setBindReceiptLookupLoading(true);
+        setBindReceiptLookupError(null);
+        try {
+          const response = await veritasFetch(
+            `/api/veritas/v1/governance/bind-receipts/${encodeURIComponent(bindReceiptId)}`,
+          );
 
         if (response.status === 404) {
           setBindReceiptLookupDetail(null);
@@ -596,12 +629,43 @@ export function useAuditData(): AuditDataState {
             "Network error: failed to fetch bind receipt.",
           ),
         );
-      } finally {
-        setBindReceiptLookupLoading(false);
-      }
-    };
+        } finally {
+          setBindReceiptLookupLoading(false);
+        }
+      };
 
-    void loadFromQuery();
+      void loadFromQuery();
+      return;
+    }
+
+    if (decisionId) {
+      if (!AUDIT_ARTIFACT_ID_PATTERN.test(decisionId)) {
+        setBindReceiptLookupError(
+          t("無効な decision_id が指定されました。", "Invalid decision_id query parameter."),
+        );
+        return;
+      }
+      setDecisionIdFromQuery(decisionId);
+      setSelectedDecisionId(decisionId);
+      setCrossSearch({ query: decisionId, field: "decision_id" });
+      setQueryTraceStatus("pending");
+      return;
+    }
+
+    if (executionIntentId) {
+      if (!AUDIT_ARTIFACT_ID_PATTERN.test(executionIntentId)) {
+        setBindReceiptLookupError(
+          t(
+            "無効な execution_intent_id が指定されました。",
+            "Invalid execution_intent_id query parameter.",
+          ),
+        );
+        return;
+      }
+      setExecutionIntentIdFromQuery(executionIntentId);
+      setCrossSearch({ query: executionIntentId, field: "all" });
+      setQueryTraceStatus("pending");
+    }
   }, [t]);
 
   useEffect(() => {
@@ -615,6 +679,34 @@ export function useAuditData(): AuditDataState {
       setDetailTab("related");
     }
   }, [bindReceiptIdFromQuery, sortedItems]);
+
+  useEffect(() => {
+    if (!decisionIdFromQuery || sortedItems.length === 0) {
+      return;
+    }
+    const matched = sortedItems.find((item) => matchesDecisionId(item, decisionIdFromQuery));
+    if (matched) {
+      setSelected(matched);
+      setDetailTab("related");
+      setQueryTraceStatus("decision:matched");
+      return;
+    }
+    setQueryTraceStatus("decision:not-found");
+  }, [decisionIdFromQuery, sortedItems]);
+
+  useEffect(() => {
+    if (!executionIntentIdFromQuery || sortedItems.length === 0) {
+      return;
+    }
+    const matched = sortedItems.find((item) => matchesExecutionIntentId(item, executionIntentIdFromQuery));
+    if (matched) {
+      setSelected(matched);
+      setDetailTab("related");
+      setQueryTraceStatus("execution-intent:matched");
+      return;
+    }
+    setQueryTraceStatus("execution-intent:not-found");
+  }, [executionIntentIdFromQuery, sortedItems]);
 
   /* ---------------------------------------------------------------- */
   /*  Return                                                           */
@@ -634,6 +726,9 @@ export function useAuditData(): AuditDataState {
     bindReceiptLookupSucceeded,
     bindReceiptTimelineMiss,
     showBindReceiptFallback,
+    decisionIdFromQuery,
+    executionIntentIdFromQuery,
+    queryTraceStatus,
     selected,
     setSelected,
     requestId,

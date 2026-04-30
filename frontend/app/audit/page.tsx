@@ -240,6 +240,49 @@ export default function TrustLogExplorerPage(): JSX.Element {
           </div>
         </Card>
       ) : null}
+      {data.decisionIdFromQuery ? (
+        <Card
+          title="Decision Artifact Trace"
+          description={t(
+            "Mission Control から指定された decision artifact を追跡中です。",
+            "Tracing decision artifact specified from Mission Control.",
+          )}
+          variant="elevated"
+        >
+          <div className="space-y-2 text-xs">
+            <p>
+              decision_id: <span className="font-mono">{data.decisionIdFromQuery}</span>
+            </p>
+            <p className={data.queryTraceStatus === "decision:matched" ? "text-success" : "text-warning"}>
+              {data.queryTraceStatus === "decision:matched"
+                ? t("関連する decision artifact をタイムラインで選択しました。", "Matched decision artifact in timeline.")
+                : t("decision artifact は現在読み込まれているタイムラインに見つかりません。", "Decision artifact was not found in the currently loaded timeline.")}
+            </p>
+          </div>
+        </Card>
+      ) : null}
+
+      {data.executionIntentIdFromQuery ? (
+        <Card
+          title="Execution Intent Trace"
+          description={t(
+            "Mission Control から指定された execution intent を追跡中です。",
+            "Tracing execution intent specified from Mission Control.",
+          )}
+          variant="elevated"
+        >
+          <div className="space-y-2 text-xs">
+            <p>
+              execution_intent_id: <span className="font-mono">{data.executionIntentIdFromQuery}</span>
+            </p>
+            <p className={data.queryTraceStatus === "execution-intent:matched" ? "text-success" : "text-warning"}>
+              {data.queryTraceStatus === "execution-intent:matched"
+                ? t("関連する execution intent をタイムラインで選択しました。", "Matched execution intent in timeline.")
+                : t("execution intent は現在読み込まれているタイムラインに見つかりません。", "Execution intent was not found in the currently loaded timeline.")}
+            </p>
+          </div>
+        </Card>
+      ) : null}
 
       {data.error ? (
         <ErrorBanner
