@@ -126,4 +126,73 @@ describe("MissionPage", () => {
     expect(screen.queryByText(/Governance layer timeline/)).not.toBeInTheDocument();
     expect(screen.queryByText(/participation_state:/)).not.toBeInTheDocument();
   });
+
+  it("renders governance artifact metadata for operators", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "trustlog_matching_decision",
+            pre_bind_detection_summary: { participation_state: "decision_shaping" },
+            pre_bind_preservation_summary: { preservation_state: "degrading" },
+            bind_reason_code: "AUTHORITY_MISSING",
+            bind_failure_reason: "Authority evidence missing",
+            target_label: "Governance policy",
+            operator_surface: "governance",
+            relevant_ui_href: "/governance",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("trustlog_matching_decision")).toBeInTheDocument();
+    expect(screen.getByText("AUTHORITY_MISSING")).toBeInTheDocument();
+    expect(screen.getByText("Authority evidence missing")).toBeInTheDocument();
+    expect(screen.getByText("Governance policy")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "/governance" })).toHaveAttribute("href", "/governance");
+  });
+
+  it("renders fallback text for null pre-bind summaries", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "none",
+            pre_bind_detection_summary: null,
+            pre_bind_preservation_summary: null,
+            bind_reason_code: null,
+            bind_failure_reason: null,
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("none")).toBeInTheDocument();
+    expect(screen.getAllByText("No pre-bind summary available").length).toBeGreaterThan(0);
+  });
+
+  it("shows degraded pre-bind source markers without crashing", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "malformed_pre_bind_artifact",
+            participation_state: "unknown",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("malformed_pre_bind_artifact")).toBeInTheDocument();
+    expect(screen.getByText(/classification: degraded/)).toBeInTheDocument();
+  });
 });

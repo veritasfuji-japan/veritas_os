@@ -80,6 +80,22 @@ export interface PreBindGovernanceSnapshot {
   pre_bind_preservation_summary?: unknown | null;
   pre_bind_detection_detail?: unknown | null;
   pre_bind_preservation_detail?: unknown | null;
+  bind_summary?: unknown | null;
+  bind_reason_code?: string | null;
+  bind_failure_reason?: string | null;
+  failure_category?: string | null;
+  rollback_status?: string | null;
+  retry_safety?: string | null;
+  target_label?: string | null;
+  target_path?: string | null;
+  target_type?: string | null;
+  target_path_type?: string | null;
+  operator_surface?: string | null;
+  relevant_ui_href?: string | null;
+  authority_check_result?: unknown | null;
+  constraint_check_result?: unknown | null;
+  drift_check_result?: unknown | null;
+  risk_check_result?: unknown | null;
 }
 
 export const PRE_BIND_GOVERNANCE_VOCABULARY_LABELS = {
