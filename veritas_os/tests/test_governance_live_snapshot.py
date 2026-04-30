@@ -154,6 +154,9 @@ def test_governance_live_snapshot_degraded_when_no_receipts(monkeypatch):
     snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
     assert snapshot["source"] == "degraded_no_recent_governance_artifact"
     assert snapshot["bind_outcome"] == "UNKNOWN"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
 
 
 def test_governance_live_snapshot_degraded_when_artifact_unavailable(monkeypatch):
@@ -166,6 +169,9 @@ def test_governance_live_snapshot_degraded_when_artifact_unavailable(monkeypatch
     snapshot = response.json()["governance_layer_snapshot"]
     assert snapshot["source"] == "degraded_artifact_retrieval_failed"
     assert snapshot["bind_outcome"] == "UNKNOWN"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
 
 
 def test_governance_live_snapshot_vocabulary(monkeypatch):
@@ -188,6 +194,9 @@ def test_governance_live_snapshot_vocabulary(monkeypatch):
     assert snapshot["preservation_state"] == "unknown"
     assert snapshot["intervention_viability"] == "unknown"
     assert snapshot["bind_outcome"] == "UNKNOWN"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
 
 
 def test_builder_uses_latest_receipt(monkeypatch):
@@ -212,6 +221,9 @@ def test_builder_degraded_on_exception(monkeypatch):
     snapshot = build_governance_live_snapshot()["governance_layer_snapshot"]
     assert snapshot["source"] == "degraded_artifact_retrieval_failed"
     assert snapshot["bind_outcome"] == "UNKNOWN"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
 
 
 def test_normalizers_invalid_values():
@@ -219,6 +231,101 @@ def test_normalizers_invalid_values():
     assert _normalize_state(None, allowed={"known", "unknown"}) == "unknown"
     assert _normalize_bind_outcome("not_real") == "UNKNOWN"
     assert _normalize_bind_outcome(None) == "UNKNOWN"
+
+
+def test_governance_live_snapshot_defaults_pre_bind_to_unknown_when_missing(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["participation_state"] == "unknown"
+    assert snapshot["preservation_state"] == "unknown"
+    assert snapshot["intervention_viability"] == "unknown"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
+    assert snapshot["pre_bind_detection_detail"] is None
+    assert snapshot["pre_bind_preservation_detail"] is None
+
+
+def test_governance_live_snapshot_reads_pre_bind_from_receipt_payload(monkeypatch):
+    class _PreBindReceipt:
+        def to_dict(self):
+            return {
+                "final_outcome": "COMMITTED",
+                "bind_ts": "2026-04-30T00:00:00Z",
+                "participation_state": "decision_shaping",
+                "preservation_state": "degrading",
+                "intervention_viability": "minimal",
+                "pre_bind_detection_summary": {"participation_state": "decision_shaping"},
+                "pre_bind_preservation_summary": {"preservation_state": "degrading"},
+                "pre_bind_detection_detail": {"aggregate_index": 0.88},
+                "pre_bind_preservation_detail": {"intervention_viability": {"level": "minimal"}},
+            }
+
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [_PreBindReceipt()],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["participation_state"] == "decision_shaping"
+    assert snapshot["preservation_state"] == "degrading"
+    assert snapshot["intervention_viability"] == "minimal"
+    assert snapshot["pre_bind_source"] == "latest_bind_receipt"
+    assert snapshot["pre_bind_detection_summary"] == {"participation_state": "decision_shaping"}
+    assert snapshot["pre_bind_preservation_summary"] == {"preservation_state": "degrading"}
+
+
+def test_governance_live_snapshot_normalizes_malformed_pre_bind_objects(monkeypatch):
+    class _MalformedPreBindReceipt:
+        def to_dict(self):
+            return {
+                "final_outcome": "BLOCKED",
+                "bind_ts": "2026-04-30T00:00:00Z",
+                "participation_state": "not_real",
+                "preservation_state": "invalid",
+                "intervention_viability": "bad",
+                "pre_bind_detection_summary": "bad",
+                "pre_bind_preservation_summary": [1, 2],
+            }
+
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [_MalformedPreBindReceipt()],
+    )
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["participation_state"] == "unknown"
+    assert snapshot["preservation_state"] == "unknown"
+    assert snapshot["intervention_viability"] == "unknown"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
+
+
+def test_governance_live_snapshot_pre_bind_enrichment_exception_is_non_fatal(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    def _raise(_payload):
+        raise RuntimeError("pre-bind boom")
+
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot._extract_pre_bind_snapshot_fields", _raise)
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["bind_outcome"] == "COMMITTED"
+    assert snapshot["pre_bind_source"] == "malformed_pre_bind_artifact"
+    assert snapshot["participation_state"] == "unknown"
 
 
 def test_governance_live_snapshot_requires_auth():
@@ -241,6 +348,9 @@ def test_governance_live_snapshot_degraded_when_to_dict_raises(monkeypatch):
     snapshot = response.json()["governance_layer_snapshot"]
     assert snapshot["source"] == "degraded_invalid_latest_bind_receipt"
     assert snapshot["bind_outcome"] == "UNKNOWN"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
 
 
 def test_governance_live_snapshot_degraded_when_to_dict_not_dict(monkeypatch):
@@ -258,6 +368,9 @@ def test_governance_live_snapshot_degraded_when_to_dict_not_dict(monkeypatch):
     snapshot = response.json()["governance_layer_snapshot"]
     assert snapshot["source"] == "degraded_invalid_latest_bind_receipt"
     assert snapshot["bind_outcome"] == "UNKNOWN"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
 
 
 def test_governance_live_snapshot_degraded_when_enrich_raises(monkeypatch):
@@ -277,6 +390,9 @@ def test_governance_live_snapshot_degraded_when_enrich_raises(monkeypatch):
     snapshot = response.json()["governance_layer_snapshot"]
     assert snapshot["source"] == "degraded_bind_summary_enrichment_failed"
     assert snapshot["bind_outcome"] == "UNKNOWN"
+    assert snapshot["pre_bind_source"] == "none"
+    assert snapshot["pre_bind_detection_summary"] is None
+    assert snapshot["pre_bind_preservation_summary"] is None
 
 
 def test_governance_live_snapshot_degraded_when_bind_summary_raises(monkeypatch):

@@ -50,18 +50,30 @@ def _normalize_bind_outcome(value: Any) -> str:
     return normalized if normalized in _ALLOWED_BIND_OUTCOMES else "UNKNOWN"
 
 
+def _default_pre_bind_fields(*, pre_bind_source: str = "none") -> dict[str, Any]:
+    """Return normalized optional pre-bind enrichment fields."""
+    return {
+        "participation_state": "unknown",
+        "preservation_state": "unknown",
+        "intervention_viability": "unknown",
+        "pre_bind_source": pre_bind_source,
+        "pre_bind_detection_summary": None,
+        "pre_bind_preservation_summary": None,
+        "pre_bind_detection_detail": None,
+        "pre_bind_preservation_detail": None,
+    }
+
+
 def _build_degraded_snapshot(source: str) -> dict[str, Any]:
     """Return a render-safe degraded snapshot with explicit failure source."""
-    return {
-        "governance_layer_snapshot": {
-            "participation_state": "unknown",
-            "preservation_state": "unknown",
-            "intervention_viability": "unknown",
-            "bind_outcome": "UNKNOWN",
-            "source": source,
-            "updated_at": _utc_now_iso8601(),
-        },
+    snapshot = {
+        **_default_pre_bind_fields(),
+        "bind_outcome": "UNKNOWN",
+        "source": source,
+        "updated_at": _utc_now_iso8601(),
     }
+
+    return {"governance_layer_snapshot": snapshot}
 
 
 def _select_latest_receipt(receipts: list[Any]) -> Any | None:
@@ -82,6 +94,65 @@ def _safe_receipt_payload(receipt: Any) -> dict[str, Any] | None:
     return payload
 
 
+
+
+def _normalize_pre_bind_summary(value: Any) -> dict[str, Any] | None:
+    """Normalize pre-bind summary/detail objects to dictionaries or None."""
+    return value if isinstance(value, dict) else None
+
+
+def _extract_pre_bind_snapshot_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract optional pre-bind enrichment fields from receipt payload."""
+    participation_state = _normalize_state(
+        payload.get("participation_state"),
+        allowed=_ALLOWED_PARTICIPATION_STATES,
+    )
+    preservation_state = _normalize_state(
+        payload.get("preservation_state"),
+        allowed=_ALLOWED_PRESERVATION_STATES,
+    )
+    intervention_viability = _normalize_state(
+        payload.get("intervention_viability"),
+        allowed=_ALLOWED_INTERVENTION_VIABILITY,
+    )
+
+    detection_summary = _normalize_pre_bind_summary(payload.get("pre_bind_detection_summary"))
+    preservation_summary = _normalize_pre_bind_summary(payload.get("pre_bind_preservation_summary"))
+    detection_detail = _normalize_pre_bind_summary(payload.get("pre_bind_detection_detail"))
+    preservation_detail = _normalize_pre_bind_summary(payload.get("pre_bind_preservation_detail"))
+
+    has_state_signal = any(
+        value != "unknown"
+        for value in (participation_state, preservation_state, intervention_viability)
+    )
+    has_summary_signal = any(
+        value is not None
+        for value in (
+            detection_summary,
+            preservation_summary,
+            detection_detail,
+            preservation_detail,
+        )
+    )
+    pre_bind_source = "latest_bind_receipt" if (has_state_signal or has_summary_signal) else "none"
+
+    return {
+        "participation_state": participation_state,
+        "preservation_state": preservation_state,
+        "intervention_viability": intervention_viability,
+        "pre_bind_source": pre_bind_source,
+        "pre_bind_detection_summary": detection_summary,
+        "pre_bind_preservation_summary": preservation_summary,
+        "pre_bind_detection_detail": detection_detail,
+        "pre_bind_preservation_detail": preservation_detail,
+    }
+
+
+def _merge_pre_bind_fields(snapshot: dict[str, Any], pre_bind_fields: dict[str, Any]) -> dict[str, Any]:
+    """Merge normalized pre-bind fields into the snapshot payload."""
+    snapshot.update(pre_bind_fields)
+    return snapshot
+
 def _build_enriched_snapshot_from_receipt_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Build enriched live snapshot from a valid receipt payload."""
     try:
@@ -92,18 +163,7 @@ def _build_enriched_snapshot_from_receipt_payload(payload: dict[str, Any]) -> di
         return None
 
     snapshot = {
-        "participation_state": _normalize_state(
-            enriched_receipt.get("participation_state"),
-            allowed=_ALLOWED_PARTICIPATION_STATES,
-        ),
-        "preservation_state": _normalize_state(
-            enriched_receipt.get("preservation_state"),
-            allowed=_ALLOWED_PRESERVATION_STATES,
-        ),
-        "intervention_viability": _normalize_state(
-            enriched_receipt.get("intervention_viability"),
-            allowed=_ALLOWED_INTERVENTION_VIABILITY,
-        ),
+        **_default_pre_bind_fields(),
         "bind_outcome": _normalize_bind_outcome(enriched_receipt.get("final_outcome")),
         "source": "backend_live_snapshot",
         "updated_at": (
@@ -131,7 +191,13 @@ def _build_enriched_snapshot_from_receipt_payload(payload: dict[str, Any]) -> di
         "risk_check_result": enriched_receipt.get("risk_check_result"),
         "bind_summary": bind_summary,
     }
-    return {"governance_layer_snapshot": snapshot}
+
+    try:
+        pre_bind_fields = _extract_pre_bind_snapshot_fields(enriched_receipt)
+    except Exception:
+        pre_bind_fields = _default_pre_bind_fields(pre_bind_source="malformed_pre_bind_artifact")
+
+    return {"governance_layer_snapshot": _merge_pre_bind_fields(snapshot, pre_bind_fields)}
 
 
 def build_governance_live_snapshot() -> dict[str, Any]:
