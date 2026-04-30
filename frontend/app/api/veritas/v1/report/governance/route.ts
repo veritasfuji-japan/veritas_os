@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
+import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
 
 const GOVERNANCE_REPORT_PATH = "/v1/report/governance";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
@@ -63,9 +64,11 @@ function normalizeGovernanceReportPayload(payload: unknown): Record<string, unkn
  * Main path fetches backend governance report and keeps payload vocabulary stable.
  */
 export async function GET(request: Request): Promise<Response> {
-  const e2ePayload = resolveE2EScenarioPayload(request);
-  if (e2ePayload) {
-    return NextResponse.json(e2ePayload, { status: 200 });
+  if (areE2EScenariosEnabled()) {
+    const e2ePayload = resolveE2EScenarioPayload(request);
+    if (e2ePayload) {
+      return NextResponse.json(e2ePayload, { status: 200 });
+    }
   }
 
   const apiBaseUrl = resolveApiBaseUrl();
