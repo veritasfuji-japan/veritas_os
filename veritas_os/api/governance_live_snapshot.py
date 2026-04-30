@@ -149,21 +149,99 @@ def _extract_pre_bind_snapshot_fields(payload: dict[str, Any]) -> dict[str, Any]
     }
 
 
-def _resolve_pre_bind_from_trustlog_recent_decision() -> dict[str, Any] | None:
-    """Resolve latest pre-bind fields from recent TrustLog decision artifacts.
+def _extract_pre_bind_correlation_identity(
+    receipt_payload: dict[str, Any],
+) -> dict[str, str]:
+    """Extract decision/request/execution identity for TrustLog correlation."""
+    identity: dict[str, str] = {}
+    for key in ("decision_id", "request_id", "execution_intent_id"):
+        value = receipt_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            identity[key] = value.strip()
+    return identity
 
-    Returns:
-        Normalized pre-bind snapshot fields when a recent decision entry contains
-        pre-bind structures; otherwise ``None``.
-    """
+
+def _extract_entry_identity_value(entry: dict[str, Any], key: str) -> str | None:
+    """Extract identity values from known TrustLog entry shapes."""
+    value = entry.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+
+    context = entry.get("context")
+    if isinstance(context, dict):
+        context_value = context.get(key)
+        if isinstance(context_value, str) and context_value.strip():
+            return context_value.strip()
+
+    payload = entry.get("payload")
+    if isinstance(payload, dict):
+        payload_value = payload.get(key)
+        if isinstance(payload_value, str) and payload_value.strip():
+            return payload_value.strip()
+
+    decision = entry.get("decision")
+    if isinstance(decision, dict):
+        decision_value = decision.get(key)
+        if isinstance(decision_value, str) and decision_value.strip():
+            return decision_value.strip()
+
+    return None
+
+
+def _trustlog_entry_matches_identity(
+    entry: dict[str, Any],
+    identity: dict[str, str],
+) -> str | None:
+    """Return the highest-priority identity key matched by a TrustLog entry."""
+    for key in ("decision_id", "request_id", "execution_intent_id"):
+        identity_value = identity.get(key)
+        if not identity_value:
+            continue
+        if _extract_entry_identity_value(entry, key) == identity_value:
+            return key
+    return None
+
+
+def _resolve_pre_bind_from_trustlog_recent_decision(
+    correlation_identity: dict[str, str] | None = None,
+) -> dict[str, Any] | None:
+    """Resolve pre-bind fields from TrustLog using identity-first correlation."""
     recent_entries = load_trust_log(limit=20)
+    candidates: list[tuple[dict[str, Any], dict[str, Any]]] = []
+
     for entry in recent_entries:
         if not isinstance(entry, dict):
             continue
         fields = _extract_pre_bind_snapshot_fields(entry)
+        candidates.append((entry, fields))
+
+    if not candidates:
+        return None
+
+    if correlation_identity:
+        source_by_key = {
+            "decision_id": "trustlog_matching_decision",
+            "request_id": "trustlog_matching_request",
+            "execution_intent_id": "trustlog_matching_execution_intent",
+        }
+        for key in ("decision_id", "request_id", "execution_intent_id"):
+            if key not in correlation_identity:
+                continue
+            for entry, fields in candidates:
+                matched_key = _trustlog_entry_matches_identity(entry, correlation_identity)
+                if matched_key != key:
+                    continue
+                if fields.get("pre_bind_source") != "latest_bind_receipt":
+                    return _default_pre_bind_fields(pre_bind_source="malformed_pre_bind_artifact")
+                resolved = dict(fields)
+                resolved["pre_bind_source"] = source_by_key[key]
+                return resolved
+
+    for _entry, fields in candidates:
         if fields.get("pre_bind_source") == "latest_bind_receipt":
-            fields["pre_bind_source"] = "trustlog_recent_decision"
-            return fields
+            resolved = dict(fields)
+            resolved["pre_bind_source"] = "trustlog_recent_decision"
+            return resolved
     return None
 
 
@@ -171,8 +249,9 @@ def resolve_latest_pre_bind_snapshot_fields(
     receipt_payload: dict[str, Any],
 ) -> dict[str, Any]:
     """Resolve pre-bind fields with source priority and safe fallbacks."""
+    correlation_identity = _extract_pre_bind_correlation_identity(receipt_payload)
     try:
-        dedicated_fields = _resolve_pre_bind_from_trustlog_recent_decision()
+        dedicated_fields = _resolve_pre_bind_from_trustlog_recent_decision(correlation_identity)
     except Exception:
         return _default_pre_bind_fields(
             pre_bind_source="pre_bind_artifact_retrieval_failed",

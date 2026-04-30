@@ -297,7 +297,7 @@ def test_governance_live_snapshot_prefers_dedicated_pre_bind_source(monkeypatch)
     )
     monkeypatch.setattr(
         "veritas_os.api.governance_live_snapshot._resolve_pre_bind_from_trustlog_recent_decision",
-        lambda: {
+        lambda _identity=None: {
             "participation_state": "decision_shaping",
             "preservation_state": "degrading",
             "intervention_viability": "minimal",
@@ -535,3 +535,85 @@ def test_builder_degraded_for_bind_summary_exception(monkeypatch):
     monkeypatch.setattr("veritas_os.api.governance_live_snapshot.build_bind_summary_from_receipt", _raise)
     snapshot = build_governance_live_snapshot()["governance_layer_snapshot"]
     assert snapshot["source"] == "degraded_bind_summary_enrichment_failed"
+
+
+def test_pre_bind_prefers_decision_match_over_newer_recent(monkeypatch):
+    receipt = BindReceipt(
+        final_outcome=FinalOutcome.COMMITTED,
+        bind_ts="2026-04-30T00:00:00Z",
+        decision_id="dec_target",
+    )
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", lambda: [receipt])
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.load_trust_log",
+        lambda limit=20: [
+            {
+                "decision_id": "dec_other",
+                "participation_state": "informative",
+            },
+            {
+                "decision_id": "dec_target",
+                "participation_state": "decision_shaping",
+            },
+        ],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["pre_bind_source"] == "trustlog_matching_decision"
+    assert snapshot["participation_state"] == "decision_shaping"
+
+
+def test_pre_bind_uses_request_match_when_decision_absent(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", lambda: [receipt])
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.enrich_bind_receipt_payload",
+        lambda payload: {**payload, "request_id": "req_target"},
+    )
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.load_trust_log",
+        lambda limit=20: [{"request_id": "req_target", "participation_state": "participatory"}],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["pre_bind_source"] == "trustlog_matching_request"
+
+
+def test_pre_bind_uses_execution_intent_match_as_third_priority(monkeypatch):
+    receipt = BindReceipt(
+        final_outcome=FinalOutcome.COMMITTED,
+        bind_ts="2026-04-30T00:00:00Z",
+        execution_intent_id="ei_target",
+    )
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", lambda: [receipt])
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.load_trust_log",
+        lambda limit=20: [{"execution_intent_id": "ei_target", "participation_state": "participatory"}],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["pre_bind_source"] == "trustlog_matching_execution_intent"
+
+
+def test_pre_bind_uses_recent_fallback_when_no_identity_match(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z", decision_id="dec_x")
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", lambda: [receipt])
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.load_trust_log",
+        lambda limit=20: [{"decision_id": "dec_y", "participation_state": "informative"}],
+    )
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["pre_bind_source"] == "trustlog_recent_decision"
+
+
+def test_pre_bind_matching_malformed_artifact_returns_unknown(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z", decision_id="dec_bad")
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", lambda: [receipt])
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.load_trust_log",
+        lambda limit=20: [{"decision_id": "dec_bad", "participation_state": "bad", "pre_bind_detection_summary": "bad"}],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["pre_bind_source"] == "malformed_pre_bind_artifact"
+    assert snapshot["participation_state"] == "unknown"
