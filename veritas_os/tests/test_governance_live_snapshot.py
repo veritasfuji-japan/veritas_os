@@ -164,7 +164,7 @@ def test_governance_live_snapshot_degraded_when_artifact_unavailable(monkeypatch
     response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
     assert response.status_code == 200
     snapshot = response.json()["governance_layer_snapshot"]
-    assert snapshot["source"] == "degraded_no_recent_governance_artifact"
+    assert snapshot["source"] == "degraded_artifact_retrieval_failed"
     assert snapshot["bind_outcome"] == "UNKNOWN"
 
 
@@ -210,7 +210,7 @@ def test_builder_degraded_on_exception(monkeypatch):
 
     monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", _raise)
     snapshot = build_governance_live_snapshot()["governance_layer_snapshot"]
-    assert snapshot["source"] == "degraded_no_recent_governance_artifact"
+    assert snapshot["source"] == "degraded_artifact_retrieval_failed"
     assert snapshot["bind_outcome"] == "UNKNOWN"
 
 
@@ -224,3 +224,135 @@ def test_normalizers_invalid_values():
 def test_governance_live_snapshot_requires_auth():
     response = client.get("/v1/governance/live-snapshot")
     assert response.status_code in {401, 403}
+
+
+def test_governance_live_snapshot_degraded_when_to_dict_raises(monkeypatch):
+    class BrokenReceipt:
+        def to_dict(self):
+            raise RuntimeError("broken receipt")
+
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [BrokenReceipt()],
+    )
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_invalid_latest_bind_receipt"
+    assert snapshot["bind_outcome"] == "UNKNOWN"
+
+
+def test_governance_live_snapshot_degraded_when_to_dict_not_dict(monkeypatch):
+    class MalformedReceipt:
+        def to_dict(self):
+            return "not a dict"
+
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [MalformedReceipt()],
+    )
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_invalid_latest_bind_receipt"
+    assert snapshot["bind_outcome"] == "UNKNOWN"
+
+
+def test_governance_live_snapshot_degraded_when_enrich_raises(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    def _raise(_payload):
+        raise RuntimeError("enrich failed")
+
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.enrich_bind_receipt_payload", _raise)
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_bind_summary_enrichment_failed"
+    assert snapshot["bind_outcome"] == "UNKNOWN"
+
+
+def test_governance_live_snapshot_degraded_when_bind_summary_raises(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    def _raise(_payload):
+        raise RuntimeError("summary failed")
+
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.build_bind_summary_from_receipt", _raise)
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_bind_summary_enrichment_failed"
+
+
+def test_governance_live_snapshot_degraded_when_reason_resolver_raises(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    def _raise(_payload):
+        raise RuntimeError("reason failed")
+
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.resolve_bind_reason_code", _raise)
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_bind_summary_enrichment_failed"
+
+
+def test_builder_degraded_for_broken_to_dict(monkeypatch):
+    class BrokenReceipt:
+        def to_dict(self):
+            raise RuntimeError("broken")
+
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [BrokenReceipt()],
+    )
+    snapshot = build_governance_live_snapshot()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_invalid_latest_bind_receipt"
+
+
+def test_builder_degraded_for_enrich_exception(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    def _raise(_payload):
+        raise RuntimeError("enrich failed")
+
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.enrich_bind_receipt_payload", _raise)
+    snapshot = build_governance_live_snapshot()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_bind_summary_enrichment_failed"
+
+
+def test_builder_degraded_for_bind_summary_exception(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    def _raise(_payload):
+        raise RuntimeError("summary failed")
+
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.build_bind_summary_from_receipt", _raise)
+    snapshot = build_governance_live_snapshot()["governance_layer_snapshot"]
+    assert snapshot["source"] == "degraded_bind_summary_enrichment_failed"

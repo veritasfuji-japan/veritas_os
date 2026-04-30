@@ -50,33 +50,46 @@ def _normalize_bind_outcome(value: Any) -> str:
     return normalized if normalized in _ALLOWED_BIND_OUTCOMES else "UNKNOWN"
 
 
-def build_governance_live_snapshot() -> dict[str, Any]:
-    """Build a lightweight governance snapshot for Mission Control.
-
-    Returns a degraded unknown snapshot when recent governance artifacts are
-    unavailable or cannot be loaded.
-    """
-    fallback = {
+def _build_degraded_snapshot(source: str) -> dict[str, Any]:
+    """Return a render-safe degraded snapshot with explicit failure source."""
+    return {
         "governance_layer_snapshot": {
             "participation_state": "unknown",
             "preservation_state": "unknown",
             "intervention_viability": "unknown",
             "bind_outcome": "UNKNOWN",
-            "source": "degraded_no_recent_governance_artifact",
+            "source": source,
             "updated_at": _utc_now_iso8601(),
         },
     }
-    try:
-        receipts = find_bind_receipts()
-    except Exception:
-        return fallback
 
+
+def _select_latest_receipt(receipts: list[Any]) -> Any | None:
+    """Select the latest receipt when artifacts exist."""
     if not receipts:
-        return fallback
+        return None
+    return receipts[-1]
 
-    latest = receipts[-1].to_dict()
-    enriched_receipt = enrich_bind_receipt_payload(latest)
-    bind_summary = build_bind_summary_from_receipt(enriched_receipt)
+
+def _safe_receipt_payload(receipt: Any) -> dict[str, Any] | None:
+    """Safely materialize a receipt payload as a dictionary."""
+    try:
+        payload = receipt.to_dict()
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _build_enriched_snapshot_from_receipt_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Build enriched live snapshot from a valid receipt payload."""
+    try:
+        enriched_receipt = enrich_bind_receipt_payload(payload)
+        bind_summary = build_bind_summary_from_receipt(enriched_receipt)
+        bind_reason_code = resolve_bind_reason_code(enriched_receipt)
+    except Exception:
+        return None
 
     snapshot = {
         "participation_state": _normalize_state(
@@ -101,7 +114,7 @@ def build_governance_live_snapshot() -> dict[str, Any]:
         "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
         "execution_intent_id": enriched_receipt.get("execution_intent_id"),
         "decision_id": enriched_receipt.get("decision_id"),
-        "bind_reason_code": resolve_bind_reason_code(enriched_receipt),
+        "bind_reason_code": bind_reason_code,
         "bind_failure_reason": bind_summary.get("bind_failure_reason"),
         "failure_category": enriched_receipt.get("failure_category"),
         "rollback_status": enriched_receipt.get("rollback_status"),
@@ -119,3 +132,29 @@ def build_governance_live_snapshot() -> dict[str, Any]:
         "bind_summary": bind_summary,
     }
     return {"governance_layer_snapshot": snapshot}
+
+
+def build_governance_live_snapshot() -> dict[str, Any]:
+    """Build a lightweight governance snapshot for Mission Control.
+
+    Returns a degraded unknown snapshot when recent governance artifacts are
+    unavailable, malformed, or cannot be enriched safely.
+    """
+    try:
+        receipts = find_bind_receipts()
+    except Exception:
+        return _build_degraded_snapshot("degraded_artifact_retrieval_failed")
+
+    latest_receipt = _select_latest_receipt(receipts)
+    if latest_receipt is None:
+        return _build_degraded_snapshot("degraded_no_recent_governance_artifact")
+
+    payload = _safe_receipt_payload(latest_receipt)
+    if payload is None:
+        return _build_degraded_snapshot("degraded_invalid_latest_bind_receipt")
+
+    snapshot = _build_enriched_snapshot_from_receipt_payload(payload)
+    if snapshot is None:
+        return _build_degraded_snapshot("degraded_bind_summary_enrichment_failed")
+
+    return snapshot
