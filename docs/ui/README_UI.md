@@ -96,3 +96,5 @@ docker compose up --build
 - production では query/header での scenario injection は無視され、Mission Control は backend-fed governance data を優先します。
 - deterministic scenario は UI regression 用フィクスチャであり、production governance data source ではありません。
 - `/v1/report/governance` は date-range governance/compliance report 用であり、Mission Control live snapshot source とは役割を分離します。
+- backend `/v1/governance/live-snapshot` は latest BindReceipt 由来の bind metadata（`bind_receipt_id` / `execution_intent_id` / `decision_id`）、target metadata（`target_path` / `target_type` / `target_label` / `operator_surface` / `relevant_ui_href`）、reason fields（`bind_reason_code` / `bind_failure_reason` / `failure_category` など）を返し、`bind_summary` が存在する場合は operator-facing artifact summary として利用できます。
+- degraded fallback snapshot は fake success を示さず render safety path です。receipt 不在・取得失敗時は `source=degraded_no_recent_governance_artifact` を維持します。

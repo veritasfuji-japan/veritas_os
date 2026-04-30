@@ -97,6 +97,37 @@ describe("/api/veritas/v1/report/governance", () => {
     });
   });
 
+
+  it("preserves enriched governance_layer_snapshot metadata fields", async () => {
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_API_KEY", "test-key");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          governance_layer_snapshot: {
+            bind_outcome: "ESCALATED",
+            bind_receipt_id: "br_123",
+            execution_intent_id: "ei_123",
+            bind_summary: { bind_outcome: "ESCALATED" },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      governance_layer_snapshot: {
+        bind_outcome: "ESCALATED",
+        bind_receipt_id: "br_123",
+        execution_intent_id: "ei_123",
+        bind_summary: { bind_outcome: "ESCALATED" },
+      },
+    });
+  });
+
   it("keeps compatibility with pre_bind_governance_snapshot payloads", async () => {
     vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
     vi.stubEnv("VERITAS_API_KEY", "test-key");
