@@ -21,6 +21,11 @@ export default defineConfig({
     command: process.env.CI
       ? "npx next build && npx next start -H 127.0.0.1"
       : "pnpm dev",
+    env: {
+      ...process.env,
+      // E2E deterministic governance scenarios are test-only and must be explicitly enabled.
+      VERITAS_ENABLE_E2E_SCENARIOS: "1",
+    },
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
