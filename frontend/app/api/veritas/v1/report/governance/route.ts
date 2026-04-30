@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
 import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
 
-const GOVERNANCE_REPORT_PATH = "/v1/report/governance";
+const GOVERNANCE_LIVE_SNAPSHOT_PATH = "/v1/governance/live-snapshot";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
 const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
 
@@ -61,7 +61,7 @@ function normalizeGovernanceReportPayload(payload: unknown): Record<string, unkn
 /**
  * Mission Control backend-fed governance feed endpoint.
  *
- * Main path fetches backend governance report and keeps payload vocabulary stable.
+ * Main path fetches backend governance live snapshot and keeps payload vocabulary stable.
  */
 export async function GET(request: Request): Promise<Response> {
   if (areE2EScenariosEnabled()) {
@@ -82,7 +82,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
-    const upstreamResponse = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${GOVERNANCE_REPORT_PATH}`, {
+    const upstreamResponse = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${GOVERNANCE_LIVE_SNAPSHOT_PATH}`, {
       method: "GET",
       headers: {
         "X-API-Key": apiKey,

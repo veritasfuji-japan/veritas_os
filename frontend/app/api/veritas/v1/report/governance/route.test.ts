@@ -122,4 +122,31 @@ describe("/api/veritas/v1/report/governance", () => {
       },
     });
   });
+
+  it("calls /v1/governance/live-snapshot when scenarios are not used", async () => {
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_API_KEY", "test-key");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ governance_layer_snapshot: { bind_outcome: "UNKNOWN" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+
+    expect(fetchSpy).toHaveBeenCalledWith("http://internal-api:8000/v1/governance/live-snapshot", expect.any(Object));
+  });
+
+  it("returns unavailable when upstream live snapshot is unavailable", async () => {
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_API_KEY", "test-key");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 503 }));
+
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
+  });
+
 });

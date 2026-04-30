@@ -23,6 +23,7 @@ from veritas_os.api.bind_summary import (
 )
 from veritas_os.api.bind_target_catalog import get_target_catalog_payload
 from veritas_os.api.rbac import Permission
+from veritas_os.api.governance_live_snapshot import build_governance_live_snapshot
 from veritas_os.api.schemas import (
     GovernanceBindReceiptExportResponse,
     GovernanceBindReceiptListResponse,
@@ -862,3 +863,9 @@ def governance_promote_policy_bundle(
             status_code=500,
             content={"ok": False, "error": "Failed to promote policy bundle"},
         )
+
+
+@router.get("/v1/governance/live-snapshot", dependencies=[Depends(require_permission(Permission.governance_read))])
+def governance_live_snapshot() -> dict[str, Any]:
+    """Return Mission Control governance live snapshot from backend artifacts."""
+    return build_governance_live_snapshot()
