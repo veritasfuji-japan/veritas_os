@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
+
 test.describe("Mission Control: governance feed frontend E2E", () => {
   test("main path reaches UI from /api/veritas/v1/report/governance", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ [E2E_SCENARIO_HEADER]: "main" });
     await page.goto("/?e2e_governance_scenario=main");
 
     await expect(
@@ -20,6 +23,7 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
   });
 
   test("endpoint unavailable path renders fallback safety snapshot without breaking page", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ [E2E_SCENARIO_HEADER]: "fallback" });
     await page.goto("/?e2e_governance_scenario=fallback");
 
     await expect(
