@@ -75,6 +75,11 @@ export interface PreBindGovernanceSnapshot {
   intervention_viability?: string;
   concise_rationale?: string;
   bind_outcome?: string;
+  pre_bind_source?: string;
+  pre_bind_detection_summary?: unknown | null;
+  pre_bind_preservation_summary?: unknown | null;
+  pre_bind_detection_detail?: unknown | null;
+  pre_bind_preservation_detail?: unknown | null;
 }
 
 export const PRE_BIND_GOVERNANCE_VOCABULARY_LABELS = {
