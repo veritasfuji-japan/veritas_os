@@ -75,7 +75,7 @@ pre-bind state combinations.
 - Canonical tests: `veritas_os/tests/test_pre_bind_canonical_golden.py`
 - HTTP endpoint E2E parity tests for `/v1/decide`: `veritas_os/tests/test_pre_bind_http_e2e.py`
 - Real pipeline `/v1/decide` reliability extension for canonical cases:
-  `veritas_os/tests/test_decide_e2e_reliability.py` (`TestCanonicalPreBindRealPipelineInputBoundaryInjection`)
+  `veritas_os/tests/test_decide_e2e_reliability.py` (`TestCanonicalPreBindRealPipelineRequestInputSeam`)
 - Vocabulary consistency + rationale-linked assertions: `test_canonical_case_naming_and_vocabulary_consistency` and
   `test_canonical_pre_bind_signals_and_rationales_are_explanatory` in the same test module.
 
@@ -86,6 +86,7 @@ pre-bind state combinations.
 - HTTP E2E tests protect `/v1/decide` endpoint wiring, response contract shape, additive optionality, and bind-field non-regression.
 - Real pipeline reliability E2E protects the non-stubbed HTTP → route → pipeline → response assembly path for canonical
   cases (including additive field optionality and bind-family field presence).
+- Migration note: canonical reliability deterministic control was moved from legacy raw-extras monkeypatch injection to the request-input seam (`context.pre_bind_participation_signal`) for the canonical main path.
 - Deterministic control in that layer is intentionally limited to request input shaping:
   canonical `participation_signal` is passed via `/v1/decide` request
   `context.pre_bind_participation_signal`.
