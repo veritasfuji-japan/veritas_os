@@ -155,6 +155,89 @@ describe("MissionPage", () => {
     expect(screen.getByRole("link", { name: "/governance" })).toHaveAttribute("href", "/governance");
   });
 
+  it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "trustlog_matching_decision",
+            relevant_ui_href: href,
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("link", { name: href })).toHaveAttribute("href", href);
+  });
+
+  it.each([
+    "https://evil.example",
+    "http://evil.example",
+    "javascript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "//evil.example",
+  ])("does not render external or protocol relevant_ui_href as a link: %s", (href) => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "trustlog_matching_decision",
+            relevant_ui_href: href,
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole("link", { name: href })).not.toBeInTheDocument();
+    expect(screen.getByText(href)).toBeInTheDocument();
+    expect(screen.getByText(/unsafe or external link not rendered/)).toBeInTheDocument();
+  });
+
+  it.each(["/foo\\bar", "/foo\nbar", "/foo\tbar"])("does not render malformed relevant_ui_href as a link: %s", (href) => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "trustlog_matching_decision",
+            relevant_ui_href: href,
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole("link", { name: href })).not.toBeInTheDocument();
+    expect(screen.getByText(/unsafe or external link not rendered/)).toBeInTheDocument();
+  });
+
+  it("renders not available when relevant_ui_href is null", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            pre_bind_source: "none",
+            relevant_ui_href: null,
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText(/relevant_ui_href:/)).toBeInTheDocument();
+    expect(screen.getAllByText("not available").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: /relevant_ui_href/i })).not.toBeInTheDocument();
+  });
+
   it("renders fallback text for null pre-bind summaries", () => {
     render(
       <I18nProvider>

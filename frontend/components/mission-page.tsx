@@ -6,6 +6,7 @@ import { CriticalRail } from "./critical-rail";
 import { GlobalHealthSummary } from "./global-health-summary";
 import { OpsPriorityCard } from "./ops-priority-card";
 import { useI18n } from "./i18n-provider";
+import { normalizeSafeInternalHref } from "../lib/governance-link-utils";
 import {
   type CriticalRailMetric,
   type DecisionEvidenceRouteModel,
@@ -222,6 +223,8 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
     return "unknown";
   };
 
+  const relevantUiHref = normalizeSafeInternalHref(governanceSnapshot?.relevant_ui_href);
+
   const hasPreBindGovernance = Boolean(
     governanceSnapshot?.participation_state ||
       governanceSnapshot?.preservation_state ||
@@ -336,7 +339,16 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
             <p>type: <span className="font-mono">{governanceSnapshot?.target_type ?? "not available"}</span></p>
             <p>path_type: <span className="font-mono">{governanceSnapshot?.target_path_type ?? "not available"}</span></p>
             <p>operator_surface: <span className="font-mono">{governanceSnapshot?.operator_surface ?? "not available"}</span></p>
-            {governanceSnapshot?.relevant_ui_href ? <p>relevant_ui_href: <Link className="underline" href={governanceSnapshot.relevant_ui_href}>{governanceSnapshot.relevant_ui_href}</Link></p> : <p>relevant_ui_href: <span className="font-mono">not available</span></p>}
+            {relevantUiHref ? (
+              <p>
+                relevant_ui_href: <Link className="underline" href={relevantUiHref}>{relevantUiHref}</Link>
+              </p>
+            ) : governanceSnapshot?.relevant_ui_href != null ? (
+              <p>
+                relevant_ui_href: <span className="font-mono">{stringifyValue(governanceSnapshot.relevant_ui_href)}</span>{" "}
+                <span className="text-muted-foreground">unsafe or external link not rendered</span>
+              </p>
+            ) : <p>relevant_ui_href: <span className="font-mono">not available</span></p>}
           </div>
           <div className="rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
             <p className="font-semibold">Check results</p>
