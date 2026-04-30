@@ -28,3 +28,31 @@ export function normalizeSafeInternalHref(value: unknown): string | null {
 
   return href;
 }
+
+
+const AUDIT_ARTIFACT_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
+
+export function buildAuditArtifactHref(
+  key: "bind_receipt_id" | "decision_id" | "execution_intent_id",
+  value: unknown,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const id = value.trim();
+  if (!id) {
+    return null;
+  }
+
+  if (id.includes("\\") || id.includes("\n") || id.includes("\r") || id.includes("\t")) {
+    return null;
+  }
+
+  if (!AUDIT_ARTIFACT_ID_PATTERN.test(id)) {
+    return null;
+  }
+
+  const params = new URLSearchParams({ [key]: id });
+  return normalizeSafeInternalHref(`/audit?${params.toString()}`);
+}

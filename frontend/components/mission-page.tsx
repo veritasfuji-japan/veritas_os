@@ -6,7 +6,7 @@ import { CriticalRail } from "./critical-rail";
 import { GlobalHealthSummary } from "./global-health-summary";
 import { OpsPriorityCard } from "./ops-priority-card";
 import { useI18n } from "./i18n-provider";
-import { normalizeSafeInternalHref } from "../lib/governance-link-utils";
+import { buildAuditArtifactHref, normalizeSafeInternalHref } from "../lib/governance-link-utils";
 import {
   type CriticalRailMetric,
   type DecisionEvidenceRouteModel,
@@ -26,6 +26,8 @@ interface MissionPageProps {
   chips: [string, string, string];
   governanceLayerSnapshot?: PreBindGovernanceSnapshot;
 }
+
+const AUDIT_ROUTE_AVAILABLE = true;
 
 const CRITICAL_RAIL_ITEMS: CriticalRailMetric[] = [
   {
@@ -224,6 +226,15 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   };
 
   const relevantUiHref = normalizeSafeInternalHref(governanceSnapshot?.relevant_ui_href);
+  const bindReceiptAuditHref = AUDIT_ROUTE_AVAILABLE
+    ? buildAuditArtifactHref("bind_receipt_id", governanceSnapshot?.bind_receipt_id)
+    : null;
+  const decisionAuditHref = AUDIT_ROUTE_AVAILABLE
+    ? buildAuditArtifactHref("decision_id", governanceSnapshot?.decision_id)
+    : null;
+  const executionIntentAuditHref = AUDIT_ROUTE_AVAILABLE
+    ? buildAuditArtifactHref("execution_intent_id", governanceSnapshot?.execution_intent_id)
+    : null;
 
   const hasPreBindGovernance = Boolean(
     governanceSnapshot?.participation_state ||
@@ -370,16 +381,31 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
               {relevantUiHref ? <Link className="underline" href={relevantUiHref}>{relevantUiHref}</Link> : <span className="font-mono">not available</span>}
             </li>
             <li>
-              Review bind receipt: <span className="font-mono">{governanceSnapshot?.bind_receipt_id ?? "not available"}</span>{" "}
-              <span className="text-muted-foreground">(route unavailable)</span>
+              Review bind receipt:{" "}
+              {bindReceiptAuditHref ? <Link className="underline font-mono" href={bindReceiptAuditHref}>{governanceSnapshot?.bind_receipt_id}</Link> : (
+                <>
+                  <span className="font-mono">{governanceSnapshot?.bind_receipt_id ?? "not available"}</span>{" "}
+                  {governanceSnapshot?.bind_receipt_id ? <span className="text-muted-foreground">(route unavailable)</span> : null}
+                </>
+              )}
             </li>
             <li>
-              View decision artifact: <span className="font-mono">{governanceSnapshot?.decision_id ?? "not available"}</span>{" "}
-              <span className="text-muted-foreground">(route unavailable)</span>
+              View decision artifact:{" "}
+              {decisionAuditHref ? <Link className="underline font-mono" href={decisionAuditHref}>{governanceSnapshot?.decision_id}</Link> : (
+                <>
+                  <span className="font-mono">{governanceSnapshot?.decision_id ?? "not available"}</span>{" "}
+                  {governanceSnapshot?.decision_id ? <span className="text-muted-foreground">(route unavailable)</span> : null}
+                </>
+              )}
             </li>
             <li>
-              View execution intent: <span className="font-mono">{governanceSnapshot?.execution_intent_id ?? "not available"}</span>{" "}
-              <span className="text-muted-foreground">(route unavailable)</span>
+              View execution intent:{" "}
+              {executionIntentAuditHref ? <Link className="underline font-mono" href={executionIntentAuditHref}>{governanceSnapshot?.execution_intent_id}</Link> : (
+                <>
+                  <span className="font-mono">{governanceSnapshot?.execution_intent_id ?? "not available"}</span>{" "}
+                  {governanceSnapshot?.execution_intent_id ? <span className="text-muted-foreground">(route unavailable)</span> : null}
+                </>
+              )}
             </li>
             <li>
               View pre-bind source: <span className="font-mono">{governanceSnapshot?.pre_bind_source ?? "unknown"}</span>{" "}
