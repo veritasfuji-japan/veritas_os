@@ -73,6 +73,81 @@ def test_governance_live_snapshot_uses_latest_receipt(monkeypatch):
     assert snapshot["updated_at"] == "2026-04-30T00:00:00Z"
 
 
+
+
+def test_governance_live_snapshot_includes_bind_metadata(monkeypatch):
+    receipt = BindReceipt(
+        bind_receipt_id="br_1",
+        execution_intent_id="ei_1",
+        decision_id="dec_1",
+        final_outcome=FinalOutcome.ESCALATED,
+        bind_ts="2026-04-30T00:00:00Z",
+        bind_reason_code="AUTHORITY_MISSING",
+        bind_failure_reason="Authority evidence missing",
+        target_path="/v1/governance/policy",
+        target_type="governance_policy",
+        target_path_type="governance_policy_update",
+        target_label="Governance policy",
+        operator_surface="governance",
+        relevant_ui_href="/governance",
+        authority_check_result={"status": "fail"},
+        constraint_check_result={"status": "pass"},
+        drift_check_result={"status": "pass"},
+        risk_check_result={"status": "escalate"},
+        failure_category="authority",
+        rollback_status="not_started",
+        retry_safety="manual_review_required",
+    )
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+
+    assert snapshot["source"] == "backend_live_snapshot"
+    assert snapshot["bind_outcome"] == "ESCALATED"
+    assert snapshot["bind_receipt_id"] == "br_1"
+    assert snapshot["execution_intent_id"] == "ei_1"
+    assert snapshot["decision_id"] == "dec_1"
+    assert snapshot["target_path"] == "/v1/governance/policy"
+    assert snapshot["target_type"] == "governance_policy"
+    assert isinstance(snapshot["target_label"], str)
+    assert snapshot["target_label"]
+    assert snapshot["operator_surface"] == "governance"
+    assert snapshot["relevant_ui_href"] == "/governance"
+    assert snapshot["bind_reason_code"] == "AUTHORITY_MISSING"
+    assert snapshot["bind_failure_reason"] == "Authority evidence missing"
+    assert snapshot["failure_category"] == "authority"
+    assert snapshot["rollback_status"] == "not_started"
+    assert snapshot["retry_safety"] == "manual_review_required"
+    assert snapshot["authority_check_result"] == {"status": "fail"}
+    assert snapshot["constraint_check_result"] == {"status": "pass"}
+    assert snapshot["drift_check_result"] == {"status": "pass"}
+    assert snapshot["risk_check_result"] == {"status": "escalate"}
+    assert snapshot["bind_summary"]["bind_outcome"] == "ESCALATED"
+
+
+def test_governance_live_snapshot_optional_metadata_defaults_to_none(monkeypatch):
+    receipt = BindReceipt(
+        final_outcome=FinalOutcome.BLOCKED,
+        bind_ts="2026-04-30T00:00:00Z",
+    )
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+
+    assert snapshot["source"] == "backend_live_snapshot"
+    assert snapshot["bind_outcome"] == "BLOCKED"
+    assert isinstance(snapshot["bind_receipt_id"], str)
+    assert snapshot["execution_intent_id"] in (None, "")
+    assert snapshot["decision_id"] in (None, "")
+    assert snapshot["bind_failure_reason"] is None
+    assert snapshot["failure_category"] is None
+
 def test_governance_live_snapshot_degraded_when_no_receipts(monkeypatch):
     monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", lambda: [])
 
