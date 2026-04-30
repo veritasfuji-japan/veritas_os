@@ -39,14 +39,19 @@ export function mapGovernanceFeedToIngressPayload(
 /**
  * Main path: backend-fed governance feed. Fallback is adapter-level render safety.
  */
-function resolveE2EScenarioHeader(): string | null {
-  const scenario = headers().get(E2E_SCENARIO_HEADER);
-  return scenario ? scenario.trim() : null;
+async function resolveE2EScenarioHeader(): Promise<string | null> {
+  try {
+    const requestHeaders = await headers();
+    const scenario = requestHeaders.get(E2E_SCENARIO_HEADER);
+    return scenario ? scenario.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function loadMissionControlIngressPayload(): Promise<MissionGovernanceIngressPayload | null> {
   try {
-    const scenario = resolveE2EScenarioHeader();
+    const scenario = await resolveE2EScenarioHeader();
     const response = await fetch(GOVERNANCE_REPORT_ENDPOINT, {
       method: "GET",
       cache: "no-store",

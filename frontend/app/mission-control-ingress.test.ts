@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const headersGetMock = vi.fn(() => null);
 
 vi.mock("next/headers", () => ({
-  headers: () => ({
+  headers: async () => ({
     get: headersGetMock,
   }),
 }));
