@@ -102,3 +102,10 @@ docker compose up --build
 - `pre_bind_detection_summary` / `pre_bind_preservation_summary` / detail fields / check result fields が `null` または `unknown` の場合、Mission Control UI は fake data を生成せず unavailable 表示を維持します。
 - 同 endpoint は optional enrichment として pre-bind detection / preservation fields（`pre_bind_source` / `pre_bind_detection_summary` / `pre_bind_preservation_summary` / `pre_bind_detection_detail` / `pre_bind_preservation_detail`）も返します。TrustLog pre-bind artifact 利用時は latest BindReceipt の `decision_id` / `request_id` / `execution_intent_id` と一致する artifact を優先し、`trustlog_matching_decision` → `trustlog_matching_request` → `trustlog_matching_execution_intent` の順で選択します。一致が無い場合のみ `trustlog_recent_decision` に fallback し、さらに TrustLog 側に signal が無い場合は latest BindReceipt payload fallback（`latest_bind_receipt`）を使います。どちらにも signal が無い場合は fake data を作らず `unknown` / `null` を返し、`pre_bind_source`（`trustlog_matching_decision` / `trustlog_matching_request` / `trustlog_matching_execution_intent` / `trustlog_recent_decision` / `latest_bind_receipt` / `none` / `pre_bind_artifact_retrieval_failed` / `malformed_pre_bind_artifact`）で取得元を明示します。
 - degraded fallback snapshot は fake success を示さず render safety path です。latest BindReceipt enrichment に失敗しても `/v1/governance/live-snapshot` は 500 ではなく degraded snapshot を返し、`source` に `degraded_artifact_retrieval_failed` / `degraded_invalid_latest_bind_receipt` / `degraded_bind_summary_enrichment_failed` などの理由を載せます。
+
+## Mission Control governance artifact link hardening
+
+- `relevant_ui_href` は backend artifact 由来の untrusted-ish display input として扱います。
+- Mission Control UI は `relevant_ui_href` が app 内部 path（例: `/governance`, `/audit?receipt=...`）の場合のみ Link として表示します。
+- external URL / protocol 付き URL / malformed href（`\\`, 改行, タブなど）は Link 化せず、plain text または `not available` として表示します。
+- unsafe input から fake internal link は生成しません。
