@@ -88,3 +88,10 @@ docker compose up --build
 - `NEXT_PUBLIC_*` で API 接続先を公開しないでください。production では BFF が fail-closed します。
 
 > 秘密情報は `docker-compose.yml` に直書きせず、`.env` 側で上書きしてください。
+
+### Mission Control E2E governance scenario safety
+
+- `e2e_governance_scenario` と `x-veritas-e2e-governance-scenario` は test-only の deterministic scenario 注入です。
+- 上記 scenario 注入は `NODE_ENV === "test"` または `VERITAS_ENABLE_E2E_SCENARIOS=1` の明示 opt-in 時のみ有効です。
+- production では query/header での scenario injection は無視され、Mission Control は backend-fed governance data を優先します。
+- deterministic scenario は UI regression 用フィクスチャであり、production governance data source ではありません。

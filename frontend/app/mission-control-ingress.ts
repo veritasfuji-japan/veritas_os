@@ -2,6 +2,8 @@ import { headers } from "next/headers";
 
 import { type MissionGovernanceIngressPayload } from "../components/mission-governance-adapter";
 
+import { areE2EScenariosEnabled } from "./e2e-scenarios";
+
 const GOVERNANCE_REPORT_ENDPOINT = "/api/veritas/v1/report/governance";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
 const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
@@ -54,7 +56,9 @@ export async function loadMissionControlIngressPayload(
   scenarioOverride?: string | null,
 ): Promise<MissionGovernanceIngressPayload | null> {
   try {
-    const scenario = scenarioOverride?.trim() || (await resolveE2EScenarioHeader());
+    const scenario = areE2EScenariosEnabled()
+      ? scenarioOverride?.trim() || (await resolveE2EScenarioHeader())
+      : null;
     const endpoint = scenario
       ? `${GOVERNANCE_REPORT_ENDPOINT}?${E2E_SCENARIO_QUERY}=${encodeURIComponent(scenario)}`
       : GOVERNANCE_REPORT_ENDPOINT;

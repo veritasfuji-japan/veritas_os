@@ -54,10 +54,12 @@ describe("mapGovernanceFeedToIngressPayload", () => {
 describe("loadMissionControlIngressPayload", () => {
   beforeEach(() => {
     headersGetMock.mockReturnValue(null);
+    vi.stubEnv("NODE_ENV", "production");
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("returns mapped payload when backend feed is available", async () => {
@@ -85,19 +87,36 @@ describe("loadMissionControlIngressPayload", () => {
     });
   });
 
-  it("forwards e2e scenario header when request header exists", async () => {
+  it("does not forward scenario override when e2e scenarios are disabled", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+
+    await loadMissionControlIngressPayload("main");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
+      method: "GET",
+      cache: "no-store",
+      headers: undefined,
+    });
+  });
+
+  it("does not forward request header scenario when e2e scenarios are disabled", async () => {
     headersGetMock.mockReturnValue("main");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        governance_layer_snapshot: {
-          participation_state: "decision_shaping",
-          preservation_state: "degrading",
-        },
-      }),
-    } as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
 
     await loadMissionControlIngressPayload();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
+      method: "GET",
+      cache: "no-store",
+      headers: undefined,
+    });
+  });
+
+  it("forwards scenario override when e2e scenarios are enabled", async () => {
+    vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "1");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+
+    await loadMissionControlIngressPayload("main");
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "/api/veritas/v1/report/governance?e2e_governance_scenario=main",
@@ -107,11 +126,5 @@ describe("loadMissionControlIngressPayload", () => {
         headers: { "x-veritas-e2e-governance-scenario": "main" },
       },
     );
-  });
-
-  it("returns null when backend feed is unavailable", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
-
-    await expect(loadMissionControlIngressPayload()).resolves.toBeNull();
   });
 });

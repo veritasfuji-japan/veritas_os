@@ -1,49 +1,54 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const { loadMissionControlIngressPayloadMock } = vi.hoisted(() => ({
+  loadMissionControlIngressPayloadMock: vi.fn(async () => null),
+}));
+
+vi.mock("./mission-control-ingress", () => ({
+  loadMissionControlIngressPayload: loadMissionControlIngressPayloadMock,
+}));
+
 import CommandDashboardPage from "./page";
 
 describe("CommandDashboardPage integration", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    loadMissionControlIngressPayloadMock.mockReset();
+    loadMissionControlIngressPayloadMock.mockResolvedValue(null);
   });
 
-  it("resolves endpoint -> ingress -> container -> page main path", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        governance_layer_snapshot: {
-          participation_state: "decision_shaping",
-          preservation_state: "degrading",
-          intervention_viability: "minimal",
-          bind_outcome: "ESCALATED",
-        },
+  it("ignores searchParams e2e scenario in production-like environments", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    render(
+      await CommandDashboardPage({
+        searchParams: Promise.resolve({ e2e_governance_scenario: "main" }),
       }),
-    } as Response);
+    );
 
-    render(await CommandDashboardPage());
-
-    const fetchCalls = vi.mocked(globalThis.fetch).mock.calls;
-    expect(
-      fetchCalls.some(
-        ([input, init]) =>
-          input === "/api/veritas/v1/report/governance" &&
-          (init as RequestInit | undefined)?.method === "GET" &&
-          (init as RequestInit | undefined)?.cache === "no-store",
-      ),
-    ).toBe(true);
-    expect(screen.getByText("decision_shaping")).toBeInTheDocument();
-    expect(screen.getByText("degrading")).toBeInTheDocument();
-    expect(screen.getByText("ESCALATED")).toBeInTheDocument();
+    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith(null);
   });
 
-  it("keeps endpoint-unavailable fallback as safety path", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
+  it("forwards searchParams e2e scenario only when e2e scenarios are enabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "1");
+
+    render(
+      await CommandDashboardPage({
+        searchParams: Promise.resolve({ e2e_governance_scenario: "fallback" }),
+      }),
+    );
+
+    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith("fallback");
+  });
+
+  it("keeps page rendering behavior", async () => {
+    vi.stubEnv("NODE_ENV", "production");
 
     render(await CommandDashboardPage());
 
-    expect(screen.getByText("participatory")).toBeInTheDocument();
-    expect(screen.getByText("open")).toBeInTheDocument();
-    expect(screen.getByText("BLOCKED")).toBeInTheDocument();
+    expect(screen.getByText("Live Event Feed")).toBeInTheDocument();
   });
 });

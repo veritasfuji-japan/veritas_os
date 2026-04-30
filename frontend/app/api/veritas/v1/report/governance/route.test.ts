@@ -8,7 +8,36 @@ afterEach(() => {
 });
 
 describe("/api/veritas/v1/report/governance", () => {
-  it("returns deterministic main scenario payload for frontend E2E header", async () => {
+  it("does not return deterministic main payload from query when e2e scenarios are disabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_API_KEY", "test-key");
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
+
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?e2e_governance_scenario=main"));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
+  });
+
+  it("does not return deterministic main payload from header when e2e scenarios are disabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_API_KEY", "test-key");
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
+
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance", {
+      headers: { "x-veritas-e2e-governance-scenario": "main" },
+    }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
+  });
+
+  it("returns deterministic main scenario payload when e2e scenarios are explicitly enabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "1");
+
     const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance", {
       headers: { "x-veritas-e2e-governance-scenario": "main" },
     }));
@@ -24,8 +53,9 @@ describe("/api/veritas/v1/report/governance", () => {
     });
   });
 
+  it("returns deterministic fallback scenario payload in test environment", async () => {
+    vi.stubEnv("NODE_ENV", "test");
 
-  it("returns deterministic fallback scenario payload for query parameter", async () => {
     const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?e2e_governance_scenario=fallback"));
 
     expect(response.status).toBe(200);
@@ -91,16 +121,5 @@ describe("/api/veritas/v1/report/governance", () => {
         preservation_state: "open",
       },
     });
-  });
-
-  it("returns 503 when upstream endpoint is unavailable", async () => {
-    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
-    vi.stubEnv("VERITAS_API_KEY", "test-key");
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
-
-    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
   });
 });
