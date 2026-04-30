@@ -613,6 +613,7 @@ class TestCanonicalPreBindRealPipelineInputBoundaryInjection:
         fixture = _load_json(_PRE_BIND_FIXTURE_DIR / f"{case_id}.json")
         golden = _load_json(_PRE_BIND_GOLDEN_DIR / f"{case_id}_golden.json")
         import veritas_os.core.pipeline.governance_layers as pipeline_response_module
+        from veritas_os.core.participation_semantics import normalize_participation_signal_payload
 
         evaluator_before = pipeline_response_module.evaluate_governance_layers
         response = _post_decide(
@@ -634,7 +635,9 @@ class TestCanonicalPreBindRealPipelineInputBoundaryInjection:
         }
         assert body["pre_bind_detection_summary"]["participation_state"] == expected_participation
         assert body["pre_bind_preservation_summary"]["preservation_state"] == expected_preservation
-        assert body["extras"]["participation_signal"] == fixture["participation_signal"]
+        assert body["extras"]["participation_signal"] == normalize_participation_signal_payload(
+            fixture["participation_signal"]
+        )
         assert (
             body["pre_bind_detection_summary"]["participation_state"]
             == golden["pre_bind_detection_summary"]["participation_state"]

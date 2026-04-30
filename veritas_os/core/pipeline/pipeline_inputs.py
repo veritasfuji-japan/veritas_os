@@ -16,6 +16,7 @@ from typing import Any, Dict
 from .pipeline_types import PipelineContext
 from .pipeline_helpers import _to_bool_local, _lazy_import, _now_iso, _warn
 from .pipeline_contracts import _ensure_full_contract
+from ..participation_semantics import normalize_participation_signal_payload
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,18 @@ _TEST_ONLY_PRE_BIND_SIGNAL_KEY = "pre_bind_participation_signal"
 
 def _to_bool(v: Any) -> bool:
     return _to_bool_local(v)
+
+
+def _extract_test_only_pre_bind_signal(context: Dict[str, Any]) -> Dict[str, Any] | None:
+    """Extract and normalize test-only canonical pre-bind signal from request context.
+
+    This keeps deterministic canonical control at the request input seam while
+    isolating the hook from normal context propagation.
+    """
+    pre_bind_signal = context.pop(_TEST_ONLY_PRE_BIND_SIGNAL_KEY, None)
+    if not isinstance(pre_bind_signal, dict):
+        return None
+    return normalize_participation_signal_payload(pre_bind_signal)
 
 
 def normalize_pipeline_inputs(
@@ -157,9 +170,9 @@ def normalize_pipeline_inputs(
     # Keep production semantics unchanged (absent by default), while allowing
     # reliability tests to inject participation signal at the request-input
     # boundary instead of patching call_core_decide/raw extras.
-    pre_bind_signal = context.get(_TEST_ONLY_PRE_BIND_SIGNAL_KEY)
-    if isinstance(pre_bind_signal, dict):
-        response_extras["participation_signal"] = dict(pre_bind_signal)
+    pre_bind_signal = _extract_test_only_pre_bind_signal(context)
+    if pre_bind_signal is not None:
+        response_extras["participation_signal"] = pre_bind_signal
 
     # --- WorldOS: inject state ---
     world_model = (

@@ -89,7 +89,9 @@ pre-bind state combinations.
 - Deterministic control in that layer is intentionally limited to request input shaping:
   canonical `participation_signal` is passed via `/v1/decide` request
   `context.pre_bind_participation_signal`.
-- Pipeline input normalization copies that value into response extras before governance-layer evaluation.
+- Pipeline input normalization extracts that test-only context key, normalizes it as a canonical
+  `participation_signal`, and places it into response extras before governance-layer evaluation.
+- The test hook key is removed from runtime context after extraction to keep the seam isolated.
 - Response-layer governance evaluation is still executed through the normal implementation
   (`pipeline_response.evaluate_governance_layers`) without monkeypatch replacement in canonical reliability tests.
 - This boundary is more natural than patching `call_core_decide(...)->raw["extras"]`, while preserving deterministic
