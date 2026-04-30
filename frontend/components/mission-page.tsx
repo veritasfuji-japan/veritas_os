@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@veritas/design-system";
+import Link from "next/link";
 import { CriticalRail } from "./critical-rail";
 import { GlobalHealthSummary } from "./global-health-summary";
 import { OpsPriorityCard } from "./ops-priority-card";
@@ -192,6 +193,34 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   const { t } = useI18n();
   const uiState: MissionUiState = TRUST_CHAIN_INTEGRITY.verificationStatus === "broken" ? "degraded" : "operational";
   const governanceSnapshot = governanceLayerSnapshot;
+  const stringifyValue = (value: unknown): string => {
+    if (value === null || value === undefined) {
+      return "not available";
+    }
+    if (typeof value === "string") {
+      return value;
+    }
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  };
+  const resolvePreBindSourceTone = (source?: string): string => {
+    if (source === "trustlog_matching_decision" || source === "trustlog_matching_request" || source === "trustlog_matching_execution_intent") {
+      return "matched";
+    }
+    if (source === "trustlog_recent_decision" || source === "latest_bind_receipt") {
+      return "fallback";
+    }
+    if (source === "pre_bind_artifact_retrieval_failed" || source === "malformed_pre_bind_artifact") {
+      return "degraded";
+    }
+    if (source === "none") {
+      return "unavailable";
+    }
+    return "unknown";
+  };
 
   const hasPreBindGovernance = Boolean(
     governanceSnapshot?.participation_state ||
@@ -255,6 +284,73 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
           ) : null}
         </section>
       ) : null}
+
+      <section aria-label="governance artifact details" className="rounded-xl border border-border/70 bg-background/70 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Governance artifacts</p>
+        <div className="mt-2 grid gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+            <p className="font-semibold">Pre-bind source</p>
+            <p className="mt-1 font-mono">{governanceSnapshot?.pre_bind_source ?? "unknown"}</p>
+            <p className="text-muted-foreground">classification: {resolvePreBindSourceTone(governanceSnapshot?.pre_bind_source)}</p>
+          </div>
+          <div className="rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+            <p className="font-semibold">Bind reason</p>
+            <p>code: <span className="font-mono">{governanceSnapshot?.bind_reason_code ?? "not available"}</span></p>
+            <p>failure: <span className="font-mono">{governanceSnapshot?.bind_failure_reason ?? "not available"}</span></p>
+            <p>category: <span className="font-mono">{governanceSnapshot?.failure_category ?? "not available"}</span></p>
+            <p>rollback: <span className="font-mono">{governanceSnapshot?.rollback_status ?? "not available"}</span></p>
+            <p>retry_safety: <span className="font-mono">{governanceSnapshot?.retry_safety ?? "not available"}</span></p>
+          </div>
+        </div>
+        <details className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+          <summary className="cursor-pointer font-semibold">Pre-bind summaries</summary>
+          <div className="mt-2 space-y-2">
+            <div>
+              <p className="font-semibold">Detection summary</p>
+              {governanceSnapshot?.pre_bind_detection_summary == null ? <p>No pre-bind summary available</p> : <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot.pre_bind_detection_summary)}</pre>}
+            </div>
+            <div>
+              <p className="font-semibold">Preservation summary</p>
+              {governanceSnapshot?.pre_bind_preservation_summary == null ? <p>No pre-bind summary available</p> : <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot.pre_bind_preservation_summary)}</pre>}
+            </div>
+            {governanceSnapshot?.bind_summary == null ? null : (
+              <div>
+                <p className="font-semibold">Bind summary</p>
+                <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot.bind_summary)}</pre>
+              </div>
+            )}
+          </div>
+        </details>
+        {(governanceSnapshot?.pre_bind_detection_detail != null || governanceSnapshot?.pre_bind_preservation_detail != null) ? (
+          <details className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+            <summary className="cursor-pointer font-semibold">Pre-bind details</summary>
+            {governanceSnapshot?.pre_bind_detection_detail != null ? <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot.pre_bind_detection_detail)}</pre> : null}
+            {governanceSnapshot?.pre_bind_preservation_detail != null ? <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot.pre_bind_preservation_detail)}</pre> : null}
+          </details>
+        ) : null}
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+            <p className="font-semibold">Target metadata</p>
+            <p>label: <span className="font-mono">{governanceSnapshot?.target_label ?? "not available"}</span></p>
+            <p>path: <span className="font-mono">{governanceSnapshot?.target_path ?? "not available"}</span></p>
+            <p>type: <span className="font-mono">{governanceSnapshot?.target_type ?? "not available"}</span></p>
+            <p>path_type: <span className="font-mono">{governanceSnapshot?.target_path_type ?? "not available"}</span></p>
+            <p>operator_surface: <span className="font-mono">{governanceSnapshot?.operator_surface ?? "not available"}</span></p>
+            {governanceSnapshot?.relevant_ui_href ? <p>relevant_ui_href: <Link className="underline" href={governanceSnapshot.relevant_ui_href}>{governanceSnapshot.relevant_ui_href}</Link></p> : <p>relevant_ui_href: <span className="font-mono">not available</span></p>}
+          </div>
+          <div className="rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+            <p className="font-semibold">Check results</p>
+            <p>authority_check_result</p>
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot?.authority_check_result)}</pre>
+            <p>constraint_check_result</p>
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot?.constraint_check_result)}</pre>
+            <p>drift_check_result</p>
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot?.drift_check_result)}</pre>
+            <p>risk_check_result</p>
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot?.risk_check_result)}</pre>
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="trust and governance highlights">
         <Card title="Trust Chain Integrity" titleSize="sm" variant="elevated" accent="danger" className="border-danger/40">
