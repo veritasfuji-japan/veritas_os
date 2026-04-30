@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSafeInternalHref } from "./governance-link-utils";
+import { buildAuditArtifactHref, normalizeSafeInternalHref } from "./governance-link-utils";
 
 describe("normalizeSafeInternalHref", () => {
   it("returns trimmed safe internal paths", () => {
@@ -29,5 +29,35 @@ describe("normalizeSafeInternalHref", () => {
     expect(normalizeSafeInternalHref("/foo\nbar")).toBeNull();
     expect(normalizeSafeInternalHref("/foo\tbar")).toBeNull();
     expect(normalizeSafeInternalHref("/foo\rbar")).toBeNull();
+  });
+});
+
+
+describe("buildAuditArtifactHref", () => {
+  it("builds safe audit query links for supported artifact keys", () => {
+    expect(buildAuditArtifactHref("bind_receipt_id", "br_123")).toBe("/audit?bind_receipt_id=br_123");
+    expect(buildAuditArtifactHref("decision_id", "dec_123")).toBe("/audit?decision_id=dec_123");
+    expect(buildAuditArtifactHref("execution_intent_id", "ei_123")).toBe("/audit?execution_intent_id=ei_123");
+  });
+
+  it("rejects unsafe or malformed artifact ids", () => {
+    const unsafeValues: unknown[] = [
+      null,
+      undefined,
+      {},
+      "",
+      "   ",
+      "br\n123",
+      "br\t123",
+      "br\\123",
+      "../secret",
+      "/audit?x=1",
+      "https://evil.example",
+      "javascript:alert(1)",
+    ];
+
+    unsafeValues.forEach((value) => {
+      expect(buildAuditArtifactHref("bind_receipt_id", value)).toBeNull();
+    });
   });
 });

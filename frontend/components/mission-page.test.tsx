@@ -278,7 +278,7 @@ describe("MissionPage", () => {
     expect(screen.getByText(/unsafe or external link not rendered/)).toBeInTheDocument();
   });
 
-  it("shows bind receipt id without creating a fake route link", () => {
+  it("renders bind receipt id as audit link when id is valid", () => {
     render(
       <I18nProvider>
         <MissionPage
@@ -294,10 +294,10 @@ describe("MissionPage", () => {
 
     expect(screen.getByText("Review bind receipt:")).toBeInTheDocument();
     expect(screen.getByText("br_123")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "br_123" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "br_123" })).toHaveAttribute("href", "/audit?bind_receipt_id=br_123");
   });
 
-  it("shows decision id without creating a fake route link", () => {
+  it("renders decision id as audit link when id is valid", () => {
     render(
       <I18nProvider>
         <MissionPage
@@ -313,10 +313,10 @@ describe("MissionPage", () => {
 
     expect(screen.getByText("View decision artifact:")).toBeInTheDocument();
     expect(screen.getByText("dec_123")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "dec_123" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "dec_123" })).toHaveAttribute("href", "/audit?decision_id=dec_123");
   });
 
-  it("shows execution intent id without creating a fake route link", () => {
+  it("renders execution intent id as audit link when id is valid", () => {
     render(
       <I18nProvider>
         <MissionPage
@@ -332,10 +332,33 @@ describe("MissionPage", () => {
 
     expect(screen.getByText("View execution intent:")).toBeInTheDocument();
     expect(screen.getByText("ei_123")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "ei_123" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ei_123" })).toHaveAttribute("href", "/audit?execution_intent_id=ei_123");
   });
 
-  it("shows pre-bind source without creating a fake trustlog route", () => {
+  
+
+  it("does not create audit links for invalid artifact ids", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            bind_receipt_id: "../secret",
+            decision_id: "javascript:alert(1)",
+            execution_intent_id: "ei\n123",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole("link", { name: "../secret" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "javascript:alert(1)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /ei/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/route unavailable/).length).toBeGreaterThan(0);
+  });
+it("shows pre-bind source without creating a fake trustlog route", () => {
     render(
       <I18nProvider>
         <MissionPage

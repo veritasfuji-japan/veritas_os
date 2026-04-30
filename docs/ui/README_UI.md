@@ -111,5 +111,6 @@ docker compose up --build
 - unsafe input から fake internal link は生成しません。
 - `Governance artifacts` パネル内の `Operator actions` は artifact 由来 metadata を compact に表示します。
 - `Open target surface` は `normalizeSafeInternalHref()` で safe internal path と判定できる場合のみ Link 化します。
-- `bind_receipt_id` / `decision_id` / `execution_intent_id` は operator 向けに表示しますが、対応 route が repository で確認できない場合は Link 化せず `route unavailable` として扱います。
+- `bind_receipt_id` / `decision_id` / `execution_intent_id` は `/audit` route が repository で確認できる場合のみ、`buildAuditArtifactHref()` により `/audit?bind_receipt_id=...` などの safe query link を生成して Link 化します。
+- artifact ID は untrusted-ish input として conservative validation（string / trim 後 non-empty / 制御文字禁止 / `^[A-Za-z0-9._:-]+$`）を通過した場合のみ Link 化し、unsafe / malformed ID は Link 化せず `route unavailable` を維持します。
 - `pre_bind_source` は source state として表示し、TrustLog 含む未確認 route への fake navigation は生成しません。
