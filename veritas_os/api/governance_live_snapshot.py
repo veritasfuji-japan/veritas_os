@@ -9,6 +9,7 @@ from veritas_os.api.bind_summary import (
     enrich_bind_receipt_payload,
     resolve_bind_reason_code,
 )
+from veritas_os.logging.trust_log import load_trust_log
 from veritas_os.policy.bind_artifacts import FinalOutcome, find_bind_receipts
 
 _ALLOWED_PARTICIPATION_STATES = {
@@ -148,6 +149,39 @@ def _extract_pre_bind_snapshot_fields(payload: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _resolve_pre_bind_from_trustlog_recent_decision() -> dict[str, Any] | None:
+    """Resolve latest pre-bind fields from recent TrustLog decision artifacts.
+
+    Returns:
+        Normalized pre-bind snapshot fields when a recent decision entry contains
+        pre-bind structures; otherwise ``None``.
+    """
+    recent_entries = load_trust_log(limit=20)
+    for entry in recent_entries:
+        if not isinstance(entry, dict):
+            continue
+        fields = _extract_pre_bind_snapshot_fields(entry)
+        if fields.get("pre_bind_source") == "latest_bind_receipt":
+            fields["pre_bind_source"] = "trustlog_recent_decision"
+            return fields
+    return None
+
+
+def resolve_latest_pre_bind_snapshot_fields(
+    receipt_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Resolve pre-bind fields with source priority and safe fallbacks."""
+    try:
+        dedicated_fields = _resolve_pre_bind_from_trustlog_recent_decision()
+    except Exception:
+        return _default_pre_bind_fields(
+            pre_bind_source="pre_bind_artifact_retrieval_failed",
+        )
+    if dedicated_fields is not None:
+        return dedicated_fields
+    return _extract_pre_bind_snapshot_fields(receipt_payload)
+
+
 def _merge_pre_bind_fields(snapshot: dict[str, Any], pre_bind_fields: dict[str, Any]) -> dict[str, Any]:
     """Merge normalized pre-bind fields into the snapshot payload."""
     snapshot.update(pre_bind_fields)
@@ -193,7 +227,7 @@ def _build_enriched_snapshot_from_receipt_payload(payload: dict[str, Any]) -> di
     }
 
     try:
-        pre_bind_fields = _extract_pre_bind_snapshot_fields(enriched_receipt)
+        pre_bind_fields = resolve_latest_pre_bind_snapshot_fields(enriched_receipt)
     except Exception:
         pre_bind_fields = _default_pre_bind_fields(pre_bind_source="malformed_pre_bind_artifact")
 

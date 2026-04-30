@@ -280,6 +280,66 @@ def test_governance_live_snapshot_reads_pre_bind_from_receipt_payload(monkeypatc
     assert snapshot["pre_bind_preservation_summary"] == {"preservation_state": "degrading"}
 
 
+def test_governance_live_snapshot_prefers_dedicated_pre_bind_source(monkeypatch):
+    class _ReceiptWithFallbackData:
+        def to_dict(self):
+            return {
+                "final_outcome": "COMMITTED",
+                "bind_ts": "2026-04-30T00:00:00Z",
+                "participation_state": "informative",
+                "preservation_state": "open",
+                "intervention_viability": "high",
+            }
+
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [_ReceiptWithFallbackData()],
+    )
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot._resolve_pre_bind_from_trustlog_recent_decision",
+        lambda: {
+            "participation_state": "decision_shaping",
+            "preservation_state": "degrading",
+            "intervention_viability": "minimal",
+            "pre_bind_source": "trustlog_recent_decision",
+            "pre_bind_detection_summary": {"participation_state": "decision_shaping"},
+            "pre_bind_preservation_summary": {"preservation_state": "degrading"},
+            "pre_bind_detection_detail": {"aggregate_index": 0.88},
+            "pre_bind_preservation_detail": {"intervention_viability": {"level": "minimal"}},
+        },
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+    assert snapshot["bind_outcome"] == "COMMITTED"
+    assert snapshot["participation_state"] == "decision_shaping"
+    assert snapshot["preservation_state"] == "degrading"
+    assert snapshot["intervention_viability"] == "minimal"
+    assert snapshot["pre_bind_source"] == "trustlog_recent_decision"
+
+
+def test_governance_live_snapshot_pre_bind_retrieval_failure_is_non_fatal(monkeypatch):
+    receipt = BindReceipt(final_outcome=FinalOutcome.COMMITTED, bind_ts="2026-04-30T00:00:00Z")
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    def _raise():
+        raise RuntimeError("trustlog unavailable")
+
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot._resolve_pre_bind_from_trustlog_recent_decision",
+        _raise,
+    )
+
+    response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
+    assert response.status_code == 200
+    snapshot = response.json()["governance_layer_snapshot"]
+    assert snapshot["bind_outcome"] == "COMMITTED"
+    assert snapshot["pre_bind_source"] == "pre_bind_artifact_retrieval_failed"
+    assert snapshot["participation_state"] == "unknown"
+    assert snapshot["pre_bind_detection_summary"] is None
+
 def test_governance_live_snapshot_normalizes_malformed_pre_bind_objects(monkeypatch):
     class _MalformedPreBindReceipt:
         def to_dict(self):
@@ -318,7 +378,10 @@ def test_governance_live_snapshot_pre_bind_enrichment_exception_is_non_fatal(mon
     def _raise(_payload):
         raise RuntimeError("pre-bind boom")
 
-    monkeypatch.setattr("veritas_os.api.governance_live_snapshot._extract_pre_bind_snapshot_fields", _raise)
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.resolve_latest_pre_bind_snapshot_fields",
+        _raise,
+    )
 
     response = client.get("/v1/governance/live-snapshot", headers=_AUTH)
     assert response.status_code == 200
