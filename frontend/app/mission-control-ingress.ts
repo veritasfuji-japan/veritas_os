@@ -1,6 +1,9 @@
+import { headers } from "next/headers";
+
 import { type MissionGovernanceIngressPayload } from "../components/mission-governance-adapter";
 
 const GOVERNANCE_REPORT_ENDPOINT = "/api/veritas/v1/report/governance";
+const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -36,11 +39,18 @@ export function mapGovernanceFeedToIngressPayload(
 /**
  * Main path: backend-fed governance feed. Fallback is adapter-level render safety.
  */
+function resolveE2EScenarioHeader(): string | null {
+  const scenario = headers().get(E2E_SCENARIO_HEADER);
+  return scenario ? scenario.trim() : null;
+}
+
 export async function loadMissionControlIngressPayload(): Promise<MissionGovernanceIngressPayload | null> {
   try {
+    const scenario = resolveE2EScenarioHeader();
     const response = await fetch(GOVERNANCE_REPORT_ENDPOINT, {
       method: "GET",
       cache: "no-store",
+      headers: scenario ? { [E2E_SCENARIO_HEADER]: scenario } : undefined,
     });
 
     if (!response.ok) {
