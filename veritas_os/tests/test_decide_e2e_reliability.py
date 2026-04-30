@@ -584,12 +584,13 @@ class TestBackwardCompatibility:
         assert "risk" in fuji
 
 
-class TestCanonicalPreBindRealPipelineInputBoundaryInjection:
-    """Canonical pre-bind reproducibility on /v1/decide with input-boundary injection.
+class TestCanonicalPreBindRealPipelineRequestInputSeam:
+    """Canonical pre-bind reproducibility via request-input deterministic seam.
 
     Scope:
       - Real HTTP/route/pipeline/response assembly path is exercised.
-      - Deterministic control is limited to request context input shaping.
+      - Deterministic control uses context.pre_bind_participation_signal.
+      - Canonical main path does not patch raw extras injection.
       - Response-layer governance evaluator is not monkeypatched here.
     """
 
@@ -638,6 +639,7 @@ class TestCanonicalPreBindRealPipelineInputBoundaryInjection:
         assert body["extras"]["participation_signal"] == normalize_participation_signal_payload(
             fixture["participation_signal"]
         )
+        assert "pre_bind_participation_signal" not in body.get("context", {})
         assert (
             body["pre_bind_detection_summary"]["participation_state"]
             == golden["pre_bind_detection_summary"]["participation_state"]
