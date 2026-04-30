@@ -62,14 +62,14 @@ def build_governance_live_snapshot() -> dict[str, Any]:
         },
     }
     try:
-        receipts = find_bind_receipts(limit=1)
+        receipts = find_bind_receipts()
     except Exception:
         return fallback
 
     if not receipts:
         return fallback
 
-    latest = receipts[0].to_dict()
+    latest = receipts[-1].to_dict()
     snapshot = {
         "participation_state": _normalize_state(
             latest.get("participation_state"),
