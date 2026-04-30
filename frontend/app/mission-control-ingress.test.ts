@@ -1,4 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const headersGetMock = vi.fn(() => null);
+
+vi.mock("next/headers", () => ({
+  headers: async () => ({
+    get: headersGetMock,
+  }),
+}));
 
 import {
   loadMissionControlIngressPayload,
@@ -44,6 +52,10 @@ describe("mapGovernanceFeedToIngressPayload", () => {
 });
 
 describe("loadMissionControlIngressPayload", () => {
+  beforeEach(() => {
+    headersGetMock.mockReturnValue(null);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -69,7 +81,32 @@ describe("loadMissionControlIngressPayload", () => {
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
       method: "GET",
       cache: "no-store",
+      headers: undefined,
     });
+  });
+
+  it("forwards e2e scenario header when request header exists", async () => {
+    headersGetMock.mockReturnValue("main");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        governance_layer_snapshot: {
+          participation_state: "decision_shaping",
+          preservation_state: "degrading",
+        },
+      }),
+    } as Response);
+
+    await loadMissionControlIngressPayload();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/veritas/v1/report/governance?e2e_governance_scenario=main",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: { "x-veritas-e2e-governance-scenario": "main" },
+      },
+    );
   });
 
   it("returns null when backend feed is unavailable", async () => {
