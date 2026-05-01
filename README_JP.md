@@ -35,7 +35,7 @@ flowchart LR
   D --> E{Supported artifact}
   E -->|decision_id| F[Auto-load latest logs<br/>focus matching timeline item]
   E -->|bind_receipt_id| G[Dedicated bind receipt lookup<br/>fallback detail]
-  E -->|execution_intent_id| I[Execution intent trace lookup]
+  E -->|execution_intent_id| I[Auto-load latest logs<br/>timeline focus or unavailable]
   E -->|invalid or unsafe| H[Reject<br/>no fake route]
 ```
 
@@ -47,6 +47,10 @@ flowchart LR
 5. decision trace は latest logs を auto-load し、一致する timeline artifact がある場合は focus します。timeline に存在しない場合は direct lookup fallback を表示します。
 6. bind receipt trace は dedicated lookup を使い、timeline に一致項目がない場合も fallback detail を表示します。
 7. unsafe links、external/protocol URLs、malformed hrefs、fake routes は生成しません。
+
+ローカルでの導線確認:
+
+`pnpm --filter frontend test components/mission-page.test.tsx app/audit/page.test.tsx`
 
 この導線は、次の focused frontend tests でカバーされています。
 

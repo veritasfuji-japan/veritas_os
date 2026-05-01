@@ -36,7 +36,7 @@ flowchart LR
   D --> E{Supported artifact}
   E -->|decision_id| F[Auto-load latest logs<br/>focus matching timeline item]
   E -->|bind_receipt_id| G[Dedicated bind receipt lookup<br/>fallback detail]
-  E -->|execution_intent_id| I[Execution intent trace lookup]
+  E -->|execution_intent_id| I[Auto-load latest logs<br/>timeline focus or unavailable]
   E -->|invalid or unsafe| H[Reject<br/>no fake route]
 ```
 
@@ -48,6 +48,10 @@ flowchart LR
 5. Decision traces auto-load latest logs and focus matching timeline artifacts when available, with direct lookup fallback when timeline data does not contain the decision.
 6. Bind receipt traces use dedicated lookup and render fallback detail when timeline items do not contain the target receipt.
 7. Unsafe links, external/protocol URLs, malformed hrefs, and fake routes are not generated.
+
+Local workflow check:
+
+`pnpm --filter frontend test components/mission-page.test.tsx app/audit/page.test.tsx`
 
 Covered by focused frontend tests:
 
