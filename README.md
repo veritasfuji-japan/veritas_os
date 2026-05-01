@@ -53,6 +53,17 @@ Local workflow check:
 
 `bash scripts/demo_mission_audit_workflow.sh`
 
+A successful run should complete the focused checks for Mission Control actions, Audit page tracing, Audit hook behavior, and safe link validation:
+
+```text
+Running VERITAS Mission Control → Audit workflow demo checks...
+✓ Mission Control artifact actions
+✓ Audit page decision / bind receipt tracing
+✓ Audit hook query workflow
+✓ Governance link safety validation
+Mission Control → Audit workflow demo checks completed.
+```
+
 Covered by focused frontend tests:
 
 - `frontend/components/mission-page.test.tsx`
