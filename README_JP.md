@@ -52,6 +52,17 @@ flowchart LR
 
 `bash scripts/demo_mission_audit_workflow.sh`
 
+正常に完了する場合、この script は Mission Control actions、Audit page tracing、Audit hook behavior、safe link validation の focused checks を完了します。
+
+```text
+Running VERITAS Mission Control → Audit workflow demo checks...
+✓ Mission Control artifact actions
+✓ Audit page decision / bind receipt tracing
+✓ Audit hook query workflow
+✓ Governance link safety validation
+Mission Control → Audit workflow demo checks completed.
+```
+
 この導線は、次の focused frontend tests でカバーされています。
 
 - `frontend/components/mission-page.test.tsx`
