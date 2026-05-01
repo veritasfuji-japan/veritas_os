@@ -270,6 +270,7 @@ def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
     payload = entry.get("bind_receipt")
     if not isinstance(payload, dict):
         return None
+    trustlog_hash = str(payload.get("trustlog_hash") or entry.get("sha256") or "")
     try:
         return BindReceipt(
             bind_receipt_id=str(payload.get("bind_receipt_id") or ""),
@@ -286,7 +287,7 @@ def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
             final_outcome=FinalOutcome(str(payload.get("final_outcome") or FinalOutcome.BLOCKED.value)),
             rollback_reason=payload.get("rollback_reason"),
             escalation_reason=payload.get("escalation_reason"),
-            trustlog_hash=str(payload.get("trustlog_hash") or ""),
+            trustlog_hash=trustlog_hash,
             prev_bind_hash=payload.get("prev_bind_hash"),
             bind_receipt_hash=str(payload.get("bind_receipt_hash") or ""),
             execution_intent_hash=str(payload.get("execution_intent_hash") or ""),

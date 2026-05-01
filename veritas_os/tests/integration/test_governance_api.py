@@ -930,6 +930,78 @@ def test_governance_bind_receipts_cursor_pagination_and_export_parity(monkeypatc
     assert export_body["target_catalog"] == first_body["target_catalog"]
 
 
+def test_governance_bind_receipts_filters_use_enriched_target_metadata(monkeypatch) -> None:
+    class _Receipt:
+        def to_dict(self) -> dict:
+            return {
+                "bind_receipt_id": "br-legacy-governance",
+                "decision_id": "dec-legacy-governance",
+                "execution_intent_id": "ei-legacy-governance",
+                "target_path": "",
+                "target_type": "",
+                "final_outcome": "ROLLED_BACK",
+                "rollback_reason": "BIND_POSTCONDITION_FAILED",
+                "occurred_at": "2026-04-22T11:00:00Z",
+            }
+
+    monkeypatch.setattr("veritas_os.api.routes_governance.find_bind_receipts", lambda **_kwargs: [_Receipt()])
+
+    by_target_path = client.get(
+        "/v1/governance/bind-receipts?target_path=/v1/governance/policy",
+        headers=HEADERS,
+    )
+    assert by_target_path.status_code == 200
+    assert [item["bind_receipt_id"] for item in by_target_path.json()["items"]] == ["br-legacy-governance"]
+
+    by_target_type = client.get(
+        "/v1/governance/bind-receipts?target_type=governance_policy",
+        headers=HEADERS,
+    )
+    assert by_target_type.status_code == 200
+    assert [item["bind_receipt_id"] for item in by_target_type.json()["items"]] == ["br-legacy-governance"]
+
+    export_resp = client.get(
+        "/v1/governance/bind-receipts/export?target_path=/v1/governance/policy",
+        headers=HEADERS,
+    )
+    assert export_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in export_resp.json()["items"]] == ["br-legacy-governance"]
+
+
+def test_governance_bind_receipts_and_snapshot_preserve_trustlog_hash(monkeypatch) -> None:
+    class _Receipt:
+        def to_dict(self) -> dict:
+            return {
+                "bind_receipt_id": "br-hash-1",
+                "decision_id": "dec-hash-1",
+                "execution_intent_id": "ei-hash-1",
+                "target_path": "/v1/governance/policy",
+                "target_type": "governance_policy",
+                "final_outcome": "COMMITTED",
+                "trustlog_hash": "93afd07c1efa61b76f80bca15386911d21b98d733496a0bed867c8818846dd43",
+                "occurred_at": "2026-04-22T11:00:00Z",
+            }
+
+    monkeypatch.setattr("veritas_os.api.routes_governance.find_bind_receipts", lambda **_kwargs: [_Receipt()])
+    monkeypatch.setattr("veritas_os.api.governance_live_snapshot.find_bind_receipts", lambda: [_Receipt()])
+
+    list_resp = client.get("/v1/governance/bind-receipts", headers=HEADERS)
+    assert list_resp.status_code == 200
+    assert list_resp.json()["items"][0]["trustlog_hash"] == _Receipt().to_dict()["trustlog_hash"]
+
+    detail_resp = client.get("/v1/governance/bind-receipts/br-hash-1", headers=HEADERS)
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()["bind_receipt"]["trustlog_hash"] == _Receipt().to_dict()["trustlog_hash"]
+
+    export_resp = client.get("/v1/governance/bind-receipts/export", headers=HEADERS)
+    assert export_resp.status_code == 200
+    assert export_resp.json()["items"][0]["trustlog_hash"] == _Receipt().to_dict()["trustlog_hash"]
+
+    snapshot_resp = client.get("/v1/governance/live-snapshot", headers=HEADERS)
+    assert snapshot_resp.status_code == 200
+    snapshot_payload = snapshot_resp.json()["governance_layer_snapshot"]
+    assert snapshot_payload["trustlog_hash"] == _Receipt().to_dict()["trustlog_hash"]
+
 
 def test_governance_bind_receipts_list_invalid_query_returns_400(monkeypatch) -> None:
     monkeypatch.setattr(
@@ -1933,4 +2005,3 @@ def test_bind_receipt_list_and_detail_use_rollback_cause_for_top_level_reason(mo
     assert "postcondition failed" in body["bind_failure_reason"].lower()
     assert body["bind_receipt"]["bind_reason_code"] == "BIND_POSTCONDITION_FAILED"
     assert body["bind_receipt"]["authority_check_result"]["reason_code"] == "BIND_AUTHORITY_VALID"
-

@@ -287,6 +287,7 @@ def _build_enriched_snapshot_from_receipt_payload(payload: dict[str, Any]) -> di
         "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
         "execution_intent_id": enriched_receipt.get("execution_intent_id"),
         "decision_id": enriched_receipt.get("decision_id"),
+        "trustlog_hash": enriched_receipt.get("trustlog_hash"),
         "bind_reason_code": bind_reason_code,
         "bind_failure_reason": bind_summary.get("bind_failure_reason"),
         "failure_category": enriched_receipt.get("failure_category"),

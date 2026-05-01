@@ -155,7 +155,7 @@ def _apply_bind_receipt_filters(
 
     filtered: list[dict[str, Any]] = []
     for receipt in receipts:
-        payload = receipt.to_dict()
+        payload = enrich_bind_receipt_payload(receipt.to_dict())
 
         if canonical_target_path:
             payload_target_path = _canonical_path(payload.get("target_path"))
