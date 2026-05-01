@@ -42,6 +42,26 @@ It is **not** a production bypass.
 
 ## Try it locally
 
+Generate a dev-only snapshot (wrapper + dry-run evaluator):
+
+```bash
+python scripts/generate_observe_mode_demo_snapshot.py --out /tmp/observe_snapshot.json
+```
+
+Validate generated output with existing CLI checker:
+
+```bash
+python scripts/check_governance_observation.py /tmp/observe_snapshot.json
+```
+
+You can also emit to stdout:
+
+```bash
+python scripts/generate_observe_mode_demo_snapshot.py
+```
+
+This flow uses the test-only wrapper and dry-run evaluator, does not enable Observe Mode runtime, does not connect to production execution, and produces a Mission Control-style JSON payload for local inspection.
+
 Single fixture check:
 
 ```bash

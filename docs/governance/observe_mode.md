@@ -91,6 +91,7 @@ Observe mode misuse can become a security and compliance risk if enabled in prod
 - It preserves would-be blocking outcomes as `observed_outcome`.
 - It runs generated observations through the dry-run evaluator before returning them.
 - Wrapper tests include a memory-only snapshot fixture generation check proving generated observations can be embedded in Mission Control-style payloads without touching runtime paths.
+- `python scripts/generate_observe_mode_demo_snapshot.py` can generate a dev-only Mission Control-style snapshot from the test-only wrapper for local inspection; it does not enable Observe Mode runtime.
 - It is intended for tests/dev fixtures before any future runtime rollout.
 
 ## Dry-run observation evaluator
