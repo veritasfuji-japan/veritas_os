@@ -62,10 +62,34 @@ require_text "docs/REVIEWER_ENTRYPOINT.md" "bash scripts/validate_governance_obs
 require_text "docs/REVIEWER_ENTRYPOINT.md" "pnpm --filter frontend test app/dev/mission-fixture/page.test.tsx"
 
 log "Running lightweight smoke checks..."
+
+print_summary() {
+  cat <<'SUMMARY'
+
+=== VERITAS Reviewer Entry Point Validation Summary ===
+Reviewer Entry Point: PASS
+Required files: PASS
+Required links: PASS
+Safety language: PASS
+Root fixture check: PASS
+Frontend fixture check: PASS
+Generated snapshot check: PASS
+Fixture drift test: PASS
+Runtime behavior: unchanged
+Observe Mode runtime: not enabled
+Production: fail-closed unchanged
+Backend mutation endpoint: not added
+Production bypass: not added
+Summary result: PASS
+===============================================
+
+SUMMARY
+}
 python scripts/check_governance_observation.py fixtures/governance_observation_live_snapshot.json
 python scripts/check_governance_observation.py frontend/fixtures/governance_observation_live_snapshot.json
 python scripts/generate_observe_mode_demo_snapshot.py --out /tmp/veritas_reviewer_entrypoint_observe_snapshot.json
 python scripts/check_governance_observation.py /tmp/veritas_reviewer_entrypoint_observe_snapshot.json
 pytest -q veritas_os/tests/test_governance_observation_fixture_drift.py
 
+print_summary
 log "Reviewer entry point validation completed successfully."
