@@ -34,6 +34,45 @@ describe("resolveMissionGovernanceSnapshot", () => {
     expect(snapshot.intervention_viability).toBeUndefined();
   });
 
+
+
+  it("preserves governance_observation fields when present", () => {
+    const snapshot = resolveMissionGovernanceSnapshot({
+      governance_layer_snapshot: {
+        participation_state: "decision_shaping",
+        governance_observation: {
+          policy_mode: "observe",
+          environment: "development",
+          would_have_blocked: true,
+          would_have_blocked_reason: "policy_violation:missing_authority_evidence",
+          effective_outcome: "proceed",
+          observed_outcome: "block",
+          operator_warning: true,
+          audit_required: true,
+        },
+      },
+    });
+
+    expect(snapshot.governance_observation).toBeDefined();
+    expect(snapshot.governance_observation?.policy_mode).toBe("observe");
+    expect(snapshot.governance_observation?.environment).toBe("development");
+    expect(snapshot.governance_observation?.would_have_blocked).toBe(true);
+    expect(snapshot.governance_observation?.would_have_blocked_reason).toBe("policy_violation:missing_authority_evidence");
+    expect(snapshot.governance_observation?.effective_outcome).toBe("proceed");
+    expect(snapshot.governance_observation?.observed_outcome).toBe("block");
+    expect(snapshot.governance_observation?.operator_warning).toBe(true);
+    expect(snapshot.governance_observation?.audit_required).toBe(true);
+  });
+
+  it("keeps governance_observation undefined when absent", () => {
+    const snapshot = resolveMissionGovernanceSnapshot({
+      governance_layer_snapshot: {
+        participation_state: "decision_shaping",
+      },
+    });
+
+    expect(snapshot.governance_observation).toBeUndefined();
+  });
   it("falls back to render-safe snapshot when ingress data is absent", () => {
     const snapshot = resolveMissionGovernanceSnapshot(undefined);
 
