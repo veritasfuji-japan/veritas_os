@@ -85,6 +85,22 @@ Important behavior:
 - No production bypass is created.
 - Missing `governance_observation` means the section is hidden.
 
+
+## View the dev-only fixture route
+
+Open the frontend route:
+
+```text
+/dev/mission-fixture
+```
+
+This route renders a static fixture through the Mission Control-style UI.
+
+- It does not enable Observe Mode runtime.
+- It does not call backend APIs.
+- It does not create a production bypass.
+- It is for local/dev inspection only.
+
 ## What this walkthrough proves
 
 - Generated payload shape is understandable.

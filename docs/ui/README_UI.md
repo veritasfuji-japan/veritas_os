@@ -101,6 +101,7 @@ docker compose up --build
 - `governance_observation` が snapshot payload に含まれる場合、Mission Control は `policy_mode` / `environment` / `would_have_blocked` / `effective_outcome` などを read-only の operator context として表示します。これは observation fields の可視化であり、Observe Mode runtime を有効化する挙動ではありません。
 - Observe Mode governance observation rendering walkthrough: `docs/governance/observe_mode_mission_control_walkthrough.md`.
 - `fixtures/governance_observation_live_snapshot.json` は、Observe Mode runtime を有効化せずに Mission Control の read-only 表示を確認するための dev-only sample payload です。
+- `/dev/mission-fixture` renders the dev-only `governance_observation` fixture in a Mission Control-style read-only view without enabling Observe Mode runtime or calling backend APIs.
 - `bash scripts/validate_governance_observation_fixture.sh` は dev-only `governance_observation` sample 用の adapter / Mission Control focused tests を実行します。
 - `pre_bind_source` は artifact 取得元と fallback 状態を示し、`trustlog_matching_*` は matched、`trustlog_recent_decision` と `latest_bind_receipt` は fallback、`none` は unavailable、`malformed_pre_bind_artifact` と `pre_bind_artifact_retrieval_failed` は degraded source として扱います。
 - `pre_bind_detection_summary` / `pre_bind_preservation_summary` / detail fields / check result fields が `null` または `unknown` の場合、Mission Control UI は fake data を生成せず unavailable 表示を維持します。
