@@ -28,11 +28,12 @@ It is **not** a production bypass.
 - Test-only Observe Mode wrapper: `veritas_os/governance/observe_mode_wrapper.py`
 - CLI checker: `scripts/check_governance_observation.py`
 - Fixture validation script: `scripts/validate_governance_observation_fixture.sh`
+- Dev-only generated observation path coverage: would-be outcome → wrapper-generated `GovernanceObservation` → semantic evaluator → snapshot fixture shape → Mission Control adapter/rendering tests
 
 ## What it does not do
 
-- Does not enable Observe Mode runtime
-- Does not bypass production enforcement
+- Does not enable Observe Mode runtime (this flow is still dev/test-only fixture validation)
+- Does not connect the wrapper to production execution or bypass production enforcement
 - Does not change policy engine behavior
 - Does not add a UI toggle
 - Does not generate production observation payloads
@@ -62,7 +63,7 @@ pytest -q veritas_os/tests/test_observe_mode_wrapper.py
 bash scripts/validate_governance_observation_fixture.sh
 ```
 
-This script runs the Python evaluator tests, CLI tests, CLI fixture check, adapter tests, and Mission Control read-only rendering tests.
+This script runs the Python evaluator tests, CLI tests, wrapper fixture-generation tests, CLI fixture check, adapter tests, and Mission Control read-only rendering tests.
 
 ## Safety rules
 
