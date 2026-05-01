@@ -51,7 +51,7 @@ flowchart LR
 
 Local workflow check:
 
-`pnpm --filter frontend test components/mission-page.test.tsx app/audit/page.test.tsx`
+`bash scripts/demo_mission_audit_workflow.sh`
 
 Covered by focused frontend tests:
 
