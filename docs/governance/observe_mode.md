@@ -8,6 +8,7 @@ This document defines semantics, safety constraints, and schema foundations for 
 
 For a developer-oriented end-to-end walkthrough, see `docs/governance/observe_mode_developer_walkthrough.md`.
 For a Mission Control-focused payload-to-UI walkthrough, see `docs/governance/observe_mode_mission_control_walkthrough.md`.
+For a reviewer-oriented evidence index, see `docs/governance/observe_mode_proof_pack.md`.
 
 ## Core policy modes
 

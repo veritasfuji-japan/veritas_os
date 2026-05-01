@@ -6,6 +6,8 @@ This walkthrough explains how a dev-only `governance_observation` snapshot maps 
 
 It does **not** enable Observe Mode runtime.
 
+For the full proof pack index, see `docs/governance/observe_mode_proof_pack.md`.
+
 ## Generate a dev-only snapshot
 
 ```bash

@@ -16,6 +16,8 @@ Observe Mode foundation is a semantics, schema, UI, fixture, and dry-run validat
 
 It is **not** a production bypass.
 
+For an evidence-oriented proof pack covering files, tests, commands, and safety boundaries, see `docs/governance/observe_mode_proof_pack.md`.
+
 ## Current foundation
 
 - Semantics doc: `docs/governance/observe_mode.md`
