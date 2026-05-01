@@ -21,6 +21,19 @@ def _resolve_rollback_failure_reason(bind_receipt: dict[str, Any]) -> str | None
     return normalized_reason
 
 
+def _extract_rollback_reason_code(bind_receipt: dict[str, Any]) -> str | None:
+    """Extract rollback reason code only when rollback_reason is code-shaped."""
+    rollback_reason = bind_receipt.get("rollback_reason")
+    if not isinstance(rollback_reason, str) or not rollback_reason.strip():
+        return None
+    rollback_prefix = rollback_reason.strip().split(":", 1)[0].strip()
+    if not rollback_prefix:
+        return None
+    if rollback_prefix.startswith("BIND_"):
+        return rollback_prefix
+    return None
+
+
 def resolve_bind_failure_reason(bind_receipt: dict[str, Any]) -> str | None:
     """Resolve compact operator-facing bind failure reason from receipt fields."""
     final_outcome = str(bind_receipt.get("final_outcome") or "").strip().upper()
@@ -52,9 +65,10 @@ def resolve_bind_failure_reason(bind_receipt: dict[str, Any]) -> str | None:
 def resolve_bind_reason_code(bind_receipt: dict[str, Any]) -> str | None:
     """Extract a stable bind reason code from the receipt payload."""
     final_outcome = str(bind_receipt.get("final_outcome") or "").strip().upper()
-    rollback_reason = bind_receipt.get("rollback_reason")
-    if final_outcome == "ROLLED_BACK" and isinstance(rollback_reason, str) and rollback_reason.strip():
-        return rollback_reason.strip().split(":", 1)[0]
+    if final_outcome == "ROLLED_BACK":
+        rollback_reason_code = _extract_rollback_reason_code(bind_receipt)
+        if rollback_reason_code:
+            return rollback_reason_code
     direct_reason_code = bind_receipt.get("bind_reason_code")
     if isinstance(direct_reason_code, str) and direct_reason_code.strip():
         return direct_reason_code.strip()
