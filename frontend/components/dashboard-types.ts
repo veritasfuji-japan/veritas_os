@@ -69,6 +69,19 @@ export interface DecisionEvidenceRouteModel {
 
 export type MissionUiState = "loading" | "empty" | "degraded" | "operational";
 
+export type PolicyMode = "enforce" | "observe" | "off";
+
+export interface GovernanceObservation {
+  policy_mode: PolicyMode;
+  environment: "development" | "test" | "staging" | "production" | string;
+  would_have_blocked: boolean;
+  would_have_blocked_reason?: string | null;
+  effective_outcome: string;
+  observed_outcome?: string | null;
+  operator_warning?: boolean;
+  audit_required?: boolean;
+}
+
 export interface PreBindGovernanceSnapshot {
   participation_state?: string;
   preservation_state?: string;
@@ -99,6 +112,7 @@ export interface PreBindGovernanceSnapshot {
   constraint_check_result?: unknown | null;
   drift_check_result?: unknown | null;
   risk_check_result?: unknown | null;
+  governance_observation?: GovernanceObservation | null;
 }
 
 export const PRE_BIND_GOVERNANCE_VOCABULARY_LABELS = {

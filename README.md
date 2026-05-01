@@ -64,6 +64,11 @@ Running VERITAS Mission Control → Audit workflow demo checks...
 Mission Control → Audit workflow demo checks completed.
 ```
 
+
+### Development-time Observe Mode
+
+VERITAS distinguishes production enforcement from development observation. Production governance remains fail-closed. Observe Mode support is a **foundation semantics** (default off) for development/test/sandbox contexts that records `would_have_blocked` outcomes without hiding violations. See `docs/governance/observe_mode.md`.
+
 Covered by focused frontend tests:
 
 - `frontend/components/mission-page.test.tsx`
