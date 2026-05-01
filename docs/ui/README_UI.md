@@ -101,6 +101,9 @@ docker compose up --build
 - `governance_observation` が snapshot payload に含まれる場合、Mission Control は `policy_mode` / `environment` / `would_have_blocked` / `effective_outcome` などを read-only の operator context として表示します。これは observation fields の可視化であり、Observe Mode runtime を有効化する挙動ではありません。
 - Observe Mode governance observation rendering walkthrough: `docs/governance/observe_mode_mission_control_walkthrough.md`.
 - `fixtures/governance_observation_live_snapshot.json` は、Observe Mode runtime を有効化せずに Mission Control の read-only 表示を確認するための dev-only sample payload です。
+- `frontend/fixtures/governance_observation_live_snapshot.json` は frontend bundler 制約に対応するための frontend-local dev-only copy で、source-of-truth は root fixture (`fixtures/governance_observation_live_snapshot.json`) です。
+- Drift detection は `veritas_os/tests/test_governance_observation_fixture_drift.py` と `scripts/check_governance_observation.py`（root/frontend fixture 両方）で実行し、`governance_observation` / artifact IDs / key routing fields の整合性を検証します。
+- 上記 fixture integrity check は表示契約の一貫性を保証するものであり、runtime behavior は変更しません。production は fail-closed のままで Observe Mode runtime は有効化されません。
 - `/dev/mission-fixture` renders the dev-only `governance_observation` fixture in a Mission Control-style read-only view without enabling Observe Mode runtime or calling backend APIs.
 - `/dev/mission-fixture` is local/dev/test-only; in production environments it renders a disabled state and does not render the static `governance_observation` fixture.
 - This route hardening does not change runtime behavior: production remains fail-closed and Observe Mode runtime is not enabled.
