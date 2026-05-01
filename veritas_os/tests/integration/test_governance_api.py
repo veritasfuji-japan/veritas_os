@@ -1895,3 +1895,42 @@ class TestRouteValidationResponses:
         body = resp.json()
         assert body["ok"] is True
         assert isinstance(body["history"], list)
+
+
+def test_bind_receipt_list_and_detail_use_rollback_cause_for_top_level_reason(monkeypatch) -> None:
+    class _Receipt:
+        def to_dict(self) -> dict:
+            return {
+                "bind_receipt_id": "br-rb",
+                "execution_intent_id": "ei-rb",
+                "final_outcome": "ROLLED_BACK",
+                "rollback_reason": "BIND_POSTCONDITION_FAILED",
+                "failure_category": "POSTCONDITION",
+                "bind_reason_code": "BIND_AUTHORITY_VALID",
+                "bind_failure_reason": "Authority remains valid.",
+                "authority_check_result": {
+                    "status": "pass",
+                    "reason_code": "BIND_AUTHORITY_VALID",
+                    "message": "Authority remains valid.",
+                },
+                "occurred_at": "2026-04-22T11:00:00Z",
+            }
+
+    monkeypatch.setattr("veritas_os.api.routes_governance.find_bind_receipts", lambda **_kwargs: [_Receipt()])
+
+    list_resp = client.get("/v1/governance/bind-receipts", headers=HEADERS)
+    assert list_resp.status_code == 200
+    list_item = list_resp.json()["items"][0]
+    assert list_item["bind_reason_code"] == "BIND_POSTCONDITION_FAILED"
+    assert "postcondition failed" in list_item["bind_failure_reason"].lower()
+    assert "rolled back" in list_item["bind_failure_reason"].lower()
+    assert list_item["authority_check_result"]["reason_code"] == "BIND_AUTHORITY_VALID"
+
+    detail_resp = client.get("/v1/governance/bind-receipts/br-rb", headers=HEADERS)
+    assert detail_resp.status_code == 200
+    body = detail_resp.json()
+    assert body["bind_reason_code"] == "BIND_POSTCONDITION_FAILED"
+    assert "postcondition failed" in body["bind_failure_reason"].lower()
+    assert body["bind_receipt"]["bind_reason_code"] == "BIND_POSTCONDITION_FAILED"
+    assert body["bind_receipt"]["authority_check_result"]["reason_code"] == "BIND_AUTHORITY_VALID"
+
