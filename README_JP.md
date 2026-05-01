@@ -23,6 +23,27 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
 
+## Governance Review Workflow（ガバナンスレビュー導線）
+
+VERITAS OS は、ガバナンス証跡を記録するだけではありません。Mission Control から Audit へ、証跡を辿って確認できるレビュー導線を提供します。
+
+1. Mission Control が `/v1/governance/live-snapshot` から live governance snapshot を受け取ります。
+2. UI が pre-bind source / bind reason / target metadata / check results / safe operator actions を表示します。
+3. Operator actions は、supported artifacts（`bind_receipt_id` / `decision_id` / `execution_intent_id`）向けに safe internal `/audit?...` links を提供します。
+4. Audit は supported query parameters を consume し、lookup / navigation 前に query validation を適用します。
+5. decision trace は latest logs を auto-load し、一致する timeline artifact がある場合は focus します。timeline に存在しない場合は direct lookup fallback を表示します。
+6. bind receipt trace は dedicated lookup を使い、timeline に一致項目がない場合も fallback detail を表示します。
+7. unsafe links、external/protocol URLs、malformed hrefs、fake routes は生成しません。
+
+この導線は、次の focused frontend tests でカバーされています。
+
+- `frontend/components/mission-page.test.tsx`
+- `frontend/app/audit/page.test.tsx`
+- `frontend/app/audit/hooks/useAuditData.test.ts`
+- `frontend/lib/governance-link-utils.test.ts`
+
+実装詳細は `docs/ui/README_UI.md` を参照してください。
+
 ## VERITAS OS は何か
 
 - 実行前に意思決定を評価し、`proceed / hold / block / human_review_required` を判定するガバナンス層

@@ -24,6 +24,27 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 
 > **Mental model:** LLM = CPU, VERITAS OS = Decision / Agent Governance OS on top
 
+## Governance Review Workflow
+
+VERITAS OS does not only record governance artifacts. It connects them into a Mission Control → Audit review workflow:
+
+1. Mission Control receives a live governance snapshot from `/v1/governance/live-snapshot`.
+2. The UI surfaces governance artifact metadata, including pre-bind source, bind reason, target metadata, check results, and safe operator actions.
+3. Operator actions provide safe internal `/audit?...` links for supported artifacts (`bind_receipt_id`, `decision_id`, `execution_intent_id`).
+4. Audit consumes supported query parameters and applies query validation before lookup/navigation.
+5. Decision traces auto-load latest logs and focus matching timeline artifacts when available, with direct lookup fallback when timeline data does not contain the decision.
+6. Bind receipt traces use dedicated lookup and render fallback detail when timeline items do not contain the target receipt.
+7. Unsafe links, external/protocol URLs, malformed hrefs, and fake routes are not generated.
+
+Covered by focused frontend tests:
+
+- `frontend/components/mission-page.test.tsx`
+- `frontend/app/audit/page.test.tsx`
+- `frontend/app/audit/hooks/useAuditData.test.ts`
+- `frontend/lib/governance-link-utils.test.ts`
+
+See `docs/ui/README_UI.md` for implementation details.
+
 ## Version
 
 - **Version:** 2.0.0
