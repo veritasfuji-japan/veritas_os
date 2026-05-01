@@ -63,6 +63,8 @@ python scripts/check_governance_observation.py /tmp/observe_snapshot.json
 pnpm --filter frontend test app/dev/mission-fixture/page.test.tsx
 ```
 
+The reviewer entrypoint validation script prints a summary block that can be pasted into `docs/reviewer_validation_report_template.md`.
+
 Optional broader checks (already used in repository docs):
 
 ```bash

@@ -44,6 +44,27 @@ Use this template to record external reviewer validation results in a consistent
 
 ## Validation output summary
 
+Paste the output of `bash scripts/validate_reviewer_entrypoint.sh` here:
+
+```text
+=== VERITAS Reviewer Entry Point Validation Summary ===
+Reviewer Entry Point:
+Required files:
+Required links:
+Safety language:
+Root fixture check:
+Frontend fixture check:
+Generated snapshot check:
+Fixture drift test:
+Runtime behavior:
+Observe Mode runtime:
+Production:
+Backend mutation endpoint:
+Production bypass:
+Summary result:
+===============================================
+```
+
 - Overall result:
   - [ ] pass
   - [ ] partial pass
