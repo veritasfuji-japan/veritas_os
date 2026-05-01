@@ -55,6 +55,7 @@ It is a governance/control plane for decision and bind boundaries before real-wo
 ## Recommended validation commands
 
 ```bash
+bash scripts/validate_reviewer_entrypoint.sh
 bash scripts/validate_governance_observation_fixture.sh
 python scripts/check_governance_observation.py fixtures/governance_observation_live_snapshot.json
 python scripts/generate_observe_mode_demo_snapshot.py --out /tmp/observe_snapshot.json
@@ -103,6 +104,7 @@ This is a dev/test evidence path. It is not production runtime evidence.
 
 - [ ] Read `README.md` overview.
 - [ ] Read `docs/governance/observe_mode_proof_pack.md`.
+- [ ] Run `bash scripts/validate_reviewer_entrypoint.sh` (lightweight link + evidence smoke validation).
 - [ ] Run focused validation script.
 - [ ] Generate and check demo snapshot.
 - [ ] Review `/dev/mission-fixture` locally.
