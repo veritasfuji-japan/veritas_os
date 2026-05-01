@@ -91,6 +91,17 @@ def _with_bind_policy_lineage(
 ) -> dict[str, Any]:
     """Merge governance bind policy surface into execution intent lineage."""
     merged: dict[str, Any] = dict(lineage or {})
+    merged.setdefault(
+        "bind_target_metadata",
+        {
+            "target_path": "/v1/governance/policy",
+            "target_type": "governance_policy",
+            "target_path_type": "governance_policy_update",
+            "target_label": "governance policy update",
+            "operator_surface": "governance",
+            "relevant_ui_href": "/governance",
+        },
+    )
     if not isinstance(governance_policy, dict):
         return merged
     bind_policy = governance_policy.get("bind_adjudication")

@@ -976,6 +976,7 @@ def _finalize_receipt(
     append_trustlog: bool,
     receipt: BindReceipt,
 ) -> BindReceipt:
+    receipt = _apply_bind_target_metadata_from_lineage(receipt, execution_intent=execution_intent)
     if not receipt.bind_reason_code or not receipt.bind_failure_reason:
         reason_code, failure_reason = _resolve_receipt_failure_fields(receipt)
         receipt = _with_receipt(
@@ -994,6 +995,39 @@ def _finalize_receipt(
         return receipt
     append_execution_intent_trustlog(execution_intent)
     return append_bind_receipt_trustlog(receipt)
+
+
+def _apply_bind_target_metadata_from_lineage(
+    receipt: BindReceipt,
+    *,
+    execution_intent: ExecutionIntent,
+) -> BindReceipt:
+    """Backfill target metadata from execution intent lineage when missing."""
+    policy_lineage = execution_intent.policy_lineage
+    if not isinstance(policy_lineage, dict):
+        return receipt
+    metadata = policy_lineage.get("bind_target_metadata")
+    if not isinstance(metadata, dict):
+        return receipt
+
+    updates: dict[str, Any] = {}
+    for field in (
+        "target_path",
+        "target_type",
+        "target_path_type",
+        "target_label",
+        "operator_surface",
+        "relevant_ui_href",
+    ):
+        current_value = getattr(receipt, field, "")
+        if isinstance(current_value, str) and current_value.strip():
+            continue
+        value = metadata.get(field)
+        if isinstance(value, str) and value.strip():
+            updates[field] = value.strip()
+    if not updates:
+        return receipt
+    return _with_receipt(receipt, **updates)
 
 
 def _deep_copy_mapping(value: dict[str, Any]) -> dict[str, Any]:

@@ -215,9 +215,18 @@ class TestPutPolicy:
         assert body["bind_receipt_id"]
         assert body["execution_intent_id"]
         assert body["bind_receipt"]["final_outcome"] == "COMMITTED"
-        assert body["bind_receipt"]["target_path_type"] in {"governance_policy_update", "other"}
-        assert body["bind_receipt"]["target_label"]
-        assert body["target_metadata"]["target_path_type"] == body["bind_receipt"]["target_path_type"]
+        assert body["bind_receipt"]["target_path"] == "/v1/governance/policy"
+        assert body["bind_receipt"]["target_type"] == "governance_policy"
+        assert body["bind_receipt"]["target_path_type"] == "governance_policy_update"
+        assert body["bind_receipt"]["target_label"] == "governance policy update"
+        assert body["bind_receipt"]["operator_surface"] == "governance"
+        assert body["bind_receipt"]["relevant_ui_href"] == "/governance"
+        assert body["target_metadata"]["target_path"] == "/v1/governance/policy"
+        assert body["target_metadata"]["target_type"] == "governance_policy"
+        assert body["target_metadata"]["target_path_type"] == "governance_policy_update"
+        assert body["target_metadata"]["label"] == "governance policy update"
+        assert body["target_metadata"]["operator_surface"] == "governance"
+        assert body["target_metadata"]["relevant_ui_href"] == "/governance"
 
     def test_put_preserves_backward_compatible_response_shape(self, monkeypatch):
         monkeypatch.setattr(
@@ -675,6 +684,50 @@ def test_governance_bind_receipts_list_endpoint(monkeypatch) -> None:
     assert isinstance(body["target_catalog"], list)
     assert any(item["target_path_type"] == "governance_policy_update" for item in body["target_catalog"])
 
+
+def test_governance_policy_bind_receipt_target_metadata_persists_across_list_detail_and_filter() -> None:
+    put_resp = client.put(
+        "/v1/governance/policy",
+        headers=HEADERS,
+        json=_approved({"risk_thresholds": {"warn_upper": 0.58}}),
+    )
+    assert put_resp.status_code == 200
+    put_body = put_resp.json()
+    bind_receipt_id = put_body["bind_receipt_id"]
+    assert put_body["bind_receipt"]["target_path"] == "/v1/governance/policy"
+    assert put_body["bind_receipt"]["target_type"] == "governance_policy"
+    assert put_body["bind_receipt"]["target_path_type"] == "governance_policy_update"
+    assert put_body["bind_receipt"]["target_label"] == "governance policy update"
+    assert put_body["bind_receipt"]["operator_surface"] == "governance"
+    assert put_body["bind_receipt"]["relevant_ui_href"] == "/governance"
+
+    list_resp = client.get(
+        "/v1/governance/bind-receipts?target_path=/v1/governance/policy",
+        headers=HEADERS,
+    )
+    assert list_resp.status_code == 200
+    list_body = list_resp.json()
+    listed = [item for item in list_body["items"] if item["bind_receipt_id"] == bind_receipt_id]
+    assert listed
+    listed_receipt = listed[0]
+    assert listed_receipt["target_path"] == "/v1/governance/policy"
+    assert listed_receipt["target_type"] == "governance_policy"
+    assert listed_receipt["target_path_type"] == "governance_policy_update"
+    assert listed_receipt["target_label"] == "governance policy update"
+    assert listed_receipt["operator_surface"] == "governance"
+    assert listed_receipt["relevant_ui_href"] == "/governance"
+    assert any(item["target_path_type"] == "governance_policy_update" for item in list_body["target_catalog"])
+
+    detail_resp = client.get(f"/v1/governance/bind-receipts/{bind_receipt_id}", headers=HEADERS)
+    assert detail_resp.status_code == 200
+    detail_body = detail_resp.json()
+    detail_receipt = detail_body["bind_receipt"]
+    assert detail_receipt["target_path"] == "/v1/governance/policy"
+    assert detail_receipt["target_type"] == "governance_policy"
+    assert detail_receipt["target_path_type"] == "governance_policy_update"
+    assert detail_receipt["target_label"] == "governance policy update"
+    assert detail_receipt["operator_surface"] == "governance"
+    assert detail_receipt["relevant_ui_href"] == "/governance"
 
 def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
     class _Receipt:
