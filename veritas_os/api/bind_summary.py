@@ -16,7 +16,7 @@ def _resolve_rollback_failure_reason(bind_receipt: dict[str, Any]) -> str | None
     if reason_code == "BIND_POSTCONDITION_FAILED":
         return (
             "Postcondition failed after attempted governance policy update; "
-            "mutation was rolled back. Authority check remained valid."
+            "mutation was rolled back."
         )
     return normalized_reason
 
@@ -90,12 +90,22 @@ def resolve_bind_reason_code(bind_receipt: dict[str, Any]) -> str | None:
 
 def enrich_bind_receipt_payload(bind_receipt: dict[str, Any]) -> dict[str, Any]:
     """Attach canonical bind target metadata to any bind receipt payload."""
-    target_metadata = resolve_bind_target_metadata(
-        bind_receipt.get("target_path"),
-        bind_receipt.get("target_type"),
-    )
+    target_path = bind_receipt.get("target_path")
+    target_type = bind_receipt.get("target_type")
+    rollback_reason_code = _extract_rollback_reason_code(bind_receipt)
+    if (
+        rollback_reason_code == "BIND_POSTCONDITION_FAILED"
+        and (not isinstance(target_path, str) or not target_path.strip())
+        and (not isinstance(target_type, str) or not target_type.strip())
+    ):
+        target_path = "/v1/governance/policy"
+        target_type = "governance_policy"
+
+    target_metadata = resolve_bind_target_metadata(target_path, target_type)
     enriched = {
         **bind_receipt,
+        "target_path": target_metadata["target_path"],
+        "target_type": target_metadata["target_type"],
         "target_path_type": target_metadata["target_path_type"],
         "target_label": target_metadata["label"],
         "operator_surface": target_metadata["operator_surface"],

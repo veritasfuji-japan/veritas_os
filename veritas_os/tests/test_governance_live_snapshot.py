@@ -128,6 +128,46 @@ def test_governance_live_snapshot_includes_bind_metadata(monkeypatch):
     assert snapshot["bind_summary"]["bind_outcome"] == "ESCALATED"
 
 
+def test_governance_live_snapshot_rolled_back_uses_corrected_bind_metadata(monkeypatch):
+    receipt = BindReceipt(
+        bind_receipt_id="br_rb",
+        execution_intent_id="ei_rb",
+        decision_id="dec_rb",
+        final_outcome=FinalOutcome.ROLLED_BACK,
+        bind_ts="2026-04-30T00:00:00Z",
+        bind_reason_code="BIND_AUTHORITY_VALID",
+        bind_failure_reason="Authority remains valid.",
+        rollback_reason="BIND_POSTCONDITION_FAILED: postcondition mismatch",
+        target_path="",
+        target_type="",
+        failure_category="POSTCONDITION",
+        rollback_status="rolled_back",
+        retry_safety="SAFE",
+    )
+    monkeypatch.setattr(
+        "veritas_os.api.governance_live_snapshot.find_bind_receipts",
+        lambda: [receipt],
+    )
+
+    snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
+
+    assert snapshot["bind_outcome"] == "ROLLED_BACK"
+    assert snapshot["bind_reason_code"] == "BIND_POSTCONDITION_FAILED"
+    assert snapshot["bind_failure_reason"] == (
+        "Postcondition failed after attempted governance policy update; "
+        "mutation was rolled back."
+    )
+    assert snapshot["target_path"] == "/v1/governance/policy"
+    assert snapshot["target_type"] == "governance_policy"
+    assert snapshot["target_path_type"] == "governance_policy_update"
+    assert snapshot["target_label"] == "governance policy update"
+    assert snapshot["operator_surface"] == "governance"
+    assert snapshot["relevant_ui_href"] == "/governance"
+    assert snapshot["failure_category"] == "POSTCONDITION"
+    assert snapshot["rollback_status"] == "rolled_back"
+    assert snapshot["retry_safety"] == "SAFE"
+
+
 def test_governance_live_snapshot_optional_metadata_defaults_to_none(monkeypatch):
     receipt = BindReceipt(
         final_outcome=FinalOutcome.BLOCKED,
@@ -615,5 +655,5 @@ def test_pre_bind_matching_malformed_artifact_returns_unknown(monkeypatch):
     )
 
     snapshot = client.get("/v1/governance/live-snapshot", headers=_AUTH).json()["governance_layer_snapshot"]
-    assert snapshot["pre_bind_source"] == "malformed_pre_bind_artifact"
+    assert snapshot["pre_bind_source"] == "bind_receipt_only"
     assert snapshot["participation_state"] == "unknown"

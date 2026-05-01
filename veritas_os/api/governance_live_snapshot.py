@@ -232,7 +232,7 @@ def _resolve_pre_bind_from_trustlog_recent_decision(
                 if matched_key != key:
                     continue
                 if fields.get("pre_bind_source") != "latest_bind_receipt":
-                    return _default_pre_bind_fields(pre_bind_source="malformed_pre_bind_artifact")
+                    return _default_pre_bind_fields(pre_bind_source="bind_receipt_only")
                 resolved = dict(fields)
                 resolved["pre_bind_source"] = source_by_key[key]
                 return resolved
