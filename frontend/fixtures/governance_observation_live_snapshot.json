@@ -1,0 +1,27 @@
+{
+  "governance_layer_snapshot": {
+    "participation_state": "decision_shaping",
+    "pre_bind_source": "trustlog_matching_decision",
+    "bind_reason_code": "AUTHORITY_MISSING",
+    "bind_failure_reason": "Authority evidence missing",
+    "failure_category": "policy_violation",
+    "target_path": "/governance/policies/authority",
+    "target_type": "policy",
+    "target_label": "Authority policy",
+    "operator_surface": "governance",
+    "relevant_ui_href": "/governance",
+    "decision_id": "dec_observe_demo_001",
+    "bind_receipt_id": "br_observe_demo_001",
+    "execution_intent_id": "ei_observe_demo_001",
+    "governance_observation": {
+      "policy_mode": "observe",
+      "environment": "development",
+      "would_have_blocked": true,
+      "would_have_blocked_reason": "policy_violation:missing_authority_evidence",
+      "effective_outcome": "proceed",
+      "observed_outcome": "block",
+      "operator_warning": true,
+      "audit_required": true
+    }
+  }
+}
