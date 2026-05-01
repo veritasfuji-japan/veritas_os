@@ -6,6 +6,8 @@ This proof pack summarizes the current Observe Mode foundation, the evidence art
 
 It is intended for external reviewers, enterprise evaluators, investors, and developers.
 
+For the repository-level reviewer guide, see `docs/REVIEWER_ENTRYPOINT.md`.
+
 ## Status
 
 - Observe Mode runtime is not enabled.

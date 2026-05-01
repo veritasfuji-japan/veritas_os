@@ -1,5 +1,7 @@
 # UI Monorepo Quickstart
 
+Repository-level reviewer guide: `docs/REVIEWER_ENTRYPOINT.md`.
+
 ## frontend だけをローカル起動
 
 ```bash
