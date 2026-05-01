@@ -242,6 +242,18 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
       governanceSnapshot?.intervention_viability,
   );
 
+  const governanceObservation = governanceSnapshot?.governance_observation;
+  const hasGovernanceObservation = governanceObservation != null;
+  const renderObservationValue = (value: unknown): string => {
+    if (value === null || value === undefined) {
+      return "not available";
+    }
+    if (typeof value === "boolean") {
+      return value ? "true" : "false";
+    }
+    return stringifyValue(value);
+  };
+
   const statusMessage = {
     loading: t("データ同期中: 信頼状態の確定前です。", "Syncing data: trust state not yet confirmed."),
     empty: t("監視データなし: オペレーター確認が必要です。", "No monitoring data: operator verification required."),
@@ -373,6 +385,33 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
             <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{stringifyValue(governanceSnapshot?.risk_check_result)}</pre>
           </div>
         </div>
+        {hasGovernanceObservation ? (
+          <div className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
+            <p className="font-semibold">Governance observation</p>
+            <p className="mt-1 text-muted-foreground">Observation fields received from payload (read-only; runtime behavior unchanged).</p>
+            <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+              <dt>policy_mode</dt>
+              <dd className="font-mono">{renderObservationValue(governanceObservation.policy_mode)}</dd>
+              <dt>environment</dt>
+              <dd className="font-mono">{renderObservationValue(governanceObservation.environment)}</dd>
+              <dt>would_have_blocked</dt>
+              <dd className={governanceObservation.would_have_blocked ? "font-mono font-semibold text-warning" : "font-mono"}>
+                {renderObservationValue(governanceObservation.would_have_blocked)}
+              </dd>
+              <dt>would_have_blocked_reason</dt>
+              <dd className="font-mono">{renderObservationValue(governanceObservation.would_have_blocked_reason)}</dd>
+              <dt>effective_outcome</dt>
+              <dd className="font-mono">{renderObservationValue(governanceObservation.effective_outcome)}</dd>
+              <dt>observed_outcome</dt>
+              <dd className="font-mono">{renderObservationValue(governanceObservation.observed_outcome)}</dd>
+              <dt>operator_warning</dt>
+              <dd className="font-mono">{renderObservationValue(governanceObservation.operator_warning)}</dd>
+              <dt>audit_required</dt>
+              <dd className="font-mono">{renderObservationValue(governanceObservation.audit_required)}</dd>
+            </dl>
+          </div>
+        ) : null}
+
         <div className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
           <p className="font-semibold">Operator actions</p>
           <ul className="mt-2 space-y-1">

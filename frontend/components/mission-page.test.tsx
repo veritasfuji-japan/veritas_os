@@ -451,4 +451,85 @@ it("shows pre-bind source without creating a fake trustlog route", () => {
     expect(screen.getAllByText("malformed_pre_bind_artifact").length).toBeGreaterThan(0);
     expect(screen.getByText(/classification: degraded/)).toBeInTheDocument();
   });
+
+  it("renders governance observation fields when payload includes governance_observation", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            governance_observation: {
+              policy_mode: "observe",
+              environment: "development",
+              would_have_blocked: true,
+              would_have_blocked_reason: "policy_violation:missing_authority_evidence",
+              effective_outcome: "proceed",
+              observed_outcome: "block",
+              operator_warning: true,
+              audit_required: true,
+            },
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Governance observation")).toBeInTheDocument();
+    expect(screen.getByText("observe")).toBeInTheDocument();
+    expect(screen.getByText("development")).toBeInTheDocument();
+    expect(screen.getByText("would_have_blocked")).toBeInTheDocument();
+    expect(screen.getAllByText("true").length).toBeGreaterThan(0);
+    expect(screen.getByText("policy_violation:missing_authority_evidence")).toBeInTheDocument();
+    expect(screen.getByText("effective_outcome")).toBeInTheDocument();
+    expect(screen.getByText("proceed")).toBeInTheDocument();
+    expect(screen.getByText("observed_outcome")).toBeInTheDocument();
+    expect(screen.getByText("block")).toBeInTheDocument();
+    expect(screen.getByText("operator_warning")).toBeInTheDocument();
+    expect(screen.getByText("audit_required")).toBeInTheDocument();
+  });
+
+  it("does not render governance observation section when governance_observation is absent", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{}}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByText("Governance observation")).not.toBeInTheDocument();
+    expect(screen.getByText("Governance artifacts")).toBeInTheDocument();
+  });
+
+  it("renders enforce mode governance observation fields", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            governance_observation: {
+              policy_mode: "enforce",
+              environment: "production",
+              would_have_blocked: false,
+              effective_outcome: "block",
+              observed_outcome: "block",
+              operator_warning: false,
+              audit_required: true,
+            },
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("enforce")).toBeInTheDocument();
+    expect(screen.getByText("production")).toBeInTheDocument();
+    expect(screen.getByText("would_have_blocked")).toBeInTheDocument();
+    expect(screen.getAllByText("false").length).toBeGreaterThan(0);
+  });
 });
