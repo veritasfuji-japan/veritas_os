@@ -121,5 +121,7 @@ docker compose up --build
 - 無効値（例: `../secret`, `javascript:...`, 改行を含む値）は拒否し、error 表示のみ行い、unsafe query による検索・遷移は行いません。
 - query priority は `bind_receipt_id` > `decision_id` > `execution_intent_id` です。複数指定時は最優先 query を workflow focus として consume します。
 - `bind_receipt_id` は従来どおり dedicated lookup（governance bind receipt API）を実行し、timeline match があれば select/focus、miss 時は fallback detail を表示します。
-- `decision_id` は loaded timeline 内で一致する item (`item.decision_id`) を探索し、見つかれば select/focus、見つからなければ not-found trace を表示します。
-- `execution_intent_id` は loaded timeline 内で `item.execution_intent_id` / `item.metadata.execution_intent_id` / `item.bind_receipt.execution_intent_id` を探索し、見つかれば select/focus、見つからなければ not-found trace を表示します。
+- `decision_id` は valid query の場合、timeline 未ロードなら latest logs を自動ロードし、loaded timeline 内で一致する item (`item.decision_id`) を探索します。見つかれば select/focus、見つからなければ not-found trace を表示します。
+- `execution_intent_id` は valid query の場合、timeline 未ロードなら latest logs を自動ロードし、loaded timeline 内で `item.execution_intent_id` / `item.metadata.execution_intent_id` / `item.bind_receipt.execution_intent_id` を探索します。見つかれば select/focus、見つからなければ not-found trace を表示します。
+- invalid `decision_id` / `execution_intent_id` は reject され、auto-load は実行されません。
+- query なしの `/audit` は従来どおり手動の `Load latest logs` 操作で読み込みます。

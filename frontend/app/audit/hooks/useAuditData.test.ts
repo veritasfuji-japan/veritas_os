@@ -28,6 +28,57 @@ vi.mock("@veritas/types", async () => {
       return "items" in payload;
     },
   };
+
+  it("auto-loads logs for decision_id query without manual trigger", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=42");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/veritas/v1/trust/logs?limit=50",
+        expect.any(Object),
+      );
+      expect(result.current.decisionIdFromQuery).toBe("42");
+      expect(result.current.selected?.decision_id).toBe("42");
+      expect(result.current.queryTraceStatus).toBe("decision:matched");
+    });
+  });
+
+  it("does not auto-load when decision_id query is invalid", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=../secret");
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptLookupError).toContain("Invalid decision_id");
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("prefers decision_id over execution_intent_id when both are present", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=42&execution_intent_id=ei-123");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        items: [{ ...MOCK_ITEMS[0], metadata: { execution_intent_id: "ei-123" } }],
+        next_cursor: null,
+        has_more: false,
+      }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.decisionIdFromQuery).toBe("42");
+      expect(result.current.executionIntentIdFromQuery).toBeNull();
+      expect(result.current.queryTraceStatus).toBe("decision:matched");
+    });
+  });
+
 });
 
 vi.mock("../audit-types", async () => {
@@ -44,6 +95,57 @@ vi.mock("../audit-types", async () => {
       policyVersions: [],
     }),
   };
+
+  it("auto-loads logs for decision_id query without manual trigger", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=42");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/veritas/v1/trust/logs?limit=50",
+        expect.any(Object),
+      );
+      expect(result.current.decisionIdFromQuery).toBe("42");
+      expect(result.current.selected?.decision_id).toBe("42");
+      expect(result.current.queryTraceStatus).toBe("decision:matched");
+    });
+  });
+
+  it("does not auto-load when decision_id query is invalid", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=../secret");
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptLookupError).toContain("Invalid decision_id");
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("prefers decision_id over execution_intent_id when both are present", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=42&execution_intent_id=ei-123");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        items: [{ ...MOCK_ITEMS[0], metadata: { execution_intent_id: "ei-123" } }],
+        next_cursor: null,
+        has_more: false,
+      }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.decisionIdFromQuery).toBe("42");
+      expect(result.current.executionIntentIdFromQuery).toBeNull();
+      expect(result.current.queryTraceStatus).toBe("decision:matched");
+    });
+  });
+
 });
 
 import { useAuditData } from "./useAuditData";
@@ -532,4 +634,55 @@ describe("useAuditData", () => {
       expect(result.current.selected?.request_id).toBe("req-001");
     });
   });
+
+  it("auto-loads logs for decision_id query without manual trigger", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=42");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/veritas/v1/trust/logs?limit=50",
+        expect.any(Object),
+      );
+      expect(result.current.decisionIdFromQuery).toBe("42");
+      expect(result.current.selected?.decision_id).toBe("42");
+      expect(result.current.queryTraceStatus).toBe("decision:matched");
+    });
+  });
+
+  it("does not auto-load when decision_id query is invalid", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=../secret");
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptLookupError).toContain("Invalid decision_id");
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("prefers decision_id over execution_intent_id when both are present", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=42&execution_intent_id=ei-123");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        items: [{ ...MOCK_ITEMS[0], metadata: { execution_intent_id: "ei-123" } }],
+        next_cursor: null,
+        has_more: false,
+      }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.decisionIdFromQuery).toBe("42");
+      expect(result.current.executionIntentIdFromQuery).toBeNull();
+      expect(result.current.queryTraceStatus).toBe("decision:matched");
+    });
+  });
+
 });
