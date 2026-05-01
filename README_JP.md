@@ -63,6 +63,11 @@ Running VERITAS Mission Control → Audit workflow demo checks...
 Mission Control → Audit workflow demo checks completed.
 ```
 
+
+### Development-time Observe Mode（開発時の観測モード）
+
+VERITAS は、本番の enforce と開発時の observe を区別します。本番では fail-closed を維持します。Observe Mode は現時点では **foundation semantics（default off）** であり、開発・test・sandbox 文脈で `would_have_blocked` を記録し、違反を隠さない設計を定義します。詳細は `docs/governance/observe_mode.md` を参照してください。
+
 この導線は、次の focused frontend tests でカバーされています。
 
 - `frontend/components/mission-page.test.tsx`

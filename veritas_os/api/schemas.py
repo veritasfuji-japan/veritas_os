@@ -108,6 +108,13 @@ PreBindParticipationStateLiteral = Literal[
 PreservationStateLiteral = Literal["open", "degrading", "collapsed"]
 InterventionViabilityLevelLiteral = Literal["high", "partial", "minimal", "none"]
 OpennessFloorStatusLiteral = Literal["met", "at_risk", "breached"]
+PolicyModeLiteral = Literal["enforce", "observe", "off"]
+GovernanceEnvironmentLiteral = Literal[
+    "development",
+    "test",
+    "staging",
+    "production",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +202,26 @@ class Context(BaseModel):
             raise ValueError(f"list exceeds maximum size of {MAX_LIST_ITEMS}")
         return v
 
+
+
+
+class GovernanceObservation(BaseModel):
+    """Optional Observe Mode governance observation contract foundation.
+
+    This model is additive and intended for documentation, fixtures, and future
+    UI/API integration. It does not change current runtime fail-closed behavior.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy_mode: PolicyModeLiteral
+    environment: Union[GovernanceEnvironmentLiteral, str]
+    would_have_blocked: bool
+    would_have_blocked_reason: Optional[str] = None
+    effective_outcome: str
+    observed_outcome: Optional[str] = None
+    operator_warning: bool = False
+    audit_required: bool = True
 
 class Option(BaseModel):
     model_config = ConfigDict(extra="allow")
