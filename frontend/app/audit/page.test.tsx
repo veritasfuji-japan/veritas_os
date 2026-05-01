@@ -107,6 +107,37 @@ describe("TrustLogExplorerPage", () => {
     expect(screen.getByText(/Matched decision artifact in timeline|関連する decision artifact をタイムラインで選択しました/)).toBeInTheDocument();
   });
 
+  it("consumes decision_id demo link and auto-loads timeline without manual action", async () => {
+    window.history.replaceState({}, "", "/audit?decision_id=dec_demo_001");
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            ...MOCK_ITEMS_CHAINED[0],
+            decision_id: "dec_demo_001",
+            request_id: "req_demo_001",
+            stage: "DECIDE",
+          },
+        ],
+        cursor: "0",
+        next_cursor: null,
+        limit: 50,
+        has_more: false,
+      }),
+    } as Response);
+
+    render(<TrustLogExplorerPage />);
+    expect(screen.getByText("Decision Artifact Trace")).toBeInTheDocument();
+    expect(screen.getByText(/Loading audit logs for decision artifact|decision artifact のために監査ログを読み込み中です/)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Matched decision artifact in timeline|関連する decision artifact をタイムラインで選択しました/)).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("dec_demo_001").length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("renders execution intent trace not-found status", async () => {
     window.history.replaceState({}, "", "/audit?execution_intent_id=ei-missing");
     mockFetchWithItems();
@@ -436,6 +467,47 @@ describe("TrustLogExplorerPage", () => {
       expect(screen.getByText("関連する監査ログをタイムラインで選択しました。")).toBeInTheDocument();
     });
     expect(screen.queryByText("Bind check summary")).not.toBeInTheDocument();
+  });
+
+  it("consumes bind_receipt_id demo link and renders bind receipt trace fallback detail", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=br_demo_001");
+    vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          bind_receipt_id: "br_demo_001",
+          execution_intent_id: "ei_demo_001",
+          final_outcome: "BLOCKED",
+          bind_failure_reason: "Authority evidence missing",
+          authority_check_result: { passed: false },
+          constraint_check_result: { passed: true },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: MOCK_ITEMS_CHAINED,
+          cursor: "0",
+          next_cursor: null,
+          limit: 50,
+          has_more: false,
+        }),
+      } as Response);
+
+    render(<TrustLogExplorerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Bind Receipt Trace")).toBeInTheDocument();
+      expect(screen.getAllByText("br_demo_001").length).toBeGreaterThan(0);
+      expect(screen.getByText("Authority evidence missing")).toBeInTheDocument();
+      expect(screen.getByText("execution_intent_id")).toBeInTheDocument();
+      expect(screen.getByText("ei_demo_001")).toBeInTheDocument();
+      expect(screen.getByText("BLOCKED")).toBeInTheDocument();
+      expect(screen.getByText("PASS")).toBeInTheDocument();
+      expect(screen.getByText("FAIL")).toBeInTheDocument();
+    });
   });
 
   it("renders compact bind receipt fallback detail when timeline misses the receipt", async () => {

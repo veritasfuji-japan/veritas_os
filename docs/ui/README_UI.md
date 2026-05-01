@@ -125,3 +125,11 @@ docker compose up --build
 - `execution_intent_id` は valid query の場合、timeline 未ロードなら latest logs を自動ロードし、loaded timeline 内で `item.execution_intent_id` / `item.metadata.execution_intent_id` / `item.bind_receipt.execution_intent_id` を探索します。見つかれば select/focus します。timeline miss 時に execution_intent 専用 direct lookup は current API semantics 上で厳密な artifact 一意取得が保証できないため実行せず、`direct lookup unavailable` を表示します（fake lookup を行いません）。
 - invalid `decision_id` / `execution_intent_id` は reject され、auto-load / direct lookup ともに実行されません。
 - query なしの `/audit` は従来どおり手動の `Load latest logs` 操作で読み込みます。
+
+## Demo-grade Mission Control → Audit review scenario
+
+- Mission Control は governance artifacts metadata（pre-bind source / bind reason / target metadata）を表示します。
+- Operator actions は safe internal path のみ Link 化し、`/audit?decision_id=...` / `/audit?bind_receipt_id=...` / `/audit?execution_intent_id=...` を生成します。
+- `/audit?decision_id=...` は query を consume し、latest logs の auto-load と timeline focus を行い、timeline miss 時は direct lookup fallback を表示します。
+- `/audit?bind_receipt_id=...` は dedicated bind receipt lookup を実行し、timeline match または fallback detail で trace を表示します。
+- fake routes（例: `/decisions/...`, `/execution-intents/...`, `/trustlog/...`）および unsafe/external links は生成しません。

@@ -335,7 +335,41 @@ describe("MissionPage", () => {
     expect(screen.getByRole("link", { name: "ei_123" })).toHaveAttribute("href", "/audit?execution_intent_id=ei_123");
   });
 
-  
+  it("covers demo-grade Mission Control artifact review actions with safe audit links only", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            decision_id: "dec_demo_001",
+            bind_receipt_id: "br_demo_001",
+            execution_intent_id: "ei_demo_001",
+            pre_bind_source: "trustlog_matching_decision",
+            bind_reason_code: "AUTHORITY_MISSING",
+            bind_failure_reason: "Authority evidence missing",
+            target_label: "Governance policy",
+            relevant_ui_href: "/governance",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Governance artifacts")).toBeInTheDocument();
+    expect(screen.getAllByText("trustlog_matching_decision").length).toBeGreaterThan(0);
+    expect(screen.getByText("AUTHORITY_MISSING")).toBeInTheDocument();
+    expect(screen.getByText("Authority evidence missing")).toBeInTheDocument();
+    expect(screen.getByText("Governance policy")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "/governance" })[0]).toHaveAttribute("href", "/governance");
+    expect(screen.getByRole("link", { name: "br_demo_001" })).toHaveAttribute("href", "/audit?bind_receipt_id=br_demo_001");
+    expect(screen.getByRole("link", { name: "dec_demo_001" })).toHaveAttribute("href", "/audit?decision_id=dec_demo_001");
+    expect(screen.getByRole("link", { name: "ei_demo_001" })).toHaveAttribute("href", "/audit?execution_intent_id=ei_demo_001");
+    expect(screen.queryByRole("link", { name: "/decisions/dec_demo_001" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "/execution-intents/ei_demo_001" })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href^="/trustlog"]')).toBeNull();
+  });
+
 
   it("does not create audit links for invalid artifact ids", () => {
     render(
