@@ -260,6 +260,25 @@ export default function TrustLogExplorerPage(): JSX.Element {
                   ? t("関連する decision artifact をタイムラインで選択しました。", "Matched decision artifact in timeline.")
                   : t("decision artifact は現在読み込まれているタイムラインに見つかりません。", "Decision artifact was not found in the currently loaded timeline.")}
             </p>
+            {data.directLookupStatus?.startsWith("decision:") ? (
+              <p className="text-muted-foreground">
+                {data.directLookupStatus === "decision:lookup-pending"
+                  ? "Direct lookup pending..."
+                  : data.directLookupStatus === "decision:lookup-found"
+                    ? "Direct lookup found fallback detail."
+                    : data.directLookupStatus === "decision:lookup-not-found"
+                      ? "Direct lookup did not find this decision_id."
+                      : `Direct lookup unavailable with current API surface.${data.directLookupError ? ` ${data.directLookupError}` : ""}`}
+              </p>
+            ) : null}
+            {data.directLookupDetail && data.directLookupStatus === "decision:lookup-found" ? (
+              <details>
+                <summary className="cursor-pointer">Raw fallback detail</summary>
+                <pre className="mt-1 max-h-64 overflow-auto rounded border border-border/60 bg-background/70 p-2 font-mono text-[10px]">
+                  {JSON.stringify(data.directLookupDetail, null, 2)}
+                </pre>
+              </details>
+            ) : null}
           </div>
         </Card>
       ) : null}
@@ -284,6 +303,9 @@ export default function TrustLogExplorerPage(): JSX.Element {
                   ? t("関連する execution intent をタイムラインで選択しました。", "Matched execution intent in timeline.")
                   : t("execution intent は現在読み込まれているタイムラインに見つかりません。", "Execution intent was not found in the currently loaded timeline.")}
             </p>
+            {data.directLookupStatus === "execution-intent:lookup-unavailable" ? (
+              <p className="text-muted-foreground">Direct lookup unavailable with current API surface.</p>
+            ) : null}
           </div>
         </Card>
       ) : null}

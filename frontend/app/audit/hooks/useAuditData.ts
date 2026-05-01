@@ -43,6 +43,9 @@ export interface AuditDataState {
   decisionIdFromQuery: string | null;
   executionIntentIdFromQuery: string | null;
   queryTraceStatus: string | null;
+  directLookupStatus: string | null;
+  directLookupError: string | null;
+  directLookupDetail: Record<string, unknown> | null;
 
   /* selected */
   selected: TrustLogItem | null;
@@ -141,10 +144,14 @@ export function useAuditData(): AuditDataState {
   const [decisionIdFromQuery, setDecisionIdFromQuery] = useState<string | null>(null);
   const [executionIntentIdFromQuery, setExecutionIntentIdFromQuery] = useState<string | null>(null);
   const [queryTraceStatus, setQueryTraceStatus] = useState<string | null>(null);
+  const [directLookupStatus, setDirectLookupStatus] = useState<string | null>(null);
+  const [directLookupError, setDirectLookupError] = useState<string | null>(null);
+  const [directLookupDetail, setDirectLookupDetail] = useState<Record<string, unknown> | null>(null);
   const [bindReceiptLookupDetail, setBindReceiptLookupDetail] = useState<BindReceiptLookupDetail | null>(null);
 
   const bindReceiptBootstrappedRef = useRef(false);
   const queryAutoLoadStartedRef = useRef(false);
+  const directLookupStartedRef = useRef<string | null>(null);
 
   /* -- search state ------------------------------------------------ */
   const [requestId, setRequestId] = useState("");
@@ -704,6 +711,43 @@ export function useAuditData(): AuditDataState {
   }, [decisionIdFromQuery, sortedItems]);
 
   useEffect(() => {
+    if (!decisionIdFromQuery || queryTraceStatus !== "decision:not-found") {
+      return;
+    }
+    if (directLookupStartedRef.current === `decision:${decisionIdFromQuery}`) {
+      return;
+    }
+    directLookupStartedRef.current = `decision:${decisionIdFromQuery}`;
+    const lookupDecision = async (): Promise<void> => {
+      setDirectLookupStatus("decision:lookup-pending");
+      setDirectLookupError(null);
+      setDirectLookupDetail(null);
+      try {
+        const response = await veritasFetch(
+          `/api/veritas/v1/governance/bind-receipts?decision_id=${encodeURIComponent(decisionIdFromQuery)}&limit=1`,
+        );
+        if (!response.ok) {
+          setDirectLookupStatus("decision:lookup-unavailable");
+          setDirectLookupError(`HTTP ${response.status}`);
+          return;
+        }
+        const payload = (await response.json()) as { items?: unknown[] };
+        const first = Array.isArray(payload.items) ? payload.items[0] : null;
+        if (first && typeof first === "object") {
+          setDirectLookupDetail(first as Record<string, unknown>);
+          setDirectLookupStatus("decision:lookup-found");
+          return;
+        }
+        setDirectLookupStatus("decision:lookup-not-found");
+      } catch (caught: unknown) {
+        setDirectLookupStatus("decision:lookup-unavailable");
+        setDirectLookupError(caught instanceof Error ? caught.message : "direct lookup failed");
+      }
+    };
+    void lookupDecision();
+  }, [decisionIdFromQuery, queryTraceStatus]);
+
+  useEffect(() => {
     if (!executionIntentIdFromQuery || sortedItems.length === 0) {
       return;
     }
@@ -716,6 +760,13 @@ export function useAuditData(): AuditDataState {
     }
     setQueryTraceStatus("execution-intent:not-found");
   }, [executionIntentIdFromQuery, sortedItems]);
+
+  useEffect(() => {
+    if (!executionIntentIdFromQuery || queryTraceStatus !== "execution-intent:not-found") {
+      return;
+    }
+    setDirectLookupStatus("execution-intent:lookup-unavailable");
+  }, [executionIntentIdFromQuery, queryTraceStatus]);
 
   /* ---------------------------------------------------------------- */
   /*  Return                                                           */
@@ -738,6 +789,9 @@ export function useAuditData(): AuditDataState {
     decisionIdFromQuery,
     executionIntentIdFromQuery,
     queryTraceStatus,
+    directLookupStatus,
+    directLookupError,
+    directLookupDetail,
     selected,
     setSelected,
     requestId,
