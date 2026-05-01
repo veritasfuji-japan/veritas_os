@@ -78,7 +78,20 @@ Observe mode misuse can become a security and compliance risk if enabled in prod
 - `would_have_blocked: true` indicates a violation that should block under production enforcement semantics.
 - `effective_outcome: "proceed"` demonstrates a non-production observe-context continuation example.
 - `observed_outcome: "block"` preserves the would-be blocking governance outcome for audit visibility.
-- `bash scripts/validate_governance_observation_fixture.sh` validates that this sample fixture is preserved by the Mission Control adapter and verified by Mission Control read-only rendering tests.
+- `bash scripts/validate_governance_observation_fixture.sh` validates that this sample fixture is preserved by the Mission Control adapter, Mission Control read-only rendering tests, and the Python dry-run semantic evaluator.
+
+## Dry-run observation evaluator
+
+- The evaluator validates `governance_observation` semantic consistency for fixtures/tests.
+- It does **not** enable Observe Mode runtime behavior.
+- It does **not** change production fail-closed behavior.
+- It rejects unsafe combinations such as:
+  - `environment=production` with `policy_mode=observe`
+  - `policy_mode=observe` without required audit/operator warning
+  - `would_have_blocked=true` without preserved reason/observed outcome
+  - `policy_mode=enforce` proceeding despite `would_have_blocked=true`
+  - `policy_mode=off` without explicit audit requirement
+- Run `pytest -q veritas_os/tests/test_governance_observation_evaluator.py` before future runtime rollout work.
 
 Short excerpt:
 
