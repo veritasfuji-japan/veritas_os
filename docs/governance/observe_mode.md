@@ -67,3 +67,31 @@ This document defines semantics, safety constraints, and schema foundations for 
 ## Security note
 
 Observe mode misuse can become a security and compliance risk if enabled in production or if audit evidence is suppressed. Any future runtime rollout must include explicit environment guards and operator-visible warnings.
+
+
+## Dev-only sample live snapshot
+
+- `fixtures/governance_observation_live_snapshot.json` is a development/test/documentation-only sample payload for reproducing Mission Control display with `governance_observation`.
+- This fixture does **not** enable Observe Mode runtime behavior and is not loaded by production runtime paths.
+- Production fail-closed behavior remains unchanged (`enforce` stays the production default semantics).
+- When `governance_observation` is present in payload, Mission Control renders it as read-only operator context.
+- `would_have_blocked: true` indicates a violation that should block under production enforcement semantics.
+- `effective_outcome: "proceed"` demonstrates a non-production observe-context continuation example.
+- `observed_outcome: "block"` preserves the would-be blocking governance outcome for audit visibility.
+
+Short excerpt:
+
+```json
+{
+  "governance_layer_snapshot": {
+    "decision_id": "dec_observe_demo_001",
+    "governance_observation": {
+      "policy_mode": "observe",
+      "environment": "development",
+      "would_have_blocked": true,
+      "effective_outcome": "proceed",
+      "observed_outcome": "block"
+    }
+  }
+}
+```
