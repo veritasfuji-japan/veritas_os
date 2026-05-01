@@ -62,6 +62,8 @@ python scripts/generate_observe_mode_demo_snapshot.py
 
 This flow uses the test-only wrapper and dry-run evaluator, does not enable Observe Mode runtime, does not connect to production execution, and produces a Mission Control-style JSON payload for local inspection.
 
+For how the generated snapshot maps to Mission Control read-only fields, see `docs/governance/observe_mode_mission_control_walkthrough.md`.
+
 Single fixture check:
 
 ```bash

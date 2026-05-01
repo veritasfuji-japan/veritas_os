@@ -99,6 +99,7 @@ docker compose up --build
 - backend `/v1/governance/live-snapshot` は latest BindReceipt 由来の bind metadata（`bind_receipt_id` / `execution_intent_id` / `decision_id`）、target metadata（`target_path` / `target_type` / `target_label` / `operator_surface` / `relevant_ui_href`）、reason fields（`bind_reason_code` / `bind_failure_reason` / `failure_category` など）を返し、`bind_summary` が存在する場合は operator-facing artifact summary として利用できます。
 - Mission Control UI は上記 live snapshot fields を operator-facing details として表示します（pre-bind source / pre-bind summaries / bind reason / target metadata / check results）。
 - `governance_observation` が snapshot payload に含まれる場合、Mission Control は `policy_mode` / `environment` / `would_have_blocked` / `effective_outcome` などを read-only の operator context として表示します。これは observation fields の可視化であり、Observe Mode runtime を有効化する挙動ではありません。
+- Observe Mode governance observation rendering walkthrough: `docs/governance/observe_mode_mission_control_walkthrough.md`.
 - `fixtures/governance_observation_live_snapshot.json` は、Observe Mode runtime を有効化せずに Mission Control の read-only 表示を確認するための dev-only sample payload です。
 - `bash scripts/validate_governance_observation_fixture.sh` は dev-only `governance_observation` sample 用の adapter / Mission Control focused tests を実行します。
 - `pre_bind_source` は artifact 取得元と fallback 状態を示し、`trustlog_matching_*` は matched、`trustlog_recent_decision` と `latest_bind_receipt` は fallback、`none` は unavailable、`malformed_pre_bind_artifact` と `pre_bind_artifact_retrieval_failed` は degraded source として扱います。
