@@ -8,6 +8,8 @@ It is intended for external reviewers, enterprise evaluators, investors, and dev
 
 For the repository-level reviewer guide, see `docs/REVIEWER_ENTRYPOINT.md`.
 
+External reviewers can record findings using `docs/reviewer_validation_report_template.md`.
+
 ## Status
 
 - Observe Mode runtime is not enabled.

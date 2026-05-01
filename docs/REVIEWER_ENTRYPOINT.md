@@ -113,6 +113,7 @@ This is a dev/test evidence path. It is not production runtime evidence.
 - [ ] Confirm production fail-closed boundary.
 - [ ] Identify foundation-only areas.
 - [ ] Record unresolved questions.
+- [ ] Record findings using `docs/reviewer_validation_report_template.md`.
 
 ## Open questions / limitations
 
