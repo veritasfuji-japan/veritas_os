@@ -6,8 +6,40 @@ from typing import Any
 from veritas_os.api.bind_target_catalog import resolve_bind_target_metadata
 
 
+def _resolve_rollback_failure_reason(bind_receipt: dict[str, Any]) -> str | None:
+    """Resolve rollback-specific failure messaging for operator-facing summaries."""
+    rollback_reason = bind_receipt.get("rollback_reason")
+    if not isinstance(rollback_reason, str) or not rollback_reason.strip():
+        return None
+    normalized_reason = rollback_reason.strip()
+    reason_code = normalized_reason.split(":", 1)[0]
+    if reason_code == "BIND_POSTCONDITION_FAILED":
+        return (
+            "Postcondition failed after attempted governance policy update; "
+            "mutation was rolled back. Authority check remained valid."
+        )
+    return normalized_reason
+
+
+def _extract_rollback_reason_code(bind_receipt: dict[str, Any]) -> str | None:
+    """Extract rollback reason code only when rollback_reason is code-shaped."""
+    rollback_reason = bind_receipt.get("rollback_reason")
+    if not isinstance(rollback_reason, str) or not rollback_reason.strip():
+        return None
+    rollback_prefix = rollback_reason.strip().split(":", 1)[0].strip()
+    if not rollback_prefix:
+        return None
+    if rollback_prefix.startswith("BIND_"):
+        return rollback_prefix
+    return None
+
+
 def resolve_bind_failure_reason(bind_receipt: dict[str, Any]) -> str | None:
     """Resolve compact operator-facing bind failure reason from receipt fields."""
+    final_outcome = str(bind_receipt.get("final_outcome") or "").strip().upper()
+    rollback_failure_reason = _resolve_rollback_failure_reason(bind_receipt)
+    if final_outcome == "ROLLED_BACK" and rollback_failure_reason:
+        return rollback_failure_reason
     direct_reason = bind_receipt.get("bind_failure_reason")
     if isinstance(direct_reason, str) and direct_reason.strip():
         return direct_reason.strip()
@@ -32,6 +64,11 @@ def resolve_bind_failure_reason(bind_receipt: dict[str, Any]) -> str | None:
 
 def resolve_bind_reason_code(bind_receipt: dict[str, Any]) -> str | None:
     """Extract a stable bind reason code from the receipt payload."""
+    final_outcome = str(bind_receipt.get("final_outcome") or "").strip().upper()
+    if final_outcome == "ROLLED_BACK":
+        rollback_reason_code = _extract_rollback_reason_code(bind_receipt)
+        if rollback_reason_code:
+            return rollback_reason_code
     direct_reason_code = bind_receipt.get("bind_reason_code")
     if isinstance(direct_reason_code, str) and direct_reason_code.strip():
         return direct_reason_code.strip()
@@ -57,13 +94,20 @@ def enrich_bind_receipt_payload(bind_receipt: dict[str, Any]) -> dict[str, Any]:
         bind_receipt.get("target_path"),
         bind_receipt.get("target_type"),
     )
-    return {
+    enriched = {
         **bind_receipt,
         "target_path_type": target_metadata["target_path_type"],
         "target_label": target_metadata["label"],
         "operator_surface": target_metadata["operator_surface"],
         "relevant_ui_href": target_metadata["relevant_ui_href"],
     }
+    resolved_reason_code = resolve_bind_reason_code(enriched)
+    if resolved_reason_code:
+        enriched["bind_reason_code"] = resolved_reason_code
+    resolved_failure_reason = resolve_bind_failure_reason(enriched)
+    if resolved_failure_reason:
+        enriched["bind_failure_reason"] = resolved_failure_reason
+    return enriched
 
 
 def build_bind_summary_from_receipt(bind_receipt: dict[str, Any]) -> dict[str, Any]:
