@@ -119,6 +119,16 @@ describe("/api/veritas/v1/report/governance", () => {
             target_label: "Governance policy",
             operator_surface: "governance",
             relevant_ui_href: "/governance",
+            governance_observation: {
+              policy_mode: "observe",
+              environment: "development",
+              would_have_blocked: true,
+              would_have_blocked_reason: "policy_violation:missing_authority_evidence",
+              effective_outcome: "proceed",
+              observed_outcome: "block",
+              operator_warning: true,
+              audit_required: true,
+            },
           },
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -144,6 +154,16 @@ describe("/api/veritas/v1/report/governance", () => {
         target_label: "Governance policy",
         operator_surface: "governance",
         relevant_ui_href: "/governance",
+        governance_observation: {
+          policy_mode: "observe",
+          environment: "development",
+          would_have_blocked: true,
+          would_have_blocked_reason: "policy_violation:missing_authority_evidence",
+          effective_outcome: "proceed",
+          observed_outcome: "block",
+          operator_warning: true,
+          audit_required: true,
+        },
       },
     });
   });
