@@ -6,6 +6,8 @@ Observe Mode is a **development-time governance mode semantics** that records wh
 
 This document defines semantics, safety constraints, and schema foundations for future implementation work.
 
+For a developer-oriented end-to-end walkthrough, see `docs/governance/observe_mode_developer_walkthrough.md`.
+
 ## Core policy modes
 
 - `enforce`
