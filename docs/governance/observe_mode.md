@@ -78,6 +78,7 @@ Observe mode misuse can become a security and compliance risk if enabled in prod
 - `would_have_blocked: true` indicates a violation that should block under production enforcement semantics.
 - `effective_outcome: "proceed"` demonstrates a non-production observe-context continuation example.
 - `observed_outcome: "block"` preserves the would-be blocking governance outcome for audit visibility.
+- `bash scripts/validate_governance_observation_fixture.sh` validates that this sample fixture is preserved by the Mission Control adapter and verified by Mission Control read-only rendering tests.
 
 Short excerpt:
 
