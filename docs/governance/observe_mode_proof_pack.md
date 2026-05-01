@@ -34,6 +34,12 @@ For the repository-level reviewer guide, see `docs/REVIEWER_ENTRYPOINT.md`.
 
 ## Validation commands
 
+Repository-level reviewer link/integrity smoke checks:
+
+```bash
+bash scripts/validate_reviewer_entrypoint.sh
+```
+
 ```bash
 python scripts/check_governance_observation.py fixtures/governance_observation_live_snapshot.json
 python scripts/check_governance_observation.py frontend/fixtures/governance_observation_live_snapshot.json
