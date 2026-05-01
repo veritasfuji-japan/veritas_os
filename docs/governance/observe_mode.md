@@ -92,6 +92,10 @@ Observe mode misuse can become a security and compliance risk if enabled in prod
   - `policy_mode=enforce` proceeding despite `would_have_blocked=true`
   - `policy_mode=off` without explicit audit requirement
 - Run `pytest -q veritas_os/tests/test_governance_observation_evaluator.py` before future runtime rollout work.
+- CLI-style dry-run checker for any JSON payload: `python scripts/check_governance_observation.py <path-to-json>`.
+- The checker reads `governance_layer_snapshot.governance_observation`, performs schema validation (`GovernanceObservation`) and semantic evaluation (`evaluate_governance_observation`).
+- Exit code behavior: valid or warning-only payloads return `0`; semantic errors, schema validation failures, missing field paths, and invalid JSON return non-zero.
+- This checker is dev/test tooling only and does **not** enable Observe Mode runtime behavior or change production fail-closed enforcement.
 
 Short excerpt:
 
