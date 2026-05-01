@@ -250,6 +250,7 @@ def test_trustlog_append_and_lineage_linkage_for_bind_receipt(trustlog_env) -> N
     assert len(by_intent_id) == 1
     assert len(by_decision_id) == 1
     assert by_decision_id[0].execution_intent_id == "ei-100"
+    assert by_decision_id[0].trustlog_hash == stored_receipt.trustlog_hash
 
 
 def test_previous_bind_hash_chaining_uses_existing_trustlog(trustlog_env) -> None:
