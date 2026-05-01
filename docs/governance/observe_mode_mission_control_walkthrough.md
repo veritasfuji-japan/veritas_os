@@ -99,7 +99,9 @@ This route renders a static fixture through the Mission Control-style UI.
 - It does not enable Observe Mode runtime.
 - It does not call backend APIs.
 - It does not create a production bypass.
-- It is for local/dev inspection only.
+- It is for local/dev/test inspection only.
+- In production environments, the fixture viewer is disabled and does not render the static `governance_observation` fixture.
+- Runtime behavior is unchanged and production remains fail-closed.
 
 ## What this walkthrough proves
 

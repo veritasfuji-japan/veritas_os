@@ -4,11 +4,37 @@ import {
   type MissionGovernanceIngressPayload,
   resolveMissionGovernanceSnapshot,
 } from "../../../components/mission-governance-adapter";
-import rawFixturePayload from "../../../fixtures/governance_observation_live_snapshot.json";
 
-const fixturePayload = rawFixturePayload as MissionGovernanceIngressPayload;
+export function isDevMissionFixtureEnabled(nodeEnv = process.env.NODE_ENV): boolean {
+  return nodeEnv !== "production";
+}
 
-export default function DevMissionFixturePage(): JSX.Element {
+type NodeEnv = "production" | "development" | "test" | undefined;
+
+type DevMissionFixturePageProps = {
+  nodeEnv?: NodeEnv;
+};
+
+export default async function DevMissionFixturePage({ nodeEnv }: DevMissionFixturePageProps = {}): Promise<JSX.Element> {
+  if (!isDevMissionFixtureEnabled(nodeEnv)) {
+    return (
+      <I18nProvider>
+        <section
+          className="rounded-md border border-warning/60 bg-warning/5 p-4"
+          data-testid="dev-mission-fixture-disabled"
+        >
+          <h1 className="font-semibold">DEV-ONLY FIXTURE DISABLED</h1>
+          <p className="mt-2 text-sm">This route is disabled in production.</p>
+          <p className="text-sm">Runtime behavior is unchanged.</p>
+          <p className="text-sm">Production still fails closed.</p>
+          <p className="text-sm">Observe Mode runtime is not enabled.</p>
+        </section>
+      </I18nProvider>
+    );
+  }
+
+  const { default: rawFixturePayload } = await import("../../../fixtures/governance_observation_live_snapshot.json");
+  const fixturePayload = rawFixturePayload as MissionGovernanceIngressPayload;
   const governanceLayerSnapshot = resolveMissionGovernanceSnapshot(fixturePayload);
 
   return (
