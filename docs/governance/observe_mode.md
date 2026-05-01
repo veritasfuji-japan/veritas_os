@@ -82,6 +82,16 @@ Observe mode misuse can become a security and compliance risk if enabled in prod
 - `observed_outcome: "block"` preserves the would-be blocking governance outcome for audit visibility.
 - `bash scripts/validate_governance_observation_fixture.sh` validates that this sample fixture is preserved by the Mission Control adapter, Mission Control read-only rendering tests, and the Python dry-run semantic evaluator.
 
+
+## Test-only Observe Mode wrapper
+
+- `veritas_os/governance/observe_mode_wrapper.py` can build `GovernanceObservation` objects for tests and fixtures.
+- It does not enable Observe Mode runtime.
+- It rejects production observe mode.
+- It preserves would-be blocking outcomes as `observed_outcome`.
+- It runs generated observations through the dry-run evaluator before returning them.
+- It is intended for tests/dev fixtures before any future runtime rollout.
+
 ## Dry-run observation evaluator
 
 - The evaluator validates `governance_observation` semantic consistency for fixtures/tests.
