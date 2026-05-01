@@ -24,6 +24,8 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 
 > **Mental model:** LLM = CPU, VERITAS OS = Decision / Agent Governance OS on top
 
+For external reviewers, start with `docs/REVIEWER_ENTRYPOINT.md`.
+
 ## Governance Review Workflow
 
 VERITAS OS does not only record governance artifacts. It connects them into a Mission Control → Audit review workflow:

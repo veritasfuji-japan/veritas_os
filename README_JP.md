@@ -23,6 +23,8 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
 
+外部レビュー担当者向けの入口は `docs/REVIEWER_ENTRYPOINT.md` を参照してください。
+
 ## Governance Review Workflow（ガバナンスレビュー導線）
 
 VERITAS OS は、ガバナンス証跡を記録するだけではありません。Mission Control から Audit へ、証跡を辿って確認できるレビュー導線を提供します。
