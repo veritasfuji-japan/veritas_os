@@ -1,0 +1,102 @@
+# Observe Mode Developer Walkthrough
+
+## Problem
+
+Governance systems can slow development when missing evidence fields or policy issues immediately stop iteration. VERITAS must avoid becoming a system that is safe but too heavy for builders.
+
+## Principle
+
+Development can move fast.
+Production still fails closed.
+Both modes remain auditable.
+
+## What Observe Mode foundation is
+
+Observe Mode foundation is a semantics, schema, UI, fixture, and dry-run validation foundation for future development-time observation.
+
+It is **not** a production bypass.
+
+## Current foundation
+
+- Semantics doc: `docs/governance/observe_mode.md`
+- Python schema: `GovernanceObservation`
+- TypeScript type: `GovernanceObservation`
+- Mission Control read-only display for received `governance_observation`
+- BFF / adapter preservation tests for `governance_observation`
+- Dev-only sample fixture: `fixtures/governance_observation_live_snapshot.json`
+- Dry-run semantic evaluator: `veritas_os/governance/observation_evaluator.py`
+- CLI checker: `scripts/check_governance_observation.py`
+- Fixture validation script: `scripts/validate_governance_observation_fixture.sh`
+
+## What it does not do
+
+- Does not enable Observe Mode runtime
+- Does not bypass production enforcement
+- Does not change policy engine behavior
+- Does not add a UI toggle
+- Does not generate production observation payloads
+- Does not weaken fail-closed behavior
+
+## Try it locally
+
+Single fixture check:
+
+```bash
+python scripts/check_governance_observation.py fixtures/governance_observation_live_snapshot.json
+```
+
+Expected output:
+
+```text
+governance_observation dry-run check: valid
+file: fixtures/governance_observation_live_snapshot.json
+issues: 0
+```
+
+Full validation:
+
+```bash
+bash scripts/validate_governance_observation_fixture.sh
+```
+
+This script runs the Python evaluator tests, CLI tests, CLI fixture check, adapter tests, and Mission Control read-only rendering tests.
+
+## Safety rules
+
+The dry-run evaluator rejects unsafe combinations and enforces evidence preservation rules:
+
+- `environment=production` with `policy_mode=observe` is invalid
+- `policy_mode=observe` requires `audit_required=true`
+- `policy_mode=observe` requires `operator_warning=true`
+- `would_have_blocked=true` requires a reason
+- `would_have_blocked=true` requires an observed outcome
+- `policy_mode=enforce` cannot proceed when `would_have_blocked=true`
+- `policy_mode=off` requires audit
+
+## Example payload
+
+```json
+{
+  "governance_layer_snapshot": {
+    "decision_id": "dec_observe_demo_001",
+    "governance_observation": {
+      "policy_mode": "observe",
+      "environment": "development",
+      "would_have_blocked": true,
+      "would_have_blocked_reason": "policy_violation:missing_authority_evidence",
+      "effective_outcome": "proceed",
+      "observed_outcome": "block",
+      "operator_warning": true,
+      "audit_required": true
+    }
+  }
+}
+```
+
+## How this appears in Mission Control
+
+When a payload includes `governance_observation`, Mission Control renders a read-only Governance observation section. This only displays received fields and does not change runtime behavior.
+
+## Future runtime rollout requirements
+
+Any future runtime rollout must add explicit environment guards, operator-visible warnings, audit evidence preservation, and tests proving production remains fail-closed.
