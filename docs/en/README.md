@@ -53,6 +53,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Bind-Boundary Governance Artifacts](architecture/bind-boundary-governance-artifacts.md)
 - [Bind-Time Admissibility Evaluator](architecture/bind_time_admissibility_evaluator.md)
 - [Pre-Bind Participation Signals](architecture/pre-bind-participation-signals.md)
+- [Observable Digest Ref Contract Addendum](architecture/observable-digest-ref-contract-addendum.md)
 - [Regulated Action Governance Kernel](architecture/regulated-action-governance-kernel.md)
 - [Authority Evidence vs Audit Log](architecture/authority-evidence-vs-audit-log.md)
 - [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
