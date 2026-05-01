@@ -9,8 +9,10 @@ export function isDevMissionFixtureEnabled(nodeEnv = process.env.NODE_ENV): bool
   return nodeEnv !== "production";
 }
 
+type NodeEnv = "production" | "development" | "test" | undefined;
+
 type DevMissionFixturePageProps = {
-  nodeEnv?: string;
+  nodeEnv?: NodeEnv;
 };
 
 export default async function DevMissionFixturePage({ nodeEnv }: DevMissionFixturePageProps = {}): Promise<JSX.Element> {
