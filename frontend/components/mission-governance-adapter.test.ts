@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { PRE_BIND_GOVERNANCE_VOCABULARY_LABELS } from "./dashboard-types";
@@ -62,6 +65,27 @@ describe("resolveMissionGovernanceSnapshot", () => {
     expect(snapshot.governance_observation?.observed_outcome).toBe("block");
     expect(snapshot.governance_observation?.operator_warning).toBe(true);
     expect(snapshot.governance_observation?.audit_required).toBe(true);
+  });
+
+
+  it("preserves governance_observation fields from dev-only fixture", () => {
+    const fixturePath = resolve(process.cwd(), "..", "fixtures", "governance_observation_live_snapshot.json");
+    const fixturePayload = JSON.parse(readFileSync(fixturePath, "utf-8"));
+
+    const snapshot = resolveMissionGovernanceSnapshot(fixturePayload);
+
+    expect(snapshot.governance_observation).toBeDefined();
+    expect(snapshot.governance_observation?.policy_mode).toBe("observe");
+    expect(snapshot.governance_observation?.environment).toBe("development");
+    expect(snapshot.governance_observation?.would_have_blocked).toBe(true);
+    expect(snapshot.governance_observation?.would_have_blocked_reason).toBe("policy_violation:missing_authority_evidence");
+    expect(snapshot.governance_observation?.effective_outcome).toBe("proceed");
+    expect(snapshot.governance_observation?.observed_outcome).toBe("block");
+    expect(snapshot.governance_observation?.operator_warning).toBe(true);
+    expect(snapshot.governance_observation?.audit_required).toBe(true);
+    expect(snapshot.decision_id).toBe("dec_observe_demo_001");
+    expect(snapshot.bind_receipt_id).toBe("br_observe_demo_001");
+    expect(snapshot.execution_intent_id).toBe("ei_observe_demo_001");
   });
 
   it("keeps governance_observation undefined when absent", () => {
