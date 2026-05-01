@@ -132,4 +132,5 @@ docker compose up --build
 - Operator actions は safe internal path のみ Link 化し、`/audit?decision_id=...` / `/audit?bind_receipt_id=...` / `/audit?execution_intent_id=...` を生成します。
 - `/audit?decision_id=...` は query を consume し、latest logs の auto-load と timeline focus を行い、timeline miss 時は direct lookup fallback を表示します。
 - `/audit?bind_receipt_id=...` は dedicated bind receipt lookup を実行し、timeline match または fallback detail で trace を表示します。
+- You can run the focused workflow checks with: `bash scripts/demo_mission_audit_workflow.sh`.
 - fake routes（例: `/decisions/...`, `/execution-intents/...`, `/trustlog/...`）および unsafe/external links は生成しません。

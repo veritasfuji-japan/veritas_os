@@ -50,7 +50,7 @@ flowchart LR
 
 ローカルでの導線確認:
 
-`pnpm --filter frontend test components/mission-page.test.tsx app/audit/page.test.tsx`
+`bash scripts/demo_mission_audit_workflow.sh`
 
 この導線は、次の focused frontend tests でカバーされています。
 
