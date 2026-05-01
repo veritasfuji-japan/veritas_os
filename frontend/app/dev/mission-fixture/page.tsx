@@ -1,7 +1,12 @@
 import { MissionPage } from "../../../components/mission-page";
 import { I18nProvider } from "../../../components/i18n-provider";
-import { resolveMissionGovernanceSnapshot } from "../../../components/mission-governance-adapter";
-import fixturePayload from "../../../fixtures/governance_observation_live_snapshot.json";
+import {
+  type MissionGovernanceIngressPayload,
+  resolveMissionGovernanceSnapshot,
+} from "../../../components/mission-governance-adapter";
+import rawFixturePayload from "../../../fixtures/governance_observation_live_snapshot.json";
+
+const fixturePayload = rawFixturePayload as MissionGovernanceIngressPayload;
 
 export default function DevMissionFixturePage(): JSX.Element {
   const governanceLayerSnapshot = resolveMissionGovernanceSnapshot(fixturePayload);
