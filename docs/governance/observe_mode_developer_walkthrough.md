@@ -25,6 +25,7 @@ It is **not** a production bypass.
 - BFF / adapter preservation tests for `governance_observation`
 - Dev-only sample fixture: `fixtures/governance_observation_live_snapshot.json`
 - Dry-run semantic evaluator: `veritas_os/governance/observation_evaluator.py`
+- Test-only Observe Mode wrapper: `veritas_os/governance/observe_mode_wrapper.py`
 - CLI checker: `scripts/check_governance_observation.py`
 - Fixture validation script: `scripts/validate_governance_observation_fixture.sh`
 
@@ -35,6 +36,7 @@ It is **not** a production bypass.
 - Does not change policy engine behavior
 - Does not add a UI toggle
 - Does not generate production observation payloads
+- Does not let production proceed when it would block
 - Does not weaken fail-closed behavior
 
 ## Try it locally
@@ -56,6 +58,7 @@ issues: 0
 Full validation:
 
 ```bash
+pytest -q veritas_os/tests/test_observe_mode_wrapper.py
 bash scripts/validate_governance_observation_fixture.sh
 ```
 
