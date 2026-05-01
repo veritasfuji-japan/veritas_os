@@ -254,9 +254,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
               decision_id: <span className="font-mono">{data.decisionIdFromQuery}</span>
             </p>
             <p className={data.queryTraceStatus === "decision:matched" ? "text-success" : "text-warning"}>
-              {data.queryTraceStatus === "decision:matched"
-                ? t("関連する decision artifact をタイムラインで選択しました。", "Matched decision artifact in timeline.")
-                : t("decision artifact は現在読み込まれているタイムラインに見つかりません。", "Decision artifact was not found in the currently loaded timeline.")}
+              {data.queryTraceStatus === "decision:pending" || data.queryTraceStatus === "pending"
+                ? t("decision artifact のために監査ログを読み込み中です...", "Loading audit logs for decision artifact...")
+                : data.queryTraceStatus === "decision:matched"
+                  ? t("関連する decision artifact をタイムラインで選択しました。", "Matched decision artifact in timeline.")
+                  : t("decision artifact は現在読み込まれているタイムラインに見つかりません。", "Decision artifact was not found in the currently loaded timeline.")}
             </p>
           </div>
         </Card>
@@ -276,9 +278,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
               execution_intent_id: <span className="font-mono">{data.executionIntentIdFromQuery}</span>
             </p>
             <p className={data.queryTraceStatus === "execution-intent:matched" ? "text-success" : "text-warning"}>
-              {data.queryTraceStatus === "execution-intent:matched"
-                ? t("関連する execution intent をタイムラインで選択しました。", "Matched execution intent in timeline.")
-                : t("execution intent は現在読み込まれているタイムラインに見つかりません。", "Execution intent was not found in the currently loaded timeline.")}
+              {data.queryTraceStatus === "execution-intent:pending" || data.queryTraceStatus === "pending"
+                ? t("execution intent のために監査ログを読み込み中です...", "Loading audit logs for execution intent...")
+                : data.queryTraceStatus === "execution-intent:matched"
+                  ? t("関連する execution intent をタイムラインで選択しました。", "Matched execution intent in timeline.")
+                  : t("execution intent は現在読み込まれているタイムラインに見つかりません。", "Execution intent was not found in the currently loaded timeline.")}
             </p>
           </div>
         </Card>

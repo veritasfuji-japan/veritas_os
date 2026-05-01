@@ -144,6 +144,7 @@ export function useAuditData(): AuditDataState {
   const [bindReceiptLookupDetail, setBindReceiptLookupDetail] = useState<BindReceiptLookupDetail | null>(null);
 
   const bindReceiptBootstrappedRef = useRef(false);
+  const queryAutoLoadStartedRef = useRef(false);
 
   /* -- search state ------------------------------------------------ */
   const [requestId, setRequestId] = useState("");
@@ -649,6 +650,10 @@ export function useAuditData(): AuditDataState {
       setSelectedDecisionId(decisionId);
       setCrossSearch({ query: decisionId, field: "decision_id" });
       setQueryTraceStatus("pending");
+      if (!queryAutoLoadStartedRef.current && items.length === 0) {
+        queryAutoLoadStartedRef.current = true;
+        void loadLogs(null, true);
+      }
       return;
     }
 
@@ -665,8 +670,12 @@ export function useAuditData(): AuditDataState {
       setExecutionIntentIdFromQuery(executionIntentId);
       setCrossSearch({ query: executionIntentId, field: "all" });
       setQueryTraceStatus("pending");
+      if (!queryAutoLoadStartedRef.current && items.length === 0) {
+        queryAutoLoadStartedRef.current = true;
+        void loadLogs(null, true);
+      }
     }
-  }, [t]);
+  }, [items.length, loadLogs, t]);
 
   useEffect(() => {
     if (!bindReceiptIdFromQuery || sortedItems.length === 0) {
