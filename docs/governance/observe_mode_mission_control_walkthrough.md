@@ -103,6 +103,25 @@ This route renders a static fixture through the Mission Control-style UI.
 - In production environments, the fixture viewer is disabled and does not render the static `governance_observation` fixture.
 - Runtime behavior is unchanged and production remains fail-closed.
 
+
+## Fixture copy integrity (root ↔ frontend)
+
+`frontend/fixtures/governance_observation_live_snapshot.json` is a frontend-local dev-only copy of `fixtures/governance_observation_live_snapshot.json` (used because frontend bundling cannot import the repository-root fixture directly).
+
+Drift detection is enforced with:
+
+- `pytest -q veritas_os/tests/test_governance_observation_fixture_drift.py`
+- `python scripts/check_governance_observation.py fixtures/governance_observation_live_snapshot.json`
+- `python scripts/check_governance_observation.py frontend/fixtures/governance_observation_live_snapshot.json`
+
+The drift test verifies alignment of:
+
+- `governance_layer_snapshot.governance_observation`
+- key artifact IDs (`decision_id`, `bind_receipt_id`, `execution_intent_id`)
+- key routing/context fields (`participation_state`, `pre_bind_source`, `bind_reason_code`, `bind_failure_reason`, `failure_category`, `target_path`, `target_type`, `target_label`, `operator_surface`, `relevant_ui_href`)
+
+This is fixture integrity validation only. Runtime behavior remains unchanged, Observe Mode runtime is not enabled, and production remains fail-closed.
+
 ## What this walkthrough proves
 
 - Generated payload shape is understandable.
