@@ -27,6 +27,19 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 VERITAS OS は、ガバナンス証跡を記録するだけではありません。Mission Control から Audit へ、証跡を辿って確認できるレビュー導線を提供します。
 
+```mermaid
+flowchart LR
+  A[Mission Control<br/>Live governance snapshot] --> B[Governance artifacts panel<br/>pre-bind source / bind reason / target metadata / check results]
+  B --> C[Safe operator actions<br/>internal /audit?... links]
+  C --> D[Audit<br/>query validation]
+  D --> E{Supported artifact}
+  E -->|decision_id| F[Auto-load latest logs<br/>focus matching timeline item]
+  E -->|bind_receipt_id| G[Dedicated bind receipt lookup<br/>fallback detail]
+  E -->|execution_intent_id| I[Execution intent trace lookup]
+  E -->|invalid or unsafe| H[Reject<br/>no fake route]
+```
+
+
 1. Mission Control が `/v1/governance/live-snapshot` から live governance snapshot を受け取ります。
 2. UI が pre-bind source / bind reason / target metadata / check results / safe operator actions を表示します。
 3. Operator actions は、supported artifacts（`bind_receipt_id` / `decision_id` / `execution_intent_id`）向けに safe internal `/audit?...` links を提供します。

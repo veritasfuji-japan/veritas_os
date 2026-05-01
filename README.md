@@ -28,6 +28,19 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 
 VERITAS OS does not only record governance artifacts. It connects them into a Mission Control → Audit review workflow:
 
+```mermaid
+flowchart LR
+  A[Mission Control<br/>Live governance snapshot] --> B[Governance artifacts panel<br/>pre-bind source / bind reason / target metadata / check results]
+  B --> C[Safe operator actions<br/>internal /audit?... links]
+  C --> D[Audit<br/>query validation]
+  D --> E{Supported artifact}
+  E -->|decision_id| F[Auto-load latest logs<br/>focus matching timeline item]
+  E -->|bind_receipt_id| G[Dedicated bind receipt lookup<br/>fallback detail]
+  E -->|execution_intent_id| I[Execution intent trace lookup]
+  E -->|invalid or unsafe| H[Reject<br/>no fake route]
+```
+
+
 1. Mission Control receives a live governance snapshot from `/v1/governance/live-snapshot`.
 2. The UI surfaces governance artifact metadata, including pre-bind source, bind reason, target metadata, check results, and safe operator actions.
 3. Operator actions provide safe internal `/audit?...` links for supported artifacts (`bind_receipt_id`, `decision_id`, `execution_intent_id`).
