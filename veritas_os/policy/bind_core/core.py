@@ -1011,7 +1011,7 @@ def _apply_bind_target_metadata_from_lineage(
         return receipt
 
     updates: dict[str, Any] = {}
-    for field in (
+    for metadata_field in (
         "target_path",
         "target_type",
         "target_path_type",
@@ -1019,12 +1019,12 @@ def _apply_bind_target_metadata_from_lineage(
         "operator_surface",
         "relevant_ui_href",
     ):
-        current_value = getattr(receipt, field, "")
+        current_value = getattr(receipt, metadata_field, "")
         if isinstance(current_value, str) and current_value.strip():
             continue
-        value = metadata.get(field)
+        value = metadata.get(metadata_field)
         if isinstance(value, str) and value.strip():
-            updates[field] = value.strip()
+            updates[metadata_field] = value.strip()
     if not updates:
         return receipt
     return _with_receipt(receipt, **updates)
