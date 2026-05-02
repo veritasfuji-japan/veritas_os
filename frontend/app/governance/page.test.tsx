@@ -112,6 +112,21 @@ beforeEach(() => {
   let seq = 0;
   vi.stubGlobal("crypto", { randomUUID: vi.fn(() => `uuid-${seq++}`) });
   vi.stubGlobal("confirm", vi.fn(() => true));
+  vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/auth/session")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, role: "admin" }),
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => MOCK_POLICY,
+    } as Response;
+  });
 });
 
 function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "admin"): ReturnType<typeof vi.spyOn> {
@@ -130,6 +145,23 @@ function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "a
       json: async () => MOCK_POLICY,
     } as Response;
   });
+}
+
+function mockSessionOnly(status: number, payload: Record<string, unknown>): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/auth/session")) {
+      return { ok: status >= 200 && status < 300, status, json: async () => payload } as Response;
+    }
+    return { ok: true, status: 200, json: async () => MOCK_POLICY } as Response;
+  });
+}
+
+async function clickLoadPolicy(): Promise<void> {
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeEnabled();
+  });
+  fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 }
 
 describe("GovernanceControlPage", () => {
@@ -159,7 +191,7 @@ describe("GovernanceControlPage", () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByText("Policy Meta")).toBeInTheDocument();
@@ -178,7 +210,7 @@ describe("GovernanceControlPage", () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByText("wat.enabled")).toBeInTheDocument();
@@ -198,7 +230,7 @@ describe("GovernanceControlPage", () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByText("Current Version")).toBeInTheDocument();
@@ -214,7 +246,7 @@ describe("GovernanceControlPage", () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
@@ -228,7 +260,7 @@ describe("GovernanceControlPage", () => {
   it("shows approval workflow when changes exist", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
@@ -243,7 +275,7 @@ describe("GovernanceControlPage", () => {
   it("shows Risk Impact Analysis after load", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByText("Risk Impact Analysis")).toBeInTheDocument();
@@ -256,7 +288,7 @@ describe("GovernanceControlPage", () => {
   it("applies RBAC gating in UI", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "適用" })).toBeInTheDocument();
@@ -270,7 +302,7 @@ describe("GovernanceControlPage", () => {
   it("disables toggle switches for viewer role", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
@@ -285,7 +317,7 @@ describe("GovernanceControlPage", () => {
   it("executes dry-run and shows status", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "ドライラン" })).toBeInTheDocument();
@@ -306,34 +338,23 @@ describe("GovernanceControlPage", () => {
   });
 
   it("shows validation error for malformed policy responses", async () => {
-    vi.spyOn(global, "fetch")
-      // First call: /api/auth/session for authenticated role display
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true, role: "admin" }),
-      } as Response)
-      // Second call: EUAIActGovernanceDashboard compliance/config on mount
-      .mockResolvedValueOnce({
+    vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/auth/session")) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, role: "admin" }) } as Response;
+      }
+      if (url.includes("/api/veritas/v1/governance/policy")) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, policy: { updated_by: 123 } }) } as Response;
+      }
+      return {
         ok: true,
         status: 200,
         json: async () => ({ config: { eu_ai_act_mode: false, safety_threshold: 0.8 } }),
-      } as Response)
-      // Third call: managed SSE probe (/api/veritas/v1/events)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({}),
-      } as Response)
-      // Fourth call: governance/policy triggered by button click
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true, policy: { updated_by: 123 } }),
-      } as Response);
+      } as Response;
+    });
 
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("レスポンスの検証に失敗しました");
@@ -343,7 +364,7 @@ describe("GovernanceControlPage", () => {
   it("shows TrustLog with policy severity tag after load", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    await clickLoadPolicy();
 
     await waitFor(() => {
       expect(screen.getByText(/policy version governance_v1 loaded/)).toBeInTheDocument();
@@ -366,11 +387,64 @@ describe("GovernanceControlPage", () => {
     render(<GovernanceControlPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Current authenticated role is operator. Governance policy read requires admin.")).toBeInTheDocument();
+      expect(screen.getByText("Governance policy read requires authenticated admin session.")).toBeInTheDocument();
     });
 
     expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
     expect(screen.getByText("Requires authenticated admin session.")).toBeInTheDocument();
+  });
+
+  it("keeps load policy disabled while role is loading", () => {
+    vi.spyOn(global, "fetch").mockImplementation(() => new Promise(() => {}));
+    render(<GovernanceControlPage />);
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+    expect(screen.getByText("Resolving authenticated BFF session role...")).toBeInTheDocument();
+  });
+
+  it("disables load policy and shows unknown message", async () => {
+    mockSessionOnly(500, { ok: false, error: "internal" });
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Could not resolve authenticated BFF role. Policy load is disabled until the role is known.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("disables load policy and shows unauthenticated message", async () => {
+    mockSessionOnly(401, { ok: false, error: "unauthorized" });
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Please use dev login or provide a valid BFF session.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("disables load policy and shows server_misconfigured message", async () => {
+    mockSessionOnly(503, { ok: false, error: "server_misconfigured" });
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("BFF auth token mapping is not configured. Check VERITAS_BFF_AUTH_TOKENS_JSON.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("keeps load policy disabled when authenticated role is operator even if UI preview role is admin", async () => {
+    mockPolicyFetch("operator");
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Governance policy read requires authenticated admin session.")).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText("role"), { target: { value: "admin" } });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("enables load policy only for authenticated admin", async () => {
+    mockPolicyFetch("admin");
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Governance policy read is available.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeEnabled();
   });
 
 });

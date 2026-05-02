@@ -61,7 +61,26 @@ const policyResponse = {
 
 describe("Governance control plane", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => policyResponse }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+        if (url.includes("/api/auth/session")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, role: "admin" }),
+          };
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => policyResponse,
+        };
+      }),
+    );
     let seq = 0;
     vi.stubGlobal("crypto", { randomUUID: () => `uuid-${seq++}` });
     vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
@@ -69,7 +88,9 @@ describe("Governance control plane", () => {
 
   it("renders policy metadata after loading", async () => {
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    const loadPolicyButton = screen.getByRole("button", { name: "ポリシーを読み込む" });
+    await waitFor(() => expect(loadPolicyButton).toBeEnabled());
+    fireEvent.click(loadPolicyButton);
 
     await waitFor(() => {
       expect(screen.getByText("Current Version")).toBeInTheDocument();
@@ -83,7 +104,9 @@ describe("Governance control plane", () => {
 
   it("gates apply button for viewer role", async () => {
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    const loadPolicyButton = screen.getByRole("button", { name: "ポリシーを読み込む" });
+    await waitFor(() => expect(loadPolicyButton).toBeEnabled());
+    fireEvent.click(loadPolicyButton);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeInTheDocument());
 

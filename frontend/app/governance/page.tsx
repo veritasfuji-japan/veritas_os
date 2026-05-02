@@ -88,7 +88,7 @@ export default function GovernanceControlPage(): JSX.Element {
             type="button"
             onClick={() => void state.fetchPolicy()}
             className="rounded border px-3 py-2 text-sm"
-            disabled={state.loading || state.authenticatedRole === "operator" || state.authenticatedRole === "viewer" || state.authenticatedRole === "unauthenticated"}
+            disabled={state.loading || state.authenticatedRole !== "admin"}
           >
             {state.loading ? t("読み込み中...", "Loading...") : t("ポリシーを読み込む", "Load policy")}
           </button>
@@ -99,11 +99,22 @@ export default function GovernanceControlPage(): JSX.Element {
             Requires authenticated admin session.
           </div>
         </div>
-        {state.authenticatedRole !== "admin" ? (
-          <p className="mt-2 text-xs text-warning-foreground">
-            Current authenticated role is {state.authenticatedRole}. Governance policy read requires admin.
-          </p>
-        ) : null}
+        <p className="mt-2 text-xs text-warning-foreground">
+          {state.authenticatedRole === "loading" ? "Resolving authenticated BFF session role..." : null}
+          {state.authenticatedRole === "admin" ? "Governance policy read is available." : null}
+          {state.authenticatedRole === "operator" || state.authenticatedRole === "viewer"
+            ? "Governance policy read requires authenticated admin session."
+            : null}
+          {state.authenticatedRole === "unauthenticated"
+            ? "Please use dev login or provide a valid BFF session."
+            : null}
+          {state.authenticatedRole === "server_misconfigured"
+            ? "BFF auth token mapping is not configured. Check VERITAS_BFF_AUTH_TOKENS_JSON."
+            : null}
+          {state.authenticatedRole === "unknown"
+            ? "Could not resolve authenticated BFF role. Policy load is disabled until the role is known."
+            : null}
+        </p>
 
         {/* ── Role capability matrix ── */}
         <div className="mt-3 rounded-lg border bg-surface/50 px-3 py-2">
