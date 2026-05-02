@@ -114,6 +114,22 @@ export const ja = {
   decisionPanelTradeOffField: "trade-off",
   decisionPanelRelativeWeakness: "相対的弱み",
   decisionPanelNone: "none",
+  decisionPanelFormationRefusalTitle: "形成遷移が拒否されました",
+  decisionPanelFormationRefusalDescription: "この artifact は bind 前に拒否されています。bind retry では回復できません。eligible な formation lineage から decision を再構築してください。",
+  decisionPanelStatus: "状態",
+  decisionPanelReason: "理由",
+  decisionPanelBlockReason: "ブロック理由",
+  decisionPanelRefusalType: "拒否タイプ",
+  decisionPanelRecoveryAction: "回復アクション",
+  decisionPanelExecutionIntent: "ExecutionIntent",
+  decisionPanelBindReceipt: "BindReceipt",
+  decisionPanelBindRetryable: "bind retry 可能",
+  decisionPanelHumanReviewRequiredLabel: "human review 必須",
+  decisionPanelPreBindFormationRefusal: "pre-bind formation refusal",
+  decisionPanelNotCreated: "未作成",
+  decisionPanelNo: "いいえ",
+  decisionPanelYes: "はい",
+  decisionPanelUnknown: "不明",
 } as const;
 
 export type LocaleKey = keyof typeof ja;
