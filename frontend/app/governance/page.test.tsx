@@ -114,12 +114,22 @@ beforeEach(() => {
   vi.stubGlobal("confirm", vi.fn(() => true));
 });
 
-function mockPolicyFetch(): ReturnType<typeof vi.spyOn> {
-  return vi.spyOn(global, "fetch").mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => MOCK_POLICY,
-  } as Response);
+function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "admin"): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/auth/session")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, role: authenticatedRole }),
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => MOCK_POLICY,
+    } as Response;
+  });
 }
 
 describe("GovernanceControlPage", () => {
@@ -252,7 +262,7 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByRole("button", { name: "適用" })).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
+    fireEvent.change(screen.getByLabelText("ui-preview-role"), { target: { value: "viewer" } });
     expect(screen.getByRole("button", { name: "適用" })).toBeDisabled();
     expect(screen.getByText("RBAC: apply/rollback は admin のみ実行可能です。")).toBeInTheDocument();
   });
@@ -266,7 +276,7 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
+    fireEvent.change(screen.getByLabelText("ui-preview-role"), { target: { value: "viewer" } });
     expect(screen.getByRole("switch", { name: "PII Check" })).toBeDisabled();
     expect(screen.getByLabelText("wat.issuance_mode")).toBeDisabled();
     expect(screen.getByText("Read-only role: WAT settings are visible but cannot be mutated.")).toBeInTheDocument();
@@ -333,4 +343,28 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByText(/policy version governance_v1 loaded/)).toBeInTheDocument();
     });
   });
+  it("shows authenticated role and UI preview role label", async () => {
+    mockPolicyFetch("admin");
+    render(<GovernanceControlPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Authenticated role:")).toBeInTheDocument();
+      expect(screen.getByText("UI preview role")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("This selector only previews UI capabilities. Backend access is determined by your authenticated BFF session role.")).toBeInTheDocument();
+  });
+
+  it("disables load policy for non-admin authenticated role", async () => {
+    mockPolicyFetch("operator");
+    render(<GovernanceControlPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Current authenticated role is operator. Governance policy read requires admin.")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+    expect(screen.getByText("Requires authenticated admin session.")).toBeInTheDocument();
+  });
+
 });

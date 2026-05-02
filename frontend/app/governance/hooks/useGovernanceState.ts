@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../../components/i18n-provider";
 import { veritasFetch } from "../../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../../lib/api-validators";
@@ -23,6 +23,7 @@ export function useGovernanceState() {
   const [draft, setDraft] = useState<GovernancePolicyUI | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("admin");
   const [governanceMode, setGovernanceMode] = useState<GovernanceMode>("standard");
+  const [authenticatedRole, setAuthenticatedRole] = useState<UserRole | "unknown" | "unauthenticated">("unknown");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +79,13 @@ export function useGovernanceState() {
         signal: controller.signal,
       });
       if (!res.ok) {
+        if (res.status === 403) {
+          setError(t(
+            "HTTP 403: Governance policy の読み込みには認証済みadminセッションが必要です。BFFログインroleを確認してください。",
+            "HTTP 403: Governance policy requires an authenticated admin session. Check your BFF login role.",
+          ));
+          return;
+        }
         setError(t(`HTTP ${res.status}: ポリシー取得に失敗しました。`, `HTTP ${res.status}: Failed to fetch policy.`));
         return;
       }
@@ -216,6 +224,40 @@ export function useGovernanceState() {
   const riskGauge = draft ? pendingRisk : currentRisk;
   const riskDrift = pendingRisk - currentRisk;
 
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchSessionRole = async (): Promise<void> => {
+      try {
+        const res = await veritasFetch("/api/auth/session");
+        if (!active) return;
+        if (res.ok) {
+          const payload = await res.json() as { role?: UserRole };
+          if (payload.role === "admin" || payload.role === "operator" || payload.role === "viewer") {
+            setAuthenticatedRole(payload.role);
+            return;
+          }
+          setAuthenticatedRole("unknown");
+          return;
+        }
+        if (res.status === 401) {
+          setAuthenticatedRole("unauthenticated");
+          return;
+        }
+        setAuthenticatedRole("unknown");
+      } catch {
+        if (active) setAuthenticatedRole("unknown");
+      }
+    };
+
+    void fetchSessionRole();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const draftApprovalStatus: ApprovalStatus = useMemo(() => {
     if (!draft) return "draft";
     if (!hasChanges) return draft.approval_status;
@@ -228,6 +270,7 @@ export function useGovernanceState() {
     selectedRole,
     setSelectedRole,
     governanceMode,
+    authenticatedRole,
     setGovernanceMode,
     loading,
     saving,

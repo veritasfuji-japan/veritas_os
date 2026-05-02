@@ -53,10 +53,13 @@ export default function GovernanceControlPage(): JSX.Element {
         className="border-primary/15"
       >
         <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded border px-3 py-2 text-xs">
+            Authenticated role: <span className="font-mono">{state.authenticatedRole}</span>
+          </div>
           <label className="text-xs">
-            Role
+            UI preview role
             <select
-              aria-label="role"
+              aria-label="ui-preview-role"
               value={state.selectedRole}
               onChange={(e) => state.setSelectedRole(e.target.value as UserRole)}
               className="mt-1 w-full rounded border px-2 py-1"
@@ -65,6 +68,9 @@ export default function GovernanceControlPage(): JSX.Element {
               <option value="operator">operator</option>
               <option value="admin">admin</option>
             </select>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              This selector only previews UI capabilities. Backend access is determined by your authenticated BFF session role.
+            </p>
           </label>
           <label className="text-xs">
             Mode
@@ -82,14 +88,22 @@ export default function GovernanceControlPage(): JSX.Element {
             type="button"
             onClick={() => void state.fetchPolicy()}
             className="rounded border px-3 py-2 text-sm"
-            disabled={state.loading}
+            disabled={state.loading || state.authenticatedRole !== "admin"}
           >
             {state.loading ? t("読み込み中...", "Loading...") : t("ポリシーを読み込む", "Load policy")}
           </button>
           <div className="rounded border px-3 py-2 text-xs">
             Risk gauge: <span className="font-mono">{state.riskGauge}%</span>
           </div>
+          <div className="rounded border px-3 py-2 text-xs text-muted-foreground">
+            Requires authenticated admin session.
+          </div>
         </div>
+        {state.authenticatedRole !== "admin" ? (
+          <p className="mt-2 text-xs text-warning-foreground">
+            Current authenticated role is {state.authenticatedRole}. Governance policy read requires admin.
+          </p>
+        ) : null}
 
         {/* ── Role capability matrix ── */}
         <div className="mt-3 rounded-lg border bg-surface/50 px-3 py-2">
