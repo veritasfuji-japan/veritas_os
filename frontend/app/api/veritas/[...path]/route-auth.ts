@@ -28,7 +28,7 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
   {
     pathPattern: /^v1\/governance\/policy$/,
     method: "GET",
-    roles: ["viewer", "operator", "admin"],
+    roles: ["admin"],
   },
   { pathPattern: /^v1\/governance\/policy$/, method: "PUT", roles: ["admin"] },
   {
