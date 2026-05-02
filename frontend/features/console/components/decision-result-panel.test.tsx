@@ -42,7 +42,11 @@ describe("DecisionResultPanel", () => {
     regulation_notice: "",
   };
 
-  function renderPanel(viewerRole: "auditor" | "operator" | "developer" = "operator") {
+  function renderPanel(
+    viewerRole: "auditor" | "operator" | "developer" = "operator",
+    language: "ja" | "en" = "ja",
+  ) {
+    window.localStorage.setItem("veritas_language", language);
     return render(
       <I18nProvider>
         <DecisionResultPanel result={baseResult as never} viewerRole={viewerRole} />
@@ -219,6 +223,7 @@ describe("DecisionResultPanel", () => {
       bind_receipt: null,
       human_review_required: true,
     };
+    window.localStorage.setItem("veritas_language", "en");
     render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
     expect(screen.getByText("Formation Transition Refused")).toBeInTheDocument();
     expect(screen.getByText("NON_PROMOTABLE_LINEAGE")).toBeInTheDocument();
@@ -238,6 +243,7 @@ describe("DecisionResultPanel", () => {
       bind_receipt_id: null,
       human_review_required: true,
     };
+    window.localStorage.setItem("veritas_language", "en");
     render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
     expect(screen.getByText("Formation Transition Refused")).toBeInTheDocument();
     expect(screen.getByText("NON_PROMOTABLE_LINEAGE")).toBeInTheDocument();
@@ -250,6 +256,7 @@ describe("DecisionResultPanel", () => {
       transition_refusal: null,
       actionability_status: "reviewable_only",
     };
+    window.localStorage.setItem("veritas_language", "en");
     render(<I18nProvider><DecisionResultPanel result={allowedResult as never} /></I18nProvider>);
     expect(screen.queryByText("Formation Transition Refused")).not.toBeInTheDocument();
   });
@@ -260,6 +267,7 @@ describe("DecisionResultPanel", () => {
       actionability_status: "formation_transition_refused",
       transition_refusal: { transition_status: "structurally_refused" },
     };
+    window.localStorage.setItem("veritas_language", "en");
     render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
     const refusalCard = screen.getByText("Formation Transition Refused").closest("article");
     expect(refusalCard).toBeInTheDocument();
@@ -279,9 +287,28 @@ describe("DecisionResultPanel", () => {
       execution_intent_id: null,
       bind_receipt_id: null,
     };
+    window.localStorage.setItem("veritas_language", "en");
     render(<I18nProvider><DecisionResultPanel result={partialResult as never} /></I18nProvider>);
     expect(screen.getByText("Formation Transition Refused")).toBeInTheDocument();
     expect(screen.getByText("NON_PROMOTABLE_LINEAGE")).toBeInTheDocument();
     expect(screen.getByText("RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE")).toBeInTheDocument();
+  });
+
+  it("renders formation refusal card in Japanese", () => {
+    const refusedResult = {
+      ...baseResult,
+      actionability_status: "formation_transition_refused",
+      transition_refusal: { transition_status: "structurally_refused" },
+      execution_intent_id: null,
+      bind_receipt_id: null,
+      human_review_required: true,
+    };
+    window.localStorage.setItem("veritas_language", "ja");
+    render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
+    expect(screen.getByText("形成遷移が拒否されました")).toBeInTheDocument();
+    expect(screen.getAllByText(/この artifact は bind 前に拒否されています/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("未作成").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("いいえ")).toBeInTheDocument();
+    expect(screen.getByText("はい")).toBeInTheDocument();
   });
 });

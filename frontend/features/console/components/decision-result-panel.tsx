@@ -56,6 +56,7 @@ type FormationTransitionRefusalCardProps = {
 };
 
 function FormationTransitionRefusalCard({ result }: FormationTransitionRefusalCardProps): JSX.Element | null {
+  const { tk } = useI18n();
   const transitionRefusal = result.transition_refusal ?? null;
   const isFormationRefused = transitionRefusal?.transition_status === "structurally_refused"
     || result.actionability_status === "formation_transition_refused";
@@ -81,29 +82,29 @@ function FormationTransitionRefusalCard({ result }: FormationTransitionRefusalCa
     : "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE";
   const recoveryReason = typeof result.recovery_reason === "string"
     ? result.recovery_reason
-    : "This artifact was refused before bind. It is not bind-retryable. Reconstruct the decision from an eligible formation lineage.";
-  const executionIntentStatus = result.execution_intent_id == null ? "not created" : result.execution_intent_id;
-  const bindReceiptStatus = result.bind_receipt_id == null ? "not created" : result.bind_receipt_id;
-  const humanReview = result.human_review_required === true ? "yes" : "unknown";
+    : tk("decisionPanelFormationRefusalDescription");
+  const executionIntentStatus = result.execution_intent_id == null ? tk("decisionPanelNotCreated") : result.execution_intent_id;
+  const bindReceiptStatus = result.bind_receipt_id == null ? tk("decisionPanelNotCreated") : result.bind_receipt_id;
+  const humanReview = result.human_review_required === true ? tk("decisionPanelYes") : tk("decisionPanelUnknown");
 
   return (
     <article className="space-y-2 rounded-md border border-orange-400/40 bg-orange-500/5 p-3">
-      <h4 className="font-semibold text-foreground">Formation Transition Refused</h4>
+      <h4 className="font-semibold text-foreground">{tk("decisionPanelFormationRefusalTitle")}</h4>
       <p className="text-muted-foreground">
-        This artifact was refused before bind. It is not bind-retryable. Reconstruct the decision from an eligible formation lineage.
+        {tk("decisionPanelFormationRefusalDescription")}
       </p>
       <div className="grid gap-1 md:grid-cols-2">
-        <p><span className="text-muted-foreground">Status:</span> <span className="font-mono text-[11px]">{status}</span></p>
-        <p><span className="text-muted-foreground">Reason:</span> <span className="font-mono text-[11px]">{reason}</span></p>
-        <p><span className="text-muted-foreground">Block reason:</span> <span className="font-mono text-[11px]">{blockReason}</span></p>
-        <p><span className="text-muted-foreground">Refusal type:</span> <span className="font-mono text-[11px]">{refusalType}</span></p>
-        <p><span className="text-muted-foreground">Recovery action:</span> <span className="font-mono text-[11px]">{recoveryAction}</span></p>
-        <p><span className="text-muted-foreground">ExecutionIntent:</span> <span className="font-mono text-[11px]">{executionIntentStatus}</span></p>
-        <p><span className="text-muted-foreground">BindReceipt:</span> <span className="font-mono text-[11px]">{bindReceiptStatus}</span></p>
-        <p><span className="text-muted-foreground">Bind retryable:</span> no</p>
-        <p><span className="text-muted-foreground">Human review required:</span> {humanReview}</p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelStatus")}:</span> <span className="font-mono text-[11px]">{status}</span></p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelReason")}:</span> <span className="font-mono text-[11px]">{reason}</span></p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelBlockReason")}:</span> <span className="font-mono text-[11px]">{blockReason}</span></p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelRefusalType")}:</span> <span className="font-mono text-[11px]">{refusalType}</span></p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelRecoveryAction")}:</span> <span className="font-mono text-[11px]">{recoveryAction}</span></p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelExecutionIntent")}:</span> <span className="font-mono text-[11px]">{executionIntentStatus}</span></p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelBindReceipt")}:</span> <span className="font-mono text-[11px]">{bindReceiptStatus}</span></p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelBindRetryable")}:</span> {tk("decisionPanelNo")}</p>
+        <p><span className="text-muted-foreground">{tk("decisionPanelHumanReviewRequiredLabel")}:</span> {humanReview}</p>
       </div>
-      <p><span className="text-muted-foreground">Pre-bind formation refusal:</span> {recoveryReason}</p>
+      <p><span className="text-muted-foreground">{tk("decisionPanelPreBindFormationRefusal")}:</span> {recoveryReason}</p>
     </article>
   );
 }
