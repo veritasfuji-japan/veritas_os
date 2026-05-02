@@ -38,8 +38,24 @@ All other combinations (including missing/unknown summaries) are backward-compat
 
 The invariant should be preserved across persistence, aggregation, replay, export, summarization, reinterpretation, and repackaging surfaces.
 
-This PR does **not** fully prove every transformation-stability path. It introduces the minimal additive contract needed as a foundation for future enforcement and transition-refusal behavior.
+This PR does **not** fully prove every transformation-stability path. It introduces a covered transition-path enforcement that refuses non-promotable lineage before execution-intent construction.
 
-## Roadmap note
+## Covered transition-path enforcement
 
-A centralized execution-intent refusal guard for non-promotable lineage is intentionally deferred to a follow-up PR to keep this change small and reviewable.
+On the covered `/v1/decide` transition path, the pipeline now evaluates
+execution-intent transition eligibility from `lineage_promotability` and applies
+structural refusal before any execution-intent lineage fields are formed in the
+public response shape.
+
+ExecutionIntent cannot be constructed from a non-promotable pre-bind formation lineage.
+
+This is a formation transition refusal, not a bind-time rejection.
+
+For `promotability_status=non_promotable`, the response emits an additive
+`transition_refusal` object and keeps `execution_intent_id` / `bind_receipt_id`
+unset (`null`) on that covered path. BindReceipt is not created on this
+transition path and the case is not treated as `bind_outcome=BLOCKED`.
+
+This enforces the invariant implementation stance that an invalid candidate
+cannot be formed in a promotable shape, and bind does not manufacture
+legitimacy.

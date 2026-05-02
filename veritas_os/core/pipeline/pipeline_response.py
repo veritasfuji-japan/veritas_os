@@ -34,6 +34,9 @@ from veritas_os.core.pipeline.governance_layers import (
     assemble_governance_public_fields,
     evaluate_governance_layers,
 )
+from veritas_os.core.lineage_transition_refusal import (
+    evaluate_execution_intent_transition,
+)
 from veritas_os.observability.metrics import record_required_evidence_telemetry
 
 logger = logging.getLogger(__name__)
@@ -860,6 +863,17 @@ def _build_response_layers(
     }
     core.update(assemble_governance_public_fields(governance_snapshot))
     core.update(_derive_business_fields(ctx))
+    transition = evaluate_execution_intent_transition(
+        lineage_promotability=core.get("lineage_promotability"),
+    )
+    if transition.get("transition_status") == "structurally_refused":
+        core["execution_intent_id"] = None
+        core["bound_execution_intent_id"] = None
+        core["bind_receipt_id"] = None
+        core["bind_receipt"] = None
+        core["transition_refusal"] = transition
+    else:
+        core["transition_refusal"] = None
 
     audit_debug_internal = {
         "extras": ctx.response_extras,
