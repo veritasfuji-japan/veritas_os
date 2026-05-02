@@ -128,6 +128,7 @@ VERITAS OS は次を実現します。
 - **現時点の事実（bind coverage registry）**: VERITAS は API 上の effect-bearing path に対して、テスト可能な bind coverage registry を持つ。現実世界に影響する route は `bind_governed` として分類されるか、明示的な `audited_exemption` として理由・リスク付きで記録されるため、記録済み意思決定が binding artifact なしで実行許可と誤認されるリスクを低減します。
 - **現時点の事実（bind artifact family）**: `BindReceipt` は完全なガバナンス成果物として永続化され、成果物契約に canonical target metadata を含みます
 - **現時点の事実（replay/運用フロー）**: 運用画面/API は bind 成果物の list/export/detail エンドポイント（`/v1/governance/bind-receipts` / `/v1/governance/bind-receipts/export` / `/v1/governance/bind-receipts/{bind_receipt_id}`）を提供し、mutation/export レスポンスでは監査トリアージ向けに `bind_summary` を再利用します
+- **現在の事実（completed pre-bind formation refusal operator flow）**: covered `/v1/decide` path では、non-promotable な pre-bind formation lineage は ExecutionIntent 構築前に構造的に拒否されます。レスポンスでは ExecutionIntent / BindReceipt 系フィールドが生成されず、actionability は `formation_transition_refused` に正規化され、operator recovery は `RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE` になります。Console では、これを bind failure ではなく pre-bind formation refusal として表示します。
 - **現時点の境界**: これは現時点で全ての副作用経路が bind-governed であると主張するものではありません。  
   本番適用には、環境ごとのハードニング、統合、鍵管理、監査設計、運用審査が必要です。
 - **将来方向（標準化）**: bind-boundary は複数の effect path を統治する標準枠組みへ拡張していく方針ですが、現時点で全経路完了を主張するものではありません

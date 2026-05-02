@@ -90,3 +90,27 @@ aligned across actionability and business/action guidance: `business_decision`
 must be `HOLD`, `next_action` must be
 `RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE`, and
 `human_review_required` must be `true` on the covered `/v1/decide` path.
+
+## Completed covered `/v1/decide` operator flow
+
+On the covered `/v1/decide` path, `lineage_promotability` determines whether a
+formation lineage can become bind-eligible.
+
+When lineage is non-promotable, `transition_refusal` prevents ExecutionIntent
+construction before bind and the response does not create ExecutionIntent or
+BindReceipt fields on that covered path.
+
+Actionability is normalized to `formation_transition_refused`, and operator
+guidance is normalized to `HOLD` +
+`RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE`.
+
+The Console / Mission Control surface displays this as Formation Transition
+Refused (pre-bind formation refusal), not bind failure.
+
+This state is not `bind_outcome=BLOCKED`, and it is not bind-retryable.
+
+A structurally refused formation is not bind-retryable.
+
+The canonical recovery action is RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE.
+
+The Console displays this as pre-bind formation refusal, not bind failure.
