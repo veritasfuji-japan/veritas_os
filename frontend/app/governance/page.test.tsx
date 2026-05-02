@@ -112,6 +112,21 @@ beforeEach(() => {
   let seq = 0;
   vi.stubGlobal("crypto", { randomUUID: vi.fn(() => `uuid-${seq++}`) });
   vi.stubGlobal("confirm", vi.fn(() => true));
+  vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/auth/session")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, role: "admin" }),
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => MOCK_POLICY,
+    } as Response;
+  });
 });
 
 function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "admin"): ReturnType<typeof vi.spyOn> {
