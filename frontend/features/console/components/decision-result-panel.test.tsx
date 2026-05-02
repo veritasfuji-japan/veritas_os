@@ -195,4 +195,93 @@ describe("DecisionResultPanel", () => {
     expect(screen.getAllByText(/gate_decision/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/business_decision/i).length).toBeGreaterThan(0);
   });
+
+  it("renders formation transition refusal card", () => {
+    const refusedResult = {
+      ...baseResult,
+      transition_refusal: {
+        transition_status: "structurally_refused",
+        reason_code: "NON_PROMOTABLE_LINEAGE",
+        invariant_id: "BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+        source_promotability_status: "non_promotable",
+        execution_intent_created: false,
+        bind_receipt_created: false,
+        concise_rationale: "ExecutionIntent cannot be constructed from a non-promotable pre-bind formation lineage.",
+      },
+      actionability_status: "formation_transition_refused",
+      actionability_block_reason: "FORMATION_TRANSITION_REFUSED",
+      actionability_refusal_type: "pre_bind_formation_transition_refusal",
+      recovery_action: "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE",
+      recovery_reason: "The refused artifact is not bind-retryable; reconstruct the decision from an eligible formation lineage.",
+      execution_intent_id: null,
+      bound_execution_intent_id: null,
+      bind_receipt_id: null,
+      bind_receipt: null,
+      human_review_required: true,
+    };
+    render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
+    expect(screen.getByText("Formation Transition Refused")).toBeInTheDocument();
+    expect(screen.getByText("NON_PROMOTABLE_LINEAGE")).toBeInTheDocument();
+    expect(screen.getByText("FORMATION_TRANSITION_REFUSED")).toBeInTheDocument();
+    expect(screen.getByText("pre_bind_formation_transition_refusal")).toBeInTheDocument();
+    expect(screen.getByText("RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE")).toBeInTheDocument();
+    expect(screen.getAllByText("not created").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("no")).toBeInTheDocument();
+  });
+
+  it("renders card when actionability_status alone indicates refusal", () => {
+    const refusedResult = {
+      ...baseResult,
+      transition_refusal: null,
+      actionability_status: "formation_transition_refused",
+      execution_intent_id: null,
+      bind_receipt_id: null,
+      human_review_required: true,
+    };
+    render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
+    expect(screen.getByText("Formation Transition Refused")).toBeInTheDocument();
+    expect(screen.getByText("NON_PROMOTABLE_LINEAGE")).toBeInTheDocument();
+    expect(screen.getByText("RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE")).toBeInTheDocument();
+  });
+
+  it("does not render card when transition is allowed", () => {
+    const allowedResult = {
+      ...baseResult,
+      transition_refusal: null,
+      actionability_status: "reviewable_only",
+    };
+    render(<I18nProvider><DecisionResultPanel result={allowedResult as never} /></I18nProvider>);
+    expect(screen.queryByText("Formation Transition Refused")).not.toBeInTheDocument();
+  });
+
+  it("does not present bind retry wording in formation refusal card", () => {
+    const refusedResult = {
+      ...baseResult,
+      actionability_status: "formation_transition_refused",
+      transition_refusal: { transition_status: "structurally_refused" },
+    };
+    render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
+    const refusalCard = screen.getByText("Formation Transition Refused").closest("article");
+    expect(refusalCard).toBeInTheDocument();
+    expect(refusalCard).not.toHaveTextContent("Retry bind");
+    expect(refusalCard).not.toHaveTextContent("Re-run bind");
+    expect(refusalCard).not.toHaveTextContent("Bind failed");
+    expect(refusalCard).not.toHaveTextContent("Bind blocked");
+  });
+
+  it("renders with partial transition_refusal payload without crashing", () => {
+    const partialResult = {
+      ...baseResult,
+      transition_refusal: {
+        transition_status: "structurally_refused",
+      },
+      actionability_status: "formation_transition_refused",
+      execution_intent_id: null,
+      bind_receipt_id: null,
+    };
+    render(<I18nProvider><DecisionResultPanel result={partialResult as never} /></I18nProvider>);
+    expect(screen.getByText("Formation Transition Refused")).toBeInTheDocument();
+    expect(screen.getByText("NON_PROMOTABLE_LINEAGE")).toBeInTheDocument();
+    expect(screen.getByText("RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE")).toBeInTheDocument();
+  });
 });
