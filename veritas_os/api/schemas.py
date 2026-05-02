@@ -649,6 +649,36 @@ class PreBindPreservationDetail(BaseModel):
     )
 
 
+class LineagePromotabilitySummary(BaseModel):
+    """Compact formation-space invariant summary for lineage promotability."""
+
+    model_config = ConfigDict(extra="allow")
+
+    promotability_family: Literal["lineage_promotability"] = "lineage_promotability"
+    promotability_version: str = Field(default="v1", max_length=MAX_TITLE_LENGTH)
+    promotability_status: Literal[
+        "promotable", "restricted", "non_promotable"
+    ] = "promotable"
+    reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    invariant_id: str = Field(
+        default="BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+        max_length=MAX_TITLE_LENGTH,
+    )
+    source_participation_state: Optional[str] = Field(
+        default=None,
+        max_length=MAX_TITLE_LENGTH,
+    )
+    source_preservation_state: Optional[str] = Field(
+        default=None,
+        max_length=MAX_TITLE_LENGTH,
+    )
+    transformation_stable: bool = True
+    concise_rationale: Optional[str] = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+    )
+
+
 # =========================
 # Response envelope — Trust Log
 # =========================
@@ -1171,6 +1201,14 @@ class DecideResponse(BaseModel):
             "Optional additive pre-bind preservation detail. "
             "Contains intervention viability, openness floor status, and "
             "counterfactual recovery context for operator review."
+        ),
+    )
+    lineage_promotability: Optional[LineagePromotabilitySummary] = Field(
+        default=None,
+        description=(
+            "Optional additive formation-space invariant summary. "
+            "Defines whether the current pre-bind formation lineage can ever "
+            "become bind-eligible under the active invariant set."
         ),
     )
     wat_integrity: Optional[Dict[str, Any]] = Field(

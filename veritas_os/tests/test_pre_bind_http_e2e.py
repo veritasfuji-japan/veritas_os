@@ -10,6 +10,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from veritas_os.core.pipeline.governance_layers import assemble_governance_public_fields
+from veritas_os.core.lineage_promotability import evaluate_lineage_promotability
 
 _BIND_SENTINEL = {
     "bind_outcome": "ESCALATED",
@@ -63,6 +64,12 @@ def _build_payload(case_id: str, include_pre_bind: bool = True) -> dict[str, Any
                     "pre_bind_preservation_summary": golden["pre_bind_preservation_summary"],
                     "pre_bind_preservation_detail": golden["pre_bind_preservation_detail"],
                 },
+                lineage_promotability=evaluate_lineage_promotability(
+                    pre_bind_detection_summary=golden["pre_bind_detection_summary"],
+                    pre_bind_preservation_summary=golden[
+                        "pre_bind_preservation_summary"
+                    ],
+                ),
             )
         )
         payload.update(snapshot)
@@ -145,6 +152,8 @@ def test_decide_http_canonical_case_c_decision_shaping_collapsed(monkeypatch) ->
     assert "aggregate_index" in body["pre_bind_detection_detail"]
     assert body["pre_bind_preservation_detail"]["detection_context"]["participation_state"] == "decision_shaping"
     assert body["pre_bind_preservation_detail"]["detection_context"]["participation_state"] == "decision_shaping"
+    assert body["lineage_promotability"]["promotability_status"] == "non_promotable"
+    assert body["lineage_promotability"]["reason_code"] == "NON_PROMOTABLE_LINEAGE"
     _assert_bind_family_regression_guard(body)
 
 
@@ -162,3 +171,4 @@ def test_decide_http_pre_bind_optionality_absent_is_backward_compatible(monkeypa
     assert body["pre_bind_detection_detail"] is None
     assert body["pre_bind_preservation_summary"] is None
     assert body["pre_bind_preservation_detail"] is None
+    assert body["lineage_promotability"] is None

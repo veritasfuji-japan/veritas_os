@@ -15,6 +15,7 @@ from typing import Any, Dict
 from veritas_os.core.participation_detection import (
     evaluate_pre_bind_structural_detection,
 )
+from veritas_os.core.lineage_promotability import evaluate_lineage_promotability
 from veritas_os.core.preservation_evaluator import evaluate_pre_bind_preservation
 
 
@@ -25,6 +26,7 @@ class GovernanceEvaluationSnapshot:
     participation_signal: Dict[str, Any] | None
     pre_bind_detection: Dict[str, Any]
     pre_bind_preservation: Dict[str, Any]
+    lineage_promotability: Dict[str, Any]
 
 
 def evaluate_governance_layers(
@@ -38,6 +40,10 @@ def evaluate_governance_layers(
             participation_signal=None,
             pre_bind_detection={},
             pre_bind_preservation={},
+            lineage_promotability=evaluate_lineage_promotability(
+                pre_bind_detection_summary=None,
+                pre_bind_preservation_summary=None,
+            ),
         )
 
     detection = evaluate_pre_bind_structural_detection(normalized_signal)
@@ -49,6 +55,12 @@ def evaluate_governance_layers(
         participation_signal=normalized_signal,
         pre_bind_detection=detection,
         pre_bind_preservation=preservation,
+        lineage_promotability=evaluate_lineage_promotability(
+            pre_bind_detection_summary=detection.get("pre_bind_detection_summary"),
+            pre_bind_preservation_summary=preservation.get(
+                "pre_bind_preservation_summary"
+            ),
+        ),
     )
 
 
@@ -70,4 +82,5 @@ def assemble_governance_public_fields(
         "pre_bind_preservation_detail": snapshot.pre_bind_preservation.get(
             "pre_bind_preservation_detail"
         ),
+        "lineage_promotability": snapshot.lineage_promotability,
     }

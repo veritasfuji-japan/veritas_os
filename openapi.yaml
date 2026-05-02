@@ -1697,6 +1697,10 @@ components:
           $ref: '#/components/schemas/PreBindPreservationDetail'
           nullable: true
           description: Optional additive expanded pre-bind preservation diagnostics.
+        lineage_promotability:
+          $ref: '#/components/schemas/LineagePromotabilitySummary'
+          nullable: true
+          description: Optional additive formation-space lineage promotability invariant summary.
     ParticipationSignal:
       type: object
       additionalProperties: true
@@ -1802,6 +1806,39 @@ components:
         main_contributing_conditions:
           type: array
           items: {type: string}
+    LineagePromotabilitySummary:
+      type: object
+      additionalProperties: true
+      properties:
+        promotability_family:
+          type: string
+          enum: [lineage_promotability]
+          default: lineage_promotability
+        promotability_version:
+          type: string
+          default: v1
+        promotability_status:
+          type: string
+          enum: [promotable, restricted, non_promotable]
+          default: promotable
+        reason_code:
+          type: string
+          nullable: true
+        invariant_id:
+          type: string
+          default: BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE
+        source_participation_state:
+          type: string
+          nullable: true
+        source_preservation_state:
+          type: string
+          nullable: true
+        transformation_stable:
+          type: boolean
+          default: true
+        concise_rationale:
+          type: string
+          nullable: true
     PreBindPreservationDetail:
       type: object
       additionalProperties: true

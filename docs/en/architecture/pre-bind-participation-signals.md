@@ -122,3 +122,11 @@ To keep future governance layers reviewable without changing public contracts,
 This split keeps `decision`, `execution_intent`, `bind_receipt`, and
 `bind_summary` contracts stable while making additional governance layers easier
 to add without route bloat.
+
+## Related formation invariant
+
+Pre-bind detection and preservation classify and explain upstream state.
+Lineage promotability defines whether that formation history can ever become bind-eligible.
+See: `docs/en/architecture/pre-bind-formation-invariants.md`.
+
+Note: current support is a v1 additive contract, not full production enforcement.

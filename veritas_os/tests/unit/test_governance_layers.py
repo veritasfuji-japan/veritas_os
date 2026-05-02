@@ -14,6 +14,7 @@ def test_evaluate_governance_layers_returns_empty_snapshot_without_signal() -> N
     assert snapshot.participation_signal is None
     assert snapshot.pre_bind_detection == {}
     assert snapshot.pre_bind_preservation == {}
+    assert snapshot.lineage_promotability["promotability_status"] == "promotable"
 
 
 def test_assemble_governance_public_fields_preserves_contract_shape() -> None:
@@ -36,3 +37,4 @@ def test_assemble_governance_public_fields_preserves_contract_shape() -> None:
     )
     assert "pre_bind_detection_detail" in payload
     assert "pre_bind_preservation_detail" in payload
+    assert "lineage_promotability" in payload
