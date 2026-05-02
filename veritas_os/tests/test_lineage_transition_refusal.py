@@ -85,6 +85,13 @@ def test_structurally_refused_transition_cannot_be_actionable_after_bind(
         core["actionability_refusal_type"]
         == "pre_bind_formation_transition_refusal"
     )
+    assert core["business_decision"] == "HOLD"
+    assert core["next_action"] == "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE"
+    assert core["human_review_required"] is True
+    assert (
+        core["action_selection"]["selected"]["action"]
+        == "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE"
+    )
 
 
 def test_raw_committed_bind_payload_cannot_override_structural_refusal(
@@ -138,6 +145,14 @@ def test_promotable_lineage_keeps_existing_actionability_behavior(monkeypatch) -
         lambda _ctx: {
             "actionability_status": "actionable_after_bind",
             "requires_bind_before_execution": False,
+            "business_decision": "APPROVE",
+            "next_action": "EXECUTE_WITH_STANDARD_MONITORING",
+            "human_review_required": False,
+            "action_selection": {
+                "evaluation_axes": ["expected_value"],
+                "selected": {"action": "EXECUTE_WITH_STANDARD_MONITORING"},
+                "candidates_considered": 1,
+            },
         },
     )
 
@@ -150,3 +165,76 @@ def test_promotable_lineage_keeps_existing_actionability_behavior(monkeypatch) -
     assert core["transition_refusal"] is None
     assert core["actionability_status"] == "actionable_after_bind"
     assert core["requires_bind_before_execution"] is False
+    assert core["business_decision"] == "APPROVE"
+    assert core["next_action"] == "EXECUTE_WITH_STANDARD_MONITORING"
+    assert core["human_review_required"] is False
+    assert (
+        core["action_selection"]["selected"]["action"]
+        == "EXECUTE_WITH_STANDARD_MONITORING"
+    )
+
+
+def test_structural_refusal_overrides_execute_selected_action(monkeypatch) -> None:
+    ctx = PipelineContext(request_id="req-1", query="q")
+    monkeypatch.setattr(
+        pipeline_response,
+        "assemble_governance_public_fields",
+        lambda _snapshot: {
+            "lineage_promotability": {"promotability_status": "non_promotable"}
+        },
+    )
+    monkeypatch.setattr(
+        pipeline_response,
+        "_derive_business_fields",
+        lambda _ctx: {
+            "business_decision": "APPROVE",
+            "next_action": "EXECUTE_WITH_STANDARD_MONITORING",
+            "human_review_required": False,
+            "action_selection": {
+                "evaluation_axes": ["expected_value"],
+                "selected": {"action": "EXECUTE_WITH_STANDARD_MONITORING"},
+                "candidates_considered": 1,
+            },
+        },
+    )
+    layers = pipeline_response._build_response_layers(  # noqa: SLF001
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={},
+    )
+    core = layers["core"]
+    assert core["business_decision"] == "HOLD"
+    assert core["next_action"] == "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE"
+    assert (
+        core["action_selection"]["selected"]["action"]
+        == "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE"
+    )
+    assert (
+        core["action_selection"]["selected"]["action"]
+        != "EXECUTE_WITH_STANDARD_MONITORING"
+    )
+
+
+def test_structural_refusal_includes_formation_transition_refused_reason(
+    monkeypatch,
+) -> None:
+    ctx = PipelineContext(request_id="req-1", query="q")
+    monkeypatch.setattr(
+        pipeline_response,
+        "assemble_governance_public_fields",
+        lambda _snapshot: {
+            "lineage_promotability": {"promotability_status": "non_promotable"}
+        },
+    )
+    layers = pipeline_response._build_response_layers(  # noqa: SLF001
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={},
+    )
+    core = layers["core"]
+    refusal_reason = str(core.get("refusal_reason") or "")
+    rationale = str(core.get("rationale") or "")
+    assert (
+        "FORMATION_TRANSITION_REFUSED" in refusal_reason
+        or "FORMATION_TRANSITION_REFUSED" in rationale
+    )

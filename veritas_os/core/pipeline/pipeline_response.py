@@ -166,6 +166,49 @@ def _apply_structural_transition_refusal_actionability(core: Dict[str, Any]) -> 
     )
     core["actionability_block_reason"] = "FORMATION_TRANSITION_REFUSED"
     core["actionability_refusal_type"] = "pre_bind_formation_transition_refusal"
+    core["business_decision"] = "HOLD"
+    core["next_action"] = "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE"
+    core["human_review_required"] = True
+    core["recovery_action"] = "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE"
+    core["recovery_reason"] = (
+        "The refused artifact is not bind-retryable; reconstruct the decision "
+        "from an eligible formation lineage."
+    )
+    core["action_selection"] = {
+        "evaluation_axes": [
+            "formation_eligibility",
+            "lineage_reconstruction",
+            "operator_review",
+        ],
+        "selected": {
+            "action": "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE",
+            "expected_value": 0.0,
+            "risk_reduction": 1.0,
+            "cost": 0.4,
+            "dependency": 0.6,
+            "urgency": 0.9,
+            "score": 1.0,
+            "reason": (
+                "Formation transition refusal is not bind-retryable; "
+                "reconstruct from an eligible lineage."
+            ),
+        },
+        "candidates_considered": 1,
+    }
+    core["refusal_reason"] = (
+        "FORMATION_TRANSITION_REFUSED: ExecutionIntent cannot be constructed "
+        "from a non-promotable pre-bind formation lineage."
+    )
+    rationale = str(core.get("rationale") or "").strip()
+    formation_rationale = (
+        "FORMATION_TRANSITION_REFUSED: ExecutionIntent cannot be constructed "
+        "from a non-promotable pre-bind formation lineage."
+    )
+    if rationale:
+        if "FORMATION_TRANSITION_REFUSED" not in rationale:
+            core["rationale"] = f"{rationale} | {formation_rationale}"
+    else:
+        core["rationale"] = formation_rationale
 
 def _is_dev_mode_enabled(context: Dict[str, Any]) -> bool:
     """Return whether action-candidate diagnostics should be exposed."""

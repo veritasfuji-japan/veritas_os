@@ -1714,6 +1714,14 @@ components:
           $ref: '#/components/schemas/TransitionRefusal'
           nullable: true
           description: Optional additive pre-bind formation transition refusal contract.
+        recovery_action:
+          type: string
+          nullable: true
+          description: Optional additive operator recovery action for structural refusal cases.
+        recovery_reason:
+          type: string
+          nullable: true
+          description: Optional additive operator recovery reason for structural refusal cases.
     ParticipationSignal:
       type: object
       additionalProperties: true

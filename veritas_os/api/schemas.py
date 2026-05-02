@@ -1250,6 +1250,21 @@ class DecideResponse(BaseModel):
             "failure outcome."
         ),
     )
+    recovery_action: Optional[str] = Field(
+        default=None,
+        max_length=MAX_TITLE_LENGTH,
+        description=(
+            "Optional additive operator recovery action for structural refusal "
+            "cases."
+        ),
+    )
+    recovery_reason: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional additive operator recovery reason aligned with structural "
+            "formation transition refusal semantics."
+        ),
+    )
     wat_integrity: Optional[Dict[str, Any]] = Field(
         default=None,
         description=(
