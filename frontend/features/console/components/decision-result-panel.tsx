@@ -64,13 +64,24 @@ function FormationTransitionRefusalCard({ result }: FormationTransitionRefusalCa
     return null;
   }
 
-  const status = result.actionability_status ?? "formation_transition_refused";
-  const reason = transitionRefusal?.reason_code ?? "NON_PROMOTABLE_LINEAGE";
-  const blockReason = result.actionability_block_reason ?? "FORMATION_TRANSITION_REFUSED";
-  const refusalType = result.actionability_refusal_type ?? "pre_bind_formation_transition_refusal";
-  const recoveryAction = result.recovery_action ?? "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE";
-  const recoveryReason = result.recovery_reason
-    ?? "This artifact was refused before bind. It is not bind-retryable. Reconstruct the decision from an eligible formation lineage.";
+  const status = typeof result.actionability_status === "string"
+    ? result.actionability_status
+    : "formation_transition_refused";
+  const reason = typeof transitionRefusal?.reason_code === "string"
+    ? transitionRefusal.reason_code
+    : "NON_PROMOTABLE_LINEAGE";
+  const blockReason = typeof result.actionability_block_reason === "string"
+    ? result.actionability_block_reason
+    : "FORMATION_TRANSITION_REFUSED";
+  const refusalType = typeof result.actionability_refusal_type === "string"
+    ? result.actionability_refusal_type
+    : "pre_bind_formation_transition_refusal";
+  const recoveryAction = typeof result.recovery_action === "string"
+    ? result.recovery_action
+    : "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE";
+  const recoveryReason = typeof result.recovery_reason === "string"
+    ? result.recovery_reason
+    : "This artifact was refused before bind. It is not bind-retryable. Reconstruct the decision from an eligible formation lineage.";
   const executionIntentStatus = result.execution_intent_id == null ? "not created" : result.execution_intent_id;
   const bindReceiptStatus = result.bind_receipt_id == null ? "not created" : result.bind_receipt_id;
   const humanReview = result.human_review_required === true ? "yes" : "unknown";
