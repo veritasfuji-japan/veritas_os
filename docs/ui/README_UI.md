@@ -35,6 +35,13 @@ pnpm -r typecheck
 pnpm -r test
 ```
 
+## Console / Mission Control formation transition refusal card
+
+The Console decision result panel includes a Formation Transition Refused card
+for structurally refused pre-bind formation lineage on the covered `/v1/decide`
+path. It shows the reason code, recovery action, no ExecutionIntent, no
+BindReceipt, and clearly states that the case is not bind-retryable.
+
 ## Decision Console の公開出力表示ルール
 
 - `gate_decision`: FujiGate によるゲート判定（安全境界）。
