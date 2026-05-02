@@ -84,6 +84,7 @@ ActionabilityStatusLiteral = Literal[
     "actionable_after_bind",
     "blocked",
     "human_review_required",
+    "formation_transition_refused",
 ]
 InterpretationSpaceNarrowingLiteral = Literal[
     "open",
@@ -1084,6 +1085,14 @@ class DecideResponse(BaseModel):
             "Operator-facing warning that decision output is not executable "
             "until bind receipt lineage is present."
         ),
+    )
+    actionability_block_reason: Optional[str] = Field(
+        default=None,
+        description="Machine-readable actionability block reason when present.",
+    )
+    actionability_refusal_type: Optional[str] = Field(
+        default=None,
+        description="Refusal subtype for pre-bind structural transition refusal.",
     )
     required_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     missing_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)

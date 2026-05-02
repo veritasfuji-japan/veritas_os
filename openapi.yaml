@@ -1480,6 +1480,7 @@ components:
           - actionable_after_bind
           - blocked
           - human_review_required
+          - formation_transition_refused
           default: reviewable_only
           description: Explicit execution boundary state. A recorded decision is reviewable
             and does not grant execution permission without bind lineage.
@@ -1497,6 +1498,14 @@ components:
           nullable: true
           description: Operator-facing warning that decision output is not executable
             until bind receipt lineage is present.
+        actionability_block_reason:
+          type: string
+          nullable: true
+          description: Machine-readable actionability block reason when present.
+        actionability_refusal_type:
+          type: string
+          nullable: true
+          description: Refusal subtype for pre-bind structural transition refusal.
         required_evidence:
           type: array
           default: []

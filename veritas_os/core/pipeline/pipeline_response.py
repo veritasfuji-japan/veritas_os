@@ -150,6 +150,23 @@ def _derive_actionability_fields(
     }
 
 
+
+
+def _apply_structural_transition_refusal_actionability(core: Dict[str, Any]) -> None:
+    """Normalize actionability fields for pre-bind formation transition refusal.
+
+    A structurally refused transition indicates the artifact never reached bind
+    eligibility. This must not be represented as bind-retry/actionable-after-bind.
+    """
+    core["actionability_status"] = "formation_transition_refused"
+    core["requires_bind_before_execution"] = False
+    core["unbound_execution_warning"] = (
+        "ExecutionIntent cannot be constructed from a non-promotable "
+        "pre-bind formation lineage."
+    )
+    core["actionability_block_reason"] = "FORMATION_TRANSITION_REFUSED"
+    core["actionability_refusal_type"] = "pre_bind_formation_transition_refusal"
+
 def _is_dev_mode_enabled(context: Dict[str, Any]) -> bool:
     """Return whether action-candidate diagnostics should be exposed."""
     explicit_flag = context.get("dev_mode") or context.get("debug")
@@ -871,6 +888,7 @@ def _build_response_layers(
         core["bound_execution_intent_id"] = None
         core["bind_receipt_id"] = None
         core["bind_receipt"] = None
+        _apply_structural_transition_refusal_actionability(core)
         core["transition_refusal"] = transition
     else:
         core["transition_refusal"] = None

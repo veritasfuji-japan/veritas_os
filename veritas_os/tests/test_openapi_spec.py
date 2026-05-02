@@ -147,6 +147,7 @@ def test_openapi_decide_response_decision_semantics_contract() -> None:
         "actionable_after_bind",
         "blocked",
         "human_review_required",
+        "formation_transition_refused",
     ]
     assert decide_schema["requires_bind_before_execution"]["type"] == "boolean"
     assert decide_schema["bound_execution_intent_id"]["nullable"] is True

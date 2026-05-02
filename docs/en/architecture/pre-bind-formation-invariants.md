@@ -59,3 +59,24 @@ transition path and the case is not treated as `bind_outcome=BLOCKED`.
 This enforces the invariant implementation stance that an invalid candidate
 cannot be formed in a promotable shape, and bind does not manufacture
 legitimacy.
+
+## Actionability consistency under structural transition refusal
+
+When `transition_refusal.transition_status=structurally_refused`, actionability
+must be normalized to the same semantic meaning. In this state, the response
+must not remain `actionable_after_bind`, and it must not imply that bind retry
+can recover the refused artifact.
+
+Formation transition refusal is not a bind retry condition.
+
+A structurally refused formation must not be presented as actionable_after_bind.
+
+This is **formation-reconstruction-required**, not bind-required. The operator
+must reconstruct the decision from an eligible formation lineage, not retry
+bind on the refused artifact.
+
+In this state, `requires_bind_before_execution=false` does **not** mean the
+artifact is executable; it means the artifact was refused before bind and
+cannot progress to bind.
+
+`transition_refusal` and actionability fields must remain semantically aligned.
