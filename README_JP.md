@@ -21,6 +21,8 @@
 VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agents**（AIエージェント向け意思決定ガバナンス / bind-boundary 制御プレーン）です。
 エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。これは、AIエージェントの意思決定と実行境界を統治するコントロールプレーンという現在のプロダクトポジショニングを示します。
 
+公式Webサイト: https://veritas-website-navy.vercel.app/
+
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
 
 外部レビュー担当者向けの入口は `docs/REVIEWER_ENTRYPOINT.md` を参照してください。
@@ -188,6 +190,7 @@ Authority Evidence と Audit Log の違いは明確です。
 - **External Technical Proof Pack（review/pilot/DD/audit）**: [`docs/ja/validation/technical-proof-pack.md`](docs/ja/validation/technical-proof-pack.md)（英語正本あり）
 - **AML/KYC Short Positioning（customer / operator / investor）**: [`docs/ja/positioning/aml-kyc-beachhead-short-positioning.md`](docs/ja/positioning/aml-kyc-beachhead-short-positioning.md)（英語正本あり）
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
+- **公式Webサイト**: https://veritas-website-navy.vercel.app/
 - **Zenodo論文（英語）**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo論文（日本語）**: https://doi.org/10.5281/zenodo.17838456
 - **英語README**: [`README.md`](README.md)
