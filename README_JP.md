@@ -744,6 +744,38 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 | GET | `/v1/governance/bind-receipts/export` | list と同じフィルタ語彙で、運用/監査パイプライン向けに bind receipt をエクスポート |
 | GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | 単一bind receipt成果物を取得 |
 
+#### Bind artifact family（運用者向けの意味）
+
+- `BindReceipt` は、reviewable/auditable な系譜確認と replay 調査に使う完全な bind 成果物です。
+- `bind_summary` は、bind-governed mutation/export レスポンス間で再利用されるコンパクトな共通語彙です。
+- この分離により、Mission Control + APIs での運用面において、decision approval と bind commitment の境界を明確に保ちます。
+
+#### 運用ワークフロー: policy bundle の昇格
+
+既存の bind-boundary パスで active policy bundle pointer を昇格する場合は、`POST /v1/governance/policy-bundles/promote` を使用します。
+
+- リクエストでは `bundle_id` **または** `bundle_dir_name` の **どちらか1つのみ** を指定できます。
+- 任意のファイルシステムパスは拒否されます（selector で `/`、`\`、`.`、`..` は受け付けません）。
+- レスポンスには bind 系譜フィールド（`bind_outcome` / `bind_receipt_id` / `execution_intent_id`）、加算的 `bind_summary`、完全な `bind_receipt` が含まれます。
+- 結果成果物の確認・エクスポートには、`GET /v1/governance/bind-receipts`、`GET /v1/governance/bind-receipts/export`、`GET /v1/governance/bind-receipts/{bind_receipt_id}` を利用します。
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
+  -H "X-API-Key: ${VERITAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bundle_id": "bundle-v2",
+    "decision_id": "dec-promote-1",
+    "request_id": "req-promote-1",
+    "policy_snapshot_id": "snap-promote-1",
+    "decision_hash": "hash-promote-1"
+  }'
+```
+
+運用ガイドと結果解釈は
+[`docs/en/guides/governance-policy-bundle-promotion.md`](docs/ja/guides/governance-policy-bundle-promotion.md)
+を参照してください。
+
 > **署名付きガバナンス成果物** — secure/prodポスチャでは、ポリシーバンドルにEd25519署名が必須です。
 > 意思決定成果物には、適用中のガバナンスポリシー（バージョン、ダイジェスト、署名検証結果、署名者ID）を
 > 示す `governance_identity` フィールドが含まれます。
