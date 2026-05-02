@@ -27,6 +27,14 @@ async function waitForPolicyLoadOutcome(
   return outcome;
 }
 
+async function getAuthenticatedRoleText(page: Page): Promise<string> {
+  const roleText = await page
+    .locator("text=Authenticated role:")
+    .first()
+    .innerText();
+  return roleText.replace("Authenticated role:", "").trim();
+}
+
 test.describe("Governance: policy management flow", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/governance");
@@ -45,12 +53,26 @@ test.describe("Governance: policy management flow", () => {
     await expect(modeSelect).toHaveValue("standard");
   });
 
-  test("load policy button is visible and clickable", async ({ page }) => {
+  test("load policy button is visible and gated by authenticated role", async ({ page }) => {
     const loadButton = page.getByRole("button", {
       name: /ポリシーを読み込む|Load policy/i,
     });
     await expect(loadButton).toBeVisible();
-    await expect(loadButton).toBeEnabled();
+    await expect(loadButton).toBeDisabled();
+
+    await expect
+      .poll(async () => getAuthenticatedRoleText(page), {
+        timeout: 15_000,
+      })
+      .not.toBe("loading");
+
+    const authenticatedRole = await getAuthenticatedRoleText(page);
+    if (authenticatedRole === "admin") {
+      await expect(loadButton).toBeEnabled();
+      return;
+    }
+
+    await expect(loadButton).toBeDisabled();
   });
 
   test("empty state shown when no policy loaded", async ({ page }) => {
@@ -65,6 +87,18 @@ test.describe("Governance: policy management flow", () => {
     const loadButton = page.getByRole("button", {
       name: /ポリシーを読み込む|Load policy/i,
     });
+    await expect
+      .poll(async () => getAuthenticatedRoleText(page), {
+        timeout: 15_000,
+      })
+      .not.toBe("loading");
+
+    const authenticatedRole = await getAuthenticatedRoleText(page);
+    if (authenticatedRole !== "admin") {
+      await expect(loadButton).toBeDisabled();
+      return;
+    }
+
     await loadButton.click();
 
     const outcome = await waitForPolicyLoadOutcome(page);
@@ -103,6 +137,18 @@ test.describe("Governance: policy management flow", () => {
     const loadButton = page.getByRole("button", {
       name: /ポリシーを読み込む|Load policy/i,
     });
+    await expect
+      .poll(async () => getAuthenticatedRoleText(page), {
+        timeout: 15_000,
+      })
+      .not.toBe("loading");
+
+    const authenticatedRole = await getAuthenticatedRoleText(page);
+    if (authenticatedRole !== "admin") {
+      await expect(loadButton).toBeDisabled();
+      return;
+    }
+
     await loadButton.click();
     const outcome = await waitForPolicyLoadOutcome(page);
 
