@@ -114,12 +114,22 @@ beforeEach(() => {
   vi.stubGlobal("confirm", vi.fn(() => true));
 });
 
-function mockPolicyFetch(): ReturnType<typeof vi.spyOn> {
-  return vi.spyOn(global, "fetch").mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => MOCK_POLICY,
-  } as Response);
+function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "admin"): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/auth/session")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, role: authenticatedRole }),
+      } as Response;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => MOCK_POLICY,
+    } as Response;
+  });
 }
 
 describe("GovernanceControlPage", () => {
@@ -297,19 +307,25 @@ describe("GovernanceControlPage", () => {
 
   it("shows validation error for malformed policy responses", async () => {
     vi.spyOn(global, "fetch")
-      // First call: EUAIActGovernanceDashboard compliance/config on mount
+      // First call: /api/auth/session for authenticated role display
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, role: "admin" }),
+      } as Response)
+      // Second call: EUAIActGovernanceDashboard compliance/config on mount
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => ({ config: { eu_ai_act_mode: false, safety_threshold: 0.8 } }),
       } as Response)
-      // Second call: managed SSE probe (/api/veritas/v1/events)
+      // Third call: managed SSE probe (/api/veritas/v1/events)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => ({}),
       } as Response)
-      // Third call: governance/policy triggered by button click
+      // Fourth call: governance/policy triggered by button click
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -333,4 +349,28 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByText(/policy version governance_v1 loaded/)).toBeInTheDocument();
     });
   });
+  it("shows authenticated role and UI preview role label", async () => {
+    mockPolicyFetch("admin");
+    render(<GovernanceControlPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Authenticated role:")).toBeInTheDocument();
+      expect(screen.getByText("UI preview role")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("This selector only previews UI capabilities. Backend access is determined by your authenticated BFF session role.")).toBeInTheDocument();
+  });
+
+  it("disables load policy for non-admin authenticated role", async () => {
+    mockPolicyFetch("operator");
+    render(<GovernanceControlPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Current authenticated role is operator. Governance policy read requires admin.")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+    expect(screen.getByText("Requires authenticated admin session.")).toBeInTheDocument();
+  });
+
 });
