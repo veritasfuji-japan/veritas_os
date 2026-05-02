@@ -81,10 +81,10 @@ describe("parseAuthTokensConfig", () => {
 });
 
 describe("matchPolicy", () => {
-  it("matches GET governance/policy for viewer", () => {
+  it("matches GET governance/policy for admin only", () => {
     const result = matchPolicy(["v1", "governance", "policy"], "GET");
     expect(result).not.toBeNull();
-    expect(result!.policy.roles).toContain("viewer");
+    expect(result!.policy.roles).toEqual(["admin"]);
   });
 
   it("matches PUT governance/policy for admin only", () => {

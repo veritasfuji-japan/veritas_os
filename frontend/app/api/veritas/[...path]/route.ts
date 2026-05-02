@@ -103,6 +103,7 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   const targetUrl = buildTargetUrl(apiBaseUrl, pathSegments, request.nextUrl.searchParams);
   const upstreamHeaders = new Headers();
   upstreamHeaders.set("X-API-Key", apiKey);
+  upstreamHeaders.set("X-Role", authResult.role);
   upstreamHeaders.set(TRACE_ID_HEADER_NAME, traceId);
   upstreamHeaders.set("X-Request-Id", traceId);
 
