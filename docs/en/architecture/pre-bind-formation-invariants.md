@@ -80,3 +80,13 @@ artifact is executable; it means the artifact was refused before bind and
 cannot progress to bind.
 
 `transition_refusal` and actionability fields must remain semantically aligned.
+
+The canonical recovery action is RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE.
+
+Formation transition refusal must not select an execution action.
+
+For structurally refused transition states, operator-facing semantics must stay
+aligned across actionability and business/action guidance: `business_decision`
+must be `HOLD`, `next_action` must be
+`RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE`, and
+`human_review_required` must be `true` on the covered `/v1/decide` path.
