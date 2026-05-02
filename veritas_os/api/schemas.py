@@ -679,6 +679,28 @@ class LineagePromotabilitySummary(BaseModel):
     )
 
 
+class TransitionRefusal(BaseModel):
+    """Structured pre-bind formation transition refusal contract."""
+
+    model_config = ConfigDict(extra="allow")
+
+    transition_status: Literal["allowed", "structurally_refused"] = "allowed"
+    reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    invariant_id: str = Field(
+        default="BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+        max_length=MAX_TITLE_LENGTH,
+    )
+    source_promotability_status: Optional[
+        Literal["promotable", "restricted", "non_promotable"]
+    ] = None
+    execution_intent_created: bool = False
+    bind_receipt_created: bool = False
+    concise_rationale: Optional[str] = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+    )
+
+
 # =========================
 # Response envelope — Trust Log
 # =========================
@@ -1209,6 +1231,14 @@ class DecideResponse(BaseModel):
             "Optional additive formation-space invariant summary. "
             "Defines whether the current pre-bind formation lineage can ever "
             "become bind-eligible under the active invariant set."
+        ),
+    )
+    transition_refusal: Optional[TransitionRefusal] = Field(
+        default=None,
+        description=(
+            "Optional additive formation transition refusal for execution-intent "
+            "construction. This is pre-bind structural refusal and not a bind "
+            "failure outcome."
         ),
     )
     wat_integrity: Optional[Dict[str, Any]] = Field(
