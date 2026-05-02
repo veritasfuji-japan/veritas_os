@@ -262,7 +262,7 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByRole("button", { name: "適用" })).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText("ui-preview-role"), { target: { value: "viewer" } });
+    fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
     expect(screen.getByRole("button", { name: "適用" })).toBeDisabled();
     expect(screen.getByText("RBAC: apply/rollback は admin のみ実行可能です。")).toBeInTheDocument();
   });
@@ -276,7 +276,7 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText("ui-preview-role"), { target: { value: "viewer" } });
+    fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
     expect(screen.getByRole("switch", { name: "PII Check" })).toBeDisabled();
     expect(screen.getByLabelText("wat.issuance_mode")).toBeDisabled();
     expect(screen.getByText("Read-only role: WAT settings are visible but cannot be mutated.")).toBeInTheDocument();
@@ -307,19 +307,25 @@ describe("GovernanceControlPage", () => {
 
   it("shows validation error for malformed policy responses", async () => {
     vi.spyOn(global, "fetch")
-      // First call: EUAIActGovernanceDashboard compliance/config on mount
+      // First call: /api/auth/session for authenticated role display
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, role: "admin" }),
+      } as Response)
+      // Second call: EUAIActGovernanceDashboard compliance/config on mount
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => ({ config: { eu_ai_act_mode: false, safety_threshold: 0.8 } }),
       } as Response)
-      // Second call: managed SSE probe (/api/veritas/v1/events)
+      // Third call: managed SSE probe (/api/veritas/v1/events)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => ({}),
       } as Response)
-      // Third call: governance/policy triggered by button click
+      // Fourth call: governance/policy triggered by button click
       .mockResolvedValueOnce({
         ok: true,
         status: 200,

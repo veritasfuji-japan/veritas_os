@@ -59,7 +59,7 @@ export default function GovernanceControlPage(): JSX.Element {
           <label className="text-xs">
             UI preview role
             <select
-              aria-label="ui-preview-role"
+              aria-label="role"
               value={state.selectedRole}
               onChange={(e) => state.setSelectedRole(e.target.value as UserRole)}
               className="mt-1 w-full rounded border px-2 py-1"
@@ -88,7 +88,7 @@ export default function GovernanceControlPage(): JSX.Element {
             type="button"
             onClick={() => void state.fetchPolicy()}
             className="rounded border px-3 py-2 text-sm"
-            disabled={state.loading || state.authenticatedRole !== "admin"}
+            disabled={state.loading || state.authenticatedRole === "operator" || state.authenticatedRole === "viewer" || state.authenticatedRole === "unauthenticated"}
           >
             {state.loading ? t("読み込み中...", "Loading...") : t("ポリシーを読み込む", "Load policy")}
           </button>
