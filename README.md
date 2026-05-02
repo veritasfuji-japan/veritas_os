@@ -19,6 +19,8 @@
 VERITAS OS is a **Decision Governance and Bind-Boundary Control Plane** for AI agents.
 Instead of passing model output directly to execution, VERITAS routes each decision through a **reproducible, fail-closed, safety-gated, hash-chained governance pipeline** with an operator-facing governance surface in **Mission Control** and governance APIs.
 
+Official Website: https://veritas-website-navy.vercel.app/
+
 This project is not only about running agents.
 It is about making AI decisions **reviewable, traceable, replayable, auditable, and enforceable** inside real organizational workflows before they have real-world effect, with bind artifacts exposed as full bind receipts and compact bind summaries.
 
@@ -211,6 +213,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **External Technical Proof Pack (review/pilot/DD/audit)**: [`docs/en/validation/technical-proof-pack.md`](docs/en/validation/technical-proof-pack.md)
 - **Third-Party Review Readiness (compact index)**: [`docs/en/validation/third-party-review-readiness.md`](docs/en/validation/third-party-review-readiness.md)
 - **AML/KYC Short Positioning (customer / operator / investor)**: [`docs/en/positioning/aml-kyc-beachhead-short-positioning.md`](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
+- **Official Website**: https://veritas-website-navy.vercel.app/
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
