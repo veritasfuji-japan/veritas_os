@@ -23,7 +23,7 @@ export function useGovernanceState() {
   const [draft, setDraft] = useState<GovernancePolicyUI | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("admin");
   const [governanceMode, setGovernanceMode] = useState<GovernanceMode>("standard");
-  const [authenticatedRole, setAuthenticatedRole] = useState<UserRole | "unknown" | "unauthenticated">("unknown");
+  const [authenticatedRole, setAuthenticatedRole] = useState<UserRole | "loading" | "unknown" | "unauthenticated" | "server_misconfigured">("loading");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +82,7 @@ export function useGovernanceState() {
         if (res.status === 403) {
           setError(t(
             "HTTP 403: Governance policy の読み込みには認証済みadminセッションが必要です。BFFログインroleを確認してください。",
-            "HTTP 403: Governance policy requires an authenticated admin session. Check your BFF login role.",
+            `HTTP 403: Governance policy requires an authenticated admin session. Current authenticated role: ${authenticatedRole}.`,
           ));
           return;
         }
@@ -114,7 +114,7 @@ export function useGovernanceState() {
         setLoading(false);
       }
     }
-  }, [appendHistory, appendLog, t]);
+  }, [appendHistory, appendLog, authenticatedRole, t]);
 
   const applyPolicy = useCallback((mode: PolicyActionMode) => {
     if (!draft) return;
@@ -241,8 +241,12 @@ export function useGovernanceState() {
           setAuthenticatedRole("unknown");
           return;
         }
-        if (res.status === 401) {
+        if (res.status === 401 || res.status === 403) {
           setAuthenticatedRole("unauthenticated");
+          return;
+        }
+        if (res.status === 503) {
+          setAuthenticatedRole("server_misconfigured");
           return;
         }
         setAuthenticatedRole("unknown");

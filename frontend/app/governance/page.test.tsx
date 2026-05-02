@@ -132,6 +132,16 @@ function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "a
   });
 }
 
+function mockSessionOnly(status: number, payload: Record<string, unknown>): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/api/auth/session")) {
+      return { ok: status >= 200 && status < 300, status, json: async () => payload } as Response;
+    }
+    return { ok: true, status: 200, json: async () => MOCK_POLICY } as Response;
+  });
+}
+
 describe("GovernanceControlPage", () => {
   it("renders governance header and load button", () => {
     render(<GovernanceControlPage />);
@@ -366,11 +376,64 @@ describe("GovernanceControlPage", () => {
     render(<GovernanceControlPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Current authenticated role is operator. Governance policy read requires admin.")).toBeInTheDocument();
+      expect(screen.getByText("Governance policy read requires authenticated admin session.")).toBeInTheDocument();
     });
 
     expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
     expect(screen.getByText("Requires authenticated admin session.")).toBeInTheDocument();
+  });
+
+  it("keeps load policy disabled while role is loading", () => {
+    vi.spyOn(global, "fetch").mockImplementation(() => new Promise(() => {}));
+    render(<GovernanceControlPage />);
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+    expect(screen.getByText("Resolving authenticated BFF session role...")).toBeInTheDocument();
+  });
+
+  it("disables load policy and shows unknown message", async () => {
+    mockSessionOnly(500, { ok: false, error: "internal" });
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Could not resolve authenticated BFF role. Policy load is disabled until the role is known.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("disables load policy and shows unauthenticated message", async () => {
+    mockSessionOnly(401, { ok: false, error: "unauthorized" });
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Please use dev login or provide a valid BFF session.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("disables load policy and shows server_misconfigured message", async () => {
+    mockSessionOnly(503, { ok: false, error: "server_misconfigured" });
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("BFF auth token mapping is not configured. Check VERITAS_BFF_AUTH_TOKENS_JSON.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("keeps load policy disabled when authenticated role is operator even if UI preview role is admin", async () => {
+    mockPolicyFetch("operator");
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Governance policy read requires authenticated admin session.")).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText("role"), { target: { value: "admin" } });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it("enables load policy only for authenticated admin", async () => {
+    mockPolicyFetch("admin");
+    render(<GovernanceControlPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Governance policy read is available.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeEnabled();
   });
 
 });
