@@ -1,0 +1,20 @@
+{
+  "lineage_promotability": {
+    "promotability_status": "non_promotable",
+    "reason_code": "NON_PROMOTABLE_LINEAGE"
+  },
+  "transition_refusal": {
+    "transition_status": "structurally_refused",
+    "reason_code": "NON_PROMOTABLE_LINEAGE",
+    "execution_intent_created": false,
+    "bind_receipt_created": false
+  },
+  "actionability_status": "formation_transition_refused",
+  "business_decision": "HOLD",
+  "next_action": "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE",
+  "human_review_required": true,
+  "execution_intent_id": null,
+  "bound_execution_intent_id": null,
+  "bind_receipt_id": null,
+  "bind_receipt": null
+}

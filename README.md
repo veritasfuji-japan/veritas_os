@@ -241,6 +241,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **Bind-Time Admissibility Evaluator**: [`docs/en/architecture/bind_time_admissibility_evaluator.md`](docs/en/architecture/bind_time_admissibility_evaluator.md)
 - **Pre-Bind Participation Signals**: [`docs/en/architecture/pre-bind-participation-signals.md`](docs/en/architecture/pre-bind-participation-signals.md)
 - **Pre-Bind Canonical Proof Cases**: [`docs/en/proofs/pre_bind_canonical_cases_proof.md`](docs/en/proofs/pre_bind_canonical_cases_proof.md)
+- **Mini proof: covered `/v1/decide` pre-bind formation refusal**: [`docs/en/validation/pre-bind-formation-refusal-mini-proof.md`](docs/en/validation/pre-bind-formation-refusal-mini-proof.md)
 - **Regulated Action Governance Kernel**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
 - **Authority Evidence vs Audit Log**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)
 - **AML/KYC Regulated Action Path (Use Case)**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
