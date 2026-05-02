@@ -39,25 +39,34 @@ def test_missing_lineage_promotability_remains_allowed() -> None:
     assert result["reason_code"] is None
 
 
-def test_pipeline_response_refuses_non_promotable_execution_intent_transition(
+def test_structurally_refused_transition_cannot_be_actionable_after_bind(
     monkeypatch,
 ) -> None:
     ctx = PipelineContext(request_id="req-1", query="q")
-    ctx.raw = {"execution_intent_id": "ei-1", "bind_receipt_id": "br-1"}
 
     monkeypatch.setattr(
         pipeline_response,
         "assemble_governance_public_fields",
         lambda _snapshot: {
-            "lineage_promotability": {"promotability_status": "non_promotable"}
+            "lineage_promotability": {
+                "promotability_status": "non_promotable",
+                "reason_code": "NON_PROMOTABLE_LINEAGE",
+            }
         },
     )
-    monkeypatch.setattr(pipeline_response, "_derive_business_fields", lambda _ctx: {
-        "execution_intent_id": "ei-1",
-        "bound_execution_intent_id": "ei-1",
-        "bind_receipt_id": "br-1",
-        "bind_receipt": {"bind_receipt_id": "br-1"},
-    })
+    monkeypatch.setattr(
+        pipeline_response,
+        "_derive_business_fields",
+        lambda _ctx: {
+            "actionability_status": "actionable_after_bind",
+            "requires_bind_before_execution": True,
+            "execution_intent_id": "ei-1",
+            "bound_execution_intent_id": "ei-1",
+            "bind_receipt_id": "br-1",
+            "bind_receipt": {"bind_receipt_id": "br-1"},
+        },
+    )
+
     layers = pipeline_response._build_response_layers(  # noqa: SLF001
         ctx,
         load_persona_fn=lambda: {},
@@ -67,3 +76,77 @@ def test_pipeline_response_refuses_non_promotable_execution_intent_transition(
     assert core["transition_refusal"]["transition_status"] == "structurally_refused"
     assert core["execution_intent_id"] is None
     assert core["bind_receipt_id"] is None
+    assert core["bind_receipt"] is None
+    assert core["actionability_status"] != "actionable_after_bind"
+    assert core["actionability_status"] == "formation_transition_refused"
+    assert core["requires_bind_before_execution"] is False
+    assert core["actionability_block_reason"] == "FORMATION_TRANSITION_REFUSED"
+    assert (
+        core["actionability_refusal_type"]
+        == "pre_bind_formation_transition_refusal"
+    )
+
+
+def test_raw_committed_bind_payload_cannot_override_structural_refusal(
+    monkeypatch,
+) -> None:
+    ctx = PipelineContext(request_id="req-1", query="q")
+    ctx.raw = {
+        "bind_outcome": "COMMITTED",
+        "execution_intent_id": "ei-1",
+        "bind_receipt_id": "br-1",
+        "bind_receipt": {"bind_receipt_id": "br-1"},
+    }
+
+    monkeypatch.setattr(
+        pipeline_response,
+        "assemble_governance_public_fields",
+        lambda _snapshot: {
+            "lineage_promotability": {
+                "promotability_status": "non_promotable",
+                "reason_code": "NON_PROMOTABLE_LINEAGE",
+            }
+        },
+    )
+
+    layers = pipeline_response._build_response_layers(  # noqa: SLF001
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={},
+    )
+    core = layers["core"]
+    assert core["actionability_status"] == "formation_transition_refused"
+    assert core["execution_intent_id"] is None
+    assert core["bind_receipt_id"] is None
+    assert core["bind_receipt"] is None
+    assert core["bound_execution_intent_id"] is None
+    assert core["transition_refusal"]["reason_code"] == "NON_PROMOTABLE_LINEAGE"
+
+
+def test_promotable_lineage_keeps_existing_actionability_behavior(monkeypatch) -> None:
+    ctx = PipelineContext(request_id="req-1", query="q")
+    monkeypatch.setattr(
+        pipeline_response,
+        "assemble_governance_public_fields",
+        lambda _snapshot: {
+            "lineage_promotability": {"promotability_status": "promotable"}
+        },
+    )
+    monkeypatch.setattr(
+        pipeline_response,
+        "_derive_business_fields",
+        lambda _ctx: {
+            "actionability_status": "actionable_after_bind",
+            "requires_bind_before_execution": False,
+        },
+    )
+
+    layers = pipeline_response._build_response_layers(  # noqa: SLF001
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={},
+    )
+    core = layers["core"]
+    assert core["transition_refusal"] is None
+    assert core["actionability_status"] == "actionable_after_bind"
+    assert core["requires_bind_before_execution"] is False
