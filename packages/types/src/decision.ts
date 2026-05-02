@@ -681,6 +681,29 @@ export interface DecideResponse extends DecideResponseMeta {
   drift_check_result?: Record<string, unknown> | null;
   /** Runtime risk check summary from bind-phase adjudication. */
   risk_check_result?: Record<string, unknown> | null;
+  /**
+   * Pre-bind formation transition refusal payload.
+   *
+   * Additive optional object used by operator-facing surfaces to distinguish
+   * transition refusal from bind-phase failures.
+   */
+  transition_refusal?: {
+    transition_status?: "allowed" | "structurally_refused";
+    reason_code?: string | null;
+    invariant_id?: string | null;
+    source_promotability_status?: "promotable" | "restricted" | "non_promotable" | null;
+    execution_intent_created?: boolean;
+    bind_receipt_created?: boolean;
+    concise_rationale?: string | null;
+  } | null;
+  /** Machine-readable actionability block reason for pre-bind refusal states. */
+  actionability_block_reason?: string | null;
+  /** Actionability refusal type marker for pre-bind refusal states. */
+  actionability_refusal_type?: string | null;
+  /** Canonical recovery action for operator remediation guidance. */
+  recovery_action?: string | null;
+  /** Human-readable recovery guidance for operator remediation. */
+  recovery_reason?: string | null;
   /** Art. 13 — notification record for individuals affected by high-risk decisions. */
   affected_parties_notice?: Record<string, unknown> | null;
 

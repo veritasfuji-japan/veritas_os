@@ -51,6 +51,52 @@ function downloadEvidenceBundle(bundle: EvidenceBundleDraft): void {
   window.URL.revokeObjectURL(url);
 }
 
+type FormationTransitionRefusalCardProps = {
+  result: DecideResponse;
+};
+
+function FormationTransitionRefusalCard({ result }: FormationTransitionRefusalCardProps): JSX.Element | null {
+  const transitionRefusal = result.transition_refusal ?? null;
+  const isFormationRefused = transitionRefusal?.transition_status === "structurally_refused"
+    || result.actionability_status === "formation_transition_refused";
+
+  if (!isFormationRefused) {
+    return null;
+  }
+
+  const status = result.actionability_status ?? "formation_transition_refused";
+  const reason = transitionRefusal?.reason_code ?? "NON_PROMOTABLE_LINEAGE";
+  const blockReason = result.actionability_block_reason ?? "FORMATION_TRANSITION_REFUSED";
+  const refusalType = result.actionability_refusal_type ?? "pre_bind_formation_transition_refusal";
+  const recoveryAction = result.recovery_action ?? "RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE";
+  const recoveryReason = result.recovery_reason
+    ?? "This artifact was refused before bind. It is not bind-retryable. Reconstruct the decision from an eligible formation lineage.";
+  const executionIntentStatus = result.execution_intent_id == null ? "not created" : result.execution_intent_id;
+  const bindReceiptStatus = result.bind_receipt_id == null ? "not created" : result.bind_receipt_id;
+  const humanReview = result.human_review_required === true ? "yes" : "unknown";
+
+  return (
+    <article className="space-y-2 rounded-md border border-orange-400/40 bg-orange-500/5 p-3">
+      <h4 className="font-semibold text-foreground">Formation Transition Refused</h4>
+      <p className="text-muted-foreground">
+        This artifact was refused before bind. It is not bind-retryable. Reconstruct the decision from an eligible formation lineage.
+      </p>
+      <div className="grid gap-1 md:grid-cols-2">
+        <p><span className="text-muted-foreground">Status:</span> <span className="font-mono text-[11px]">{status}</span></p>
+        <p><span className="text-muted-foreground">Reason:</span> <span className="font-mono text-[11px]">{reason}</span></p>
+        <p><span className="text-muted-foreground">Block reason:</span> <span className="font-mono text-[11px]">{blockReason}</span></p>
+        <p><span className="text-muted-foreground">Refusal type:</span> <span className="font-mono text-[11px]">{refusalType}</span></p>
+        <p><span className="text-muted-foreground">Recovery action:</span> <span className="font-mono text-[11px]">{recoveryAction}</span></p>
+        <p><span className="text-muted-foreground">ExecutionIntent:</span> <span className="font-mono text-[11px]">{executionIntentStatus}</span></p>
+        <p><span className="text-muted-foreground">BindReceipt:</span> <span className="font-mono text-[11px]">{bindReceiptStatus}</span></p>
+        <p><span className="text-muted-foreground">Bind retryable:</span> no</p>
+        <p><span className="text-muted-foreground">Human review required:</span> {humanReview}</p>
+      </div>
+      <p><span className="text-muted-foreground">Pre-bind formation refusal:</span> {recoveryReason}</p>
+    </article>
+  );
+}
+
 /**
  * Structured decision result panel for operator review.
  *
@@ -167,6 +213,8 @@ export function DecisionResultPanel({
               <p className="text-muted-foreground">{tk("decisionPanelNextActionHint")}</p>
             </article>
           </div>
+
+          <FormationTransitionRefusalCard result={result} />
 
           <article className="space-y-2 rounded-md border border-border/70 bg-background/70 p-3">
             <h4 className="font-semibold text-foreground">{tk("decisionPanelBindPhaseTitle")}</h4>
