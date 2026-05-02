@@ -117,7 +117,7 @@ export const en: Record<LocaleKey, string> = {
   decisionPanelRelativeWeakness: "relative weakness",
   decisionPanelNone: "none",
   decisionPanelFormationRefusalTitle: "Formation Transition Refused",
-  decisionPanelFormationRefusalDescription: "This artifact was refused before bind. It is not bind-retryable. Reconstruct the decision from an eligible formation lineage.",
+  decisionPanelFormationRefusalDescription: "This decision was stopped before bind because its formation lineage is not eligible for execution. Do not retry bind. Rebuild the decision from eligible evidence and formation history.",
   decisionPanelStatus: "Status",
   decisionPanelReason: "Reason",
   decisionPanelBlockReason: "Block reason",

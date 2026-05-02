@@ -226,6 +226,9 @@ describe("DecisionResultPanel", () => {
     window.localStorage.setItem("veritas_language", "en");
     render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
     expect(screen.getByText("Formation Transition Refused")).toBeInTheDocument();
+    expect(screen.getAllByText(/This decision was stopped before bind because its formation lineage is not eligible for execution/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Do not retry bind/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Rebuild the decision from eligible evidence and formation history/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("NON_PROMOTABLE_LINEAGE")).toBeInTheDocument();
     expect(screen.getByText("FORMATION_TRANSITION_REFUSED")).toBeInTheDocument();
     expect(screen.getByText("pre_bind_formation_transition_refusal")).toBeInTheDocument();
@@ -306,7 +309,9 @@ describe("DecisionResultPanel", () => {
     window.localStorage.setItem("veritas_language", "ja");
     render(<I18nProvider><DecisionResultPanel result={refusedResult as never} /></I18nProvider>);
     expect(screen.getByText("形成遷移が拒否されました")).toBeInTheDocument();
-    expect(screen.getAllByText(/この artifact は bind 前に拒否されています/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/この判断は、実行候補として成立しない形成履歴だったため、bind 前に止められました/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/bind を再実行しても回復できません/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/判断材料と形成履歴を見直し/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("未作成").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("いいえ")).toBeInTheDocument();
     expect(screen.getByText("はい")).toBeInTheDocument();
