@@ -149,6 +149,8 @@ def test_file_mode_behavior_unchanged_for_load_save(tmp_path, monkeypatch):
     """Backward-compatible helpers still read/write JSON file based policy."""
     policy_path = tmp_path / "governance.json"
     history_path = tmp_path / "governance_history.jsonl"
+    monkeypatch.setenv("VERITAS_GOVERNANCE_BACKEND", "file")
+    monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
     monkeypatch.setattr(gov, "_DEFAULT_POLICY_PATH", policy_path)
     monkeypatch.setattr(gov, "_POLICY_HISTORY_PATH", history_path)
 
