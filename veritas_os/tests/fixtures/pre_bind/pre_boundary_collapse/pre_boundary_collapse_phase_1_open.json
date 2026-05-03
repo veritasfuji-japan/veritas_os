@@ -1,0 +1,31 @@
+{
+  "phase_id": "pre_boundary_collapse_phase_1_open",
+  "phase_label": "Phase 1 — Participation / open framing",
+  "options": ["A", "B", "C", "D"],
+  "option_exposure": {
+    "A": "high",
+    "B": "high",
+    "C": "high",
+    "D": "high"
+  },
+  "reinforcement_asymmetry": "none",
+  "effective_optionality": "full",
+  "participation_signal": {
+    "interpretation_space_narrowing": "open",
+    "counterfactual_availability": "high",
+    "intervention_headroom": "high",
+    "structural_openness": "open"
+  },
+  "expected_participation_state": "informative",
+  "expected_preservation_state": "open",
+  "intervention_viability": "high",
+  "expected_bind_outcome": "FORMALLY_VALID_UPSTREAM_OPEN",
+  "concise_rationale": "All options remain visible and contestable, so effective optionality remains full before bind.",
+  "lineage_evidence": {
+    "framing_iteration_log": "phase_1_framing_log_ref",
+    "option_exposure_trace": "phase_1_exposure_trace_ref",
+    "counterfactual_probes": "phase_1_counterfactual_probe_ref",
+    "intervention_record": "phase_1_intervention_record_ref",
+    "bind_context_snapshot": "phase_1_bind_context_snapshot_ref"
+  }
+}
