@@ -4,6 +4,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
+import { buildAmlKycReviewerWalkthroughPayload } from "../../../../../../lib/aml-kyc-reviewer-walkthrough";
 import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
 
 const GOVERNANCE_LIVE_SNAPSHOT_PATH = "/v1/governance/live-snapshot";
@@ -12,6 +13,7 @@ const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
 const DEMO_SCENARIO_HEADER = "x-veritas-demo-scenario";
 const DEMO_SCENARIO_QUERY = "demo_scenario";
 const PRE_BOUNDARY_COLLAPSE_SCENARIO = "pre_boundary_collapse";
+const AML_KYC_REVIEWER_WALKTHROUGH_SCENARIO = "aml_kyc_reviewer_walkthrough";
 
 const PRE_BOUNDARY_COLLAPSE_PHASE_FIXTURE_FILES = [
   "pre_boundary_collapse_phase_1_open.json",
@@ -101,7 +103,12 @@ function mapPreBoundaryCollapsePhaseToSnapshot(phase: Record<string, unknown>): 
 }
 
 async function resolveDemoScenarioPayload(request: Request): Promise<Record<string, unknown> | null> {
-  if (resolveDemoScenario(request) !== PRE_BOUNDARY_COLLAPSE_SCENARIO) {
+  const demoScenario = resolveDemoScenario(request);
+  if (demoScenario === AML_KYC_REVIEWER_WALKTHROUGH_SCENARIO) {
+    return buildAmlKycReviewerWalkthroughPayload();
+  }
+
+  if (demoScenario !== PRE_BOUNDARY_COLLAPSE_SCENARIO) {
     return null;
   }
 

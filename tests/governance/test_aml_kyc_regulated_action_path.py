@@ -58,3 +58,11 @@ def test_all_scenarios_are_deterministic() -> None:
     first = [item.to_dict() for item in run_all_regulated_action_scenarios()]
     second = [item.to_dict() for item in run_all_regulated_action_scenarios()]
     assert first == second
+
+
+def test_missing_authority_fixture_metadata_shape() -> None:
+    scenario = _by_name()["scenario_e_missing_authority"]
+    assert scenario.expected_outcome == "block"
+    assert scenario.actual_outcome == "block"
+    assert scenario.authority_evidence_id == ""
+    assert scenario.missing_predicate_count >= 1
