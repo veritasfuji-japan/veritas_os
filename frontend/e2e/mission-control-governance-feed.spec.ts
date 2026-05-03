@@ -72,14 +72,17 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     const phasePanel = page.locator('section[aria-label="pre-boundary collapse demo walkthrough"]');
     await expect(phasePanel).toBeVisible();
 
-    await expect(phasePanel).toContainText("Phase 1 — Participation / open framing");
-    await expect(phasePanel).toContainText("Phase 2 — Iterative shaping");
-    await expect(phasePanel).toContainText("Phase 3 — Pre-boundary collapse");
-    await expect(phasePanel).toContainText("Phase 4 — Bind");
+    const phases = phasePanel.locator("ol > li");
+    await expect(phases).toHaveCount(4);
 
-    await expect(phasePanel).toContainText("participation_state: decision_shaping");
-    await expect(phasePanel).toContainText(/preservation_state: (collapsed|degrading)/);
-    await expect(phasePanel).toContainText("bind_outcome: FORMALLY_VALID_STRUCTURALLY_COLLAPSED");
+    await expect(phases.nth(0)).toContainText("Phase 1 — Participation / open framing");
+    await expect(phases.nth(1)).toContainText("Phase 2 — Iterative shaping");
+    await expect(phases.nth(2)).toContainText("Phase 3 — Pre-boundary collapse");
+    await expect(phases.nth(3)).toContainText("Phase 4 — Bind");
+
+    await expect(phases.nth(2)).toContainText("participation_state: decision_shaping");
+    await expect(phases.nth(2)).toContainText(/preservation_state: (collapsed|degrading)/);
+    await expect(phases.nth(3)).toContainText("bind_outcome: FORMALLY_VALID_STRUCTURALLY_COLLAPSED");
 
     await expect(phasePanel).toContainText("lineage evidence summary");
 
