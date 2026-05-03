@@ -95,3 +95,48 @@ snapshot payload.
 
 This preserves vocabulary and backend contracts while making the paradox
 visible at first glance: **formally valid, structurally collapsed**.
+
+
+## Run and verification entrypoint
+
+Run the representative demo from Mission Control with:
+
+- `/?demo_scenario=pre_boundary_collapse`
+
+Routing path under review:
+
+- `page.tsx` reads `demo_scenario` and forwards it via `loadMissionControlIngressPayload`
+- ingress calls `/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse`
+- response carries `governance_layer_snapshot.demo_scenario = pre_boundary_collapse`
+- Mission Control renders the demo walkthrough panel
+
+## UI verification checklist
+
+Confirm all of the following in the browser UI:
+
+- `Pre-Boundary Collapse Demo · 4 phase walkthrough` is visible
+- `formally valid, structurally collapsed` is visible
+- `Phase 1 — Participation / open framing`
+- `Phase 2 — Iterative shaping`
+- `Phase 3 — Pre-boundary collapse`
+- `Phase 4 — Bind`
+- Phase 3 shows `participation_state: decision_shaping`
+- Phase 3 shows `preservation_state: degrading` or `preservation_state: collapsed`
+- Phase 4 shows `bind_outcome: FORMALLY_VALID_STRUCTURALLY_COLLAPSED`
+- `lineage evidence summary` is present
+- default `governance layer timeline` remains visible
+
+## Reviewer framing
+
+This walkthrough is a controlled representative demo for reviewer understanding.
+
+- It is **not** a production certification claim
+- It is **not** a replacement for bind-time governance enforcement
+- It demonstrates the VERITAS pre-bind governance stack concretely
+- It complements, rather than replaces, bind-time governance
+
+## Known limitations
+
+- Deterministic fixture-backed scenario
+- Not an exhaustive production trace
+- Does not imply legal or regulatory approval

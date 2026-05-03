@@ -28,7 +28,7 @@ describe("CommandDashboardPage integration", () => {
       }),
     );
 
-    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith(null);
+    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith(null, undefined);
   });
 
   it("forwards searchParams e2e scenario only when e2e scenarios are enabled", async () => {
@@ -41,7 +41,32 @@ describe("CommandDashboardPage integration", () => {
       }),
     );
 
-    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith("fallback");
+    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith("fallback", undefined);
+  });
+
+
+  it("forwards demo_scenario independently from e2e scenario flags", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    render(
+      await CommandDashboardPage({
+        searchParams: Promise.resolve({ demo_scenario: "pre_boundary_collapse" }),
+      }),
+    );
+
+    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith(null, "pre_boundary_collapse");
+  });
+
+  it("uses first value for array-style demo_scenario query params", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    render(
+      await CommandDashboardPage({
+        searchParams: Promise.resolve({ demo_scenario: ["pre_boundary_collapse", "ignored"] }),
+      }),
+    );
+
+    expect(loadMissionControlIngressPayloadMock).toHaveBeenCalledWith(null, "pre_boundary_collapse");
   });
 
   it("keeps page rendering behavior", async () => {
