@@ -241,6 +241,10 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
       governanceSnapshot?.preservation_state ||
       governanceSnapshot?.intervention_viability,
   );
+  const phaseSnapshots = Array.isArray(governanceSnapshot?.phase_snapshots)
+    ? governanceSnapshot.phase_snapshots
+    : [];
+  const hasPreBoundaryCollapseDemo = governanceSnapshot?.demo_scenario === "pre_boundary_collapse" && phaseSnapshots.length > 0;
 
   const governanceObservation = governanceSnapshot?.governance_observation;
   const hasGovernanceObservation = governanceObservation != null;
@@ -308,6 +312,33 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
               <span className="font-semibold">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.concise_rationale}:</span> {governanceSnapshot?.concise_rationale}
             </p>
           ) : null}
+        </section>
+      ) : null}
+      {hasPreBoundaryCollapseDemo ? (
+        <section aria-label="pre-boundary collapse demo walkthrough" className="rounded-xl border border-warning/40 bg-warning/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-warning">Pre-Boundary Collapse Demo · 4 phase walkthrough</p>
+          <p className="mt-1 text-xs text-muted-foreground">formal options remain, effective optionality collapses before bind.</p>
+          <p className="mt-1 text-xs font-medium">formally valid, structurally collapsed</p>
+          <ol className="mt-3 space-y-3">
+            {phaseSnapshots.map((phase, index) => {
+              const phaseRecord = phase as Record<string, unknown>;
+              const phaseLabel = typeof phaseRecord.phase_label === "string" ? phaseRecord.phase_label : `Phase ${index + 1}`;
+              return (
+                <li key={String(phaseRecord.phase_id ?? index)} className="rounded-md border border-border/60 bg-background/70 p-3 text-xs">
+                  <p className="font-semibold">{phaseLabel}</p>
+                  <p>{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.participation_state}: <span className="font-mono">{stringifyValue(phaseRecord.participation_state)}</span></p>
+                  <p>{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.preservation_state}: <span className="font-mono">{stringifyValue(phaseRecord.preservation_state)}</span></p>
+                  <p>{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.intervention_viability}: <span className="font-mono">{stringifyValue(phaseRecord.intervention_viability)}</span></p>
+                  <p>{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.bind_outcome}: <span className="font-mono">{stringifyValue(phaseRecord.bind_outcome)}</span></p>
+                  <p>{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.concise_rationale}: <span className="text-muted-foreground">{stringifyValue(phaseRecord.concise_rationale)}</span></p>
+                  <p>effective optionality: <span className="font-mono">{stringifyValue(phaseRecord.effective_optionality)}</span></p>
+                  <p>option exposure summary: <span className="font-mono">{stringifyValue(phaseRecord.option_exposure_summary)}</span></p>
+                  <p>reinforcement asymmetry summary: <span className="font-mono">{stringifyValue(phaseRecord.reinforcement_asymmetry_summary)}</span></p>
+                  <p>lineage evidence summary: <span className="font-mono">{stringifyValue(phaseRecord.lineage_evidence)}</span></p>
+                </li>
+              );
+            })}
+          </ol>
         </section>
       ) : null}
 

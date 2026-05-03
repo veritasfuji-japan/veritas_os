@@ -75,9 +75,23 @@ Each phase requires the following evidence keys:
 This minimum set supports replayability, reviewer traceability, and consistent
 cross-phase comparison.
 
-## Scope guardrails for this PR
+## Mission Control walkthrough surface (operator-facing)
 
-This PR intentionally does **not** implement UI, governance feed route changes,
-OpenAPI changes, or bind-contract changes. It only fixes scenario fixtures,
-walkthrough semantics, and validation tests so the demo is reviewable before
-surface implementation.
+Mission Control now renders this demo as a dedicated 4-phase walkthrough panel
+when `demo_scenario=pre_boundary_collapse` is present in the governance layer
+snapshot payload.
+
+- Normal Mission Control mode: existing live governance timeline and artifact
+  cards.
+- Demo mode: additive "Pre-Boundary Collapse Demo · 4 phase walkthrough"
+  section that displays:
+  - phase label
+  - `participation_state`
+  - `preservation_state`
+  - `intervention_viability`
+  - `bind_outcome`
+  - concise rationale
+  - effective optionality and exposure/asymmetry/lineage summaries
+
+This preserves vocabulary and backend contracts while making the paradox
+visible at first glance: **formally valid, structurally collapsed**.
