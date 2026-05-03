@@ -157,6 +157,69 @@ describe("MissionPage", () => {
     expect(screen.getByText(/Open target surface:/)).toBeInTheDocument();
   });
 
+  it("renders pre-boundary collapse demo walkthrough with four phases", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            demo_scenario: "pre_boundary_collapse",
+            phase_snapshots: [
+              {
+                phase_id: "pre_boundary_collapse_phase_1_open",
+                phase_label: "Participation / open framing",
+                participation_state: "informative",
+                preservation_state: "open",
+                intervention_viability: "high",
+                bind_outcome: "PENDING",
+                concise_rationale: "All options are broadly exposed.",
+              },
+              {
+                phase_id: "pre_boundary_collapse_phase_2_iterative_shaping",
+                phase_label: "Iterative shaping",
+                participation_state: "participatory",
+                preservation_state: "degrading",
+                intervention_viability: "medium",
+                bind_outcome: "PENDING",
+                concise_rationale: "Reinforcement narrows practical divergence.",
+              },
+              {
+                phase_id: "pre_boundary_collapse_phase_3_collapse",
+                phase_label: "Pre-boundary collapse",
+                participation_state: "decision_shaping",
+                preservation_state: "collapsed",
+                intervention_viability: "minimal",
+                bind_outcome: "PENDING",
+                concise_rationale: "Effective optionality is nearly exhausted.",
+              },
+              {
+                phase_id: "pre_boundary_collapse_phase_4_bind",
+                phase_label: "Bind",
+                participation_state: "decision_shaping",
+                preservation_state: "collapsed",
+                intervention_viability: "minimal",
+                bind_outcome: "ALLOWED",
+                concise_rationale: "Bind remains formally admissible.",
+              },
+            ],
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Pre-Boundary Collapse Demo · 4 phase walkthrough")).toBeInTheDocument();
+    expect(screen.getByText("formally valid, structurally collapsed")).toBeInTheDocument();
+    expect(screen.getByText("Participation / open framing")).toBeInTheDocument();
+    expect(screen.getByText("Iterative shaping")).toBeInTheDocument();
+    expect(screen.getByText("Pre-boundary collapse")).toBeInTheDocument();
+    expect(screen.getByText("Bind")).toBeInTheDocument();
+    expect(screen.getAllByText(/participation_state:/).length).toBeGreaterThan(1);
+    expect(screen.getAllByText("decision_shaping").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("collapsed").length).toBeGreaterThan(0);
+  });
+
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
     render(
       <I18nProvider>

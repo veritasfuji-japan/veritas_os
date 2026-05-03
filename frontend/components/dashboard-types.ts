@@ -83,6 +83,8 @@ export interface GovernanceObservation {
 }
 
 export interface PreBindGovernanceSnapshot {
+  demo_scenario?: string;
+  phase_snapshots?: Array<Record<string, unknown>>;
   participation_state?: string;
   preservation_state?: string;
   intervention_viability?: string;

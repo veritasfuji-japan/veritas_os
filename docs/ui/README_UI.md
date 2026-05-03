@@ -161,3 +161,16 @@ docker compose up --build
 - payload は `governance_layer_snapshot.phase_snapshots` に 4 phase（phase 1〜4）を返し、`participation_state` / `preservation_state` / `intervention_viability` / `bind_outcome` など既存 vocabulary を維持します。
 - invalid な `demo_scenario` は upstream fetch path にフォールバックし、既存の endpoint unavailable / invalid payload fallback behavior を変更しません。
 - Mission Control UI の phase progression 表示強化は次 PR で実施し、この PR では feed/payload 接続のみを担当します。
+
+## Pre-Boundary Collapse demo walkthrough UI
+
+- Mission Control は `governance_layer_snapshot.demo_scenario=pre_boundary_collapse` かつ `phase_snapshots` が存在する場合に、通常表示へ加えて dedicated demo panel を表示します。
+- panel title: `Pre-Boundary Collapse Demo · 4 phase walkthrough`。
+- 4 phase は次の順序で表示します。
+  1. Participation / open framing
+  2. Iterative shaping
+  3. Pre-boundary collapse
+  4. Bind
+- 各 phase で `participation_state` / `preservation_state` / `intervention_viability` / `bind_outcome` / `concise_rationale` を表示します。
+- 追加で `effective optionality` / `option exposure summary` / `reinforcement asymmetry summary` / `lineage evidence summary` を表示し、`formally valid, structurally collapsed` の explanatory copy を固定表示します。
+- この UI は demo surface であり、normal Mission Control mode（live governance snapshot）を置き換えません。fallback behavior・shared vocabulary・backend contract は変更しません。
