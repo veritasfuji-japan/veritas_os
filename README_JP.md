@@ -27,6 +27,43 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 外部レビュー担当者向けの入口は `docs/REVIEWER_ENTRYPOINT.md` を参照してください。
 
+## AML/KYC レビュアー向けウォークスルー Quickstart
+
+VERITAS には、決定論的に確認できる AML/KYC reviewer walkthrough が実装されています。外部レビュアー・企業担当者・投資家は 10 分以内で価値確認できます。
+
+開く URL:
+
+`/?demo_scenario=aml_kyc_reviewer_walkthrough`
+
+確認ポイント:
+
+- Authority Evidence が `missing` であること
+- Bind result が `block` であること
+- Safe audit link が利用可能であること
+- Evidence bundle summary が表示されること
+- Source-state が live ではなく fixture/demo のままであること
+
+このウォークスルーが示すこと:
+
+- AI agent が規制対象の AML/KYC action を試行する
+- 必要な Authority Evidence が不足している
+- VERITAS が Bind Boundary で commit 前に block する
+- 決定論的な audit trace でレビュー可能性が維持される
+
+境界条件（重要）:
+
+- fixture/demo 限定
+- 法的助言ではない
+- 規制承認ではない
+- 第三者認証ではない
+- 実銀行システム・実制裁 API・実顧客データには接続していない
+
+関連ドキュメント:
+
+- [Full reviewer handoff pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+- [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+- [UI walkthrough notes](docs/ui/README_UI.md)
+
 ## Governance Review Workflow（ガバナンスレビュー導線）
 
 VERITAS OS は、ガバナンス証跡を記録するだけではありません。Mission Control から Audit へ、証跡を辿って確認できるレビュー導線を提供します。

@@ -28,6 +28,43 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 
 For external reviewers, start with `docs/REVIEWER_ENTRYPOINT.md`.
 
+## AML/KYC Reviewer Walkthrough Quickstart
+
+VERITAS now includes a deterministic AML/KYC reviewer walkthrough for external reviewers, enterprise stakeholders, and investors who need to verify value in under 10 minutes.
+
+Open:
+
+`/?demo_scenario=aml_kyc_reviewer_walkthrough`
+
+What to verify:
+
+1. Authority Evidence: `missing`
+2. Bind result: `block`
+3. Safe audit link is available
+4. Evidence bundle summary is visible
+5. Source-state remains fixture/demo, not live
+
+What this demonstrates:
+
+- AI agent attempts a regulated AML/KYC action
+- Required Authority Evidence is missing
+- VERITAS blocks before commit at the Bind Boundary
+- The path remains reviewable through deterministic audit trace
+
+Boundary (important):
+
+- Fixture/demo only
+- Not legal advice
+- Not regulatory approval
+- Not third-party certification
+- Not connected to real bank systems, sanctions APIs, or customer data
+
+Related reviewer docs:
+
+- [Full reviewer handoff pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+- [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+- [UI walkthrough notes](docs/ui/README_UI.md)
+
 ## Governance Review Workflow
 
 VERITAS OS does not only record governance artifacts. It connects them into a Mission Control → Audit review workflow:
