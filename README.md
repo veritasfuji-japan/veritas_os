@@ -250,6 +250,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **External Audit / Evidence Bundle Readiness**: [`docs/en/validation/external-audit-readiness.md`](docs/en/validation/external-audit-readiness.md)
 - **External Technical Proof Pack (review/pilot/DD/audit)**: [`docs/en/validation/technical-proof-pack.md`](docs/en/validation/technical-proof-pack.md)
 - **Third-Party Review Readiness (compact index)**: [`docs/en/validation/third-party-review-readiness.md`](docs/en/validation/third-party-review-readiness.md)
+- **Current Implementation Matrix (external reviewer snapshot)**: [`docs/en/validation/current-implementation-matrix.md`](docs/en/validation/current-implementation-matrix.md)
 - **AML/KYC Short Positioning (customer / operator / investor)**: [`docs/en/positioning/aml-kyc-beachhead-short-positioning.md`](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 - **Official Website**: https://veritas-website-navy.vercel.app/
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os

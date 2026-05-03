@@ -47,6 +47,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Regulated Action Governance External Review Handoff Pack](validation/external-review-handoff-regulated-action-governance.md)
 - [Regulated Action Governance External Reviewer Feedback Template](validation/external-reviewer-feedback-template-regulated-action-governance.md)
 - [Third-Party Review Readiness (compact index)](validation/third-party-review-readiness.md)
+- [Current Implementation Matrix (10-minute reviewer view)](validation/current-implementation-matrix.md)
 
 ### Governance & Compliance
 - [Decision Semantics Contract](architecture/decision-semantics.md)

@@ -22,6 +22,7 @@
 | External Review Handoff Pack (Regulated Action Governance) | [External review handoff pack (EN)](en/validation/external-review-handoff-regulated-action-governance.md) | [外部レビュー引き渡しパック 日本語要約 (JA)](ja/validation/external-review-handoff-regulated-action-governance-summary.md) |
 | External Reviewer Feedback Template (Regulated Action Governance) | [External reviewer feedback template (EN)](en/validation/external-reviewer-feedback-template-regulated-action-governance.md) | [外部レビューフィードバックテンプレート 日本語要約 (JA)](ja/validation/external-reviewer-feedback-template-regulated-action-governance-summary.md) |
 | Third-Party Review Readiness | [Third-party review readiness (EN)](en/validation/third-party-review-readiness.md) | [第三者レビュー準備性 (JA)](ja/validation/third-party-review-readiness.md) |
+| Current Implementation Matrix | [Current implementation matrix (EN)](en/validation/current-implementation-matrix.md) | — |
 | Backend Parity Coverage | [Backend parity coverage (EN)](en/validation/backend-parity-coverage.md) | [バックエンドパリティカバレッジ (JA)](ja/validation/backend-parity-coverage.md) |
 | Production Validation | [Production validation (EN)](en/validation/production-validation.md) | [本番検証 (JA)](ja/validation/production-validation.md) |
 | PostgreSQL Production Proof Map | [PostgreSQL production proof map (EN)](en/validation/postgresql-production-proof-map.md) | [PostgreSQL本番証跡マップ (JA)](ja/validation/postgresql-production-proof-map.md) |
