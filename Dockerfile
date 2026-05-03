@@ -23,7 +23,8 @@ FROM python:3.11.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/deps
+    PYTHONPATH=/app/deps \
+    PATH="/app/deps/bin:${PATH}"
 
 WORKDIR /app
 
@@ -52,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "from http.client import HTTPConnection; c = HTTPConnection('localhost', 8000, timeout=3); c.request('GET', '/health'); exit(0 if c.getresponse().status == 200 else 1)" || exit 1
 
 STOPSIGNAL SIGTERM
-CMD ["uvicorn", "veritas_os.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "veritas_os.api.server:app", "--host", "0.0.0.0", "--port", "8000"]

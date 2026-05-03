@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from time import monotonic
 from typing import Any, Callable, Iterator
 
+from psycopg.types.json import Jsonb
+
 from veritas_os.governance.repository import (
     GovernanceRepository,
     GovernanceWriteConflictError,
@@ -75,6 +77,8 @@ class PostgresGovernanceRepository(GovernanceRepository):
                         conn.rollback()
                         return default_factory()
                     payload = row[0]
+                    if isinstance(payload, Jsonb):
+                        payload = payload.obj
                     conn.rollback()
                     return payload if isinstance(payload, dict) else default_factory()
         except Exception:
@@ -129,10 +133,10 @@ class PostgresGovernanceRepository(GovernanceRepository):
                             event.changed_by,
                             self._parse_timestamp(event.changed_at),
                             "",
-                            {
+                            Jsonb({
                                 "previous_version": event.previous_version,
                                 "new_version": event.new_version,
-                            },
+                            }),
                         ),
                     )
                 conn.commit()
@@ -349,12 +353,12 @@ class PostgresGovernanceRepository(GovernanceRepository):
                         """,
                         (
                             str(updated.get("version", "")),
-                            updated,
+                            Jsonb(updated),
                             new_digest,
                             changed_at,
                             changed_by,
                             next_revision,
-                            {"expected_previous_digest": expected_digest},
+                            Jsonb({"expected_previous_digest": expected_digest}),
                         ),
                     )
                     new_policy_id = cur.fetchone()[0]
@@ -385,12 +389,12 @@ class PostgresGovernanceRepository(GovernanceRepository):
                             changed_by,
                             changed_at,
                             reason,
-                            {
+                            Jsonb({
                                 "previous_version": previous.get("version"),
                                 "new_version": updated.get("version"),
                                 "previous_revision": current_revision,
                                 "new_revision": next_revision,
-                            },
+                            }),
                         ),
                     )
                     event_id = cur.fetchone()[0]
@@ -409,7 +413,7 @@ class PostgresGovernanceRepository(GovernanceRepository):
                                 event_id,
                                 approval["reviewer"],
                                 approval["signature"],
-                                {},
+                                Jsonb({}),
                             ),
                         )
                 conn.commit()
