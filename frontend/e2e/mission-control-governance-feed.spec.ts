@@ -57,6 +57,39 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(timeline).toContainText("bind_outcome:");
   });
 
+
+
+  test("pre-boundary collapse demo renders 4-phase walkthrough without breaking default timeline", async ({ page }) => {
+    await page.goto("/?demo_scenario=pre_boundary_collapse");
+
+    await expect(
+      page.getByRole("heading", { name: /コマンドダッシュボード|Command Dashboard/i }),
+    ).toBeVisible();
+
+    await expect(page.getByText("Pre-Boundary Collapse Demo · 4 phase walkthrough")).toBeVisible();
+    await expect(page.getByText("formally valid, structurally collapsed")).toBeVisible();
+
+    const phasePanel = page.locator('section[aria-label="pre-boundary collapse demo walkthrough"]');
+    await expect(phasePanel).toBeVisible();
+
+    const phases = phasePanel.locator("ol > li");
+    await expect(phases).toHaveCount(4);
+
+    await expect(phases.nth(0)).toContainText("Phase 1 — Participation / open framing");
+    await expect(phases.nth(1)).toContainText("Phase 2 — Iterative shaping");
+    await expect(phases.nth(2)).toContainText("Phase 3 — Pre-boundary collapse");
+    await expect(phases.nth(3)).toContainText("Phase 4 — Bind");
+
+    await expect(phases.nth(2)).toContainText("participation_state: decision_shaping");
+    await expect(phases.nth(2)).toContainText(/preservation_state: (collapsed|degrading)/);
+    await expect(phases.nth(3)).toContainText("bind_outcome: FORMALLY_VALID_STRUCTURALLY_COLLAPSED");
+
+    await expect(phasePanel).toContainText("lineage evidence summary");
+
+    const timeline = page.locator('section[aria-label="governance layer timeline"]');
+    await expect(timeline).toBeVisible();
+    await expect(timeline).toContainText("bind_outcome:");
+  });
   test("endpoint unavailable path renders fallback safety snapshot without breaking page", async ({ page }) => {
     await page.setExtraHTTPHeaders({ [E2E_SCENARIO_HEADER]: "fallback" });
     await page.goto("/?e2e_governance_scenario=fallback");

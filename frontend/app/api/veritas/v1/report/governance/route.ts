@@ -111,11 +111,17 @@ async function resolveDemoScenarioPayload(request: Request): Promise<Record<stri
       return JSON.parse(raw) as Record<string, unknown>;
     }),
   );
+  const finalPhase = phases.at(-1);
+  const finalPhaseSnapshot = finalPhase ? mapPreBoundaryCollapsePhaseToSnapshot(finalPhase) : null;
 
   return {
     governance_layer_snapshot: {
       demo_scenario: PRE_BOUNDARY_COLLAPSE_SCENARIO,
       phase_snapshots: phases.map(mapPreBoundaryCollapsePhaseToSnapshot),
+      participation_state: finalPhaseSnapshot?.participation_state ?? "decision_shaping",
+      preservation_state: finalPhaseSnapshot?.preservation_state ?? "collapsed",
+      intervention_viability: finalPhaseSnapshot?.intervention_viability ?? "low",
+      bind_outcome: finalPhaseSnapshot?.bind_outcome ?? "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
     },
   };
 }
