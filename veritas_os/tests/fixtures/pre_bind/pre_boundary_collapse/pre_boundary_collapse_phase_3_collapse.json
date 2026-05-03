@@ -1,0 +1,31 @@
+{
+  "phase_id": "pre_boundary_collapse_phase_3_collapse",
+  "phase_label": "Phase 3 — Pre-boundary collapse",
+  "options": ["A", "B", "C", "D"],
+  "option_exposure": {
+    "A": "high",
+    "B": "high",
+    "C": "minimal",
+    "D": "minimal"
+  },
+  "reinforcement_asymmetry": "high_ab_convergent",
+  "effective_optionality": "near_zero",
+  "participation_signal": {
+    "interpretation_space_narrowing": "closed",
+    "counterfactual_availability": "none",
+    "intervention_headroom": "low",
+    "structural_openness": "closed"
+  },
+  "expected_participation_state": "decision_shaping",
+  "expected_preservation_state": "collapsed",
+  "intervention_viability": "low",
+  "expected_bind_outcome": "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
+  "concise_rationale": "A/B converge into one trajectory and C/D lose practical viability, collapsing optionality before bind.",
+  "lineage_evidence": {
+    "framing_iteration_log": "phase_3_framing_log_ref",
+    "option_exposure_trace": "phase_3_exposure_trace_ref",
+    "counterfactual_probes": "phase_3_counterfactual_probe_ref",
+    "intervention_record": "phase_3_intervention_record_ref",
+    "bind_context_snapshot": "phase_3_bind_context_snapshot_ref"
+  }
+}

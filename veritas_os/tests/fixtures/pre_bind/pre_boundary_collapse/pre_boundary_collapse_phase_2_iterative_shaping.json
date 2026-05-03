@@ -1,0 +1,31 @@
+{
+  "phase_id": "pre_boundary_collapse_phase_2_iterative_shaping",
+  "phase_label": "Phase 2 — Iterative shaping",
+  "options": ["A", "B", "C", "D"],
+  "option_exposure": {
+    "A": "high",
+    "B": "high",
+    "C": "low",
+    "D": "low"
+  },
+  "reinforcement_asymmetry": "moderate_ab_over_cd",
+  "effective_optionality": "shrinking",
+  "participation_signal": {
+    "interpretation_space_narrowing": "narrowing",
+    "counterfactual_availability": "low",
+    "intervention_headroom": "medium",
+    "structural_openness": "fragile"
+  },
+  "expected_participation_state": "participatory",
+  "expected_preservation_state": "degrading",
+  "intervention_viability": "medium",
+  "expected_bind_outcome": "FORMALLY_VALID_WITH_SHAPING_RISK",
+  "concise_rationale": "A/B are repeatedly amplified while C/D remain formally available but under-exposed, reducing effective divergence.",
+  "lineage_evidence": {
+    "framing_iteration_log": "phase_2_framing_log_ref",
+    "option_exposure_trace": "phase_2_exposure_trace_ref",
+    "counterfactual_probes": "phase_2_counterfactual_probe_ref",
+    "intervention_record": "phase_2_intervention_record_ref",
+    "bind_context_snapshot": "phase_2_bind_context_snapshot_ref"
+  }
+}
