@@ -49,12 +49,12 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       page.getByRole("heading", { name: /コマンドダッシュボード|Command Dashboard/i }),
     ).toBeVisible();
 
-    const timeline = page.locator('section[aria-label="governance layer timeline"]');
-    await expect(timeline).toBeVisible();
-    await expect(timeline).toContainText("participation_state:");
-    await expect(timeline).toContainText("preservation_state:");
-    await expect(timeline).toContainText("intervention_viability:");
-    await expect(timeline).toContainText("bind_outcome:");
+    await expectGovernanceTimeline(page, {
+      participationState: "decision_shaping",
+      preservationState: "degrading",
+      interventionViability: "minimal",
+      bindOutcome: "ESCALATED",
+    });
   });
 
   test("endpoint unavailable path renders fallback safety snapshot without breaking page", async ({ page }) => {
@@ -78,6 +78,13 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       "/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
     );
     await expect(apiResponse).toBeOK();
+    const payload = await apiResponse.json();
+    expect(payload).toMatchObject({
+      governance_layer_snapshot: {
+        demo_scenario: "pre_boundary_collapse",
+      },
+    });
+    expect(payload.governance_layer_snapshot.phase_snapshots).toHaveLength(4);
 
     await page.goto("/?demo_scenario=pre_boundary_collapse");
 

@@ -65,10 +65,17 @@ describe("mapGovernanceFeedToIngressPayload", () => {
   it("returns null for unsupported payload shape", () => {
     expect(mapGovernanceFeedToIngressPayload({})).toBeNull();
   });
+
+
+
+
+
+
 });
 
 describe("loadMissionControlIngressPayload", () => {
   beforeEach(() => {
+    headersGetMock.mockReset();
     headersGetMock.mockReturnValue(null);
     vi.stubEnv("NODE_ENV", "production");
   });
@@ -116,7 +123,8 @@ describe("loadMissionControlIngressPayload", () => {
   });
 
   it("does not forward request header scenario when e2e scenarios are disabled", async () => {
-    headersGetMock.mockReturnValue("main");
+    headersGetMock.mockImplementation((name: string) =>
+      (name === "x-veritas-e2e-governance-scenario" ? "main" : null));
     vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
 
     await loadMissionControlIngressPayload();
@@ -151,6 +159,57 @@ describe("loadMissionControlIngressPayload", () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: { "x-veritas-demo-scenario": "pre_boundary_collapse" },
+      },
+    );
+  });
+
+
+
+
+
+  it("builds absolute endpoint from forwarded host/proto for server-side fetch", async () => {
+    headersGetMock.mockImplementation((name: string) => {
+      if (name === "x-forwarded-host") {
+        return "ci.veritas.example";
+      }
+      if (name === "x-forwarded-proto") {
+        return "https";
+      }
+      return null;
+    });
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+
+    await loadMissionControlIngressPayload(null, "pre_boundary_collapse");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://ci.veritas.example/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: { "x-veritas-demo-scenario": "pre_boundary_collapse" },
+      },
+    );
+  });
+
+  it("falls back to http for localhost host when proto header is absent", async () => {
+    headersGetMock.mockImplementation((name: string) => {
+      if (name === "host") {
+        return "localhost:3000";
+      }
+      return null;
+    });
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+
+    await loadMissionControlIngressPayload(null, "pre_boundary_collapse");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
       {
         method: "GET",
         cache: "no-store",

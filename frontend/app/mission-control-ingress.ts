@@ -54,6 +54,30 @@ async function resolveE2EScenarioHeader(): Promise<string | null> {
   }
 }
 
+
+
+async function resolveRequestOrigin(): Promise<string | null> {
+  try {
+    const requestHeaders = await headers();
+    const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+    if (!host) {
+      return null;
+    }
+
+    const proto =
+      requestHeaders.get("x-forwarded-proto") ??
+      (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+
+    return `${proto}://${host}`;
+  } catch {
+    return null;
+  }
+}
+
+function buildGovernanceFeedEndpoint(pathWithQuery: string, origin: string | null): string {
+  return origin ? `${origin}${pathWithQuery}` : pathWithQuery;
+}
+
 export async function loadMissionControlIngressPayload(
   scenarioOverride?: string | null,
   demoScenarioOverride?: string | null,
@@ -70,9 +94,12 @@ export async function loadMissionControlIngressPayload(
     if (demoScenario) {
       endpointParams.set(DEMO_SCENARIO_QUERY, demoScenario);
     }
-    const endpoint = endpointParams.size > 0
+    const endpointPath = endpointParams.size > 0
       ? `${GOVERNANCE_REPORT_ENDPOINT}?${endpointParams.toString()}`
       : GOVERNANCE_REPORT_ENDPOINT;
+    const origin = await resolveRequestOrigin();
+    const endpoint = buildGovernanceFeedEndpoint(endpointPath, origin);
+
     const response = await fetch(endpoint, {
       method: "GET",
       cache: "no-store",
