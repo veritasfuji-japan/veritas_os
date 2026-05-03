@@ -220,4 +220,56 @@ describe("/api/veritas/v1/report/governance", () => {
     await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
   });
 
+  it("returns pre-boundary collapse demo scenario payload from query seam", async () => {
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse"));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { governance_layer_snapshot: { phase_snapshots: Array<Record<string, unknown>> } };
+    expect(payload.governance_layer_snapshot.phase_snapshots).toHaveLength(4);
+    expect(payload.governance_layer_snapshot.phase_snapshots[0]).toMatchObject({
+      phase_id: "pre_boundary_collapse_phase_1_open",
+      phase_label: "Phase 1 — Participation / open framing",
+      participation_state: "informative",
+      preservation_state: "open",
+      intervention_viability: "high",
+      bind_outcome: "FORMALLY_VALID_UPSTREAM_OPEN",
+      concise_rationale: expect.any(String),
+      lineage_evidence: expect.any(Object),
+      effective_optionality: "full",
+      option_exposure_summary: "A:high, B:high, C:high, D:high",
+      reinforcement_asymmetry_summary: "none",
+    });
+  });
+
+  it("returns pre-boundary collapse demo scenario payload from header seam", async () => {
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance", {
+      headers: { "x-veritas-demo-scenario": "pre_boundary_collapse" },
+    }));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { governance_layer_snapshot: { phase_snapshots: Array<Record<string, unknown>> } };
+    expect(payload.governance_layer_snapshot.phase_snapshots.map((phase) => phase.phase_id)).toEqual([
+      "pre_boundary_collapse_phase_1_open",
+      "pre_boundary_collapse_phase_2_iterative_shaping",
+      "pre_boundary_collapse_phase_3_collapse",
+      "pre_boundary_collapse_phase_4_bind",
+    ]);
+  });
+
+  it("falls back to upstream path when demo scenario is invalid", async () => {
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_API_KEY", "test-key");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ governance_layer_snapshot: { bind_outcome: "UNKNOWN" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?demo_scenario=unknown"));
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
 });

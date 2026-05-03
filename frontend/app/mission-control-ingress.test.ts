@@ -46,6 +46,22 @@ describe("mapGovernanceFeedToIngressPayload", () => {
     });
   });
 
+
+
+  it("maps governance demo phase snapshots without breaking main vocabulary", () => {
+    const result = mapGovernanceFeedToIngressPayload({
+      governance_layer_snapshot: {
+        phase_snapshots: [{ phase_id: "pre_boundary_collapse_phase_1_open" }],
+      },
+    });
+
+    expect(result).toEqual({
+      governance_layer_snapshot: {
+        phase_snapshots: [{ phase_id: "pre_boundary_collapse_phase_1_open" }],
+      },
+    });
+  });
+
   it("returns null for unsupported payload shape", () => {
     expect(mapGovernanceFeedToIngressPayload({})).toBeNull();
   });
@@ -127,4 +143,20 @@ describe("loadMissionControlIngressPayload", () => {
       },
     );
   });
+
+  it("forwards demo scenario override independently from e2e scenarios", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+
+    await loadMissionControlIngressPayload(null, "pre_boundary_collapse");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: { "x-veritas-demo-scenario": "pre_boundary_collapse" },
+      },
+    );
+  });
+
 });

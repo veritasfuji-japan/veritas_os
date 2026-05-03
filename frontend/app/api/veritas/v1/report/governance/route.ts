@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import { NextResponse } from "next/server";
 
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
@@ -6,6 +9,16 @@ import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
 const GOVERNANCE_LIVE_SNAPSHOT_PATH = "/v1/governance/live-snapshot";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
 const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
+const DEMO_SCENARIO_HEADER = "x-veritas-demo-scenario";
+const DEMO_SCENARIO_QUERY = "demo_scenario";
+const PRE_BOUNDARY_COLLAPSE_SCENARIO = "pre_boundary_collapse";
+
+const PRE_BOUNDARY_COLLAPSE_PHASE_FIXTURE_FILES = [
+  "pre_boundary_collapse_phase_1_open.json",
+  "pre_boundary_collapse_phase_2_iterative_shaping.json",
+  "pre_boundary_collapse_phase_3_collapse.json",
+  "pre_boundary_collapse_phase_4_bind.json",
+] as const;
 
 function resolveE2EScenarioPayload(request: Request): Record<string, unknown> | null {
   const scenarioFromQuery = new URL(request.url).searchParams.get(E2E_SCENARIO_QUERY)?.trim();
@@ -58,17 +71,66 @@ function normalizeGovernanceReportPayload(payload: unknown): Record<string, unkn
   return null;
 }
 
-/**
- * Mission Control backend-fed governance feed endpoint.
- *
- * Main path fetches backend governance live snapshot and keeps payload vocabulary stable.
- */
+function resolveDemoScenario(request: Request): string | null {
+  const requestUrl = new URL(request.url);
+  const scenarioFromQuery = requestUrl.searchParams.get(DEMO_SCENARIO_QUERY)?.trim();
+  return scenarioFromQuery || request.headers.get(DEMO_SCENARIO_HEADER)?.trim() || null;
+}
+
+function resolveFixturePath(filename: string): string {
+  return path.resolve(process.cwd(), "..", "veritas_os", "tests", "fixtures", "pre_bind", "pre_boundary_collapse", filename);
+}
+
+function mapPreBoundaryCollapsePhaseToSnapshot(phase: Record<string, unknown>): Record<string, unknown> {
+  const optionExposure = phase.option_exposure as Record<string, string>;
+  return {
+    phase_id: phase.phase_id,
+    phase_label: phase.phase_label,
+    participation_state: phase.expected_participation_state,
+    preservation_state: phase.expected_preservation_state,
+    intervention_viability: phase.intervention_viability,
+    bind_outcome: phase.expected_bind_outcome,
+    concise_rationale: phase.concise_rationale,
+    lineage_evidence: phase.lineage_evidence,
+    effective_optionality: phase.effective_optionality,
+    option_exposure_summary: Object.entries(optionExposure)
+      .map(([option, exposure]) => `${option}:${exposure}`)
+      .join(", "),
+    reinforcement_asymmetry_summary: phase.reinforcement_asymmetry,
+  };
+}
+
+async function resolveDemoScenarioPayload(request: Request): Promise<Record<string, unknown> | null> {
+  if (resolveDemoScenario(request) !== PRE_BOUNDARY_COLLAPSE_SCENARIO) {
+    return null;
+  }
+
+  const phases = await Promise.all(
+    PRE_BOUNDARY_COLLAPSE_PHASE_FIXTURE_FILES.map(async (filename) => {
+      const raw = await readFile(resolveFixturePath(filename), "utf-8");
+      return JSON.parse(raw) as Record<string, unknown>;
+    }),
+  );
+
+  return {
+    governance_layer_snapshot: {
+      demo_scenario: PRE_BOUNDARY_COLLAPSE_SCENARIO,
+      phase_snapshots: phases.map(mapPreBoundaryCollapsePhaseToSnapshot),
+    },
+  };
+}
+
 export async function GET(request: Request): Promise<Response> {
   if (areE2EScenariosEnabled()) {
     const e2ePayload = resolveE2EScenarioPayload(request);
     if (e2ePayload) {
       return NextResponse.json(e2ePayload, { status: 200 });
     }
+  }
+
+  const demoScenarioPayload = await resolveDemoScenarioPayload(request);
+  if (demoScenarioPayload) {
+    return NextResponse.json(demoScenarioPayload, { status: 200 });
   }
 
   const apiBaseUrl = resolveApiBaseUrl();

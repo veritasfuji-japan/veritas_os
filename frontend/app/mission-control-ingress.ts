@@ -7,6 +7,8 @@ import { areE2EScenariosEnabled } from "./e2e-scenarios";
 const GOVERNANCE_REPORT_ENDPOINT = "/api/veritas/v1/report/governance";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
 const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
+const DEMO_SCENARIO_HEADER = "x-veritas-demo-scenario";
+const DEMO_SCENARIO_QUERY = "demo_scenario";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -54,18 +56,32 @@ async function resolveE2EScenarioHeader(): Promise<string | null> {
 
 export async function loadMissionControlIngressPayload(
   scenarioOverride?: string | null,
+  demoScenarioOverride?: string | null,
 ): Promise<MissionGovernanceIngressPayload | null> {
   try {
     const scenario = areE2EScenariosEnabled()
       ? scenarioOverride?.trim() || (await resolveE2EScenarioHeader())
       : null;
-    const endpoint = scenario
-      ? `${GOVERNANCE_REPORT_ENDPOINT}?${E2E_SCENARIO_QUERY}=${encodeURIComponent(scenario)}`
+    const demoScenario = demoScenarioOverride?.trim() || null;
+    const endpointParams = new URLSearchParams();
+    if (scenario) {
+      endpointParams.set(E2E_SCENARIO_QUERY, scenario);
+    }
+    if (demoScenario) {
+      endpointParams.set(DEMO_SCENARIO_QUERY, demoScenario);
+    }
+    const endpoint = endpointParams.size > 0
+      ? `${GOVERNANCE_REPORT_ENDPOINT}?${endpointParams.toString()}`
       : GOVERNANCE_REPORT_ENDPOINT;
     const response = await fetch(endpoint, {
       method: "GET",
       cache: "no-store",
-      headers: scenario ? { [E2E_SCENARIO_HEADER]: scenario } : undefined,
+      headers: scenario || demoScenario
+        ? {
+          ...(scenario ? { [E2E_SCENARIO_HEADER]: scenario } : {}),
+          ...(demoScenario ? { [DEMO_SCENARIO_HEADER]: demoScenario } : {}),
+        }
+        : undefined,
     });
 
     if (!response.ok) {
