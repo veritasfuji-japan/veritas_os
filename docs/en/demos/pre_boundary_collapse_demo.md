@@ -95,3 +95,30 @@ snapshot payload.
 
 This preserves vocabulary and backend contracts while making the paradox
 visible at first glance: **formally valid, structurally collapsed**.
+
+
+## Run and verification entrypoint
+
+1. Open Mission Control demo mode via query seam:
+   - `/?demo_scenario=pre_boundary_collapse`
+2. Confirm the dedicated panel appears:
+   - `Pre-Boundary Collapse Demo · 4 phase walkthrough`
+3. Confirm expected progression:
+   - Phase 1 → 2 → 3 → 4 labels
+   - Phase 3 shows `participation_state=decision_shaping` with preservation collapse/degrading signal
+   - Phase 4 keeps bind admissibility-visible while upstream collapse gap remains explicit
+4. Confirm explanatory sentence remains visible:
+   - `formally valid, structurally collapsed`
+
+## Reviewer framing (external)
+
+- This demo is **not** production certification evidence by itself.
+- This is a **controlled representative demo** for reviewer orientation.
+- It concretely demonstrates VERITAS pre-bind governance stack behavior prior to bind.
+- It does **not** replace bind-time governance; it complements bind-time checks by exposing upstream structural collapse.
+
+## Known limitations
+
+- Scenario is deterministic and fixture-backed; it is representative, not exhaustive.
+- It does not claim legal/regulatory approval or third-party certification.
+- It should be read together with bind-time evidence and operational controls for production-readiness assessment.

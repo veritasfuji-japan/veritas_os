@@ -234,6 +234,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **Legacy Path Cleanup**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
 - **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **Documentation Hub (EN)**: [`docs/en/README.md`](docs/en/README.md)
+- **Pre-Boundary Collapse Demo**: [`docs/en/demos/pre_boundary_collapse_demo.md`](docs/en/demos/pre_boundary_collapse_demo.md)
 - **Documentation Hub (JA)**: [`docs/ja/README.md`](docs/ja/README.md)
 - **Public Positioning Guide (EN)**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
 - **Public Positioning Guide (JA)**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
