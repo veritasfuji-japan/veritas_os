@@ -72,4 +72,39 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       bindOutcome: "BLOCKED",
     });
   });
+
+  test("pre-boundary collapse demo path renders 4-phase walkthrough and keeps base timeline", async ({ page }) => {
+    const apiResponse = await page.request.get(
+      "/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
+    );
+    await expect(apiResponse).toBeOK();
+
+    await page.goto("/?demo_scenario=pre_boundary_collapse");
+
+    await expect(
+      page.getByRole("heading", { name: /コマンドダッシュボード|Command Dashboard/i }),
+    ).toBeVisible();
+
+    const walkthrough = page.locator(
+      'section[aria-label="pre-boundary collapse demo walkthrough"]',
+    );
+    await expect(walkthrough).toBeVisible();
+    await expect(walkthrough).toContainText("Pre-Boundary Collapse Demo · 4 phase walkthrough");
+    await expect(walkthrough).toContainText("formally valid, structurally collapsed");
+    await expect(walkthrough).toContainText("Phase 1 — Participation / open framing");
+    await expect(walkthrough).toContainText("Phase 2 — Iterative shaping");
+    await expect(walkthrough).toContainText("Phase 3 — Pre-boundary collapse");
+    await expect(walkthrough).toContainText("Phase 4 — Bind");
+    await expect(walkthrough).toContainText("participation_state: decision_shaping");
+    await expect(walkthrough).toContainText(/preservation_state: (collapsed|degrading)/);
+    await expect(walkthrough).toContainText(
+      "bind_outcome: FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
+    );
+    await expect(walkthrough).toContainText("lineage evidence summary");
+
+    const timeline = page.locator('section[aria-label="governance layer timeline"]');
+    await expect(timeline).toBeVisible();
+    await expect(timeline).toContainText("bind_outcome:");
+  });
+
 });

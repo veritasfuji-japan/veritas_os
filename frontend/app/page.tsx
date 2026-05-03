@@ -13,10 +13,20 @@ export default async function CommandDashboardPage({
 }: CommandDashboardPageProps = {}): Promise<JSX.Element> {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const scenarioParam = resolvedSearchParams?.e2e_governance_scenario;
+  const demoScenarioParam = resolvedSearchParams?.demo_scenario;
+
   const scenarioOverride = areE2EScenariosEnabled()
     ? (Array.isArray(scenarioParam) ? scenarioParam[0] : scenarioParam)
     : null;
-  const ingressPayload = await loadMissionControlIngressPayload(scenarioOverride);
+
+  const demoScenarioOverride = Array.isArray(demoScenarioParam)
+    ? demoScenarioParam[0]
+    : demoScenarioParam;
+
+  const ingressPayload = await loadMissionControlIngressPayload(
+    scenarioOverride,
+    demoScenarioOverride,
+  );
 
   return (
     <div className="space-y-6">
