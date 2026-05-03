@@ -206,6 +206,7 @@ Authority Evidence と Audit Log の違いは明確です。
 - **データベースマイグレーション**: [`docs/ja/operations/database-migrations.md`](docs/ja/operations/database-migrations.md)
 - **バックエンドパリティカバレッジ**: [`docs/ja/validation/backend-parity-coverage.md`](docs/ja/validation/backend-parity-coverage.md)
 - **ライブPostgreSQL検証エビデンス**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
+- [Release Gate Recovery Case Study](docs/en/validation/release-gate-recovery-case-study.md) — Release Gate が実際に失敗したリリースを止め、PostgreSQL governance backend、Docker runtime、file/PostgreSQL test isolation の問題を修正後に passing へ戻した実例。
 - **レガシーパスクリーンアップ**: [`docs/ja/operations/legacy-path-cleanup.md`](docs/ja/operations/legacy-path-cleanup.md)
 - **レビュー文書マップ**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **ドキュメント入口（英語）**: [`docs/en/README.md`](docs/en/README.md)
