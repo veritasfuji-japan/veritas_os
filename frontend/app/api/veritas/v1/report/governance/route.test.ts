@@ -271,6 +271,36 @@ describe("/api/veritas/v1/report/governance", () => {
     ]);
   });
 
+
+  it("returns AML/KYC reviewer walkthrough payload from query seam", async () => {
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?demo_scenario=aml_kyc_reviewer_walkthrough"));
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { governance_layer_snapshot: Record<string, unknown> };
+    expect(payload.governance_layer_snapshot).toMatchObject({
+      demo_scenario: "aml_kyc_reviewer_walkthrough",
+      source_state: "fixture",
+      scenario_id: "scenario_e_missing_authority",
+      authority_evidence_status: "missing",
+      bind_outcome: "block",
+      bind_reason_code: "AUTHORITY_MISSING",
+    });
+  });
+
+  it("returns AML/KYC reviewer walkthrough payload from header seam", async () => {
+    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance", {
+      headers: { "x-veritas-demo-scenario": "aml_kyc_reviewer_walkthrough" },
+    }));
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { governance_layer_snapshot: { audit_trace: Array<{ event: string }> } };
+    expect(payload.governance_layer_snapshot.audit_trace.map((item) => item.event)).toEqual([
+      "decision_created",
+      "execution_intent_requested",
+      "authority_evidence_validation_failed",
+      "bind_boundary_blocked",
+      "bind_receipt_recorded",
+    ]);
+  });
+
   it("falls back to upstream path when demo scenario is invalid", async () => {
     vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
     vi.stubEnv("VERITAS_API_KEY", "test-key");

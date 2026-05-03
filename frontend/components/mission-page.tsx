@@ -253,6 +253,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
     ? governanceSnapshot.phase_snapshots
     : [];
   const hasPreBoundaryCollapseDemo = governanceSnapshot?.demo_scenario === "pre_boundary_collapse" && phaseSnapshots.length > 0;
+  const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
   const hasGovernanceObservation = governanceObservation != null;
@@ -345,6 +346,29 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
           ) : null}
         </section>
       ) : null}
+
+      {hasAmlKycReviewerWalkthrough ? (
+        <section aria-label="aml kyc reviewer walkthrough" className="rounded-xl border border-warning/40 bg-warning/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-warning">AML/KYC Reviewer Walkthrough <SourceStateBadge state={resolveGovernanceSourceState("none", governanceSnapshot?.demo_scenario)} reason="demo_scenario" compact className="ml-2" /></p>
+          <p className="mt-1 text-xs font-semibold">Authority Evidence: <span className="text-warning">missing</span> · Bind result: <span className="text-danger">block</span></p>
+          <ul className="mt-2 space-y-1 text-xs">
+            <li>scenario_id: <span className="font-mono">{stringifyValue(governanceSnapshot?.scenario_id)}</span></li>
+            <li>scenario_name: <span className="font-mono">{stringifyValue(governanceSnapshot?.scenario_name)}</span></li>
+            <li>action_class: <span className="font-mono">{stringifyValue(governanceSnapshot?.action_class)}</span></li>
+            <li>requested_action / requested_scope: <span className="font-mono">{stringifyValue(governanceSnapshot?.requested_action)} / {stringifyValue(governanceSnapshot?.requested_scope)}</span></li>
+            <li>customer_risk_context: <span className="font-mono">{stringifyValue(governanceSnapshot?.customer_risk_context)}</span></li>
+            <li>bind_reason_code: <span className="font-mono">{stringifyValue(governanceSnapshot?.bind_reason_code)}</span></li>
+            <li>bind_failure_reason: <span className="font-mono">{stringifyValue(governanceSnapshot?.bind_failure_reason)}</span></li>
+            <li>decision_id: {decisionAuditHref ? <Link className="underline font-mono" href={decisionAuditHref}>{governanceSnapshot?.decision_id}</Link> : <span className="font-mono">unavailable</span>}</li>
+            <li>execution_intent_id: {executionIntentAuditHref ? <Link className="underline font-mono" href={executionIntentAuditHref}>{governanceSnapshot?.execution_intent_id}</Link> : <span className="font-mono">unavailable</span>}</li>
+            <li>bind_receipt_id: {bindReceiptAuditHref ? <Link className="underline font-mono" href={bindReceiptAuditHref}>{governanceSnapshot?.bind_receipt_id}</Link> : <span className="font-mono">unavailable</span>}</li>
+            <li>audit path: {actionDrilldownHref ? <Link className="underline" href={actionDrilldownHref}>open audit path</Link> : <span className="font-mono">unavailable</span>}</li>
+            <li>evidence_bundle_summary: <span className="font-mono">{stringifyValue(governanceSnapshot?.evidence_bundle_summary)}</span></li>
+            <li>reviewer_expected_steps: <span className="font-mono">{stringifyValue(governanceSnapshot?.reviewer_expected_steps)}</span></li>
+          </ul>
+        </section>
+      ) : null}
+
       {hasPreBoundaryCollapseDemo ? (
         <section aria-label="pre-boundary collapse demo walkthrough" className="rounded-xl border border-warning/40 bg-warning/5 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-warning">Pre-Boundary Collapse Demo · 4 phase walkthrough</p>

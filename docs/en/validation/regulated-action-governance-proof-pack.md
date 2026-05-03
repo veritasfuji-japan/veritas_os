@@ -107,3 +107,13 @@ Recommended checks for this proof pack:
 - It does not establish full enterprise deployment correctness by itself.
 - It does not provide legal interpretation or external certification evidence.
 - Additional domain contracts and effect-path coverage are roadmap items.
+
+
+## AML/KYC missing-authority reviewer walkthrough (fixture/demo)
+
+- Open Mission Control with `/?demo_scenario=aml_kyc_reviewer_walkthrough`.
+- Review panel fields: scenario id/name, requested scope, authority evidence status (`missing`), bind outcome (`block`), reason code, deterministic audit IDs, audit safe link, evidence bundle summary, and reviewer expected steps.
+- Expected behavior: missing authority evidence must fail-closed before commit and must not be represented as live production behavior.
+- Implemented fact: deterministic fixture payload + Mission Control panel + safe audit links + reviewer evidence summary.
+- Roadmap (not implemented here): real bank integration, real sanctions API, real customer data, third-party certification, regulatory approval.
+- Not legal advice, regulatory approval, third-party certification, or production customer validation.

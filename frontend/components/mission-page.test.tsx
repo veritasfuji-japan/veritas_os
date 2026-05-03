@@ -151,7 +151,7 @@ describe("MissionPage", () => {
     );
 
     expect(screen.getAllByText("trustlog_matching_decision").length).toBeGreaterThan(0);
-    expect(screen.getByText("AUTHORITY_MISSING")).toBeInTheDocument();
+    expect(screen.getAllByText("AUTHORITY_MISSING").length).toBeGreaterThan(0);
     expect(screen.getByText("Authority evidence missing")).toBeInTheDocument();
     expect(screen.getByText("Governance policy")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "/governance" })[0]).toHaveAttribute("href", "/governance");
@@ -290,6 +290,40 @@ describe("MissionPage", () => {
     expect(screen.queryByRole("link", { name: href })).not.toBeInTheDocument();
     expect(screen.getByText(href)).toBeInTheDocument();
     expect(screen.getByText(/unsafe or external link not rendered/)).toBeInTheDocument();
+  });
+
+
+  it("renders AML/KYC reviewer walkthrough panel with safe links and fail-closed labels", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+          governanceLayerSnapshot={{
+            demo_scenario: "aml_kyc_reviewer_walkthrough",
+            source_state: "fixture",
+            scenario_id: "scenario_e_missing_authority",
+            scenario_name: "scenario_e_missing_authority",
+            action_class: "aml_kyc_customer_risk_escalation",
+            requested_action: "create_internal_risk_escalation",
+            requested_scope: "create_internal_risk_escalation",
+            authority_evidence_status: "missing",
+            bind_outcome: "block",
+            bind_reason_code: "AUTHORITY_MISSING",
+            bind_failure_reason: "authority evidence missing",
+            decision_id: "fixture.decision.aml_kyc.scenario_e_missing_authority",
+            execution_intent_id: "fixture.execution_intent.aml_kyc.scenario_e_missing_authority",
+            bind_receipt_id: "fixture.bind_receipt.aml_kyc.scenario_e_missing_authority",
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("AML/KYC Reviewer Walkthrough")).toBeInTheDocument();
+    expect(screen.getByText(/Authority Evidence:/)).toBeInTheDocument();
+    expect(screen.getAllByText("AUTHORITY_MISSING").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "open audit path" }).length).toBeGreaterThan(0);
   });
 
   it.each(["/foo\\bar", "/foo\nbar", "/foo\tbar"])("does not render malformed relevant_ui_href as a link: %s", (href) => {
@@ -450,7 +484,7 @@ describe("MissionPage", () => {
 
     expect(screen.getByText("Governance artifacts")).toBeInTheDocument();
     expect(screen.getAllByText("trustlog_matching_decision").length).toBeGreaterThan(0);
-    expect(screen.getByText("AUTHORITY_MISSING")).toBeInTheDocument();
+    expect(screen.getAllByText("AUTHORITY_MISSING").length).toBeGreaterThan(0);
     expect(screen.getByText("Authority evidence missing")).toBeInTheDocument();
     expect(screen.getByText("Governance policy")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "/governance" })[0]).toHaveAttribute("href", "/governance");

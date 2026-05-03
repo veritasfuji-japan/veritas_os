@@ -182,3 +182,10 @@ docker compose up --build
 - 各 phase で `participation_state` / `preservation_state` / `intervention_viability` / `bind_outcome` / `concise_rationale` を表示します。
 - 追加で `effective optionality` / `option exposure summary` / `reinforcement asymmetry summary` / `lineage evidence summary` を表示し、`formally valid, structurally collapsed` の explanatory copy を固定表示します。
 - この UI は demo surface であり、normal Mission Control mode（live governance snapshot）を置き換えません。fallback behavior・shared vocabulary・backend contract は変更しません。
+
+
+## AML/KYC missing-authority reviewer walkthrough (fixture/demo)
+
+- Open: `/?demo_scenario=aml_kyc_reviewer_walkthrough`
+- Mission Control shows `AML/KYC Reviewer Walkthrough` panel with explicit `Authority Evidence: missing` and `Bind result: block`.
+- This path is deterministic fixture/demo evidence only; it is not live banking, sanctions API, customer data, legal advice, certification, or regulatory approval.
