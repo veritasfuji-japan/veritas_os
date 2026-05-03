@@ -153,3 +153,11 @@ docker compose up --build
 - `/audit?bind_receipt_id=...` は dedicated bind receipt lookup を実行し、timeline match または fallback detail で trace を表示します。
 - You can run the focused workflow checks with: `bash scripts/demo_mission_audit_workflow.sh`.
 - fake routes（例: `/decisions/...`, `/execution-intents/...`, `/trustlog/...`）および unsafe/external links は生成しません。
+
+## Pre-Boundary Collapse demo scenario feed seam
+
+- `GET /api/veritas/v1/report/governance` は demo/test seam として `demo_scenario=pre_boundary_collapse`（query）または `x-veritas-demo-scenario: pre_boundary_collapse`（header）を受け付けます。
+- この seam は production governance source の置き換えではなく、PR1 fixture を Mission Control main path へ接続するための demo payload 注入です。
+- payload は `governance_layer_snapshot.phase_snapshots` に 4 phase（phase 1〜4）を返し、`participation_state` / `preservation_state` / `intervention_viability` / `bind_outcome` など既存 vocabulary を維持します。
+- invalid な `demo_scenario` は upstream fetch path にフォールバックし、既存の endpoint unavailable / invalid payload fallback behavior を変更しません。
+- Mission Control UI の phase progression 表示強化は次 PR で実施し、この PR では feed/payload 接続のみを担当します。
