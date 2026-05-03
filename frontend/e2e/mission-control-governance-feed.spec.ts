@@ -79,7 +79,7 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
 
     await expect(phasePanel).toContainText("participation_state: decision_shaping");
     await expect(phasePanel).toContainText(/preservation_state: (collapsed|degrading)/);
-    await expect(phasePanel).toContainText("bind_outcome: COMMITTED");
+    await expect(phasePanel).toContainText("bind_outcome: FORMALLY_VALID_STRUCTURALLY_COLLAPSED");
 
     await expect(phasePanel).toContainText("lineage evidence summary");
 
