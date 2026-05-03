@@ -69,6 +69,35 @@ BindReceipt / BindSummary enrichment
 commit / block / escalate / refuse
 ```
 
+### 4.1) 10-minute reviewer path (Mission Control → Audit)
+
+Use this quick path to separate implemented facts from fixture/demo data in about 10 minutes:
+
+1. Open Mission Control.
+2. Check source-state labels on key cards/panels:
+   - `live`: runtime-linked data.
+   - `fixture`: deterministic sample/fixture-backed data.
+   - `demo`: walkthrough/illustrative display path.
+   - `unavailable`: data not present or connector unavailable.
+3. Open the AML/KYC regulated-action panel and confirm the drilldown path:
+   - AI decision
+   - execution intent
+   - bind-boundary result
+   - authority evidence state
+   - bind receipt
+   - audit view
+4. Follow safe internal links from Mission Control operator actions to Audit/BindReceipt details.
+5. Validate authority-evidence failure behavior:
+   - missing authority evidence must be shown as blocked/fail-closed;
+   - no fake link should be rendered when drilldown identifiers are missing.
+
+Boundary reminder:
+
+- Implemented fact: deterministic AML/KYC governed path, bind artifacts, and Mission Control/Audit linkage are repository-implemented behavior.
+- Roadmap area: broader production integrations, external certification claims, and legal/regulatory sign-off are outside this implementation boundary.
+
+This reviewer path is technical evidence guidance only, and is not third-party certification, legal advice, or regulatory approval.
+
 ## 5) Scenario matrix
 
 | Scenario | Requested action | Expected outcome | Review focus |

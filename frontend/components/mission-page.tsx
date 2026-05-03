@@ -7,6 +7,7 @@ import { GlobalHealthSummary } from "./global-health-summary";
 import { OpsPriorityCard } from "./ops-priority-card";
 import { useI18n } from "./i18n-provider";
 import { buildAuditArtifactHref, normalizeSafeInternalHref } from "../lib/governance-link-utils";
+import { resolveGovernanceSourceState, resolveSourceState, type SourceState } from "../lib/source-state-utils";
 import {
   type CriticalRailMetric,
   type DecisionEvidenceRouteModel,
@@ -28,6 +29,10 @@ interface MissionPageProps {
 }
 
 const AUDIT_ROUTE_AVAILABLE = true;
+
+function SourceStateBadge({ state }: { state: SourceState }): JSX.Element {
+  return <span className="ml-2 rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">{state}</span>;
+}
 
 const CRITICAL_RAIL_ITEMS: CriticalRailMetric[] = [
   {
@@ -248,6 +253,8 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
 
   const governanceObservation = governanceSnapshot?.governance_observation;
   const hasGovernanceObservation = governanceObservation != null;
+  const governanceState = resolveGovernanceSourceState(governanceSnapshot?.pre_bind_source, governanceSnapshot?.demo_scenario);
+  const actionDrilldownHref = bindReceiptAuditHref ?? decisionAuditHref ?? executionIntentAuditHref;
   const renderObservationValue = (value: unknown): string => {
     if (value === null || value === undefined) {
       return "not available";
@@ -287,7 +294,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
 
       {hasPreBindGovernance ? (
         <section aria-label="governance layer timeline" className="rounded-xl border border-info/40 bg-info/5 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-info">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.heading}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-info">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.heading}<SourceStateBadge state={governanceState} /></p>
           <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs">
             <li>
               <span className="font-semibold">{PRE_BIND_GOVERNANCE_VOCABULARY_LABELS.participation_state}:</span>{" "}
@@ -343,7 +350,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
       ) : null}
 
       <section aria-label="governance artifact details" className="rounded-xl border border-border/70 bg-background/70 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Governance artifacts</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Governance artifacts<SourceStateBadge state={governanceState} /></p>
         <div className="mt-2 grid gap-3 md:grid-cols-2">
           <div className="rounded-md border border-border/60 bg-muted/10 p-3 text-xs">
             <p className="font-semibold">Pre-bind source</p>
@@ -481,12 +488,19 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
               View pre-bind source: <span className="font-mono">{governanceSnapshot?.pre_bind_source ?? "unknown"}</span>{" "}
               <span className="text-muted-foreground">(route unavailable)</span>
             </li>
+            <li>
+              AML/KYC evidence drilldown: {actionDrilldownHref ? <Link className="underline" href={actionDrilldownHref}>open audit path</Link> : <span className="font-mono">unavailable</span>}
+            </li>
+            {governanceSnapshot?.bind_reason_code === "AUTHORITY_MISSING" ? (
+              <li>Authority evidence status: <span className="text-warning">missing (bind blocked)</span></li>
+            ) : null}
           </ul>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="trust and governance highlights">
         <Card title="Trust Chain Integrity" titleSize="sm" variant="elevated" accent="danger" className="border-danger/40">
+          <SourceStateBadge state={resolveSourceState(TRUST_CHAIN_INTEGRITY, { fixture: true })} />
           <div className="space-y-1 text-xs">
             <p>Verification: <span className="font-semibold text-danger">{TRUST_CHAIN_INTEGRITY.verificationStatus}</span></p>
             <p>Continuity ratio: {(TRUST_CHAIN_INTEGRITY.continuityRatio * 100).toFixed(1)}%</p>
@@ -497,6 +511,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
         </Card>
 
         <Card title="Governance approval risk" titleSize="sm" variant="elevated" accent="warning" className="border-warning/40">
+          <SourceStateBadge state={resolveSourceState(GOVERNANCE_APPROVAL, { fixture: true })} />
           <div className="space-y-1 text-xs">
             <p>Pending policy: <span className="font-semibold">{GOVERNANCE_APPROVAL.pendingVersion}</span></p>
             <p>Status: <span className="font-semibold text-warning">{GOVERNANCE_APPROVAL.status}</span></p>
@@ -523,6 +538,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="replay and evidence routing">
         <Card title="Replay diff readability" titleSize="sm" variant="glass" className="border-border/70" accent="danger">
+          <SourceStateBadge state={resolveSourceState(REPLAY_DIFF_INSIGHT, { fixture: true })} />
           <div className="space-y-1 text-xs">
             <p>Status: <span className="font-semibold text-danger">{REPLAY_DIFF_INSIGHT.status}</span></p>
             <p>Changed fields: {REPLAY_DIFF_INSIGHT.changedFields.join(", ")}</p>
@@ -532,6 +548,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
         </Card>
 
         <Card title="Risk → Decision → Evidence → Report" titleSize="sm" variant="glass" className="border-border/70" accent="info">
+          <SourceStateBadge state={resolveSourceState(DECISION_EVIDENCE_ROUTE, { demo: true })} />
           <ol className="list-decimal space-y-1 pl-4 text-xs">
             <li><span className="font-semibold">Risk:</span> {DECISION_EVIDENCE_ROUTE.riskSignal}</li>
             <li><span className="font-semibold">Decision:</span> {DECISION_EVIDENCE_ROUTE.decisionTarget}</li>
@@ -541,6 +558,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
         </Card>
 
         <Card title="Policy diff / impact preview" titleSize="sm" variant="glass" className="border-border/70" accent="warning">
+          <SourceStateBadge state={resolveSourceState(POLICY_DIFF_IMPACT_PREVIEW, { demo: true })} />
           <div className="space-y-1 text-xs">
             <p>Status: <span className="font-semibold text-warning">{POLICY_DIFF_IMPACT_PREVIEW.status}</span></p>
             <p>{POLICY_DIFF_IMPACT_PREVIEW.summary}</p>
