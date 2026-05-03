@@ -22,6 +22,7 @@ describe("MissionPage", () => {
     expect(screen.getByText("Critical Rail")).toBeInTheDocument();
     expect(screen.getByText("FUJI reject")).toBeInTheDocument();
     expect(screen.getByText("Open incidents: 4")).toBeInTheDocument();
+    expect(screen.getByText("Mission Control provenance: mixed")).toBeInTheDocument();
   });
 
   it("renders action-oriented priority cards", () => {
@@ -167,9 +168,21 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText(/AML\/KYC evidence drilldown:/)).toBeInTheDocument();
+    expect(screen.getByText(/AML\/KYC evidence drilldown/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "open audit path" })).not.toBeInTheDocument();
     expect(screen.getAllByText("unavailable").length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText("source state: unavailable (missing_payload)").length).toBeGreaterThan(0);
+  });
+
+  it("marks static and demo cards with source-state labels", () => {
+    render(
+      <I18nProvider>
+        <MissionPage title="Command Dashboard" subtitle="Mission overview" chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]} />
+      </I18nProvider>,
+    );
+
+    expect(screen.getAllByText("fixture").length).toBeGreaterThan(3);
+    expect(screen.getAllByText("demo").length).toBeGreaterThan(1);
   });
 
   it("renders pre-boundary collapse demo walkthrough with four phases", () => {

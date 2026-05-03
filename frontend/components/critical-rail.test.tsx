@@ -53,4 +53,9 @@ describe("CriticalRail", () => {
     render(<CriticalRail items={items} />);
     expect(screen.getByRole("region", { name: "critical rail" })).toBeInTheDocument();
   });
+
+  it("renders source badge when sourceState is provided", () => {
+    render(<CriticalRail items={items} sourceState="fixture" sourceStateReason="deterministic_fixture" />);
+    expect(screen.getByText("fixture")).toBeInTheDocument();
+  });
 });

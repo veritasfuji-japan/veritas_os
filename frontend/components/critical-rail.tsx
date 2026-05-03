@@ -1,7 +1,11 @@
 import { type CriticalRailMetric } from "./dashboard-types";
+import { SourceStateBadge } from "./source-state-badge";
+import { type SourceState } from "../lib/source-state-utils";
 
 interface CriticalRailProps {
   items: CriticalRailMetric[];
+  sourceState?: SourceState;
+  sourceStateReason?: string;
 }
 
 const SEVERITY_STYLE = {
@@ -10,10 +14,12 @@ const SEVERITY_STYLE = {
   critical: "text-danger border-danger/40",
 };
 
-export function CriticalRail({ items }: CriticalRailProps): JSX.Element {
+export function CriticalRail({ items, sourceState, sourceStateReason }: CriticalRailProps): JSX.Element {
   return (
     <section aria-label="critical rail" className="rounded-xl border border-danger/30 bg-danger/8 p-4">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-danger">Critical Rail</p>
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-danger">
+        Critical Rail {sourceState ? <SourceStateBadge state={sourceState} reason={sourceStateReason} compact className="ml-2" /> : null}
+      </p>
       <div className="grid gap-2 md:grid-cols-5">
         {items.map((item) => (
           <a key={item.key} href={item.href} className="rounded-lg border border-border/60 bg-background/70 p-3 text-xs">
