@@ -229,6 +229,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **Database Migrations**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
 - **Backend Parity Coverage**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
 - **PostgreSQL Production Proof Map (compact)**: [`docs/en/validation/postgresql-production-proof-map.md`](docs/en/validation/postgresql-production-proof-map.md)
+- [Release Gate Recovery Case Study](docs/en/validation/release-gate-recovery-case-study.md) — a real failure-to-green example showing how VERITAS OS blocks release promotion until governance backend, Docker runtime, and test isolation failures are fixed.
 - **Live PostgreSQL Validation Evidence**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
 - **Legacy Path Cleanup**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
 - **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
