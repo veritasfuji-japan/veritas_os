@@ -1,8 +1,12 @@
 import { Card } from "@veritas/design-system";
 import { type GlobalHealthSummaryModel } from "./dashboard-types";
+import { SourceStateBadge } from "./source-state-badge";
+import { type SourceState } from "../lib/source-state-utils";
 
 interface GlobalHealthSummaryProps {
   summary: GlobalHealthSummaryModel;
+  sourceState?: SourceState;
+  sourceStateReason?: string;
 }
 
 const BAND_STYLE = {
@@ -11,7 +15,7 @@ const BAND_STYLE = {
   critical: "text-danger",
 };
 
-export function GlobalHealthSummary({ summary }: GlobalHealthSummaryProps): JSX.Element {
+export function GlobalHealthSummary({ summary, sourceState, sourceStateReason }: GlobalHealthSummaryProps): JSX.Element {
   return (
     <Card
       title="Global Health Summary"
@@ -20,6 +24,7 @@ export function GlobalHealthSummary({ summary }: GlobalHealthSummaryProps): JSX.
       className="border-border/60"
       description="healthy / degraded / critical の3区分で司令塔の現状を要約"
     >
+      <div className="mb-2">{sourceState ? <SourceStateBadge state={sourceState} reason={sourceStateReason} compact /> : null}</div>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-2 text-xs">
           <p>

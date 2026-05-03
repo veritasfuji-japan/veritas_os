@@ -39,4 +39,13 @@ describe("OpsPriorityCard", () => {
     const link = screen.getByRole("link", { name: "確認する" });
     expect(link).toHaveAttribute("href", "/governance");
   });
+
+  it("renders source badge when sourceState is provided", () => {
+    render(
+      <I18nProvider>
+        <OpsPriorityCard item={item} priority={2} sourceState="fixture" sourceStateReason="deterministic_fixture" />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("fixture")).toBeInTheDocument();
+  });
 });

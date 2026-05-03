@@ -59,6 +59,14 @@ BindReceipt, and clearly states that the case is not bind-retryable.
 
 ## Mission Control pre-bind governance vocabulary
 
+### Mission Control provenance coverage (top-level cards)
+
+- Mission Control の主要トップレベルカードは `source-state` badge を表示し、表示 provenance を `live` / `fixture` / `demo` / `unavailable` で明示します。
+- page 上部に `Mission Control provenance: mixed` summary を表示し、画面内が混在 provenance（runtime + fixture + demo + unavailable fallback）であることを即時判別できるようにしています。
+- `live` は runtime snapshot / governance artifact lineage 由来、`fixture` は deterministic/static sample、`demo` は walkthrough scenario、`unavailable` は payload 欠落や connector unavailable を意味します。
+- `source-state` label は reviewer guidance であり、法規制上の認証・第三者認証・規制承認を意味しません。
+- fixture/demo surface は live runtime data として扱わず、UI で明示的に区別します。
+
 - Mission Control の pre-bind governance snapshot は `frontend/components/dashboard-types.ts` の shared frontend contract を参照してください。
 - `participation_state` / `preservation_state` / `intervention_viability` / `concise_rationale` / `bind_outcome` は backend vocabulary をそのまま表示する契約です。
 - Mission Control は bind outcome だけでなく pre-bind state を timeline で扱うため、component-local 型ではなく shared type (`PreBindGovernanceSnapshot`) を利用してください。

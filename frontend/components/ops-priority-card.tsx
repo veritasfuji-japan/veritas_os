@@ -1,13 +1,17 @@
 import { Card } from "@veritas/design-system";
 import { useI18n } from "./i18n-provider";
 import { type OpsPriorityItem } from "./dashboard-types";
+import { SourceStateBadge } from "./source-state-badge";
+import { type SourceState } from "../lib/source-state-utils";
 
 interface OpsPriorityCardProps {
   item: OpsPriorityItem;
   priority: number;
+  sourceState?: SourceState;
+  sourceStateReason?: string;
 }
 
-export function OpsPriorityCard({ item, priority }: OpsPriorityCardProps): JSX.Element {
+export function OpsPriorityCard({ item, priority, sourceState, sourceStateReason }: OpsPriorityCardProps): JSX.Element {
   const { t } = useI18n();
 
   return (
@@ -18,6 +22,7 @@ export function OpsPriorityCard({ item, priority }: OpsPriorityCardProps): JSX.E
       accent={priority === 1 ? "danger" : priority === 2 ? "warning" : "info"}
       className="border-border/60"
     >
+      <div className="mb-2">{sourceState ? <SourceStateBadge state={sourceState} reason={sourceStateReason} compact /> : null}</div>
       <div className="space-y-2 text-sm">
         <p className="text-xs text-muted-foreground">Owner: {item.owner}</p>
         <p>

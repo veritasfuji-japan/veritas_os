@@ -30,4 +30,10 @@ describe("GlobalHealthSummary", () => {
     expect(screen.getByText("Policy drift: 0.02")).toBeInTheDocument();
     expect(screen.getByText("Decision anomalies: 1")).toBeInTheDocument();
   });
+
+  it("renders source badge when sourceState is provided", () => {
+    render(<GlobalHealthSummary summary={summary} sourceState="fixture" sourceStateReason="static_fixture" />);
+    expect(screen.getByText("fixture")).toBeInTheDocument();
+    expect(screen.getByLabelText("source state: fixture (static_fixture)")).toBeInTheDocument();
+  });
 });
