@@ -59,6 +59,12 @@ def _extract_bind_summary_property_keys_from_yaml() -> list[str]:
     return keys
 
 
+def _load_doc(relative_path: str) -> str:
+    """Load a documentation file from the repository root."""
+    repo_root = Path(__file__).resolve().parents[2]
+    return (repo_root / relative_path).read_text(encoding="utf-8")
+
+
 def test_openapi_yaml_is_parseable() -> None:
     """The OpenAPI document must be valid YAML."""
     spec = _load_openapi_spec()
@@ -373,3 +379,83 @@ def test_openapi_bind_summary_surface_nullable_and_duplicate_free() -> None:
     raw_property_keys = _extract_bind_summary_property_keys_from_yaml()
     assert len(raw_property_keys) == len(set(raw_property_keys))
     assert expected_optional_target_fields.issubset(set(raw_property_keys))
+
+
+def test_observable_digest_ref_addendum_v1_contract_statements_locked() -> None:
+    """Addendum must preserve v1 locator-first and no-runtime-expansion guarantees."""
+    addendum = _load_doc("docs/en/architecture/observable-digest-ref-contract-addendum.md")
+
+    required_phrases = [
+        "`observable_digest_ref` remains **locator-first**",
+        "inline digest payloads",
+        "Runtime impact",
+        "Default operator surface impact",
+        "transitional compatibility field",
+        "`auto_escalate_confirmed_revocations` remains schema-only for v1",
+        "runtime decision semantics in v1",
+        "`*_operator_summary` outputs remain minimal",
+        "runtime decisions remain unchanged",
+        "default operator surface remains unchanged",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in addendum
+
+
+def test_observable_digest_ref_addendum_failure_code_vocabulary_locked() -> None:
+    """Addendum must keep stable FCxx + failure_name pairs for tooling compatibility."""
+    addendum = _load_doc("docs/en/architecture/observable-digest-ref-contract-addendum.md")
+
+    required_pairs = {
+        "FC01": "LOCATOR_MISSING",
+        "FC02": "LOCATOR_MALFORMED",
+        "FC03": "RESOLUTION_FAILED",
+        "FC04": "AUTHZ_DENIED",
+        "FC05": "DIGEST_MISMATCH",
+        "FC06": "BOUNDARY_VALIDATION_FAILURE",
+        "FC07": "REPLAY_DUPLICATE",
+        "FC08": "STALE_DIGEST",
+        "FC09": "SCHEMA_MISMATCH",
+        "FC10": "UNKNOWN_TRANSIENT",
+    }
+
+    for code, name in required_pairs.items():
+        assert f"| {code} | {name} |" in addendum
+
+    assert "Preserve code stability (`FCxx` + `Name`)" in addendum
+
+
+def test_observable_digest_ref_addendum_audit_entry_schema_expectations_locked() -> None:
+    """Addendum must keep append-only audit-entry expectations explicit."""
+    addendum = _load_doc("docs/en/architecture/observable-digest-ref-contract-addendum.md")
+
+    required_fields = [
+        '"event_id"',
+        '"timestamp"',
+        '"failure_code"',
+        '"failure_name"',
+        '"locator"',
+        '"resolved_digest"',
+        '"expected_digest"',
+        '"validation_result"',
+        '"v1_schema_version"',
+        '"remediation_class"',
+        '"sla_window_seconds"',
+        '"caller_id_hash"',
+        '"actor"',
+        '"action_taken"',
+        '"revocation_vector"',
+        '"payload_summary"',
+        '"remediation_attempts"',
+    ]
+
+    for field in required_fields:
+        assert field in addendum
+
+    assert "Entries should be immutable and append-only" in addendum
+
+
+def test_docs_readme_links_observable_digest_ref_addendum() -> None:
+    """Docs index should continue linking the observable digest ref contract addendum."""
+    readme = _load_doc("docs/en/README.md")
+    assert "architecture/observable-digest-ref-contract-addendum.md" in readme
