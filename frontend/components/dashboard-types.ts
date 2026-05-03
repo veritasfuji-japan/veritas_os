@@ -84,6 +84,20 @@ export interface GovernanceObservation {
 
 export interface PreBindGovernanceSnapshot {
   demo_scenario?: string;
+  source_state?: string | null;
+  scenario_id?: string | null;
+  scenario_name?: string | null;
+  scenario_title?: string | null;
+  action_class?: string | null;
+  requested_action?: string | null;
+  requested_scope?: string[] | string | null;
+  customer_risk_context?: unknown | null;
+  authority_evidence?: unknown | null;
+  authority_evidence_status?: string | null;
+  admissibility_result?: unknown | null;
+  audit_trace?: Array<Record<string, unknown>> | null;
+  evidence_bundle_summary?: unknown | null;
+  reviewer_expected_steps?: Array<string | Record<string, unknown>> | null;
   phase_snapshots?: Array<Record<string, unknown>>;
   participation_state?: string;
   preservation_state?: string;
