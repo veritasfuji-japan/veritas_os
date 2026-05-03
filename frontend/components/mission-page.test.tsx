@@ -143,6 +143,7 @@ describe("MissionPage", () => {
             target_label: "Governance policy",
             operator_surface: "governance",
             relevant_ui_href: "/governance",
+            bind_receipt_id: "br_123",
           }}
         />
       </I18nProvider>,
@@ -155,6 +156,20 @@ describe("MissionPage", () => {
     expect(screen.getAllByRole("link", { name: "/governance" })[0]).toHaveAttribute("href", "/governance");
     expect(screen.getByText("Operator actions")).toBeInTheDocument();
     expect(screen.getByText(/Open target surface:/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "open audit path" })).toBeInTheDocument();
+    expect(screen.getByText(/Authority evidence status:/)).toBeInTheDocument();
+  });
+
+  it("shows unavailable drilldown without fake links when ids are missing", () => {
+    render(
+      <I18nProvider>
+        <MissionPage title="Command Dashboard" subtitle="Mission overview" chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]} governanceLayerSnapshot={{ pre_bind_source: "none" }} />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText(/AML\/KYC evidence drilldown:/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "open audit path" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("unavailable").length).toBeGreaterThan(0);
   });
 
   it("renders pre-boundary collapse demo walkthrough with four phases", () => {
@@ -315,6 +330,7 @@ describe("MissionPage", () => {
           governanceLayerSnapshot={{
             target_label: "Governance policy",
             relevant_ui_href: "/governance",
+            bind_receipt_id: "br_123",
           }}
         />
       </I18nProvider>,
