@@ -112,10 +112,18 @@ async function resolveDemoScenarioPayload(request: Request): Promise<Record<stri
     }),
   );
 
+  const phaseSnapshots = phases.map(mapPreBoundaryCollapsePhaseToSnapshot);
+  const finalPhaseSnapshot = phaseSnapshots[phaseSnapshots.length - 1];
+
   return {
     governance_layer_snapshot: {
       demo_scenario: PRE_BOUNDARY_COLLAPSE_SCENARIO,
-      phase_snapshots: phases.map(mapPreBoundaryCollapsePhaseToSnapshot),
+      participation_state: finalPhaseSnapshot.participation_state,
+      preservation_state: finalPhaseSnapshot.preservation_state,
+      intervention_viability: finalPhaseSnapshot.intervention_viability,
+      bind_outcome: finalPhaseSnapshot.bind_outcome,
+      concise_rationale: finalPhaseSnapshot.concise_rationale,
+      phase_snapshots: phaseSnapshots,
     },
   };
 }

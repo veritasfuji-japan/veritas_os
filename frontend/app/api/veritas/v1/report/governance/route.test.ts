@@ -224,8 +224,22 @@ describe("/api/veritas/v1/report/governance", () => {
     const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse"));
 
     expect(response.status).toBe(200);
-    const payload = await response.json() as { governance_layer_snapshot: { phase_snapshots: Array<Record<string, unknown>> } };
+    const payload = await response.json() as {
+      governance_layer_snapshot: {
+        participation_state: string;
+        preservation_state: string;
+        intervention_viability: string;
+        bind_outcome: string;
+        phase_snapshots: Array<Record<string, unknown>>;
+      };
+    };
     expect(payload.governance_layer_snapshot.phase_snapshots).toHaveLength(4);
+    expect(payload.governance_layer_snapshot).toMatchObject({
+      participation_state: "decision_shaping",
+      preservation_state: "collapsed",
+      intervention_viability: "minimal",
+      bind_outcome: "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
+    });
     expect(payload.governance_layer_snapshot.phase_snapshots[0]).toMatchObject({
       phase_id: "pre_boundary_collapse_phase_1_open",
       phase_label: "Phase 1 — Participation / open framing",
@@ -247,7 +261,8 @@ describe("/api/veritas/v1/report/governance", () => {
     }));
 
     expect(response.status).toBe(200);
-    const payload = await response.json() as { governance_layer_snapshot: { phase_snapshots: Array<Record<string, unknown>> } };
+    const payload = await response.json() as { governance_layer_snapshot: { bind_outcome: string; phase_snapshots: Array<Record<string, unknown>> } };
+    expect(payload.governance_layer_snapshot.bind_outcome).toBe("FORMALLY_VALID_STRUCTURALLY_COLLAPSED");
     expect(payload.governance_layer_snapshot.phase_snapshots.map((phase) => phase.phase_id)).toEqual([
       "pre_boundary_collapse_phase_1_open",
       "pre_boundary_collapse_phase_2_iterative_shaping",

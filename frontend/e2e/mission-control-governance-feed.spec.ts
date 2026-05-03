@@ -82,6 +82,10 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     expect(payload).toMatchObject({
       governance_layer_snapshot: {
         demo_scenario: "pre_boundary_collapse",
+        participation_state: "decision_shaping",
+        preservation_state: "collapsed",
+        intervention_viability: "minimal",
+        bind_outcome: "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
       },
     });
     expect(payload.governance_layer_snapshot.phase_snapshots).toHaveLength(4);
