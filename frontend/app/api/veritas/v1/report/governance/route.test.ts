@@ -237,7 +237,7 @@ describe("/api/veritas/v1/report/governance", () => {
     expect(payload.governance_layer_snapshot).toMatchObject({
       participation_state: "decision_shaping",
       preservation_state: "collapsed",
-      intervention_viability: "minimal",
+      intervention_viability: "low",
       bind_outcome: "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
     });
     expect(payload.governance_layer_snapshot.phase_snapshots[0]).toMatchObject({

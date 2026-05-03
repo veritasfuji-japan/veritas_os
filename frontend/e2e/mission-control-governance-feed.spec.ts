@@ -84,7 +84,7 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
         demo_scenario: "pre_boundary_collapse",
         participation_state: "decision_shaping",
         preservation_state: "collapsed",
-        intervention_viability: "minimal",
+        intervention_viability: "low",
         bind_outcome: "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
       },
     });
