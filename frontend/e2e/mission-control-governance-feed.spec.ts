@@ -60,6 +60,15 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
 
 
   test("pre-boundary collapse demo renders 4-phase walkthrough without breaking default timeline", async ({ page }) => {
+    const demoApiResponse = await page.request.get("/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse");
+    await expect(demoApiResponse).toBeOK();
+    await expect(demoApiResponse.json()).resolves.toMatchObject({
+      governance_layer_snapshot: {
+        demo_scenario: "pre_boundary_collapse",
+        phase_snapshots: expect.any(Array),
+      },
+    });
+
     await page.goto("/?demo_scenario=pre_boundary_collapse");
 
     await expect(
