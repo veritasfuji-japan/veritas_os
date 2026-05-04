@@ -10,6 +10,8 @@ import os
 import secrets
 import threading
 import time
+import uuid
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Dict, Optional, Protocol, Tuple
 
@@ -18,6 +20,7 @@ from fastapi.security.api_key import APIKeyHeader
 
 from veritas_os.api.utils import _errstr, redact
 from veritas_os.api.rbac import Permission, Role, ROLE_PERMISSIONS
+from veritas_os.audit.trustlog_signed import append_signed_decision
 
 logger = logging.getLogger(__name__)
 
@@ -555,6 +558,95 @@ def _resolve_role_from_request(
         return Role.admin  # Fallback; auth check already validated the key
 
 
+
+_RBAC_DENIAL_DEDUPE_TTL_SEC = 60.0
+_RBAC_DENIAL_DEDUPE_MAX = 1024
+_rbac_denial_dedupe_cache: Dict[str, float] = {}
+_rbac_denial_dedupe_lock = threading.Lock()
+
+
+def _build_rbac_denial_dedupe_key(
+    *,
+    role: Role,
+    permission: Permission,
+    endpoint: str,
+    trace_id: Optional[str],
+) -> str:
+    """Build stable in-memory dedupe key for RBAC denial audit events."""
+    return "|".join([role.value, permission.value, endpoint, trace_id or "none"])
+
+
+def _should_append_rbac_denial_event(
+    *,
+    dedupe_key: str,
+    now_ts: float,
+) -> bool:
+    """Return True when RBAC denial event should be appended (TTL dedupe)."""
+    with _rbac_denial_dedupe_lock:
+        expired = [
+            key
+            for key, seen_at in _rbac_denial_dedupe_cache.items()
+            if now_ts - seen_at > _RBAC_DENIAL_DEDUPE_TTL_SEC
+        ]
+        for key in expired:
+            _rbac_denial_dedupe_cache.pop(key, None)
+
+        last_seen = _rbac_denial_dedupe_cache.get(dedupe_key)
+        if last_seen is not None and now_ts - last_seen <= _RBAC_DENIAL_DEDUPE_TTL_SEC:
+            return False
+
+        _rbac_denial_dedupe_cache[dedupe_key] = now_ts
+        if len(_rbac_denial_dedupe_cache) > _RBAC_DENIAL_DEDUPE_MAX:
+            overflow = len(_rbac_denial_dedupe_cache) - _RBAC_DENIAL_DEDUPE_MAX
+            oldest = sorted(_rbac_denial_dedupe_cache.items(), key=lambda item: item[1])[:overflow]
+            for key, _ in oldest:
+                _rbac_denial_dedupe_cache.pop(key, None)
+        return True
+
+
+def _append_rbac_denial_audit_event_best_effort(
+    *,
+    request: Optional[Request],
+    role: Role,
+    permission: Permission,
+    reason_code: str,
+) -> None:
+    """Append privacy-safe RBAC denial event to signed TrustLog on best-effort basis."""
+    endpoint = "unknown"
+    method = "unknown"
+    trace_id = None
+    if request is not None:
+        endpoint = getattr(getattr(request, "url", None), "path", None) or "unknown"
+        method = getattr(request, "method", None) or "unknown"
+        trace_id = getattr(getattr(request, "state", None), "trace_id", None)
+
+    dedupe_key = _build_rbac_denial_dedupe_key(
+        role=role,
+        permission=permission,
+        endpoint=endpoint,
+        trace_id=trace_id,
+    )
+    if not _should_append_rbac_denial_event(dedupe_key=dedupe_key, now_ts=time.time()):
+        return
+
+    event_payload = {
+        "event_type": "rbac_denial",
+        "decision_id": f"rbac-denial-{uuid.uuid4()}",
+        "actor_role": role.value,
+        "requested_permission": permission.value,
+        "endpoint": endpoint,
+        "method": method,
+        "reason_code": reason_code,
+        "trace_id": trace_id,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "audit_schema_version": "rbac_denial.v1",
+    }
+    try:
+        append_signed_decision(event_payload)
+    except Exception as exc:
+        logger.warning("RBAC denial audit append failed: %s", _errstr(exc))
+
+
 def require_permission(permission: Permission):
     """FastAPI dependency factory that enforces a specific RBAC permission.
 
@@ -588,6 +680,12 @@ def require_permission(permission: Permission):
         allowed = ROLE_PERMISSIONS.get(role, frozenset())
         if permission not in allowed:
             _record_auth_reject_reason("insufficient_permission")
+            _append_rbac_denial_audit_event_best_effort(
+                request=request,
+                role=role,
+                permission=permission,
+                reason_code="RBAC_INSUFFICIENT_PERMISSION",
+            )
             logger.warning(
                 "RBAC denied: role=%s permission=%s",
                 role.value,
