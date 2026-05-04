@@ -26,6 +26,7 @@ class VersionRateResult:
     total_reports: int
     unknown_reports: int
     invalid_reports: int = 0
+    discovered_reports: int = 0
 
     @property
     def unknown_rate(self) -> float:
@@ -95,8 +96,10 @@ def _compute_version_rate(reports_dir: Path) -> VersionRateResult:
     total = 0
     unknown = 0
     invalid = 0
+    discovered = 0
 
     for path in sorted(reports_dir.glob("replay_*.json")):
+        discovered += 1
         payload = _load_json(path)
         if payload is None:
             invalid += 1
@@ -109,6 +112,7 @@ def _compute_version_rate(reports_dir: Path) -> VersionRateResult:
         total_reports=total,
         unknown_reports=unknown,
         invalid_reports=invalid,
+        discovered_reports=discovered,
     )
 
 
@@ -140,6 +144,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"WARNING: replay reports directory does not exist: {reports_dir}")
         return 0
 
+    if not reports_dir.is_dir():
+        print(f"ERROR: replay reports path is not a directory: {reports_dir}")
+        return 1
+
     result = _compute_version_rate(reports_dir)
     if result.invalid_reports:
         print(
@@ -154,7 +162,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"reports were found under {reports_dir}"
             )
             return 1
-        print(f"WARNING: no replay reports found under {reports_dir}")
+        if result.discovered_reports == 0:
+            print(f"WARNING: no replay reports found under {reports_dir}")
+            return 0
+        print(
+            "WARNING: replay reports were found but none were valid JSON "
+            f"under {reports_dir}"
+        )
         return 0
 
     rate = result.unknown_rate

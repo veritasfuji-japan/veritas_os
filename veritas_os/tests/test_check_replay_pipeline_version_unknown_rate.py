@@ -33,6 +33,7 @@ def test_compute_version_rate_counts_unknown_known_and_invalid(tmp_path: Path) -
     assert result.unknown_reports == 1
     assert result.invalid_reports == 1
     assert result.unknown_rate == 0.5
+    assert result.discovered_reports == 3
 
 
 def test_main_returns_success_when_rate_is_within_threshold(
@@ -128,6 +129,19 @@ def test_main_empty_directory_strict_fails(tmp_path: Path, capsys) -> None:
     assert code == 1
     assert "ERROR: replay reports are required" in output
 
+
+
+
+def test_main_reports_path_is_file_fails(tmp_path: Path, capsys) -> None:
+    """A non-directory reports path should fail explicitly."""
+    report_file = tmp_path / "replay_a.json"
+    _write_report(report_file, "abc123")
+
+    code = checker.main(["--reports-dir", str(report_file)])
+    output = capsys.readouterr().out
+
+    assert code == 1
+    assert "ERROR: replay reports path is not a directory" in output
 
 def test_main_only_invalid_reports_strict_fails(tmp_path: Path, capsys) -> None:
     """Strict mode should fail when all replay reports are invalid."""
