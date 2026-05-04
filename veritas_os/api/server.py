@@ -23,6 +23,10 @@ from typing import Any, Dict, Optional, Protocol, Tuple
 # ---- ロガー設定（標準化: print → logging）----
 logger = logging.getLogger(__name__)
 
+from veritas_os.logging.structured import configure_logging_from_env
+
+configure_logging_from_env()
+
 from fastapi import (
     Depends,
     FastAPI,
