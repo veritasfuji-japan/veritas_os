@@ -28,6 +28,23 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 
 For external reviewers, start with `docs/REVIEWER_ENTRYPOINT.md`.
 
+## External reviewer fast path
+
+For a 10-minute implementation snapshot, start here:
+
+1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
+2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
+3. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+4. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+5. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+
+Boundary:
+
+- This is not legal advice.
+- This is not regulatory approval.
+- This is not third-party certification.
+- Fixture-backed PoC evidence should not be presented as live bank-side integration.
+
 ## AML/KYC Reviewer Walkthrough Quickstart
 
 VERITAS now includes a deterministic AML/KYC reviewer walkthrough for external reviewers, enterprise stakeholders, and investors who need to verify value in under 10 minutes.
