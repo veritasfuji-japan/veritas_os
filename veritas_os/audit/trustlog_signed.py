@@ -693,6 +693,16 @@ _SUMMARY_ALLOWLIST: frozenset[str] = frozenset({
     "critique_ok",
     "critique_mode",
     "critique_reason",
+    # RBAC denial audit fields (scalar-only, no secrets)
+    "event_type",
+    "actor_role",
+    "requested_permission",
+    "endpoint",
+    "method",
+    "reason_code",
+    "trace_id",
+    "audit_schema_version",
+    "ts",
 })
 
 #: Keys inside the full payload whose *scalar* value is extracted for the
