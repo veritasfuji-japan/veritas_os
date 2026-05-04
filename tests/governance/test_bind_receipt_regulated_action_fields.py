@@ -52,11 +52,11 @@ def _regulated_context() -> dict[str, object]:
             "validity_window": {
                 "issued_at": "2026-04-25T00:00:00",
                 "valid_from": "2026-04-25T00:00:00",
-                "valid_until": "2026-04-30T00:00:00",
+                "valid_until": "2026-12-30T00:00:00",
             },
             "issued_at": "2026-04-25T00:00:00",
             "valid_from": "2026-04-25T00:00:00",
-            "valid_until": "2026-04-30T00:00:00",
+            "valid_until": "2026-12-30T00:00:00",
             "revalidated_at": "2026-04-26T00:00:00",
             "policy_snapshot_id": "policy-snapshot-001",
             "evidence_hash": "hash-001",
@@ -89,10 +89,12 @@ def _intent_with_regulated_context() -> dict[str, object]:
 
 
 def _run_bind(intent: dict[str, object], adapter: ReferenceBindAdapter | None = None):
+    """Execute regulated bind flow with deterministic bind timestamp for tests."""
     return execute_bind_adjudication(
         execution_intent=intent,
         adapter=adapter
         or ReferenceBindAdapter(state={"mode": "safe"}, pending_changes={"mode": "strict"}),
+        bind_ts="2026-04-26T00:00:00+00:00",
         append_trustlog=False,
     )
 
