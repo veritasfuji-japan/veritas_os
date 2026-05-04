@@ -13,6 +13,7 @@ import re
 import secrets
 import threading
 import time
+import warnings
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from datetime import datetime, timezone
@@ -39,6 +40,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
@@ -653,6 +655,39 @@ async def _app_lifespan(_: FastAPI):
 
 
 app = FastAPI(title="VERITAS Public API", version="2.0.0-beta", lifespan=_app_lifespan)
+
+
+def _safe_openapi_schema() -> Dict[str, Any]:
+    """Build OpenAPI schema while suppressing known Pydantic v2 shim deprecations.
+
+    FastAPI may trigger a DeprecationWarning via an internal Pydantic v1
+    compatibility check (`__fields__`) during OpenAPI security schema encoding.
+    This warning originates in dependency internals and does not indicate
+    deprecated API usage in VERITAS application models.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=DeprecationWarning,
+            message=r".*__fields__.*deprecated.*model_fields.*",
+        )
+        return get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+        )
+
+
+def custom_openapi() -> Dict[str, Any]:
+    """Return cached OpenAPI schema with compatibility-safe generation."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    app.openapi_schema = _safe_openapi_schema()
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 # ★ セキュリティ: allow_credentials は明示的なオリジンが設定されている場合のみ True
 def _resolve_cors_settings(origins: Any) -> tuple[list[str], bool]:
