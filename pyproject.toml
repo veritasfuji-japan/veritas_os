@@ -115,6 +115,14 @@ veritas_os = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+testpaths = [
+  "veritas_os/tests",
+  "tests",
+]
+python_files = [
+  "test_*.py",
+  "*_test.py",
+]
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
   "ignore:invalid escape sequence.*:SyntaxWarning:sentence_transformers\\..*",

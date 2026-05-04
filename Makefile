@@ -96,7 +96,7 @@ test-cov:
 	@set -e; \
 	if [ -x .venv/bin/python ] && .venv/bin/python -c "import pytest" >/dev/null 2>&1; then \
 		echo "[veritas] Using existing .venv"; \
-		.venv/bin/python -m pytest -q veritas_os/tests \
+		.venv/bin/python -m pytest -q veritas_os/tests tests \
 			--cov=veritas_os \
 			--cov-config=veritas_os/tests/.coveragerc \
 			--cov-report=term-missing \
@@ -110,7 +110,7 @@ test-cov:
 		exit 0; \
 	fi; \
 	echo "[veritas] Running coverage tests with Python $(PYTHON_VERSION) via uv"; \
-	if UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_VERSION) --with pytest --with pytest-cov pytest -q veritas_os/tests \
+	if UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_VERSION) --with pytest --with pytest-cov pytest -q veritas_os/tests tests \
 		--cov=veritas_os \
 		--cov-config=veritas_os/tests/.coveragerc \
 		--cov-report=term-missing \
@@ -124,7 +124,7 @@ test-cov:
 		exit 0; \
 	fi; \
 	echo "[veritas] Falling back to Python $(PYTHON_FALLBACK) (local or managed)"; \
-	UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_FALLBACK) --with pytest --with pytest-cov pytest -q veritas_os/tests \
+	UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_FALLBACK) --with pytest --with pytest-cov pytest -q veritas_os/tests tests \
 		--cov=veritas_os \
 		--cov-config=veritas_os/tests/.coveragerc \
 		--cov-report=term-missing \
@@ -169,6 +169,7 @@ verify: verify-backend verify-frontend
 
 verify-backend:
 	@echo "[veritas] Running backend verification suite..."
+	@echo "[veritas] Note: verify-backend runs targeted backend smoke/invariant checks, not full pytest discovery."
 	@pytest -q tests/test_continuation_enforcement.py \
 		tests/test_continuation_integration.py \
 		tests/test_debate_safety_heuristics.py

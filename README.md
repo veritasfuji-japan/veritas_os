@@ -1432,7 +1432,8 @@ make test-cov
 These targets use `uv` with `PYTHON_VERSION=3.12.12` and automatically download the
 interpreter if it is not already installed. `make test-cov` now mirrors the CI
 coverage gate (`--cov-fail-under=85`, `veritas_os/tests/.coveragerc`, XML/HTML reports,
-and `-m "not slow"`).
+and `-m "not slow"`), and explicitly executes both Python test roots:
+`veritas_os/tests/` and top-level `tests/`.
 
 ```bash
 # Optional: override the local gate/marker to troubleshoot

@@ -349,7 +349,9 @@ jobs:
           set -euxo pipefail
           mkdir -p test-reports coverage-html
 
-          pytest -q veritas_os/tests \
+          # Full Python test discovery roots are explicit to avoid skipping
+          # either repository-level tests/ or package-level veritas_os/tests/.
+          pytest -q veritas_os/tests tests \
             --cov=veritas_os \
             --cov-config=veritas_os/tests/.coveragerc \
             --cov-report=term-missing \
