@@ -94,10 +94,22 @@ jobs:
       - name: unsafe dynamic execution/deserialization check
         run: python scripts/security/check_unsafe_dynamic_execution_usage.py
 
+      - name: Prepare deterministic replay report fixture
+        run: |
+          mkdir -p audit/replay_reports
+          cat > audit/replay_reports/replay_ci_fixture.json <<'JSON'
+          {
+            "meta": {
+              "pipeline_version": "ci-fixture-v1"
+            }
+          }
+          JSON
+
       - name: replay pipeline-version unknown-rate check
         run: |
           python scripts/quality/check_replay_pipeline_version_unknown_rate.py \
-            --max-unknown-rate 0.0
+            --max-unknown-rate 0.0 \
+            --require-reports
 
       - name: deployment env template smoke check
         run: python scripts/quality/check_deployment_env_defaults.py

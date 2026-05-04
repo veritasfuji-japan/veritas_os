@@ -159,7 +159,7 @@ quality-checks:
 	@python scripts/security/check_memory_dir_allowlist.py
 	@python scripts/security/check_httpx_raw_upload_usage.py
 	@python scripts/security/check_subprocess_shell_usage.py
-	@python scripts/quality/check_replay_pipeline_version_unknown_rate.py --max-unknown-rate 0.0
+	@python scripts/quality/check_replay_pipeline_version_unknown_rate.py --max-unknown-rate 0.0 --require-reports
 	@python scripts/quality/check_deployment_env_defaults.py
 	@python scripts/security/check_runtime_pickle_artifacts.py
 
