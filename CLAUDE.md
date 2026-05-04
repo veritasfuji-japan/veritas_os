@@ -274,3 +274,62 @@ python scripts/reset_repo_runtime.py --dry-run  # Preview cleanup
 • 重大な変更は必ず docstring とテストを作る
 • Planner / Kernel / Fuji / MemoryOS の責務を越える変更は禁止
 • セキュリティリスクは必ず警告する
+
+## 13. AI-Assisted Development Authority Model
+
+VERITAS OS may use multiple AI tools during development, including ChatGPT, Codex, Claude Code, GitHub Copilot, Gemini, Grok, and Meta AI.
+
+This is an auditable AI-assisted development workflow, not autonomous development.
+
+### Claude Code Role
+
+Claude Code is primarily used for:
+
+- architecture consistency review
+- implementation support
+- edge-case review
+- terminology consistency review
+- security/governance-sensitive change review
+- identifying runtime behavior mismatches
+- identifying missing or weak tests
+
+### Feedback Classification
+
+Claude Code feedback should be classified as:
+
+- `blocker`: must address before merge
+- `recommended`: should address unless there is a clear reason not to
+- `optional`: style, readability, or alternative implementation suggestion
+
+### Authority Rules
+
+- AI reviews are advisory signals.
+- GitHub Actions / CI are objective checks.
+- Human maintainer approval is the final commit boundary.
+- Claude Code feedback does not override CI or human maintainer approval.
+- Claude Code must not independently approve security-sensitive, governance-sensitive, release-sensitive, or public-claim changes.
+
+### VERITAS Terminology Rules
+
+Do not rename or generalize VERITAS-specific concepts without explicit human approval, including:
+
+- Bind Boundary
+- Commit Boundary
+- Authority Evidence
+- Proof Pack
+- Quality Gate
+- Admissibility
+- Receipt
+- Audit Trace
+- FUJI Gate
+- TrustLog
+- Mission Control
+- ExecutionIntent
+- BindReceipt
+- BindSummary
+
+### Prohibited Without Explicit Approval
+
+Do not introduce broad refactors, new abstraction layers, or public positioning changes unless explicitly requested.
+
+Do not change fail-closed safety behavior, bind/admissibility semantics, release gates, secret handling, or TrustLog persistence semantics without explicit human approval.
