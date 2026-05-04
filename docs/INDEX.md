@@ -37,6 +37,8 @@
 | Required Evidence Taxonomy | [Required evidence taxonomy (EN)](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy (JA)](ja/governance/required-evidence-taxonomy.md) |
 | Governance Artifact Lifecycle | [Governance artifact lifecycle (EN)](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle (JA)](ja/governance/governance-artifact-lifecycle.md) |
 | Guides | [Guides (EN)](en/guides/) | [Guides (JA)](ja/guides/) |
+| AI-Assisted Development | [AI-assisted development guardrails (EN)](en/development/ai-assisted-development.md) | [AI支援開発ガードレール (JA)](ja/development/ai-assisted-development.md) |
+| AI Review Matrix | [AI review matrix (EN)](en/development/ai-review-matrix.md) | [AIレビューマトリクス (JA)](ja/development/ai-review-matrix.md) |
 | Financial / AML-KYC | [AML/KYC quickstart (EN)](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート (JA)](ja/guides/poc-pack-financial-quickstart.md) |
 | AML/KYC Regulated Action Path | [AML/KYC regulated action path (EN)](en/use-cases/aml-kyc-regulated-action-path.md) | — |
 | Financial Governance Templates | [Financial governance templates (EN)](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート (JA)](ja/guides/financial-governance-templates.md) |
@@ -92,6 +94,8 @@
 | Required Evidence Taxonomy | [Required evidence taxonomy（英語正本）](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy（日本語解説）](ja/governance/required-evidence-taxonomy.md) |
 | Governance Artifact Lifecycle | [Governance artifact lifecycle（英語正本）](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle（日本語解説）](ja/governance/governance-artifact-lifecycle.md) |
 | ガイド | [Guides（英語正本）](en/guides/) | [Guides（日本語）](ja/guides/) |
+| AI支援開発 | [AI-assisted development guardrails（英語正本）](en/development/ai-assisted-development.md) | [AI支援開発ガードレール（日本語）](ja/development/ai-assisted-development.md) |
+| AIレビューマトリクス | [AI review matrix（英語正本）](en/development/ai-review-matrix.md) | [AIレビューマトリクス（日本語）](ja/development/ai-review-matrix.md) |
 | 金融 / AML-KYC | [AML/KYC quickstart（英語正本）](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート（日本語）](ja/guides/poc-pack-financial-quickstart.md) |
 | AML/KYC Regulated Action Path | [AML/KYC Regulated Action Path（英語正本）](en/use-cases/aml-kyc-regulated-action-path.md) | — |
 | 金融ガバナンステンプレート | [Financial governance templates（英語正本）](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート（日本語解説）](ja/guides/financial-governance-templates.md) |

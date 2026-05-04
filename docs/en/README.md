@@ -60,6 +60,10 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
 - [Governance Artifact Lifecycle](governance/governance-artifact-lifecycle.md)
 
+### Development Workflow
+- [AI-Assisted Development Guardrails](development/ai-assisted-development.md) — auditable workflow rules for using assistant tools during development.
+- [AI Review Matrix](development/ai-review-matrix.md) — role and authority matrix for AI-assisted development reviews.
+
 ### Guides
 - [3-Minute Demo Script](guides/demo-script.md)
 - [Financial PoC Pack (1-day quickstart, EN)](guides/poc-pack-financial-quickstart.md)
