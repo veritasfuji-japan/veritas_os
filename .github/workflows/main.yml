@@ -97,7 +97,9 @@ jobs:
       - name: replay pipeline-version unknown-rate check
         run: |
           python scripts/quality/check_replay_pipeline_version_unknown_rate.py \
-            --max-unknown-rate 0.0
+            --reports-dir scripts/quality/fixtures/replay_reports_valid \
+            --max-unknown-rate 0.0 \
+            --require-reports
 
       - name: deployment env template smoke check
         run: python scripts/quality/check_deployment_env_defaults.py

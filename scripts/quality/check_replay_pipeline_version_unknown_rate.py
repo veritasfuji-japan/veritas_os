@@ -25,6 +25,7 @@ class VersionRateResult:
 
     total_reports: int
     unknown_reports: int
+    invalid_reports: int = 0
 
     @property
     def unknown_rate(self) -> float:
@@ -53,6 +54,14 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Maximum allowed unknown ratio (0.0 - 1.0).",
+    )
+    parser.add_argument(
+        "--require-reports",
+        action="store_true",
+        help=(
+            "Fail when the reports directory is missing, empty, or has no valid "
+            "replay_*.json files."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -85,16 +94,22 @@ def _compute_version_rate(reports_dir: Path) -> VersionRateResult:
     """Compute unknown pipeline version rate for replay reports."""
     total = 0
     unknown = 0
+    invalid = 0
 
     for path in sorted(reports_dir.glob("replay_*.json")):
         payload = _load_json(path)
         if payload is None:
+            invalid += 1
             continue
         total += 1
         if _extract_pipeline_version(payload) == UNKNOWN_VALUE:
             unknown += 1
 
-    return VersionRateResult(total_reports=total, unknown_reports=unknown)
+    return VersionRateResult(
+        total_reports=total,
+        unknown_reports=unknown,
+        invalid_reports=invalid,
+    )
 
 
 def _validate_rate_threshold(max_unknown_rate: float) -> None:
@@ -116,11 +131,29 @@ def main(argv: list[str] | None = None) -> int:
 
     reports_dir = parsed.reports_dir.resolve(strict=False)
     if not reports_dir.exists():
+        if parsed.require_reports:
+            print(
+                "ERROR: replay reports directory is required but does not exist: "
+                f"{reports_dir}"
+            )
+            return 1
         print(f"WARNING: replay reports directory does not exist: {reports_dir}")
         return 0
 
     result = _compute_version_rate(reports_dir)
+    if result.invalid_reports:
+        print(
+            "WARNING: invalid replay reports were skipped: "
+            f"{result.invalid_reports}"
+        )
+
     if result.total_reports == 0:
+        if parsed.require_reports:
+            print(
+                "ERROR: replay reports are required but no valid replay_*.json "
+                f"reports were found under {reports_dir}"
+            )
+            return 1
         print(f"WARNING: no replay reports found under {reports_dir}")
         return 0
 
@@ -128,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "Replay pipeline version metrics: "
         f"unknown={result.unknown_reports}/{result.total_reports} "
-        f"({rate:.2%})"
+        f"({rate:.2%}), invalid={result.invalid_reports}"
     )
 
     if rate > parsed.max_unknown_rate:
