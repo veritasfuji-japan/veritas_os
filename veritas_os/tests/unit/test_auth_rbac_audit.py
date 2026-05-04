@@ -3,6 +3,7 @@ from starlette.requests import Request
 
 from veritas_os.api import auth
 from veritas_os.api.rbac import Permission, Role
+from veritas_os.audit.trustlog_signed import build_trustlog_summary
 
 
 def _build_request(path: str = "/v1/secure", method: str = "GET", query_string: bytes = b"") -> Request:
@@ -133,3 +134,52 @@ def test_rbac_denial_helper_handles_none_request(monkeypatch):
     assert len(captured) == 1
     assert captured[0]["endpoint"] == "unknown"
     assert captured[0]["method"] == "unknown"
+
+
+def test_rbac_denial_fields_survive_signed_summary_compaction():
+    payload = {
+        "event_type": "rbac_denial",
+        "decision_id": "rbac-denial-test",
+        "actor_role": "auditor",
+        "requested_permission": "decide",
+        "endpoint": "/v1/decide",
+        "method": "POST",
+        "reason_code": "RBAC_INSUFFICIENT_PERMISSION",
+        "trace_id": "trace-001",
+        "ts": "2026-05-04T00:00:00+00:00",
+        "audit_schema_version": "rbac_denial.v1",
+        "Authorization": "Bearer secret",
+        "X-API-Key": "secret",
+        "query_string": "token=secret",
+    }
+
+    summary = build_trustlog_summary(payload)
+
+    assert summary["event_type"] == "rbac_denial"
+    assert summary["actor_role"] == "auditor"
+    assert summary["requested_permission"] == "decide"
+    assert summary["endpoint"] == "/v1/decide"
+    assert summary["method"] == "POST"
+    assert summary["reason_code"] == "RBAC_INSUFFICIENT_PERMISSION"
+    assert summary["trace_id"] == "trace-001"
+    assert summary["audit_schema_version"] == "rbac_denial.v1"
+    assert summary["ts"] == "2026-05-04T00:00:00+00:00"
+
+    assert "Authorization" not in summary
+    assert "X-API-Key" not in summary
+    assert "query_string" not in summary
+
+
+def test_normal_decision_summary_allowlist_unchanged():
+    payload = {
+        "decision_id": "decision-001",
+        "decision_status": "approved",
+        "chosen_title": "Allow",
+        "world_state": {"secret": "should-not-leak"},
+    }
+
+    summary = build_trustlog_summary(payload)
+    assert summary["decision_id"] == "decision-001"
+    assert summary["decision_status"] == "approved"
+    assert summary["chosen_title"] == "Allow"
+    assert "world_state" not in summary
