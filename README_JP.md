@@ -27,6 +27,24 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 外部レビュー担当者向けの入口は `docs/REVIEWER_ENTRYPOINT.md` を参照してください。
 
+
+## 外部レビュアー向け Fast Path
+
+10 分で実装スナップショットを確認する場合は、次の順で参照してください。
+
+1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
+2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
+3. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+4. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+5. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
+
+境界条件:
+
+- 法的助言ではありません。
+- 規制当局の承認ではありません。
+- 第三者認証ではありません。
+- fixture ベースの PoC 証跡は、実銀行統合の証明として提示してはいけません。
+
 ## AML/KYC レビュアー向けウォークスルー Quickstart
 
 VERITAS には、決定論的に確認できる AML/KYC reviewer walkthrough が実装されています。外部レビュアー・企業担当者・投資家は 10 分以内で価値確認できます。
