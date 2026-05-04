@@ -246,11 +246,13 @@ def _check_freshness(evaluation_input: BindAdmissibilityInput) -> CheckResult:
     if expired:
         labels = ", ".join(name for name, _ in expired)
         primary_reason = expired[0][1]
-        expired_status = _missing_signal_status(evaluation_input)
         return CheckResult(
-            status=expired_status,
+            status=CheckStatus.ESCALATE,
             reason_code=primary_reason,
-            message=f"Freshness window expired ({labels}); policy fallback applied.",
+            message=(
+                f"Freshness window expired ({labels}); "
+                "escalation required before bind."
+            ),
         )
 
     return CheckResult(
