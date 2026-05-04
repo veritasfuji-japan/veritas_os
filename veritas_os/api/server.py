@@ -13,6 +13,7 @@ import re
 import secrets
 import threading
 import time
+import warnings
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from datetime import datetime, timezone
@@ -653,6 +654,31 @@ async def _app_lifespan(_: FastAPI):
 
 
 app = FastAPI(title="VERITAS Public API", version="2.0.0-beta", lifespan=_app_lifespan)
+
+
+def _install_openapi_deprecation_guard(fastapi_app: FastAPI) -> None:
+    """Guard OpenAPI generation from third-party Pydantic v2 deprecation noise.
+
+    FastAPI's OpenAPI path may call pydantic.v1 compatibility checks that touch
+    ``BaseModel.__fields__`` on v2 models. This emits a deprecation warning in
+    Pydantic v2 and becomes a hard error under ``-W error::DeprecationWarning``.
+    The filter is intentionally narrow and scoped only to OpenAPI generation.
+    """
+    original_openapi = fastapi_app.openapi
+
+    def _guarded_openapi() -> dict[str, Any]:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"The `__fields__` attribute is deprecated, use `model_fields` instead\.",
+                category=DeprecationWarning,
+            )
+            return original_openapi()
+
+    fastapi_app.openapi = _guarded_openapi
+
+
+_install_openapi_deprecation_guard(app)
 
 # ★ セキュリティ: allow_credentials は明示的なオリジンが設定されている場合のみ True
 def _resolve_cors_settings(origins: Any) -> tuple[list[str], bool]:
