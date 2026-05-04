@@ -108,6 +108,23 @@ def _coerce_alt_list(v: Any) -> list:
     return out
 
 
+
+
+def _hydrate_bind_compat_fields(payload: Dict[str, Any]) -> None:
+    """Populate canonical bind compatibility fields from nested bind structures."""
+    bind_summary = payload.get("bind_summary")
+    bind_receipt = payload.get("bind_receipt")
+
+    summary = bind_summary if isinstance(bind_summary, dict) else {}
+    receipt = bind_receipt if isinstance(bind_receipt, dict) else {}
+
+    payload.setdefault("bind_outcome", summary.get("bind_outcome") or summary.get("outcome") or receipt.get("final_outcome"))
+    payload.setdefault("bind_reason_code", summary.get("bind_reason_code") or summary.get("reason_code") or receipt.get("bind_reason_code"))
+    payload.setdefault("bind_failure_reason", summary.get("bind_failure_reason") or summary.get("failure_reason") or receipt.get("bind_failure_reason"))
+    payload.setdefault("bind_receipt_id", summary.get("bind_receipt_id") or receipt.get("bind_receipt_id"))
+    payload.setdefault("execution_intent_id", summary.get("execution_intent_id") or receipt.get("execution_intent_id"))
+    payload.setdefault("bind_summary", bind_summary if isinstance(bind_summary, dict) else None)
+
 def _coerce_decide_payload(payload: Any, *, seed: str = "") -> Dict[str, Any]:
     """response_model を "効かせつつ" server を落とさないための最終整形。"""
     if not isinstance(payload, dict):
@@ -122,6 +139,8 @@ def _coerce_decide_payload(payload: Any, *, seed: str = "") -> Dict[str, Any]:
         return payload
 
     d = dict(payload)
+
+    _hydrate_bind_compat_fields(d)
 
     if "trust_log" not in d:
         d["trust_log"] = None
