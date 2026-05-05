@@ -12,6 +12,7 @@ import { FujiRulesEditor } from "./components/FujiRulesEditor";
 import { DiffPreview } from "./components/DiffPreview";
 import { RiskImpactGauge } from "./components/RiskImpactGauge";
 import { ApprovalWorkflow } from "./components/ApprovalWorkflow";
+import { HumanApprovalWorkbench } from "./components/HumanApprovalWorkbench";
 import { ApplyFlow } from "./components/ApplyFlow";
 import { TrustLogStream } from "./components/TrustLogStream";
 import { ChangeHistory } from "./components/ChangeHistory";
@@ -498,6 +499,12 @@ export default function GovernanceControlPage(): JSX.Element {
               onReject={state.rejectChanges}
             />
           ) : null}
+
+          <HumanApprovalWorkbench
+            approvals={state.approvalRecords}
+            validationError={state.approvalValidationError}
+            onUpdateApproval={state.updateApprovalRecord}
+          />
 
           <ApplyFlow
             hasChanges={state.hasChanges}

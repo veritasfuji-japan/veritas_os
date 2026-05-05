@@ -12,6 +12,7 @@ import type {
   PolicyActionMode,
   TrustLogEntry,
   UserRole,
+  HumanApprovalRecord,
 } from "../governance-types";
 import { bumpDraftVersion, collectChanges, deepEqual, isRecordObject, normalizeGovernancePolicyWatFields } from "../helpers";
 
@@ -31,12 +32,34 @@ export function useGovernanceState() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [trustLog, setTrustLog] = useState<TrustLogEntry[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [approvalRecords, setApprovalRecords] = useState<HumanApprovalRecord[]>([
+    { reviewer: "", signature: "", decision: "pending" },
+    { reviewer: "", signature: "", decision: "pending" },
+  ]);
+  const [approvalValidationError, setApprovalValidationError] = useState<string | null>(null);
 
   const dismissConfirm = useCallback(() => setPendingConfirm(null), []);
   const requestConfirm = useCallback((description: string, onConfirm: () => void) => {
     setPendingConfirm({ description, onConfirm });
   }, []);
   const fetchAbortRef = useRef<AbortController | null>(null);
+
+  const updateApprovalRecord = useCallback((index: number, patch: Partial<HumanApprovalRecord>) => {
+    setApprovalValidationError(null);
+    setApprovalRecords((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  }, []);
+
+  const validateApprovalRecords = useCallback((): { ok: boolean; message?: string } => {
+    if (approvalRecords.length < 2) return { ok: false, message: "Two approvals are required before apply." };
+    const relevant = approvalRecords.slice(0, 2);
+    const reviewers = relevant.map((item) => item.reviewer.trim());
+    const signatures = relevant.map((item) => item.signature.trim());
+    if (reviewers.some((item) => !item)) return { ok: false, message: "Reviewer names are required for both approvals." };
+    if (signatures.some((item) => !item)) return { ok: false, message: "Signatures are required for both approvals." };
+    if (new Set(reviewers).size !== reviewers.length) return { ok: false, message: "Reviewers must be distinct." };
+    if (new Set(signatures).size !== signatures.length) return { ok: false, message: "Signatures must be distinct." };
+    return { ok: true };
+  }, [approvalRecords]);
 
   const hasChanges = useMemo(() => savedPolicy !== null && draft !== null && !deepEqual(savedPolicy, draft), [savedPolicy, draft]);
   const canApply = selectedRole === "admin";
@@ -143,26 +166,48 @@ export function useGovernanceState() {
           }
 
           try {
+            if (draft.approval_status === "rejected") {
+              const blocked = "Apply blocked: draft is rejected.";
+              setApprovalValidationError(blocked);
+              appendLog(blocked, "warning");
+              setError(blocked);
+              return;
+            }
+            const validation = validateApprovalRecords();
+            if (!validation.ok) {
+              const blocked = `apply blocked: ${validation.message}`;
+              setApprovalValidationError(validation.message ?? "Approval validation failed.");
+              appendLog(blocked, "warning");
+              setError(validation.message ?? "Approval validation failed.");
+              return;
+            }
+            appendLog(`approval records prepared by ${approvalRecords[0].reviewer.trim()} and ${approvalRecords[1].reviewer.trim()}`, "policy");
+            const approvals = approvalRecords.slice(0, 2).map((item) => ({
+              reviewer: item.reviewer.trim(),
+              signature: item.signature.trim(),
+              ...(item.reason?.trim() ? { reason: item.reason.trim() } : {}),
+              reviewed_at: item.reviewed_at ?? new Date().toISOString(),
+            }));
             const res = await veritasFetch("/api/veritas/v1/governance/policy", {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(draft),
+              body: JSON.stringify({ ...draft, approvals }),
             });
             if (!res.ok) {
               setError(t(`HTTP ${res.status}: ポリシー更新に失敗しました。`, `HTTP ${res.status}: Failed to update policy.`));
               return;
             }
-            const validation = validateGovernancePolicyResponse(await res.json());
-            if (!validation.ok) {
+            const applyValidation = validateGovernancePolicyResponse(await res.json());
+            if (!applyValidation.ok) {
               setError(t("適用レスポンスの検証に失敗しました。TrustLog を確認してください。", "Apply response validation failed. Check TrustLog."));
               return;
             }
             const nextPolicy = normalizeGovernancePolicyWatFields({
-              ...validation.data.policy,
+              ...applyValidation.data.policy,
               effective_at: new Date().toISOString(),
               last_applied: new Date().toISOString(),
               approval_status: "approved" as ApprovalStatus,
-              draft_version: bumpDraftVersion(validation.data.policy.version),
+              draft_version: bumpDraftVersion(applyValidation.data.policy.version),
             } as GovernancePolicyUI);
             setSavedPolicy(nextPolicy);
             setDraft(structuredClone(nextPolicy));
@@ -178,7 +223,7 @@ export function useGovernanceState() {
         })();
       },
     );
-  }, [appendHistory, appendLog, draft, requestConfirm, t]);
+  }, [appendHistory, appendLog, approvalRecords, draft, requestConfirm, t, validateApprovalRecords]);
 
   const rollback = useCallback(() => {
     if (!savedPolicy) return;
@@ -198,13 +243,20 @@ export function useGovernanceState() {
     requestConfirm(
       t("ドラフト変更を承認しますか？", "Approve draft changes?"),
       () => {
+        const validation = validateApprovalRecords();
+        if (!validation.ok) {
+          setApprovalValidationError(validation.message ?? "Approval validation failed.");
+          appendLog("apply blocked: missing approval signatures", "warning");
+          setError(validation.message ?? "Approval validation failed.");
+          return;
+        }
         setDraft((prev) => prev ? { ...prev, approval_status: "approved" } : prev);
-        appendHistory("approve", `draft changes approved by ${selectedRole}`);
-        appendLog(`draft approved by ${selectedRole}`, "policy");
+        appendHistory("approve", "draft approved by two reviewers");
+        appendLog("draft approved by two reviewers", "policy");
         setSuccess(t("ドラフトを承認しました。apply で本番適用できます。", "Draft approved. Apply to push to production."));
       },
     );
-  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, selectedRole, t]);
+  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, t, validateApprovalRecords]);
 
   const rejectChanges = useCallback(() => {
     if (!draft || !hasChanges) return;
@@ -217,7 +269,7 @@ export function useGovernanceState() {
         setSuccess(t("ドラフトを却下しました。", "Draft rejected."));
       },
     );
-  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, selectedRole, t]);
+  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, t, validateApprovalRecords]);
 
   const currentRisk = savedPolicy ? Math.round(((savedPolicy.risk_thresholds.deny_upper + savedPolicy.auto_stop.max_risk_score) / 2) * 100) : 0;
   const pendingRisk = draft ? Math.round(((draft.risk_thresholds.deny_upper + draft.auto_stop.max_risk_score) / 2) * 100) : 0;
@@ -280,6 +332,8 @@ export function useGovernanceState() {
     saving,
     error,
     success,
+    approvalRecords,
+    approvalValidationError,
     history,
     trustLog,
     hasChanges,
@@ -288,6 +342,7 @@ export function useGovernanceState() {
     canApprove,
     changeCount,
     updateDraft,
+    updateApprovalRecord,
     fetchPolicy,
     applyPolicy,
     rollback,
