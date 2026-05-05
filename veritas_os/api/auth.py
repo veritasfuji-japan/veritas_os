@@ -21,6 +21,7 @@ from fastapi.security.api_key import APIKeyHeader
 from veritas_os.api.utils import _errstr, redact
 from veritas_os.api.rbac import Permission, Role, ROLE_PERMISSIONS
 from veritas_os.audit.trustlog_signed import append_signed_decision
+from veritas_os.observability.tracing import add_span_event
 
 logger = logging.getLogger(__name__)
 
@@ -641,6 +642,18 @@ def _append_rbac_denial_audit_event_best_effort(
         "ts": datetime.now(timezone.utc).isoformat(),
         "audit_schema_version": "rbac_denial.v1",
     }
+    add_span_event(
+        "rbac.denied",
+        attributes={
+            "event_type": "rbac_denial",
+            "reason_code": reason_code,
+            "actor_role": role.value,
+            "requested_permission": permission.value,
+            "endpoint": endpoint,
+            "method": method,
+            "trace_id": trace_id,
+        },
+    )
     try:
         append_signed_decision(event_payload)
     except Exception as exc:

@@ -37,6 +37,7 @@ from veritas_os.api.schemas import (
 from veritas_os.policy.bind_route_markers import requires_bind_boundary
 from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome, find_bind_receipts
 from veritas_os.policy.governance_policy_update import update_governance_policy_with_bind_boundary
+from veritas_os.observability.tracing import add_span_event, set_span_attribute, trace_step
 from veritas_os.policy.policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
 from veritas_os.security.hash import sha256_of_canonical_json
 
@@ -463,68 +464,94 @@ def governance_get():
 def governance_put(body: dict):
     """Update the governance policy (partial merge)."""
     srv = _get_server()
-    try:
-        srv.enforce_four_eyes_approval(body)
-        previous = srv.get_policy()
-        decision_id = str(body.get("decision_id") or uuid4().hex)
-        request_id = str(body.get("request_id") or decision_id)
-        policy_snapshot_id = str(previous.get("updated_at") or previous.get("version") or "governance_policy")
-        bind_receipt = update_governance_policy_with_bind_boundary(
-            decision_id=decision_id,
-            request_id=request_id,
-            actor_identity=str(body.get("updated_by") or "api"),
-            policy_snapshot_id=policy_snapshot_id,
-            decision_hash=sha256_of_canonical_json(_governance_decision_hash_payload(body)),
-            policy_patch=body,
-            policy_reader=srv.get_policy,
-            policy_updater=srv.update_policy,
-            policy_rollback=getattr(srv, "rollback_policy", None),
-            approval_context={"governance_policy_update_approved": True},
-            approval_records=body.get("approvals") if isinstance(body.get("approvals"), list) else None,
-            policy_lineage=body.get("policy_lineage")
-            if isinstance(body.get("policy_lineage"), dict)
-            else None,
-            governance_policy=previous if isinstance(previous, dict) else None,
-            execution_intent_id=str(body.get("execution_intent_id") or "") or None,
-            bind_receipt_id=str(body.get("bind_receipt_id") or "") or None,
-        ).to_dict()
-        updated = srv.get_policy()
-        bind_payload = build_bind_response_payload(bind_receipt)
-        if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
-            status_code, error_message = _bind_failure_status_and_error(bind_receipt)
-            return JSONResponse(
-                status_code=status_code,
-                content={
-                    **bind_payload,
-                    "ok": False,
-                    "error": error_message,
-                    "policy": updated,
-                },
+    with trace_step(
+        "governance.policy_update.request",
+        attributes={
+            "target_path": "/v1/governance/policy",
+            "target_type": "governance_policy",
+        },
+    ):
+        try:
+            with trace_step("governance.approval.validate"):
+                srv.enforce_four_eyes_approval(body)
+
+            previous = srv.get_policy()
+            decision_id = str(body.get("decision_id") or uuid4().hex)
+            request_id = str(body.get("request_id") or decision_id)
+            actor_identity = str(body.get("updated_by") or "api")
+            approval_count = len(body.get("approvals")) if isinstance(body.get("approvals"), list) else 0
+            policy_snapshot_id = str(previous.get("updated_at") or previous.get("version") or "governance_policy")
+            set_span_attribute("decision_id", decision_id)
+            set_span_attribute("request_id", request_id)
+            set_span_attribute("actor_identity", actor_identity)
+            set_span_attribute("policy_snapshot_id", policy_snapshot_id)
+            set_span_attribute("approval_count", approval_count)
+
+            with trace_step("governance.bind_boundary.evaluate"):
+                bind_receipt = update_governance_policy_with_bind_boundary(
+                    decision_id=decision_id,
+                    request_id=request_id,
+                    actor_identity=actor_identity,
+                    policy_snapshot_id=policy_snapshot_id,
+                    decision_hash=sha256_of_canonical_json(_governance_decision_hash_payload(body)),
+                    policy_patch=body,
+                    policy_reader=srv.get_policy,
+                    policy_updater=srv.update_policy,
+                    policy_rollback=getattr(srv, "rollback_policy", None),
+                    approval_context={"governance_policy_update_approved": True},
+                    approval_records=body.get("approvals") if isinstance(body.get("approvals"), list) else None,
+                    policy_lineage=body.get("policy_lineage")
+                    if isinstance(body.get("policy_lineage"), dict)
+                    else None,
+                    governance_policy=previous if isinstance(previous, dict) else None,
+                    execution_intent_id=str(body.get("execution_intent_id") or "") or None,
+                    bind_receipt_id=str(body.get("bind_receipt_id") or "") or None,
+                ).to_dict()
+
+            set_span_attribute("bind_receipt_id", bind_receipt.get("bind_receipt_id"))
+            set_span_attribute("final_outcome", bind_receipt.get("final_outcome"))
+            set_span_attribute("bind_reason_code", resolve_bind_reason_code(bind_receipt) or "")
+            with trace_step("governance.policy.persist"):
+                updated = srv.get_policy()
+            bind_payload = build_bind_response_payload(bind_receipt)
+            if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
+                with trace_step("governance.policy_update.response"):
+                    status_code, error_message = _bind_failure_status_and_error(bind_receipt)
+                    return JSONResponse(
+                        status_code=status_code,
+                        content={
+                            **bind_payload,
+                            "ok": False,
+                            "error": error_message,
+                            "policy": updated,
+                        },
+                    )
+            srv._publish_event(
+                "governance.updated",
+                {"updated_by": updated.get("updated_by", "api")},
             )
-        srv._publish_event(
-            "governance.updated",
-            {"updated_by": updated.get("updated_by", "api")},
-        )
-        _emit_governance_change_alert(previous=previous, updated=updated)
-        return {"ok": True, "policy": updated, **bind_payload}
-    except PermissionError as e:
-        logger.warning("governance_put rejected: %s", e)
-        return JSONResponse(
-            status_code=403,
-            content={"ok": False, "error": "governance approval validation failed"},
-        )
-    except (ValueError, TypeError) as e:
-        logger.warning("governance_put validation error: %s", e)
-        return JSONResponse(
-            status_code=400,
-            content={"ok": False, "error": "Governance policy validation failed"},
-        )
-    except Exception as e:
-        logger.error("governance_put failed: %s", e, exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "error": "Failed to update governance policy"},
-        )
+            _emit_governance_change_alert(previous=previous, updated=updated)
+            with trace_step("governance.policy_update.response"):
+                return {"ok": True, "policy": updated, **bind_payload}
+        except PermissionError as e:
+            add_span_event("governance.approval.failed", attributes={"error": str(e)})
+            logger.warning("governance_put rejected: %s", e)
+            return JSONResponse(
+                status_code=403,
+                content={"ok": False, "error": "governance approval validation failed"},
+            )
+        except (ValueError, TypeError) as e:
+            logger.warning("governance_put validation error: %s", e)
+            return JSONResponse(
+                status_code=400,
+                content={"ok": False, "error": "Governance policy validation failed"},
+            )
+        except Exception as e:
+            logger.error("governance_put failed: %s", e, exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={"ok": False, "error": "Failed to update governance policy"},
+            )
 
 
 @router.get(

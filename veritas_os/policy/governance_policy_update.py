@@ -13,6 +13,7 @@ from uuid import uuid4
 from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent
 from veritas_os.policy.bind_boundary_adapters import GovernancePolicyUpdateAdapter
 from veritas_os.policy.bind_core import execute_bind_adjudication
+from veritas_os.observability.tracing import add_span_event, set_span_attribute, trace_step
 
 
 def update_governance_policy_with_bind_boundary(
@@ -37,13 +38,14 @@ def update_governance_policy_with_bind_boundary(
     bind_receipt_id: str | None = None,
 ) -> BindReceipt:
     """Apply governance policy patch through bind-boundary adjudication."""
-    adapter = GovernancePolicyUpdateAdapter(
-        policy_reader=policy_reader,
-        policy_updater=policy_updater,
-        policy_patch=dict(policy_patch),
-        policy_rollback=policy_rollback,
-        approval_records=approval_records,
-    )
+    with trace_step("bind.boundary.evaluate.start"):
+        adapter = GovernancePolicyUpdateAdapter(
+            policy_reader=policy_reader,
+            policy_updater=policy_updater,
+            policy_patch=dict(policy_patch),
+            policy_rollback=policy_rollback,
+            approval_records=approval_records,
+        )
 
     pre_snapshot = adapter.snapshot()
     expected_fingerprint = adapter.fingerprint_state(pre_snapshot)
@@ -70,13 +72,23 @@ def update_governance_policy_with_bind_boundary(
         ),
     )
 
-    return execute_bind_adjudication(
+    receipt = execute_bind_adjudication(
         execution_intent=intent,
         adapter=adapter,
         bind_ts=bind_ts,
         bind_receipt_id=bind_receipt_id,
         append_trustlog=append_trustlog,
     )
+    set_span_attribute("final_outcome", receipt.final_outcome.value)
+    set_span_attribute("bind_receipt_id", receipt.bind_receipt_id)
+    add_span_event(
+        "bind.boundary.evaluate.end",
+        attributes={
+            "final_outcome": receipt.final_outcome.value,
+            "bind_receipt_id": receipt.bind_receipt_id,
+        },
+    )
+    return receipt
 
 
 def _utc_now_iso8601() -> str:
