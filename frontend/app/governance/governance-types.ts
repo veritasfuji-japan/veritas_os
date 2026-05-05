@@ -82,6 +82,14 @@ export interface GovernancePolicyUI extends GovernancePolicy {
   operator_verbosity: OperatorVerbosity;
 }
 
+export interface HumanApprovalRecord {
+  reviewer: string;
+  signature: string;
+  decision: "approved" | "rejected" | "pending";
+  reason?: string;
+  reviewed_at?: string;
+}
+
 export interface DiffChange {
   path: string;
   old: string;
