@@ -323,7 +323,8 @@ jobs:
 
       - name: Run targeted compatibility smoke tests
         run: |
-          set -euxo pipefail
+          set -uo pipefail
+          status=0
           pytest -q \
             veritas_os/tests/test_openapi_no_deprecation_warnings.py \
             veritas_os/tests/test_openapi_spec.py \
@@ -332,7 +333,17 @@ jobs:
             veritas_os/tests/test_schemas_extra_v2.py \
             veritas_os/tests/test_decide_e2e_reliability.py \
             --tb=short \
-            -W error::DeprecationWarning
+            -W error::DeprecationWarning || status=$?
+
+          if [ "$status" -eq 0 ]; then
+            echo "passed" > future-dependency-pytest-result.txt
+            echo "0" > future-dependency-pytest-exit-code.txt
+          else
+            echo "failed" > future-dependency-pytest-result.txt
+            echo "$status" > future-dependency-pytest-exit-code.txt
+          fi
+
+          exit "$status"
 
       - name: Write compatibility summary
         if: always()
@@ -358,6 +369,27 @@ jobs:
               echo "Resolved versions were not captured; dependency install may have failed."
             fi
             echo "\`\`\`"
+            echo ""
+            echo "### Test result"
+            if [ -f future-dependency-pytest-result.txt ]; then
+              result="$(cat future-dependency-pytest-result.txt)"
+            else
+              result="unknown"
+            fi
+            if [ -f future-dependency-pytest-exit-code.txt ]; then
+              exit_code="$(cat future-dependency-pytest-exit-code.txt)"
+            else
+              exit_code="unavailable"
+            fi
+            echo "Result: \`$result\`"
+            echo "Exit code: \`$exit_code\`"
+            if [ "$result" = "unknown" ]; then
+              echo ""
+              echo "The pytest result file was not captured; dependency install or earlier setup may have failed."
+            elif [ "$result" != "passed" ]; then
+              echo ""
+              echo "Review the job log for failing tests and dependency resolver output."
+            fi
             echo ""
             echo "### Targeted tests"
             echo "- \`veritas_os/tests/test_openapi_no_deprecation_warnings.py\`"
