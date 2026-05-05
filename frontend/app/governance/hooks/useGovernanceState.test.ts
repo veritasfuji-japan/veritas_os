@@ -96,6 +96,13 @@ const MOCK_POLICY = {
   },
 };
 
+const setValidApprovals = (result: { current: ReturnType<typeof useGovernanceState> }): void => {
+  act(() => {
+    result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "sig-A" });
+    result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "sig-B" });
+  });
+};
+
 describe("useGovernanceState", () => {
   beforeEach(() => {
     mockFetch.mockReset();
@@ -287,11 +294,7 @@ describe("useGovernanceState", () => {
     await act(async () => {
       await result.current.fetchPolicy();
     });
-
-    act(() => {
-      result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "sig-A" });
-      result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "sig-B" });
-    });
+    setValidApprovals(result);
 
     const updatedPolicy = { ...MOCK_POLICY, version: "v2.0" };
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: updatedPolicy }) });
@@ -325,6 +328,7 @@ describe("useGovernanceState", () => {
     await act(async () => {
       await result.current.fetchPolicy();
     });
+    setValidApprovals(result);
 
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
@@ -342,6 +346,7 @@ describe("useGovernanceState", () => {
     await act(async () => {
       await result.current.fetchPolicy();
     });
+    setValidApprovals(result);
 
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     mockValidate.mockReturnValue({ ok: false });
@@ -360,6 +365,7 @@ describe("useGovernanceState", () => {
     await act(async () => {
       await result.current.fetchPolicy();
     });
+    setValidApprovals(result);
 
     mockFetch.mockRejectedValue(new Error("Network failure"));
 
@@ -386,11 +392,7 @@ describe("useGovernanceState", () => {
       }));
     });
     expect(result.current.hasChanges).toBe(true);
-
-    act(() => {
-      result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "sig-A" });
-      result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "sig-B" });
-    });
+    setValidApprovals(result);
 
     act(() => { result.current.approveChanges(); });
     expect(result.current.pendingConfirm).not.toBeNull();
@@ -434,11 +436,6 @@ describe("useGovernanceState", () => {
       await result.current.fetchPolicy();
     });
 
-    act(() => {
-      result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "sig-A" });
-      result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "sig-B" });
-    });
-
     act(() => { result.current.approveChanges(); });
     expect(result.current.pendingConfirm).toBeNull();
   });
@@ -454,72 +451,6 @@ describe("useGovernanceState", () => {
 
     act(() => { result.current.rejectChanges(); });
     expect(result.current.pendingConfirm).toBeNull();
-  });
-
-
-  it("blocks apply when reviewers are duplicated", async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
-    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
-
-    const { result } = renderHook(() => useGovernanceState());
-    await act(async () => {
-      await result.current.fetchPolicy();
-    });
-
-    act(() => {
-      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
-      result.current.updateApprovalRecord(0, { reviewer: "dup", signature: "sig-A" });
-      result.current.updateApprovalRecord(1, { reviewer: "dup", signature: "sig-B" });
-      result.current.applyPolicy("apply");
-    });
-    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
-
-    expect(result.current.error).toContain("Reviewers must be distinct");
-  });
-
-  it("blocks apply when signatures are duplicated", async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
-    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
-
-    const { result } = renderHook(() => useGovernanceState());
-    await act(async () => {
-      await result.current.fetchPolicy();
-    });
-
-    act(() => {
-      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
-      result.current.updateApprovalRecord(0, { reviewer: "a", signature: "same" });
-      result.current.updateApprovalRecord(1, { reviewer: "b", signature: "same" });
-      result.current.applyPolicy("apply");
-    });
-    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
-
-    expect(result.current.error).toContain("Signatures must be distinct");
-  });
-
-  it("blocks apply when draft is rejected", async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
-    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
-
-    const { result } = renderHook(() => useGovernanceState());
-    await act(async () => {
-      await result.current.fetchPolicy();
-    });
-
-    act(() => {
-      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
-      result.current.rejectChanges();
-    });
-    act(() => { result.current.pendingConfirm!.onConfirm(); });
-
-    act(() => {
-      result.current.updateApprovalRecord(0, { reviewer: "a", signature: "sig-A" });
-      result.current.updateApprovalRecord(1, { reviewer: "b", signature: "sig-B" });
-      result.current.applyPolicy("apply");
-    });
-    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
-
-    expect(result.current.error).toContain("draft is rejected");
   });
 
   it("draftApprovalStatus returns pending when there are changes", async () => {
@@ -539,6 +470,74 @@ describe("useGovernanceState", () => {
     });
 
     expect(result.current.draftApprovalStatus).toBe("pending");
+  });
+
+  it("blocks apply when reviewers are duplicated", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+      result.current.updateApprovalRecord(0, { reviewer: "dup", signature: "sig-A" });
+      result.current.updateApprovalRecord(1, { reviewer: "dup", signature: "sig-B" });
+    });
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm?.onConfirm(); });
+
+    expect(result.current.error).toContain("Reviewers must be distinct");
+  });
+
+  it("blocks apply when signatures are duplicated", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+      result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "same" });
+      result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "same" });
+    });
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm?.onConfirm(); });
+
+    expect(result.current.error).toContain("Signatures must be distinct");
+  });
+
+  it("blocks apply when draft is rejected", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+      result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "sig-A" });
+      result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "sig-B" });
+    });
+    act(() => {
+      result.current.rejectChanges();
+    });
+    act(() => { result.current.pendingConfirm?.onConfirm(); });
+
+    setValidApprovals(result);
+    mockFetch.mockClear();
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm?.onConfirm(); });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.current.draft?.approval_status).toBe("rejected");
   });
 
   it("draftApprovalStatus returns draft when no draft loaded", () => {

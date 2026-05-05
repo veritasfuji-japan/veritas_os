@@ -203,11 +203,11 @@ export function useGovernanceState() {
               return;
             }
             const nextPolicy = normalizeGovernancePolicyWatFields({
-              ...validation.data.policy,
+              ...applyValidation.data.policy,
               effective_at: new Date().toISOString(),
               last_applied: new Date().toISOString(),
               approval_status: "approved" as ApprovalStatus,
-              draft_version: bumpDraftVersion(validation.data.policy.version),
+              draft_version: bumpDraftVersion(applyValidation.data.policy.version),
             } as GovernancePolicyUI);
             setSavedPolicy(nextPolicy);
             setDraft(structuredClone(nextPolicy));
