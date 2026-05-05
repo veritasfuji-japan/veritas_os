@@ -91,30 +91,29 @@ export function useGovernanceState() {
 
   const updateApprovalRecord = useCallback((index: number, patch: Partial<HumanApprovalRecord>) => {
     setApprovalValidationError(null);
-
-    let invalidatedApprovedRecord = false;
+    const targetRecord = approvalRecords[index];
+    const metadataEditedAfterApproval = Boolean(targetRecord)
+      && targetRecord.decision === "approved"
+      && (Object.prototype.hasOwnProperty.call(patch, "reviewer")
+        || Object.prototype.hasOwnProperty.call(patch, "signature")
+        || Object.prototype.hasOwnProperty.call(patch, "reason"));
     setApprovalRecords((prev) => prev.map((item, itemIndex) => {
       if (itemIndex !== index) return item;
       const next = { ...item, ...patch };
-      const metadataEdited = item.decision === "approved"
-        && (Object.prototype.hasOwnProperty.call(patch, "reviewer")
-          || Object.prototype.hasOwnProperty.call(patch, "signature")
-          || Object.prototype.hasOwnProperty.call(patch, "reason"));
-      if (metadataEdited) {
-        invalidatedApprovedRecord = true;
+      if (metadataEditedAfterApproval) {
         return { ...next, decision: "pending", reviewed_at: undefined };
       }
       return next;
     }));
 
-    if (invalidatedApprovedRecord) {
+    if (metadataEditedAfterApproval) {
       setDraft((prev) => (prev && prev.approval_status === "approved"
         ? { ...prev, approval_status: "pending" }
         : prev));
       appendHistory("approval-edit", "approval edited after approval; re-approval required");
       appendLog("approval edited after approval; re-approval required", "warning");
     }
-  }, [appendHistory, appendLog]);
+  }, [appendHistory, appendLog, approvalRecords]);
 
   const updateDraft = useCallback((updater: (prev: GovernancePolicyUI) => GovernancePolicyUI) => {
     setDraft((prev) => {
