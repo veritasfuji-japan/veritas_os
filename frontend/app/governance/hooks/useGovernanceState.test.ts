@@ -396,6 +396,109 @@ describe("useGovernanceState", () => {
     expect(result.current.error).toContain("Apply failed");
   });
 
+
+
+  it("invalidates approved record and draft status when reviewer is edited after approval", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+    });
+    setValidApprovals(result);
+    approveDraft(result);
+
+    const reviewedAtBefore = result.current.approvalRecords[0].reviewed_at;
+    act(() => {
+      result.current.updateApprovalRecord(0, { reviewer: "reviewerA-updated" });
+    });
+
+    expect(result.current.approvalRecords[0].decision).toBe("pending");
+    expect(result.current.approvalRecords[0].reviewed_at).toBeUndefined();
+    expect(result.current.trustLog.some((entry) => entry.message.includes("re-approval required"))).toBe(true);
+    expect(reviewedAtBefore).toBeDefined();
+  });
+
+  it("invalidates approved record when signature or reason is edited after approval", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+    });
+    setValidApprovals(result);
+    approveDraft(result);
+
+    act(() => {
+      result.current.updateApprovalRecord(0, { signature: "sig-A-updated" });
+    });
+    expect(result.current.approvalRecords[0].decision).toBe("pending");
+
+    approveDraft(result);
+    act(() => {
+      result.current.updateApprovalRecord(1, { reason: "reason-updated" });
+    });
+    expect(result.current.approvalRecords[1].decision).toBe("pending");
+  });
+
+  it("requires re-approval after approval metadata edits and refreshes reviewed_at", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+    });
+    setValidApprovals(result);
+    approveDraft(result);
+
+    const firstReviewedAt = result.current.approvalRecords[0].reviewed_at;
+    act(() => {
+      result.current.updateApprovalRecord(0, { reviewer: "reviewerA-updated" });
+    });
+    expect(result.current.draft?.approval_status).toBe("pending");
+
+    mockFetch.mockClear();
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm?.onConfirm(); });
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.updateApprovalRecord(0, { signature: "sig-A-updated" });
+    });
+    approveDraft(result);
+
+    expect(result.current.approvalRecords[0].reviewed_at).toBeDefined();
+    expect(result.current.approvalRecords[0].reviewed_at).not.toBe(firstReviewedAt);
+
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+    mockFetch.mockClear();
+
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm?.onConfirm(); });
+
+    const applyCall = mockFetch.mock.calls.find((call) => call[0] === "/api/veritas/v1/governance/policy" && call[1]?.method === "PUT");
+    expect(applyCall).toBeDefined();
+    const payload = JSON.parse(applyCall[1].body as string) as { approvals: Array<{ reviewer: string; signature: string }> };
+    expect(payload.approvals).toHaveLength(2);
+    expect(payload.approvals[0].reviewer).toBe("reviewerA-updated");
+  });
+
   it("approveChanges sets draft approval_status to approved", async () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
     mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
