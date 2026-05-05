@@ -97,6 +97,7 @@
 | ガイド | [Guides（英語正本）](en/guides/) | [Guides（日本語）](ja/guides/) |
 | AI支援開発 | [AI-assisted development guardrails（英語正本）](en/development/ai-assisted-development.md) | [AI支援開発ガードレール（日本語）](ja/development/ai-assisted-development.md) |
 | AIレビューマトリクス | [AI review matrix（英語正本）](en/development/ai-review-matrix.md) | [AIレビューマトリクス（日本語）](ja/development/ai-review-matrix.md) |
+| 直近のハードニング整理 | [Recent hardening notes（英語正本）](en/development/recent-hardening.md) | [直近のハードニング整理（日本語）](ja/development/recent-hardening.md) |
 | 金融 / AML-KYC | [AML/KYC quickstart（英語正本）](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート（日本語）](ja/guides/poc-pack-financial-quickstart.md) |
 | AML/KYC Regulated Action Path | [AML/KYC Regulated Action Path（英語正本）](en/use-cases/aml-kyc-regulated-action-path.md) | — |
 | 金融ガバナンステンプレート | [Financial governance templates（英語正本）](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート（日本語解説）](ja/guides/financial-governance-templates.md) |
