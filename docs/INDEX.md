@@ -39,6 +39,7 @@
 | Guides | [Guides (EN)](en/guides/) | [Guides (JA)](ja/guides/) |
 | AI-Assisted Development | [AI-assisted development guardrails (EN)](en/development/ai-assisted-development.md) | [AI支援開発ガードレール (JA)](ja/development/ai-assisted-development.md) |
 | AI Review Matrix | [AI review matrix (EN)](en/development/ai-review-matrix.md) | [AIレビューマトリクス (JA)](ja/development/ai-review-matrix.md) |
+| Recent hardening notes | [Recent hardening notes (EN)](en/development/recent-hardening.md) | [直近のハードニング整理 (JA)](ja/development/recent-hardening.md) |
 | Financial / AML-KYC | [AML/KYC quickstart (EN)](en/guides/poc-pack-financial-quickstart.md) | [AML/KYCクイックスタート (JA)](ja/guides/poc-pack-financial-quickstart.md) |
 | AML/KYC Regulated Action Path | [AML/KYC regulated action path (EN)](en/use-cases/aml-kyc-regulated-action-path.md) | — |
 | Financial Governance Templates | [Financial governance templates (EN)](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート (JA)](ja/guides/financial-governance-templates.md) |

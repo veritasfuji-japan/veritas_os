@@ -63,6 +63,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 ### Development Workflow
 - [AI-Assisted Development Guardrails](development/ai-assisted-development.md) — auditable workflow rules for using assistant tools during development.
 - [AI Review Matrix](development/ai-review-matrix.md) — role and authority matrix for AI-assisted development reviews.
+- [Recent Hardening Notes](development/recent-hardening.md) — compact summary of recent auditability, observability, CI gate, and compatibility hardening work.
 
 ### Guides
 - [3-Minute Demo Script](guides/demo-script.md)

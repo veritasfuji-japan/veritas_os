@@ -14,6 +14,7 @@
 | Documentation hub | `docs/en/README.md` | `docs/ja/README.md` | EN/JA fully paired | JA-first 導線を強化 |
 | Development: AI-assisted development guardrails | `docs/en/development/ai-assisted-development.md` | `docs/ja/development/ai-assisted-development.md` | EN/JA fully paired | auditable AI-assisted development workflow の運用ガードレール |
 | Development: AI review matrix | `docs/en/development/ai-review-matrix.md` | `docs/ja/development/ai-review-matrix.md` | EN/JA fully paired | AI支援レビューの役割と権限マトリクス |
+| Development: Recent hardening notes | `docs/en/development/recent-hardening.md` | `docs/ja/development/recent-hardening.md` | EN/JA fully paired | 直近の監査性・観測性・CI品質ゲート・互換性強化の整理 |
 | Architecture: Decision Semantics | `docs/en/architecture/decision-semantics.md` | `docs/ja/architecture/decision-semantics.md` | JA explanation / EN canonical | 仕様判断は EN |
 | Architecture: Bind artifacts | `docs/en/architecture/bind-boundary-governance-artifacts.md` | `docs/ja/architecture/bind-boundary-governance-artifacts.md` | JA explanation / EN canonical | bind成果物解説 |
 | Architecture: Bind admissibility | `docs/en/architecture/bind_time_admissibility_evaluator.md` | `docs/ja/architecture/bind_time_admissibility_evaluator.md` | JA explanation / EN canonical | 互換リンクあり |
