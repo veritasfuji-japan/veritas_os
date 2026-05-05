@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from veritas_os.api.rate_limiting import _rate_lock, _rate_bucket, _RATE_LIMIT, _RATE_WINDOW
 from veritas_os.logging.structured import reset_trace_id, set_trace_id
+from veritas_os.observability.tracing import set_span_attribute, start_span
 
 import logging
 logger = logging.getLogger(__name__)
@@ -112,14 +113,26 @@ def _inflight_snapshot() -> dict:
 # ---------------------------------------------------------------------------
 
 async def attach_trace_id(request: Request, call_next):
-    """Attach a validated trace id to request state and response headers."""
+    """Attach trace id and root request span to request lifecycle."""
     trace_id = _resolve_trace_id_from_request(request)
     request.state.trace_id = trace_id
     token = set_trace_id(trace_id)
-    try:
-        response = await call_next(request)
-    finally:
-        reset_trace_id(token)
+    attributes = {
+        "trace_id": trace_id,
+        "http.method": request.method,
+        "http.route": request.url.path,
+        "veritas.component": "api",
+    }
+    with start_span("http.request", attributes=attributes):
+        try:
+            response = await call_next(request)
+            set_span_attribute("status_code", response.status_code)
+        except Exception as exc:
+            set_span_attribute("error", True)
+            set_span_attribute("error.message", str(exc))
+            raise
+        finally:
+            reset_trace_id(token)
     response.headers[TRACE_ID_HEADER_NAME] = trace_id
     response.headers.setdefault("X-Request-Id", trace_id)
     return response
