@@ -6,12 +6,14 @@ import type { HumanApprovalRecord } from "../governance-types";
 
 interface HumanApprovalWorkbenchProps {
   approvals: HumanApprovalRecord[];
+  approvalStatus: "approved" | "pending" | "rejected" | "draft";
   validationError: string | null;
   onUpdateApproval: (index: number, patch: Partial<HumanApprovalRecord>) => void;
 }
 
 export function HumanApprovalWorkbench({
   approvals,
+  approvalStatus,
   validationError,
   onUpdateApproval,
 }: HumanApprovalWorkbenchProps): JSX.Element {
@@ -24,6 +26,9 @@ export function HumanApprovalWorkbench({
           "Governance Policy の適用前に、2名の外部レビュアー承認情報を入力してください。",
           "Before applying governance policy changes, input approval records from two human reviewers.",
         )}
+      </p>
+      <p className="mb-3 text-xs font-semibold">
+        Overall approval status: <span className="uppercase">{approvalStatus}</span>
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         {approvals.slice(0, 2).map((approval, index) => (

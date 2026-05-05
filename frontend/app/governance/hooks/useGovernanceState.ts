@@ -49,6 +49,18 @@ export function useGovernanceState() {
     setApprovalRecords((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }, []);
 
+  const updateApprovalDecisions = useCallback((decision: HumanApprovalRecord["decision"]) => {
+    const reviewedAt = new Date().toISOString();
+    setApprovalRecords((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex > 1) return item;
+      return {
+        ...item,
+        decision,
+        reviewed_at: item.reviewed_at ?? reviewedAt,
+      };
+    }));
+  }, []);
+
   const validateApprovalRecords = useCallback((): { ok: boolean; message?: string } => {
     if (approvalRecords.length < 2) return { ok: false, message: "Two approvals are required before apply." };
     const relevant = approvalRecords.slice(0, 2);
@@ -173,6 +185,13 @@ export function useGovernanceState() {
               setError(blocked);
               return;
             }
+            if (draft.approval_status !== "approved") {
+              const blocked = "Apply blocked: draft must be approved by two reviewers before apply.";
+              setApprovalValidationError(blocked);
+              appendLog(blocked, "warning");
+              setError(blocked);
+              return;
+            }
             const validation = validateApprovalRecords();
             if (!validation.ok) {
               const blocked = `apply blocked: ${validation.message}`;
@@ -181,8 +200,18 @@ export function useGovernanceState() {
               setError(validation.message ?? "Approval validation failed.");
               return;
             }
-            appendLog(`approval records prepared by ${approvalRecords[0].reviewer.trim()} and ${approvalRecords[1].reviewer.trim()}`, "policy");
-            const approvals = approvalRecords.slice(0, 2).map((item) => ({
+            const approvedApprovals = approvalRecords
+              .slice(0, 2)
+              .filter((item) => item.decision === "approved");
+            if (approvedApprovals.length < 2) {
+              const blocked = "Apply blocked: two approved human approval records are required before apply.";
+              setApprovalValidationError(blocked);
+              appendLog(blocked, "warning");
+              setError(blocked);
+              return;
+            }
+            appendLog(`approval records prepared by ${approvedApprovals[0].reviewer.trim()} and ${approvedApprovals[1].reviewer.trim()}`, "policy");
+            const approvals = approvedApprovals.map((item) => ({
               reviewer: item.reviewer.trim(),
               signature: item.signature.trim(),
               ...(item.reason?.trim() ? { reason: item.reason.trim() } : {}),
@@ -250,26 +279,28 @@ export function useGovernanceState() {
           setError(validation.message ?? "Approval validation failed.");
           return;
         }
+        updateApprovalDecisions("approved");
         setDraft((prev) => prev ? { ...prev, approval_status: "approved" } : prev);
         appendHistory("approve", "draft approved by two reviewers");
         appendLog("draft approved by two reviewers", "policy");
         setSuccess(t("ドラフトを承認しました。apply で本番適用できます。", "Draft approved. Apply to push to production."));
       },
     );
-  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, t, validateApprovalRecords]);
+  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, t, updateApprovalDecisions, validateApprovalRecords]);
 
   const rejectChanges = useCallback(() => {
     if (!draft || !hasChanges) return;
     requestConfirm(
       t("ドラフト変更を却下しますか？", "Reject draft changes?"),
       () => {
+        updateApprovalDecisions("rejected");
         setDraft((prev) => prev ? { ...prev, approval_status: "rejected" } : prev);
         appendHistory("reject", `draft changes rejected by ${selectedRole}`);
         appendLog(`draft rejected by ${selectedRole}`, "warning");
         setSuccess(t("ドラフトを却下しました。", "Draft rejected."));
       },
     );
-  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, t, validateApprovalRecords]);
+  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, selectedRole, t, updateApprovalDecisions]);
 
   const currentRisk = savedPolicy ? Math.round(((savedPolicy.risk_thresholds.deny_upper + savedPolicy.auto_stop.max_risk_score) / 2) * 100) : 0;
   const pendingRisk = draft ? Math.round(((draft.risk_thresholds.deny_upper + draft.auto_stop.max_risk_score) / 2) * 100) : 0;

@@ -502,6 +502,7 @@ export default function GovernanceControlPage(): JSX.Element {
 
           <HumanApprovalWorkbench
             approvals={state.approvalRecords}
+            approvalStatus={state.draftApprovalStatus}
             validationError={state.approvalValidationError}
             onUpdateApproval={state.updateApprovalRecord}
           />
