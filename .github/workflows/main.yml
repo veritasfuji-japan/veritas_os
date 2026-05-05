@@ -310,14 +310,14 @@ jobs:
       - name: Print resolved dependency versions
         run: |
           set -euxo pipefail
-          python - <<'PY'
+          python - <<'PY' | tee future-dependency-versions.txt
           import fastapi
           import pydantic
           import starlette
 
-          print("fastapi", fastapi.__version__)
-          print("pydantic", pydantic.__version__)
-          print("starlette", starlette.__version__)
+          print(f"fastapi {fastapi.__version__}")
+          print(f"pydantic {pydantic.__version__}")
+          print(f"starlette {starlette.__version__}")
           PY
           python -m pip check
 
@@ -333,6 +333,45 @@ jobs:
             veritas_os/tests/test_decide_e2e_reliability.py \
             --tb=short \
             -W error::DeprecationWarning
+
+      - name: Write compatibility summary
+        if: always()
+        run: |
+          {
+            echo "## Future dependency compatibility dry-run"
+            echo ""
+            echo "Status: experimental / non-blocking"
+            echo ""
+            echo "### Production pins"
+            echo "Production dependency manifests were not changed by this job."
+            echo "This job installs \`veritas_os/requirements.txt\` first, then upgrades selected packages only inside the CI job."
+            echo ""
+            echo "### Dry-run ranges"
+            echo "- fastapi: \`>=0.121,<0.123\`"
+            echo "- pydantic: \`>=2.10,<2.12\`"
+            echo ""
+            echo "### Resolved versions"
+            echo "\`\`\`text"
+            if [ -f future-dependency-versions.txt ]; then
+              cat future-dependency-versions.txt
+            else
+              echo "Resolved versions were not captured; dependency install may have failed."
+            fi
+            echo "\`\`\`"
+            echo ""
+            echo "### Targeted tests"
+            echo "- \`veritas_os/tests/test_openapi_no_deprecation_warnings.py\`"
+            echo "- \`veritas_os/tests/test_openapi_spec.py\`"
+            echo "- \`veritas_os/tests/test_openapi_pre_bind_contract.py\`"
+            echo "- \`veritas_os/tests/test_schemas_extra.py\`"
+            echo "- \`veritas_os/tests/test_schemas_extra_v2.py\`"
+            echo "- \`veritas_os/tests/test_decide_e2e_reliability.py\`"
+            echo ""
+            echo "### Interpretation"
+            echo "A failure in this job indicates possible future FastAPI/Pydantic upgrade risk."
+            echo "It does not mean the pinned production dependencies are broken."
+            echo "This job is intentionally \`continue-on-error: true\` until the compatibility lane is stable."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================
   # [Tier 1] Test matrix
