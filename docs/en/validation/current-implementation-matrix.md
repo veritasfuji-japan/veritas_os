@@ -59,6 +59,7 @@ and non-certification boundaries for external reviewers.
 1. `README.md`
 2. `docs/REVIEWER_ENTRYPOINT.md`
 3. `docs/en/validation/current-implementation-matrix.md`
-4. `docs/en/validation/regulated-action-governance-proof-pack.md`
-5. `docs/en/guides/poc-pack-financial-quickstart.md`
-6. `docs/en/validation/external-review-handoff-regulated-action-governance.md`
+4. `docs/en/development/recent-hardening.md`
+5. `docs/en/validation/regulated-action-governance-proof-pack.md`
+6. `docs/en/guides/poc-pack-financial-quickstart.md`
+7. `docs/en/validation/external-review-handoff-regulated-action-governance.md`

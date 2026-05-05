@@ -86,7 +86,8 @@ Primary boundary sources:
 1. Read [Short DD Summary](short-dd-summary.md) (orientation).
 2. Read this compact index (claim/implementation/check/boundary split).
 3. Read [Implemented vs Pending Boundary](implemented-vs-pending-boundary.md).
-4. Spot-check API contract in `openapi.yaml` and one bind mutation path.
-5. Confirm validation gates in [Production Validation Strategy](production-validation.md).
+4. Read [Recent Hardening Notes](../development/recent-hardening.md) for recent auditability, observability, CI gate, API compatibility, and dependency-risk visibility updates.
+5. Spot-check API contract in `openapi.yaml` and one bind mutation path.
+6. Confirm validation gates in [Production Validation Strategy](production-validation.md).
 
 If deeper verification is needed, continue with [External Reviewer Checklist](external-reviewer-checklist.md).
