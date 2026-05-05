@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 
 vi.mock("../../../components/i18n-provider", () => ({
   useI18n: () => ({
@@ -103,9 +103,13 @@ const setValidApprovals = (result: { current: ReturnType<typeof useGovernanceSta
   });
 };
 
-const approveDraft = (result: { current: ReturnType<typeof useGovernanceState> }): void => {
+const approveDraft = async (result: { current: ReturnType<typeof useGovernanceState> }): Promise<void> => {
   act(() => { result.current.approveChanges(); });
   act(() => { result.current.pendingConfirm?.onConfirm(); });
+  await waitFor(() => {
+    expect(result.current.approvalRecords[0].decision).toBe("approved");
+    expect(result.current.approvalRecords[1].decision).toBe("approved");
+  });
 };
 
 describe("useGovernanceState", () => {
@@ -303,7 +307,7 @@ describe("useGovernanceState", () => {
       result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
     });
     setValidApprovals(result);
-    approveDraft(result);
+    await approveDraft(result);
 
     const updatedPolicy = { ...MOCK_POLICY, version: "v2.0" };
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: updatedPolicy }) });
@@ -341,7 +345,7 @@ describe("useGovernanceState", () => {
       result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
     });
     setValidApprovals(result);
-    approveDraft(result);
+    await approveDraft(result);
 
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
@@ -363,7 +367,7 @@ describe("useGovernanceState", () => {
       result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
     });
     setValidApprovals(result);
-    approveDraft(result);
+    await approveDraft(result);
 
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     mockValidate.mockReturnValue({ ok: false });
@@ -386,7 +390,7 @@ describe("useGovernanceState", () => {
       result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
     });
     setValidApprovals(result);
-    approveDraft(result);
+    await approveDraft(result);
 
     mockFetch.mockRejectedValue(new Error("Network failure"));
 
@@ -394,6 +398,109 @@ describe("useGovernanceState", () => {
     await act(async () => { result.current.pendingConfirm!.onConfirm(); });
 
     expect(result.current.error).toContain("Apply failed");
+  });
+
+
+
+  it("invalidates approved record and draft status when reviewer is edited after approval", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+    });
+    setValidApprovals(result);
+    await approveDraft(result);
+
+    const reviewedAtBefore = result.current.approvalRecords[0].reviewed_at;
+    act(() => {
+      result.current.updateApprovalRecord(0, { reviewer: "reviewerA-updated" });
+    });
+
+    expect(result.current.approvalRecords[0].decision).toBe("pending");
+    expect(result.current.approvalRecords[0].reviewed_at).toBeUndefined();
+    expect(result.current.trustLog.some((entry) => entry.message.includes("re-approval required"))).toBe(true);
+    expect(reviewedAtBefore).toBeDefined();
+  });
+
+  it("invalidates approved record when signature or reason is edited after approval", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+    });
+    setValidApprovals(result);
+    await approveDraft(result);
+
+    act(() => {
+      result.current.updateApprovalRecord(0, { signature: "sig-A-updated" });
+    });
+    expect(result.current.approvalRecords[0].decision).toBe("pending");
+
+    await approveDraft(result);
+    act(() => {
+      result.current.updateApprovalRecord(1, { reason: "reason-updated" });
+    });
+    expect(result.current.approvalRecords[1].decision).toBe("pending");
+  });
+
+  it("requires re-approval after approval metadata edits and refreshes reviewed_at", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
+    });
+    setValidApprovals(result);
+    await approveDraft(result);
+
+    const firstReviewedAt = result.current.approvalRecords[0].reviewed_at;
+    act(() => {
+      result.current.updateApprovalRecord(0, { reviewer: "reviewerA-updated" });
+    });
+    expect(result.current.draft?.approval_status).toBe("pending");
+
+    mockFetch.mockClear();
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm?.onConfirm(); });
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.updateApprovalRecord(0, { signature: "sig-A-updated" });
+    });
+    await approveDraft(result);
+
+    expect(result.current.approvalRecords[0].reviewed_at).toBeDefined();
+    expect(result.current.approvalRecords[0].reviewed_at).not.toBe(firstReviewedAt);
+
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+    mockFetch.mockClear();
+
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm?.onConfirm(); });
+
+    const applyCall = mockFetch.mock.calls.find((call) => call[0] === "/api/veritas/v1/governance/policy" && call[1]?.method === "PUT");
+    expect(applyCall).toBeDefined();
+    const payload = JSON.parse(applyCall[1].body as string) as { approvals: Array<{ reviewer: string; signature: string }> };
+    expect(payload.approvals).toHaveLength(2);
+    expect(payload.approvals[0].reviewer).toBe("reviewerA-updated");
   });
 
   it("approveChanges sets draft approval_status to approved", async () => {
@@ -511,7 +618,7 @@ describe("useGovernanceState", () => {
       result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "sig-A" });
       result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "sig-B" });
     });
-    approveDraft(result);
+    await approveDraft(result);
     act(() => {
       result.current.updateApprovalRecord(0, { reviewer: "dup" });
       result.current.updateApprovalRecord(1, { reviewer: "dup" });
@@ -519,7 +626,7 @@ describe("useGovernanceState", () => {
     act(() => { result.current.applyPolicy("apply"); });
     await act(async () => { result.current.pendingConfirm?.onConfirm(); });
 
-    expect(result.current.error).toContain("Reviewers must be distinct");
+    expect(result.current.error).toContain("must be approved by two reviewers");
   });
 
   it("blocks apply when signatures are duplicated", async () => {
@@ -536,7 +643,7 @@ describe("useGovernanceState", () => {
       result.current.updateApprovalRecord(0, { reviewer: "reviewerA", signature: "sig-A" });
       result.current.updateApprovalRecord(1, { reviewer: "reviewerB", signature: "sig-B" });
     });
-    approveDraft(result);
+    await approveDraft(result);
     act(() => {
       result.current.updateApprovalRecord(0, { signature: "same" });
       result.current.updateApprovalRecord(1, { signature: "same" });
@@ -544,7 +651,7 @@ describe("useGovernanceState", () => {
     act(() => { result.current.applyPolicy("apply"); });
     await act(async () => { result.current.pendingConfirm?.onConfirm(); });
 
-    expect(result.current.error).toContain("Signatures must be distinct");
+    expect(result.current.error).toContain("must be approved by two reviewers");
   });
 
   it("blocks apply when draft is rejected", async () => {
@@ -610,7 +717,7 @@ describe("useGovernanceState", () => {
       result.current.updateDraft((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, pii_check: false } }));
     });
     setValidApprovals(result);
-    approveDraft(result);
+    await approveDraft(result);
     act(() => {
       result.current.updateApprovalRecord(1, { decision: "pending" });
     });

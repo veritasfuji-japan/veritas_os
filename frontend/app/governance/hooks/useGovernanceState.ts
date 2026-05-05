@@ -44,11 +44,6 @@ export function useGovernanceState() {
   }, []);
   const fetchAbortRef = useRef<AbortController | null>(null);
 
-  const updateApprovalRecord = useCallback((index: number, patch: Partial<HumanApprovalRecord>) => {
-    setApprovalValidationError(null);
-    setApprovalRecords((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
-  }, []);
-
   const updateApprovalDecisions = useCallback((decision: HumanApprovalRecord["decision"]) => {
     const reviewedAt = new Date().toISOString();
     setApprovalRecords((prev) => prev.map((item, itemIndex) => {
@@ -56,7 +51,7 @@ export function useGovernanceState() {
       return {
         ...item,
         decision,
-        reviewed_at: item.reviewed_at ?? reviewedAt,
+        reviewed_at: reviewedAt,
       };
     }));
   }, []);
@@ -93,6 +88,32 @@ export function useGovernanceState() {
       ...prev,
     ].slice(0, 20));
   }, [selectedRole]);
+
+  const updateApprovalRecord = useCallback((index: number, patch: Partial<HumanApprovalRecord>) => {
+    setApprovalValidationError(null);
+    const targetRecord = approvalRecords[index];
+    const metadataEditedAfterApproval = Boolean(targetRecord)
+      && targetRecord.decision === "approved"
+      && (Object.prototype.hasOwnProperty.call(patch, "reviewer")
+        || Object.prototype.hasOwnProperty.call(patch, "signature")
+        || Object.prototype.hasOwnProperty.call(patch, "reason"));
+    setApprovalRecords((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const next = { ...item, ...patch };
+      if (metadataEditedAfterApproval) {
+        return { ...next, decision: "pending", reviewed_at: undefined };
+      }
+      return next;
+    }));
+
+    if (metadataEditedAfterApproval) {
+      setDraft((prev) => (prev && prev.approval_status === "approved"
+        ? { ...prev, approval_status: "pending" }
+        : prev));
+      appendHistory("approval-edit", "approval edited after approval; re-approval required");
+      appendLog("approval edited after approval; re-approval required", "warning");
+    }
+  }, [appendHistory, appendLog, approvalRecords]);
 
   const updateDraft = useCallback((updater: (prev: GovernancePolicyUI) => GovernancePolicyUI) => {
     setDraft((prev) => {
