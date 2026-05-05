@@ -15,6 +15,7 @@
 ## 実装上の確認ポイント
 - レビュー向けに evidence bundle と手順書が再現可能か。
 - bind-governed effect path の範囲が README と一致しているか。
+- [直近のハードニング整理](../development/recent-hardening.md) で、監査性・観測性・CI品質ゲート・API互換性・依存関係リスク可視化に関する最近の強化内容を確認してください。
 - 詳細は英語正本または実装ファイルを確認してください。
 
 ## 現時点の制限
