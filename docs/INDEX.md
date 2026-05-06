@@ -33,6 +33,7 @@
 | Security | [Security hardening (EN)](en/operations/security-hardening.md) | [セキュリティハードニング (JA)](ja/operations/security-hardening.md) |
 | Database | [Database migrations (EN)](en/operations/database-migrations.md) | [データベース移行 (JA)](ja/operations/database-migrations.md) |
 | Governance Artifact Signing | [Governance artifact signing (EN)](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名 (JA)](ja/operations/governance-artifact-signing.md) |
+| Governance Trace Span Chain | [Governance trace span chain (EN)](en/operations/governance-trace-span-chain.md) | [ガバナンストレース span chain (JA)](ja/operations/governance-trace-span-chain.md) |
 | Governance | [Governance (EN)](en/governance/) | [Governance (JA)](ja/governance/) |
 | Required Evidence Taxonomy | [Required evidence taxonomy (EN)](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy (JA)](ja/governance/required-evidence-taxonomy.md) |
 | Governance Artifact Lifecycle | [Governance artifact lifecycle (EN)](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle (JA)](ja/governance/governance-artifact-lifecycle.md) |
@@ -91,6 +92,7 @@
 | セキュリティ | [Security hardening（英語正本）](en/operations/security-hardening.md) | [セキュリティハードニング（日本語）](ja/operations/security-hardening.md) |
 | データベース | [Database migrations（英語正本）](en/operations/database-migrations.md) | [データベース移行（日本語）](ja/operations/database-migrations.md) |
 | ガバナンス成果物署名 | [Governance artifact signing（英語正本）](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名（日本語解説）](ja/operations/governance-artifact-signing.md) |
+| ガバナンストレース span chain | [Governance trace span chain（英語正本）](en/operations/governance-trace-span-chain.md) | [ガバナンストレース span chain（日本語解説）](ja/operations/governance-trace-span-chain.md) |
 | ガバナンス | [Governance（英語正本）](en/governance/) | [Governance（日本語）](ja/governance/) |
 | Required Evidence Taxonomy | [Required evidence taxonomy（英語正本）](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy（日本語解説）](ja/governance/required-evidence-taxonomy.md) |
 | Governance Artifact Lifecycle | [Governance artifact lifecycle（英語正本）](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle（日本語解説）](ja/governance/governance-artifact-lifecycle.md) |
