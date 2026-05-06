@@ -59,14 +59,15 @@ def test_sample_evidence_json_has_expected_schema_fields() -> None:
 
 
 def test_sample_evidence_json_forbidden_secret_markers_absent() -> None:
-    content = SAMPLE_JSON.read_text(encoding="utf-8").lower()
+    path = SAMPLE_JSON
+    content = path.read_text(encoding="utf-8").lower()
 
     for value in FORBIDDEN_STRINGS:
-        assert value not in content
+        assert value not in content, f"forbidden marker {value!r} found in {path}"
 
 
 def test_sample_evidence_markdown_forbidden_secret_markers_absent() -> None:
     for path in (SAMPLE_MD_EN, SAMPLE_MD_JA):
         content = path.read_text(encoding="utf-8").lower()
         for value in FORBIDDEN_STRINGS:
-            assert value not in content
+            assert value not in content, f"forbidden marker {value!r} found in {path}"

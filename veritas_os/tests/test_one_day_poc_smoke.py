@@ -244,9 +244,12 @@ def test_evidence_json_is_created_and_sanitized(api_server: Any, tmp_path: Path)
         "governance_span_chain": True,
         "rbac_denial_audit_append_visibility": True,
     }
+    assert "not_a_runtime_deployment_reference" in payload["non_goals"]
+    assert "not_a_production_deployment_reference" not in payload["non_goals"]
     serialized = output_path.read_text(encoding="utf-8")
     assert "test-api-key" not in serialized
     assert "secret-exporter" not in serialized
+    assert "not_a_production_deployment_reference" not in serialized
     assert "token" not in serialized.lower()
     assert "exporter_endpoint" not in serialized
 
