@@ -47,6 +47,8 @@
 
 1. 実行:
    - `python scripts/demo/one_day_poc_smoke.py --json`
+   - `python scripts/demo/one_day_poc_smoke.py --json --evidence-json /tmp/veritas_poc_evidence.json`
+   - `python scripts/demo/one_day_poc_smoke.py --evidence-md /tmp/veritas_poc_evidence.md`
 2. `capabilities_ok: true` を確認。
 3. 要約に以下が含まれることを確認:
    - structured logging format
@@ -84,6 +86,7 @@
 
 - [ ] `GET /v1/observability/capabilities` のレスポンス取得
 - [ ] スモークスクリプト JSON 要約の取得
+- [ ] 外部レビュー提出用の sanitized evidence packet（`--evidence-json` / `--evidence-md`）生成
 - [ ] RBAC deny と監査可視性の例
 - [ ] governance update の human approval 証跡
 - [ ] Bind Boundary の結果と receipt サンプル
@@ -104,6 +107,28 @@
 - 暗号学的な human approval 署名は含まない。
 - TrustLog durability 特性は現行実装のままである。
 - スモークツールの mutation 経路は既定で無効。
+- evidence packet は PoC 証跡用であり、本番認証（production certification）ではない。
+
+## Evidence packet の内容と非包含項目
+
+one-day smoke script は、外部共有向けに sanitize 済み evidence packet を生成できます。
+
+- `--evidence-json PATH`: 構造化 JSON evidence packet を出力
+- `--evidence-md PATH`: レビュアー向け Markdown packet を出力
+
+含まれるもの:
+
+- observability capability の allowlist 要約シグナル
+- observability と governance policy read の read-only チェック結果
+- ドキュメント参照リンクと PoC 非目標の明示
+
+含まれないもの:
+
+- API キーおよび `X-API-Key` の値
+- raw exporter endpoint URL
+- raw 環境変数値
+- raw request/response payload 本文
+- token / cookie / password / secret / authorization header
 
 ## 外部レビュアー向け推奨トークトラック
 

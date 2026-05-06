@@ -221,3 +221,74 @@ def test_default_mode_does_not_call_mutation_endpoints(api_server: Any) -> None:
 
     assert result.returncode == 0
     assert state["mutation_called"] is False
+
+
+def test_evidence_json_is_created_and_sanitized(api_server: Any, tmp_path: Path) -> None:
+    base_url, _ = api_server
+    output_path = tmp_path / "evidence.json"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-api-key", "VERITAS_BASE_URL": base_url},
+        "--json",
+        "--evidence-json",
+        str(output_path),
+    )
+
+    assert result.returncode == 0
+    assert output_path.exists()
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "one_day_poc_evidence.v1"
+    assert payload["checks"]["observability_capabilities"]["summary"] == {
+        "structured_logging_format": "json",
+        "opentelemetry_importable": True,
+        "exporter_configured": False,
+        "governance_span_chain": True,
+        "rbac_denial_audit_append_visibility": True,
+    }
+    serialized = output_path.read_text(encoding="utf-8")
+    assert "test-api-key" not in serialized
+    assert "secret-exporter" not in serialized
+    assert "token" not in serialized.lower()
+    assert "exporter_endpoint" not in serialized
+
+
+def test_evidence_markdown_is_created_and_sanitized(
+    api_server: Any, tmp_path: Path
+) -> None:
+    base_url, _ = api_server
+    output_path = tmp_path / "evidence.md"
+    result = _run_script(
+        {"VERITAS_API_KEY": "another-secret-key", "VERITAS_BASE_URL": base_url},
+        "--evidence-md",
+        str(output_path),
+    )
+
+    assert result.returncode == 0
+    assert output_path.exists()
+    content = output_path.read_text(encoding="utf-8")
+    assert "# VERITAS One-Day PoC Evidence Packet" in content
+    assert "another-secret-key" not in content
+    assert "secret-exporter" not in content
+    assert "token" not in content.lower()
+
+
+def test_missing_api_key_does_not_create_evidence_file(tmp_path: Path) -> None:
+    output_path = tmp_path / "evidence.json"
+    result = _run_script(
+        {"VERITAS_API_KEY": ""},
+        "--evidence-json",
+        str(output_path),
+    )
+    assert result.returncode != 0
+    assert not output_path.exists()
+
+
+def test_evidence_write_failure_exits_nonzero(api_server: Any, tmp_path: Path) -> None:
+    base_url, _ = api_server
+    output_path = tmp_path / "missing" / "dir" / "evidence.json"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--evidence-json",
+        str(output_path),
+    )
+    assert result.returncode != 0
+    assert not output_path.exists()

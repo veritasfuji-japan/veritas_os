@@ -45,6 +45,8 @@ This PoC is intended to show enforceable boundaries and auditable behavior, not 
 
 1. Run:
    - `python scripts/demo/one_day_poc_smoke.py --json`
+   - `python scripts/demo/one_day_poc_smoke.py --json --evidence-json /tmp/veritas_poc_evidence.json`
+   - `python scripts/demo/one_day_poc_smoke.py --evidence-md /tmp/veritas_poc_evidence.md`
 2. Confirm `capabilities_ok: true`.
 3. Confirm summary includes:
    - structured logging format
@@ -82,6 +84,7 @@ This PoC is intended to show enforceable boundaries and auditable behavior, not 
 
 - [ ] `GET /v1/observability/capabilities` response captured.
 - [ ] Smoke script JSON summary captured.
+- [ ] Sanitized evidence packet (`--evidence-json` / `--evidence-md`) generated for external reviewers.
 - [ ] RBAC denial example with audit visibility.
 - [ ] Human approval evidence for governance update path.
 - [ ] Bind Boundary outcome + receipt sample.
@@ -102,6 +105,28 @@ This PoC is intended to show enforceable boundaries and auditable behavior, not 
 - No cryptographic human approval signatures.
 - TrustLog durability characteristics remain exactly as implemented today.
 - Optional mutation path is disabled by default in smoke tooling.
+- Evidence packet is PoC evidence only, not production certification.
+
+## Evidence packet contents and exclusions
+
+The one-day smoke script can generate a sanitized evidence packet for external sharing:
+
+- `--evidence-json PATH`: writes a structured JSON evidence packet.
+- `--evidence-md PATH`: writes a reviewer-friendly Markdown packet.
+
+Included in the packet:
+
+- Allowlisted summary signals for observability capabilities.
+- Read-only check status for observability and governance policy read.
+- Documentation links and explicit PoC non-goals.
+
+Not included in the packet:
+
+- API keys or any `X-API-Key` values.
+- Raw exporter endpoint URLs.
+- Raw environment values.
+- Raw request/response payload bodies.
+- Tokens, cookies, passwords, secrets, or authorization headers.
 
 ## Suggested talk track for external reviewers
 
