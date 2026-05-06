@@ -37,8 +37,10 @@ Notes:
 When RBAC rejects a permission check, the active span receives the event:
 
 - `rbac.denied`
+- `rbac.denial.audit_append`
 
 This event records denial metadata only (for example, role, permission, endpoint, method, reason code, trace id) and must not include secrets.
+For `rbac.denial.audit_append`, `audit_append_status = success | failed | deduped` tracks best-effort TrustLog append outcomes without changing RBAC deny semantics or API responses.
 
 ## Privacy-safe attribute policy
 
@@ -69,6 +71,8 @@ Current implementation and tests rely on the following attribute keys:
 - `requested_permission`
 - `endpoint`
 - `method`
+- `audit_append_status`
+- `error_type`
 
 ## Attributes explicitly forbidden
 

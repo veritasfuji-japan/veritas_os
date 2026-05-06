@@ -50,7 +50,9 @@ def test_rbac_denial_appends_audit_event(monkeypatch):
 
 
 def test_rbac_denial_append_failure_still_returns_403(monkeypatch):
+    captured = []
     monkeypatch.setattr(auth, "resolve_role_for_key", lambda _key: Role.auditor)
+    monkeypatch.setattr(auth, "add_span_event", lambda name, attributes=None: captured.append((name, attributes)))
 
     def _raise(_payload):
         raise RuntimeError("append failed")
@@ -65,6 +67,12 @@ def test_rbac_denial_append_failure_still_returns_403(monkeypatch):
         raise AssertionError("expected HTTPException")
     except HTTPException as exc:
         assert exc.status_code == 403
+    assert any(
+        name == "rbac.denial.audit_append"
+        and attrs.get("audit_append_status") == "failed"
+        and "error_type" in attrs
+        for name, attrs in captured
+    )
 
 
 def test_rbac_denial_payload_excludes_secrets(monkeypatch):
@@ -92,8 +100,10 @@ def test_rbac_denial_payload_excludes_secrets(monkeypatch):
 
 def test_rbac_denial_dedupe(monkeypatch):
     captured = []
+    span_events = []
     monkeypatch.setattr(auth, "resolve_role_for_key", lambda _key: Role.auditor)
     monkeypatch.setattr(auth, "append_signed_decision", lambda payload: captured.append(payload))
+    monkeypatch.setattr(auth, "add_span_event", lambda name, attributes=None: span_events.append((name, attributes)))
     auth._rbac_denial_dedupe_cache.clear()
 
     checker = auth.require_permission(Permission.decide)
@@ -109,6 +119,10 @@ def test_rbac_denial_dedupe(monkeypatch):
             pass
 
     assert len(captured) == 1
+    assert any(
+        name == "rbac.denial.audit_append" and attrs.get("audit_append_status") == "deduped"
+        for name, attrs in span_events
+    )
 
     req3 = _build_request(path="/v1/decide")
     req3.state.trace_id = "different"
@@ -134,6 +148,47 @@ def test_rbac_denial_helper_handles_none_request(monkeypatch):
     assert len(captured) == 1
     assert captured[0]["endpoint"] == "unknown"
     assert captured[0]["method"] == "unknown"
+
+
+def test_rbac_denial_append_success_emits_audit_append_status(monkeypatch):
+    captured = []
+    monkeypatch.setattr(auth, "append_signed_decision", lambda payload: None)
+    monkeypatch.setattr(auth, "add_span_event", lambda name, attributes=None: captured.append((name, attributes)))
+    auth._rbac_denial_dedupe_cache.clear()
+
+    auth._append_rbac_denial_audit_event_best_effort(
+        request=_build_request(path="/v1/decide", method="POST"),
+        role=Role.auditor,
+        permission=Permission.decide,
+        reason_code="RBAC_INSUFFICIENT_PERMISSION",
+    )
+
+    assert any(
+        name == "rbac.denial.audit_append" and attrs.get("audit_append_status") == "success"
+        for name, attrs in captured
+    )
+
+
+def test_rbac_denial_visibility_excludes_forbidden_attributes_in_events_and_logs(monkeypatch, caplog):
+    span_events = []
+    monkeypatch.setattr(auth, "add_span_event", lambda name, attributes=None: span_events.append((name, attributes)))
+    auth._emit_rbac_denial_audit_append_visibility(
+        audit_append_status="failed",
+        attributes={
+            "event_type": "rbac_denial",
+            "reason_code": "RBAC_INSUFFICIENT_PERMISSION",
+            "actor_role": "auditor",
+            "requested_permission": "decide",
+            "endpoint": "/v1/private",
+            "method": "GET",
+            "trace_id": "trace-001",
+        },
+        error_type="RuntimeError",
+    )
+
+    dump = str(span_events) + str(caplog.records)
+    for forbidden in ("Authorization", "X-API-Key", "Cookie", "token=secret", "query_string", "password"):
+        assert forbidden not in dump
 
 
 def test_rbac_denial_fields_survive_signed_summary_compaction():

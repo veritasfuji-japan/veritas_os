@@ -627,7 +627,22 @@ def _append_rbac_denial_audit_event_best_effort(
         endpoint=endpoint,
         trace_id=trace_id,
     )
+
+    base_attrs = {
+        "event_type": "rbac_denial",
+        "reason_code": reason_code,
+        "actor_role": role.value,
+        "requested_permission": permission.value,
+        "endpoint": endpoint,
+        "method": method,
+        "trace_id": trace_id,
+    }
+
     if not _should_append_rbac_denial_event(dedupe_key=dedupe_key, now_ts=time.time()):
+        _emit_rbac_denial_audit_append_visibility(
+            audit_append_status="deduped",
+            attributes=base_attrs,
+        )
         return
 
     event_payload = {
@@ -644,20 +659,41 @@ def _append_rbac_denial_audit_event_best_effort(
     }
     add_span_event(
         "rbac.denied",
-        attributes={
-            "event_type": "rbac_denial",
-            "reason_code": reason_code,
-            "actor_role": role.value,
-            "requested_permission": permission.value,
-            "endpoint": endpoint,
-            "method": method,
-            "trace_id": trace_id,
-        },
+        attributes=base_attrs,
     )
     try:
         append_signed_decision(event_payload)
+        _emit_rbac_denial_audit_append_visibility(
+            audit_append_status="success",
+            attributes=base_attrs,
+        )
     except Exception as exc:
-        logger.warning("RBAC denial audit append failed: %s", _errstr(exc))
+        _emit_rbac_denial_audit_append_visibility(
+            audit_append_status="failed",
+            attributes=base_attrs,
+            error_type=type(exc).__name__,
+        )
+
+
+def _emit_rbac_denial_audit_append_visibility(
+    *,
+    audit_append_status: str,
+    attributes: Dict[str, Optional[str]],
+    error_type: Optional[str] = None,
+) -> None:
+    """Emit structured observability signals for RBAC denial audit append outcomes."""
+    event_attrs = dict(attributes)
+    event_attrs["audit_append_status"] = audit_append_status
+    if error_type:
+        event_attrs["error_type"] = error_type
+
+    add_span_event("rbac.denial.audit_append", attributes=event_attrs)
+
+    safe_log_payload = dict(event_attrs)
+    if audit_append_status == "failed":
+        logger.warning("RBAC denial audit append outcome", extra={"rbac_audit_append": safe_log_payload})
+    else:
+        logger.info("RBAC denial audit append outcome", extra={"rbac_audit_append": safe_log_payload})
 
 
 def require_permission(permission: Permission):
