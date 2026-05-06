@@ -15,11 +15,9 @@ router = APIRouter()
 
 def _resolve_log_format() -> str:
     """Resolve structured logging format without exposing raw config values."""
-    desired = (os.getenv("VERITAS_LOG_FORMAT", "text") or "text").strip().lower()
-    if desired in {"json", "text"}:
-        return desired
-    if not desired:
-        return "unknown"
+    desired = (os.getenv("VERITAS_LOG_FORMAT") or "text").strip().lower()
+    if desired == "json":
+        return "json"
     return "text"
 
 
