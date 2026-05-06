@@ -24,8 +24,8 @@ For `PUT /v1/governance/policy`, the expected span chain is:
 4. `governance.bind_boundary.evaluate`
 5. `bind.boundary.evaluate.start` (event)
 6. `bind.boundary.evaluate.end` (event)
-8. `governance.policy.persist`
-9. `governance.policy_update.response`
+7. `governance.policy.persist`
+8. `governance.policy_update.response`
 
 Notes:
 
