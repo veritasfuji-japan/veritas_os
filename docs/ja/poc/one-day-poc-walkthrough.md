@@ -32,6 +32,8 @@
 
 この PoC の目的は、最終パッケージではなく「強制可能な境界」と「監査可能性」を示すことです。外部レビュー提出用の推奨成果物は sanitized evidence packet です。
 
+スモークスクリプト実行前に、提出物の形式はサンプル証跡で事前確認できます: `docs/en/poc/sample-one-day-poc-evidence.json`、`docs/en/poc/sample-one-day-poc-evidence.md`、`docs/ja/poc/sample-one-day-poc-evidence.md`。これらは dummy / sanitized / fixture-based のサンプルであり、実環境の証跡ではありません。
+
 ## 前提条件
 
 1. VERITAS API サーバーが起動済みであること。

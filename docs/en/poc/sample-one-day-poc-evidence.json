@@ -1,0 +1,37 @@
+{
+  "packet_type": "veritas_one_day_poc_evidence",
+  "schema_version": "one_day_poc_evidence.v1",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "read_only": true,
+  "mutation_allowed": false,
+  "checks": {
+    "observability_capabilities": {
+      "status_code": 200,
+      "ok": true,
+      "summary": {
+        "structured_logging_format": "json",
+        "opentelemetry_importable": true,
+        "exporter_configured": false,
+        "governance_span_chain": true,
+        "rbac_denial_audit_append_visibility": true
+      }
+    },
+    "governance_policy_read": {
+      "status_code": 200,
+      "required": false
+    }
+  },
+  "docs": {
+    "walkthrough_en": "docs/en/poc/one-day-poc-walkthrough.md",
+    "walkthrough_ja": "docs/ja/poc/one-day-poc-walkthrough.md",
+    "trace_span_chain_en": "docs/en/operations/governance-trace-span-chain.md",
+    "trace_span_chain_ja": "docs/ja/operations/governance-trace-span-chain.md"
+  },
+  "non_goals": [
+    "not_a_production_deployment_reference",
+    "no_jaeger_grafana_tempo_otlp_deployment",
+    "no_cryptographic_human_approval_signature",
+    "no_new_trustlog_durability_guarantee"
+  ],
+  "warnings": []
+}
