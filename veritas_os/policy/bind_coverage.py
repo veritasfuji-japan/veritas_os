@@ -111,6 +111,7 @@ BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
     BindCoverageEntry("/v1/system/resume", "POST", BindCoverageClass.BIND_GOVERNED),
     BindCoverageEntry("/v1/system/halt-status", "GET", BindCoverageClass.READ_ONLY),
     BindCoverageEntry("/v1/compliance/deployment-readiness", "GET", BindCoverageClass.READ_ONLY),
+    BindCoverageEntry("/v1/observability/capabilities", "GET", BindCoverageClass.READ_ONLY),
 )
 
 _REGISTRY_INDEX = {entry.key(): entry for entry in BIND_COVERAGE_REGISTRY}

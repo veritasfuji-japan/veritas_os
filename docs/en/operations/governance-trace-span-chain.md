@@ -134,3 +134,13 @@ Use this checklist during review:
 4. Confirm forbidden attributes are absent from span attributes/events.
 5. Confirm no-op fallback behavior is documented and tested.
 6. Confirm this scope does not include Jaeger/Grafana/OTLP deployment work.
+
+## Runtime observability capabilities endpoint
+
+Use `GET /v1/observability/capabilities` to inspect current runtime observability and auditability capabilities in a read-only form.
+
+Security boundary:
+- Exporter configuration is reported as a boolean only.
+- Raw endpoint URLs, tokens, API keys, and secrets are never returned.
+
+This endpoint may still report Jaeger/Grafana/OTLP-related items as non-goals or not configured in the current environment.

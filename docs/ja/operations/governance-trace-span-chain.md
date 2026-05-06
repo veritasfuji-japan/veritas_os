@@ -133,3 +133,13 @@ tracing helper は fail-safe 設計です。
 4. 禁止 attributes が span attributes/events に含まれないことを確認する。
 5. no-op fallback の挙動が文書化され、テストで担保されていることを確認する。
 6. 本PRに Jaeger/Grafana/OTLP のデプロイ作業が含まれないことを確認する。
+
+## Runtime observability capabilities endpoint
+
+`GET /v1/observability/capabilities` を使うと、現在環境の observability / auditability capability を read-only で確認できます。
+
+セキュリティ境界:
+- exporter 設定は boolean のみ返します。
+- endpoint URL、token、API key、secret の生値は返しません。
+
+この endpoint では、環境によって Jaeger/Grafana/OTLP 関連項目が non-goal / not configured として返る場合があります。
