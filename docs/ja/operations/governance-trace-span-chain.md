@@ -38,8 +38,10 @@
 RBAC が権限不足を拒否した場合、アクティブ span に次の event が付与されます。
 
 - `rbac.denied`
+- `rbac.denial.audit_append`
 
 この event には role / permission / endpoint / method / reason code / trace id などの拒否メタデータのみを記録し、秘密情報は含めません。
+`rbac.denial.audit_append` では `audit_append_status = success | failed | deduped` により、best-effort な TrustLog 追記結果のみを可視化します（RBAC deny の意味論や API 応答は変更しません）。
 
 ## プライバシー安全属性ポリシー
 
@@ -70,6 +72,8 @@ RBAC が権限不足を拒否した場合、アクティブ span に次の event
 - `requested_permission`
 - `endpoint`
 - `method`
+- `audit_append_status`
+- `error_type`
 
 ## 明示的に禁止される attributes
 

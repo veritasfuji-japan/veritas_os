@@ -22,6 +22,10 @@ EXPECTED_GOVERNANCE_TRACE_SPANS = (
     "governance.policy.persist",
     "governance.policy_update.response",
 )
+EXPECTED_RBAC_TRACE_EVENTS = (
+    "rbac.denied",
+    "rbac.denial.audit_append",
+)
 
 FORBIDDEN_TRACE_ATTRIBUTE_NAMES = {
     "authorization",
@@ -294,6 +298,9 @@ def test_trace_docs_include_expected_spans_and_forbidden_attributes(doc_path):
     content = open(doc_path, "r", encoding="utf-8").read()
     for span_name in EXPECTED_GOVERNANCE_TRACE_SPANS:
         assert span_name in content
+    for event_name in EXPECTED_RBAC_TRACE_EVENTS:
+        assert event_name in content
+    assert "audit_append_status = success | failed | deduped" in content
     content_lower = content.lower()
     for forbidden_name in FORBIDDEN_TRACE_ATTRIBUTE_NAMES:
         assert forbidden_name in content_lower
