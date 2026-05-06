@@ -24,7 +24,7 @@ def _bool_env(name: str, *, default: bool = False) -> bool:
 def _http_get_json(base_url: str, path: str, api_key: str) -> tuple[int, dict[str, Any]]:
     url = f"{base_url.rstrip('/')}{path}"
     req = request.Request(url=url, method="GET")
-    req.add_header("Authorization", f"Bearer {api_key}")
+    req.add_header("X-API-Key", api_key)
     req.add_header("Accept", "application/json")
     try:
         with request.urlopen(req, timeout=DEFAULT_TIMEOUT_SECONDS) as response:
@@ -59,18 +59,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run VERITAS one-day PoC smoke checks")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--base-url", default=os.getenv("VERITAS_BASE_URL", DEFAULT_BASE_URL))
-    parser.add_argument("--api-key-env", default="VERITAS_API_KEY")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    api_key = os.getenv(args.api_key_env)
+    api_key = os.getenv("VERITAS_API_KEY")
     if not api_key:
-        print(
-            f"ERROR: missing required environment variable {args.api_key_env}",
-            file=sys.stderr,
-        )
+        print("ERROR: missing required API credentials", file=sys.stderr)
         return 2
 
     allow_mutation = _bool_env("VERITAS_DEMO_ALLOW_MUTATION", default=False)

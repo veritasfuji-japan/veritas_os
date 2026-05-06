@@ -81,7 +81,49 @@ def test_missing_api_key_fails_clearly() -> None:
     result = _run_script({"VERITAS_API_KEY": ""})
 
     assert result.returncode != 0
-    assert "missing required environment variable VERITAS_API_KEY" in result.stderr
+    assert "missing required API credentials" in result.stderr
+
+
+def test_uses_x_api_key_header_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("one_day_poc_smoke", SCRIPT_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    captured_headers: dict[str, str] = {}
+
+    class DummyResponse:
+        def __enter__(self) -> "DummyResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def getcode(self) -> int:
+            return 200
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def _fake_urlopen(req: Any, timeout: float) -> DummyResponse:
+        del timeout
+        captured_headers.update(dict(req.header_items()))
+        return DummyResponse()
+
+    monkeypatch.setattr(module.request, "urlopen", _fake_urlopen)
+
+    status, _payload = module._http_get_json(
+        "http://127.0.0.1:8000",
+        "/v1/observability/capabilities",
+        "key-for-test",
+    )
+
+    assert status == 200
+    assert captured_headers.get("X-api-key") == "key-for-test"
+    assert "Authorization" not in captured_headers
 
 
 def test_script_does_not_print_api_key(api_server: Any) -> None:
