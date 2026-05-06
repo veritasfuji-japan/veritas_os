@@ -34,6 +34,7 @@ This PoC is intended to show enforceable boundaries and auditable behavior, not 
 
 1. Running VERITAS API server.
 2. API key with read permissions for observability endpoints.
+   - The API key must map to a role with `governance_read` permission, such as `auditor` or `admin`.
 3. Local environment variables:
    - `VERITAS_BASE_URL` (optional, default `http://127.0.0.1:8000`)
    - `VERITAS_API_KEY` (required)

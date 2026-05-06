@@ -40,12 +40,31 @@ def api_server(monkeypatch: pytest.MonkeyPatch) -> Any:
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 payload = {
-                    "structured_logging_format": "json",
-                    "opentelemetry_importable": True,
-                    "exporter_configured": False,
-                    "exporter_endpoint": "http://secret-exporter:4317",
-                    "governance_span_chain": True,
-                    "rbac_denial_audit_append_visibility": True,
+                    "ok": True,
+                    "observability": {
+                        "structured_logging": {
+                            "available": True,
+                            "format": "json",
+                            "trace_id_supported": True,
+                        },
+                        "tracing": {
+                            "helper_available": True,
+                            "opentelemetry_importable": True,
+                            "exporter_configured": False,
+                            "no_op_fallback": True,
+                            "governance_span_chain": True,
+                            "rbac_denial_events": True,
+                            "rbac_denial_audit_append_visibility": True,
+                        },
+                        "docs": {
+                            "governance_trace_span_chain_en": (
+                                "docs/en/operations/governance-trace-span-chain.md"
+                            ),
+                            "governance_trace_span_chain_ja": (
+                                "docs/ja/operations/governance-trace-span-chain.md"
+                            ),
+                        },
+                    },
                 }
                 self.wfile.write(json.dumps(payload).encode("utf-8"))
                 return
@@ -74,6 +93,7 @@ def api_server(monkeypatch: pytest.MonkeyPatch) -> Any:
         yield url, state
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -122,8 +142,9 @@ def test_uses_x_api_key_header_only(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert status == 200
-    assert captured_headers.get("X-api-key") == "key-for-test"
-    assert "Authorization" not in captured_headers
+    lowered = {k.lower(): v for k, v in captured_headers.items()}
+    assert lowered.get("x-api-key") == "key-for-test"
+    assert "authorization" not in lowered
 
 
 def test_script_does_not_print_api_key(api_server: Any) -> None:
@@ -151,9 +172,12 @@ def test_capabilities_response_is_summarized(api_server: Any) -> None:
     assert payload["capabilities_ok"] is True
     assert payload["observability"]["structured_logging_format"] == "json"
     assert payload["observability"]["opentelemetry_importable"] is True
+    assert payload["observability"]["exporter_configured"] is False
+    assert payload["observability"]["governance_span_chain"] is True
+    assert payload["observability"]["rbac_denial_audit_append_visibility"] is True
 
 
-def test_exporter_endpoint_raw_value_is_not_printed(api_server: Any) -> None:
+def test_unexpected_exporter_endpoint_raw_value_is_not_printed(api_server: Any) -> None:
     base_url, _ = api_server
     result = _run_script(
         {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
@@ -162,6 +186,18 @@ def test_exporter_endpoint_raw_value_is_not_printed(api_server: Any) -> None:
 
     assert result.returncode == 0
     assert "secret-exporter" not in result.stdout
+
+
+def test_fixture_does_not_expose_exporter_endpoint_field(api_server: Any) -> None:
+    base_url, _ = api_server
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--json",
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert "exporter_endpoint" not in payload["observability"]
 
 
 def test_non_200_capabilities_fails_nonzero() -> None:

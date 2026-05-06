@@ -44,12 +44,24 @@ def _http_get_json(base_url: str, path: str, api_key: str) -> tuple[int, dict[st
 
 
 def _extract_observability_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    observability = payload.get("observability")
+    if not isinstance(observability, dict):
+        observability = {}
+
+    structured = observability.get("structured_logging")
+    if not isinstance(structured, dict):
+        structured = {}
+
+    tracing = observability.get("tracing")
+    if not isinstance(tracing, dict):
+        tracing = {}
+
     return {
-        "structured_logging_format": payload.get("structured_logging_format"),
-        "opentelemetry_importable": payload.get("opentelemetry_importable"),
-        "exporter_configured": payload.get("exporter_configured"),
-        "governance_span_chain": payload.get("governance_span_chain"),
-        "rbac_denial_audit_append_visibility": payload.get(
+        "structured_logging_format": structured.get("format"),
+        "opentelemetry_importable": tracing.get("opentelemetry_importable"),
+        "exporter_configured": tracing.get("exporter_configured"),
+        "governance_span_chain": tracing.get("governance_span_chain"),
+        "rbac_denial_audit_append_visibility": tracing.get(
             "rbac_denial_audit_append_visibility"
         ),
     }

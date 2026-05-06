@@ -36,6 +36,7 @@
 
 1. VERITAS API サーバーが起動済みであること。
 2. observability エンドポイントを読める API キーがあること。
+   - API キーは `governance_read` 権限を含む role（例: `auditor` / `admin`）に紐づいている必要があります。
 3. 環境変数:
    - `VERITAS_BASE_URL`（任意、既定値 `http://127.0.0.1:8000`）
    - `VERITAS_API_KEY`（必須）
