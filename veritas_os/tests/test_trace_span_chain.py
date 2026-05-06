@@ -12,6 +12,31 @@ from veritas_os.api.rbac import Permission, Role
 from veritas_os.observability import tracing
 from veritas_os.policy.bind_artifacts import FinalOutcome
 
+EXPECTED_GOVERNANCE_TRACE_SPANS = (
+    "http.request",
+    "governance.policy_update.request",
+    "governance.approval.validate",
+    "governance.bind_boundary.evaluate",
+    "bind.boundary.evaluate.start",
+    "bind.boundary.evaluate.end",
+    "governance.policy.persist",
+    "governance.policy_update.response",
+)
+
+FORBIDDEN_TRACE_ATTRIBUTE_NAMES = {
+    "authorization",
+    "x-api-key",
+    "cookie",
+    "token",
+    "secret",
+    "password",
+    "raw request body",
+    "query_string",
+    "personally identifying free-text payloads",
+    "approval signature raw secret beyond existing v1 token string semantics",
+    "medical/financial record contents",
+}
+
 
 def test_tracing_noop_without_opentelemetry(monkeypatch):
     monkeypatch.setattr(tracing, "otel_trace", None)
@@ -208,6 +233,19 @@ def test_governance_put_span_chain_happy_path(monkeypatch):
     assert "governance.policy_update.request" in steps
     assert "governance.approval.validate" in steps
     assert "governance.bind_boundary.evaluate" in steps
+    assert "governance.policy.persist" in steps
+    assert "governance.policy_update.response" in steps
+
+
+def test_governance_trace_span_expectation_alignment():
+    implemented_steps = {
+        "governance.policy_update.request",
+        "governance.approval.validate",
+        "governance.bind_boundary.evaluate",
+        "governance.policy.persist",
+        "governance.policy_update.response",
+    }
+    assert implemented_steps.issubset(set(EXPECTED_GOVERNANCE_TRACE_SPANS))
 
 
 def test_governance_put_approval_failure_adds_event(monkeypatch):
@@ -241,3 +279,21 @@ def test_rbac_denial_adds_span_event(monkeypatch):
     assert captured
     assert captured[0][0] == "rbac.denied"
     assert "token" not in str(captured[0][1]).lower()
+    lowered_keys = {str(key).lower() for key in captured[0][1].keys()}
+    assert lowered_keys.isdisjoint(FORBIDDEN_TRACE_ATTRIBUTE_NAMES)
+
+
+@pytest.mark.parametrize(
+    "doc_path",
+    (
+        "docs/en/operations/governance-trace-span-chain.md",
+        "docs/ja/operations/governance-trace-span-chain.md",
+    ),
+)
+def test_trace_docs_include_expected_spans_and_forbidden_attributes(doc_path):
+    content = open(doc_path, "r", encoding="utf-8").read()
+    for span_name in EXPECTED_GOVERNANCE_TRACE_SPANS:
+        assert span_name in content
+    content_lower = content.lower()
+    for forbidden_name in FORBIDDEN_TRACE_ATTRIBUTE_NAMES:
+        assert forbidden_name in content_lower

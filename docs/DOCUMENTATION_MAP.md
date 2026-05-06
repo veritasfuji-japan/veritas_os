@@ -37,6 +37,7 @@
 | Operations: Security hardening | `docs/en/operations/security-hardening.md` | `docs/ja/operations/security-hardening.md` | JA explanation / EN canonical | ハードニング観点 |
 | Operations: Database migrations | `docs/en/operations/database-migrations.md` | `docs/ja/operations/database-migrations.md` | JA explanation / EN canonical | 移行手順 |
 | Operations: Governance artifact signing | `docs/en/operations/governance-artifact-signing.md` | `docs/ja/operations/governance-artifact-signing.md` | JA explanation / EN canonical | 署名運用 |
+| Operations: Governance trace span chain | `docs/en/operations/governance-trace-span-chain.md` | `docs/ja/operations/governance-trace-span-chain.md` | JA explanation / EN canonical | observability検証導線 |
 | Operations: Legacy path cleanup | `docs/en/operations/legacy-path-cleanup.md` | `docs/ja/operations/legacy-path-cleanup.md` | JA explanation / EN canonical | 旧経路整理 |
 | Governance: Required evidence taxonomy | `docs/en/governance/required-evidence-taxonomy.md` | `docs/ja/governance/required-evidence-taxonomy.md` | JA explanation / EN canonical | taxonomy語彙 |
 | Governance: Artifact lifecycle | `docs/en/governance/governance-artifact-lifecycle.md` | `docs/ja/governance/governance-artifact-lifecycle.md` | JA explanation / EN canonical | lifecycle管理 |
