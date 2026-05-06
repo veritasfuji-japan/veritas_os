@@ -39,6 +39,27 @@ class _NoOpContextManager:
         return False
 
 
+class _SafeSpanContextManager:
+    """Wrap a span context manager and set attributes on the activated span."""
+
+    def __init__(self, span_cm: Any, attributes: dict[str, Any] | None = None) -> None:
+        self._span_cm = span_cm
+        self._attributes = attributes or {}
+
+    def __enter__(self) -> Any:
+        span = self._span_cm.__enter__()
+        if self._attributes:
+            for key, value in self._attributes.items():
+                try:
+                    span.set_attribute(key, value)
+                except Exception:
+                    continue
+        return span
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        return self._span_cm.__exit__(exc_type, exc_val, exc_tb)
+
+
 def get_tracer():
     """Return OpenTelemetry tracer when available, otherwise a no-op tracer."""
     if otel_trace is None:
@@ -60,7 +81,11 @@ def _active_span() -> Any:
 
 
 def start_span(name: str, attributes: dict[str, Any] | None = None):
-    """Start a span context manager with optional privacy-safe attributes."""
+    """Start a span context manager with optional privacy-safe attributes.
+
+    Attributes are attached after span activation to avoid writing to a stale
+    current span in real OpenTelemetry runtimes.
+    """
     tracer = get_tracer()
     if tracer is None:
         return _NoOpContextManager()
@@ -69,14 +94,7 @@ def start_span(name: str, attributes: dict[str, Any] | None = None):
     except Exception:
         return _NoOpContextManager()
 
-    if attributes:
-        try:
-            current = _active_span()
-            for key, value in attributes.items():
-                current.set_attribute(key, value)
-        except Exception:
-            pass
-    return span_cm
+    return _SafeSpanContextManager(span_cm, attributes=attributes)
 
 
 def add_span_event(name: str, attributes: dict[str, Any] | None = None) -> None:
