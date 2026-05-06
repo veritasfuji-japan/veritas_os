@@ -39,6 +39,7 @@
 | Governance Artifact Lifecycle | [Governance artifact lifecycle (EN)](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle (JA)](ja/governance/governance-artifact-lifecycle.md) |
 | Guides | [Guides (EN)](en/guides/) | [Guides (JA)](ja/guides/) |
 | One-Day PoC Walkthrough | [One-Day VERITAS PoC Walkthrough (EN)](en/poc/one-day-poc-walkthrough.md) — Includes sanitized JSON/Markdown evidence packet generation. | [One-Day VERITAS PoC Walkthrough (JA)](ja/poc/one-day-poc-walkthrough.md) — sanitized evidence packet（JSON/Markdown）生成を含む。 |
+| One-Day PoC Sample Evidence Packet | [Sample one-day PoC evidence (EN JSON/Markdown)](en/poc/sample-one-day-poc-evidence.json) / [Markdown](en/poc/sample-one-day-poc-evidence.md) | [Sample one-day PoC evidence（JA Markdown）](ja/poc/sample-one-day-poc-evidence.md) |
 | AI-Assisted Development | [AI-assisted development guardrails (EN)](en/development/ai-assisted-development.md) | [AI支援開発ガードレール (JA)](ja/development/ai-assisted-development.md) |
 | AI Review Matrix | [AI review matrix (EN)](en/development/ai-review-matrix.md) | [AIレビューマトリクス (JA)](ja/development/ai-review-matrix.md) |
 | Recent hardening notes | [Recent hardening notes (EN)](en/development/recent-hardening.md) | [直近のハードニング整理 (JA)](ja/development/recent-hardening.md) |
@@ -99,6 +100,7 @@
 | Governance Artifact Lifecycle | [Governance artifact lifecycle（英語正本）](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle（日本語解説）](ja/governance/governance-artifact-lifecycle.md) |
 | ガイド | [Guides（英語正本）](en/guides/) | [Guides（日本語）](ja/guides/) |
 | One-Day PoC Walkthrough | [One-Day VERITAS PoC Walkthrough（英語正本）](en/poc/one-day-poc-walkthrough.md) | [One-Day VERITAS PoC Walkthrough（日本語）](ja/poc/one-day-poc-walkthrough.md) |
+| One-Day PoC サンプル証跡パケット | [Sample one-day PoC evidence（英語 JSON/Markdown）](en/poc/sample-one-day-poc-evidence.json) / [Markdown](en/poc/sample-one-day-poc-evidence.md) | [Sample one-day PoC evidence（日本語 Markdown）](ja/poc/sample-one-day-poc-evidence.md) |
 | AI支援開発 | [AI-assisted development guardrails（英語正本）](en/development/ai-assisted-development.md) | [AI支援開発ガードレール（日本語）](ja/development/ai-assisted-development.md) |
 | AIレビューマトリクス | [AI review matrix（英語正本）](en/development/ai-review-matrix.md) | [AIレビューマトリクス（日本語）](ja/development/ai-review-matrix.md) |
 | 直近のハードニング整理 | [Recent hardening notes（英語正本）](en/development/recent-hardening.md) | [直近のハードニング整理（日本語）](ja/development/recent-hardening.md) |

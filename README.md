@@ -89,6 +89,12 @@ See full walkthroughs:
 - [One-Day VERITAS PoC Walkthrough (EN)](docs/en/poc/one-day-poc-walkthrough.md)
 - [One-Day VERITAS PoC Walkthrough (JA)](docs/ja/poc/one-day-poc-walkthrough.md)
 
+Sample sanitized evidence packets are available for reviewers who want to preview the deliverable format before running the smoke script.
+
+- [Sample One-Day PoC Evidence (JSON)](docs/en/poc/sample-one-day-poc-evidence.json)
+- [Sample One-Day PoC Evidence (Markdown, EN)](docs/en/poc/sample-one-day-poc-evidence.md)
+- [Sample One-Day PoC Evidence (Markdown, JA)](docs/ja/poc/sample-one-day-poc-evidence.md)
+
 ## AML/KYC Reviewer Walkthrough Quickstart
 
 VERITAS now includes a deterministic AML/KYC reviewer walkthrough for external reviewers, enterprise stakeholders, and investors who need to verify value in under 10 minutes.
