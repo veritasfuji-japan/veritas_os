@@ -12,8 +12,36 @@ SAMPLE_MD_JA = Path("docs/ja/poc/sample-one-day-poc-evidence.md")
 FORBIDDEN_STRINGS = (
     "authorization",
     "x-api-key",
+    "api_key",
+    "api-key",
+    "x_api_key",
+    "token",
+    "access_token",
+    "refresh_token",
+    "bearer",
+    "secret",
+    "client_secret",
+    "private_key",
+    "password",
+    "passwd",
+    "cookie",
+    "session",
+    "credential",
+    "credentials",
     "http://secret",
     "collector.internal",
+    "localhost",
+    "127.0.0.1",
+    "real-customer",
+    "customer.internal",
+    "production",
+    "prod-",
+    "live-",
+    "aws_secret_access_key",
+    "aws_access_key_id",
+    "openai_api_key",
+    "slack_bot_token",
+    "github_token",
 )
 
 
@@ -30,14 +58,14 @@ def test_sample_evidence_json_has_expected_schema_fields() -> None:
     assert payload["checks"]["governance_policy_read"]["status_code"] == 200
 
 
-def test_sample_evidence_json_forbidden_strings_absent() -> None:
+def test_sample_evidence_json_forbidden_secret_markers_absent() -> None:
     content = SAMPLE_JSON.read_text(encoding="utf-8").lower()
 
     for value in FORBIDDEN_STRINGS:
         assert value not in content
 
 
-def test_sample_evidence_markdown_forbidden_strings_absent() -> None:
+def test_sample_evidence_markdown_forbidden_secret_markers_absent() -> None:
     for path in (SAMPLE_MD_EN, SAMPLE_MD_JA):
         content = path.read_text(encoding="utf-8").lower()
         for value in FORBIDDEN_STRINGS:

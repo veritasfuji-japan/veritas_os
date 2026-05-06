@@ -40,12 +40,11 @@
 
 ## Non-goals / limitations
 
-- `not_a_production_deployment_reference`
+- `not_a_runtime_deployment_reference`
 - `no_jaeger_grafana_tempo_otlp_deployment`
 - `no_cryptographic_human_approval_signature`
 - `no_new_trustlog_durability_guarantee`
 
 ## Security boundary
 
-このサンプルには API key / token / secret / password / cookie / raw endpoint / raw request body / raw response body を含みません。
-
+このサンプルには認証情報・機密値・セッション値・直接 endpoint・raw request body・raw response body を含みません。

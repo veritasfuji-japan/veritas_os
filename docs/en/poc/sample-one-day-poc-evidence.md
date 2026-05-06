@@ -1,6 +1,6 @@
 # VERITAS One-Day PoC Evidence Packet — Sample
 
-> This is a fully dummy, sanitized sample packet for format preview only. It is not evidence from any live or production environment.
+> This is a fully dummy, sanitized sample packet for format preview only. It is not evidence from any active environment.
 
 Generated at: 2026-01-01T00:00:00Z
 Read-only: true
@@ -39,12 +39,11 @@ Mutation allowed: false
 
 ## Non-goals / limitations
 
-- `not_a_production_deployment_reference`
+- `not_a_runtime_deployment_reference`
 - `no_jaeger_grafana_tempo_otlp_deployment`
 - `no_cryptographic_human_approval_signature`
 - `no_new_trustlog_durability_guarantee`
 
 ## Security boundary
 
-This sample contains no API keys, raw endpoints, tokens, cookies, passwords, secrets, or raw request/response bodies.
-
+This sample contains no authentication material, direct endpoints, transient auth values, sensitive values, or raw request/response bodies.
