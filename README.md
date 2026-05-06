@@ -45,6 +45,50 @@ Boundary:
 - This is not third-party certification.
 - Fixture-backed PoC evidence should not be presented as live bank-side integration.
 
+## One-Day PoC Evidence Packet
+
+For external reviewers, HPAN, enterprise stakeholders, and investor diligence, use the one-day PoC smoke script to generate a sanitized evidence packet from a running VERITAS API server.
+
+Prerequisites:
+
+- VERITAS API server is running.
+- `VERITAS_API_KEY` is set.
+- The API key maps to a role that includes `governance_read` (for example `auditor` or `admin`).
+
+Run:
+
+```bash
+VERITAS_API_KEY=... python scripts/demo/one_day_poc_smoke.py \
+  --json \
+  --evidence-json /tmp/veritas_poc_evidence.json \
+  --evidence-md /tmp/veritas_poc_evidence.md
+```
+
+Outputs:
+
+- JSON evidence packet
+- Markdown evidence packet
+
+Security boundaries:
+
+- API keys are not written into evidence files.
+- Raw exporter endpoint URLs are not written.
+- Raw environment values are not written.
+- Raw request/response bodies are not copied.
+- Tokens, cookies, passwords, secrets, and authorization headers are not included.
+
+Limitations:
+
+- Not production certification.
+- Jaeger/Grafana/OTLP deployment is not included.
+- Cryptographic human-approval signatures are not included.
+- Final enterprise SLA/certification is not included.
+
+See full walkthroughs:
+
+- [One-Day VERITAS PoC Walkthrough (EN)](docs/en/poc/one-day-poc-walkthrough.md)
+- [One-Day VERITAS PoC Walkthrough (JA)](docs/ja/poc/one-day-poc-walkthrough.md)
+
 ## AML/KYC Reviewer Walkthrough Quickstart
 
 VERITAS now includes a deterministic AML/KYC reviewer walkthrough for external reviewers, enterprise stakeholders, and investors who need to verify value in under 10 minutes.

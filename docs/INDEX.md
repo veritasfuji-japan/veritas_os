@@ -38,7 +38,7 @@
 | Required Evidence Taxonomy | [Required evidence taxonomy (EN)](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy (JA)](ja/governance/required-evidence-taxonomy.md) |
 | Governance Artifact Lifecycle | [Governance artifact lifecycle (EN)](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle (JA)](ja/governance/governance-artifact-lifecycle.md) |
 | Guides | [Guides (EN)](en/guides/) | [Guides (JA)](ja/guides/) |
-| One-Day PoC Walkthrough | [One-Day VERITAS PoC Walkthrough (EN)](en/poc/one-day-poc-walkthrough.md) | [One-Day VERITAS PoC Walkthrough (JA)](ja/poc/one-day-poc-walkthrough.md) |
+| One-Day PoC Walkthrough | [One-Day VERITAS PoC Walkthrough (EN)](en/poc/one-day-poc-walkthrough.md) — Includes sanitized JSON/Markdown evidence packet generation. | [One-Day VERITAS PoC Walkthrough (JA)](ja/poc/one-day-poc-walkthrough.md) — sanitized evidence packet（JSON/Markdown）生成を含む。 |
 | AI-Assisted Development | [AI-assisted development guardrails (EN)](en/development/ai-assisted-development.md) | [AI支援開発ガードレール (JA)](ja/development/ai-assisted-development.md) |
 | AI Review Matrix | [AI review matrix (EN)](en/development/ai-review-matrix.md) | [AIレビューマトリクス (JA)](ja/development/ai-review-matrix.md) |
 | Recent hardening notes | [Recent hardening notes (EN)](en/development/recent-hardening.md) | [直近のハードニング整理 (JA)](ja/development/recent-hardening.md) |
