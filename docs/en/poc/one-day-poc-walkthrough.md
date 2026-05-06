@@ -28,7 +28,7 @@ This walkthrough provides a one-day, external-reviewer-friendly PoC flow for dem
 - Any stronger TrustLog append durability guarantee beyond the current implementation
 - Final enterprise packaging, commercial SLA, or complete security certification
 
-This PoC is intended to show enforceable boundaries and auditable behavior, not final production packaging.
+This PoC is intended to show enforceable boundaries and auditable behavior, not final production packaging. The sanitized evidence packet is the recommended deliverable for external review.
 
 ## Prerequisites
 

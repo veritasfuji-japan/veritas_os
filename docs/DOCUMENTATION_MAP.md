@@ -44,7 +44,7 @@
 | Guides: Financial templates | `docs/en/guides/financial-governance-templates.md` | `docs/ja/guides/financial-governance-templates.md` | JA explanation / EN canonical | AML/KYC導線 |
 | Guides: Bundle promotion | `docs/en/guides/governance-policy-bundle-promotion.md` | `docs/ja/guides/governance-policy-bundle-promotion.md` | JA explanation / EN canonical | ポリシーバンドル昇格 |
 | Guides: PoC quickstart | `docs/en/guides/poc-pack-financial-quickstart.md` | `docs/ja/guides/poc-pack-financial-quickstart.md` | EN/JA fully paired | JAファースト導線 |
-| PoC: One-day walkthrough | `docs/en/poc/one-day-poc-walkthrough.md` | `docs/ja/poc/one-day-poc-walkthrough.md` | JA explanation / EN canonical | 外部レビュー向け1-dayデモ導線 |
+| PoC: One-day walkthrough | `docs/en/poc/one-day-poc-walkthrough.md` | `docs/ja/poc/one-day-poc-walkthrough.md` | JA explanation / EN canonical | 外部レビュー向け1-dayデモ導線 + evidence packet生成 |
 | Positioning: AML/KYC | `docs/en/positioning/aml-kyc-beachhead-short-positioning.md` | `docs/ja/positioning/aml-kyc-beachhead-short-positioning.md` | JA explanation / EN canonical | 公開向け短縮版 |
 | Positioning: Public positioning | `docs/en/positioning/public-positioning.md` | `docs/ja/positioning/public-positioning.md` | JA explanation / EN canonical | 内部再評価含む |
 | UI docs | `docs/ui/README_UI.md` | `docs/ui/PREVIEW_PAGES_JP.md` | Mixed | UI本体は EN、プレビュー案内は JA |
