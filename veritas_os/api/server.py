@@ -932,6 +932,7 @@ from veritas_os.api.routes_system import (  # noqa: E402,F401 -- backward compat
     compliance_deployment_readiness,
 )
 from veritas_os.api.routes_wat import router as _wat_router  # noqa: E402
+from veritas_os.api.routes_observability import router as _observability_router  # noqa: E402
 from veritas_os.api.routes_wat import (  # noqa: E402,F401 -- backward compat
     issue_shadow_wat,
     validate_shadow_wat,
@@ -952,6 +953,7 @@ app.include_router(_trust_router, dependencies=_auth_deps)
 app.include_router(_wat_router, dependencies=_auth_deps)
 app.include_router(_governance_router, dependencies=_gov_deps)
 app.include_router(_system_router, dependencies=[Depends(require_api_key)])
+app.include_router(_observability_router, dependencies=[Depends(require_api_key)])
 app.include_router(_events_router, dependencies=[Depends(require_api_key_header_or_query)])
 
 
