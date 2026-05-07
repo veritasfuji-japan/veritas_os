@@ -38,7 +38,13 @@ def _is_repo_local_doc_path(value: Any) -> bool:
     if "\\" in value:
         return False
     parsed = urlparse(value)
-    if parsed.scheme or parsed.netloc:
+    if (
+        parsed.scheme
+        or parsed.netloc
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
         return False
     path = PurePosixPath(value)
     if path.is_absolute():
