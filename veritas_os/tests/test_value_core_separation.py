@@ -168,6 +168,18 @@ def test_default_weights_include_legacy_japanese_keys():
     assert "最小ステップで前進する" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
 
 
+def test_default_weights_includes_personal_compatibility_key_but_not_normative():
+    assert "sauna_less" in value_core.DEFAULT_WEIGHTS
+    assert "sauna_less" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
+
+
+def test_profile_weights_keyset_matches_default_weights(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    prof = value_core.ValueProfile.load()
+    assert set(prof.weights.keys()) == set(value_core.DEFAULT_WEIGHTS.keys())
+
+
 def test_v2_personal_preferences_preserved(tmp_path, monkeypatch):
     monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
     monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
