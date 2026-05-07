@@ -31,6 +31,7 @@ This walkthrough provides a one-day, external-reviewer-friendly PoC flow for dem
 This PoC is intended to show enforceable boundaries and auditable behavior, not final production packaging. The sanitized evidence packet is the recommended deliverable for external review.
 
 Before running the smoke script, reviewers can preview the final deliverable format using the sample packet fixtures: `docs/en/poc/sample-one-day-poc-evidence.json`, `docs/en/poc/sample-one-day-poc-evidence.md`, and `docs/ja/poc/sample-one-day-poc-evidence.md`. These samples are dummy/sanitized/fixture-based and are not live environment evidence.
+The evidence JSON follows the repo-local schema at `schemas/poc/one_day_poc_evidence.v1.schema.json`.
 
 ## Prerequisites
 
