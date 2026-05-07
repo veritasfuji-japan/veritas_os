@@ -88,6 +88,8 @@ See full walkthroughs:
 
 - [One-Day VERITAS PoC Walkthrough (EN)](docs/en/poc/one-day-poc-walkthrough.md)
 - [One-Day VERITAS PoC Walkthrough (JA)](docs/ja/poc/one-day-poc-walkthrough.md)
+- [One-Day PoC Reviewer Pack (EN)](docs/en/poc/one-day-poc-reviewer-pack.md)
+- [One-Day PoC Reviewer Pack (JA)](docs/ja/poc/one-day-poc-reviewer-pack.md)
 
 Sample sanitized evidence packets are available for reviewers who want to preview the deliverable format before running the smoke script.
 Evidence JSON follows `schemas/poc/one_day_poc_evidence.v1.schema.json`.
