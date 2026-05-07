@@ -1,0 +1,236 @@
+import json
+
+from veritas_os.core import value_core
+
+
+def test_default_separation():
+    assert "ethics" in value_core.DEFAULT_NORMATIVE_WEIGHTS
+    assert "legality" in value_core.DEFAULT_NORMATIVE_WEIGHTS
+    assert "最小ステップで前進する" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
+    assert "mvpコードを進める" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
+    assert "サウナ控め" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
+    assert "minimal_steps" in value_core.DEFAULT_OPERATIONAL_PREFERENCES
+
+
+def test_legacy_split_mapping():
+    split = value_core._split_value_settings({
+        "ethics": 0.9,
+        "最小ステップで前進する": 0.6,
+        "サウナ控め": 0.3,
+    })
+    assert split["normative_weights"]["ethics"] == 0.9
+    assert split["operational_preferences"]["minimal_steps"] == 0.6
+    assert split["personal_preferences"]["sauna_less"] == 0.3
+    assert "サウナ控め" not in split["normative_weights"]
+
+
+def test_personal_canonical_key_is_preserved():
+    split = value_core._split_value_settings({"sauna_less": 0.2})
+    assert split["personal_preferences"]["sauna_less"] == 0.2
+
+
+def test_legacy_personal_key_maps_to_canonical():
+    split = value_core._split_value_settings({"サウナ控め": 0.4})
+    assert split["personal_preferences"]["sauna_less"] == 0.4
+
+
+def test_save_format_v2(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    prof = value_core.ValueProfile.load()
+    prof.save()
+    data = json.loads((tmp_path / "value_core.json").read_text(encoding="utf-8"))
+    assert data["schema_version"] == "value_core.v2"
+    assert "normative_weights" in data
+    assert "operational_preferences" in data
+    assert "personal_preferences" in data
+    assert "weights" not in data
+
+
+def test_evaluate_excludes_operational_personal(monkeypatch):
+    class _Dummy:
+        def __init__(self):
+            self.normative_weights = value_core.DEFAULT_NORMATIVE_WEIGHTS.copy()
+            self.operational_preferences = value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy()
+            self.personal_preferences = {}
+
+        def update_from_scores(self, scores, lr=0.02):
+            return None
+
+    dummy = _Dummy()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: dummy))
+    res = value_core.evaluate("実装を進める", {
+        "no_learn_values": True,
+        "value_scores": {"サウナ控め": 1.0, "mvpコードを進める": 1.0},
+        "personal_preferences": {"sauna_less": 1.0},
+    })
+    assert "サウナ控め" not in res.scores
+    assert "mvpコードを進める" not in res.scores
+    assert "サウナ控め" not in res.top_factors
+    assert "サウナ控め" not in res.contributions
+    assert "mvpコードを進める" not in res.contributions
+
+
+def test_personal_override_does_not_affect_governance_scoring(monkeypatch):
+    class _Dummy:
+        def __init__(self):
+            self.normative_weights = value_core.DEFAULT_NORMATIVE_WEIGHTS.copy()
+            self.operational_preferences = value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy()
+            self.personal_preferences = value_core.DEFAULT_PERSONAL_PREFERENCES.copy()
+
+        def update_from_scores(self, scores, lr=0.02):
+            return None
+
+    dummy = _Dummy()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: dummy))
+    result = value_core.evaluate(
+        "安全な実装",
+        {"no_learn_values": True, "personal_preferences": {"sauna_less": 1.0}},
+    )
+    assert result.personal_preferences["sauna_less"] == 1.0
+    assert "sauna_less" not in result.scores
+    assert "sauna_less" not in result.contributions
+    assert "sauna_less" not in result.top_factors
+
+
+def test_normalize_mapping_merges_defaults():
+    merged = value_core._normalize_mapping(
+        {"ethics": 0.1}, value_core.DEFAULT_NORMATIVE_WEIGHTS,
+    )
+    assert "legality" in merged
+    assert merged["ethics"] == 0.1
+
+
+def test_update_from_scores_normative_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    prof = value_core.ValueProfile.load()
+    prof.update_from_scores({"ethics": 0.2, "サウナ控め": 1.0}, lr=0.5)
+    assert "サウナ控め" not in prof.normative_weights
+
+
+def test_update_weights_backward_compatible(monkeypatch):
+    class _Dummy:
+        def __init__(self):
+            self.normative_weights = value_core.DEFAULT_NORMATIVE_WEIGHTS.copy()
+            self.operational_preferences = value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy()
+            self.personal_preferences = {}
+
+        @property
+        def weights(self):
+            return {
+                **self.normative_weights,
+                **self.operational_preferences,
+                **self.personal_preferences,
+            }
+
+        def save(self):
+            return None
+
+    dummy = _Dummy()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: dummy))
+    merged = value_core.update_weights({"ethics": 0.8, "最小ステップで前進する": 0.7})
+    assert dummy.normative_weights["ethics"] == 0.8
+    assert dummy.operational_preferences["minimal_steps"] == 0.7
+    assert "ethics" in merged
+
+
+def test_legacy_profile_weights_only_still_works(monkeypatch):
+    class _LegacyOnly:
+        def __init__(self):
+            self.weights = value_core.DEFAULT_WEIGHTS.copy()
+
+        def update_from_scores(self, scores, lr=0.02):
+            return None
+
+    legacy = _LegacyOnly()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: legacy))
+    result = value_core.evaluate("テスト", {"no_learn_values": True})
+    assert 0.0 <= result.total <= 1.0
+
+
+def test_update_weights_partial_update_preserves_values(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    profile = value_core.ValueProfile.load()
+    profile.normative_weights["truthfulness"] = 0.11
+    profile.save()
+    value_core.update_weights({"ethics": 0.8})
+    loaded = value_core.ValueProfile.load()
+    assert loaded.normative_weights["ethics"] == 0.8
+    assert loaded.normative_weights["truthfulness"] == 0.11
+
+
+def test_default_weights_include_legacy_japanese_keys():
+    assert "最小ステップで前進する" in value_core.DEFAULT_WEIGHTS
+    assert "mvpコードを進める" in value_core.DEFAULT_WEIGHTS
+    assert "サウナ控め" in value_core.DEFAULT_WEIGHTS
+    assert "最小ステップで前進する" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
+
+
+def test_default_weights_includes_personal_compatibility_key_but_not_normative():
+    assert "sauna_less" in value_core.DEFAULT_WEIGHTS
+    assert "sauna_less" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
+
+
+def test_profile_weights_keyset_matches_default_weights(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    prof = value_core.ValueProfile.load()
+    assert set(prof.weights.keys()) == set(value_core.DEFAULT_WEIGHTS.keys())
+
+
+def test_v2_personal_preferences_preserved(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    profile = value_core.ValueProfile(
+        normative_weights=value_core.DEFAULT_NORMATIVE_WEIGHTS.copy(),
+        operational_preferences=value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy(),
+        personal_preferences={"sauna_less": 0.3},
+    )
+    profile.save()
+    loaded = value_core.ValueProfile.load()
+    assert loaded.personal_preferences["sauna_less"] == 0.3
+
+
+def test_weights_property_returns_legacy_and_new_compatibility_keys():
+    profile = value_core.ValueProfile(
+        normative_weights=value_core.DEFAULT_NORMATIVE_WEIGHTS.copy(),
+        operational_preferences=value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy(),
+        personal_preferences={"sauna_less": 0.3},
+    )
+    merged = profile.weights
+    assert "ethics" in merged
+    assert "minimal_steps" in merged
+    assert "最小ステップで前進する" in merged
+    assert "mvp_progress" in merged
+    assert "mvpコードを進める" in merged
+    assert "サウナ控め" in merged
+    assert "サウナ控め" not in profile.normative_weights
+
+
+def test_saved_v2_does_not_write_legacy_weights_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    profile = value_core.ValueProfile.load()
+    profile.save()
+    data = json.loads((tmp_path / "value_core.json").read_text(encoding="utf-8"))
+    assert data["schema_version"] == "value_core.v2"
+    assert "weights" not in data
+
+
+def test_update_weights_return_contains_compatibility_view(monkeypatch):
+    class _LegacyDummy:
+        def __init__(self):
+            self.weights = {"ethics": 0.1}
+
+        def save(self):
+            return None
+
+    dummy = _LegacyDummy()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: dummy))
+    result = value_core.update_weights({"ethics": 2.0, "user_benefit": 10})
+    assert 0.0 <= result["ethics"] <= 1.0
+    assert 0.0 <= result["user_benefit"] <= 1.0
+    assert "最小ステップで前進する" in result
+    assert "minimal_steps" in result
