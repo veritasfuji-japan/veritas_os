@@ -104,6 +104,14 @@ def test_missing_api_key_fails_clearly() -> None:
     assert "missing required API credentials" in result.stderr
 
 
+def test_smoke_script_standalone_import_bootstrap_works() -> None:
+    result = _run_script({}, "--print-schema-path")
+
+    assert result.returncode == 0
+    assert "schemas/poc/one_day_poc_evidence.v1.schema.json" in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr
+
+
 def test_uses_x_api_key_header_only(monkeypatch: pytest.MonkeyPatch) -> None:
     import importlib.util
 
@@ -762,3 +770,65 @@ def test_normal_run_without_validate_generated_evidence_unchanged(api_server: An
 
     assert result.returncode == 0
     assert "Generated evidence validation: VALID one_day_poc_evidence.v1" not in result.stdout
+
+
+def test_shared_helper_import_and_contract() -> None:
+    from scripts.demo import one_day_poc_shared
+
+    summary = one_day_poc_shared.extract_observability_summary({"observability": {}})
+    assert isinstance(summary, dict)
+
+    packet = one_day_poc_shared.build_evidence_packet(
+        observability=summary,
+        capabilities_status=200,
+        capabilities_ok=True,
+        policy_status=200,
+        warnings=[],
+    )
+    assert packet["schema_version"] == "one_day_poc_evidence.v1"
+    assert packet["packet_type"] == "veritas_one_day_poc_evidence"
+
+
+def test_shared_evidence_packet_non_goals_is_defensive_copy() -> None:
+    from scripts.demo import one_day_poc_shared
+
+    packet = one_day_poc_shared.build_evidence_packet(
+        observability={},
+        capabilities_status=200,
+        capabilities_ok=True,
+        policy_status=403,
+        warnings=[],
+    )
+    original = list(one_day_poc_shared.EXPECTED_NON_GOALS)
+    assert isinstance(packet["non_goals"], list)
+
+    packet["non_goals"].append("mutated")
+
+    assert list(one_day_poc_shared.EXPECTED_NON_GOALS) == original
+    assert "mutated" not in one_day_poc_shared.EXPECTED_NON_GOALS
+
+
+def test_smoke_wrapper_build_evidence_packet_compatibility() -> None:
+    from scripts.demo import one_day_poc_shared
+    from scripts.demo import one_day_poc_smoke
+
+    shared_packet = one_day_poc_shared.build_evidence_packet(
+        observability={"structured_logging_format": "json"},
+        capabilities_status=200,
+        capabilities_ok=True,
+        policy_status=403,
+        warnings=["w"],
+    )
+    wrapper_packet = one_day_poc_smoke._build_evidence_packet(
+        observability={"structured_logging_format": "json"},
+        capabilities_status=200,
+        capabilities_ok=True,
+        policy_status=403,
+        warnings=["w"],
+    )
+
+    assert set(wrapper_packet.keys()) == set(shared_packet.keys())
+    assert wrapper_packet["schema_version"] == shared_packet["schema_version"]
+    assert wrapper_packet["packet_type"] == shared_packet["packet_type"]
+    assert wrapper_packet["docs"] == shared_packet["docs"]
+    assert wrapper_packet["non_goals"] == shared_packet["non_goals"]
