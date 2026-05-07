@@ -62,7 +62,7 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
 
 ## 本番SLAではない
 
-本結果は本番SLAを示しません。
+本結果は本番SLAを示さず、計測時の指定環境におけるローカルベンチマーク挙動のみを示します。
 
 ## 法的認証ではない
 

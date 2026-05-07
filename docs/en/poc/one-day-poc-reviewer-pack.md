@@ -136,6 +136,16 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
 
 Include `runtime/dev/benchmarks/veritas_poc_benchmark.json` and `runtime/dev/benchmarks/veritas_poc_benchmark.md` in reviewer handoff artifacts.
 
+
+## 12. What this review does not prove
+
+- Not legal certification.
+- Not a conformity assessment.
+- Not an EU Declaration of Conformity.
+- Not CE marking.
+- Not a production SLA guarantee.
+- Not a replacement for legal counsel review.
+
 ## 13. Troubleshooting
 
 - Missing API key: set `VERITAS_API_KEY` and retry.

@@ -257,7 +257,7 @@ VERITAS OS includes a Regulated Action Governance Kernel for selected AI-agent a
 
 Audit Log records what happened. Authority Evidence records why an action was authorized and admissible at bind time; audit log records alone do not authorize commit.
 
-This is not legal advice, not regulatory approval, not third-party certification, or a claim of compliance by itself.
+This is not legal advice, not regulatory approval, not third-party certification, or a claim of compliance by itself. VERITAS helps produce inspectable audit/control evidence for EU AI Act-aligned workflows and is not legal certification, a conformity assessment, an EU Declaration of Conformity, CE marking, or notified-body/regulatory approval.
 
 External reviewers can start from the Regulated Action Governance External Review Handoff Pack, which links the implemented AML/KYC action path, evidence artifacts, quality gate, and known limitations.
 External reviewers can use the Regulated Action Governance External Reviewer Feedback Template to record review scope, assessment criteria, findings, evidence requests, and recommendations.
@@ -572,7 +572,7 @@ VERITAS optimizes for **governance**:
 - **Memory & world state** as first-class inputs (MemoryOS with vector search + WorldModel with causal transitions)
 - **Operational visibility** via a full-stack **Mission Control dashboard** (Next.js) with real-time event streaming, risk analytics, and governance policy management
 - **Bind-boundary visibility** in Mission Control via bind-phase outcomes (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`/`APPLY_FAILED`/`SNAPSHOT_FAILED`/`PRECONDITION_FAILED`) with execution intent and bind receipt lineage pointers
-- **EU AI Act compliance** — built-in compliance reporting, audit export, and deployment readiness checks
+- **EU AI Act-aligned governance support** — built-in audit/reporting exports and deployment readiness checks that support compliance workflows
 
 **Target users**
 - AI safety / agent researchers
@@ -660,7 +660,7 @@ This separation is one of the reasons VERITAS is easier to audit and safer to ev
 | **Planner** | Action plan generation with step-by-step execution strategies |
 | **Replay Engine** | High-fidelity reproducible replay of past decisions with diff reporting, retrieval snapshot checksum, model version verification, and dependency version tracking for audit verification |
 | **Policy Compiler** | YAML/JSON policy → intermediate representation → compiled rules with Ed25519-signed bundles, runtime enforcement adapter, and auto-generated tests |
-| **Compliance** | EU AI Act compliance reports, internal governance reports, and deployment readiness checks |
+| **Compliance** | EU AI Act-aligned workflow support reports, internal governance reports, and deployment readiness checks |
 
 ---
 
@@ -963,7 +963,7 @@ For operator guidance and outcome interpretation, see
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/v1/report/eu_ai_act/{decision_id}` | EU AI Act compliance report |
+| GET | `/v1/report/eu_ai_act/{decision_id}` | EU AI Act-aligned governance evidence report |
 | GET | `/v1/report/governance` | Internal governance report |
 | GET | `/v1/compliance/deployment-readiness` | Pre-deployment compliance check |
 | GET | `/v1/compliance/config` | Retrieve compliance configuration |
