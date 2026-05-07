@@ -19,16 +19,10 @@ def _normalize_mapping(
     values: Dict[str, Any], defaults: Dict[str, float],
 ) -> Dict[str, float]:
     """
-    入力された mapping を 0..1 にクリップする。
-    空なら defaults を返す。
+    defaults に values を部分上書きし、各値を 0..1 にクリップする。
     """
-    if not values:
-        return defaults.copy()
-    w2 = {k: _clip01(_to_float(v, defaults.get(k, 0.0))) for k, v in values.items()}
-    mx = max(w2.values()) if w2 else 1.0
-    if mx > 1.0 + 1e-9:  # 念のため
-        w2 = {k: (v / mx) for k, v in w2.items()}
-    return w2
+    merged: Dict[str, Any] = {**defaults, **(values or {})}
+    return {k: _clip01(_to_float(v, defaults.get(k, 0.0))) for k, v in merged.items()}
 
 
 def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:
@@ -68,7 +62,9 @@ DEFAULT_OPERATIONAL_PREFERENCES: Dict[str, float] = {
     "information_gathering_first": 0.60,
 }
 
-DEFAULT_PERSONAL_PREFERENCES: Dict[str, float] = {}
+DEFAULT_PERSONAL_PREFERENCES: Dict[str, float] = {
+    "sauna_less": 0.30,
+}
 
 LEGACY_OPERATIONAL_KEY_ALIASES: Dict[str, str] = {
     "最小ステップで前進する": "minimal_steps",
@@ -327,8 +323,10 @@ class ValueProfile:
     @classmethod
     def load(cls) -> "ValueProfile":
         """
-        ~/.veritas/value_core.json を読み込む。
-        なければ DEFAULT_WEIGHTS を初期値として保存してから返す。
+        value_core.v2 分離スキーマを読み込む。
+        後方互換として旧 "weights" payload または旧 merged dict も読み込む。
+        初回作成時は分離済み value_core.v2 形式で保存する。
+        DEFAULT_WEIGHTS は互換ビュー専用で、ガバナンス計算には使用しない。
         """
         try:
             CFG_DIR.mkdir(parents=True, exist_ok=True)
@@ -666,8 +664,8 @@ def update_weights(new_weights: Dict[str, Any]) -> Dict[str, float]:
     try:
         if not isinstance(prof, ValueProfile):
             prof.weights = merged_view.copy()
-    except Exception:
-        pass
+    except (AttributeError, TypeError) as exc:
+        logger.debug("Could not sync legacy profile weights view: %s", exc)
     prof.save()
     return merged_view
 

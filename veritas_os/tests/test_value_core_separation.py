@@ -24,6 +24,16 @@ def test_legacy_split_mapping():
     assert "サウナ控め" not in split["normative_weights"]
 
 
+def test_personal_canonical_key_is_preserved():
+    split = value_core._split_value_settings({"sauna_less": 0.2})
+    assert split["personal_preferences"]["sauna_less"] == 0.2
+
+
+def test_legacy_personal_key_maps_to_canonical():
+    split = value_core._split_value_settings({"サウナ控め": 0.4})
+    assert split["personal_preferences"]["sauna_less"] == 0.4
+
+
 def test_save_format_v2(tmp_path, monkeypatch):
     monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
     monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
@@ -59,6 +69,36 @@ def test_evaluate_excludes_operational_personal(monkeypatch):
     assert "サウナ控め" not in res.top_factors
     assert "サウナ控め" not in res.contributions
     assert "mvpコードを進める" not in res.contributions
+
+
+def test_personal_override_does_not_affect_governance_scoring(monkeypatch):
+    class _Dummy:
+        def __init__(self):
+            self.normative_weights = value_core.DEFAULT_NORMATIVE_WEIGHTS.copy()
+            self.operational_preferences = value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy()
+            self.personal_preferences = value_core.DEFAULT_PERSONAL_PREFERENCES.copy()
+
+        def update_from_scores(self, scores, lr=0.02):
+            return None
+
+    dummy = _Dummy()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: dummy))
+    result = value_core.evaluate(
+        "安全な実装",
+        {"no_learn_values": True, "personal_preferences": {"sauna_less": 1.0}},
+    )
+    assert result.personal_preferences["sauna_less"] == 1.0
+    assert "sauna_less" not in result.scores
+    assert "sauna_less" not in result.contributions
+    assert "sauna_less" not in result.top_factors
+
+
+def test_normalize_mapping_merges_defaults():
+    merged = value_core._normalize_mapping(
+        {"ethics": 0.1}, value_core.DEFAULT_NORMATIVE_WEIGHTS,
+    )
+    assert "legality" in merged
+    assert merged["ethics"] == 0.1
 
 
 def test_update_from_scores_normative_only(tmp_path, monkeypatch):
