@@ -124,6 +124,20 @@ python scripts/demo/one_day_poc_smoke.py --print-schema-path
 - 「この PoC は、監査可能な decision-boundary の実証として評価すべきである。」
 - 「本番ハードニングには、デプロイ構成、運用統制、保持ポリシー、ID 連携、顧客固有のリスク統制が必要となる。」
 
+
+## 任意のパフォーマンスベンチマーク（Optional performance benchmark）
+
+```bash
+VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
+  --runs 10 \
+  --warmup 2 \
+  --json \
+  --out-json runtime/dev/benchmarks/veritas_poc_benchmark.json \
+  --out-md runtime/dev/benchmarks/veritas_poc_benchmark.md
+```
+
+生成された `runtime/dev/benchmarks/veritas_poc_benchmark.json` と `runtime/dev/benchmarks/veritas_poc_benchmark.md` をレビュアー向け提出物に含めてください。
+
 ## 13. トラブルシューティング
 
 - API key がない: `VERITAS_API_KEY` を設定して再実行。

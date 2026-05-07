@@ -91,6 +91,10 @@ See full walkthroughs:
 - [One-Day VERITAS PoC Walkthrough (JA)](docs/ja/poc/one-day-poc-walkthrough.md)
 - [One-Day PoC Reviewer Pack (EN)](docs/en/poc/one-day-poc-reviewer-pack.md)
 - [One-Day PoC Reviewer Pack (JA)](docs/ja/poc/one-day-poc-reviewer-pack.md)
+- [One-Day PoC Performance Benchmark Report (EN)](docs/en/poc/one-day-poc-performance-report.md)
+- [One-Day PoC Performance Benchmark Report (JA)](docs/ja/poc/one-day-poc-performance-report.md)
+
+For lightweight local performance measurements, run `python scripts/demo/one_day_poc_benchmark.py` and see the performance report docs above.
 
 Sample sanitized evidence packets are available for reviewers who want to preview the deliverable format before running the smoke script.
 Evidence JSON follows `schemas/poc/one_day_poc_evidence.v1.schema.json`.
