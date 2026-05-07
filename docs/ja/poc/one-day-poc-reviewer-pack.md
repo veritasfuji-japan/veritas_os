@@ -125,7 +125,7 @@ python scripts/demo/one_day_poc_smoke.py --print-schema-path
 - 「本番ハードニングには、デプロイ構成、運用統制、保持ポリシー、ID 連携、顧客固有のリスク統制が必要となる。」
 
 
-## Optional performance benchmark
+## 任意のパフォーマンスベンチマーク（Optional performance benchmark）
 
 ```bash
 VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
@@ -136,7 +136,7 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
   --out-md runtime/dev/benchmarks/veritas_poc_benchmark.md
 ```
 
-Include `runtime/dev/benchmarks/veritas_poc_benchmark.json` and `runtime/dev/benchmarks/veritas_poc_benchmark.md` in reviewer handoff artifacts.
+生成された `runtime/dev/benchmarks/veritas_poc_benchmark.json` と `runtime/dev/benchmarks/veritas_poc_benchmark.md` をレビュアー向け提出物に含めてください。
 
 ## 13. トラブルシューティング
 

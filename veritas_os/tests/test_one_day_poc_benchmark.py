@@ -243,6 +243,34 @@ def test_timeout_argument_applied(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["timeout"] == 0.25
 
 
+def test_timeout_shaped_urlerror_classified_as_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.demo import one_day_poc_benchmark as target
+
+    def _fake_urlopen(req: Any, timeout: float) -> Any:
+        del req, timeout
+        raise target.error.URLError(target.socket.timeout("timed out"))
+
+    monkeypatch.setattr(target.request, "urlopen", _fake_urlopen)
+    status, payload = target._http_get_json_with_timeout(
+        "http://127.0.0.1:8000", "/v1/observability/capabilities", "secret-key", timeout=1.0
+    )
+    assert status == 0
+    assert payload == {"error": "timeout"}
+    assert "secret" not in json.dumps(payload)
+
+
+@pytest.mark.parametrize("timeout_value", ["0", "-1", "121"])
+def test_timeout_validation(timeout_value: str) -> None:
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key"},
+        "--timeout",
+        timeout_value,
+    )
+    assert result.returncode != 0
+    assert "--timeout must be greater than 0 and at most 120" in result.stderr
+    assert result.stdout == ""
+
+
 @pytest.mark.parametrize(
     "args",
     [("--runs", "0"), ("--runs", "51"), ("--warmup", "-1"), ("--warmup", "11")],

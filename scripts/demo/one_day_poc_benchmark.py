@@ -8,6 +8,7 @@ import json
 import math
 import os
 import platform
+import socket
 import statistics
 import sys
 import time
@@ -15,6 +16,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 from urllib import error, request
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo import one_day_poc_smoke
 
@@ -98,10 +103,17 @@ def _http_get_json_with_timeout(
             body = response.read().decode("utf-8", errors="replace")
     except error.HTTPError as exc:
         return exc.code, {"error": "http_error"}
-    except error.URLError:
-        return 0, {"error": "url_error"}
     except TimeoutError:
         return 0, {"error": "timeout"}
+    except socket.timeout:
+        return 0, {"error": "timeout"}
+    except error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            return 0, {"error": "timeout"}
+        if "timed out" in str(reason).lower():
+            return 0, {"error": "timeout"}
+        return 0, {"error": "url_error"}
 
     try:
         payload = json.loads(body)
@@ -250,6 +262,9 @@ def main(argv: list[str] | None = None) -> int:
     if not 0 <= args.warmup <= 10:
         _emit_status("--warmup must be between 0 and 10")
         return 2
+    if not 0 < args.timeout <= 120:
+        _emit_status("--timeout must be greater than 0 and at most 120")
+        return 2
 
     api_key = os.getenv("VERITAS_API_KEY", "").strip()
     if not api_key:
@@ -292,8 +307,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         capabilities_ok = status == 200 and bool(obs_payload.get("ok", True))
         warnings: list[str] = []
-        if policy_status not in (200, 401, 403, 404):
-            warnings.append(f"unexpected governance policy status: {policy_status}")
         one_day_poc_smoke._build_evidence_packet(
             observability=observability_summary,
             capabilities_status=status,

@@ -2,6 +2,11 @@
 
 > 英語版（`docs/en/poc/one-day-poc-performance-report.md`）が正本です。日本語版は補助説明です。
 
+## 英語正本
+
+英語正本は [One-Day PoC Performance Benchmark Report](../../en/poc/one-day-poc-performance-report.md) です。  
+日本語版は補助説明です。
+
 ## 目的
 
 本ドキュメントは、One-Day PoC の主要導線について、再現可能なローカル遅延計測証跡を取得する手順を示します。
