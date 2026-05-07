@@ -146,8 +146,8 @@ def _checked_http_get_json(
         raise BenchmarkRequestError(f"{path} returned status {status}")
     if not isinstance(payload, dict):
         raise BenchmarkRequestError(f"{path} returned non-object JSON")
-    if require_ok and payload.get("ok") is False:
-        raise BenchmarkRequestError(f"{path} returned ok=false")
+    if require_ok and payload.get("ok") is not True:
+        raise BenchmarkRequestError(f"{path} returned ok!=true")
     if status == 0 and payload.get("error"):
         raise BenchmarkRequestError(f"{path} request failed")
     if payload.get("error") in {"invalid_json", "non_object_json"}:
@@ -286,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
             "/v1/governance/policy",
             api_key,
             timeout=args.timeout,
-            allowed_statuses={200, 401, 403, 404},
+            allowed_statuses={200, 401, 403},
         )
 
     def _smoke_equivalent() -> None:
@@ -303,10 +303,12 @@ def main(argv: list[str] | None = None) -> int:
             "/v1/governance/policy",
             api_key,
             timeout=args.timeout,
-            allowed_statuses={200, 401, 403, 404},
+            allowed_statuses={200, 401, 403},
         )
         capabilities_ok = status == 200 and bool(obs_payload.get("ok", True))
         warnings: list[str] = []
+        # Reuses smoke-script helpers for contract parity in this PR.
+        # Follow-up refactor can extract shared public helpers.
         one_day_poc_smoke._build_evidence_packet(
             observability=observability_summary,
             capabilities_status=status,

@@ -259,6 +259,100 @@ def test_timeout_shaped_urlerror_classified_as_timeout(monkeypatch: pytest.Monke
     assert "secret" not in json.dumps(payload)
 
 
+@pytest.mark.parametrize(
+    "ok_payload",
+    [{}, {"ok": None}, {"ok": "true"}, {"ok": False}],
+)
+def test_checked_http_get_json_requires_ok_true(
+    monkeypatch: pytest.MonkeyPatch, ok_payload: dict[str, Any]
+) -> None:
+    from scripts.demo import one_day_poc_benchmark as target
+
+    def _fake_http(*args: Any, **kwargs: Any) -> tuple[int, dict[str, Any]]:
+        del args, kwargs
+        return 200, ok_payload
+
+    monkeypatch.setattr(target, "_http_get_json_with_timeout", _fake_http)
+    with pytest.raises(target.BenchmarkRequestError, match="ok!=true"):
+        target._checked_http_get_json(
+            "http://127.0.0.1:8000",
+            "/v1/observability/capabilities",
+            "key",
+            timeout=1.0,
+            require_ok=True,
+        )
+
+
+def test_checked_http_get_json_accepts_ok_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.demo import one_day_poc_benchmark as target
+
+    def _fake_http(*args: Any, **kwargs: Any) -> tuple[int, dict[str, Any]]:
+        del args, kwargs
+        return 200, {"ok": True, "observability": {}}
+
+    monkeypatch.setattr(target, "_http_get_json_with_timeout", _fake_http)
+    status, payload = target._checked_http_get_json(
+        "http://127.0.0.1:8000",
+        "/v1/observability/capabilities",
+        "key",
+        timeout=1.0,
+        require_ok=True,
+    )
+    assert status == 200
+    assert payload["ok"] is True
+
+
+def test_policy_404_is_counted_as_failure() -> None:
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/v1/observability/capabilities":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "observability": {}}).encode("utf-8"))
+                return
+            if self.path == "/v1/governance/policy":
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b"{}")
+                return
+            self.send_response(404)
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        result = _run_script(
+            {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+            "--json",
+            "--runs",
+            "1",
+            "--warmup",
+            "0",
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    policy_row = payload["benchmarks"]["governance_policy_read"]
+    smoke_row = payload["benchmarks"]["smoke_equivalent_end_to_end"]
+    assert policy_row["success_count"] == 0
+    assert policy_row["failure_count"] > 0
+    assert smoke_row["failure_count"] > 0
+
+
 @pytest.mark.parametrize("timeout_value", ["0", "-1", "121"])
 def test_timeout_validation(timeout_value: str) -> None:
     result = _run_script(
