@@ -33,6 +33,7 @@ This PoC is intended to show enforceable boundaries and auditable behavior, not 
 Before running the smoke script, reviewers can preview the final deliverable format using the sample packet fixtures: `docs/en/poc/sample-one-day-poc-evidence.json`, `docs/en/poc/sample-one-day-poc-evidence.md`, and `docs/ja/poc/sample-one-day-poc-evidence.md`. These samples are dummy/sanitized/fixture-based and are not live environment evidence.
 The evidence JSON follows the repo-local schema at `schemas/poc/one_day_poc_evidence.v1.schema.json`.
 `python scripts/demo/one_day_poc_smoke.py --print-schema-path` prints the repo-local schema path without requiring an API key or network access.
+`python scripts/demo/one_day_poc_smoke.py --validate-evidence PATH` validates a generated evidence JSON offline without requiring an API key or network access.
 
 ## Prerequisites
 

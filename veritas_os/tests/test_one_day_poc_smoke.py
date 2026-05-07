@@ -327,3 +327,126 @@ def test_print_schema_path_no_network_and_no_evidence_files(tmp_path: Path) -> N
     assert "api_key" not in result.stdout.lower()
     assert "token" not in result.stdout.lower()
     assert "secret" not in result.stdout.lower()
+
+
+
+def _sample_evidence_payload() -> dict[str, Any]:
+    return json.loads(
+        Path("docs/en/poc/sample-one-day-poc-evidence.json").read_text(encoding="utf-8")
+    )
+
+
+def test_validate_evidence_sample_passes_without_api_key() -> None:
+    result = _run_script(
+        {"VERITAS_API_KEY": "", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
+        "--validate-evidence",
+        "docs/en/poc/sample-one-day-poc-evidence.json",
+    )
+
+    assert result.returncode == 0
+    assert "VALID one_day_poc_evidence.v1" in result.stdout
+
+
+def test_validate_evidence_invalid_json_fails(tmp_path: Path) -> None:
+    evidence_path = tmp_path / "invalid.json"
+    evidence_path.write_text("{invalid", encoding="utf-8")
+    result = _run_script(
+        {"VERITAS_API_KEY": ""},
+        "--validate-evidence",
+        str(evidence_path),
+    )
+
+    assert result.returncode != 0
+    assert "INVALID one_day_poc_evidence.v1" in result.stderr
+
+
+def test_validate_evidence_missing_required_field_fails(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    del payload["checks"]
+    evidence_path = tmp_path / "missing_checks.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "missing required field: checks" in result.stderr
+
+
+def test_validate_evidence_unknown_top_level_field_fails(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    payload["unknown_field"] = True
+    evidence_path = tmp_path / "unknown_field.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "unknown top-level field: unknown_field" in result.stderr
+
+
+def test_validate_evidence_wrong_packet_type_fails(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    payload["packet_type"] = "wrong"
+    evidence_path = tmp_path / "wrong_packet_type.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "packet_type must equal veritas_one_day_poc_evidence" in result.stderr
+
+
+def test_validate_evidence_rejects_external_docs_url(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    payload["docs"]["walkthrough_en"] = "https://example.com/walkthrough"
+    evidence_path = tmp_path / "external_docs_url.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "docs.walkthrough_en must be a repo-local path" in result.stderr
+
+
+def test_validate_evidence_does_not_create_evidence_outputs(tmp_path: Path) -> None:
+    evidence_json_path = tmp_path / "should_not_create.json"
+    evidence_md_path = tmp_path / "should_not_create.md"
+    result = _run_script(
+        {"VERITAS_API_KEY": ""},
+        "--validate-evidence",
+        "docs/en/poc/sample-one-day-poc-evidence.json",
+        "--evidence-json",
+        str(evidence_json_path),
+        "--evidence-md",
+        str(evidence_md_path),
+    )
+
+    assert result.returncode == 0
+    assert not evidence_json_path.exists()
+    assert not evidence_md_path.exists()
+
+
+def test_validate_evidence_output_masks_secret_values(tmp_path: Path) -> None:
+    evidence_path = tmp_path / "invalid_with_secret.json"
+    evidence_path.write_text("not-json", encoding="utf-8")
+    result = _run_script(
+        {"VERITAS_API_KEY": "super-secret-key", "VERITAS_TOKEN": "token-value"},
+        "--validate-evidence",
+        str(evidence_path),
+    )
+
+    assert result.returncode != 0
+    assert "super-secret-key" not in result.stdout
+    assert "super-secret-key" not in result.stderr
+    assert "token-value" not in result.stdout
+    assert "token-value" not in result.stderr
+
+
+def test_print_schema_path_precedence_over_validate_evidence(tmp_path: Path) -> None:
+    evidence_path = tmp_path / "invalid.json"
+    evidence_path.write_text("{invalid", encoding="utf-8")
+    result = _run_script(
+        {"VERITAS_API_KEY": ""},
+        "--print-schema-path",
+        "--validate-evidence",
+        str(evidence_path),
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "schemas/poc/one_day_poc_evidence.v1.schema.json"

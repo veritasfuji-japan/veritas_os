@@ -35,6 +35,7 @@
 スモークスクリプト実行前に、提出物の形式はサンプル証跡で事前確認できます: `docs/en/poc/sample-one-day-poc-evidence.json`、`docs/en/poc/sample-one-day-poc-evidence.md`、`docs/ja/poc/sample-one-day-poc-evidence.md`。これらは dummy / sanitized / fixture-based のサンプルであり、実環境の証跡ではありません。
 evidence JSON は `schemas/poc/one_day_poc_evidence.v1.schema.json` に従います。
 `python scripts/demo/one_day_poc_smoke.py --print-schema-path` で、API key やネットワーク接続なしに repo-local schema path を確認できます。
+`python scripts/demo/one_day_poc_smoke.py --validate-evidence PATH` で、生成済み evidence JSON を API key / ネットワーク接続なしにオフライン検証できます。
 
 ## 前提条件
 

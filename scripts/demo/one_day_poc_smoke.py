@@ -18,6 +18,163 @@ EVIDENCE_PACKET_TYPE = "veritas_one_day_poc_evidence"
 EVIDENCE_SCHEMA_VERSION = "one_day_poc_evidence.v1"
 EVIDENCE_SCHEMA_PATH = "schemas/poc/one_day_poc_evidence.v1.schema.json"
 
+EXPECTED_NON_GOALS = [
+    "not_a_runtime_deployment_reference",
+    "no_jaeger_grafana_tempo_otlp_deployment",
+    "no_cryptographic_human_approval_signature",
+    "no_new_trustlog_durability_guarantee",
+]
+ALLOWED_STRUCTURED_LOGGING_FORMATS = {"json", "text", "unknown", None}
+
+
+def _is_repo_local_doc_path(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    lowered = value.lower()
+    return not (lowered.startswith("http://") or lowered.startswith("https://"))
+
+
+def _validate_evidence_packet(payload: Any) -> list[str]:
+    """Validate one-day PoC evidence packet fields using lightweight stdlib checks."""
+    errors: list[str] = []
+    if not isinstance(payload, dict):
+        return ["payload must be an object"]
+
+    required_top_level = {
+        "packet_type",
+        "schema_version",
+        "generated_at",
+        "read_only",
+        "mutation_allowed",
+        "checks",
+        "docs",
+        "non_goals",
+        "warnings",
+    }
+    unknown_fields = sorted(set(payload) - required_top_level)
+    for field in unknown_fields:
+        errors.append(f"unknown top-level field: {field}")
+
+    for field in sorted(required_top_level):
+        if field not in payload:
+            errors.append(f"missing required field: {field}")
+
+    if payload.get("packet_type") != EVIDENCE_PACKET_TYPE:
+        errors.append("packet_type must equal veritas_one_day_poc_evidence")
+    if payload.get("schema_version") != EVIDENCE_SCHEMA_VERSION:
+        errors.append("schema_version must equal one_day_poc_evidence.v1")
+    if not isinstance(payload.get("generated_at"), str):
+        errors.append("generated_at must be a string")
+    if payload.get("read_only") is not True:
+        errors.append("read_only must be true")
+    if payload.get("mutation_allowed") is not False:
+        errors.append("mutation_allowed must be false")
+
+    checks = payload.get("checks")
+    if not isinstance(checks, dict):
+        errors.append("checks must be an object")
+        checks = {}
+
+    observability = checks.get("observability_capabilities")
+    if not isinstance(observability, dict):
+        errors.append("checks.observability_capabilities must be an object")
+        observability = {}
+    if not isinstance(observability.get("status_code"), int):
+        errors.append("checks.observability_capabilities.status_code must be an integer")
+    if not isinstance(observability.get("ok"), bool):
+        errors.append("checks.observability_capabilities.ok must be a boolean")
+
+    summary = observability.get("summary")
+    if not isinstance(summary, dict):
+        errors.append("checks.observability_capabilities.summary must be an object")
+        summary = {}
+
+    summary_fields = [
+        "structured_logging_format",
+        "opentelemetry_importable",
+        "exporter_configured",
+        "governance_span_chain",
+        "rbac_denial_audit_append_visibility",
+    ]
+    for field in summary_fields:
+        if field not in summary:
+            errors.append(f"missing required field: checks.observability_capabilities.summary.{field}")
+
+    if summary.get("structured_logging_format") not in ALLOWED_STRUCTURED_LOGGING_FORMATS:
+        errors.append(
+            "checks.observability_capabilities.summary.structured_logging_format must be json, text, unknown, or null"
+        )
+    for field in summary_fields[1:]:
+        value = summary.get(field)
+        if value is not None and not isinstance(value, bool):
+            errors.append(
+                f"checks.observability_capabilities.summary.{field} must be boolean or null"
+            )
+
+    policy_read = checks.get("governance_policy_read")
+    if not isinstance(policy_read, dict):
+        errors.append("checks.governance_policy_read must be an object")
+        policy_read = {}
+    if not isinstance(policy_read.get("status_code"), int):
+        errors.append("checks.governance_policy_read.status_code must be an integer")
+    if not isinstance(policy_read.get("required"), bool):
+        errors.append("checks.governance_policy_read.required must be a boolean")
+
+    docs = payload.get("docs")
+    if not isinstance(docs, dict):
+        errors.append("docs must be an object")
+        docs = {}
+    doc_fields = [
+        "walkthrough_en",
+        "walkthrough_ja",
+        "trace_span_chain_en",
+        "trace_span_chain_ja",
+    ]
+    for field in doc_fields:
+        value = docs.get(field)
+        if not isinstance(value, str):
+            errors.append(f"docs.{field} must be a string")
+        elif not _is_repo_local_doc_path(value):
+            errors.append(f"docs.{field} must be a repo-local path")
+
+    non_goals = payload.get("non_goals")
+    if not isinstance(non_goals, list) or not all(isinstance(item, str) for item in non_goals):
+        errors.append("non_goals must be a list of strings")
+    elif non_goals != EXPECTED_NON_GOALS:
+        errors.append("non_goals must match the expected one-day PoC non-goals")
+
+    warnings = payload.get("warnings")
+    if not isinstance(warnings, list) or not all(isinstance(item, str) for item in warnings):
+        errors.append("warnings must be a list of strings")
+
+    return errors
+
+
+def _run_evidence_validation(path: Path) -> int:
+    """Validate evidence JSON file and print compact result lines."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print("INVALID one_day_poc_evidence.v1", file=sys.stderr)
+        print(f"- failed to read evidence file: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        print("INVALID one_day_poc_evidence.v1", file=sys.stderr)
+        print("- evidence file is not valid JSON", file=sys.stderr)
+        return 1
+
+    errors = _validate_evidence_packet(payload)
+    if errors:
+        print("INVALID one_day_poc_evidence.v1", file=sys.stderr)
+        for item in errors:
+            print(f"- {item}", file=sys.stderr)
+        return 1
+
+    print("VALID one_day_poc_evidence.v1")
+    return 0
 
 def _bool_env(name: str, *, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -79,6 +236,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-url", default=os.getenv("VERITAS_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument("--evidence-json", type=Path, dest="evidence_json")
     parser.add_argument("--evidence-md", type=Path, dest="evidence_md")
+    parser.add_argument("--validate-evidence", type=Path, dest="validate_evidence")
     return parser
 
 
@@ -118,12 +276,7 @@ def _build_evidence_packet(
             "trace_span_chain_en": "docs/en/operations/governance-trace-span-chain.md",
             "trace_span_chain_ja": "docs/ja/operations/governance-trace-span-chain.md",
         },
-        "non_goals": [
-            "not_a_runtime_deployment_reference",
-            "no_jaeger_grafana_tempo_otlp_deployment",
-            "no_cryptographic_human_approval_signature",
-            "no_new_trustlog_durability_guarantee",
-        ],
+        "non_goals": EXPECTED_NON_GOALS,
         "warnings": warnings,
     }
 
@@ -192,6 +345,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.print_schema_path:
         print(EVIDENCE_SCHEMA_PATH)
         return 0
+
+    if args.validate_evidence:
+        return _run_evidence_validation(args.validate_evidence)
 
     api_key = os.getenv("VERITAS_API_KEY")
     if not api_key:
