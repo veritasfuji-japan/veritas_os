@@ -295,3 +295,35 @@ def test_evidence_write_failure_exits_nonzero(api_server: Any, tmp_path: Path) -
     )
     assert result.returncode != 0
     assert not output_path.exists()
+
+
+def test_print_schema_path_succeeds_without_api_key() -> None:
+    result = _run_script({"VERITAS_API_KEY": ""}, "--print-schema-path")
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "schemas/poc/one_day_poc_evidence.v1.schema.json"
+
+
+def test_print_schema_path_no_network_and_no_evidence_files(tmp_path: Path) -> None:
+    evidence_json_path = tmp_path / "should_not_exist.json"
+    evidence_md_path = tmp_path / "should_not_exist.md"
+    result = _run_script(
+        {
+            "VERITAS_API_KEY": "",
+            "VERITAS_BASE_URL": "http://127.0.0.1:9",
+        },
+        "--print-schema-path",
+        "--evidence-json",
+        str(evidence_json_path),
+        "--evidence-md",
+        str(evidence_md_path),
+        "--json",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "schemas/poc/one_day_poc_evidence.v1.schema.json"
+    assert not evidence_json_path.exists()
+    assert not evidence_md_path.exists()
+    assert "api_key" not in result.stdout.lower()
+    assert "token" not in result.stdout.lower()
+    assert "secret" not in result.stdout.lower()

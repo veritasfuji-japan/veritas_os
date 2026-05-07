@@ -16,6 +16,7 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 EVIDENCE_PACKET_TYPE = "veritas_one_day_poc_evidence"
 EVIDENCE_SCHEMA_VERSION = "one_day_poc_evidence.v1"
+EVIDENCE_SCHEMA_PATH = "schemas/poc/one_day_poc_evidence.v1.schema.json"
 
 
 def _bool_env(name: str, *, default: bool = False) -> bool:
@@ -73,6 +74,7 @@ def _extract_observability_summary(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run VERITAS one-day PoC smoke checks")
+    parser.add_argument("--print-schema-path", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--base-url", default=os.getenv("VERITAS_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument("--evidence-json", type=Path, dest="evidence_json")
@@ -187,6 +189,10 @@ def _build_evidence_markdown(evidence: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    if args.print_schema_path:
+        print(EVIDENCE_SCHEMA_PATH)
+        return 0
+
     api_key = os.getenv("VERITAS_API_KEY")
     if not api_key:
         print("ERROR: missing required API credentials", file=sys.stderr)
