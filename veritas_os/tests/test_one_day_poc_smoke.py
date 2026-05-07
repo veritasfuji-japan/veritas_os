@@ -450,3 +450,119 @@ def test_print_schema_path_precedence_over_validate_evidence(tmp_path: Path) -> 
 
     assert result.returncode == 0
     assert result.stdout.strip() == "schemas/poc/one_day_poc_evidence.v1.schema.json"
+
+
+def test_validate_generated_evidence_succeeds_and_creates_file(
+    api_server: Any, tmp_path: Path
+) -> None:
+    base_url, _ = api_server
+    output_path = tmp_path / "generated_evidence.json"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--evidence-json",
+        str(output_path),
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode == 0
+    assert "Generated evidence validation: VALID one_day_poc_evidence.v1" in result.stdout
+    assert output_path.exists()
+
+
+def test_validate_generated_evidence_output_revalidates_offline(
+    api_server: Any, tmp_path: Path
+) -> None:
+    base_url, _ = api_server
+    output_path = tmp_path / "generated_evidence.json"
+    generate_result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--evidence-json",
+        str(output_path),
+        "--validate-generated-evidence",
+    )
+    validate_result = _run_script(
+        {"VERITAS_API_KEY": "", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
+        "--validate-evidence",
+        str(output_path),
+    )
+
+    assert generate_result.returncode == 0
+    assert validate_result.returncode == 0
+    assert "VALID one_day_poc_evidence.v1" in validate_result.stdout
+
+
+def test_validate_generated_evidence_requires_evidence_json() -> None:
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode != 0
+    assert "ERROR: --validate-generated-evidence requires --evidence-json PATH" in result.stderr
+
+
+def test_validate_generated_evidence_requires_evidence_json_no_network() -> None:
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode != 0
+    assert "required check failed" not in result.stdout
+    assert "urlopen error" not in result.stdout
+    assert "urlopen error" not in result.stderr
+
+
+def test_print_schema_path_precedence_over_validate_generated_evidence() -> None:
+    result = _run_script(
+        {"VERITAS_API_KEY": "", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
+        "--print-schema-path",
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "schemas/poc/one_day_poc_evidence.v1.schema.json"
+
+
+def test_validate_evidence_precedence_over_validate_generated_evidence(
+    tmp_path: Path,
+) -> None:
+    evidence_path = tmp_path / "invalid.json"
+    evidence_path.write_text("{invalid", encoding="utf-8")
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
+        "--validate-evidence",
+        str(evidence_path),
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode != 0
+    assert "INVALID one_day_poc_evidence.v1" in result.stderr
+    assert "Generated evidence validation: VALID one_day_poc_evidence.v1" not in result.stdout
+
+
+def test_validate_generated_evidence_write_failure_no_success_line(
+    api_server: Any, tmp_path: Path
+) -> None:
+    base_url, _ = api_server
+    output_path = tmp_path / "missing" / "dir" / "evidence.json"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--evidence-json",
+        str(output_path),
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode != 0
+    assert "Generated evidence validation: VALID one_day_poc_evidence.v1" not in result.stdout
+
+
+def test_normal_run_without_validate_generated_evidence_unchanged(api_server: Any) -> None:
+    base_url, _ = api_server
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--json",
+    )
+
+    assert result.returncode == 0
+    assert "Generated evidence validation: VALID one_day_poc_evidence.v1" not in result.stdout

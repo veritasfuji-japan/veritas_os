@@ -93,6 +93,7 @@ Sample sanitized evidence packets are available for reviewers who want to previe
 Evidence JSON follows `schemas/poc/one_day_poc_evidence.v1.schema.json`.
 To print the repo-local schema path: `python scripts/demo/one_day_poc_smoke.py --print-schema-path`.
 To validate a generated evidence packet offline: `python scripts/demo/one_day_poc_smoke.py --validate-evidence /tmp/veritas_poc_evidence.json`.
+To generate and self-validate JSON evidence in one run, add `--validate-generated-evidence` together with `--evidence-json`.
 
 - [Sample One-Day PoC Evidence (JSON)](docs/en/poc/sample-one-day-poc-evidence.json)
 - [Sample One-Day PoC Evidence (Markdown, EN)](docs/en/poc/sample-one-day-poc-evidence.md)

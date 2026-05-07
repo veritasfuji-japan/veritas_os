@@ -238,6 +238,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--evidence-json", type=Path, dest="evidence_json")
     parser.add_argument("--evidence-md", type=Path, dest="evidence_md")
     parser.add_argument("--validate-evidence", type=Path, dest="validate_evidence")
+    parser.add_argument("--validate-generated-evidence", action="store_true")
     return parser
 
 
@@ -349,6 +350,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.validate_evidence:
         return _run_evidence_validation(args.validate_evidence)
+    if args.validate_generated_evidence and not args.evidence_json:
+        print(
+            "ERROR: --validate-generated-evidence requires --evidence-json PATH",
+            file=sys.stderr,
+        )
+        return 2
 
     api_key = os.getenv("VERITAS_API_KEY")
     if not api_key:
@@ -417,6 +424,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: failed to write evidence JSON: {exc}", file=sys.stderr)
             return 3
         print(f"Wrote sanitized evidence JSON: {args.evidence_json}")
+        if args.validate_generated_evidence:
+            generated_errors = _validate_evidence_packet(evidence)
+            if generated_errors:
+                print(
+                    "Generated evidence validation: INVALID one_day_poc_evidence.v1",
+                    file=sys.stderr,
+                )
+                for item in generated_errors:
+                    print(f"- {item}", file=sys.stderr)
+                return 1
+            print("Generated evidence validation: VALID one_day_poc_evidence.v1")
 
     if args.evidence_md:
         try:
