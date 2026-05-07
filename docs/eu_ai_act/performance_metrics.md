@@ -41,7 +41,38 @@
 
 ## 3. ベンチマーク結果
 
-### 3.1 テスト環境
+## 3.0 Current status
+
+- One-Day PoC の軽量ローカル遅延計測導線として `scripts/demo/one_day_poc_benchmark.py` を追加済み。
+- 現時点では本ドキュメント内に固定実測値は未掲載（Not yet measured / not yet published）。
+- この表や導線は認証・SLA・法的保証を意味しない。
+
+### 3.1 One-Day PoC benchmark 導線
+
+```bash
+VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
+  --runs 10 \
+  --warmup 2 \
+  --json \
+  --out-json /tmp/veritas_poc_benchmark.json \
+  --out-md /tmp/veritas_poc_benchmark.md
+```
+
+取得可能な遅延指標:
+- `observability capabilities` latency (p50/p95/p99)
+- `governance policy read` latency (p50/p95/p99)
+- `smoke-equivalent evidence generation overhead` latency (p50/p95/p99)
+
+### 3.2 One-Day PoC latency publication status
+
+| 項目 | 計測方法 | 指標 | 公開状況 |
+|------|----------|------|----------|
+| One-Day PoC observability capabilities latency | measured by script | p50/p95/p99 | not yet published |
+| One-Day PoC governance policy read latency | measured by script | p50/p95/p99 | not yet published |
+| One-Day PoC evidence generation overhead | measured by script | p50/p95/p99 | not yet published |
+
+### 3.3 テスト環境
+
 
 | 項目 | 詳細 |
 |------|------|

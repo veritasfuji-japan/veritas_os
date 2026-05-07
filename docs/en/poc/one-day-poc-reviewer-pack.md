@@ -122,6 +122,20 @@ Expected output includes:
 - "The PoC should be evaluated as an auditable decision-boundary demonstration."
 - "Production hardening would require deployment architecture, operational controls, retention policy, identity integration, and customer-specific risk controls."
 
+
+## Optional performance benchmark
+
+```bash
+VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
+  --runs 10 \
+  --warmup 2 \
+  --json \
+  --out-json /tmp/veritas_poc_benchmark.json \
+  --out-md /tmp/veritas_poc_benchmark.md
+```
+
+Include `/tmp/veritas_poc_benchmark.json` and `/tmp/veritas_poc_benchmark.md` in reviewer handoff artifacts.
+
 ## 13. Troubleshooting
 
 - Missing API key: set `VERITAS_API_KEY` and retry.
