@@ -176,6 +176,7 @@ def _run_evidence_validation(path: Path) -> int:
     print("VALID one_day_poc_evidence.v1")
     return 0
 
+
 def _bool_env(name: str, *, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
