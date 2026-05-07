@@ -55,6 +55,7 @@ This validation mode is a lightweight stdlib contract check aligned with the v1 
    - `python scripts/demo/one_day_poc_smoke.py --json`
    - `python scripts/demo/one_day_poc_smoke.py --json --evidence-json /tmp/veritas_poc_evidence.json`
    - `python scripts/demo/one_day_poc_smoke.py --evidence-md /tmp/veritas_poc_evidence.md`
+   - With `--json`, stdout stays parseable JSON and status lines are emitted to stderr.
 2. Confirm `capabilities_ok: true`.
 3. Confirm summary includes:
    - structured logging format

@@ -46,6 +46,7 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_smoke.py \
 - `Generated evidence validation: VALID one_day_poc_evidence.v1`
 - `Wrote sanitized evidence Markdown: ...`
 - `ok` と `capabilities_ok` を含む JSON summary
+- `--json` を使う場合は stdout を JSON として parse し、status line は stderr 側を確認してください。
 
 stdout 全体の厳密な行順までは固定要件にしないでください（成功シグナルの有無を確認）。
 

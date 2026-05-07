@@ -9,8 +9,10 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 from urllib import error, request
+from urllib.parse import urlparse
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT_SECONDS = 5.0
@@ -28,10 +30,28 @@ ALLOWED_STRUCTURED_LOGGING_FORMATS = {"json", "text", "unknown", None}
 
 
 def _is_repo_local_doc_path(value: Any) -> bool:
+    """Return True when value is a safe repo-local docs/schemas relative path."""
     if not isinstance(value, str):
         return False
-    lowered = value.lower()
-    return not (lowered.startswith("http://") or lowered.startswith("https://"))
+    if not value or value.strip() != value:
+        return False
+    if "\\" in value:
+        return False
+    parsed = urlparse(value)
+    if parsed.scheme or parsed.netloc:
+        return False
+    path = PurePosixPath(value)
+    if path.is_absolute():
+        return False
+    if any(part in ("", ".", "..") for part in path.parts):
+        return False
+    return bool(path.parts) and path.parts[0] in {"docs", "schemas"}
+
+
+def _emit_status(message: str, *, json_output: bool, error: bool = False) -> None:
+    """Emit status messages to stdout, or stderr when JSON mode/error is active."""
+    stream = sys.stderr if json_output or error else sys.stdout
+    print(message, file=stream)
 
 def _append_unknown_fields_errors(
     errors: list[str],
@@ -490,18 +510,25 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             print(f"ERROR: failed to write evidence JSON: {exc}", file=sys.stderr)
             return 3
-        print(f"Wrote sanitized evidence JSON: {args.evidence_json}")
+        _emit_status(
+            f"Wrote sanitized evidence JSON: {args.evidence_json}",
+            json_output=args.json_output,
+        )
         if args.validate_generated_evidence:
             generated_errors = _load_and_validate_evidence_file(args.evidence_json)
             if generated_errors:
-                print(
+                _emit_status(
                     "Generated evidence validation: INVALID one_day_poc_evidence.v1",
-                    file=sys.stderr,
+                    json_output=args.json_output,
+                    error=True,
                 )
                 for item in generated_errors:
                     print(f"- {item}", file=sys.stderr)
                 return 1
-            print("Generated evidence validation: VALID one_day_poc_evidence.v1")
+            _emit_status(
+                "Generated evidence validation: VALID one_day_poc_evidence.v1",
+                json_output=args.json_output,
+            )
 
     if args.evidence_md:
         try:
@@ -509,7 +536,10 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             print(f"ERROR: failed to write evidence Markdown: {exc}", file=sys.stderr)
             return 3
-        print(f"Wrote sanitized evidence Markdown: {args.evidence_md}")
+        _emit_status(
+            f"Wrote sanitized evidence Markdown: {args.evidence_md}",
+            json_output=args.json_output,
+        )
 
     if args.json_output:
         print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))

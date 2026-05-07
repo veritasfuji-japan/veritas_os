@@ -68,6 +68,7 @@ Outputs:
 
 - JSON evidence packet
 - Markdown evidence packet
+- With `--json`, stdout contains only the JSON summary; status messages are written to stderr.
 
 Security boundaries:
 

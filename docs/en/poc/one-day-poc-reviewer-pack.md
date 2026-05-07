@@ -44,6 +44,7 @@ You should see output that includes the following lines:
 - `Generated evidence validation: VALID one_day_poc_evidence.v1`
 - `Wrote sanitized evidence Markdown: ...`
 - JSON summary output that includes `ok` and `capabilities_ok`
+- If `--json` is used, parse stdout as JSON and inspect status lines on stderr.
 
 Do not require an exact full stdout ordering; verify presence of the expected success signals.
 
