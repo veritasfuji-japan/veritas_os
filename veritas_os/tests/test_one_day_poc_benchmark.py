@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -375,6 +376,24 @@ def test_runs_validation(args: tuple[str, str]) -> None:
 
 
 def test_benchmark_no_private_smoke_helper_dependency() -> None:
-    source = SCRIPT_PATH.read_text(encoding="utf-8")
-    assert "one_day_poc_smoke._build_evidence_packet" not in source
-    assert "one_day_poc_smoke._extract_observability_summary" not in source
+    tree = ast.parse(SCRIPT_PATH.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert alias.name != "scripts.demo.one_day_poc_smoke"
+                assert alias.name != "one_day_poc_smoke"
+
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert module != "scripts.demo.one_day_poc_smoke"
+            for alias in node.names:
+                assert alias.name != "one_day_poc_smoke"
+
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in {"_build_evidence_packet", "_extract_observability_summary"}
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "one_day_poc_smoke"
+        ):
+            raise AssertionError("benchmark must not reference smoke private helpers")

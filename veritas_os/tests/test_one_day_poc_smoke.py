@@ -104,6 +104,14 @@ def test_missing_api_key_fails_clearly() -> None:
     assert "missing required API credentials" in result.stderr
 
 
+def test_smoke_script_standalone_import_bootstrap_works() -> None:
+    result = _run_script({}, "--print-schema-path")
+
+    assert result.returncode == 0
+    assert "schemas/poc/one_day_poc_evidence.v1.schema.json" in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr
+
+
 def test_uses_x_api_key_header_only(monkeypatch: pytest.MonkeyPatch) -> None:
     import importlib.util
 

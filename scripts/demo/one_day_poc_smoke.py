@@ -8,18 +8,22 @@ import json
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib import error, request
 from urllib.parse import urlparse
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo import one_day_poc_shared
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT_SECONDS = 5.0
-EVIDENCE_PACKET_TYPE = "veritas_one_day_poc_evidence"
-EVIDENCE_SCHEMA_VERSION = "one_day_poc_evidence.v1"
+EVIDENCE_PACKET_TYPE = one_day_poc_shared.EVIDENCE_PACKET_TYPE
+EVIDENCE_SCHEMA_VERSION = one_day_poc_shared.EVIDENCE_SCHEMA_VERSION
+EXPECTED_NON_GOALS = one_day_poc_shared.EXPECTED_NON_GOALS
 EVIDENCE_SCHEMA_PATH = "schemas/poc/one_day_poc_evidence.v1.schema.json"
 
 ALLOWED_STRUCTURED_LOGGING_FORMATS = {"json", "text", "unknown", None}
@@ -54,6 +58,7 @@ def _emit_status(message: str, *, json_output: bool, error: bool = False) -> Non
     """Emit status messages to stdout, or stderr when JSON mode/error is active."""
     stream = sys.stderr if json_output or error else sys.stdout
     print(message, file=stream)
+
 
 def _append_unknown_fields_errors(
     errors: list[str],
