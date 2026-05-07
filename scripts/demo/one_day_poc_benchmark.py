@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.demo import one_day_poc_smoke
+from scripts.demo import one_day_poc_shared
 
 SCHEMA_VERSION = "one_day_poc_benchmark.v1"
 PACKET_TYPE = "performance_benchmark"
@@ -297,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
             timeout=args.timeout,
             require_ok=True,
         )
-        observability_summary = one_day_poc_smoke._extract_observability_summary(obs_payload)
+        observability_summary = one_day_poc_shared.extract_observability_summary(obs_payload)
         policy_status, _policy_payload = _checked_http_get_json(
             args.base_url,
             "/v1/governance/policy",
@@ -307,9 +307,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         capabilities_ok = status == 200 and bool(obs_payload.get("ok", True))
         warnings: list[str] = []
-        # Reuses smoke-script helpers for contract parity in this PR.
-        # Follow-up refactor can extract shared public helpers.
-        one_day_poc_smoke._build_evidence_packet(
+        one_day_poc_shared.build_evidence_packet(
             observability=observability_summary,
             capabilities_status=status,
             capabilities_ok=capabilities_ok,

@@ -372,3 +372,9 @@ def test_timeout_validation(timeout_value: str) -> None:
 def test_runs_validation(args: tuple[str, str]) -> None:
     result = _run_script({"VERITAS_API_KEY": "test-key"}, *args)
     assert result.returncode != 0
+
+
+def test_benchmark_no_private_smoke_helper_dependency() -> None:
+    source = SCRIPT_PATH.read_text(encoding="utf-8")
+    assert "one_day_poc_smoke._build_evidence_packet" not in source
+    assert "one_day_poc_smoke._extract_observability_summary" not in source

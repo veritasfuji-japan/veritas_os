@@ -7,12 +7,14 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any
 from urllib import error, request
 from urllib.parse import urlparse
+
+from scripts.demo import one_day_poc_shared
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT_SECONDS = 5.0
@@ -20,12 +22,6 @@ EVIDENCE_PACKET_TYPE = "veritas_one_day_poc_evidence"
 EVIDENCE_SCHEMA_VERSION = "one_day_poc_evidence.v1"
 EVIDENCE_SCHEMA_PATH = "schemas/poc/one_day_poc_evidence.v1.schema.json"
 
-EXPECTED_NON_GOALS = [
-    "not_a_runtime_deployment_reference",
-    "no_jaeger_grafana_tempo_otlp_deployment",
-    "no_cryptographic_human_approval_signature",
-    "no_new_trustlog_durability_guarantee",
-]
 ALLOWED_STRUCTURED_LOGGING_FORMATS = {"json", "text", "unknown", None}
 
 
@@ -300,27 +296,8 @@ def _http_get_json(base_url: str, path: str, api_key: str) -> tuple[int, dict[st
 
 
 def _extract_observability_summary(payload: dict[str, Any]) -> dict[str, Any]:
-    observability = payload.get("observability")
-    if not isinstance(observability, dict):
-        observability = {}
-
-    structured = observability.get("structured_logging")
-    if not isinstance(structured, dict):
-        structured = {}
-
-    tracing = observability.get("tracing")
-    if not isinstance(tracing, dict):
-        tracing = {}
-
-    return {
-        "structured_logging_format": structured.get("format"),
-        "opentelemetry_importable": tracing.get("opentelemetry_importable"),
-        "exporter_configured": tracing.get("exporter_configured"),
-        "governance_span_chain": tracing.get("governance_span_chain"),
-        "rbac_denial_audit_append_visibility": tracing.get(
-            "rbac_denial_audit_append_visibility"
-        ),
-    }
+    """Backward-compatible wrapper for older tests/internal callers."""
+    return one_day_poc_shared.extract_observability_summary(payload)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -347,33 +324,14 @@ def _build_evidence_packet(
     policy_status: int,
     warnings: list[str],
 ) -> dict[str, Any]:
-    """Build a sanitized one-day PoC evidence packet."""
-    return {
-        "packet_type": EVIDENCE_PACKET_TYPE,
-        "schema_version": EVIDENCE_SCHEMA_VERSION,
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "read_only": True,
-        "mutation_allowed": False,
-        "checks": {
-            "observability_capabilities": {
-                "status_code": capabilities_status,
-                "ok": capabilities_ok,
-                "summary": observability,
-            },
-            "governance_policy_read": {
-                "status_code": policy_status,
-                "required": False,
-            },
-        },
-        "docs": {
-            "walkthrough_en": "docs/en/poc/one-day-poc-walkthrough.md",
-            "walkthrough_ja": "docs/ja/poc/one-day-poc-walkthrough.md",
-            "trace_span_chain_en": "docs/en/operations/governance-trace-span-chain.md",
-            "trace_span_chain_ja": "docs/ja/operations/governance-trace-span-chain.md",
-        },
-        "non_goals": EXPECTED_NON_GOALS,
-        "warnings": warnings,
-    }
+    """Backward-compatible wrapper for older tests/internal callers."""
+    return one_day_poc_shared.build_evidence_packet(
+        observability=observability,
+        capabilities_status=capabilities_status,
+        capabilities_ok=capabilities_ok,
+        policy_status=policy_status,
+        warnings=warnings,
+    )
 
 
 def _build_evidence_markdown(evidence: dict[str, Any]) -> str:
