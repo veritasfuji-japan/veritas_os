@@ -57,6 +57,7 @@ evidence JSON は `schemas/poc/one_day_poc_evidence.v1.schema.json` に従いま
    - `python scripts/demo/one_day_poc_smoke.py --json`
    - `python scripts/demo/one_day_poc_smoke.py --json --evidence-json /tmp/veritas_poc_evidence.json`
    - `python scripts/demo/one_day_poc_smoke.py --evidence-md /tmp/veritas_poc_evidence.md`
+   - `--json` 使用時、stdout は parse 可能な JSON summary のみで、status line は stderr に出力されます。
 2. `capabilities_ok: true` を確認。
 3. 要約に以下が含まれることを確認:
    - structured logging format

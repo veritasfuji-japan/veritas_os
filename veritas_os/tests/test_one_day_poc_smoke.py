@@ -404,6 +404,50 @@ def test_validate_evidence_rejects_external_docs_url(tmp_path: Path) -> None:
     assert "docs.walkthrough_en must be a repo-local path" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "unsafe_value",
+    [
+        "https://example.com/x",
+        "http://example.com/x",
+        "file:///tmp/x",
+        "/etc/passwd",
+        "../secret.md",
+        "docs/en/../private.md",
+        "docs/en/poc.md?x=1",
+        "docs/en/poc.md#section",
+        "docs/en/poc.md;param",
+        "docs\\en\\poc.md",
+        "",
+        " docs/en/poc/one-day-poc-walkthrough.md",
+    ],
+)
+def test_validate_evidence_rejects_unsafe_repo_local_doc_paths(
+    tmp_path: Path, unsafe_value: str
+) -> None:
+    payload = _sample_evidence_payload()
+    payload["docs"]["walkthrough_en"] = unsafe_value
+    evidence_path = tmp_path / "unsafe_docs_path.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "docs.walkthrough_en must be a repo-local path" in result.stderr
+
+
+def test_repo_local_doc_path_accepts_expected_docs_and_schema_prefixes() -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("one_day_poc_smoke", SCRIPT_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    assert module._is_repo_local_doc_path("docs/en/poc/one-day-poc-walkthrough.md")
+    assert module._is_repo_local_doc_path("schemas/poc/one_day_poc_evidence.v1.schema.json")
+
+
 def test_validate_evidence_does_not_create_evidence_outputs(tmp_path: Path) -> None:
     evidence_json_path = tmp_path / "should_not_create.json"
     evidence_md_path = tmp_path / "should_not_create.md"
@@ -575,6 +619,50 @@ def test_validate_generated_evidence_succeeds_and_creates_file(
     assert result.returncode == 0
     assert "Generated evidence validation: VALID one_day_poc_evidence.v1" in result.stdout
     assert output_path.exists()
+
+
+def test_json_output_routes_status_lines_to_stderr(
+    api_server: Any, tmp_path: Path
+) -> None:
+    base_url, _ = api_server
+    output_json = tmp_path / "generated_evidence.json"
+    output_md = tmp_path / "generated_evidence.md"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--json",
+        "--evidence-json",
+        str(output_json),
+        "--evidence-md",
+        str(output_md),
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert "Wrote sanitized evidence JSON" not in result.stdout
+    assert "Generated evidence validation" not in result.stdout
+    assert "Wrote sanitized evidence Markdown" not in result.stdout
+    assert "Wrote sanitized evidence JSON" in result.stderr
+    assert "Generated evidence validation: VALID one_day_poc_evidence.v1" in result.stderr
+    assert "Wrote sanitized evidence Markdown" in result.stderr
+
+
+def test_non_json_output_keeps_status_lines_on_stdout(
+    api_server: Any, tmp_path: Path
+) -> None:
+    base_url, _ = api_server
+    output_json = tmp_path / "generated_evidence.json"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": base_url},
+        "--evidence-json",
+        str(output_json),
+        "--validate-generated-evidence",
+    )
+
+    assert result.returncode == 0
+    assert "Wrote sanitized evidence JSON" in result.stdout
+    assert "Generated evidence validation: VALID one_day_poc_evidence.v1" in result.stdout
 
 
 def test_validate_generated_evidence_output_revalidates_offline(
