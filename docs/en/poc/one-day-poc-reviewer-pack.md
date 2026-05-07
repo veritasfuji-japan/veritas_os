@@ -137,7 +137,7 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
 Include `runtime/dev/benchmarks/veritas_poc_benchmark.json` and `runtime/dev/benchmarks/veritas_poc_benchmark.md` in reviewer handoff artifacts.
 
 
-## 12. What this review does not prove
+## 13. What this review does not prove
 
 - Not legal certification.
 - Not a conformity assessment.
@@ -146,7 +146,7 @@ Include `runtime/dev/benchmarks/veritas_poc_benchmark.json` and `runtime/dev/ben
 - Not a production SLA guarantee.
 - Not a replacement for legal counsel review.
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 - Missing API key: set `VERITAS_API_KEY` and retry.
 - `401` / `403`: verify key validity and role mapping (`governance_read`, e.g. `auditor` or `admin`).
@@ -156,7 +156,7 @@ Include `runtime/dev/benchmarks/veritas_poc_benchmark.json` and `runtime/dev/ben
 - `generated_at` invalid: verify timestamp format is `YYYY-MM-DDTHH:MM:SSZ`.
 - Schema path not found: verify repo checkout includes `schemas/poc/one_day_poc_evidence.v1.schema.json`.
 
-## 14. What to send after the PoC
+## 15. What to send after the PoC
 
 - Generated JSON evidence packet
 - Generated Markdown evidence packet
