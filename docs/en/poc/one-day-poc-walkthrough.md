@@ -34,6 +34,8 @@ Before running the smoke script, reviewers can preview the final deliverable for
 The evidence JSON follows the repo-local schema at `schemas/poc/one_day_poc_evidence.v1.schema.json`.
 `python scripts/demo/one_day_poc_smoke.py --print-schema-path` prints the repo-local schema path without requiring an API key or network access.
 `python scripts/demo/one_day_poc_smoke.py --validate-evidence PATH` validates a generated evidence JSON offline without requiring an API key or network access.
+This validation mode is a lightweight stdlib contract check aligned with the v1 schema, not a full external jsonschema engine.
+`generated_at` uses fixed UTC Z format: `YYYY-MM-DDTHH:MM:SSZ`.
 `--validate-generated-evidence` validates the generated JSON evidence packet during the same smoke run when used with `--evidence-json`.
 
 ## Prerequisites

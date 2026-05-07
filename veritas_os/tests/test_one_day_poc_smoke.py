@@ -421,6 +421,114 @@ def test_validate_evidence_does_not_create_evidence_outputs(tmp_path: Path) -> N
     assert not evidence_json_path.exists()
     assert not evidence_md_path.exists()
 
+def test_validate_evidence_rejects_unknown_nested_fields(tmp_path: Path) -> None:
+    cases = [
+        ("checks", "unknown field: checks.extra"),
+        (
+            "checks.observability_capabilities",
+            "unknown field: checks.observability_capabilities.extra",
+        ),
+        (
+            "checks.observability_capabilities.summary",
+            "unknown field: checks.observability_capabilities.summary.extra",
+        ),
+        (
+            "checks.governance_policy_read",
+            "unknown field: checks.governance_policy_read.extra",
+        ),
+        ("docs", "unknown field: docs.extra"),
+    ]
+    for path_name, expected_error in cases:
+        payload = _sample_evidence_payload()
+        target = payload
+        for key in path_name.split("."):
+            target = target[key]
+        target["extra"] = True
+        evidence_path = tmp_path / f"{path_name.replace('.', '_')}.json"
+        evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        result = _run_script(
+            {"VERITAS_API_KEY": ""},
+            "--validate-evidence",
+            str(evidence_path),
+        )
+
+        assert result.returncode != 0
+        assert expected_error in result.stderr
+
+
+def test_validate_evidence_generated_at_must_be_utc_format(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    payload["generated_at"] = "not-a-date"
+    evidence_path = tmp_path / "bad_generated_at.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "generated_at must use UTC format YYYY-MM-DDTHH:MM:SSZ" in result.stderr
+
+
+def test_validate_evidence_generated_at_utc_sample_is_valid(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    payload["generated_at"] = "2026-01-01T00:00:00Z"
+    evidence_path = tmp_path / "valid_generated_at.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode == 0
+    assert "VALID one_day_poc_evidence.v1" in result.stdout
+
+
+def test_validate_evidence_generated_at_plus_offset_is_invalid(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    payload["generated_at"] = "2026-01-01T00:00:00+00:00"
+    evidence_path = tmp_path / "invalid_generated_at_offset.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "generated_at must use UTC format YYYY-MM-DDTHH:MM:SSZ" in result.stderr
+
+
+def test_validate_evidence_generated_at_fractional_seconds_is_invalid(
+    tmp_path: Path,
+) -> None:
+    payload = _sample_evidence_payload()
+    payload["generated_at"] = "2026-01-01T00:00:00.000Z"
+    evidence_path = tmp_path / "invalid_generated_at_fractional.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "generated_at must use UTC format YYYY-MM-DDTHH:MM:SSZ" in result.stderr
+
+
+def test_load_and_validate_evidence_file_reads_actual_file(tmp_path: Path) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("one_day_poc_smoke", SCRIPT_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    payload = _sample_evidence_payload()
+    evidence_path = tmp_path / "module_validation.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    errors = module._load_and_validate_evidence_file(evidence_path)
+    assert errors == []
+
+    payload["checks"]["extra"] = True
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    errors = module._load_and_validate_evidence_file(evidence_path)
+    assert "unknown field: checks.extra" in errors
+
 
 def test_validate_evidence_output_masks_secret_values(tmp_path: Path) -> None:
     evidence_path = tmp_path / "invalid_with_secret.json"

@@ -33,6 +33,29 @@ def _is_repo_local_doc_path(value: Any) -> bool:
     lowered = value.lower()
     return not (lowered.startswith("http://") or lowered.startswith("https://"))
 
+def _append_unknown_fields_errors(
+    errors: list[str],
+    value: Any,
+    allowed: set[str],
+    path: str,
+) -> None:
+    """Append unknown-field errors for object values."""
+    if not isinstance(value, dict):
+        return
+    for field in sorted(set(value) - allowed):
+        errors.append(f"unknown field: {path}.{field}")
+
+
+def _is_utc_timestamp(value: Any) -> bool:
+    """Return True for UTC timestamps in YYYY-MM-DDTHH:MM:SSZ format."""
+    if not isinstance(value, str):
+        return False
+    try:
+        datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        return True
+    except ValueError:
+        return False
+
 
 def _validate_evidence_packet(payload: Any) -> list[str]:
     """Validate one-day PoC evidence packet fields using lightweight stdlib checks."""
@@ -65,6 +88,8 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
         errors.append("schema_version must equal one_day_poc_evidence.v1")
     if not isinstance(payload.get("generated_at"), str):
         errors.append("generated_at must be a string")
+    elif not _is_utc_timestamp(payload.get("generated_at")):
+        errors.append("generated_at must use UTC format YYYY-MM-DDTHH:MM:SSZ")
     if payload.get("read_only") is not True:
         errors.append("read_only must be true")
     if payload.get("mutation_allowed") is not False:
@@ -74,11 +99,23 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
     if not isinstance(checks, dict):
         errors.append("checks must be an object")
         checks = {}
+    _append_unknown_fields_errors(
+        errors,
+        checks,
+        {"observability_capabilities", "governance_policy_read"},
+        "checks",
+    )
 
     observability = checks.get("observability_capabilities")
     if not isinstance(observability, dict):
         errors.append("checks.observability_capabilities must be an object")
         observability = {}
+    _append_unknown_fields_errors(
+        errors,
+        observability,
+        {"status_code", "ok", "summary"},
+        "checks.observability_capabilities",
+    )
     if not isinstance(observability.get("status_code"), int):
         errors.append("checks.observability_capabilities.status_code must be an integer")
     if not isinstance(observability.get("ok"), bool):
@@ -88,6 +125,18 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
     if not isinstance(summary, dict):
         errors.append("checks.observability_capabilities.summary must be an object")
         summary = {}
+    _append_unknown_fields_errors(
+        errors,
+        summary,
+        {
+            "structured_logging_format",
+            "opentelemetry_importable",
+            "exporter_configured",
+            "governance_span_chain",
+            "rbac_denial_audit_append_visibility",
+        },
+        "checks.observability_capabilities.summary",
+    )
 
     summary_fields = [
         "structured_logging_format",
@@ -115,6 +164,12 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
     if not isinstance(policy_read, dict):
         errors.append("checks.governance_policy_read must be an object")
         policy_read = {}
+    _append_unknown_fields_errors(
+        errors,
+        policy_read,
+        {"status_code", "required"},
+        "checks.governance_policy_read",
+    )
     if not isinstance(policy_read.get("status_code"), int):
         errors.append("checks.governance_policy_read.status_code must be an integer")
     if not isinstance(policy_read.get("required"), bool):
@@ -124,6 +179,17 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
     if not isinstance(docs, dict):
         errors.append("docs must be an object")
         docs = {}
+    _append_unknown_fields_errors(
+        errors,
+        docs,
+        {
+            "walkthrough_en",
+            "walkthrough_ja",
+            "trace_span_chain_en",
+            "trace_span_chain_ja",
+        },
+        "docs",
+    )
     doc_fields = [
         "walkthrough_en",
         "walkthrough_ja",
@@ -150,23 +216,24 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
     return errors
 
 
-def _run_evidence_validation(path: Path) -> int:
-    """Validate evidence JSON file and print compact result lines."""
+def _load_and_validate_evidence_file(path: Path) -> list[str]:
+    """Load and validate an evidence JSON file without exposing raw content."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
-        print("INVALID one_day_poc_evidence.v1", file=sys.stderr)
-        print(f"- failed to read evidence file: {exc}", file=sys.stderr)
-        return 1
+        return [f"failed to read evidence file: {exc}"]
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
-        print("INVALID one_day_poc_evidence.v1", file=sys.stderr)
-        print("- evidence file is not valid JSON", file=sys.stderr)
-        return 1
+        return ["evidence file is not valid JSON"]
 
-    errors = _validate_evidence_packet(payload)
+    return _validate_evidence_packet(payload)
+
+
+def _run_evidence_validation(path: Path) -> int:
+    """Validate evidence JSON file and print compact result lines."""
+    errors = _load_and_validate_evidence_file(path)
     if errors:
         print("INVALID one_day_poc_evidence.v1", file=sys.stderr)
         for item in errors:
@@ -425,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
             return 3
         print(f"Wrote sanitized evidence JSON: {args.evidence_json}")
         if args.validate_generated_evidence:
-            generated_errors = _validate_evidence_packet(evidence)
+            generated_errors = _load_and_validate_evidence_file(args.evidence_json)
             if generated_errors:
                 print(
                     "Generated evidence validation: INVALID one_day_poc_evidence.v1",
