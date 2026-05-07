@@ -15,19 +15,25 @@ from .utils import _to_float, _clip01
 from .time_utils import utc_now_iso_z
 
 
-def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:
+def _normalize_mapping(
+    values: Dict[str, Any], defaults: Dict[str, float],
+) -> Dict[str, float]:
     """
-    入力された weight を 0..1 にクリップし、最大値が1を超える場合は 1 に合わせてスケール。
-    空なら DEFAULT_WEIGHTS を返す。
+    入力された mapping を 0..1 にクリップする。
+    空なら defaults を返す。
     """
-    if not w:
-        return DEFAULT_WEIGHTS.copy()
-    # まず 0..1 に収める
-    w2 = {k: _clip01(_to_float(v, 0.0)) for k, v in w.items()}
+    if not values:
+        return defaults.copy()
+    w2 = {k: _clip01(_to_float(v, defaults.get(k, 0.0))) for k, v in values.items()}
     mx = max(w2.values()) if w2 else 1.0
     if mx > 1.0 + 1e-9:  # 念のため
         w2 = {k: (v / mx) for k, v in w2.items()}
     return w2
+
+
+def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:
+    """Backward-compatible helper. Use _normalize_mapping with DEFAULT_WEIGHTS."""
+    return _normalize_mapping(w, DEFAULT_WEIGHTS)
 
 
 # ==============================
@@ -43,8 +49,7 @@ except (ImportError, AttributeError):
 CFG_PATH = CFG_DIR / "value_core.json"
 TRUST_LOG_PATH = CFG_DIR / "trust_log.jsonl"
 
-# デフォルトの価値重み（0.0〜1.0）
-DEFAULT_WEIGHTS: Dict[str, float] = {
+DEFAULT_NORMATIVE_WEIGHTS: Dict[str, float] = {
     "ethics": 0.95,        # 倫理
     "legality": 0.95,      # 合法性
     "harm_avoid": 0.95,    # 非加害
@@ -54,13 +59,62 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "accountability": 0.70,# 説明責任
     "efficiency": 0.60,    # 効率・コスト
     "autonomy": 0.60,      # 自律性
-    # ↓日本語キー（行動方針）
-    "最小ステップで前進する": 0.60,
-    "mvpコードを進める": 0.60,
-    "一次情報(公式/論文)を調べる": 0.70,
-    "情報収集を優先する": 0.60,
-    "サウナ控め": 0.30,
 }
+
+DEFAULT_OPERATIONAL_PREFERENCES: Dict[str, float] = {
+    "minimal_steps": 0.60,
+    "mvp_progress": 0.60,
+    "primary_source_research": 0.70,
+    "information_gathering_first": 0.60,
+}
+
+DEFAULT_PERSONAL_PREFERENCES: Dict[str, float] = {}
+
+LEGACY_OPERATIONAL_KEY_ALIASES: Dict[str, str] = {
+    "最小ステップで前進する": "minimal_steps",
+    "mvpコードを進める": "mvp_progress",
+    "一次情報(公式/論文)を調べる": "primary_source_research",
+    "情報収集を優先する": "information_gathering_first",
+}
+
+LEGACY_PERSONAL_KEY_ALIASES: Dict[str, str] = {
+    "サウナ控め": "sauna_less",
+}
+
+# Backward-compatible merged view only.
+# Governance scoring should use DEFAULT_NORMATIVE_WEIGHTS.
+DEFAULT_WEIGHTS: Dict[str, float] = {
+    **DEFAULT_NORMATIVE_WEIGHTS,
+    **DEFAULT_OPERATIONAL_PREFERENCES,
+}
+
+
+def _split_value_settings(raw: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+    normative = DEFAULT_NORMATIVE_WEIGHTS.copy()
+    operational = DEFAULT_OPERATIONAL_PREFERENCES.copy()
+    personal = DEFAULT_PERSONAL_PREFERENCES.copy()
+    for key, value in (raw or {}).items():
+        if key in DEFAULT_NORMATIVE_WEIGHTS:
+            normative[key] = _clip01(_to_float(value, normative[key]))
+        elif key in DEFAULT_OPERATIONAL_PREFERENCES:
+            operational[key] = _clip01(_to_float(value, operational[key]))
+        elif key in DEFAULT_PERSONAL_PREFERENCES:
+            personal[key] = _clip01(_to_float(value, personal[key]))
+        elif key in LEGACY_OPERATIONAL_KEY_ALIASES:
+            mapped = LEGACY_OPERATIONAL_KEY_ALIASES[key]
+            operational[mapped] = _clip01(_to_float(value, operational.get(mapped, 0.0)))
+        elif key in LEGACY_PERSONAL_KEY_ALIASES:
+            mapped = LEGACY_PERSONAL_KEY_ALIASES[key]
+            personal[mapped] = _clip01(_to_float(value, personal.get(mapped, 0.0)))
+        else:
+            logger.warning("Ignoring unknown value setting key: %s", key)
+    return {
+        "normative_weights": _normalize_mapping(normative, DEFAULT_NORMATIVE_WEIGHTS),
+        "operational_preferences": _normalize_mapping(
+            operational, DEFAULT_OPERATIONAL_PREFERENCES,
+        ),
+        "personal_preferences": _normalize_mapping(personal, DEFAULT_PERSONAL_PREFERENCES),
+    }
 
 # ==============================
 #   コンテキストプロファイル（domain 別の重み調整）
@@ -111,7 +165,24 @@ POLICY_PRESETS: Dict[str, Dict[str, float]] = {
 # ==============================
 @dataclass
 class ValueProfile:
-    weights: Dict[str, float]
+    normative_weights: Dict[str, float]
+    operational_preferences: Dict[str, float] = field(default_factory=dict)
+    personal_preferences: Dict[str, float] = field(default_factory=dict)
+
+    @property
+    def weights(self) -> Dict[str, float]:
+        return {
+            **self.normative_weights,
+            **self.operational_preferences,
+            **self.personal_preferences,
+        }
+
+    @weights.setter
+    def weights(self, value: Dict[str, Any]) -> None:
+        groups = _split_value_settings(value or {})
+        self.normative_weights = groups["normative_weights"]
+        self.operational_preferences = groups["operational_preferences"]
+        self.personal_preferences = groups["personal_preferences"]
 
     # ---- 読み込み ----
     @classmethod
@@ -126,32 +197,45 @@ class ValueProfile:
                 with CFG_PATH.open("r", encoding="utf-8") as f:
                     data = json.load(f)
 
-                # {"weights": {...}} 形式 or そのまま dict の両方に対応
-                if isinstance(data, dict):
+                if isinstance(data, dict) and data.get("schema_version") == "value_core.v2":
+                    groups = _split_value_settings({
+                        **(data.get("normative_weights", {}) or {}),
+                        **(data.get("operational_preferences", {}) or {}),
+                        **(data.get("personal_preferences", {}) or {}),
+                    })
+                elif isinstance(data, dict):
                     loaded = data.get("weights", data)
+                    groups = _split_value_settings(loaded or {})
                 else:
-                    loaded = {}
-
-                merged = DEFAULT_WEIGHTS.copy()
-                merged.update(
-                    {
-                        k: _clip01(_to_float(v, merged.get(k, 0.0)))
-                        for k, v in (loaded or {}).items()
-                    }
-                )
-                return cls(weights=_normalize_weights(merged))
+                    groups = _split_value_settings({})
+                return cls(**groups)
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             logger.warning("load failed: %s", e)
 
         # 失敗したらデフォルトで作り直し
-        prof = cls(weights=DEFAULT_WEIGHTS.copy())
+        prof = cls(
+            normative_weights=DEFAULT_NORMATIVE_WEIGHTS.copy(),
+            operational_preferences=DEFAULT_OPERATIONAL_PREFERENCES.copy(),
+            personal_preferences=DEFAULT_PERSONAL_PREFERENCES.copy(),
+        )
         prof.save()
         return prof
 
     # ---- 保存 ----
     def save(self) -> None:
         CFG_DIR.mkdir(parents=True, exist_ok=True)
-        data = {"weights": _normalize_weights(self.weights)}
+        data = {
+            "schema_version": "value_core.v2",
+            "normative_weights": _normalize_mapping(
+                self.normative_weights, DEFAULT_NORMATIVE_WEIGHTS,
+            ),
+            "operational_preferences": _normalize_mapping(
+                self.operational_preferences, DEFAULT_OPERATIONAL_PREFERENCES,
+            ),
+            "personal_preferences": _normalize_mapping(
+                self.personal_preferences, DEFAULT_PERSONAL_PREFERENCES,
+            ),
+        }
         # ★ 修正: atomic_write_json を使用してクラッシュ時のファイル破損を防止
         from veritas_os.core.atomic_io import atomic_write_json
         atomic_write_json(CFG_PATH, data, indent=2)
@@ -162,12 +246,13 @@ class ValueProfile:
         直近の Value scores から weights を少しだけ更新する。
         w_new = (1 - lr) * w_old + lr * score
         """
-        w = dict(self.weights)
+        w = dict(self.normative_weights)
         for k, s in scores.items():
-            old = float(w.get(k, DEFAULT_WEIGHTS.get(k, 0.5)))
+            if k not in DEFAULT_NORMATIVE_WEIGHTS:
+                continue
+            old = float(w.get(k, DEFAULT_NORMATIVE_WEIGHTS.get(k, 0.5)))
             w[k] = _clip01((1.0 - lr) * old + lr * float(s))
-
-        self.weights = _normalize_weights(w)
+        self.normative_weights = _normalize_mapping(w, DEFAULT_NORMATIVE_WEIGHTS)
         self.save()
 
 
@@ -185,6 +270,8 @@ class ValueResult:
     applied_context: str = ""
     applied_policy: str = ""
     audit_trail: List[Dict[str, Any]] = field(default_factory=list)
+    operational_preferences: Dict[str, float] = field(default_factory=dict)
+    personal_preferences: Dict[str, float] = field(default_factory=dict)
 
 
 # ==============================
@@ -197,8 +284,7 @@ RISKY_WORDS = {"投機", "ギャンブル", "損失", "ハッキング", "過度
 def heuristic_value_scores(q: str, ctx: dict) -> Dict[str, float]:
     qn = (q or "").lower()
 
-    # 初期値を DEFAULT_WEIGHTS から作る
-    s = {k: float(DEFAULT_WEIGHTS.get(k, 0.5)) for k in DEFAULT_WEIGHTS}
+    s = {k: float(DEFAULT_NORMATIVE_WEIGHTS.get(k, 0.5)) for k in DEFAULT_NORMATIVE_WEIGHTS}
 
     # ネガティブワード
     if any(w in qn for w in NEG_WORDS):
@@ -302,7 +388,6 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
     """
     ctx = context or {}
     q = query or ""
-    qn = q.lower()
     audit: List[Dict[str, Any]] = []
 
     # 1) ヒューリスティクスで基本スコア
@@ -313,23 +398,7 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
     for k, v in ctx_scores_raw.items():
         scores[k] = _clip01(_to_float(v, scores.get(k, 0.0)))
 
-    # 3) 行動系（日本語キー）ヒント
-    def _hint(tf: bool, base: float) -> float:
-        return _clip01(base if tf else scores.get("最小ステップで前進する", 0.0))
-
-    scores.setdefault("最小ステップで前進する", _hint(True, 0.7))
-    scores.setdefault("mvpコードを進める", _clip01(0.6 if ("code" in qn or "実装" in qn) else 0.3))
-    scores.setdefault(
-        "一次情報(公式/論文)を調べる",
-        _clip01(0.6 if ("論文" in qn or "paper" in qn or "rfc" in qn) else 0.3),
-    )
-    scores.setdefault(
-        "情報収集を優先する",
-        _clip01(0.5 if ("調査" in qn or "リサーチ" in qn) else 0.3),
-    )
-    scores.setdefault("サウナ控め", _clip01(scores.get("サウナ控め", 0.3)))
-
-    # 3.5) ポリシープリセットによるスコア下限適用
+    # 3) ポリシープリセットによるスコア下限適用
     applied_policy = ""
     policy_name = str(ctx.get("policy", ""))
     if policy_name and policy_name in POLICY_PRESETS:
@@ -345,10 +414,18 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
 
     # 4) 重みの決定（保存 > context 上書き）
     prof = ValueProfile.load()
-    merged_w = prof.weights.copy()
+    merged_w = prof.normative_weights.copy()
+    operational_preferences = prof.operational_preferences.copy()
+    personal_preferences = prof.personal_preferences.copy()
     ctx_weights = ctx.get("value_weights", {}) or {}
     for k, v in ctx_weights.items():
-        merged_w[k] = _clip01(_to_float(v, merged_w.get(k, 0.0)))
+        if k in DEFAULT_NORMATIVE_WEIGHTS:
+            merged_w[k] = _clip01(_to_float(v, merged_w.get(k, 0.0)))
+    for k, v in (ctx.get("operational_preferences", {}) or {}).items():
+        if k in DEFAULT_OPERATIONAL_PREFERENCES:
+            operational_preferences[k] = _clip01(_to_float(v, operational_preferences.get(k, 0.0)))
+    for k, v in (ctx.get("personal_preferences", {}) or {}).items():
+        personal_preferences[k] = _clip01(_to_float(v, personal_preferences.get(k, 0.0)))
 
     # 4.5) コンテキストプロファイルによる重み調整
     applied_context = ""
@@ -364,7 +441,7 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
                     "context_weight", k, old_w, target_w, domain=domain,
                 ))
 
-    weights = _normalize_weights(merged_w)
+    weights = _normalize_mapping(merged_w, DEFAULT_NORMATIVE_WEIGHTS)
 
     # 5) 加重平均で total（sum→クリップではなく平均にするので 1.0 固定を防ぐ）
     contribs: Dict[str, float] = {}
@@ -405,6 +482,8 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
         applied_context=applied_context,
         applied_policy=applied_policy,
         audit_trail=audit,
+        operational_preferences=operational_preferences,
+        personal_preferences=personal_preferences,
     )
 
 
@@ -413,9 +492,10 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
 # ==============================
 def update_weights(new_weights: Dict[str, Any]) -> Dict[str, float]:
     prof = ValueProfile.load()
-    for k, v in (new_weights or {}).items():
-        prof.weights[k] = _clip01(_to_float(v, prof.weights.get(k, 0.0)))
-    prof.weights = _normalize_weights(prof.weights)
+    groups = _split_value_settings(new_weights or {})
+    prof.normative_weights = groups["normative_weights"]
+    prof.operational_preferences = groups["operational_preferences"]
+    prof.personal_preferences = groups["personal_preferences"]
     prof.save()
     return prof.weights
 
@@ -451,7 +531,7 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
     logger.info("Trust EMA: %.3f", ema)
 
     prof = ValueProfile.load()
-    w = prof.weights.copy()
+    w = prof.normative_weights.copy()
 
     # --- 自己適応ロジック（例） ---
     if ema < 0.7:
@@ -460,7 +540,7 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
     elif ema > 0.9:
         w["efficiency"] = _clip01(_to_float(w.get("efficiency", 0.6)) + 0.05)
 
-    prof.weights = _normalize_weights(w)
+    prof.normative_weights = _normalize_mapping(w, DEFAULT_NORMATIVE_WEIGHTS)
     prof.save()
     logger.info(
         "ValueCore rebalanced successfully at %s",
