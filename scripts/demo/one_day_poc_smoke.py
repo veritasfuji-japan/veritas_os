@@ -117,7 +117,7 @@ def _build_evidence_packet(
             "trace_span_chain_ja": "docs/ja/operations/governance-trace-span-chain.md",
         },
         "non_goals": [
-            "not_a_production_deployment_reference",
+            "not_a_runtime_deployment_reference",
             "no_jaeger_grafana_tempo_otlp_deployment",
             "no_cryptographic_human_approval_signature",
             "no_new_trustlog_durability_guarantee",
