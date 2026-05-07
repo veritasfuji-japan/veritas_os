@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/poc/one_day_poc_evidence.v1.schema.json",
+  "title": "VERITAS One-Day PoC Evidence Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packet_type",
+    "schema_version",
+    "generated_at",
+    "read_only",
+    "mutation_allowed",
+    "checks",
+    "docs",
+    "non_goals",
+    "warnings"
+  ],
+  "properties": {
+    "packet_type": {
+      "const": "veritas_one_day_poc_evidence"
+    },
+    "schema_version": {
+      "const": "one_day_poc_evidence.v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "read_only": {
+      "const": true
+    },
+    "mutation_allowed": {
+      "const": false
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observability_capabilities",
+        "governance_policy_read"
+      ],
+      "properties": {
+        "observability_capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status_code",
+            "ok",
+            "summary"
+          ],
+          "properties": {
+            "status_code": {
+              "type": "integer"
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "summary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "structured_logging_format",
+                "opentelemetry_importable",
+                "exporter_configured",
+                "governance_span_chain",
+                "rbac_denial_audit_append_visibility"
+              ],
+              "properties": {
+                "structured_logging_format": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "json",
+                    "text",
+                    "unknown",
+                    null
+                  ]
+                },
+                "opentelemetry_importable": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "exporter_configured": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "governance_span_chain": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "rbac_denial_audit_append_visibility": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "governance_policy_read": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status_code",
+            "required"
+          ],
+          "properties": {
+            "status_code": {
+              "type": "integer"
+            },
+            "required": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "docs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "walkthrough_en",
+        "walkthrough_ja",
+        "trace_span_chain_en",
+        "trace_span_chain_ja"
+      ],
+      "properties": {
+        "walkthrough_en": {
+          "type": "string",
+          "pattern": "^(?!https?://).+"
+        },
+        "walkthrough_ja": {
+          "type": "string",
+          "pattern": "^(?!https?://).+"
+        },
+        "trace_span_chain_en": {
+          "type": "string",
+          "pattern": "^(?!https?://).+"
+        },
+        "trace_span_chain_ja": {
+          "type": "string",
+          "pattern": "^(?!https?://).+"
+        }
+      }
+    },
+    "non_goals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

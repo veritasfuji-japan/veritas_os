@@ -46,6 +46,7 @@
 | Guides: PoC quickstart | `docs/en/guides/poc-pack-financial-quickstart.md` | `docs/ja/guides/poc-pack-financial-quickstart.md` | EN/JA fully paired | JAファースト導線 |
 | PoC: One-day walkthrough | `docs/en/poc/one-day-poc-walkthrough.md` | `docs/ja/poc/one-day-poc-walkthrough.md` | JA explanation / EN canonical | 外部レビュー向け1-dayデモ導線 + evidence packet生成 |
 | PoC: Sample evidence packet | `docs/en/poc/sample-one-day-poc-evidence.json` / `docs/en/poc/sample-one-day-poc-evidence.md` | `docs/ja/poc/sample-one-day-poc-evidence.md` | JA explanation / EN canonical | 外部レビュー向けサンプル証跡 |
+| PoC: Evidence packet schema | `schemas/poc/one_day_poc_evidence.v1.schema.json` | — | EN canonical / machine-readable | One-Day PoC evidence JSON schema |
 | Positioning: AML/KYC | `docs/en/positioning/aml-kyc-beachhead-short-positioning.md` | `docs/ja/positioning/aml-kyc-beachhead-short-positioning.md` | JA explanation / EN canonical | 公開向け短縮版 |
 | Positioning: Public positioning | `docs/en/positioning/public-positioning.md` | `docs/ja/positioning/public-positioning.md` | JA explanation / EN canonical | 内部再評価含む |
 | UI docs | `docs/ui/README_UI.md` | `docs/ui/PREVIEW_PAGES_JP.md` | Mixed | UI本体は EN、プレビュー案内は JA |
