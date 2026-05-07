@@ -132,11 +132,11 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
   --runs 10 \
   --warmup 2 \
   --json \
-  --out-json /tmp/veritas_poc_benchmark.json \
-  --out-md /tmp/veritas_poc_benchmark.md
+  --out-json runtime/dev/benchmarks/veritas_poc_benchmark.json \
+  --out-md runtime/dev/benchmarks/veritas_poc_benchmark.md
 ```
 
-Include `/tmp/veritas_poc_benchmark.json` and `/tmp/veritas_poc_benchmark.md` in reviewer handoff artifacts.
+Include `runtime/dev/benchmarks/veritas_poc_benchmark.json` and `runtime/dev/benchmarks/veritas_poc_benchmark.md` in reviewer handoff artifacts.
 
 ## 13. トラブルシューティング
 

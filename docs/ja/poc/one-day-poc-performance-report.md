@@ -11,12 +11,13 @@
 推奨コマンド:
 
 ```bash
+mkdir -p runtime/dev/benchmarks
 VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
   --runs 10 \
   --warmup 2 \
   --json \
-  --out-json /tmp/veritas_poc_benchmark.json \
-  --out-md /tmp/veritas_poc_benchmark.md
+  --out-json runtime/dev/benchmarks/veritas_poc_benchmark.json \
+  --out-md runtime/dev/benchmarks/veritas_poc_benchmark.md
 ```
 
 ## JSON出力項目

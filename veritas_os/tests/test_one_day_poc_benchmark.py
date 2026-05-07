@@ -37,9 +37,23 @@ def api_server() -> Any:
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(
-                    json.dumps({"observability": {"structured_logging": {"format": "json"}, "tracing": {}}}).encode("utf-8")
-                )
+                payload = {
+                    "ok": True,
+                    "observability": {
+                        "structured_logging": {
+                            "available": True,
+                            "format": "json",
+                            "trace_id_supported": True,
+                        },
+                        "tracing": {
+                            "opentelemetry_importable": True,
+                            "exporter_configured": False,
+                            "governance_span_chain": True,
+                            "rbac_denial_audit_append_visibility": True,
+                        },
+                    },
+                }
+                self.wfile.write(json.dumps(payload).encode("utf-8"))
                 return
             if self.path == "/v1/governance/policy":
                 self.send_response(200)
@@ -88,16 +102,49 @@ def test_summarize_timings() -> None:
     assert summary["stdev_ms"] > 0.0
 
 
-def test_json_output_parseable_and_status_in_stderr(api_server: Any) -> None:
+def test_json_output_parseable_and_status_in_stderr(api_server: Any, tmp_path: Path) -> None:
+    output_path = tmp_path / "bench.json"
     result = _run_script(
         {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": api_server},
         "--json",
         "--out-json",
-        "/tmp/bench.json",
+        str(output_path),
     )
     assert result.returncode == 0
     json.loads(result.stdout)
     assert "Wrote sanitized benchmark JSON" in result.stderr
+
+
+def test_smoke_equivalent_success(api_server: Any) -> None:
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": api_server},
+        "--json",
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    row = payload["benchmarks"]["smoke_equivalent_end_to_end"]
+    assert row["success_count"] == 1
+    assert row["failure_count"] == 0
+
+
+def test_unreachable_counts_as_failure() -> None:
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
+        "--json",
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    row = payload["benchmarks"]["observability_capabilities"]
+    assert row["failure_count"] > 0
+    assert row["success_count"] == 0
 
 
 def test_secret_safety(api_server: Any, tmp_path: Path) -> None:
@@ -113,7 +160,12 @@ def test_secret_safety(api_server: Any, tmp_path: Path) -> None:
         str(out_md),
     )
     assert result.returncode == 0
-    for body in [result.stdout, result.stderr, out_json.read_text("utf-8"), out_md.read_text("utf-8")]:
+    for body in [
+        result.stdout,
+        result.stderr,
+        out_json.read_text("utf-8"),
+        out_md.read_text("utf-8"),
+    ]:
         assert secret not in body
 
 
@@ -144,16 +196,57 @@ def test_out_md_written(api_server: Any, tmp_path: Path) -> None:
     assert "test-key" not in body
 
 
-@pytest.mark.parametrize("args", [("--runs", "0"), ("--runs", "51"), ("--warmup", "-1"), ("--warmup", "11")])
+def test_write_failure_is_sanitized_nonzero(api_server: Any, tmp_path: Path) -> None:
+    out_json = tmp_path / "missing" / "bench.json"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": api_server},
+        "--json",
+        "--out-json",
+        str(out_json),
+    )
+    assert result.returncode != 0
+    assert "ERROR: failed to write benchmark JSON" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_status_lines_always_stderr(api_server: Any, tmp_path: Path) -> None:
+    out_json = tmp_path / "bench.json"
+    out_md = tmp_path / "bench.md"
+    result = _run_script(
+        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": api_server},
+        "--out-json",
+        str(out_json),
+        "--out-md",
+        str(out_md),
+    )
+    assert result.returncode == 0
+    assert result.stdout.startswith("# One-Day PoC Performance Benchmark")
+    assert "Wrote sanitized benchmark" not in result.stdout
+    assert "Wrote sanitized benchmark" in result.stderr
+
+
+def test_timeout_argument_applied(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.demo import one_day_poc_benchmark as target
+
+    captured: dict[str, float] = {}
+
+    def _fake_urlopen(req: Any, timeout: float) -> Any:
+        captured["timeout"] = timeout
+        raise TimeoutError
+
+    monkeypatch.setattr(target.request, "urlopen", _fake_urlopen)
+    status, payload = target._http_get_json_with_timeout(
+        "http://127.0.0.1:8000", "/v1/observability/capabilities", "key", timeout=0.25
+    )
+    assert status == 0
+    assert payload == {"error": "timeout"}
+    assert captured["timeout"] == 0.25
+
+
+@pytest.mark.parametrize(
+    "args",
+    [("--runs", "0"), ("--runs", "51"), ("--warmup", "-1"), ("--warmup", "11")],
+)
 def test_runs_validation(args: tuple[str, str]) -> None:
     result = _run_script({"VERITAS_API_KEY": "test-key"}, *args)
     assert result.returncode != 0
-
-
-def test_no_raw_response_body_leak() -> None:
-    result = _run_script(
-        {"VERITAS_API_KEY": "test-key", "VERITAS_BASE_URL": "http://127.0.0.1:9"},
-        "--json",
-    )
-    assert "secret-like-body" not in result.stdout
-    assert "secret-like-body" not in result.stderr

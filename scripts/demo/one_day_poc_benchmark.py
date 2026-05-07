@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from urllib import error, request
 
 from scripts.demo import one_day_poc_smoke
 
@@ -23,9 +24,13 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
 
-def _emit_status(message: str, *, json_output: bool, error: bool = False) -> None:
-    stream = sys.stderr if json_output or error else sys.stdout
-    print(message, file=stream)
+class BenchmarkRequestError(RuntimeError):
+    """Raised when a benchmark request does not satisfy target constraints."""
+
+
+def _emit_status(message: str, *, json_output: bool = False, error_output: bool = False) -> None:
+    del json_output, error_output
+    print(message, file=sys.stderr)
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -39,7 +44,9 @@ def _percentile(values: list[float], percentile: float) -> float:
     return ordered[idx]
 
 
-def _summarize_timings(values: list[float], success_count: int, failure_count: int) -> dict[str, float | int]:
+def _summarize_timings(
+    values: list[float], success_count: int, failure_count: int
+) -> dict[str, float | int]:
     if not values:
         return {
             "success_count": success_count,
@@ -65,11 +72,82 @@ def _summarize_timings(values: list[float], success_count: int, failure_count: i
     }
 
 
-def _redact_message(exc: Exception) -> str:
-    return str(exc).replace(os.getenv("VERITAS_API_KEY", ""), "[REDACTED]")
+def _redact_message(message: str) -> str:
+    api_key = os.getenv("VERITAS_API_KEY", "")
+    if api_key:
+        return message.replace(api_key, "[REDACTED]")
+    return message
 
 
-def _run_target(runs: int, warmup: int, target: Callable[[], None]) -> tuple[dict[str, float | int], list[dict[str, str]]]:
+def _http_get_json_with_timeout(
+    base_url: str,
+    path: str,
+    api_key: str,
+    *,
+    timeout: float,
+) -> tuple[int, dict[str, Any]]:
+    """Perform a GET request with timeout and sanitized error payloads."""
+    url = f"{base_url.rstrip('/')}{path}"
+    req = request.Request(url=url, method="GET")
+    req.add_header("X-API-Key", api_key)
+    req.add_header("Accept", "application/json")
+
+    try:
+        with request.urlopen(req, timeout=timeout) as response:
+            status = response.getcode()
+            body = response.read().decode("utf-8", errors="replace")
+    except error.HTTPError as exc:
+        return exc.code, {"error": "http_error"}
+    except error.URLError:
+        return 0, {"error": "url_error"}
+    except TimeoutError:
+        return 0, {"error": "timeout"}
+
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return status, {"error": "invalid_json"}
+
+    if not isinstance(payload, dict):
+        return status, {"error": "non_object_json"}
+    return status, payload
+
+
+def _checked_http_get_json(
+    base_url: str,
+    path: str,
+    api_key: str,
+    *,
+    timeout: float,
+    allowed_statuses: set[int] | None = None,
+    require_ok: bool = False,
+) -> tuple[int, dict[str, Any]]:
+    """Get JSON with target-specific status/body validation."""
+    status, payload = _http_get_json_with_timeout(
+        base_url,
+        path,
+        api_key,
+        timeout=timeout,
+    )
+    allowed = allowed_statuses or {200}
+    if status not in allowed:
+        raise BenchmarkRequestError(f"{path} returned status {status}")
+    if not isinstance(payload, dict):
+        raise BenchmarkRequestError(f"{path} returned non-object JSON")
+    if require_ok and payload.get("ok") is False:
+        raise BenchmarkRequestError(f"{path} returned ok=false")
+    if status == 0 and payload.get("error"):
+        raise BenchmarkRequestError(f"{path} request failed")
+    if payload.get("error") in {"invalid_json", "non_object_json"}:
+        raise BenchmarkRequestError(f"{path} returned invalid JSON payload")
+    return status, payload
+
+
+def _run_target(
+    runs: int,
+    warmup: int,
+    target: Callable[[], None],
+) -> tuple[dict[str, float | int], list[dict[str, str]]]:
     for _ in range(warmup):
         try:
             target()
@@ -85,8 +163,13 @@ def _run_target(runs: int, warmup: int, target: Callable[[], None]) -> tuple[dic
             target()
             timings.append((time.perf_counter() - started) * 1000.0)
             success += 1
-        except Exception as exc:  # pragma: no cover - defensive branch
-            failures.append({"type": exc.__class__.__name__, "message": _redact_message(exc)[:200]})
+        except Exception as exc:
+            failures.append(
+                {
+                    "type": exc.__class__.__name__,
+                    "message": _redact_message(str(exc))[:200],
+                }
+            )
     return _summarize_timings(timings, success, runs - success), failures
 
 
@@ -94,7 +177,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="One-day VERITAS PoC benchmark")
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--warmup", type=int, default=1)
-    parser.add_argument("--base-url", default=os.getenv("VERITAS_BASE_URL", DEFAULT_BASE_URL))
+    parser.add_argument(
+        "--base-url", default=os.getenv("VERITAS_BASE_URL", DEFAULT_BASE_URL)
+    )
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--scenario", default="one_day_poc", choices=["one_day_poc"])
     parser.add_argument("--json", action="store_true")
@@ -104,12 +189,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _build_markdown(packet: dict[str, Any]) -> str:
-    b = packet["benchmarks"]
+    benchmarks = packet["benchmarks"]
     lines = [
         "# One-Day PoC Performance Benchmark",
         "",
         "## Summary",
         "Local benchmark for lightweight PoC latency checks.",
+        "Packet generation succeeds with exit code 0 even when request failures are recorded.",
         "",
         "## Environment",
         f"- Measured at: {packet['measured_at']}",
@@ -121,70 +207,110 @@ def _build_markdown(packet: dict[str, Any]) -> str:
         "| Target | Runs | Success | Failure | p50 ms | p95 ms | p99 ms | Mean ms | Max ms |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    for name in ["observability_capabilities", "governance_policy_read", "smoke_equivalent_end_to_end"]:
-        row = b[name]
+    for name in [
+        "observability_capabilities",
+        "governance_policy_read",
+        "smoke_equivalent_end_to_end",
+    ]:
+        row = benchmarks[name]
         lines.append(
-            f"| {name} | {packet['runs']} | {row['success_count']} | {row['failure_count']} | "
-            f"{row['p50_ms']:.2f} | {row['p95_ms']:.2f} | {row['p99_ms']:.2f} | {row['mean_ms']:.2f} | {row['max_ms']:.2f} |"
+            f"| {name} | {packet['runs']} | {row['success_count']} | "
+            f"{row['failure_count']} | {row['p50_ms']:.2f} | {row['p95_ms']:.2f} | "
+            f"{row['p99_ms']:.2f} | {row['mean_ms']:.2f} | {row['max_ms']:.2f} |"
         )
-    lines.extend([
-        "",
-        "## Methodology",
-        "- Repeats endpoint checks and a smoke-equivalent flow for configured runs.",
-        "- Uses local wall-clock latency from Python runtime.",
-        "",
-        "## Limitations",
-        "- Local benchmark only; not a production SLA.",
-        "- Network, model provider latency, and deployment topology may change results.",
-        "- This benchmark does not certify EU AI Act compliance.",
-        "",
-        "## What this does not prove",
-        "- Not throughput testing.",
-        "- Not legal certification.",
-        "",
-        "## Recommended next measurements",
-        "- Controlled staging environment measurements.",
-        "- Load, concurrency, and tail-latency analysis.",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Methodology",
+            "- Repeats endpoint checks and a smoke-equivalent flow.",
+            "- Uses request timeout from `--timeout` for each HTTP call.",
+            "",
+            "## Limitations",
+            "- Local benchmark only; not a production SLA.",
+            "- Network, model provider latency, and deployment topology may change results.",
+            "- This benchmark does not certify EU AI Act compliance.",
+            "",
+            "## What this does not prove",
+            "- Not throughput testing.",
+            "- Not legal certification.",
+            "",
+            "## Recommended next measurements",
+            "- Controlled staging environment measurements.",
+            "- Load, concurrency, and tail-latency analysis.",
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if not 1 <= args.runs <= 50:
-        _emit_status("--runs must be between 1 and 50", json_output=args.json, error=True)
+        _emit_status("--runs must be between 1 and 50")
         return 2
     if not 0 <= args.warmup <= 10:
-        _emit_status("--warmup must be between 0 and 10", json_output=args.json, error=True)
+        _emit_status("--warmup must be between 0 and 10")
         return 2
 
     api_key = os.getenv("VERITAS_API_KEY", "").strip()
     if not api_key:
-        _emit_status("missing required API credentials: set VERITAS_API_KEY", json_output=args.json, error=True)
+        _emit_status("missing required API credentials: set VERITAS_API_KEY")
         return 2
 
     def _obs() -> None:
-        one_day_poc_smoke._http_get_json(args.base_url, "/v1/observability/capabilities", api_key)
+        _checked_http_get_json(
+            args.base_url,
+            "/v1/observability/capabilities",
+            api_key,
+            timeout=args.timeout,
+            require_ok=True,
+        )
 
     def _policy() -> None:
-        one_day_poc_smoke._http_get_json(args.base_url, "/v1/governance/policy", api_key)
+        _checked_http_get_json(
+            args.base_url,
+            "/v1/governance/policy",
+            api_key,
+            timeout=args.timeout,
+            allowed_statuses={200, 401, 403, 404},
+        )
 
     def _smoke_equivalent() -> None:
-        status, obs_payload = one_day_poc_smoke._http_get_json(args.base_url, "/v1/observability/capabilities", api_key)
-        one_day_poc_smoke._extract_observability_summary(obs_payload)
-        policy_status, _ = one_day_poc_smoke._http_get_json(args.base_url, "/v1/governance/policy", api_key)
-        one_day_poc_smoke._build_evidence_packet(status, obs_payload, policy_status)
+        status, obs_payload = _checked_http_get_json(
+            args.base_url,
+            "/v1/observability/capabilities",
+            api_key,
+            timeout=args.timeout,
+            require_ok=True,
+        )
+        observability_summary = one_day_poc_smoke._extract_observability_summary(obs_payload)
+        policy_status, _policy_payload = _checked_http_get_json(
+            args.base_url,
+            "/v1/governance/policy",
+            api_key,
+            timeout=args.timeout,
+            allowed_statuses={200, 401, 403, 404},
+        )
+        capabilities_ok = status == 200 and bool(obs_payload.get("ok", True))
+        warnings: list[str] = []
+        if policy_status not in (200, 401, 403, 404):
+            warnings.append(f"unexpected governance policy status: {policy_status}")
+        one_day_poc_smoke._build_evidence_packet(
+            observability=observability_summary,
+            capabilities_status=status,
+            capabilities_ok=capabilities_ok,
+            policy_status=policy_status,
+            warnings=warnings,
+        )
 
     obs, obs_failures = _run_target(args.runs, args.warmup, _obs)
     policy, policy_failures = _run_target(args.runs, args.warmup, _policy)
     e2e, e2e_failures = _run_target(args.runs, args.warmup, _smoke_equivalent)
-    measured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     packet: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "packet_type": PACKET_TYPE,
         "scenario": args.scenario,
-        "measured_at": measured_at,
+        "measured_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "runs": args.runs,
         "warmup": args.warmup,
         "timeout_seconds": args.timeout,
@@ -211,11 +337,26 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     if args.out_json:
-        Path(args.out_json).write_text(json.dumps(packet, indent=2) + "\n", encoding="utf-8")
-        _emit_status(f"Wrote sanitized benchmark JSON: {args.out_json}", json_output=args.json)
+        try:
+            Path(args.out_json).write_text(
+                json.dumps(packet, indent=2) + "\n", encoding="utf-8"
+            )
+        except OSError as exc:
+            _emit_status(
+                f"ERROR: failed to write benchmark JSON: {_redact_message(str(exc))}"
+            )
+            return 3
+        _emit_status(f"Wrote sanitized benchmark JSON: {args.out_json}")
+
     if args.out_md:
-        Path(args.out_md).write_text(_build_markdown(packet), encoding="utf-8")
-        _emit_status(f"Wrote sanitized benchmark Markdown: {args.out_md}", json_output=args.json)
+        try:
+            Path(args.out_md).write_text(_build_markdown(packet), encoding="utf-8")
+        except OSError as exc:
+            _emit_status(
+                f"ERROR: failed to write benchmark Markdown: {_redact_message(str(exc))}"
+            )
+            return 3
+        _emit_status(f"Wrote sanitized benchmark Markdown: {args.out_md}")
 
     if args.json:
         print(json.dumps(packet, indent=2))
