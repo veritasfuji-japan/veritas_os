@@ -233,7 +233,7 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
     non_goals = payload.get("non_goals")
     if not isinstance(non_goals, list) or not all(isinstance(item, str) for item in non_goals):
         errors.append("non_goals must be a list of strings")
-    elif non_goals != EXPECTED_NON_GOALS:
+    elif non_goals != list(EXPECTED_NON_GOALS):
         errors.append("non_goals must match the expected one-day PoC non-goals")
 
     warnings = payload.get("warnings")

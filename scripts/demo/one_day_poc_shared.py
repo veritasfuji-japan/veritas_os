@@ -7,12 +7,12 @@ from typing import Any
 
 EVIDENCE_PACKET_TYPE = "veritas_one_day_poc_evidence"
 EVIDENCE_SCHEMA_VERSION = "one_day_poc_evidence.v1"
-EXPECTED_NON_GOALS = [
+EXPECTED_NON_GOALS: tuple[str, ...] = (
     "not_a_runtime_deployment_reference",
     "no_jaeger_grafana_tempo_otlp_deployment",
     "no_cryptographic_human_approval_signature",
     "no_new_trustlog_durability_guarantee",
-]
+)
 
 
 def extract_observability_summary(payload: dict[str, Any]) -> dict[str, Any]:
@@ -71,6 +71,6 @@ def build_evidence_packet(
             "trace_span_chain_en": "docs/en/operations/governance-trace-span-chain.md",
             "trace_span_chain_ja": "docs/ja/operations/governance-trace-span-chain.md",
         },
-        "non_goals": EXPECTED_NON_GOALS,
+        "non_goals": list(EXPECTED_NON_GOALS),
         "warnings": warnings,
     }

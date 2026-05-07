@@ -789,6 +789,25 @@ def test_shared_helper_import_and_contract() -> None:
     assert packet["packet_type"] == "veritas_one_day_poc_evidence"
 
 
+def test_shared_evidence_packet_non_goals_is_defensive_copy() -> None:
+    from scripts.demo import one_day_poc_shared
+
+    packet = one_day_poc_shared.build_evidence_packet(
+        observability={},
+        capabilities_status=200,
+        capabilities_ok=True,
+        policy_status=403,
+        warnings=[],
+    )
+    original = list(one_day_poc_shared.EXPECTED_NON_GOALS)
+    assert isinstance(packet["non_goals"], list)
+
+    packet["non_goals"].append("mutated")
+
+    assert list(one_day_poc_shared.EXPECTED_NON_GOALS) == original
+    assert "mutated" not in one_day_poc_shared.EXPECTED_NON_GOALS
+
+
 def test_smoke_wrapper_build_evidence_packet_compatibility() -> None:
     from scripts.demo import one_day_poc_shared
     from scripts.demo import one_day_poc_smoke
