@@ -118,7 +118,17 @@ python scripts/demo/one_day_poc_smoke.py --print-schema-path
 - 現行実装を超える TrustLog durability 保証は含みません。
 - これ単体で live customer integration の証明にはなりません。
 
-## 12. レビューノート（推奨）
+
+## 12. このレビューで証明しないこと
+
+- 法的認証ではありません。
+- 適合性評価ではありません。
+- EU適合宣言（EU Declaration of Conformity）ではありません。
+- CEマーキングではありません。
+- 本番SLAの保証ではありません。
+- 法務担当者・法律事務所レビューの代替ではありません。
+
+## 13. レビューノート（推奨）
 
 - 「評価すべき論点は、これがフルのエンタープライズ配備かどうかではなく、VERITAS が governed AI action flow に対して reviewable かつ sanitized で schema-aligned な証跡を出力できるかどうかである。」
 - 「この PoC は、監査可能な decision-boundary の実証として評価すべきである。」
@@ -138,7 +148,7 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
 
 生成された `runtime/dev/benchmarks/veritas_poc_benchmark.json` と `runtime/dev/benchmarks/veritas_poc_benchmark.md` をレビュアー向け提出物に含めてください。
 
-## 13. トラブルシューティング
+## 14. トラブルシューティング
 
 - API key がない: `VERITAS_API_KEY` を設定して再実行。
 - `401` / `403`: キーの有効性とロールマッピング（`governance_read`、例: `auditor` / `admin`）を確認。
@@ -148,7 +158,7 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
 - `generated_at` invalid: `YYYY-MM-DDTHH:MM:SSZ` 形式を確認。
 - Schema path not found: リポジトリに `schemas/poc/one_day_poc_evidence.v1.schema.json` が存在するか確認。
 
-## 14. PoC 後に送付すべきもの
+## 15. PoC 後に送付すべきもの
 
 - 生成された JSON evidence packet
 - 生成された Markdown evidence packet

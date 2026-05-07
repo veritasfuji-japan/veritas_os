@@ -56,7 +56,7 @@ The script emits a stable benchmark packet shape (`one_day_poc_benchmark.v1`) in
 
 ## Not a production SLA
 
-These measurements are **not** production SLA commitments.
+These measurements are **not** production SLA commitments and only represent local benchmark behavior in the measured environment.
 
 ## Not legal certification
 
