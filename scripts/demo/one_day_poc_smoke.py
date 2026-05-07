@@ -216,24 +216,24 @@ def _validate_evidence_packet(payload: Any) -> list[str]:
     return errors
 
 
-def _load_and_validate_evidence_file(path: Path) -> tuple[list[str], str | None]:
+def _load_and_validate_evidence_file(path: Path) -> list[str]:
     """Load and validate an evidence JSON file without exposing raw content."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
-        return [f"failed to read evidence file: {exc}"], None
+        return [f"failed to read evidence file: {exc}"]
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
-        return ["evidence file is not valid JSON"], None
+        return ["evidence file is not valid JSON"]
 
-    return _validate_evidence_packet(payload), None
+    return _validate_evidence_packet(payload)
 
 
 def _run_evidence_validation(path: Path) -> int:
     """Validate evidence JSON file and print compact result lines."""
-    errors, _unused = _load_and_validate_evidence_file(path)
+    errors = _load_and_validate_evidence_file(path)
     if errors:
         print("INVALID one_day_poc_evidence.v1", file=sys.stderr)
         for item in errors:
@@ -492,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
             return 3
         print(f"Wrote sanitized evidence JSON: {args.evidence_json}")
         if args.validate_generated_evidence:
-            generated_errors, _unused = _load_and_validate_evidence_file(args.evidence_json)
+            generated_errors = _load_and_validate_evidence_file(args.evidence_json)
             if generated_errors:
                 print(
                     "Generated evidence validation: INVALID one_day_poc_evidence.v1",

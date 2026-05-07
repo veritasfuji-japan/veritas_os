@@ -481,6 +481,32 @@ def test_validate_evidence_generated_at_utc_sample_is_valid(tmp_path: Path) -> N
     assert "VALID one_day_poc_evidence.v1" in result.stdout
 
 
+def test_validate_evidence_generated_at_plus_offset_is_invalid(tmp_path: Path) -> None:
+    payload = _sample_evidence_payload()
+    payload["generated_at"] = "2026-01-01T00:00:00+00:00"
+    evidence_path = tmp_path / "invalid_generated_at_offset.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "generated_at must use UTC format YYYY-MM-DDTHH:MM:SSZ" in result.stderr
+
+
+def test_validate_evidence_generated_at_fractional_seconds_is_invalid(
+    tmp_path: Path,
+) -> None:
+    payload = _sample_evidence_payload()
+    payload["generated_at"] = "2026-01-01T00:00:00.000Z"
+    evidence_path = tmp_path / "invalid_generated_at_fractional.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = _run_script({"VERITAS_API_KEY": ""}, "--validate-evidence", str(evidence_path))
+
+    assert result.returncode != 0
+    assert "generated_at must use UTC format YYYY-MM-DDTHH:MM:SSZ" in result.stderr
+
+
 def test_load_and_validate_evidence_file_reads_actual_file(tmp_path: Path) -> None:
     import importlib.util
 
@@ -494,13 +520,13 @@ def test_load_and_validate_evidence_file_reads_actual_file(tmp_path: Path) -> No
     evidence_path = tmp_path / "module_validation.json"
     evidence_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    errors, _raw = module._load_and_validate_evidence_file(evidence_path)
+    errors = module._load_and_validate_evidence_file(evidence_path)
     assert errors == []
 
     payload["checks"]["extra"] = True
     evidence_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    errors, _raw = module._load_and_validate_evidence_file(evidence_path)
+    errors = module._load_and_validate_evidence_file(evidence_path)
     assert "unknown field: checks.extra" in errors
 
 
