@@ -81,15 +81,25 @@ LEGACY_PERSONAL_KEY_ALIASES: Dict[str, str] = {
     "サウナ控め": "sauna_less",
 }
 
-# Backward-compatible legacy merged view only.
-# Do not use for governance scoring.
-DEFAULT_WEIGHTS: Dict[str, float] = {
-    **DEFAULT_NORMATIVE_WEIGHTS,
+LEGACY_OPERATIONAL_DEFAULTS: Dict[str, float] = {
     "最小ステップで前進する": 0.60,
     "mvpコードを進める": 0.60,
     "一次情報(公式/論文)を調べる": 0.70,
     "情報収集を優先する": 0.60,
+}
+
+LEGACY_PERSONAL_DEFAULTS: Dict[str, float] = {
     "サウナ控め": 0.30,
+}
+
+# Backward-compatible legacy merged view only.
+# Do not use for governance scoring.
+# Governance scoring must use DEFAULT_NORMATIVE_WEIGHTS.
+DEFAULT_WEIGHTS: Dict[str, float] = {
+    **DEFAULT_NORMATIVE_WEIGHTS,
+    **DEFAULT_OPERATIONAL_PREFERENCES,
+    **LEGACY_OPERATIONAL_DEFAULTS,
+    **LEGACY_PERSONAL_DEFAULTS,
 }
 
 
@@ -190,6 +200,34 @@ def _apply_value_setting_update(
     else:
         logger.warning("Ignoring unknown value setting key: %s", key)
 
+
+def _build_legacy_weights_view(
+    normative: Dict[str, float],
+    operational: Dict[str, float],
+    personal: Dict[str, float],
+) -> Dict[str, float]:
+    """Build compatibility merged view with new and legacy alias keys."""
+    merged: Dict[str, float] = {}
+    merged.update(_normalize_mapping(normative, DEFAULT_NORMATIVE_WEIGHTS))
+    merged.update(_normalize_mapping(operational, DEFAULT_OPERATIONAL_PREFERENCES))
+    merged.update(_normalize_mapping(personal, DEFAULT_PERSONAL_PREFERENCES))
+
+    for legacy_key, mapped_key in LEGACY_OPERATIONAL_KEY_ALIASES.items():
+        merged[legacy_key] = _clip01(
+            _to_float(
+                operational.get(mapped_key, LEGACY_OPERATIONAL_DEFAULTS.get(legacy_key, 0.0)),
+                LEGACY_OPERATIONAL_DEFAULTS.get(legacy_key, 0.0),
+            ),
+        )
+    for legacy_key, mapped_key in LEGACY_PERSONAL_KEY_ALIASES.items():
+        merged[legacy_key] = _clip01(
+            _to_float(
+                personal.get(mapped_key, LEGACY_PERSONAL_DEFAULTS.get(legacy_key, 0.0)),
+                LEGACY_PERSONAL_DEFAULTS.get(legacy_key, 0.0),
+            ),
+        )
+    return merged
+
 # ==============================
 #   コンテキストプロファイル（domain 別の重み調整）
 # ==============================
@@ -272,11 +310,11 @@ class ValueProfile:
 
     @property
     def weights(self) -> Dict[str, float]:
-        return {
-            **self.normative_weights,
-            **self.operational_preferences,
-            **self.personal_preferences,
-        }
+        return _build_legacy_weights_view(
+            self.normative_weights,
+            self.operational_preferences,
+            self.personal_preferences,
+        )
 
     @weights.setter
     def weights(self, value: Dict[str, Any]) -> None:
@@ -620,8 +658,18 @@ def update_weights(new_weights: Dict[str, Any]) -> Dict[str, float]:
         operational, DEFAULT_OPERATIONAL_PREFERENCES,
     )
     prof.personal_preferences = _normalize_mapping(personal, DEFAULT_PERSONAL_PREFERENCES)
+    merged_view = _build_legacy_weights_view(
+        prof.normative_weights,
+        prof.operational_preferences,
+        prof.personal_preferences,
+    )
+    try:
+        if not isinstance(prof, ValueProfile):
+            prof.weights = merged_view.copy()
+    except Exception:
+        pass
     prof.save()
-    return prof.weights
+    return merged_view
 
 
 # ==============================

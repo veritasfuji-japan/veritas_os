@@ -7,7 +7,8 @@ Value Core は以下の3層に分離されます。
 - `personal_preferences`
 
 ガバナンススコアリングは `normative_weights` のみを使用します。`operational_preferences` と `personal_preferences` は `ValueResult.total` に影響しません。
-`DEFAULT_WEIGHTS` は旧互換の表示用ビューであり、ガバナンススコア計算には使いません。
+`DEFAULT_WEIGHTS` と `ValueProfile.weights` は旧互換の表示用ビューであり、legacy operational/personal key を含む場合があります。
+ガバナンススコア計算には使いません。
 ガバナンス計算の正規ソースは `DEFAULT_NORMATIVE_WEIGHTS` です。
 
 後方互換として、旧 `weights` 形式と旧日本語キーの移行を維持します。

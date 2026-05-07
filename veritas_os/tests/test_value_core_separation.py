@@ -139,3 +139,46 @@ def test_v2_personal_preferences_preserved(tmp_path, monkeypatch):
     profile.save()
     loaded = value_core.ValueProfile.load()
     assert loaded.personal_preferences["sauna_less"] == 0.3
+
+
+def test_weights_property_returns_legacy_and_new_compatibility_keys():
+    profile = value_core.ValueProfile(
+        normative_weights=value_core.DEFAULT_NORMATIVE_WEIGHTS.copy(),
+        operational_preferences=value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy(),
+        personal_preferences={"sauna_less": 0.3},
+    )
+    merged = profile.weights
+    assert "ethics" in merged
+    assert "minimal_steps" in merged
+    assert "最小ステップで前進する" in merged
+    assert "mvp_progress" in merged
+    assert "mvpコードを進める" in merged
+    assert "サウナ控め" in merged
+    assert "サウナ控め" not in profile.normative_weights
+
+
+def test_saved_v2_does_not_write_legacy_weights_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    profile = value_core.ValueProfile.load()
+    profile.save()
+    data = json.loads((tmp_path / "value_core.json").read_text(encoding="utf-8"))
+    assert data["schema_version"] == "value_core.v2"
+    assert "weights" not in data
+
+
+def test_update_weights_return_contains_compatibility_view(monkeypatch):
+    class _LegacyDummy:
+        def __init__(self):
+            self.weights = {"ethics": 0.1}
+
+        def save(self):
+            return None
+
+    dummy = _LegacyDummy()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: dummy))
+    result = value_core.update_weights({"ethics": 2.0, "user_benefit": 10})
+    assert 0.0 <= result["ethics"] <= 1.0
+    assert 0.0 <= result["user_benefit"] <= 1.0
+    assert "最小ステップで前進する" in result
+    assert "minimal_steps" in result

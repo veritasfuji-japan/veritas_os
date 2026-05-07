@@ -63,7 +63,9 @@ def test_value_profile_save_writes_normalized(tmp_path, monkeypatch):
     assert value_core.CFG_PATH.exists()
     with value_core.CFG_PATH.open(encoding="utf-8") as f:
         data = json.load(f)
-    w = data["weights"]
+    assert data["schema_version"] == "value_core.v2"
+    assert "weights" not in data
+    w = data["normative_weights"]
     assert 0.0 <= w["ethics"] <= 1.0
     assert 0.0 <= w["user_benefit"] <= 1.0
 
