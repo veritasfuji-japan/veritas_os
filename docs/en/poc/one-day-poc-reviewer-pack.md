@@ -164,3 +164,10 @@ Include `runtime/dev/benchmarks/veritas_poc_benchmark.json` and `runtime/dev/ben
 - VERITAS commit hash or release tag, if available
 - Reviewer notes
 - Known limitations
+
+
+## Provider dependency note
+
+- OpenAI is the current production-tier provider for the runtime path.
+- See `docs/en/operations/provider-support-matrix.md` for current provider tiers and limitations.
+- Reviewers should not infer on-premises, private-cloud, or multi-provider production support from this PoC alone.

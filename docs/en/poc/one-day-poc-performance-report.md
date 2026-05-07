@@ -68,3 +68,10 @@ These measurements do **not** certify EU AI Act compliance or any legal/regulato
 - Concurrency and throughput tests
 - Tail latency under controlled load
 - Regional/network variation analysis
+
+
+## Provider dependency note
+
+- Benchmark results are provider- and environment-dependent.
+- If model calls are included in future benchmarks, provider latency and rate-limit effects must be reported separately.
+- Current local benchmark results do not prove provider-neutral production performance.
