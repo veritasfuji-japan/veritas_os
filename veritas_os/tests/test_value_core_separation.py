@@ -57,6 +57,8 @@ def test_evaluate_excludes_operational_personal(monkeypatch):
     assert "サウナ控め" not in res.scores
     assert "mvpコードを進める" not in res.scores
     assert "サウナ控め" not in res.top_factors
+    assert "サウナ控め" not in res.contributions
+    assert "mvpコードを進める" not in res.contributions
 
 
 def test_update_from_scores_normative_only(tmp_path, monkeypatch):
@@ -91,3 +93,49 @@ def test_update_weights_backward_compatible(monkeypatch):
     assert dummy.normative_weights["ethics"] == 0.8
     assert dummy.operational_preferences["minimal_steps"] == 0.7
     assert "ethics" in merged
+
+
+def test_legacy_profile_weights_only_still_works(monkeypatch):
+    class _LegacyOnly:
+        def __init__(self):
+            self.weights = value_core.DEFAULT_WEIGHTS.copy()
+
+        def update_from_scores(self, scores, lr=0.02):
+            return None
+
+    legacy = _LegacyOnly()
+    monkeypatch.setattr(value_core.ValueProfile, "load", classmethod(lambda cls: legacy))
+    result = value_core.evaluate("テスト", {"no_learn_values": True})
+    assert 0.0 <= result.total <= 1.0
+
+
+def test_update_weights_partial_update_preserves_values(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    profile = value_core.ValueProfile.load()
+    profile.normative_weights["truthfulness"] = 0.11
+    profile.save()
+    value_core.update_weights({"ethics": 0.8})
+    loaded = value_core.ValueProfile.load()
+    assert loaded.normative_weights["ethics"] == 0.8
+    assert loaded.normative_weights["truthfulness"] == 0.11
+
+
+def test_default_weights_include_legacy_japanese_keys():
+    assert "最小ステップで前進する" in value_core.DEFAULT_WEIGHTS
+    assert "mvpコードを進める" in value_core.DEFAULT_WEIGHTS
+    assert "サウナ控め" in value_core.DEFAULT_WEIGHTS
+    assert "最小ステップで前進する" not in value_core.DEFAULT_NORMATIVE_WEIGHTS
+
+
+def test_v2_personal_preferences_preserved(tmp_path, monkeypatch):
+    monkeypatch.setattr(value_core, "CFG_DIR", tmp_path)
+    monkeypatch.setattr(value_core, "CFG_PATH", tmp_path / "value_core.json")
+    profile = value_core.ValueProfile(
+        normative_weights=value_core.DEFAULT_NORMATIVE_WEIGHTS.copy(),
+        operational_preferences=value_core.DEFAULT_OPERATIONAL_PREFERENCES.copy(),
+        personal_preferences={"sauna_less": 0.3},
+    )
+    profile.save()
+    loaded = value_core.ValueProfile.load()
+    assert loaded.personal_preferences["sauna_less"] == 0.3

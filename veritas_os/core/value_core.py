@@ -81,11 +81,15 @@ LEGACY_PERSONAL_KEY_ALIASES: Dict[str, str] = {
     "サウナ控め": "sauna_less",
 }
 
-# Backward-compatible merged view only.
-# Governance scoring should use DEFAULT_NORMATIVE_WEIGHTS.
+# Backward-compatible legacy merged view only.
+# Do not use for governance scoring.
 DEFAULT_WEIGHTS: Dict[str, float] = {
     **DEFAULT_NORMATIVE_WEIGHTS,
-    **DEFAULT_OPERATIONAL_PREFERENCES,
+    "最小ステップで前進する": 0.60,
+    "mvpコードを進める": 0.60,
+    "一次情報(公式/論文)を調べる": 0.70,
+    "情報収集を優先する": 0.60,
+    "サウナ控め": 0.30,
 }
 
 
@@ -115,6 +119,76 @@ def _split_value_settings(raw: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
         ),
         "personal_preferences": _normalize_mapping(personal, DEFAULT_PERSONAL_PREFERENCES),
     }
+
+
+def _profile_normative_weights(profile: Any) -> Dict[str, float]:
+    """Return normalized normative weights from modern or legacy profile."""
+    if hasattr(profile, "normative_weights"):
+        return _normalize_mapping(
+            getattr(profile, "normative_weights") or {},
+            DEFAULT_NORMATIVE_WEIGHTS,
+        )
+    legacy_weights = getattr(profile, "weights", {}) or {}
+    return _split_value_settings(legacy_weights)["normative_weights"]
+
+
+def _profile_operational_preferences(profile: Any) -> Dict[str, float]:
+    """Return normalized operational preferences from modern or legacy profile."""
+    if hasattr(profile, "operational_preferences"):
+        return _normalize_mapping(
+            getattr(profile, "operational_preferences") or {},
+            DEFAULT_OPERATIONAL_PREFERENCES,
+        )
+    legacy_weights = getattr(profile, "weights", {}) or {}
+    return _split_value_settings(legacy_weights)["operational_preferences"]
+
+
+def _profile_personal_preferences(profile: Any) -> Dict[str, float]:
+    """Return normalized personal preferences from modern or legacy profile."""
+    if hasattr(profile, "personal_preferences"):
+        return _normalize_mapping(
+            getattr(profile, "personal_preferences") or {},
+            DEFAULT_PERSONAL_PREFERENCES,
+        )
+    legacy_weights = getattr(profile, "weights", {}) or {}
+    return _split_value_settings(legacy_weights)["personal_preferences"]
+
+
+def _apply_value_setting_update(
+    normative: Dict[str, float],
+    operational: Dict[str, float],
+    personal: Dict[str, float],
+    key: str,
+    value: Any,
+) -> None:
+    """Apply a partial update for a single key into separated value groups."""
+    if key in DEFAULT_NORMATIVE_WEIGHTS:
+        normative[key] = _clip01(
+            _to_float(value, normative.get(key, DEFAULT_NORMATIVE_WEIGHTS[key])),
+        )
+    elif key in DEFAULT_OPERATIONAL_PREFERENCES:
+        operational[key] = _clip01(
+            _to_float(
+                value, operational.get(key, DEFAULT_OPERATIONAL_PREFERENCES[key]),
+            ),
+        )
+    elif key in DEFAULT_PERSONAL_PREFERENCES:
+        personal[key] = _clip01(
+            _to_float(value, personal.get(key, DEFAULT_PERSONAL_PREFERENCES[key])),
+        )
+    elif key in LEGACY_OPERATIONAL_KEY_ALIASES:
+        mapped = LEGACY_OPERATIONAL_KEY_ALIASES[key]
+        operational[mapped] = _clip01(
+            _to_float(
+                value,
+                operational.get(mapped, DEFAULT_OPERATIONAL_PREFERENCES.get(mapped, 0.0)),
+            ),
+        )
+    elif key in LEGACY_PERSONAL_KEY_ALIASES:
+        mapped = LEGACY_PERSONAL_KEY_ALIASES[key]
+        personal[mapped] = _clip01(_to_float(value, personal.get(mapped, 0.0)))
+    else:
+        logger.warning("Ignoring unknown value setting key: %s", key)
 
 # ==============================
 #   コンテキストプロファイル（domain 別の重み調整）
@@ -163,11 +237,38 @@ POLICY_PRESETS: Dict[str, Dict[str, float]] = {
 # ==============================
 #   プロファイル（学習する価値観）
 # ==============================
-@dataclass
+@dataclass(init=False)
 class ValueProfile:
     normative_weights: Dict[str, float]
     operational_preferences: Dict[str, float] = field(default_factory=dict)
     personal_preferences: Dict[str, float] = field(default_factory=dict)
+
+    def __init__(
+        self,
+        normative_weights: Dict[str, float] | None = None,
+        operational_preferences: Dict[str, float] | None = None,
+        personal_preferences: Dict[str, float] | None = None,
+        weights: Dict[str, float] | None = None,
+    ) -> None:
+        """Initialize from separated mappings or legacy merged `weights`."""
+        if weights is not None and normative_weights is None:
+            groups = _split_value_settings(weights)
+            self.normative_weights = groups["normative_weights"]
+            self.operational_preferences = groups["operational_preferences"]
+            self.personal_preferences = groups["personal_preferences"]
+            return
+        self.normative_weights = _normalize_mapping(
+            normative_weights or DEFAULT_NORMATIVE_WEIGHTS,
+            DEFAULT_NORMATIVE_WEIGHTS,
+        )
+        self.operational_preferences = _normalize_mapping(
+            operational_preferences or DEFAULT_OPERATIONAL_PREFERENCES,
+            DEFAULT_OPERATIONAL_PREFERENCES,
+        )
+        self.personal_preferences = _normalize_mapping(
+            personal_preferences or DEFAULT_PERSONAL_PREFERENCES,
+            DEFAULT_PERSONAL_PREFERENCES,
+        )
 
     @property
     def weights(self) -> Dict[str, float]:
@@ -396,7 +497,20 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
     # 2) context からのスコア上書き（あれば優先）
     ctx_scores_raw: Dict[str, Any] = ctx.get("value_scores", {}) or {}
     for k, v in ctx_scores_raw.items():
-        scores[k] = _clip01(_to_float(v, scores.get(k, 0.0)))
+        if k in DEFAULT_NORMATIVE_WEIGHTS:
+            scores[k] = _clip01(_to_float(v, scores.get(k, 0.0)))
+        elif (
+            k in DEFAULT_OPERATIONAL_PREFERENCES
+            or k in LEGACY_OPERATIONAL_KEY_ALIASES
+            or k in LEGACY_PERSONAL_KEY_ALIASES
+        ):
+            logger.debug(
+                "Ignoring non-normative value_scores key for governance scoring: %s", k,
+            )
+        else:
+            logger.debug(
+                "Ignoring unknown value_scores key for governance scoring: %s", k,
+            )
 
     # 3) ポリシープリセットによるスコア下限適用
     applied_policy = ""
@@ -414,9 +528,9 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
 
     # 4) 重みの決定（保存 > context 上書き）
     prof = ValueProfile.load()
-    merged_w = prof.normative_weights.copy()
-    operational_preferences = prof.operational_preferences.copy()
-    personal_preferences = prof.personal_preferences.copy()
+    merged_w = _profile_normative_weights(prof).copy()
+    operational_preferences = _profile_operational_preferences(prof).copy()
+    personal_preferences = _profile_personal_preferences(prof).copy()
     ctx_weights = ctx.get("value_weights", {}) or {}
     for k, v in ctx_weights.items():
         if k in DEFAULT_NORMATIVE_WEIGHTS:
@@ -444,11 +558,14 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
     weights = _normalize_mapping(merged_w, DEFAULT_NORMATIVE_WEIGHTS)
 
     # 5) 加重平均で total（sum→クリップではなく平均にするので 1.0 固定を防ぐ）
+    normative_scores = {
+        k: v for k, v in scores.items() if k in DEFAULT_NORMATIVE_WEIGHTS
+    }
     contribs: Dict[str, float] = {}
-    if scores:
+    if normative_scores:
         contribs = {
-            k: round(float(scores[k]) * float(weights.get(k, 1.0)), 4)
-            for k in scores.keys()
+            k: round(float(normative_scores[k]) * float(weights.get(k, 1.0)), 4)
+            for k in normative_scores.keys()
         }
         total_raw = sum(contribs.values()) / max(len(contribs), 1)
     else:
@@ -457,7 +574,7 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
 
     # 6) 上位要素（weight * score でソート）
     factors_sorted = sorted(
-        scores.items(),
+        normative_scores.items(),
         key=lambda kv: float(kv[1]) * float(weights.get(kv[0], 1.0)),
         reverse=True,
     )
@@ -492,10 +609,17 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
 # ==============================
 def update_weights(new_weights: Dict[str, Any]) -> Dict[str, float]:
     prof = ValueProfile.load()
-    groups = _split_value_settings(new_weights or {})
-    prof.normative_weights = groups["normative_weights"]
-    prof.operational_preferences = groups["operational_preferences"]
-    prof.personal_preferences = groups["personal_preferences"]
+    normative = _profile_normative_weights(prof)
+    operational = _profile_operational_preferences(prof)
+    personal = _profile_personal_preferences(prof)
+    for key, value in (new_weights or {}).items():
+        _apply_value_setting_update(normative, operational, personal, key, value)
+
+    prof.normative_weights = _normalize_mapping(normative, DEFAULT_NORMATIVE_WEIGHTS)
+    prof.operational_preferences = _normalize_mapping(
+        operational, DEFAULT_OPERATIONAL_PREFERENCES,
+    )
+    prof.personal_preferences = _normalize_mapping(personal, DEFAULT_PERSONAL_PREFERENCES)
     prof.save()
     return prof.weights
 
@@ -531,7 +655,7 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
     logger.info("Trust EMA: %.3f", ema)
 
     prof = ValueProfile.load()
-    w = prof.normative_weights.copy()
+    w = _profile_normative_weights(prof).copy()
 
     # --- 自己適応ロジック（例） ---
     if ema < 0.7:
