@@ -228,16 +228,18 @@ class TestComposePostgresqlBackend:
             f"VERITAS_TRUSTLOG_BACKEND should default to postgresql, got {tlog!r}"
         )
 
-    def test_compose_database_url_set(self):
+    def test_compose_database_url_requires_explicit_env(self):
         import yaml
 
         compose = _ROOT / "docker-compose.yml"
         cfg = yaml.safe_load(compose.read_text())
         backend_env = cfg["services"]["backend"]["environment"]
         db_url = backend_env.get("VERITAS_DATABASE_URL", "")
-        assert "postgres" in db_url, (
-            f"VERITAS_DATABASE_URL should point to postgres, got {db_url!r}"
+        assert "${VERITAS_DATABASE_URL:?" in db_url, (
+            "VERITAS_DATABASE_URL must require explicit .env value via "
+            f"compose fail-fast expansion, got {db_url!r}"
         )
+        assert "postgresql://veritas:veritas@" not in db_url
 
     def test_compose_backend_depends_on_postgres(self):
         import yaml

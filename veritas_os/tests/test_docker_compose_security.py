@@ -9,16 +9,17 @@ def test_docker_compose_exists() -> None:
 
 def test_docker_compose_has_no_unsafe_defaults() -> None:
     text = Path("docker-compose.yml").read_text(encoding="utf-8")
-    blocked = [
-        "POSTGRES_PASSWORD: ${VERITAS_DB_PASSWORD:-veritas}",
-        "postgresql://veritas:veritas@postgres:5432/veritas",
-        "postgresql://veritas:veritas@localhost:5432/veritas",
-        "VERITAS_BFF_SESSION_TOKEN: ${VERITAS_BFF_SESSION_TOKEN:-veritas-dev-session}",
-        "VERITAS_BFF_AUTH_TOKENS_JSON: ${VERITAS_BFF_AUTH_TOKENS_JSON:-'{\"veritas-dev-session\":\"admin\"}'}",
+    blocked_patterns = [
+        "${VERITAS_DB_PASSWORD:-",
+        "${VERITAS_DATABASE_URL:-",
+        "${VERITAS_BFF_SESSION_TOKEN:-",
+        "${VERITAS_BFF_AUTH_TOKENS_JSON:-",
         "veritas-dev-session",
+        "postgresql://veritas:veritas@",
+        "VERITAS_DB_PASSWORD=veritas",
     ]
-    for item in blocked:
-        assert item not in text
+    for pattern in blocked_patterns:
+        assert pattern not in text
 
 
 def test_docker_compose_requires_explicit_secrets() -> None:
@@ -31,6 +32,14 @@ def test_docker_compose_requires_explicit_secrets() -> None:
     ]
     for item in required:
         assert item in text
+
+
+def test_bff_auth_tokens_json_interpolation_is_quoted() -> None:
+    text = Path("docker-compose.yml").read_text(encoding="utf-8")
+    assert (
+        "VERITAS_BFF_AUTH_TOKENS_JSON: "
+        "'${VERITAS_BFF_AUTH_TOKENS_JSON:?"
+    ) in text
 
 
 def test_env_example_keeps_operator_template_tokens() -> None:
@@ -98,3 +107,14 @@ def test_docs_links_exist() -> None:
     assert "docs/en/operations/docker-compose-security.md" in readme
     assert "docker-compose-security.md" in index
     assert "docker-compose-security.md" in documentation_map
+
+
+def test_readme_has_no_known_compose_database_password_examples() -> None:
+    text = Path("README.md").read_text(encoding="utf-8")
+    blocked = [
+        "postgresql://veritas:veritas@postgres",
+        "postgresql://veritas:veritas@localhost",
+        "veritas:veritas@",
+    ]
+    for item in blocked:
+        assert item not in text

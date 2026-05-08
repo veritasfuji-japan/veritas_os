@@ -767,7 +767,7 @@ VERITAS OS uses a **pluggable storage backend** pattern for MemoryOS and TrustLo
 # Use PostgreSQL for both backends
 VERITAS_MEMORY_BACKEND=postgresql
 VERITAS_TRUSTLOG_BACKEND=postgresql
-VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
+VERITAS_DATABASE_URL=postgresql://veritas:CHANGE_ME_generate_a_strong_local_password@localhost:5432/veritas
 
 # Apply schema
 make db-upgrade
@@ -1228,7 +1228,7 @@ Environment variables (set in `.env` or shell):
 | `VERITAS_API_BASE_URL` | `http://backend:8000` | Frontend BFF (server-only) → backend URL |
 | `VERITAS_MEMORY_BACKEND` | `postgresql` | Memory storage backend (`json` or `postgresql`) |
 | `VERITAS_TRUSTLOG_BACKEND` | `postgresql` | TrustLog storage backend (`jsonl` or `postgresql`) |
-| `VERITAS_DATABASE_URL` | `postgresql://veritas:veritas@postgres:5432/veritas` | PostgreSQL connection URL |
+| `VERITAS_DATABASE_URL` | required for PostgreSQL | PostgreSQL DSN; for Docker Compose set this in `.env` using a non-default password |
 | `LLM_PROVIDER` | `openai` | LLM provider |
 | `LLM_MODEL` | `gpt-4.1-mini` | LLM model name |
 
