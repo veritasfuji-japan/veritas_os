@@ -54,6 +54,7 @@ Experimental means developer-oriented or adapter-level support only. It may chan
 - Current production-tier support is OpenAI only.
 - Provider support tiers do not certify provider-side legal/compliance posture.
 - Multi-provider parity is not implied by abstraction interfaces alone.
+- Anthropic has offline contract coverage for request formatting, response parsing, header construction, model allowlist behavior, planned-tier warnings, and sanitized error handling. It remains Planned and must not be treated as production-supported without additional live integration validation, operational review, benchmark evidence, and customer/provider policy review.
 
 ## What changes when using a non-OpenAI provider
 
