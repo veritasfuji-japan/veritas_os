@@ -31,7 +31,7 @@ python -m scripts.quality.check_type_baseline
 
 ## What this proves
 
-- A repeatable mypy gate exists and is runnable in CI/local workflows.
+- A repeatable mypy baseline command exists for local developer/DD workflows.
 - Selected PoC/demo helper paths pass static type checking.
 - Type safety adoption is tracked as an explicit quality baseline.
 

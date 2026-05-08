@@ -3,10 +3,10 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
-import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECK_SCRIPT_PATH = REPO_ROOT / "scripts" / "quality" / "check_type_baseline.py"
@@ -70,3 +70,8 @@ def test_type_baseline_passes_when_mypy_available() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_check_script_has_python_shebang() -> None:
+    source = CHECK_SCRIPT_PATH.read_text(encoding="utf-8")
+    assert source.startswith("#!/usr/bin/env python3")

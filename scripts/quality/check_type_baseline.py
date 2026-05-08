@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""Run the incremental mypy type-safety baseline for selected paths.
+
+This guard intentionally checks a narrow baseline target list. It does not
+claim repository-wide strict typing.
+"""
+
 from __future__ import annotations
 
 import subprocess
@@ -14,6 +21,7 @@ BASELINE_TARGETS = [
 
 
 def main() -> int:
+    """Run mypy against the configured baseline targets."""
     cmd = [sys.executable, "-m", "mypy", "--explicit-package-bases", *BASELINE_TARGETS]
     result = subprocess.run(cmd, cwd=REPO_ROOT, check=False)
     return result.returncode
