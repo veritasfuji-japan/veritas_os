@@ -92,17 +92,25 @@ def _jsonl_trustlog_process_lock(path: Path) -> Iterator[None]:
     """Serialize JSONL append critical section across processes when available."""
     lock_path = path.with_suffix(path.suffix + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_file = lock_path.open("a+", encoding="utf-8")
-    try:
-        if fcntl is None:
-            _warn_jsonl_trustlog_process_lock_unavailable_once()
-        else:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        yield
-    finally:
-        if fcntl is not None:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-        lock_file.close()
+    lock_acquired = False
+
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        try:
+            if fcntl is None:
+                _warn_jsonl_trustlog_process_lock_unavailable_once()
+            else:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                lock_acquired = True
+            yield
+        finally:
+            if fcntl is not None and lock_acquired:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    _logger.warning(
+                        "[security-warning] Failed to release JSONL TrustLog process lock",
+                        exc_info=True,
+                    )
 
 
 def _worm_mirror_path() -> Optional[Path]:
@@ -940,8 +948,10 @@ def append_signed_decision(
                 last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
                 entry["previous_hash"] = _entry_chain_hash(last_entry) if last_entry else None
                 entry = _enforce_entry_size(entry, signer)
-                line = json.dumps(entry, ensure_ascii=False) + "\n"
+                persisted_entry = json.loads(json.dumps(entry, ensure_ascii=False))
+                line = json.dumps(persisted_entry, ensure_ascii=False) + "\n"
                 _append_line(SIGNED_TRUSTLOG_JSONL, line)
+            entry_hash_for_anchor = _entry_chain_hash(persisted_entry)
 
             mirror = _mirror_to_worm(line)
             if _worm_hard_fail_enabled() and mirror.get("configured") and not mirror.get("ok"):
@@ -950,7 +960,7 @@ def append_signed_decision(
             entry["mirror_backend"] = mirror.get("backend")
             entry["mirror_receipt"] = _build_mirror_receipt(mirror) if mirror.get("ok") else None
 
-            transparency_anchor = _anchor_entry_hash(_entry_chain_hash(entry))
+            transparency_anchor = _anchor_entry_hash(entry_hash_for_anchor)
             if (
                 _transparency_required_enabled()
                 and transparency_anchor.get("configured")

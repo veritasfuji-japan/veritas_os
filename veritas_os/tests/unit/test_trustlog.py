@@ -16,6 +16,8 @@ pytestmark = pytest.mark.unit
 
 
 import json
+import logging
+import logging
 import hashlib
 import re
 import builtins
@@ -1825,8 +1827,10 @@ from veritas_os.audit import trustlog_signed
 from veritas_os.logging import trust_log
 
 
-def test_append_signed_decision_wraps_oserror(monkeypatch):
+def test_append_signed_decision_wraps_oserror(monkeypatch, tmp_path):
     """Expected runtime write failures are wrapped in domain error."""
+    trustlog_path = tmp_path / "trustlog.jsonl"
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
 
     _stub_signing(monkeypatch)
 
@@ -1954,15 +1958,19 @@ def test_append_signed_decision_releases_process_lock_before_side_effects(monkey
     def _spy_process_lock(_path):
         return _SpyLock()
 
+    captured = {}
+
     def _spy_append_line(path, line):
         events.append(f"append:{path.name}")
+        captured["line"] = line
 
     def _spy_mirror(_line):
         events.append("mirror")
         return {"configured": False, "ok": False, "backend": "local"}
 
-    def _spy_anchor(_entry_hash):
+    def _spy_anchor(entry_hash):
         events.append("anchor")
+        captured["anchor_hash"] = entry_hash
         return {"configured": False, "ok": False, "backend": "local", "status": "disabled", "receipt": None}
 
     monkeypatch.setattr(trustlog_signed, "_jsonl_trustlog_process_lock", _spy_process_lock)
@@ -1977,3 +1985,28 @@ def test_append_signed_decision_releases_process_lock_before_side_effects(monkey
     assert events.index("append:trustlog.jsonl") < events.index("exit")
     assert events.index("exit") < events.index("mirror")
     assert events.index("exit") < events.index("anchor")
+    persisted_entry = json.loads(captured["line"])
+    assert captured["anchor_hash"] == trustlog_signed._entry_chain_hash(persisted_entry)
+
+
+def test_jsonl_process_lock_does_not_unlock_when_lock_acquire_fails(monkeypatch, tmp_path):
+    class _FailingFcntl:
+        LOCK_EX = 1
+        LOCK_UN = 2
+
+        def __init__(self):
+            self.calls = []
+
+        def flock(self, _fd, op):
+            self.calls.append(op)
+            if op == self.LOCK_EX:
+                raise OSError("lock failed")
+
+    fake_fcntl = _FailingFcntl()
+    monkeypatch.setattr(trustlog_signed, "fcntl", fake_fcntl)
+
+    with pytest.raises(OSError, match="lock failed"):
+        with trustlog_signed._jsonl_trustlog_process_lock(tmp_path / "trustlog.jsonl"):
+            pass
+
+    assert fake_fcntl.calls == [fake_fcntl.LOCK_EX]
