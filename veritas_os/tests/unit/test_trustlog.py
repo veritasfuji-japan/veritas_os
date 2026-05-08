@@ -17,7 +17,6 @@ pytestmark = pytest.mark.unit
 
 import json
 import logging
-import logging
 import hashlib
 import re
 import builtins

@@ -808,6 +808,7 @@ def _has_configured_api_key() -> bool:
 
     return bool((_get_expected_api_key() or "").strip())
 
+
 def _is_valid_api_key(candidate: str) -> bool:
     """Check if *candidate* matches any configured API key (multi or single)."""
     candidate = candidate.strip()
