@@ -32,6 +32,9 @@ For external reviewers, start with `docs/REVIEWER_ENTRYPOINT.md`.
 
 For a 10-minute implementation snapshot, start here:
 
+For a concise business-facing overview, see [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md).
+日本語補助版: [企業向け価値説明ブリーフ](docs/ja/positioning/enterprise-value-brief.md)
+
 1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
 3. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
