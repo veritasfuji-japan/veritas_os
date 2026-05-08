@@ -14,8 +14,13 @@ Risk:
 
 Mitigations applied here:
     - Files are created with mode ``0o600`` (owner-read/write only).
-    - ``_load_private_key`` checks that the key file is not world-readable
-      and raises ``PermissionError`` when unsafe permissions are detected.
+    - ``_load_private_key`` verifies that the private-key path resolves to a
+      regular file and rejects group/other-readable permissions before using
+      key material.
+    - Local private-key reads use descriptor-based permission checks,
+      ``O_NOFOLLOW`` when available, ``O_CLOEXEC`` when available, and
+      non-blocking open flags when available to reduce symlink/TOCTOU,
+      descriptor-inheritance, and non-regular-file blocking exposure.
 
 Recommended additional hardening for production:
     - Store the private key in a secrets manager (HashiCorp Vault, AWS Secrets
@@ -93,34 +98,74 @@ def store_keypair(private_key_path: Path, public_key_path: Path) -> Tuple[Path, 
 
 
 def _check_private_key_permissions(private_key_path: Path) -> None:
-    """Warn (or raise) when the private key file has unsafe permissions.
+    """Warn (or raise) when the private key file is not safe to read.
 
     Security:
-        A world-readable private key file undermines the audit trail integrity
-        guarantee. This check runs at load time so misconfigurations are caught
-        early rather than silently tolerated.
+        A world-readable or non-regular private key file undermines the audit
+        trail integrity guarantee. This path-based compatibility check runs
+        at load/setup validation time, while ``_load_private_key`` uses an
+        fd-based check to reduce TOCTOU exposure.
 
     Raises:
-        PermissionError: When the file is readable by group or others.
+        PermissionError: When the file is not a regular file or is readable by
+            group or others.
     """
     try:
-        file_stat = private_key_path.stat()
-        mode = stat.S_IMODE(file_stat.st_mode)
-        if mode & (stat.S_IRGRP | stat.S_IROTH):
+        file_stat = private_key_path.lstat()
+        if stat.S_ISLNK(file_stat.st_mode):
             raise PermissionError(
-                f"Private key file {private_key_path} has unsafe permissions "
-                f"({oct(mode)}). Expected 0o600 (owner-read/write only). "
-                "An attacker with file-system read access could forge TrustLog signatures."
+                f"Private key file {private_key_path} must not be a symlink"
             )
+        _check_private_key_stat(file_stat, private_key_path)
     except PermissionError:
         raise
     except OSError as exc:
         logger.warning("Could not stat private key file %s: %s", private_key_path, exc)
 
 
+def _private_key_open_flags() -> int:
+    """Return secure open flags for local private-key reads."""
+    flags = os.O_RDONLY
+    for optional_flag in ("O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK"):
+        flag_value = getattr(os, optional_flag, 0)
+        if flag_value:
+            flags |= flag_value
+    return flags
+
+
+def _check_private_key_stat(
+    file_stat: os.stat_result,
+    private_key_path: Path,
+) -> None:
+    """Validate private-key file type and permissions from a stat result."""
+    mode = stat.S_IMODE(file_stat.st_mode)
+    if not stat.S_ISREG(file_stat.st_mode):
+        raise PermissionError(
+            f"Private key file {private_key_path} must be a regular file"
+        )
+    if mode & (stat.S_IRGRP | stat.S_IROTH):
+        raise PermissionError(
+            f"Private key file {private_key_path} has unsafe permissions "
+            f"({oct(mode)}). Expected 0o600 (owner-read/write only). "
+            "An attacker with file-system read access could forge TrustLog signatures."
+        )
+
+
+def _read_private_key_file_secure(private_key_path: Path) -> str:
+    """Read private-key text via an opened descriptor after fstat checks."""
+    fd = os.open(str(private_key_path), _private_key_open_flags())
+    try:
+        _check_private_key_stat(os.fstat(fd), private_key_path)
+        with os.fdopen(fd, "r", encoding="utf-8") as handle:
+            fd = -1
+            return handle.read()
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
 def _load_private_key(private_key_path: Path) -> Ed25519PrivateKey:
-    _check_private_key_permissions(private_key_path)
-    raw = base64.urlsafe_b64decode(private_key_path.read_text(encoding="utf-8"))
+    raw = base64.urlsafe_b64decode(_read_private_key_file_secure(private_key_path))
     return Ed25519PrivateKey.from_private_bytes(raw)
 
 
