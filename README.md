@@ -757,7 +757,7 @@ VERITAS OS uses a **pluggable storage backend** pattern for MemoryOS and TrustLo
 | Environment | Recommended backend | Config source |
 |-------------|-------------------|---------------|
 | Local dev (no Docker) | JSON / JSONL | `.env` defaults |
-| Local dev (Docker Compose) | PostgreSQL | `docker-compose.yml` defaults |
+| Local dev (Docker Compose) | PostgreSQL | `.env` copied from `.env.example`; explicit compose credentials required |
 | Staging | PostgreSQL | Explicit env vars |
 | Secure / Prod | PostgreSQL | External secret manager |
 
@@ -1231,6 +1231,8 @@ Environment variables (set in `.env` or shell):
 | `VERITAS_DATABASE_URL` | `postgresql://veritas:veritas@postgres:5432/veritas` | PostgreSQL connection URL |
 | `LLM_PROVIDER` | `openai` | LLM provider |
 | `LLM_MODEL` | `gpt-4.1-mini` | LLM model name |
+
+Docker Compose no longer ships default database or admin BFF credentials. Copy `.env.example` to `.env` and replace every `CHANGE_ME` value before running compose. See `docs/en/operations/docker-compose-security.md`.
 
 ---
 
