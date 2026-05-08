@@ -1828,7 +1828,6 @@ from veritas_os.logging import trust_log
 def test_append_signed_decision_wraps_oserror(monkeypatch):
     """Expected runtime write failures are wrapped in domain error."""
 
-    monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
     _stub_signing(monkeypatch)
 
     def _raise_oserror(_path, _line):
@@ -1879,7 +1878,6 @@ def test_append_signed_decision_adds_transparency_anchor(monkeypatch, tmp_path):
     anchor_path = tmp_path / "transparency.jsonl"
 
     monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
-    monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
     _stub_signing(monkeypatch)
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(anchor_path))
 
@@ -1900,7 +1898,6 @@ def test_append_signed_decision_raises_when_transparency_required(monkeypatch, t
     trustlog_path = tmp_path / "trustlog.jsonl"
 
     monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
-    monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
     _stub_signing(monkeypatch)
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(tmp_path / "tp.jsonl"))
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
@@ -1916,3 +1913,67 @@ def test_append_signed_decision_raises_when_transparency_required(monkeypatch, t
 
     with pytest.raises(trustlog_signed.SignedTrustLogWriteError):
         trustlog_signed.append_signed_decision({"request_id": "req-anchor-hard-fail"})
+
+
+def test_jsonl_process_lock_fallback_without_fcntl_warns_once(monkeypatch, tmp_path, caplog):
+    trustlog_path = tmp_path / "trustlog.jsonl"
+    monkeypatch.setattr(trustlog_signed, "fcntl", None)
+    trustlog_signed._warn_jsonl_trustlog_process_lock_unavailable_once.cache_clear()
+
+    with caplog.at_level(logging.WARNING):
+        with trustlog_signed._jsonl_trustlog_process_lock(trustlog_path):
+            trustlog_path.write_text("ok", encoding="utf-8")
+        with trustlog_signed._jsonl_trustlog_process_lock(trustlog_path):
+            pass
+
+    assert trustlog_path.read_text(encoding="utf-8") == "ok"
+    warnings = [
+        record.message
+        for record in caplog.records
+        if "JSONL TrustLog process-level file locking is unavailable" in record.message
+    ]
+    assert len(warnings) == 1
+
+
+def test_append_signed_decision_releases_process_lock_before_side_effects(monkeypatch, tmp_path):
+    trustlog_path = tmp_path / "trustlog.jsonl"
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
+    _stub_signing(monkeypatch)
+
+    events = []
+
+    class _SpyLock:
+        def __enter__(self):
+            events.append("enter")
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            events.append("exit")
+            return False
+
+    def _spy_process_lock(_path):
+        return _SpyLock()
+
+    def _spy_append_line(path, line):
+        events.append(f"append:{path.name}")
+
+    def _spy_mirror(_line):
+        events.append("mirror")
+        return {"configured": False, "ok": False, "backend": "local"}
+
+    def _spy_anchor(_entry_hash):
+        events.append("anchor")
+        return {"configured": False, "ok": False, "backend": "local", "status": "disabled", "receipt": None}
+
+    monkeypatch.setattr(trustlog_signed, "_jsonl_trustlog_process_lock", _spy_process_lock)
+    monkeypatch.setattr(trustlog_signed, "_append_line", _spy_append_line)
+    monkeypatch.setattr(trustlog_signed, "_mirror_to_worm", _spy_mirror)
+    monkeypatch.setattr(trustlog_signed, "_anchor_entry_hash", _spy_anchor)
+
+    trustlog_signed.append_signed_decision({"request_id": "req-lock-scope"})
+
+    assert events.count("enter") == 1
+    assert events.count("exit") == 1
+    assert events.index("append:trustlog.jsonl") < events.index("exit")
+    assert events.index("exit") < events.index("mirror")
+    assert events.index("exit") < events.index("anchor")

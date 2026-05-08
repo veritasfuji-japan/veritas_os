@@ -2887,6 +2887,30 @@ def test_websocket_auth_rejects_query_api_key_in_production_even_with_dual_flags
     assert server._authenticate_websocket_api_key(ws) is False
 
 
+def test_websocket_auth_falls_back_to_legacy_key_when_multi_key_config_malformed(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", "legacy-ws-key")
+    monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
+
+    ws = SimpleNamespace(
+        headers={"X-API-Key": "legacy-ws-key"},
+        query_params={},
+    )
+
+    assert server._authenticate_websocket_api_key(ws) is True
+
+
+def test_websocket_auth_fail_closed_when_multi_key_config_malformed_without_legacy_key(monkeypatch):
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
+
+    ws = SimpleNamespace(
+        headers={"X-API-Key": "anything"},
+        query_params={},
+    )
+
+    assert server._authenticate_websocket_api_key(ws) is False
+
+
 def test_websocket_auth_rejects_query_api_key_without_risk_ack(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     monkeypatch.setenv("VERITAS_ALLOW_WS_QUERY_API_KEY", "1")
