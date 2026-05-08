@@ -27,9 +27,10 @@ def test_readme_index_and_map_link_handoff_docs() -> None:
 def test_risk_boundary_phrases_exist() -> None:
     en = EN_DOC.read_text(encoding="utf-8")
     ja = JA_DOC.read_text(encoding="utf-8")
-    assert "does not eliminate bus-factor risk" in en
-    assert "not a substitute for a staffed support organization" in en
-    assert "no formal support SLA" in en
+    en_lower = en.lower()
+    assert "does not eliminate bus-factor risk" in en_lower
+    assert "not a substitute for a staffed support organization" in en_lower
+    assert "no formal support sla" in en_lower
     assert "バスファクターリスクを完全に解消するものではありません" in ja
     assert "24/7 support または正式なSLAを意味しない" in ja
 

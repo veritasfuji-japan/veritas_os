@@ -213,7 +213,7 @@ When handing off to another maintainer, package at minimum:
 
 - Single primary maintainer risk remains.
 - No staffed 24/7 support organization is claimed.
-- no formal support SLA is claimed.
+- No formal support SLA is claimed.
 - Some operational knowledge may still be implicit.
 - External legal/security review remains outside this repository.
 - Production deployment ownership remains customer/operator responsibility.
