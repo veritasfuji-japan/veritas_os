@@ -31,6 +31,7 @@
 | PostgreSQL Production Guide | [PostgreSQL production guide (EN)](en/operations/postgresql-production-guide.md) | [PostgreSQL本番運用ガイド (JA)](ja/operations/postgresql-production-guide.md) |
 | PostgreSQL Drill Runbook | [PostgreSQL drill runbook (EN)](en/operations/postgresql-drill-runbook.md) | [PostgreSQLドリルRunbook (JA)](ja/operations/postgresql-drill-runbook.md) |
 | Security | [Security hardening (EN)](en/operations/security-hardening.md) | [セキュリティハードニング (JA)](ja/operations/security-hardening.md) |
+| Docker Compose Security Notes | [Docker Compose security notes (EN)](en/operations/docker-compose-security.md) | [Docker Composeセキュリティノート (JA)](ja/operations/docker-compose-security.md) |
 | Database | [Database migrations (EN)](en/operations/database-migrations.md) | [データベース移行 (JA)](ja/operations/database-migrations.md) |
 | Governance Artifact Signing | [Governance artifact signing (EN)](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名 (JA)](ja/operations/governance-artifact-signing.md) |
 | Governance Trace Span Chain | [Governance trace span chain (EN)](en/operations/governance-trace-span-chain.md) | [ガバナンストレース span chain (JA)](ja/operations/governance-trace-span-chain.md) |
@@ -98,6 +99,7 @@
 | PostgreSQL本番運用ガイド | [PostgreSQL production guide（英語正本）](en/operations/postgresql-production-guide.md) | [PostgreSQL本番運用ガイド（日本語解説）](ja/operations/postgresql-production-guide.md) |
 | PostgreSQLドリルRunbook | [PostgreSQL drill runbook（英語正本）](en/operations/postgresql-drill-runbook.md) | [PostgreSQLドリルRunbook（日本語解説）](ja/operations/postgresql-drill-runbook.md) |
 | セキュリティ | [Security hardening（英語正本）](en/operations/security-hardening.md) | [セキュリティハードニング（日本語）](ja/operations/security-hardening.md) |
+| Docker Compose Security Notes | [Docker Compose security notes（英語正本）](en/operations/docker-compose-security.md) | [Docker Composeセキュリティノート（日本語補助）](ja/operations/docker-compose-security.md) |
 | データベース | [Database migrations（英語正本）](en/operations/database-migrations.md) | [データベース移行（日本語）](ja/operations/database-migrations.md) |
 | ガバナンス成果物署名 | [Governance artifact signing（英語正本）](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名（日本語解説）](ja/operations/governance-artifact-signing.md) |
 | ガバナンストレース span chain | [Governance trace span chain（英語正本）](en/operations/governance-trace-span-chain.md) | [ガバナンストレース span chain（日本語解説）](ja/operations/governance-trace-span-chain.md) |
