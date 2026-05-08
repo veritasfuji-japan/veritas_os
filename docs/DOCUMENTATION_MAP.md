@@ -36,6 +36,7 @@
 | Operations: PostgreSQL drill | `docs/en/operations/postgresql-drill-runbook.md` | `docs/ja/operations/postgresql-drill-runbook.md` | JA explanation / EN canonical | 復旧ドリル |
 | Operations: Security hardening | `docs/en/operations/security-hardening.md` | `docs/ja/operations/security-hardening.md` | JA explanation / EN canonical | ハードニング観点 |
 | Operations: Docker Compose security notes | `docs/en/operations/docker-compose-security.md` | `docs/ja/operations/docker-compose-security.md` | JA explanation / EN canonical | Local compose credential requirements, .env setup, non-claims, and production boundary |
+| Security: External review remediation summary | `docs/en/security/external-security-remediation-summary.md` | `docs/ja/security/external-security-remediation-summary.md` | JA explanation / EN canonical | Maps external security findings #1–#8 to remediation PRs, controls, verification commands, and residual boundaries. |
 | Operations: Database migrations | `docs/en/operations/database-migrations.md` | `docs/ja/operations/database-migrations.md` | JA explanation / EN canonical | 移行手順 |
 | Operations: Governance artifact signing | `docs/en/operations/governance-artifact-signing.md` | `docs/ja/operations/governance-artifact-signing.md` | JA explanation / EN canonical | 署名運用 |
 | Operations: Governance trace span chain | `docs/en/operations/governance-trace-span-chain.md` | `docs/ja/operations/governance-trace-span-chain.md` | JA explanation / EN canonical | observability検証導線 |

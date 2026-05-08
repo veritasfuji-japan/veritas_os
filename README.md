@@ -351,6 +351,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **PostgreSQL Production Guide**: [`docs/en/operations/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md)
 - **PostgreSQL Drill Runbook**: [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md)
 - **Security Hardening**: [`docs/en/operations/security-hardening.md`](docs/en/operations/security-hardening.md)
+- External security review remediation notes are tracked in `docs/en/security/external-security-remediation-summary.md`, with a Japanese companion in `docs/ja/security/external-security-remediation-summary.md`.
 - **Database Migrations**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
 - **Backend Parity Coverage**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
 - **PostgreSQL Production Proof Map (compact)**: [`docs/en/validation/postgresql-production-proof-map.md`](docs/en/validation/postgresql-production-proof-map.md)
