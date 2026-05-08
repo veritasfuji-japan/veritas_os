@@ -31,6 +31,7 @@
 | PostgreSQL Production Guide | [PostgreSQL production guide (EN)](en/operations/postgresql-production-guide.md) | [PostgreSQL本番運用ガイド (JA)](ja/operations/postgresql-production-guide.md) |
 | PostgreSQL Drill Runbook | [PostgreSQL drill runbook (EN)](en/operations/postgresql-drill-runbook.md) | [PostgreSQLドリルRunbook (JA)](ja/operations/postgresql-drill-runbook.md) |
 | Security | [Security hardening (EN)](en/operations/security-hardening.md) | [セキュリティハードニング (JA)](ja/operations/security-hardening.md) |
+| Docker Compose Security Notes | [Docker Compose security notes (EN)](en/operations/docker-compose-security.md) | [Docker Compose セキュリティノート (JA)](ja/operations/docker-compose-security.md) |
 | Database | [Database migrations (EN)](en/operations/database-migrations.md) | [データベース移行 (JA)](ja/operations/database-migrations.md) |
 | Governance Artifact Signing | [Governance artifact signing (EN)](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名 (JA)](ja/operations/governance-artifact-signing.md) |
 | Governance Trace Span Chain | [Governance trace span chain (EN)](en/operations/governance-trace-span-chain.md) | [ガバナンストレース span chain (JA)](ja/operations/governance-trace-span-chain.md) |

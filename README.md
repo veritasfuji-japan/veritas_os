@@ -758,6 +758,8 @@ VERITAS OS uses a **pluggable storage backend** pattern for MemoryOS and TrustLo
 |-------------|-------------------|---------------|
 | Local dev (no Docker) | JSON / JSONL | `.env` defaults |
 | Local dev (Docker Compose) | PostgreSQL | `docker-compose.yml` defaults |
+> Docker Compose no longer ships default database or admin BFF credentials. Copy `.env.example` to `.env` and replace every `CHANGE_ME` value before running compose. See `docs/en/operations/docker-compose-security.md`.
+
 | Staging | PostgreSQL | Explicit env vars |
 | Secure / Prod | PostgreSQL | External secret manager |
 
