@@ -74,3 +74,10 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
 - 同時実行・スループット計測
 - tail latency の計測
 - リージョン/ネットワーク差分計測
+
+
+## Provider依存に関する注意
+
+- ベンチマーク結果は provider と実行環境に依存します。
+- 将来、モデル呼び出しを含むベンチマークを行う場合は、providerごとの遅延とレート制限の影響を分離して報告する必要があります。
+- 現在のローカルベンチマーク結果は、provider-neutral な本番性能を証明しません。

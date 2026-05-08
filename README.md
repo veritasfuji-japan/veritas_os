@@ -1347,6 +1347,8 @@ Supports multiple providers via `LLM_PROVIDER` environment variable. Each provid
 | `ollama` | Local models | experimental |
 | `openrouter` | Aggregator | experimental |
 
+Current model-provider support is documented in `docs/en/operations/provider-support-matrix.md`. OpenAI is the current production-tier provider; other providers are planned or experimental unless explicitly documented otherwise.
+
 > **Runtime notice**: Using a non-production provider emits a `UserWarning` so callers are aware of the tier boundary.
 >
 > **Promoting a provider to production** requires: (1) integration test suite with ≥ 90 % path coverage for the provider, (2) successful staging deployment for ≥ 2 weeks, (3) API-compatibility review against upstream changelog, and (4) explicit approval in a pull request.

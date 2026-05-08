@@ -166,3 +166,10 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
 - 可能であれば VERITAS の commit hash または release tag
 - レビューノート
 - 既知の制約
+
+
+## Provider依存に関する注意
+
+- 現時点で runtime path の production-tier provider は OpenAI です。
+- provider tier と制約は `docs/ja/operations/provider-support-matrix.md` を参照してください。
+- このPoCのみから、on-prem/private cloud/multi-provider の本番対応を推論しないでください。
