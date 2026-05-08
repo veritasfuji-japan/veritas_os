@@ -14,11 +14,13 @@ Risk:
 
 Mitigations applied here:
     - Files are created with mode ``0o600`` (owner-read/write only).
-    - ``_load_private_key`` checks that the key file is not world-readable
-      and raises ``PermissionError`` when unsafe permissions are detected.
+    - ``_load_private_key`` verifies that the private-key path resolves to a
+      regular file and rejects group/other-readable permissions before using
+      key material.
     - Local private-key reads use descriptor-based permission checks,
-      ``O_NOFOLLOW`` when available, and close-on-exec flags when available
-      to reduce symlink/TOCTOU and descriptor-inheritance exposure.
+      ``O_NOFOLLOW`` when available, ``O_CLOEXEC`` when available, and
+      non-blocking open flags when available to reduce symlink/TOCTOU,
+      descriptor-inheritance, and non-regular-file blocking exposure.
 
 Recommended additional hardening for production:
     - Store the private key in a secrets manager (HashiCorp Vault, AWS Secrets
@@ -109,7 +111,12 @@ def _check_private_key_permissions(private_key_path: Path) -> None:
             group or others.
     """
     try:
-        _check_private_key_stat(private_key_path.stat(), private_key_path)
+        file_stat = private_key_path.lstat()
+        if stat.S_ISLNK(file_stat.st_mode):
+            raise PermissionError(
+                f"Private key file {private_key_path} must not be a symlink"
+            )
+        _check_private_key_stat(file_stat, private_key_path)
     except PermissionError:
         raise
     except OSError as exc:
@@ -119,7 +126,7 @@ def _check_private_key_permissions(private_key_path: Path) -> None:
 def _private_key_open_flags() -> int:
     """Return secure open flags for local private-key reads."""
     flags = os.O_RDONLY
-    for optional_flag in ("O_NOFOLLOW", "O_CLOEXEC"):
+    for optional_flag in ("O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK"):
         flag_value = getattr(os, optional_flag, 0)
         if flag_value:
             flags |= flag_value

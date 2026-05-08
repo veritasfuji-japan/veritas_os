@@ -56,6 +56,24 @@ def test_private_key_open_flags_include_optional_hardening_flags() -> None:
         assert flags & os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         assert flags & os.O_NOFOLLOW
+    if hasattr(os, "O_NONBLOCK"):
+        assert flags & os.O_NONBLOCK
+
+
+@pytest.mark.skipif(not hasattr(os, "symlink"), reason="symlink not available")
+def test_check_private_key_permissions_rejects_symlink(tmp_path: Path) -> None:
+    private_raw, _ = signing.generate_ed25519_keypair()
+    real_key = tmp_path / "real.key"
+    _write_private_key_file(real_key, private_raw, mode=0o600)
+
+    symlink_key = tmp_path / "symlink.key"
+    try:
+        symlink_key.symlink_to(real_key)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+
+    with pytest.raises(PermissionError, match="symlink"):
+        signing._check_private_key_permissions(symlink_key)
 
 
 def test_file_backed_signing_flow_remains_valid(tmp_path: Path) -> None:
