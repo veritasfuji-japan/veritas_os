@@ -16,8 +16,9 @@ Mitigations applied here:
     - Files are created with mode ``0o600`` (owner-read/write only).
     - ``_load_private_key`` checks that the key file is not world-readable
       and raises ``PermissionError`` when unsafe permissions are detected.
-    - Local private-key reads use descriptor-based permission checks and
-      ``O_NOFOLLOW`` when available to reduce symlink/TOCTOU exposure.
+    - Local private-key reads use descriptor-based permission checks,
+      ``O_NOFOLLOW`` when available, and close-on-exec flags when available
+      to reduce symlink/TOCTOU and descriptor-inheritance exposure.
 
 Recommended additional hardening for production:
     - Store the private key in a secrets manager (HashiCorp Vault, AWS Secrets
@@ -95,15 +96,17 @@ def store_keypair(private_key_path: Path, public_key_path: Path) -> Tuple[Path, 
 
 
 def _check_private_key_permissions(private_key_path: Path) -> None:
-    """Warn (or raise) when the private key file has unsafe permissions.
+    """Warn (or raise) when the private key file is not safe to read.
 
     Security:
-        A world-readable private key file undermines the audit trail integrity
-        guarantee. This check runs at load time so misconfigurations are caught
-        early rather than silently tolerated.
+        A world-readable or non-regular private key file undermines the audit
+        trail integrity guarantee. This path-based compatibility check runs
+        at load/setup validation time, while ``_load_private_key`` uses an
+        fd-based check to reduce TOCTOU exposure.
 
     Raises:
-        PermissionError: When the file is readable by group or others.
+        PermissionError: When the file is not a regular file or is readable by
+            group or others.
     """
     try:
         _check_private_key_stat(private_key_path.stat(), private_key_path)
@@ -116,13 +119,17 @@ def _check_private_key_permissions(private_key_path: Path) -> None:
 def _private_key_open_flags() -> int:
     """Return secure open flags for local private-key reads."""
     flags = os.O_RDONLY
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    if nofollow:
-        flags |= nofollow
+    for optional_flag in ("O_NOFOLLOW", "O_CLOEXEC"):
+        flag_value = getattr(os, optional_flag, 0)
+        if flag_value:
+            flags |= flag_value
     return flags
 
 
-def _check_private_key_stat(file_stat: os.stat_result, private_key_path: Path) -> None:
+def _check_private_key_stat(
+    file_stat: os.stat_result,
+    private_key_path: Path,
+) -> None:
     """Validate private-key file type and permissions from a stat result."""
     mode = stat.S_IMODE(file_stat.st_mode)
     if not stat.S_ISREG(file_stat.st_mode):

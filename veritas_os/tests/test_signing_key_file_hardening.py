@@ -11,7 +11,11 @@ import pytest
 from veritas_os.security import signing
 
 
-def _write_private_key_file(path: Path, raw_private_key: bytes, mode: int = 0o600) -> None:
+def _write_private_key_file(
+    path: Path,
+    raw_private_key: bytes,
+    mode: int = 0o600,
+) -> None:
     path.write_text(
         base64.urlsafe_b64encode(raw_private_key).decode("ascii"),
         encoding="utf-8",
@@ -42,8 +46,16 @@ def test_load_private_key_rejects_unsafe_permissions(tmp_path: Path) -> None:
 
 
 def test_load_private_key_rejects_non_regular_file(tmp_path: Path) -> None:
-    with pytest.raises((PermissionError, OSError), match="regular file"):
+    with pytest.raises(PermissionError, match="regular file"):
         signing._load_private_key(tmp_path)
+
+
+def test_private_key_open_flags_include_optional_hardening_flags() -> None:
+    flags = signing._private_key_open_flags()
+    if hasattr(os, "O_CLOEXEC"):
+        assert flags & os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        assert flags & os.O_NOFOLLOW
 
 
 def test_file_backed_signing_flow_remains_valid(tmp_path: Path) -> None:
