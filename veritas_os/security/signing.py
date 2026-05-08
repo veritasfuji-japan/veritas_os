@@ -406,7 +406,11 @@ class GcpKmsEd25519Provider:
         try:
             public_key = self._load_public_key()
             public_key.verify(signature, payload_hash.encode("utf-8"))
-        except (InvalidSignature, ValueError, TypeError, AttributeError):
+        # Signature/key-shape failures return False; provider/client
+        # programming errors such as AttributeError are allowed to propagate
+        # so configuration problems are not reported as ordinary
+        # invalid signatures.
+        except (InvalidSignature, ValueError, TypeError):
             return False
         return True
 
