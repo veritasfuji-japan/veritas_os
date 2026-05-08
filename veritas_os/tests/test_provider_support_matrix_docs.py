@@ -66,3 +66,9 @@ def test_provider_positioning_banned_claims_absent() -> None:
         text = _read(path)
         for phrase in banned:
             assert phrase not in text
+
+
+def test_eu_ai_act_provider_note_is_japanese_positioning() -> None:
+    text = _read("docs/eu_ai_act/technical_documentation.md")
+    assert "Provider選定と責任境界" in text
+    assert "Provider selection and responsibility boundary" not in text
