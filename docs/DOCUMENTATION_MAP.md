@@ -54,6 +54,7 @@
 | PoC: Evidence packet schema | `schemas/poc/one_day_poc_evidence.v1.schema.json` | — | EN canonical / machine-readable | One-Day PoC evidence JSON schema |
 | Positioning: AML/KYC | `docs/en/positioning/aml-kyc-beachhead-short-positioning.md` | `docs/ja/positioning/aml-kyc-beachhead-short-positioning.md` | JA explanation / EN canonical | 公開向け短縮版 |
 | Positioning: Public positioning | `docs/en/positioning/public-positioning.md` | `docs/ja/positioning/public-positioning.md` | JA explanation / EN canonical | 内部再評価含む |
+| Positioning: Enterprise value brief | `docs/en/positioning/enterprise-value-brief.md` | `docs/ja/positioning/enterprise-value-brief.md` | JA explanation / EN canonical | One-page enterprise/investor value brief, proof assets, boundaries, and next-step review path |
 | UI docs | `docs/ui/README_UI.md` | `docs/ui/PREVIEW_PAGES_JP.md` | Mixed | UI本体は EN、プレビュー案内は JA |
 | Reviews | `docs/en/reviews/` | `docs/ja/reviews/` | Mixed | JAはレビュー蓄積多め |
 | Benchmarks | `docs/benchmarks/VERITAS_EVIDENCE_BENCHMARK_PLAN.md` | `docs/ja/validation/technical-proof-pack.md` | JA explanation / EN canonical | ベンチ証跡案内 |

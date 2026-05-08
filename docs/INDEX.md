@@ -53,6 +53,7 @@
 | Financial Governance Templates | [Financial governance templates (EN)](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート (JA)](ja/guides/financial-governance-templates.md) |
 | Governance Policy Bundle Promotion | [Policy bundle promotion (EN)](en/guides/governance-policy-bundle-promotion.md) | [ポリシーバンドル昇格 (JA)](ja/guides/governance-policy-bundle-promotion.md) |
 | AML/KYC Beachhead Positioning | [AML/KYC short positioning (EN)](en/positioning/aml-kyc-beachhead-short-positioning.md) | [AML/KYCポジショニング (JA)](ja/positioning/aml-kyc-beachhead-short-positioning.md) |
+| Positioning: Enterprise value brief | [Enterprise value brief (EN)](en/positioning/enterprise-value-brief.md) | [企業向け価値説明ブリーフ (JA)](ja/positioning/enterprise-value-brief.md) |
 | UI / Frontend | [UI Docs (EN)](ui/README_UI.md) | [UI preview (JA)](ui/PREVIEW_PAGES_JP.md) |
 | Benchmarks | [Benchmarks (EN)](benchmarks/) | [技術証明パック (JA解説)](ja/validation/technical-proof-pack.md) |
 | Reviews / Audits | [Reviews (EN)](en/reviews/) | [Reviews / Audits (JA)](ja/reviews/) |
@@ -120,6 +121,7 @@
 | 金融ガバナンステンプレート | [Financial governance templates（英語正本）](en/guides/financial-governance-templates.md) | [金融ガバナンステンプレート（日本語解説）](ja/guides/financial-governance-templates.md) |
 | ポリシーバンドル昇格 | [Policy bundle promotion（英語正本）](en/guides/governance-policy-bundle-promotion.md) | [ポリシーバンドル昇格（日本語解説）](ja/guides/governance-policy-bundle-promotion.md) |
 | AML/KYCポジショニング | [AML/KYC short positioning（英語正本）](en/positioning/aml-kyc-beachhead-short-positioning.md) | [AML/KYCポジショニング（日本語解説）](ja/positioning/aml-kyc-beachhead-short-positioning.md) |
+| Positioning: Enterprise value brief | [Enterprise value brief (EN)](en/positioning/enterprise-value-brief.md) | [企業向け価値説明ブリーフ (JA)](ja/positioning/enterprise-value-brief.md) |
 | UI / Frontend | [UI Docs（英語正本）](ui/README_UI.md) | [UIプレビュー（日本語）](ui/PREVIEW_PAGES_JP.md) |
 | ベンチマーク | [Benchmarks（英語正本）](benchmarks/) | [技術証明パック（日本語解説）](ja/validation/technical-proof-pack.md) |
 | レビュー / 監査 | [Reviews（英語正本）](en/reviews/) | [レビュー / 監査（日本語）](ja/reviews/) |
