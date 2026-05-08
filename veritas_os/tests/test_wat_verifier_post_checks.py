@@ -20,7 +20,12 @@ BASE_CLAIMS: dict[str, Any] = {
 }
 
 
-def _run_case(*, claims: dict[str, Any], observable_refs_local: list[dict[str, str]] | None, **kwargs: Any) -> dict[str, Any]:
+def _run_case(
+    *,
+    claims: dict[str, Any],
+    observable_refs_local: list[dict[str, str]] | None,
+    **kwargs: Any,
+) -> dict[str, Any]:
     config = {"signature_verifier": lambda _claims, _sig: True}
     config.update(kwargs.pop("config", {}))
     return validate_local(
@@ -49,28 +54,59 @@ def _paired_results(*, claims: dict[str, Any], **kwargs: Any) -> tuple[dict[str,
     return non_list, with_list
 
 
+def _assert_post_check_parity(
+    non_list: dict[str, Any],
+    with_list: dict[str, Any],
+    *,
+    expected_status: str,
+    expected_failure_type: str | None,
+) -> None:
+    assert (
+        non_list["validation_status"]
+        == with_list["validation_status"]
+        == expected_status
+    )
+    assert non_list["failure_type"] == with_list["failure_type"] == expected_failure_type
+    assert non_list["drift_vector"] == with_list["drift_vector"]
+    assert (
+        non_list["admissibility_state"] == with_list["admissibility_state"]
+    )
+
+
 def test_post_checks_parity_between_observable_paths() -> None:
     replay_cache = {"action:nonce:session"}
     replay_non_list, replay_with_list = _paired_results(
         claims=BASE_CLAIMS,
         replay_cache=replay_cache,
     )
-    assert replay_non_list["validation_status"] == replay_with_list["validation_status"] == "invalid"
-    assert replay_non_list["failure_type"] == replay_with_list["failure_type"] == "replay_detected"
+    _assert_post_check_parity(
+        replay_non_list,
+        replay_with_list,
+        expected_status="invalid",
+        expected_failure_type="replay_detected",
+    )
 
     expired_non_list, expired_with_list = _paired_results(
         claims=BASE_CLAIMS,
         now_ts=2100,
     )
-    assert expired_non_list["validation_status"] == expired_with_list["validation_status"] == "stale"
-    assert expired_non_list["failure_type"] == expired_with_list["failure_type"] == "expired_token"
+    _assert_post_check_parity(
+        expired_non_list,
+        expired_with_list,
+        expected_status="stale",
+        expected_failure_type="expired_token",
+    )
 
     revoked_non_list, revoked_with_list = _paired_results(
         claims=BASE_CLAIMS,
         revocation_state="revoked_pending",
     )
-    assert revoked_non_list["validation_status"] == revoked_with_list["validation_status"] == "revoked_pending"
-    assert revoked_non_list["failure_type"] == revoked_with_list["failure_type"] == "revocation_pending"
+    _assert_post_check_parity(
+        revoked_non_list,
+        revoked_with_list,
+        expected_status="revoked_pending",
+        expected_failure_type="revocation_pending",
+    )
 
     partial_non_list, partial_with_list = _paired_results(
         claims=BASE_CLAIMS,
@@ -80,35 +116,39 @@ def test_post_checks_parity_between_observable_paths() -> None:
             "partial_validation_confirmation": False,
         },
     )
-    assert partial_non_list["validation_status"] == partial_with_list["validation_status"] == "invalid"
-    assert (
-        partial_non_list["failure_type"]
-        == partial_with_list["failure_type"]
-        == "partial_validation_confirmation_required"
+    _assert_post_check_parity(
+        partial_non_list,
+        partial_with_list,
+        expected_status="invalid",
+        expected_failure_type="partial_validation_confirmation_required",
     )
 
     skew_exceeded_non_list, skew_exceeded_with_list = _paired_results(
         claims=BASE_CLAIMS,
         issuance_ts_local=1100,
     )
-    assert skew_exceeded_non_list["validation_status"] == skew_exceeded_with_list["validation_status"] == "invalid"
-    assert (
-        skew_exceeded_non_list["failure_type"]
-        == skew_exceeded_with_list["failure_type"]
-        == "timestamp_skew_exceeded"
+    _assert_post_check_parity(
+        skew_exceeded_non_list,
+        skew_exceeded_with_list,
+        expected_status="invalid",
+        expected_failure_type="timestamp_skew_exceeded",
     )
 
     skew_within_non_list, skew_within_with_list = _paired_results(
         claims=BASE_CLAIMS,
         issuance_ts_local=1010,
     )
-    assert skew_within_non_list["validation_status"] == skew_within_with_list["validation_status"] == "valid"
-    assert (
-        skew_within_non_list["failure_type"]
-        == skew_within_with_list["failure_type"]
-        == "timestamp_skew_within_tolerance"
+    _assert_post_check_parity(
+        skew_within_non_list,
+        skew_within_with_list,
+        expected_status="valid",
+        expected_failure_type="timestamp_skew_within_tolerance",
     )
 
     valid_non_list, valid_with_list = _paired_results(claims=BASE_CLAIMS)
-    assert valid_non_list["validation_status"] == valid_with_list["validation_status"] == "valid"
-    assert valid_non_list["failure_type"] == valid_with_list["failure_type"] is None
+    _assert_post_check_parity(
+        valid_non_list,
+        valid_with_list,
+        expected_status="valid",
+        expected_failure_type=None,
+    )

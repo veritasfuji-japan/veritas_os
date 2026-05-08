@@ -187,9 +187,6 @@ def _is_partial_allowed(config: Mapping[str, Any], now_ts: int) -> bool:
         return False
     return now_ts <= warning_only_until
 
-
-
-
 @dataclass(frozen=True)
 class _PostCheckResult:
     """Result payload for shared post-validation checks."""
