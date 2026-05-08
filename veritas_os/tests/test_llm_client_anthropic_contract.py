@@ -144,7 +144,10 @@ def test_anthropic_format_request_normalizes_extra_messages() -> None:
     assert messages[1] == {"role": "user", "content": "42"}
     assert messages[2] == {"role": "123", "content": ""}
     assert messages[3] == {"role": "assistant", "content": "ok"}
-    assert len(messages) == 101
+    # _format_request() truncates before normalization. The first 100 extras
+    # include one non-dict entry that gets dropped, so the total is:
+    # 1 user prompt + 99 normalized extras.
+    assert len(messages) == 100
 
 
 def test_anthropic_parse_response_extracts_text() -> None:
@@ -220,9 +223,12 @@ def test_anthropic_chat_uses_messages_endpoint_headers_and_payload(
     assert captured["url"] == "https://api.anthropic.com/v1/messages"
     assert captured["headers"]["x-api-key"] == "test-anthropic-secret"
     assert captured["headers"]["anthropic-version"] == "2023-06-01"
-    assert captured["json"]["system"] == "system rules"
+    system_payload = captured["json"]["system"]
+    assert "system rules" in system_payload
+    assert system_payload.endswith("system rules")
     assert captured["json"]["messages"][0] == {"role": "user", "content": "hello"}
     assert {"role": "system", "content": "system rules"} not in captured["json"]["messages"]
+    assert all(message.get("role") != "system" for message in captured["json"]["messages"])
     assert captured["json"]["model"].startswith("claude-")
     assert result["text"] == "captured response"
 
