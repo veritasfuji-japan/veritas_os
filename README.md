@@ -94,6 +94,10 @@ See full walkthroughs:
 - [One-Day PoC Performance Benchmark Report (EN)](docs/en/poc/one-day-poc-performance-report.md)
 - [One-Day PoC Performance Benchmark Report (JA)](docs/ja/poc/one-day-poc-performance-report.md)
 
+Maintainer handoff and support-continuity guidance is documented in `docs/en/operations/maintainer-handoff.md`. This runbook reduces handoff friction but does not claim to eliminate bus-factor risk or provide a staffed support organization/SLA.
+
+Maintainer handoff / support continuity は `docs/ja/operations/maintainer-handoff.md` に補助説明があります。
+
 For lightweight local performance measurements, run `python scripts/demo/one_day_poc_benchmark.py` and see the performance report docs above.
 
 Sample sanitized evidence packets are available for reviewers who want to preview the deliverable format before running the smoke script.
