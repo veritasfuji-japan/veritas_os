@@ -57,15 +57,15 @@ def test_anthropic_headers_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Authorization" not in headers
 
 
-def test_anthropic_headers_missing_key_error_is_sanitized(
+def test_anthropic_headers_missing_key_error_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    with pytest.raises(LLMError, match="ANTHROPIC_API_KEY not set") as exc:
+    with pytest.raises(LLMError) as exc:
         llm_client._get_headers("anthropic")
 
-    assert "test-anthropic-secret" not in str(exc.value)
+    assert str(exc.value) == "ANTHROPIC_API_KEY not set"
 
 
 def test_anthropic_model_allowlist_accepts_claude_models() -> None:
@@ -163,8 +163,17 @@ def test_anthropic_parse_response_extracts_text() -> None:
     assert parsed == "hello from claude"
 
 
-@pytest.mark.parametrize("bad_payload", [{}, {"content": []}, {"content": [{"type": "text"}]}])
+@pytest.mark.parametrize(
+    "bad_payload",
+    [
+        {"content": [], "raw": "secret-token-should-not-leak"},
+        {"content": [{"type": "text"}], "raw": "secret-token-should-not-leak"},
+        {"unexpected": {"raw": "secret-token-should-not-leak"}},
+    ],
+)
 def test_anthropic_parse_response_error_is_sanitized(bad_payload: dict[str, Any]) -> None:
+    # Sentinel is intentionally embedded in malformed payloads to prove parse
+    # errors do not echo raw provider content into surfaced error messages.
     with pytest.raises(LLMError) as exc:
         llm_client._parse_response("anthropic", bad_payload)
 
