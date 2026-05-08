@@ -1553,6 +1553,7 @@ Additional CI workflows:
 | `sbom-nightly.yml` | Nightly schedule | SBOM generation and vulnerability scan |
 
 **Tier 1** (`main.yml`) — every PR is blocked until all of the following pass:
+- Type safety baseline check (`python -m scripts.quality.check_type_baseline`) for selected PoC/demo helper paths
 - Ruff lint + Bandit + architecture/security script checks
 - Dependency CVE audit (Python + Node)
 - **`governance-smoke`**: explicit fast smoke gate (`pytest -m smoke`, ~2 min)
@@ -1574,6 +1575,13 @@ Additional CI workflows:
 
 See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for the complete
 tier model and [`docs/RELEASE_PROCESS.md`](docs/en/operations/release-process.md) for the release process.
+
+Type safety baseline command (incremental, not repository-wide strict typing):
+
+```bash
+python -m scripts.quality.check_type_baseline
+```
+
 
 ### How to tell if a release is governance-ready
 
