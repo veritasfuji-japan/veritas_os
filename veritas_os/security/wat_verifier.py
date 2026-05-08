@@ -187,6 +187,94 @@ def _is_partial_allowed(config: Mapping[str, Any], now_ts: int) -> bool:
         return False
     return now_ts <= warning_only_until
 
+@dataclass(frozen=True)
+class _PostCheckResult:
+    """Result payload for shared post-validation checks."""
+
+    drift_vector: DriftVector
+    status: str
+    failure_type: str | None
+
+
+def _resolve_post_validation_checks(
+    *,
+    cfg: Mapping[str, Any],
+    replay_cache: MutableSet[str] | None,
+    binding_key: str,
+    claim_expiry_ts: int | None,
+    current_ts: int,
+    revocation_status: str,
+    issuance_ts_local: int | None,
+    claim_issuance_ts: int | None,
+    expiry_ts_local: int | None,
+) -> _PostCheckResult:
+    """Resolve shared post-validation checks while preserving legacy order."""
+    if replay_cache is not None and binding_key in replay_cache:
+        return _PostCheckResult(
+            drift_vector=DriftVector(1.0, 0.0, 0.0, 0.0),
+            status="invalid",
+            failure_type="replay_detected",
+        )
+
+    if claim_expiry_ts is not None and current_ts > claim_expiry_ts:
+        return _PostCheckResult(
+            drift_vector=DriftVector(0.0, 0.0, 0.0, 1.0),
+            status="stale",
+            failure_type="expired_token",
+        )
+
+    if revocation_status == "revoked_pending":
+        return _PostCheckResult(
+            drift_vector=DriftVector(0.6, 0.0, 0.0, 0.0),
+            status="revoked_pending",
+            failure_type="revocation_pending",
+        )
+
+    if bool(cfg.get("allow_partial_validation", False)):
+        if bool(cfg.get("partial_validation_requires_confirmation", True)) and not bool(
+            cfg.get("partial_validation_confirmation", False)
+        ):
+            status = "invalid"
+            failure_type = "partial_validation_confirmation_required"
+            logger.warning(
+                "WAT partial-validation confirmation failure "
+                "status=%s failure_type=%s binding_key=%s",
+                status,
+                failure_type,
+                binding_key,
+            )
+            return _PostCheckResult(
+                drift_vector=DriftVector(0.6, 0.0, 0.0, 0.0),
+                status=status,
+                failure_type=failure_type,
+            )
+        return _PostCheckResult(
+            drift_vector=DriftVector(0.3, 0.0, 0.0, 0.0),
+            status="partial",
+            failure_type="partial_validation_mode",
+        )
+
+    temporal_drift = 0.0
+    failure_type = None
+    skew_tolerance = int(cfg.get("timestamp_skew_tolerance_seconds", 30))
+    if issuance_ts_local is not None and claim_issuance_ts is not None:
+        if abs(claim_issuance_ts - issuance_ts_local) > skew_tolerance:
+            temporal_drift = 1.0
+            failure_type = "timestamp_skew_exceeded"
+    if expiry_ts_local is not None and claim_expiry_ts is not None:
+        if abs(claim_expiry_ts - expiry_ts_local) > skew_tolerance:
+            temporal_drift = max(temporal_drift, 1.0)
+            failure_type = failure_type or "timestamp_skew_exceeded"
+    if temporal_drift == 0.0 and issuance_ts_local is not None and claim_issuance_ts is not None:
+        if claim_issuance_ts != issuance_ts_local:
+            temporal_drift = 0.4
+            failure_type = "timestamp_skew_within_tolerance"
+    return _PostCheckResult(
+        drift_vector=DriftVector(0.0, 0.0, 0.0, temporal_drift),
+        status="invalid" if failure_type == "timestamp_skew_exceeded" else "valid",
+        failure_type=failure_type,
+    )
+
 
 def _verify_signature_local(
     *,
@@ -382,102 +470,36 @@ def validate_local(
                 drift_vector = DriftVector(0.0, 0.0, 1.0, 0.0)
                 status = "invalid"
                 failure_type = "observable_digest_list_mismatch"
-            elif replay_cache is not None and binding_key in replay_cache:
-                drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
-                status = "invalid"
-                failure_type = "replay_detected"
-            elif claim_expiry_ts is not None and current_ts > claim_expiry_ts:
-                drift_vector = DriftVector(0.0, 0.0, 0.0, 1.0)
-                status = "stale"
-                failure_type = "expired_token"
-            elif revocation_status == "revoked_pending":
-                drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
-                status = "revoked_pending"
-                failure_type = "revocation_pending"
-            elif bool(cfg.get("allow_partial_validation", False)):
-                if bool(cfg.get("partial_validation_requires_confirmation", True)) and not bool(
-                    cfg.get("partial_validation_confirmation", False)
-                ):
-                    drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
-                    status = "invalid"
-                    failure_type = "partial_validation_confirmation_required"
-                    logger.warning(
-                        "WAT partial-validation confirmation failure "
-                        "status=%s failure_type=%s binding_key=%s",
-                        status,
-                        failure_type,
-                        binding_key,
-                    )
-                else:
-                    drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
-                    status = "partial"
-                    failure_type = "partial_validation_mode"
             else:
-                temporal_drift = 0.0
-                failure_type = None
-                skew_tolerance = int(cfg.get("timestamp_skew_tolerance_seconds", 30))
-                if issuance_ts_local is not None and claim_issuance_ts is not None:
-                    if abs(claim_issuance_ts - issuance_ts_local) > skew_tolerance:
-                        temporal_drift = 1.0
-                        failure_type = "timestamp_skew_exceeded"
-                if expiry_ts_local is not None and claim_expiry_ts is not None:
-                    if abs(claim_expiry_ts - expiry_ts_local) > skew_tolerance:
-                        temporal_drift = max(temporal_drift, 1.0)
-                        failure_type = failure_type or "timestamp_skew_exceeded"
-                if temporal_drift == 0.0 and issuance_ts_local is not None and claim_issuance_ts is not None:
-                    if claim_issuance_ts != issuance_ts_local:
-                        temporal_drift = 0.4
-                        failure_type = "timestamp_skew_within_tolerance"
-                drift_vector = DriftVector(0.0, 0.0, 0.0, temporal_drift)
-                status = "invalid" if failure_type == "timestamp_skew_exceeded" else "valid"
-        elif replay_cache is not None and binding_key in replay_cache:
-            drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
-            status = "invalid"
-            failure_type = "replay_detected"
-        elif claim_expiry_ts is not None and current_ts > claim_expiry_ts:
-            drift_vector = DriftVector(0.0, 0.0, 0.0, 1.0)
-            status = "stale"
-            failure_type = "expired_token"
-        elif revocation_status == "revoked_pending":
-            drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
-            status = "revoked_pending"
-            failure_type = "revocation_pending"
-        elif bool(cfg.get("allow_partial_validation", False)):
-            if bool(cfg.get("partial_validation_requires_confirmation", True)) and not bool(
-                cfg.get("partial_validation_confirmation", False)
-            ):
-                drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
-                status = "invalid"
-                failure_type = "partial_validation_confirmation_required"
-                logger.warning(
-                    "WAT partial-validation confirmation failure "
-                    "status=%s failure_type=%s binding_key=%s",
-                    status,
-                    failure_type,
-                    binding_key,
+                post_check = _resolve_post_validation_checks(
+                    cfg=cfg,
+                    replay_cache=replay_cache,
+                    binding_key=binding_key,
+                    claim_expiry_ts=claim_expiry_ts,
+                    current_ts=current_ts,
+                    revocation_status=revocation_status,
+                    issuance_ts_local=issuance_ts_local,
+                    claim_issuance_ts=claim_issuance_ts,
+                    expiry_ts_local=expiry_ts_local,
                 )
-            else:
-                drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
-                status = "partial"
-                failure_type = "partial_validation_mode"
+                drift_vector = post_check.drift_vector
+                status = post_check.status
+                failure_type = post_check.failure_type
         else:
-            temporal_drift = 0.0
-            failure_type = None
-            skew_tolerance = int(cfg.get("timestamp_skew_tolerance_seconds", 30))
-            if issuance_ts_local is not None and claim_issuance_ts is not None:
-                if abs(claim_issuance_ts - issuance_ts_local) > skew_tolerance:
-                    temporal_drift = 1.0
-                    failure_type = "timestamp_skew_exceeded"
-            if expiry_ts_local is not None and claim_expiry_ts is not None:
-                if abs(claim_expiry_ts - expiry_ts_local) > skew_tolerance:
-                    temporal_drift = max(temporal_drift, 1.0)
-                    failure_type = failure_type or "timestamp_skew_exceeded"
-            if temporal_drift == 0.0 and issuance_ts_local is not None and claim_issuance_ts is not None:
-                if claim_issuance_ts != issuance_ts_local:
-                    temporal_drift = 0.4
-                    failure_type = "timestamp_skew_within_tolerance"
-            drift_vector = DriftVector(0.0, 0.0, 0.0, temporal_drift)
-            status = "invalid" if failure_type == "timestamp_skew_exceeded" else "valid"
+            post_check = _resolve_post_validation_checks(
+                cfg=cfg,
+                replay_cache=replay_cache,
+                binding_key=binding_key,
+                claim_expiry_ts=claim_expiry_ts,
+                current_ts=current_ts,
+                revocation_status=revocation_status,
+                issuance_ts_local=issuance_ts_local,
+                claim_issuance_ts=claim_issuance_ts,
+                expiry_ts_local=expiry_ts_local,
+            )
+            drift_vector = post_check.drift_vector
+            status = post_check.status
+            failure_type = post_check.failure_type
 
     if replay_cache is not None and status in {"valid", "partial", "revoked_pending"}:
         replay_cache.add(binding_key)
