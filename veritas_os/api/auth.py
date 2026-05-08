@@ -549,14 +549,19 @@ def resolve_role_for_key(api_key: str) -> Role:
 def _resolve_role_from_request(
     x_api_key: str | None,
 ) -> Role:
-    """Resolve role from the request API key, defaulting to admin for legacy keys."""
+    """Resolve role from request API key with least-privilege fallback.
+
+    Authentication should have already validated the API key before this helper
+    is used. If role resolution still fails here, default to least privilege
+    (auditor) rather than admin as a defense-in-depth control.
+    """
     key = (x_api_key or "").strip()
     if not key:
-        return Role.admin  # Will be caught by require_api_key first
+        return Role.auditor
     try:
         return resolve_role_for_key(key)
     except ValueError:
-        return Role.admin  # Fallback; auth check already validated the key
+        return Role.auditor
 
 
 
@@ -1137,10 +1142,6 @@ async def verify_signature(
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
         _record_auth_reject_reason("signature_timestamp_out_of_range")
         raise HTTPException(status_code=401, detail="Timestamp out of range")
-    if not _check_and_register_nonce(nonce):
-        _record_auth_reject_reason("signature_replay_detected")
-        raise HTTPException(status_code=401, detail="Replay detected")
-
     body_bytes = await request.body()
     try:
         body = body_bytes.decode("utf-8") if body_bytes else ""
@@ -1152,6 +1153,9 @@ async def verify_signature(
     if not hmac.compare_digest(mac, signature.lower()):
         _record_auth_reject_reason("signature_invalid")
         raise HTTPException(status_code=401, detail="Invalid signature")
+    if not _check_and_register_nonce(nonce):
+        _record_auth_reject_reason("signature_replay_detected")
+        raise HTTPException(status_code=401, detail="Replay detected")
     return True
 
 

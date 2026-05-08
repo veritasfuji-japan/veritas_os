@@ -2911,6 +2911,50 @@ def test_websocket_auth_fail_closed_when_multi_key_config_malformed_without_lega
     assert server._authenticate_websocket_api_key(ws) is False
 
 
+def test_resolve_role_from_request_empty_key_fallbacks_to_auditor():
+    assert server._resolve_role_from_request(None) == server.Role.auditor
+    assert server._resolve_role_from_request("") == server.Role.auditor
+
+
+def test_resolve_role_from_request_invalid_key_fallbacks_to_auditor(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", "legacy-admin-key")
+    monkeypatch.delenv("VERITAS_API_KEYS", raising=False)
+
+    assert server._resolve_role_from_request("wrong") == server.Role.auditor
+
+
+def test_resolve_role_from_request_valid_legacy_key_is_admin(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", "legacy-admin-key")
+    monkeypatch.delenv("VERITAS_API_KEYS", raising=False)
+
+    assert server._resolve_role_from_request("legacy-admin-key") == server.Role.admin
+
+
+def test_resolve_role_from_request_multi_key_role_is_preserved(monkeypatch):
+    monkeypatch.setenv(
+        "VERITAS_API_KEYS",
+        '[{"key":"auditor-key","role":"auditor"},{"key":"operator-key","role":"operator"}]',
+    )
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+
+    assert server._resolve_role_from_request("auditor-key") == server.Role.auditor
+    assert server._resolve_role_from_request("operator-key") == server.Role.operator
+
+
+def test_resolve_role_from_request_malformed_multi_key_valid_legacy_is_admin(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
+    monkeypatch.setenv("VERITAS_API_KEY", "legacy-admin-key")
+
+    assert server._resolve_role_from_request("legacy-admin-key") == server.Role.admin
+
+
+def test_resolve_role_from_request_malformed_multi_key_invalid_key_fallbacks_auditor(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
+    monkeypatch.setenv("VERITAS_API_KEY", "legacy-admin-key")
+
+    assert server._resolve_role_from_request("wrong") == server.Role.auditor
+
+
 def test_websocket_auth_rejects_query_api_key_without_risk_ack(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     monkeypatch.setenv("VERITAS_ALLOW_WS_QUERY_API_KEY", "1")
@@ -4342,6 +4386,41 @@ def test_verify_signature_replay(monkeypatch):
             x_nonce=nonce, x_signature=sig,
         ))
     assert exc.value.status_code == 401
+
+
+def test_verify_signature_invalid_signature_does_not_consume_nonce(monkeypatch):
+    secret = b"secret-for-test-1234567890abcdef"
+    monkeypatch.setattr(server, "API_SECRET", secret)
+    server._nonce_store.clear()
+    ts = str(int(time.time()))
+    nonce = "nonce-invalid-signature-not-consumed"
+    body = b'{"hello":"world"}'
+    payload = f"{ts}\n{nonce}\n{body.decode()}"
+    valid_sig = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
+
+    with pytest.raises(HTTPException) as exc:
+        _run_async(
+            server.verify_signature(
+                _FakeRequest(body),
+                x_api_key="k",
+                x_timestamp=ts,
+                x_nonce=nonce,
+                x_signature="bad-signature",
+            )
+        )
+    assert exc.value.status_code == 401
+    assert "Invalid signature" in exc.value.detail
+
+    ok = _run_async(
+        server.verify_signature(
+            _FakeRequest(body),
+            x_api_key="k",
+            x_timestamp=ts,
+            x_nonce=nonce,
+            x_signature=valid_sig,
+        )
+    )
+    assert ok is True
 
 
 # ----------------------------------------------------------------
