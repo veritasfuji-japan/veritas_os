@@ -1103,6 +1103,14 @@ def _check_and_register_nonce(nonce: str) -> bool:
     return _auth_store_register_nonce(nonce=nonce, ttl_sec=_NONCE_TTL_SEC)
 
 
+def _is_nonce_shape_valid(nonce: str) -> bool:
+    """Validate nonce shape before body/HMAC work (registration happens later)."""
+    normalized = (nonce or "").strip()
+    if not normalized:
+        return False
+    return len(normalized) <= _NONCE_MAX_LENGTH
+
+
 async def verify_signature(
     request: Request,
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
@@ -1142,6 +1150,9 @@ async def verify_signature(
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
         _record_auth_reject_reason("signature_timestamp_out_of_range")
         raise HTTPException(status_code=401, detail="Timestamp out of range")
+    if not _is_nonce_shape_valid(nonce):
+        _record_auth_reject_reason("signature_invalid_nonce")
+        raise HTTPException(status_code=401, detail="Invalid nonce")
     body_bytes = await request.body()
     try:
         body = body_bytes.decode("utf-8") if body_bytes else ""

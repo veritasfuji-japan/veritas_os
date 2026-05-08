@@ -2911,12 +2911,12 @@ def test_websocket_auth_fail_closed_when_multi_key_config_malformed_without_lega
     assert server._authenticate_websocket_api_key(ws) is False
 
 
-def test_resolve_role_from_request_empty_key_fallbacks_to_auditor():
+def test_resolve_role_from_request_empty_key_falls_back_to_auditor():
     assert server._resolve_role_from_request(None) == server.Role.auditor
     assert server._resolve_role_from_request("") == server.Role.auditor
 
 
-def test_resolve_role_from_request_invalid_key_fallbacks_to_auditor(monkeypatch):
+def test_resolve_role_from_request_invalid_key_falls_back_to_auditor(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", "legacy-admin-key")
     monkeypatch.delenv("VERITAS_API_KEYS", raising=False)
 
@@ -2948,7 +2948,7 @@ def test_resolve_role_from_request_malformed_multi_key_valid_legacy_is_admin(mon
     assert server._resolve_role_from_request("legacy-admin-key") == server.Role.admin
 
 
-def test_resolve_role_from_request_malformed_multi_key_invalid_key_fallbacks_auditor(monkeypatch):
+def test_resolve_role_from_request_malformed_multi_key_invalid_key_falls_back_to_auditor(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
     monkeypatch.setenv("VERITAS_API_KEY", "legacy-admin-key")
 
@@ -4421,6 +4421,30 @@ def test_verify_signature_invalid_signature_does_not_consume_nonce(monkeypatch):
         )
     )
     assert ok is True
+
+
+def test_verify_signature_rejects_oversized_nonce_before_signature_and_does_not_register(
+    monkeypatch,
+):
+    secret = b"secret-for-test-1234567890abcdef"
+    monkeypatch.setattr(server, "API_SECRET", secret)
+    server._nonce_store.clear()
+    ts = str(int(time.time()))
+    nonce = "n" * (server._NONCE_MAX_LENGTH + 1)
+
+    with pytest.raises(HTTPException) as exc:
+        _run_async(
+            server.verify_signature(
+                _FakeRequest(b'{"hello":"world"}'),
+                x_api_key="k",
+                x_timestamp=ts,
+                x_nonce=nonce,
+                x_signature="bad-signature",
+            )
+        )
+    assert exc.value.status_code == 401
+    assert "nonce" in str(exc.value.detail).lower()
+    assert nonce not in server._nonce_store
 
 
 # ----------------------------------------------------------------
