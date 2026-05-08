@@ -1585,6 +1585,10 @@ This is currently an incremental developer/DD baseline for selected PoC/demo hel
 It should not be read as repository-wide strict typing or as a Tier 1 CI gate unless
 the workflow explicitly runs it.
 
+`mypy` is included in the repository development/full dependency manifests for repeatable
+quality checks. This baseline does not change runtime behavior or application code paths;
+production image dependency minimization should be handled separately if needed.
+
 
 ### How to tell if a release is governance-ready
 

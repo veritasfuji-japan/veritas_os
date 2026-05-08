@@ -43,6 +43,11 @@ python -m scripts.quality.check_type_baseline
 - Runtime correctness certification.
 - API compatibility certification.
 
+
+## Dependency positioning
+
+`mypy` is included in the repository's development/full dependency manifests so the baseline can be installed and run consistently in repository quality workflows. This does not change VERITAS runtime behavior, governance semantics, API contracts, evidence packet shapes, or provider behavior. Production image dependency minimization should be handled separately from this baseline PR if a deployment profile needs to exclude developer tooling.
+
 ## Expansion roadmap
 
 This baseline is intentionally narrow and will expand in phases.

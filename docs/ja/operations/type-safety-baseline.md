@@ -46,6 +46,11 @@ python -m scripts.quality.check_type_baseline
 - ランタイム正当性の保証。
 - API互換性の保証。
 
+
+## 依存関係上の位置づけ
+
+`mypy` は、このベースラインをリポジトリの品質確認フローで一貫して導入・実行できるように、development/full dependency manifest に含めています。これは VERITAS の runtime behavior、governance semantics、API contracts、evidence packet shape、provider behavior を変更するものではありません。本番イメージから開発用ツールを除外する必要がある場合は、この baseline PR とは別に deployment profile / Docker install path の最適化として扱ってください。
+
 ## 拡張ロードマップ
 
 このベースラインは最小構成であり、段階的に拡張予定です。
