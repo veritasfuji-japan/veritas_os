@@ -1103,7 +1103,7 @@ def _check_and_register_nonce(nonce: str) -> bool:
     return _auth_store_register_nonce(nonce=nonce, ttl_sec=_NONCE_TTL_SEC)
 
 
-def _is_nonce_shape_valid(nonce: str) -> bool:
+def _is_nonce_shape_valid(nonce: str | None) -> bool:
     """Validate nonce shape before body/HMAC work (registration happens later)."""
     normalized = (nonce or "").strip()
     if not normalized:
