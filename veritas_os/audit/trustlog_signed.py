@@ -27,11 +27,19 @@ import logging
 import os
 import threading
 import uuid
+from contextlib import contextmanager
+from functools import lru_cache
 from time import perf_counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, Iterator, List, Optional, Protocol
+
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX environments
+    fcntl = None
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.audit.storage_mirror import build_storage_mirror
@@ -66,6 +74,43 @@ TRUSTLOG_VERIFICATION_POLICY_VERSION = "trustlog_witness_v2"
 
 class SignedTrustLogWriteError(RuntimeError):
     """Raised when signed TrustLog append fails for expected runtime reasons."""
+
+
+@lru_cache(maxsize=1)
+def _warn_jsonl_trustlog_process_lock_unavailable_once() -> None:
+    """Emit one warning when process-level JSONL locking is unavailable."""
+    _logger.warning(
+        "[security-warning] JSONL TrustLog process-level file locking is unavailable "
+        "because fcntl is not available. Cross-process append serialization is not "
+        "enforced for the JSONL backend on this platform; use PostgreSQL backend for "
+        "production multi-worker deployments."
+    )
+
+
+@contextmanager
+def _jsonl_trustlog_process_lock(path: Path) -> Iterator[None]:
+    """Serialize JSONL append critical section across processes when available."""
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_acquired = False
+
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        try:
+            if fcntl is None:
+                _warn_jsonl_trustlog_process_lock_unavailable_once()
+            else:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                lock_acquired = True
+            yield
+        finally:
+            if fcntl is not None and lock_acquired:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    _logger.warning(
+                        "[security-warning] Failed to release JSONL TrustLog process lock",
+                        exc_info=True,
+                    )
 
 
 def _worm_mirror_path() -> Optional[Path]:
@@ -865,8 +910,6 @@ def append_signed_decision(
     try:
         with _lock:
             signer = _resolve_signer(ensure_local_keys=True)
-            last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
-            previous_hash = _entry_chain_hash(last_entry) if last_entry else None
 
             # Compute hash of the *full* payload for cross-reference,
             # then compact to a lightweight summary for on-disk storage.
@@ -887,7 +930,7 @@ def append_signed_decision(
             entry = {
                 "decision_id": _uuid7(),
                 "timestamp": signed_at,
-                "previous_hash": previous_hash,
+                "previous_hash": None,
                 "decision_payload": compact_payload,
                 "payload_hash": payload_hash,
                 "full_payload_hash": full_payload_hash,
@@ -901,11 +944,15 @@ def append_signed_decision(
                 if artifact_ref is not None:
                     entry["artifact_ref"] = artifact_ref
 
-            # Enforce maximum entry size before writing
-            entry = _enforce_entry_size(entry, signer)
+            with _jsonl_trustlog_process_lock(SIGNED_TRUSTLOG_JSONL):
+                last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
+                entry["previous_hash"] = _entry_chain_hash(last_entry) if last_entry else None
+                entry = _enforce_entry_size(entry, signer)
+                persisted_entry = json.loads(json.dumps(entry, ensure_ascii=False))
+                line = json.dumps(persisted_entry, ensure_ascii=False) + "\n"
+                _append_line(SIGNED_TRUSTLOG_JSONL, line)
+            entry_hash_for_anchor = _entry_chain_hash(persisted_entry)
 
-            line = json.dumps(entry, ensure_ascii=False) + "\n"
-            _append_line(SIGNED_TRUSTLOG_JSONL, line)
             mirror = _mirror_to_worm(line)
             if _worm_hard_fail_enabled() and mirror.get("configured") and not mirror.get("ok"):
                 raise SignedTrustLogWriteError("worm_mirror_write_failed")
@@ -913,7 +960,7 @@ def append_signed_decision(
             entry["mirror_backend"] = mirror.get("backend")
             entry["mirror_receipt"] = _build_mirror_receipt(mirror) if mirror.get("ok") else None
 
-            transparency_anchor = _anchor_entry_hash(_entry_chain_hash(entry))
+            transparency_anchor = _anchor_entry_hash(entry_hash_for_anchor)
             if (
                 _transparency_required_enabled()
                 and transparency_anchor.get("configured")

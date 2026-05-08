@@ -796,6 +796,19 @@ def _enforce_auth_failure_rate_limit(client_ip: str) -> None:
         raise HTTPException(status_code=429, detail="Too many auth failures")
 
 
+
+
+def _has_configured_api_key() -> bool:
+    """Return True when at least one valid API key configuration exists."""
+    try:
+        if _parse_api_keys_config():
+            return True
+    except ValueError:
+        pass
+
+    return bool((_get_expected_api_key() or "").strip())
+
+
 def _is_valid_api_key(candidate: str) -> bool:
     """Check if *candidate* matches any configured API key (multi or single)."""
     candidate = candidate.strip()
@@ -825,15 +838,7 @@ def require_api_key(
     x_forwarded_for: Optional[str] = Header(default=None, alias="X-Forwarded-For"),
 ):
     """テスト契約: サーバ側の API Key が未設定なら 500, ヘッダが無い/不一致なら 401"""
-    # Check if any key is configured (multi or single)
-    has_multi = False
-    try:
-        has_multi = bool(_parse_api_keys_config())
-    except ValueError:
-        pass
-    expected = (_get_expected_api_key() or "").strip()
-
-    if not expected and not has_multi:
+    if not _has_configured_api_key():
         _record_auth_reject_reason("api_key_server_unconfigured")
         raise HTTPException(status_code=500, detail="Server API key not configured")
 
@@ -958,8 +963,7 @@ def _allow_sse_query_api_key() -> bool:
 
 def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
     """Authenticate WebSocket API key with header-first policy."""
-    expected = (_get_expected_api_key() or "").strip()
-    if not expected:
+    if not _has_configured_api_key():
         return False
 
     header_candidate = (websocket.headers.get("X-API-Key") or "").strip()
