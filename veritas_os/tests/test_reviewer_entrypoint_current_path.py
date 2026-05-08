@@ -35,11 +35,13 @@ def test_reviewer_entrypoint_markdown_links_are_relative_and_exist() -> None:
             continue
 
         file_part = _link_file_part(target)
+        if not file_part:
+            continue
+
         assert not file_part.startswith("docs/"), (
             f"broken docs-relative link from docs/: {target}"
         )
-        if file_part.endswith(".md"):
-            assert (ENTRYPOINT.parent / file_part).exists(), target
+        assert (ENTRYPOINT.parent / file_part).exists(), target
 
 
 def test_reviewer_entrypoint_links_required_current_docs() -> None:
