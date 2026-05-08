@@ -1137,10 +1137,6 @@ async def verify_signature(
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
         _record_auth_reject_reason("signature_timestamp_out_of_range")
         raise HTTPException(status_code=401, detail="Timestamp out of range")
-    if not _check_and_register_nonce(nonce):
-        _record_auth_reject_reason("signature_replay_detected")
-        raise HTTPException(status_code=401, detail="Replay detected")
-
     body_bytes = await request.body()
     try:
         body = body_bytes.decode("utf-8") if body_bytes else ""
@@ -1152,6 +1148,9 @@ async def verify_signature(
     if not hmac.compare_digest(mac, signature.lower()):
         _record_auth_reject_reason("signature_invalid")
         raise HTTPException(status_code=401, detail="Invalid signature")
+    if not _check_and_register_nonce(nonce):
+        _record_auth_reject_reason("signature_replay_detected")
+        raise HTTPException(status_code=401, detail="Replay detected")
     return True
 
 

@@ -4344,6 +4344,33 @@ def test_verify_signature_replay(monkeypatch):
     assert exc.value.status_code == 401
 
 
+def test_verify_signature_invalid_signature_does_not_consume_nonce(monkeypatch):
+    secret = b"secret-for-test-1234567890abcdef"
+    monkeypatch.setattr(server, "API_SECRET", secret)
+    server._nonce_store.clear()
+    ts = str(int(time.time()))
+    nonce = "nonce-survives-invalid-signature"
+    body = b'{"check":"nonce"}'
+
+    invalid_signature = "0" * 64
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        _run_async(server.verify_signature(
+            _FakeRequest(body), x_api_key="k", x_timestamp=ts,
+            x_nonce=nonce, x_signature=invalid_signature,
+        ))
+    assert exc.value.status_code == 401
+
+    payload = f"{ts}\n{nonce}\n{body.decode()}"
+    valid_signature = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
+    result = _run_async(server.verify_signature(
+        _FakeRequest(body), x_api_key="k", x_timestamp=ts,
+        x_nonce=nonce, x_signature=valid_signature,
+    ))
+    assert result is True
+
+
 # ----------------------------------------------------------------
 # 30-32. _coerce_decide_payload
 # ----------------------------------------------------------------
