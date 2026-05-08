@@ -67,7 +67,8 @@ def test_non_claim_boundaries_exist() -> None:
 
 
 def test_no_overclaim_expressions() -> None:
-    combined_lower = f"{EN_BRIEF.read_text(encoding='utf-8')}\n{JA_BRIEF.read_text(encoding='utf-8')}".lower()
+    combined = f"{EN_BRIEF.read_text(encoding='utf-8')}\n{JA_BRIEF.read_text(encoding='utf-8')}"
+    combined_lower = combined.lower()
     banned_case_insensitive = [
         "guaranteed compliance",
         "fully compliant",
@@ -78,7 +79,7 @@ def test_no_overclaim_expressions() -> None:
         "provider-neutral production-ready",
         "fully eliminates bus-factor risk",
     ]
-    banned_ja = [
+    banned_ja_case_insensitive = [
         "完全準拠",
         "認証済み製品",
         "本番sla保証",
@@ -89,6 +90,7 @@ def test_no_overclaim_expressions() -> None:
     for phrase in banned_case_insensitive:
         assert phrase not in combined_lower
 
-    combined_text = f"{EN_BRIEF.read_text(encoding='utf-8')}\n{JA_BRIEF.read_text(encoding='utf-8')}"
-    for phrase in banned_ja:
-        assert phrase not in combined_text
+    # Use lowercased combined text so mixed Japanese/Latin phrases such as
+    # "本番SLA保証" are caught consistently.
+    for phrase in banned_ja_case_insensitive:
+        assert phrase.lower() not in combined_lower
