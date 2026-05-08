@@ -100,6 +100,7 @@
 | ガバナンス成果物署名 | [Governance artifact signing（英語正本）](en/operations/governance-artifact-signing.md) | [ガバナンス成果物署名（日本語解説）](ja/operations/governance-artifact-signing.md) |
 | ガバナンストレース span chain | [Governance trace span chain（英語正本）](en/operations/governance-trace-span-chain.md) | [ガバナンストレース span chain（日本語解説）](ja/operations/governance-trace-span-chain.md) |
 | Provider Support Matrix | [Provider support matrix（英語正本）](en/operations/provider-support-matrix.md) | [Provider support matrix（日本語）](ja/operations/provider-support-matrix.md) |
+| Type Safety Baseline | [Type safety baseline (EN)](en/operations/type-safety-baseline.md) | [型安全性 baseline (JA)](ja/operations/type-safety-baseline.md) |
 | ガバナンス | [Governance（英語正本）](en/governance/) | [Governance（日本語）](ja/governance/) |
 | Required Evidence Taxonomy | [Required evidence taxonomy（英語正本）](en/governance/required-evidence-taxonomy.md) | [Required evidence taxonomy（日本語解説）](ja/governance/required-evidence-taxonomy.md) |
 | Governance Artifact Lifecycle | [Governance artifact lifecycle（英語正本）](en/governance/governance-artifact-lifecycle.md) | [Governance artifact lifecycle（日本語解説）](ja/governance/governance-artifact-lifecycle.md) |

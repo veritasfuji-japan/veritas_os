@@ -1575,6 +1575,21 @@ Additional CI workflows:
 See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for the complete
 tier model and [`docs/RELEASE_PROCESS.md`](docs/en/operations/release-process.md) for the release process.
 
+Type safety baseline command (incremental, not repository-wide strict typing):
+
+```bash
+python -m scripts.quality.check_type_baseline
+```
+
+This is currently an incremental developer/DD baseline for selected PoC/demo helper paths.
+It should not be read as repository-wide strict typing or as a Tier 1 CI gate unless
+the workflow explicitly runs it.
+
+`mypy` is included in the repository development/full dependency manifests for repeatable
+quality checks. This baseline does not change runtime behavior or application code paths;
+production image dependency minimization should be handled separately if needed.
+
+
 ### How to tell if a release is governance-ready
 
 1. Find the `Release Gate` workflow run for the target tag in the [Actions tab](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
