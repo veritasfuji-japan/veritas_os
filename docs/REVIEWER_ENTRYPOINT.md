@@ -2,126 +2,164 @@
 
 ## Purpose
 
-This document is the fastest entry point for external reviewers, enterprise evaluators, investors, and technical reviewers who want to understand VERITAS OS without reading the entire repository first.
+This document is the first review entry point for external reviewers, enterprise evaluators, investors, and technical due diligence teams who want to understand VERITAS OS before reading the full repository.
 
-It summarizes what to review, what is implemented, what is foundation-only, which proof packs exist, how to validate key claims, and what is intentionally not enabled.
+It is designed to clarify current value, implemented scope, proof assets, validation flow, and explicit boundaries/non-claims.
 
-## 30-minute review path
+This entry point is organized around the current enterprise review path: business value, implemented scope, one-day evidence, provider/compliance boundaries, and technical appendices.
 
-1. `README.md` — product overview and implemented scope boundary.
-2. `docs/REVIEWER_ENTRYPOINT.md` — this repository-level reviewer guide.
-3. `docs/governance/observe_mode_proof_pack.md` — Observe Mode evidence index.
-4. `docs/ui/README_UI.md` — Mission Control and governance UI context.
-5. `/dev/mission-fixture` — local/dev-only fixture viewer route for read-only inspection.
-6. `bash scripts/validate_governance_observation_fixture.sh` — focused validation command for fixture integrity and rendering contract checks.
+## 10-minute review path
+
+1. `docs/en/positioning/enterprise-value-brief.md` — one-page business/investor overview.
+2. `README.md` — core product definition and repository entry map.
+3. `docs/en/validation/current-implementation-matrix.md` — current implementation facts vs roadmap.
+4. `docs/en/poc/one-day-poc-reviewer-pack.md` — what can be reviewed in a short PoC window.
+5. `docs/en/operations/provider-support-matrix.md` — provider tiers, support boundaries, and non-claims.
+6. `docs/en/positioning/public-positioning.md` — conservative positioning and legal/compliance boundary statements.
+
+## 30-minute technical review path
+
+1. `docs/en/positioning/enterprise-value-brief.md`
+2. `docs/en/validation/current-implementation-matrix.md`
+3. `docs/en/validation/regulated-action-governance-proof-pack.md`
+4. `docs/en/poc/one-day-poc-reviewer-pack.md`
+5. `docs/en/poc/one-day-poc-performance-report.md`
+6. `docs/en/operations/type-safety-baseline.md`
+7. `docs/en/operations/maintainer-handoff.md`
+8. `docs/en/operations/provider-support-matrix.md`
+9. `docs/en/architecture/regulated-action-governance-kernel.md`
+10. `docs/en/architecture/bind-boundary-governance-artifacts.md`
 
 ## What VERITAS OS is
 
-VERITAS OS is an auditable decision operating system for LLM agents. It focuses on making AI decisions reviewable, traceable, reproducible, and governable through structured evidence, policy checks, decision artifacts, Mission Control visibility, and validation workflows.
+VERITAS OS is a Decision Governance and Bind-Boundary Control Plane for AI agents. It is designed to make AI-agent decisions reviewable, traceable, replayable, auditable, and enforceable before real-world effect.
 
-It is a governance/control plane for decision and bind boundaries before real-world effect. It is not a claim that every effect path is fully production-complete today.
+Key reviewer concepts:
 
-## Current implemented evidence areas
+- Decision governance for regulated/high-impact action paths.
+- Bind-boundary control before real-world side effects.
+- Authority Evidence for operator and reviewer traceability.
+- BindReceipt / BindSummary artifacts for inspection and replay context.
+- Fail-closed behavior as the default safety posture.
+- Operator-facing review artifacts for governance and PoC validation.
 
-| Area | Where to look | What to verify |
+## What to verify first
+
+| Review question | Primary source | What to check |
 |---|---|---|
-| Decision / governance pipeline | `README.md`, `docs/INDEX.md` | Decision artifacts, governance pipeline concepts, evidence-oriented execution, fail-closed posture language. |
-| Mission Control | `docs/ui/README_UI.md`, `frontend/components/mission-page.tsx`, `frontend/app/dev/mission-fixture/page.tsx` | Read-only operator visibility, governance artifact rendering, dev-only fixture viewer behavior. |
-| Observe Mode foundation | `docs/governance/observe_mode_proof_pack.md`, `docs/governance/observe_mode.md` | Semantics, dry-run evaluator, CLI checker, dev-only snapshot generator, Mission Control read-only display, production fail-closed unchanged, runtime not enabled. |
-| Fixture and validation integrity | `scripts/validate_governance_observation_fixture.sh`, `veritas_os/tests/test_governance_observation_fixture_drift.py`, `frontend/app/dev/mission-fixture/page.test.tsx` | Root/frontend fixture parity, CLI checker validity, Mission Control rendering tests for the fixture path. |
-| Quality / validation commands | `README.md`, `scripts/check_governance_observation.py`, `scripts/generate_observe_mode_demo_snapshot.py` | Reproducible local checks, focused validation commands, proof-pack validation paths. |
+| What problem does VERITAS solve? | `docs/en/positioning/enterprise-value-brief.md` | Enterprise value, target users, and priority use cases. |
+| What is implemented today? | `docs/en/validation/current-implementation-matrix.md` | Clear separation between current facts and roadmap/foundation-only items. |
+| What can be verified in one day? | `docs/en/poc/one-day-poc-reviewer-pack.md` | Smoke path, generated evidence packet, and validation workflow. |
+| Is there performance evidence? | `docs/en/poc/one-day-poc-performance-report.md` | Local benchmark method, measurement boundaries, and non-SLA language. |
+| What are provider boundaries? | `docs/en/operations/provider-support-matrix.md` | OpenAI production tier, Anthropic planned with offline contract coverage, and explicit boundaries. |
+| Are legal/compliance claims bounded? | `docs/en/positioning/public-positioning.md`, `docs/eu_ai_act/technical_documentation.md` | Positioning uses conservative non-certification language and bounded claims. |
+| Is there type safety? | `docs/en/operations/type-safety-baseline.md` | Narrow, practical baseline rather than full-repository strict typing claims. |
+| Is handoff possible? | `docs/en/operations/maintainer-handoff.md` | Maintainer runbook exists; handoff path is documented but risk is not eliminated. |
 
-## Production-ready vs foundation-only
+## Current proof assets
 
-### Implemented / reviewable
-
-- Mission Control read-only governance artifact rendering.
-- `governance_observation` schema/type foundation and documentation.
-- Observe Mode dry-run validation tooling (evaluator + CLI checker).
-- Dev-only fixture viewer with production disabled state.
-- Fixture drift detection and focused validation scripts.
-- Observe Mode demo snapshot generation for local/dev inspection.
-
-### Foundation-only / not runtime-enabled
-
-- Observe Mode runtime behavior.
-- Production observe execution.
-- Live backend emission of `governance_observation`.
-- User-uploaded JSON loader for Mission Control.
-- Automatic policy generation.
-- Governance palette marketplace.
-- Any production bypass path.
+- [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md)
+- [One-Day PoC Reviewer Pack](docs/en/poc/one-day-poc-reviewer-pack.md)
+- [One-Day PoC Performance Report](docs/en/poc/one-day-poc-performance-report.md)
+- [Sample evidence JSON / Markdown](docs/en/poc/sample-one-day-poc-evidence.md)
+- [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
+- [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+- [Provider Support Matrix](docs/en/operations/provider-support-matrix.md)
+- [Type Safety Baseline](docs/en/operations/type-safety-baseline.md)
+- [Maintainer Handoff Runbook](docs/en/operations/maintainer-handoff.md)
+- [Public Positioning](docs/en/positioning/public-positioning.md)
+- [AML/KYC regulated action path](docs/en/validation/aml-kyc-regulated-action-path.md)
+- Anthropic provider contract test path: `veritas_os/tests/test_llm_client_anthropic_contract.py`
 
 ## Recommended validation commands
 
-```bash
-bash scripts/validate_reviewer_entrypoint.sh
-bash scripts/validate_governance_observation_fixture.sh
-python scripts/check_governance_observation.py fixtures/governance_observation_live_snapshot.json
-python scripts/generate_observe_mode_demo_snapshot.py --out /tmp/observe_snapshot.json
-python scripts/check_governance_observation.py /tmp/observe_snapshot.json
-pnpm --filter frontend test app/dev/mission-fixture/page.test.tsx
-```
-
-The reviewer entrypoint validation script prints a summary block that can be pasted into `docs/reviewer_validation_report_template.md`.
-
-Optional broader checks (already used in repository docs):
+Run docs and reviewer-path checks first:
 
 ```bash
-bash scripts/demo_mission_audit_workflow.sh
-pnpm -r test
+python -m scripts.quality.check_bilingual_docs
+pytest -q veritas_os/tests/test_enterprise_value_brief_docs.py
+pytest -q veritas_os/tests/test_docs_poc_samples.py
+pytest -q veritas_os/tests/test_provider_support_matrix_docs.py
+pytest -q veritas_os/tests/test_type_safety_baseline.py
+pytest -q veritas_os/tests/test_maintainer_handoff_docs.py
+pytest -q veritas_os/tests/test_llm_client_anthropic_contract.py
+pytest -q veritas_os/tests/test_reviewer_entrypoint_current_path.py
 ```
 
-## Demo / inspection surfaces
-
-### `/dev/mission-fixture`
-
-- Local/dev/test oriented route.
-- Production environment renders a disabled state.
-- No backend API calls.
-- No runtime Observe Mode activation.
-- Static fixture only.
-- Useful for reviewing Mission Control rendering contract.
-
-### Observe Mode generated snapshot
+One-Day PoC command examples (API server required, API key required):
 
 ```bash
-python scripts/generate_observe_mode_demo_snapshot.py --out /tmp/observe_snapshot.json
-python scripts/check_governance_observation.py /tmp/observe_snapshot.json
+VERITAS_API_KEY=... python scripts/demo/one_day_poc_smoke.py --json --evidence-json /tmp/veritas_poc_evidence.json --evidence-md /tmp/veritas_poc_evidence.md
+VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py --runs 10 --warmup 2 --json --out-json /tmp/veritas_poc_benchmark.json --out-md /tmp/veritas_poc_benchmark.md
 ```
 
-This is a dev/test evidence path. It is not production runtime evidence.
+Boundary notes for PoC commands:
 
-## Safety boundaries
+- API server is required for end-to-end PoC execution.
+- `VERITAS_API_KEY` is required for authenticated runs.
+- Do not print or commit secrets/tokens into logs, docs, or evidence files.
 
-- Production remains fail-closed.
+## Current boundaries and non-claims
+
+- Not legal advice.
+- Not regulatory approval.
+- Not third-party certification.
+- Not EU Declaration of Conformity.
+- Not CE marking.
+- Not production SLA.
+- Not 24/7 support.
+- Not proof of provider-neutral production readiness.
+- Not proof of live bank/healthcare/government integration.
+- Not full repository strict typing.
+- Not elimination of bus-factor risk.
+- Fixture/demo evidence is not live customer integration.
+
+## Provider and model boundary
+
+OpenAI is the current production-tier provider. Anthropic and Google remain Planned. Ollama/OpenRouter-style paths remain Experimental unless code and docs state otherwise. Anthropic has offline contract coverage, but that coverage does not promote it to production.
+
+## Compliance positioning boundary
+
+VERITAS supports EU AI Act-aligned governance workflows by producing inspectable control and audit evidence. It is not legal certification, conformity assessment, EU Declaration of Conformity, CE marking, or regulatory approval.
+
+## Technical appendix: Observe Mode foundation
+
+Observe Mode material is retained as a foundation/technical appendix path, not the primary enterprise reviewer path.
+
+- `docs/governance/observe_mode_proof_pack.md`
+- `docs/governance/observe_mode.md`
+- `docs/ui/README_UI.md`
+- `/dev/mission-fixture`
+- `scripts/validate_governance_observation_fixture.sh`
+- `scripts/check_governance_observation.py`
+- `scripts/generate_observe_mode_demo_snapshot.py`
+
+Observe Mode boundary reminders:
+
 - Observe Mode runtime is not enabled.
-- No production bypass exists.
-- No backend mutation endpoint is added by the Observe Mode foundation.
-- Mission Control observation display is read-only.
-- `/dev/mission-fixture` is disabled in production environment.
-- Proof packs document evidence; they do not replace future runtime safety validation.
+- Production remains fail-closed.
+- Demo fixture evidence is not production runtime evidence.
 
 ## Reviewer checklist
 
-- [ ] Read `README.md` overview.
-- [ ] Read `docs/governance/observe_mode_proof_pack.md`.
-- [ ] Run `bash scripts/validate_reviewer_entrypoint.sh` (lightweight link + evidence smoke validation).
-- [ ] Run focused validation script.
-- [ ] Generate and check demo snapshot.
-- [ ] Review `/dev/mission-fixture` locally.
-- [ ] Confirm production disabled-state behavior.
-- [ ] Confirm runtime non-goals.
-- [ ] Confirm production fail-closed boundary.
-- [ ] Identify foundation-only areas.
+- [ ] Read Enterprise Value Brief.
+- [ ] Read Current Implementation Matrix.
+- [ ] Review One-Day PoC Reviewer Pack.
+- [ ] Generate or inspect evidence packet.
+- [ ] Review performance report boundaries.
+- [ ] Review provider matrix.
+- [ ] Review compliance positioning boundaries.
+- [ ] Review type safety baseline.
+- [ ] Review maintainer handoff runbook.
+- [ ] Confirm non-claims.
 - [ ] Record unresolved questions.
-- [ ] Record findings using `docs/reviewer_validation_report_template.md`.
 
 ## Open questions / limitations
 
-- Some systems are foundation-only and not runtime-enabled.
-- External security review is still needed before production claims beyond current scope.
-- Production deployment posture should be evaluated separately per environment.
-- Observe Mode runtime is not implemented.
-- Live backend emission of `governance_observation` is not implemented.
-- Demo routes are not substitutes for production runtime tests.
+- External security review is still needed.
+- Legal review and conformity assessment are not included.
+- Production deployment posture must be evaluated per customer environment.
+- Live customer integrations are not proven by fixture/demo evidence.
+- Provider-neutral production readiness is not proven.
+- Type safety is baseline-only, not full-repository strict typing.
+- Bus-factor risk remains.
