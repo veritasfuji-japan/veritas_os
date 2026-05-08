@@ -58,17 +58,18 @@ Key reviewer concepts:
 
 ## Current proof assets
 
-- [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md)
-- [One-Day PoC Reviewer Pack](docs/en/poc/one-day-poc-reviewer-pack.md)
-- [One-Day PoC Performance Report](docs/en/poc/one-day-poc-performance-report.md)
-- [Sample evidence JSON / Markdown](docs/en/poc/sample-one-day-poc-evidence.md)
-- [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
-- [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-- [Provider Support Matrix](docs/en/operations/provider-support-matrix.md)
-- [Type Safety Baseline](docs/en/operations/type-safety-baseline.md)
-- [Maintainer Handoff Runbook](docs/en/operations/maintainer-handoff.md)
-- [Public Positioning](docs/en/positioning/public-positioning.md)
-- [AML/KYC regulated action path](docs/en/validation/aml-kyc-regulated-action-path.md)
+- [Enterprise Value Brief](en/positioning/enterprise-value-brief.md)
+- [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
+- [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
+- [Sample evidence JSON](en/poc/sample-one-day-poc-evidence.json)
+- [Sample evidence Markdown](en/poc/sample-one-day-poc-evidence.md)
+- [Current Implementation Matrix](en/validation/current-implementation-matrix.md)
+- [Regulated Action Governance Proof Pack](en/validation/regulated-action-governance-proof-pack.md)
+- [Provider Support Matrix](en/operations/provider-support-matrix.md)
+- [Type Safety Baseline](en/operations/type-safety-baseline.md)
+- [Maintainer Handoff Runbook](en/operations/maintainer-handoff.md)
+- [Public Positioning](en/positioning/public-positioning.md)
+- [AML/KYC regulated action path](en/use-cases/aml-kyc-regulated-action-path.md)
 - Anthropic provider contract test path: `veritas_os/tests/test_llm_client_anthropic_contract.py`
 
 ## Recommended validation commands

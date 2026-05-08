@@ -2,33 +2,66 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT = REPO_ROOT / "docs/REVIEWER_ENTRYPOINT.md"
+MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 
 def _entrypoint_text() -> str:
     return ENTRYPOINT.read_text(encoding="utf-8")
 
 
+def _markdown_link_targets() -> list[str]:
+    return MARKDOWN_LINK_RE.findall(_entrypoint_text())
+
+
+def _link_file_part(target: str) -> str:
+    return target.split("#", 1)[0].split("?", 1)[0]
+
+
 def test_reviewer_entrypoint_exists() -> None:
     assert ENTRYPOINT.exists()
 
 
+def test_reviewer_entrypoint_markdown_links_are_relative_and_exist() -> None:
+    targets = _markdown_link_targets()
+    assert targets
+
+    for target in targets:
+        if target.startswith(("http://", "https://", "#", "/")):
+            continue
+
+        file_part = _link_file_part(target)
+        assert not file_part.startswith("docs/"), (
+            f"broken docs-relative link from docs/: {target}"
+        )
+        if file_part.endswith(".md"):
+            assert (ENTRYPOINT.parent / file_part).exists(), target
+
+
 def test_reviewer_entrypoint_links_required_current_docs() -> None:
-    text = _entrypoint_text()
+    targets = set(_markdown_link_targets())
     required_links = [
-        "docs/en/positioning/enterprise-value-brief.md",
-        "docs/en/validation/current-implementation-matrix.md",
-        "docs/en/poc/one-day-poc-reviewer-pack.md",
-        "docs/en/poc/one-day-poc-performance-report.md",
-        "docs/en/operations/provider-support-matrix.md",
-        "docs/en/operations/type-safety-baseline.md",
-        "docs/en/operations/maintainer-handoff.md",
+        "en/positioning/enterprise-value-brief.md",
+        "en/validation/current-implementation-matrix.md",
+        "en/poc/one-day-poc-reviewer-pack.md",
+        "en/poc/one-day-poc-performance-report.md",
+        "en/operations/provider-support-matrix.md",
+        "en/operations/type-safety-baseline.md",
+        "en/operations/maintainer-handoff.md",
     ]
     for link in required_links:
-        assert link in text
+        assert link in targets
+
+
+def test_reviewer_entrypoint_links_aml_kyc_use_case() -> None:
+    targets = set(_markdown_link_targets())
+    aml_kyc_path = "en/use-cases/aml-kyc-regulated-action-path.md"
+    assert aml_kyc_path in targets
+    assert (ENTRYPOINT.parent / aml_kyc_path).exists()
 
 
 def test_reviewer_entrypoint_has_required_sections() -> None:
