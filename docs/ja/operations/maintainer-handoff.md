@@ -139,7 +139,7 @@
 | RBAC | `docs/en/architecture/decision-semantics.md`, `veritas_os/tests/test_role_guard_escalation.py` | denial visibility と escalation 境界を維持。 |
 | TrustLog | `docs/en/architecture/authority-evidence-vs-audit-log.md`, `veritas_os/tests/test_audit_log_writer.py` | append/audit semantics を維持。 |
 | Evidence packets | `docs/en/poc/one-day-poc-reviewer-pack.md`, `veritas_os/tests/test_docs_poc_samples.py` | schema shape と sanitize 保証を維持。 |
-| Provider support | `docs/en/operations/provider-support-matrix.md`, `veritas_os/tests/test_provider_support_matrix_docs.py` | 非本番 provider の過剰主張をしない。 |
+| Provider support | `docs/en/operations/provider-support-matrix.md`, `veritas_os/tests/test_provider_support_matrix_docs.py` | 非本番 provider の過剰主張をしない。Anthropic の contract coverage は offline-only であり、provider tier を変更しない。 |
 | Compliance positioning | `docs/en/positioning/public-positioning.md`, `veritas_os/tests/test_compliance_positioning_docs.py` | legal certification を主張しない。 |
 | Type safety | `docs/en/operations/type-safety-baseline.md`, `veritas_os/tests/test_type_safety_baseline.py` | baseline は段階的運用であり、全域 strict typing ではない。 |
 

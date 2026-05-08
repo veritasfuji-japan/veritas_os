@@ -190,6 +190,7 @@ Incident classes to cover:
 Provider tiers are documented, and production support claims must remain aligned with `docs/en/operations/provider-support-matrix.md`.
 
 Do not imply provider-neutral production equivalence if not documented and tested.
+Anthropic contract coverage is offline-only and does not change provider tier.
 
 ## 15. Compliance positioning boundary
 
