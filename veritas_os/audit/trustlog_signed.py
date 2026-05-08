@@ -23,6 +23,7 @@ Design (post-compaction):
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 import logging
 import os
 import threading
@@ -32,6 +33,11 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - platform dependent
+    fcntl = None
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.audit.storage_mirror import build_storage_mirror
@@ -841,6 +847,24 @@ def _build_artifact_reference(decision_payload: Dict[str, Any]) -> Optional[Dict
         "artifact_hash_algorithm": "sha256_canonical_json",
     }
 
+
+
+@contextmanager
+def _jsonl_trustlog_process_lock(path: Path):
+    """Serialize JSONL append critical section across processes when available."""
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with _lock:
+        with lock_path.open("a", encoding="utf-8") as lock_file:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
 def append_signed_decision(
     decision_payload: Dict[str, Any],
     *,
@@ -863,7 +887,7 @@ def append_signed_decision(
             runtime errors (filesystem, serialization, or value issues).
     """
     try:
-        with _lock:
+        with _jsonl_trustlog_process_lock(SIGNED_TRUSTLOG_JSONL):
             signer = _resolve_signer(ensure_local_keys=True)
             last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
             previous_hash = _entry_chain_hash(last_entry) if last_entry else None

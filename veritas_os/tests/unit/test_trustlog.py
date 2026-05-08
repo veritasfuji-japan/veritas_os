@@ -1916,3 +1916,63 @@ def test_append_signed_decision_raises_when_transparency_required(monkeypatch, t
 
     with pytest.raises(trustlog_signed.SignedTrustLogWriteError):
         trustlog_signed.append_signed_decision({"request_id": "req-anchor-hard-fail"})
+
+
+def test_append_signed_decision_uses_jsonl_process_lock(monkeypatch, tmp_path):
+    """JSONL append critical section is wrapped by process-level lock helper."""
+    trustlog_path = tmp_path / "trustlog.jsonl"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
+    monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
+    _stub_signing(monkeypatch)
+
+    events = []
+
+    class _SpyLock:
+        def __enter__(self):
+            events.append("enter")
+
+        def __exit__(self, exc_type, exc, tb):
+            events.append("exit")
+            return False
+
+    monkeypatch.setattr(
+        trustlog_signed,
+        "_jsonl_trustlog_process_lock",
+        lambda _path: _SpyLock(),
+    )
+
+    trustlog_signed.append_signed_decision({"request_id": "req-lock"})
+
+    assert events == ["enter", "exit"]
+
+
+def test_jsonl_process_lock_creates_sidecar_file(monkeypatch, tmp_path):
+    """Process lock helper creates sidecar lock file and keeps JSONL readable."""
+    trustlog_path = tmp_path / "trustlog.jsonl"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
+    monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
+    _stub_signing(monkeypatch)
+
+    trustlog_signed.append_signed_decision({"request_id": "req-sidecar"})
+
+    lock_path = trustlog_path.with_suffix(".jsonl.lock")
+    assert lock_path.exists()
+    assert lock_path.read_text(encoding="utf-8") == ""
+
+    lines = trustlog_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    payload = json.loads(lines[0])
+    assert payload["decision_payload"]["request_id"] == "req-sidecar"
+
+
+def test_jsonl_process_lock_fallback_without_fcntl(monkeypatch, tmp_path):
+    """Lock helper still yields when fcntl is unavailable."""
+    trustlog_path = tmp_path / "trustlog.jsonl"
+    monkeypatch.setattr(trustlog_signed, "fcntl", None)
+
+    with trustlog_signed._jsonl_trustlog_process_lock(trustlog_path):
+        trustlog_path.write_text("ok", encoding="utf-8")
+
+    assert trustlog_path.read_text(encoding="utf-8") == "ok"

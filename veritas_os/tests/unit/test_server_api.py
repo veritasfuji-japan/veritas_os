@@ -2900,6 +2900,50 @@ def test_websocket_auth_rejects_query_api_key_without_risk_ack(monkeypatch):
     assert server._authenticate_websocket_api_key(ws) is False
 
 
+
+
+def test_websocket_auth_accepts_multi_key_only_configuration(monkeypatch):
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    monkeypatch.setenv(
+        "VERITAS_API_KEYS",
+        '[{"key":"ws-auditor-key","role":"auditor"}]',
+    )
+
+    ws = SimpleNamespace(headers={"X-API-Key": "ws-auditor-key"}, query_params={})
+
+    assert server._authenticate_websocket_api_key(ws) is True
+
+
+def test_websocket_auth_rejects_wrong_multi_key_configuration(monkeypatch):
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    monkeypatch.setenv(
+        "VERITAS_API_KEYS",
+        '[{"key":"ws-auditor-key","role":"auditor"}]',
+    )
+
+    ws = SimpleNamespace(headers={"X-API-Key": "wrong"}, query_params={})
+
+    assert server._authenticate_websocket_api_key(ws) is False
+
+
+def test_websocket_auth_rejects_malformed_multi_key_configuration(monkeypatch):
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
+
+    ws = SimpleNamespace(headers={"X-API-Key": "anything"}, query_params={})
+
+    assert server._authenticate_websocket_api_key(ws) is False
+
+
+def test_websocket_auth_rejects_empty_api_key_candidate(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+
+    ws_empty = SimpleNamespace(headers={"X-API-Key": ""}, query_params={})
+    ws_none = SimpleNamespace(headers={}, query_params={})
+
+    assert server._authenticate_websocket_api_key(ws_empty) is False
+    assert server._authenticate_websocket_api_key(ws_none) is False
+
 def test_decide_failure_publishes_sse_event(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
 

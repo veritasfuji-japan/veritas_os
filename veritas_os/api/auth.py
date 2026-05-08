@@ -796,6 +796,17 @@ def _enforce_auth_failure_rate_limit(client_ip: str) -> None:
         raise HTTPException(status_code=429, detail="Too many auth failures")
 
 
+def _has_configured_api_key() -> bool:
+    """Return True when at least one valid API key configuration exists."""
+    try:
+        if _parse_api_keys_config():
+            return True
+    except ValueError:
+        return False
+
+    return bool((_get_expected_api_key() or "").strip())
+
+
 def _is_valid_api_key(candidate: str) -> bool:
     """Check if *candidate* matches any configured API key (multi or single)."""
     candidate = candidate.strip()
@@ -958,8 +969,7 @@ def _allow_sse_query_api_key() -> bool:
 
 def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
     """Authenticate WebSocket API key with header-first policy."""
-    expected = (_get_expected_api_key() or "").strip()
-    if not expected:
+    if not _has_configured_api_key():
         return False
 
     header_candidate = (websocket.headers.get("X-API-Key") or "").strip()
