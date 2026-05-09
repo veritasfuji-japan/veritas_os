@@ -83,6 +83,10 @@ def _runtime_feature_checks(srv: Any) -> Dict[str, str]:
     """Return runtime feature statuses for health visibility."""
     sanitize_status = "ok" if getattr(srv, "_HAS_SANITIZE", False) else "degraded"
     atomic_io_status = "ok" if getattr(srv, "_HAS_ATOMIC_IO", False) else "degraded"
+    trustlog_posture = posture_info.get("level")
+    if trustlog_posture == "unknown":
+        trustlog_posture = None
+
     return {
         "sanitize": sanitize_status,
         "atomic_io": atomic_io_status,
@@ -181,7 +185,8 @@ def _security_posture_snapshot() -> Dict[str, Any]:
         },
         "encryption": encryption_status,
         "trustlog_secure_default": get_trustlog_security_posture(
-            encryption_status=encryption_status
+            encryption_status=encryption_status,
+            posture=trustlog_posture,
         ),
     }
 

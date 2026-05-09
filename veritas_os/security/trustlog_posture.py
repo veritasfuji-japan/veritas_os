@@ -5,19 +5,26 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from veritas_os.core.posture import resolve_posture
+from veritas_os.core.posture import get_active_posture, resolve_posture
 from veritas_os.logging.encryption import get_encryption_status
 from veritas_os.storage.factory import get_backend_info
 
 
 def get_trustlog_security_posture(
     encryption_status: dict[str, Any] | None = None,
+    posture: str | None = None,
 ) -> dict[str, Any]:
     """Return TrustLog runtime security posture diagnostics.
 
     The returned schema is intentionally stable for health/status payloads.
     """
-    posture = resolve_posture().value
+    if posture is not None:
+        resolved_posture = posture
+    else:
+        try:
+            resolved_posture = get_active_posture().posture.value
+        except Exception:
+            resolved_posture = resolve_posture().value
     backend = get_backend_info().get("trustlog", "jsonl")
     encryption = encryption_status if encryption_status is not None else get_encryption_status()
     encryption_enabled = bool(encryption.get("encryption_enabled", False))
@@ -28,10 +35,10 @@ def get_trustlog_security_posture(
     remediation: list[str] = []
     status = "ok"
 
-    if posture in {"secure", "prod"}:
+    if resolved_posture in {"secure", "prod"}:
         if backend != "postgresql":
             reasons.append(
-                f"VERITAS_POSTURE={posture} requires TrustLog backend=postgresql (current={backend})."
+                f"VERITAS_POSTURE={resolved_posture} requires TrustLog backend=postgresql (current={backend})."
             )
             remediation.append("Set VERITAS_TRUSTLOG_BACKEND=postgresql.")
         if not db_url_configured:
@@ -43,7 +50,7 @@ def get_trustlog_security_posture(
                 "Set VERITAS_ENCRYPTION_KEY or configure a supported KMS/Vault key provider."
             )
         status = "blocked" if reasons else "ok"
-    elif posture == "staging":
+    elif resolved_posture == "staging":
         if backend != "postgresql":
             reasons.append("Staging posture should use PostgreSQL TrustLog for production parity.")
             remediation.append("Set VERITAS_TRUSTLOG_BACKEND=postgresql.")
@@ -68,7 +75,7 @@ def get_trustlog_security_posture(
 
     return {
         "status": status,
-        "posture": posture,
+        "posture": resolved_posture,
         "trustlog_backend": backend,
         "encryption_enabled": encryption_enabled,
         "key_configured": key_configured,

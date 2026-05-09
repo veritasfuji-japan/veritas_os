@@ -11,7 +11,10 @@ from veritas_os.security.trustlog_posture import (
 
 
 @pytest.mark.parametrize("posture", ["dev", "staging"])
-def test_non_strict_posture_jsonl_without_key_degrades(monkeypatch: pytest.MonkeyPatch, posture: str) -> None:
+def test_non_strict_posture_degrades(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
     """dev/staging should not fail closed for file-based TrustLog without key."""
     monkeypatch.setenv("VERITAS_POSTURE", posture)
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
@@ -29,7 +32,10 @@ def test_non_strict_posture_jsonl_without_key_degrades(monkeypatch: pytest.Monke
 
 
 @pytest.mark.parametrize("posture", ["secure", "prod"])
-def test_strict_posture_jsonl_without_key_is_blocked(monkeypatch: pytest.MonkeyPatch, posture: str) -> None:
+def test_strict_posture_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
     """secure/prod must fail closed for insecure TrustLog defaults."""
     monkeypatch.setenv("VERITAS_POSTURE", posture)
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
@@ -92,6 +98,7 @@ def test_security_posture_snapshot_includes_trustlog_secure_default(monkeypatch:
     assert trustlog["status"] == "degraded"
     assert isinstance(trustlog["reasons"], list)
     assert isinstance(trustlog["remediation"], list)
+    assert snapshot["posture"]["level"] == trustlog["posture"]
 
 
 def test_get_trustlog_security_posture_uses_provided_encryption_status(
@@ -114,9 +121,11 @@ def test_get_trustlog_security_posture_uses_provided_encryption_status(
             "encryption_enabled": True,
             "key_configured": True,
             "secure_by_default": True,
-        }
+        },
+        posture="prod",
     )
     assert result["status"] == "ok"
+    assert result["posture"] == "prod"
 
 
 def test_security_posture_snapshot_reuses_encryption_status(
@@ -146,3 +155,32 @@ def test_security_posture_snapshot_reuses_encryption_status(
 
     assert call_counter["count"] == 1
     assert snapshot["trustlog_secure_default"]["status"] == "degraded"
+
+
+@pytest.mark.parametrize("active_posture", ["secure", "prod"])
+def test_active_posture_precedes_env_posture(
+    monkeypatch: pytest.MonkeyPatch,
+    active_posture: str,
+) -> None:
+    """Gate should follow active posture even when VERITAS_POSTURE env differs."""
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+    monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+
+    import veritas_os.security.trustlog_posture as posture_module
+
+    class _DummyPosture:
+        posture = type("P", (), {"value": active_posture})()
+
+    monkeypatch.setattr(posture_module, "get_active_posture", lambda: _DummyPosture())
+
+    result = posture_module.get_trustlog_security_posture(
+        encryption_status={
+            "encryption_enabled": False,
+            "key_configured": False,
+            "secure_by_default": True,
+        }
+    )
+    assert result["posture"] == active_posture
+    assert result["status"] == "blocked"
