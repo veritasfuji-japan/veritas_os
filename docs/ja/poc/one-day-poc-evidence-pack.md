@@ -86,6 +86,7 @@
 
 ## Related documents
 
+- [`docs/ja/poc/one-day-poc-reviewer-handoff-template.md`](one-day-poc-reviewer-handoff-template.md)
 - [`docs/ja/poc/one-day-poc-operator-runbook.md`](one-day-poc-operator-runbook.md) — 証跡の準備・実行・提出手順はOperator Runbookを参照する。
 - [`docs/en/benchmarks/local-performance-metrics.latest.md`](../../en/benchmarks/local-performance-metrics.latest.md)
 - [`docs/en/benchmarks/local-performance-metrics.latest.json`](../../en/benchmarks/local-performance-metrics.latest.json)

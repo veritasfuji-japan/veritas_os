@@ -54,6 +54,7 @@ For external reviewers, HPAN, enterprise stakeholders, and investor diligence, u
 
 - **One-Day PoC Evidence Pack / Checklist**: reviewer-facing checklist and success/failure criteria (distinct from generated evidence packet output) — [`docs/en/poc/one-day-poc-evidence-pack.md`](docs/en/poc/one-day-poc-evidence-pack.md)
 - **One-Day PoC Operator Runbook**: [`docs/en/poc/one-day-poc-operator-runbook.md`](docs/en/poc/one-day-poc-operator-runbook.md)
+- **One-Day PoC Reviewer Handoff Template**: [`docs/en/poc/one-day-poc-reviewer-handoff-template.md`](docs/en/poc/one-day-poc-reviewer-handoff-template.md)
 
 Prerequisites:
 

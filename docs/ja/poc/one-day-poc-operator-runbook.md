@@ -135,6 +135,7 @@ poc-evidence/
 ## Related documents
 
 - [`docs/ja/poc/one-day-poc-evidence-pack.md`](one-day-poc-evidence-pack.md)
+- [`docs/ja/poc/one-day-poc-reviewer-handoff-template.md`](one-day-poc-reviewer-handoff-template.md) — PoC結果をレビュー担当者へ提出する際は、このテンプレートを使用する。
 - [`docs/ja/poc/one-day-poc-reviewer-pack.md`](one-day-poc-reviewer-pack.md)
 - [`docs/ja/poc/one-day-poc-walkthrough.md`](one-day-poc-walkthrough.md)
 - [`docs/ja/poc/one-day-poc-performance-report.md`](one-day-poc-performance-report.md)
