@@ -239,7 +239,10 @@ def _build_markdown(packet: dict[str, Any]) -> str:
             "",
             "## Limitations",
             "- Local benchmark only; not a production SLA.",
+            "- Not a customer environment measurement.",
+            "- Not third-party certified.",
             "- Network, model provider latency, and deployment topology may change results.",
+            "- Does not measure external LLM/provider latency unless the configured local server explicitly invokes such providers.",
             "- This benchmark does not certify EU AI Act compliance.",
             "",
             "## What this does not prove",
@@ -344,7 +347,10 @@ def main(argv: list[str] | None = None) -> int:
         },
         "limitations": [
             "Local benchmark only; not a production SLA.",
+            "Not a customer environment measurement.",
+            "Not third-party certified.",
             "Network, model provider latency, and deployment topology may change results.",
+            "Does not measure external LLM/provider latency unless the configured local server explicitly invokes such providers.",
             "This benchmark does not certify EU AI Act compliance.",
         ],
     }

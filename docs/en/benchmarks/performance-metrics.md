@@ -72,3 +72,9 @@ Do not present this output as production throughput, customer latency, or extern
 - Japanese companion:
   - `docs/ja/benchmarks/local-performance-metrics.latest.md`
 - This artifact is local/deterministic only and not a production SLA.
+
+## Relationship to One-Day PoC benchmark
+
+- `scripts/benchmarks/run_performance_metrics.py` is deterministic local and non-HTTP.
+- `scripts/demo/one_day_poc_benchmark.py` measures local/configured HTTP PoC endpoints and requires `VERITAS_API_KEY`.
+- Neither benchmark is a production SLA or third-party certified result.

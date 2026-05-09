@@ -1,83 +1,28 @@
 # One-Day PoC パフォーマンスベンチマークレポート
 
-> 英語版（`docs/en/poc/one-day-poc-performance-report.md`）が正本です。日本語版は補助説明です。
-
 ## 英語正本
 
-英語正本は [One-Day PoC Performance Benchmark Report](../../en/poc/one-day-poc-performance-report.md) です。  
-日本語版は補助説明です。
+- [One-Day PoC Performance Benchmark](../../en/poc/one-day-poc-performance-report.md)
 
 ## 目的
 
-本ドキュメントは、One-Day PoC の主要導線について、再現可能なローカル遅延計測証跡を取得する手順を示します。
+これは One-Day PoC 向けの **local HTTP PoC benchmark** です。
+実行には、起動中の local/configured VERITAS API server と `VERITAS_API_KEY` が必要です。
+
+また、これは deterministic local performance metrics artifact とは別物です。
+deterministic local non-HTTP artifact は
+`docs/en/benchmarks/local-performance-metrics.latest.md` を参照してください。
 
 ## 実行方法
 
-推奨コマンド:
-
 ```bash
-mkdir -p runtime/dev/benchmarks
-VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py \
-  --runs 10 \
-  --warmup 2 \
-  --json \
-  --out-json runtime/dev/benchmarks/veritas_poc_benchmark.json \
-  --out-md runtime/dev/benchmarks/veritas_poc_benchmark.md
+VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py --runs 5 --warmup 1 --base-url http://127.0.0.1:8000 --out-json /tmp/one-day-poc-benchmark.json --out-md /tmp/one-day-poc-benchmark.md
 ```
 
-## JSON出力項目
+## 非主張境界（誤解防止）
 
-`one_day_poc_benchmark.v1` 形式で、以下を出力します。
-
-- scenario / measured_at
-- runs / warmup / timeout
-- sanitize 済み環境情報
-- 遅延サマリ（min/p50/p95/p99/max/mean/stdev）
-- ターゲットごとの success/failure
-- 制約事項と sanitize 済み failure 情報
-
-## Markdown出力
-
-`--out-md` により以下を含むレポートを生成します。
-
-- Summary
-- Environment
-- Benchmark Results
-- Methodology
-- Limitations
-- What this does not prove
-- Recommended next measurements
-
-## レビュアー向け解釈
-
-- **ローカルベンチマーク証跡**として扱ってください。
-- 本番性能やSLAの確約ではありません。
-- 同一環境で複数回実行し、傾向確認に利用してください。
-
-## 制約
-
-- ローカル環境差分の影響を受けます。
-- ネットワーク/モデル提供者/構成で結果は変動します。
-- 負荷・同時実行・長時間安定性試験は含みません。
-
-## 本番SLAではない
-
-本結果は本番SLAを示さず、計測時の指定環境におけるローカルベンチマーク挙動のみを示します。
-
-## 法的認証ではない
-
-本結果はEU AI法準拠の法的認証を示しません。
-
-## 次の本番向け計測
-
-- ステージング環境の基準値作成
-- 同時実行・スループット計測
-- tail latency の計測
-- リージョン/ネットワーク差分計測
-
-
-## Provider依存に関する注意
-
-- ベンチマーク結果は provider と実行環境に依存します。
-- 将来、モデル呼び出しを含むベンチマークを行う場合は、providerごとの遅延とレート制限の影響を分離して報告する必要があります。
-- 現在のローカルベンチマーク結果は、provider-neutral な本番性能を証明しません。
+- これは local HTTP PoC benchmark であり、本番レイテンシ測定ではありません。
+- 本番SLAではない。
+- 第三者認証ではない。
+- 顧客環境測定ではない。
+- 外部LLM/provider latency は、configured local server が明示的にproviderを呼ぶ場合を除き測定対象ではありません。
