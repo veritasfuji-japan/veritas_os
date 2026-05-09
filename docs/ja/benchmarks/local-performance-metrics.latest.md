@@ -9,6 +9,11 @@
 - 第三者認証ではない。
 - 顧客環境での測定ではない。
 
+## 英語正本
+
+- [Local Performance Metrics Artifact](../../en/benchmarks/local-performance-metrics.latest.md)
+- [Local Performance Metrics JSON](../../en/benchmarks/local-performance-metrics.latest.json)
+
 ## Scope
 
 このartifactは、deterministicなローカルベンチマーク1回分の実測結果です。本番レイテンシや顧客環境での性能を示すものではありません。

@@ -2,6 +2,10 @@
 
 英語版が正本であり、日本語版は補助説明です。
 
+## 英語正本
+
+- [Performance Metrics](../../en/benchmarks/performance-metrics.md)
+
 本資料は、VERITAS OS における性能測定の入口として、再現可能な deterministic local harness を定義します。
 
 - deterministic local harness である

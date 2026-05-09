@@ -49,6 +49,7 @@ def test_json_notes_contain_non_claim_boundaries() -> None:
     assert "No external LLM/API calls." in notes
     assert "Not a production SLA." in notes
     assert "Not third-party certified." in notes
+    assert "Not a customer environment measurement." in notes
 
 
 def test_json_is_not_sample_only() -> None:
@@ -89,6 +90,16 @@ def test_ja_markdown_contains_boundaries() -> None:
     assert "本番SLAではない" in text
     assert "第三者認証ではない" in text
     assert "顧客環境" in text
+    assert "## 英語正本" in text
+    assert "../../en/benchmarks/local-performance-metrics.latest.md" in text
+    assert "../../en/benchmarks/local-performance-metrics.latest.json" in text
+
+
+
+def test_ja_performance_metrics_doc_links_to_en_canonical() -> None:
+    text = (ROOT / "docs/ja/benchmarks/performance-metrics.md").read_text(encoding="utf-8")
+    assert "## 英語正本" in text
+    assert "../../en/benchmarks/performance-metrics.md" in text
 
 
 def test_readme_and_docs_links_exist() -> None:

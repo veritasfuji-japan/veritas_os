@@ -24,7 +24,8 @@
     "Deterministic local benchmark only.",
     "No external LLM/API calls.",
     "Not a production SLA.",
-    "Not third-party certified."
+    "Not third-party certified.",
+    "Not a customer environment measurement."
   ],
   "scenario": "local_deterministic_smoke",
   "schema_version": "performance_metrics.v1",
