@@ -28,6 +28,7 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 外部レビュー担当者向けの入口は `docs/REVIEWER_ENTRYPOINT.md` を参照してください。
 
 - **性能メトリクス**: [日本語補助](docs/ja/benchmarks/performance-metrics.md) / [英語正本](docs/en/benchmarks/performance-metrics.md)
+- **最新ローカル性能メトリクスartifact**: [日本語補助](docs/ja/benchmarks/local-performance-metrics.latest.md) / [英語正本](docs/en/benchmarks/local-performance-metrics.latest.md) / [JSON](docs/en/benchmarks/local-performance-metrics.latest.json)
 
 
 ## 外部レビュアー向け Fast Path

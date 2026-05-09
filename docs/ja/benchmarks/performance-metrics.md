@@ -13,3 +13,14 @@
 - ビジネス向け数値を出す前に、測定方法を再現可能にするための資料である
 
 - p95_ms / p99_ms は測定iterationの nearest-rank percentile であり、本番レイテンシ保証ではありません。
+
+
+## 最新ローカルartifact
+
+- 最新のlocal deterministic artifact:
+  - `docs/en/benchmarks/local-performance-metrics.latest.json`
+  - `docs/en/benchmarks/local-performance-metrics.latest.md`
+- 日本語補助:
+  - `docs/ja/benchmarks/local-performance-metrics.latest.md`
+- 本番SLAではない
+- 顧客環境測定ではない
