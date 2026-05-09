@@ -30,6 +30,7 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 - **性能メトリクス**: [日本語補助](docs/ja/benchmarks/performance-metrics.md) / [英語正本](docs/en/benchmarks/performance-metrics.md)
 - **最新ローカル性能メトリクスartifact**: [日本語補助](docs/ja/benchmarks/local-performance-metrics.latest.md) / [英語正本](docs/en/benchmarks/local-performance-metrics.latest.md) / [JSON](docs/en/benchmarks/local-performance-metrics.latest.json)
 - **One-Day PoC証跡パック**: [日本語補助](docs/ja/poc/one-day-poc-evidence-pack.md) / [英語正本](docs/en/poc/one-day-poc-evidence-pack.md)
+- **One-Day PoC運用Runbook**: [日本語補助](docs/ja/poc/one-day-poc-operator-runbook.md) / [英語正本](docs/en/poc/one-day-poc-operator-runbook.md)
 - 性能メトリクスおよびOne-Day PoC benchmarkは、local/reviewer-facingな測定であり、本番SLA・第三者認証・顧客環境測定ではありません。
 
 

@@ -65,3 +65,4 @@
 | JA manuals | — | `docs/ja/guides/user-manual.md` | JA primary | 日本語中心運用文書 |
 | EN notes | `docs/en/notes/chainlit.md` | — | EN canonical only | 補助ノート |
 | PoC: One-Day PoC evidence pack | `docs/en/poc/one-day-poc-evidence-pack.md` | `docs/ja/poc/one-day-poc-evidence-pack.md` | JA explanation / EN canonical | Reviewer-facing evidence checklist, walkthrough scenarios, success/failure criteria, and non-claim boundaries for One-Day PoC. |
+| PoC: One-Day PoC operator runbook | `docs/en/poc/one-day-poc-operator-runbook.md` | `docs/ja/poc/one-day-poc-operator-runbook.md` | JA explanation / EN canonical | Operator-facing preparation, execution, evidence collection, packaging, and review handoff runbook for One-Day PoC. |
