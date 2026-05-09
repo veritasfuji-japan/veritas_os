@@ -767,7 +767,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'frontend/package.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install dependencies
         env:
