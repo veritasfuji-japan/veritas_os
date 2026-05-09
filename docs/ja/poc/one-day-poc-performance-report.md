@@ -26,3 +26,8 @@ VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py --runs 5 --warm
 - 第三者認証ではない。
 - 顧客環境測定ではない。
 - 外部LLM/provider latency は、configured local server が明示的にproviderを呼ぶ場合を除き測定対象ではありません。
+
+## 関連する証跡パック
+
+- One-Day PoCの証跡収集、成功条件、失敗条件は `docs/ja/poc/one-day-poc-evidence-pack.md` を参照
+- このbenchmark reportは証跡パックの一部であり、本番SLA・第三者認証・顧客環境測定ではない

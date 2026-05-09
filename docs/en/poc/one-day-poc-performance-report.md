@@ -34,3 +34,9 @@ The script emits a stable benchmark packet shape (`one_day_poc_benchmark.v1`) in
 - latency summaries (`min`, `p50`, `p95`, `p99`, `max`, `mean`, `stdev`)
 - per-target success/failure counts
 - limitations and sanitized failure metadata
+
+## Related evidence pack
+
+- For reviewer-facing PoC evidence collection and success/failure criteria, see `docs/en/poc/one-day-poc-evidence-pack.md`.
+- This benchmark report is only one input into the evidence pack.
+- It is not a production SLA, third-party certification, or customer environment measurement.
