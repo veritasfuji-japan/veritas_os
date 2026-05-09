@@ -28,3 +28,9 @@
   - `docs/ja/benchmarks/local-performance-metrics.latest.md`
 - 本番SLAではない
 - 顧客環境測定ではない
+
+## One-Day PoC benchmarkとの違い
+
+- `scripts/benchmarks/run_performance_metrics.py` は deterministic local / non-HTTP です。
+- `scripts/demo/one_day_poc_benchmark.py` は local/configured HTTP PoC endpoint を測るもので、`VERITAS_API_KEY` が必要です。
+- どちらも本番SLAや第三者認証済み結果ではありません。

@@ -27,6 +27,14 @@ SCHEMA_VERSION = "one_day_poc_benchmark.v1"
 PACKET_TYPE = "performance_benchmark"
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT_SECONDS = 10.0
+BENCHMARK_LIMITATIONS = [
+    "Local benchmark only; not a production SLA.",
+    "Not a customer environment measurement.",
+    "Not third-party certified.",
+    "Network, model provider latency, and deployment topology may change results.",
+    "Does not measure external LLM/provider latency unless the configured local server explicitly invokes such providers.",
+    "This benchmark does not certify EU AI Act compliance.",
+]
 
 
 class BenchmarkRequestError(RuntimeError):
@@ -238,9 +246,7 @@ def _build_markdown(packet: dict[str, Any]) -> str:
             "- Uses request timeout from `--timeout` for each HTTP call.",
             "",
             "## Limitations",
-            "- Local benchmark only; not a production SLA.",
-            "- Network, model provider latency, and deployment topology may change results.",
-            "- This benchmark does not certify EU AI Act compliance.",
+            *[f"- {limitation}" for limitation in BENCHMARK_LIMITATIONS],
             "",
             "## What this does not prove",
             "- Not throughput testing.",
@@ -342,11 +348,7 @@ def main(argv: list[str] | None = None) -> int:
             "governance_policy_read": policy_failures,
             "smoke_equivalent_end_to_end": e2e_failures,
         },
-        "limitations": [
-            "Local benchmark only; not a production SLA.",
-            "Network, model provider latency, and deployment topology may change results.",
-            "This benchmark does not certify EU AI Act compliance.",
-        ],
+        "limitations": list(BENCHMARK_LIMITATIONS),
     }
 
     if args.out_json:

@@ -768,10 +768,8 @@ jobs:
         working-directory: frontend
         run: |
           set -euo pipefail
-          if ! pnpm exec playwright install --with-deps chromium chromium-headless-shell; then
-            echo "Playwright --with-deps failed (apt restricted). Retrying browser-only install." >&2
-            pnpm exec playwright install chromium chromium-headless-shell
-          fi
+          # Avoid --with-deps: apt mirror stalls can cancel the e2e job.
+          pnpm exec playwright install chromium chromium-headless-shell
 
       - name: Build frontend
         if: matrix.gate == 'e2e'

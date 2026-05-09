@@ -103,6 +103,8 @@ Maintainer handoff / support continuity の日本語補助説明は [Maintainer 
 
 For lightweight local performance measurements, run `python scripts/demo/one_day_poc_benchmark.py` and see the performance report docs above.
 
+Performance Metrics and One-Day PoC benchmark artifacts are local/reviewer-facing measurements only. They are not a production SLA, third-party certification, or customer environment measurements.
+
 - **Performance Metrics**: [`docs/en/benchmarks/performance-metrics.md`](docs/en/benchmarks/performance-metrics.md) / [`docs/ja/benchmarks/performance-metrics.md`](docs/ja/benchmarks/performance-metrics.md)
 - **Latest Local Performance Metrics Artifact**: [`docs/en/benchmarks/local-performance-metrics.latest.md`](docs/en/benchmarks/local-performance-metrics.latest.md) / [`docs/en/benchmarks/local-performance-metrics.latest.json`](docs/en/benchmarks/local-performance-metrics.latest.json)
 
