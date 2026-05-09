@@ -59,5 +59,30 @@ def test_ja_doc_contains_required_phrases() -> None:
 
 def test_index_links_exist() -> None:
     assert "external-security-remediation-summary.md" in _read("README.md")
+    assert "docs/en/security/external-security-remediation-summary.md" in _read(
+        "README.md"
+    )
+    assert "docs/ja/security/external-security-remediation-summary.md" in _read(
+        "README.md"
+    )
+    assert "external-security-remediation-summary.md" in _read("README_JP.md")
+    assert "docs/ja/security/external-security-remediation-summary.md" in _read(
+        "README_JP.md"
+    )
+    assert "docs/en/security/external-security-remediation-summary.md" in _read(
+        "README_JP.md"
+    )
+    assert "英語正本" in _read("README_JP.md")
     assert "external-security-remediation-summary.md" in _read("docs/INDEX.md")
     assert "external-security-remediation-summary.md" in _read("docs/DOCUMENTATION_MAP.md")
+
+
+def test_remediation_matrix_tables_do_not_start_with_double_pipe() -> None:
+    for path in [
+        "docs/en/security/external-security-remediation-summary.md",
+        "docs/ja/security/external-security-remediation-summary.md",
+    ]:
+        for line in _read(path).splitlines():
+            assert not line.startswith("||"), (
+                f"{path} contains malformed table row: {line}"
+            )
