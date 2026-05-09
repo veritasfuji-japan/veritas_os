@@ -63,3 +63,12 @@ Do not present this output as production throughput, customer latency, or extern
 - provider adapter overhead
 - one-day PoC end-to-end scenario latency
 - cost-per-request estimation when LLM providers are used
+
+## Latest local artifact
+
+- Latest local deterministic artifact:
+  - `docs/en/benchmarks/local-performance-metrics.latest.json`
+  - `docs/en/benchmarks/local-performance-metrics.latest.md`
+- Japanese companion:
+  - `docs/ja/benchmarks/local-performance-metrics.latest.md`
+- This artifact is local/deterministic only and not a production SLA.

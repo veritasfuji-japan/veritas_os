@@ -1,0 +1,33 @@
+{
+  "counters": {
+    "failure": 0,
+    "success": 100
+  },
+  "environment": {
+    "implementation": "cpython",
+    "platform": "Linux-6.12.47-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "python_version": "3.12.3"
+  },
+  "generated_at": "2026-05-09T02:05:00.659731+00:00",
+  "iterations": 100,
+  "metrics": {
+    "max_ms": 0.029875,
+    "mean_ms": 0.010114,
+    "median_ms": 0.008882,
+    "min_ms": 0.008606,
+    "p95_ms": 0.015959,
+    "p99_ms": 0.024828,
+    "total_wall_ms": 1.011381
+  },
+  "notes": [
+    "Deterministic local benchmark only.",
+    "No external LLM/API calls.",
+    "Not a production SLA.",
+    "Not third-party certified.",
+    "Not a customer environment measurement."
+  ],
+  "scenario": "local_deterministic_smoke",
+  "schema_version": "performance_metrics.v1",
+  "warmup": 10
+}

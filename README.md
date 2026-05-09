@@ -104,6 +104,7 @@ Maintainer handoff / support continuity の日本語補助説明は [Maintainer 
 For lightweight local performance measurements, run `python scripts/demo/one_day_poc_benchmark.py` and see the performance report docs above.
 
 - **Performance Metrics**: [`docs/en/benchmarks/performance-metrics.md`](docs/en/benchmarks/performance-metrics.md) / [`docs/ja/benchmarks/performance-metrics.md`](docs/ja/benchmarks/performance-metrics.md)
+- **Latest Local Performance Metrics Artifact**: [`docs/en/benchmarks/local-performance-metrics.latest.md`](docs/en/benchmarks/local-performance-metrics.latest.md) / [`docs/en/benchmarks/local-performance-metrics.latest.json`](docs/en/benchmarks/local-performance-metrics.latest.json)
 
 Sample sanitized evidence packets are available for reviewers who want to preview the deliverable format before running the smoke script.
 Evidence JSON follows `schemas/poc/one_day_poc_evidence.v1.schema.json`.
