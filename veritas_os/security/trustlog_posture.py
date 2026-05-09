@@ -10,14 +10,16 @@ from veritas_os.logging.encryption import get_encryption_status
 from veritas_os.storage.factory import get_backend_info
 
 
-def get_trustlog_security_posture() -> dict[str, Any]:
+def get_trustlog_security_posture(
+    encryption_status: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Return TrustLog runtime security posture diagnostics.
 
     The returned schema is intentionally stable for health/status payloads.
     """
     posture = resolve_posture().value
     backend = get_backend_info().get("trustlog", "jsonl")
-    encryption = get_encryption_status()
+    encryption = encryption_status if encryption_status is not None else get_encryption_status()
     encryption_enabled = bool(encryption.get("encryption_enabled", False))
     key_configured = bool(encryption.get("key_configured", False))
     db_url_configured = bool((os.getenv("VERITAS_DATABASE_URL") or "").strip())

@@ -180,7 +180,9 @@ def _security_posture_snapshot() -> Dict[str, Any]:
             "failure_mode": auth_details.get("failure_mode", "closed"),
         },
         "encryption": encryption_status,
-        "trustlog_secure_default": get_trustlog_security_posture(),
+        "trustlog_secure_default": get_trustlog_security_posture(
+            encryption_status=encryption_status
+        ),
     }
 
 

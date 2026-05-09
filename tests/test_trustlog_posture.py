@@ -92,3 +92,57 @@ def test_security_posture_snapshot_includes_trustlog_secure_default(monkeypatch:
     assert trustlog["status"] == "degraded"
     assert isinstance(trustlog["reasons"], list)
     assert isinstance(trustlog["remediation"], list)
+
+
+def test_get_trustlog_security_posture_uses_provided_encryption_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Provided encryption status should bypass internal get_encryption_status call."""
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+
+    import veritas_os.security.trustlog_posture as posture_module
+
+    def _raise_if_called() -> dict[str, bool]:
+        raise AssertionError("get_encryption_status should not be called")
+
+    monkeypatch.setattr(posture_module, "get_encryption_status", _raise_if_called)
+
+    result = posture_module.get_trustlog_security_posture(
+        encryption_status={
+            "encryption_enabled": True,
+            "key_configured": True,
+            "secure_by_default": True,
+        }
+    )
+    assert result["status"] == "ok"
+
+
+def test_security_posture_snapshot_reuses_encryption_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Security snapshot should call encryption status once and reuse the value."""
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+
+    import veritas_os.api.routes_system as routes_system
+    import veritas_os.security.trustlog_posture as posture_module
+
+    call_counter = {"count": 0}
+
+    def _fake_get_encryption_status() -> dict[str, bool]:
+        call_counter["count"] += 1
+        return {
+            "encryption_enabled": False,
+            "key_configured": False,
+            "secure_by_default": True,
+        }
+
+    monkeypatch.setattr(routes_system, "get_encryption_status", _fake_get_encryption_status)
+    monkeypatch.setattr(posture_module, "get_encryption_status", _fake_get_encryption_status)
+
+    snapshot = routes_system._security_posture_snapshot()
+
+    assert call_counter["count"] == 1
+    assert snapshot["trustlog_secure_default"]["status"] == "degraded"
