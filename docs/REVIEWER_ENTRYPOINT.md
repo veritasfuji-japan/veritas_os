@@ -10,29 +10,30 @@ This entry point is organized around the current enterprise review path: busines
 
 ## 10-minute review path
 
-1. `en/positioning/enterprise-value-brief.md` — one-page business/investor overview.
-2. `README.md` — core product definition and repository entry map.
-3. `en/validation/current-implementation-matrix.md` — current implementation facts vs roadmap.
-4. `en/poc/one-day-poc-evidence-pack.md` — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
-5. `en/poc/one-day-poc-reviewer-handoff-template.md` — submit-ready handoff format for PoC results.
-6. `en/operations/provider-support-matrix.md` — provider tiers, support boundaries, and non-claims.
-7. `en/positioning/public-positioning.md` — conservative positioning and legal/compliance boundary statements.
+1. [Enterprise Value Brief](en/positioning/enterprise-value-brief.md) — one-page business/investor overview.
+2. [README](../README.md) — core product definition and repository entry map.
+3. [Current Implementation Matrix](en/validation/current-implementation-matrix.md) — current implementation facts vs roadmap.
+4. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
+5. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) — how operators prepare, collect, package, and hand off PoC evidence.
+6. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) — submit-ready handoff format for PoC results.
+7. [Provider Support Matrix](en/operations/provider-support-matrix.md) — provider tiers, support boundaries, and non-claims.
+8. [Public Positioning](en/positioning/public-positioning.md) — conservative positioning and legal/compliance boundary statements.
 
 ## 30-minute technical review path
 
-1. `en/positioning/enterprise-value-brief.md`
-2. `en/validation/current-implementation-matrix.md`
-3. `en/validation/regulated-action-governance-proof-pack.md`
-4. `en/poc/one-day-poc-evidence-pack.md`
-5. `en/poc/one-day-poc-operator-runbook.md`
-6. `en/poc/one-day-poc-reviewer-handoff-template.md`
-7. `en/poc/one-day-poc-reviewer-pack.md`
-8. `en/poc/one-day-poc-performance-report.md`
-9. `en/operations/type-safety-baseline.md`
-10. `en/operations/maintainer-handoff.md`
-11. `en/operations/provider-support-matrix.md`
-12. `en/architecture/regulated-action-governance-kernel.md`
-13. `en/architecture/bind-boundary-governance-artifacts.md`
+1. [Enterprise Value Brief](en/positioning/enterprise-value-brief.md)
+2. [Current Implementation Matrix](en/validation/current-implementation-matrix.md)
+3. [Regulated Action Governance Proof Pack](en/validation/regulated-action-governance-proof-pack.md)
+4. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md)
+5. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md)
+6. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md)
+7. [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
+8. [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
+9. [Type Safety Baseline](en/operations/type-safety-baseline.md)
+10. [Maintainer Handoff](en/operations/maintainer-handoff.md)
+11. [Provider Support Matrix](en/operations/provider-support-matrix.md)
+12. [Regulated Action Governance Kernel](en/architecture/regulated-action-governance-kernel.md)
+13. [Bind Boundary Governance Artifacts](en/architecture/bind-boundary-governance-artifacts.md)
 
 ## What VERITAS OS is
 
