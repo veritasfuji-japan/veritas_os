@@ -730,6 +730,8 @@ jobs:
       fail-fast: false
       matrix:
         gate: ["lint", "test", "e2e"]
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
 
     steps:
       - name: Checkout
@@ -762,6 +764,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        if: matrix.gate == 'e2e'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'frontend/package.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
       - name: Install Playwright browsers
         if: matrix.gate == 'e2e'
