@@ -8,17 +8,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import platform
 import statistics
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
-from datetime import datetime, timezone
-from typing import Any
 
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 from veritas_os.security.wat_verifier import (
@@ -29,12 +30,38 @@ from veritas_os.security.wat_verifier import (
 )
 
 
+def _positive_int(value: str) -> int:
+    """Parse CLI integer argument that must be >= 1."""
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return parsed
+
+
+def _non_negative_int(value: str) -> int:
+    """Parse CLI integer argument that must be >= 0."""
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be >= 0")
+    return parsed
+
+
 def _percentile(sorted_values: list[float], percentile: float) -> float:
-    """Return percentile value for a pre-sorted non-empty list."""
+    """Return nearest-rank percentile for a pre-sorted non-empty list.
+
+    Args:
+        sorted_values: Pre-sorted values in ascending order.
+        percentile: Ratio in the inclusive range [0.0, 1.0].
+    """
+    if not sorted_values:
+        raise ValueError("sorted_values must not be empty")
+    if percentile < 0.0 or percentile > 1.0:
+        raise ValueError("percentile must be between 0.0 and 1.0")
     if len(sorted_values) == 1:
         return sorted_values[0]
-    rank = int((len(sorted_values) - 1) * percentile)
-    return sorted_values[rank]
+    rank = math.ceil(percentile * len(sorted_values))
+    index = min(max(rank - 1, 0), len(sorted_values) - 1)
+    return sorted_values[index]
 
 
 def _run_iteration() -> bool:
@@ -132,8 +159,8 @@ def collect_metrics(iterations: int, warmup: int, scenario: str) -> dict[str, An
 def main() -> int:
     """CLI entrypoint."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--iterations", type=int, default=100)
-    parser.add_argument("--warmup", type=int, default=10)
+    parser.add_argument("--iterations", type=_positive_int, default=100)
+    parser.add_argument("--warmup", type=_non_negative_int, default=10)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--scenario", default="local_deterministic_smoke")
     args = parser.parse_args()

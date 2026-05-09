@@ -43,6 +43,8 @@ The harness outputs `performance_metrics.v1` JSON with:
 
 ## Interpreting results
 
+Percentiles use nearest-rank semantics over measured iteration durations; `p95_ms` and `p99_ms` are local harness statistics, not production latency guarantees.
+
 Use this output to compare local deterministic runs under controlled conditions.
 Do not present this output as production throughput, customer latency, or external certification.
 
