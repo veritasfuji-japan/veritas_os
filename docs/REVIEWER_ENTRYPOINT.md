@@ -10,13 +10,14 @@ This entry point is organized around the current enterprise review path: busines
 
 ## 10-minute review path
 
-1. `docs/en/positioning/enterprise-value-brief.md` — one-page business/investor overview.
+1. `en/positioning/enterprise-value-brief.md` — one-page business/investor overview.
 2. `README.md` — core product definition and repository entry map.
-3. `docs/en/validation/current-implementation-matrix.md` — current implementation facts vs roadmap.
+3. `en/validation/current-implementation-matrix.md` — current implementation facts vs roadmap.
 4. `en/poc/one-day-poc-evidence-pack.md` — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
-5. `en/poc/one-day-poc-reviewer-handoff-template.md` — submit-ready handoff format for PoC results.
-6. `en/operations/provider-support-matrix.md` — provider tiers, support boundaries, and non-claims.
-7. `en/positioning/public-positioning.md` — conservative positioning and legal/compliance boundary statements.
+5. `en/poc/one-day-poc-operator-runbook.md` — how operators prepare, collect, package, and hand off PoC evidence.
+6. `en/poc/one-day-poc-reviewer-handoff-template.md` — submit-ready handoff format for PoC results.
+7. `en/operations/provider-support-matrix.md` — provider tiers, support boundaries, and non-claims.
+8. `en/positioning/public-positioning.md` — conservative positioning and legal/compliance boundary statements.
 
 ## 30-minute technical review path
 
@@ -51,17 +52,17 @@ Key reviewer concepts:
 
 | Review question | Primary source | What to check |
 |---|---|---|
-| What problem does VERITAS solve? | `docs/en/positioning/enterprise-value-brief.md` | Enterprise value, target users, and priority use cases. |
-| What is implemented today? | `docs/en/validation/current-implementation-matrix.md` | Clear separation between current facts and roadmap/foundation-only items. |
+| What problem does VERITAS solve? | `en/positioning/enterprise-value-brief.md` | Enterprise value, target users, and priority use cases. |
+| What is implemented today? | `en/validation/current-implementation-matrix.md` | Clear separation between current facts and roadmap/foundation-only items. |
 | What should reviewers inspect in the One-Day PoC? | `en/poc/one-day-poc-evidence-pack.md` | Evidence checklist, walkthrough scenarios, success/failure criteria, and non-claim boundaries. |
 | How should operators prepare and package the PoC evidence? | `en/poc/one-day-poc-operator-runbook.md` | Pre-flight checklist, evidence folder layout, run sequence, redaction notes, and review handoff package. |
 | What should be handed to the reviewer after the PoC? | `en/poc/one-day-poc-reviewer-handoff-template.md` | Submit-ready summary of scope, environment, scenarios, evidence, results, limitations, and open questions. |
 | What can be verified in one day? | `en/poc/one-day-poc-reviewer-pack.md` | Smoke path, generated evidence packet, and validation workflow. |
-| Is there performance evidence? | `docs/en/poc/one-day-poc-performance-report.md` | Local benchmark method, measurement boundaries, and non-SLA language. |
-| What are provider boundaries? | `docs/en/operations/provider-support-matrix.md` | OpenAI production tier, Anthropic planned with offline contract coverage, and explicit boundaries. |
-| Are legal/compliance claims bounded? | `docs/en/positioning/public-positioning.md`, `docs/eu_ai_act/technical_documentation.md` | Positioning uses conservative non-certification language and bounded claims. |
-| Is there type safety? | `docs/en/operations/type-safety-baseline.md` | Narrow, practical baseline rather than full-repository strict typing claims. |
-| Is handoff possible? | `docs/en/operations/maintainer-handoff.md` | Maintainer runbook exists; handoff path is documented but risk is not eliminated. |
+| Is there performance evidence? | `en/poc/one-day-poc-performance-report.md` | Local benchmark method, measurement boundaries, and non-SLA language. |
+| What are provider boundaries? | `en/operations/provider-support-matrix.md` | OpenAI production tier, Anthropic planned with offline contract coverage, and explicit boundaries. |
+| Are legal/compliance claims bounded? | `en/positioning/public-positioning.md`, `eu_ai_act/technical_documentation.md` | Positioning uses conservative non-certification language and bounded claims. |
+| Is there type safety? | `en/operations/type-safety-baseline.md` | Narrow, practical baseline rather than full-repository strict typing claims. |
+| Is handoff possible? | `en/operations/maintainer-handoff.md` | Maintainer runbook exists; handoff path is documented but risk is not eliminated. |
 
 ## Current proof assets
 

@@ -141,11 +141,16 @@ def test_reviewer_entrypoint_includes_one_day_poc_evidence_suite() -> None:
         "One-Day PoC Evidence Pack",
         "One-Day PoC Operator Runbook",
         "One-Day PoC Reviewer Handoff Template",
-        "Evidence Pack",
-        "Operator Runbook",
-        "Reviewer Handoff Template",
     ]:
         assert phrase in text
+
+    targets = set(_markdown_link_targets())
+    for link in [
+        "en/poc/one-day-poc-evidence-pack.md",
+        "en/poc/one-day-poc-operator-runbook.md",
+        "en/poc/one-day-poc-reviewer-handoff-template.md",
+    ]:
+        assert link in targets
 
 
 def test_reviewer_entrypoint_validation_commands_include_poc_doc_guardrails() -> None:
