@@ -10,25 +10,29 @@ This entry point is organized around the current enterprise review path: busines
 
 ## 10-minute review path
 
-1. `docs/en/positioning/enterprise-value-brief.md` — one-page business/investor overview.
+1. `en/positioning/enterprise-value-brief.md` — one-page business/investor overview.
 2. `README.md` — core product definition and repository entry map.
-3. `docs/en/validation/current-implementation-matrix.md` — current implementation facts vs roadmap.
-4. `docs/en/poc/one-day-poc-reviewer-pack.md` — what can be reviewed in a short PoC window.
-5. `docs/en/operations/provider-support-matrix.md` — provider tiers, support boundaries, and non-claims.
-6. `docs/en/positioning/public-positioning.md` — conservative positioning and legal/compliance boundary statements.
+3. `en/validation/current-implementation-matrix.md` — current implementation facts vs roadmap.
+4. `en/poc/one-day-poc-evidence-pack.md` — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
+5. `en/poc/one-day-poc-reviewer-handoff-template.md` — submit-ready handoff format for PoC results.
+6. `en/operations/provider-support-matrix.md` — provider tiers, support boundaries, and non-claims.
+7. `en/positioning/public-positioning.md` — conservative positioning and legal/compliance boundary statements.
 
 ## 30-minute technical review path
 
-1. `docs/en/positioning/enterprise-value-brief.md`
-2. `docs/en/validation/current-implementation-matrix.md`
-3. `docs/en/validation/regulated-action-governance-proof-pack.md`
-4. `docs/en/poc/one-day-poc-reviewer-pack.md`
-5. `docs/en/poc/one-day-poc-performance-report.md`
-6. `docs/en/operations/type-safety-baseline.md`
-7. `docs/en/operations/maintainer-handoff.md`
-8. `docs/en/operations/provider-support-matrix.md`
-9. `docs/en/architecture/regulated-action-governance-kernel.md`
-10. `docs/en/architecture/bind-boundary-governance-artifacts.md`
+1. `en/positioning/enterprise-value-brief.md`
+2. `en/validation/current-implementation-matrix.md`
+3. `en/validation/regulated-action-governance-proof-pack.md`
+4. `en/poc/one-day-poc-evidence-pack.md`
+5. `en/poc/one-day-poc-operator-runbook.md`
+6. `en/poc/one-day-poc-reviewer-handoff-template.md`
+7. `en/poc/one-day-poc-reviewer-pack.md`
+8. `en/poc/one-day-poc-performance-report.md`
+9. `en/operations/type-safety-baseline.md`
+10. `en/operations/maintainer-handoff.md`
+11. `en/operations/provider-support-matrix.md`
+12. `en/architecture/regulated-action-governance-kernel.md`
+13. `en/architecture/bind-boundary-governance-artifacts.md`
 
 ## What VERITAS OS is
 
@@ -47,19 +51,25 @@ Key reviewer concepts:
 
 | Review question | Primary source | What to check |
 |---|---|---|
-| What problem does VERITAS solve? | `docs/en/positioning/enterprise-value-brief.md` | Enterprise value, target users, and priority use cases. |
-| What is implemented today? | `docs/en/validation/current-implementation-matrix.md` | Clear separation between current facts and roadmap/foundation-only items. |
-| What can be verified in one day? | `docs/en/poc/one-day-poc-reviewer-pack.md` | Smoke path, generated evidence packet, and validation workflow. |
-| Is there performance evidence? | `docs/en/poc/one-day-poc-performance-report.md` | Local benchmark method, measurement boundaries, and non-SLA language. |
-| What are provider boundaries? | `docs/en/operations/provider-support-matrix.md` | OpenAI production tier, Anthropic planned with offline contract coverage, and explicit boundaries. |
-| Are legal/compliance claims bounded? | `docs/en/positioning/public-positioning.md`, `docs/eu_ai_act/technical_documentation.md` | Positioning uses conservative non-certification language and bounded claims. |
-| Is there type safety? | `docs/en/operations/type-safety-baseline.md` | Narrow, practical baseline rather than full-repository strict typing claims. |
-| Is handoff possible? | `docs/en/operations/maintainer-handoff.md` | Maintainer runbook exists; handoff path is documented but risk is not eliminated. |
+| What problem does VERITAS solve? | [Enterprise Value Brief](en/positioning/enterprise-value-brief.md) | Enterprise value, target users, and priority use cases. |
+| What is implemented today? | [Current Implementation Matrix](en/validation/current-implementation-matrix.md) | Clear separation between current facts and roadmap/foundation-only items. |
+| What should reviewers inspect in the One-Day PoC? | [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) | Evidence checklist, walkthrough scenarios, success/failure criteria, and non-claim boundaries. |
+| How should operators prepare and package the PoC evidence? | [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) | Pre-flight checklist, evidence folder layout, run sequence, redaction notes, and review handoff package. |
+| What should be handed to the reviewer after the PoC? | [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) | Submit-ready summary of scope, environment, scenarios, evidence, results, limitations, and open questions. |
+| What can be verified in one day? | [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md) | Smoke path, generated evidence packet, and validation workflow. |
+| Is there performance evidence? | [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md) | Local benchmark method, measurement boundaries, and non-SLA language. |
+| What are provider boundaries? | [Provider Support Matrix](en/operations/provider-support-matrix.md) | OpenAI production tier, Anthropic planned with offline contract coverage, and explicit boundaries. |
+| Are legal/compliance claims bounded? | [Public Positioning](en/positioning/public-positioning.md), [EU AI Act technical documentation](eu_ai_act/technical_documentation.md) | Positioning uses conservative non-certification language and bounded claims. |
+| Is there type safety? | [Type Safety Baseline](en/operations/type-safety-baseline.md) | Narrow, practical baseline rather than full-repository strict typing claims. |
+| Is handoff possible? | [Maintainer Handoff](en/operations/maintainer-handoff.md) | Maintainer runbook exists; handoff path is documented but risk is not eliminated. |
 
 ## Current proof assets
 
 - [Enterprise Value Brief](en/positioning/enterprise-value-brief.md)
 - [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
+- [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md)
+- [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md)
+- [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md)
 - For the completed external security review remediation matrix, see [External Security Review Remediation Summary](en/security/external-security-remediation-summary.md).
 - [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
 - [Sample evidence JSON](en/poc/sample-one-day-poc-evidence.json)
@@ -81,6 +91,9 @@ Run docs and reviewer-path checks first:
 python -m scripts.quality.check_bilingual_docs
 pytest -q veritas_os/tests/test_enterprise_value_brief_docs.py
 pytest -q veritas_os/tests/test_docs_poc_samples.py
+pytest -q veritas_os/tests/test_one_day_poc_evidence_pack_docs.py
+pytest -q veritas_os/tests/test_one_day_poc_operator_runbook_docs.py
+pytest -q veritas_os/tests/test_one_day_poc_reviewer_handoff_template_docs.py
 pytest -q veritas_os/tests/test_provider_support_matrix_docs.py
 pytest -q veritas_os/tests/test_type_safety_baseline.py
 pytest -q veritas_os/tests/test_maintainer_handoff_docs.py
@@ -94,6 +107,11 @@ One-Day PoC command examples (API server required, API key required):
 VERITAS_API_KEY=... python scripts/demo/one_day_poc_smoke.py --json --evidence-json /tmp/veritas_poc_evidence.json --evidence-md /tmp/veritas_poc_evidence.md
 VERITAS_API_KEY=... python scripts/demo/one_day_poc_benchmark.py --runs 10 --warmup 2 --json --out-json /tmp/veritas_poc_benchmark.json --out-md /tmp/veritas_poc_benchmark.md
 ```
+
+Use the Evidence Pack to decide what to inspect.
+Use the Operator Runbook to collect and organize evidence.
+Use the Reviewer Handoff Template to summarize and submit the PoC outcome.
+These documents do not create a production SLA, third-party certification, customer-environment measurement, or EU AI Act certification.
 
 Boundary notes for PoC commands:
 
@@ -115,6 +133,10 @@ Boundary notes for PoC commands:
 - Not full repository strict typing.
 - Not elimination of bus-factor risk.
 - Fixture/demo evidence is not live customer integration.
+- One-Day PoC evidence is not production audit evidence.
+- One-Day PoC handoff is not customer-environment verification unless explicitly run and documented in that environment.
+- Local/configured PoC output is not proof of production latency, production availability, or third-party certification.
+- Provider latency/cost is not measured unless providers are intentionally enabled and separately recorded.
 
 ## Provider and model boundary
 
@@ -147,7 +169,11 @@ Observe Mode boundary reminders:
 - [ ] Read Enterprise Value Brief.
 - [ ] Read Current Implementation Matrix.
 - [ ] Review One-Day PoC Reviewer Pack.
+- [ ] Review One-Day PoC Evidence Pack.
+- [ ] Use Operator Runbook when preparing or auditing PoC evidence collection.
+- [ ] Review completed Reviewer Handoff Template if PoC results are being submitted.
 - [ ] Generate or inspect evidence packet.
+- [ ] Confirm Evidence Packet / Evidence Pack / Handoff Template are not being presented as production audit evidence or certification.
 - [ ] Review performance report boundaries.
 - [ ] Review provider matrix.
 - [ ] Review compliance positioning boundaries.

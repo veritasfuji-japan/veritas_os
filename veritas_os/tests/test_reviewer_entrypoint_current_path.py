@@ -50,6 +50,9 @@ def test_reviewer_entrypoint_links_required_current_docs() -> None:
         "en/positioning/enterprise-value-brief.md",
         "en/validation/current-implementation-matrix.md",
         "en/poc/one-day-poc-reviewer-pack.md",
+        "en/poc/one-day-poc-evidence-pack.md",
+        "en/poc/one-day-poc-operator-runbook.md",
+        "en/poc/one-day-poc-reviewer-handoff-template.md",
         "en/poc/one-day-poc-performance-report.md",
         "en/operations/provider-support-matrix.md",
         "en/operations/type-safety-baseline.md",
@@ -96,6 +99,9 @@ def test_reviewer_entrypoint_has_required_non_claim_boundaries() -> None:
         "Not proof of provider-neutral production readiness",
         "Not full repository strict typing",
         "Not elimination of bus-factor risk",
+        "One-Day PoC evidence is not production audit evidence",
+        "One-Day PoC handoff is not customer-environment verification",
+        "Provider latency/cost is not measured unless providers are intentionally enabled",
     ]
     for boundary in required_boundaries:
         assert boundary in text
@@ -127,3 +133,30 @@ def test_reviewer_entrypoint_keeps_observe_mode_appendix() -> None:
     assert "observe_mode_proof_pack.md" in text
     assert "/dev/mission-fixture" in text
     assert "Observe Mode runtime is not enabled" in text
+
+
+def test_reviewer_entrypoint_includes_one_day_poc_evidence_suite() -> None:
+    text = _entrypoint_text()
+    for phrase in [
+        "One-Day PoC Evidence Pack",
+        "One-Day PoC Operator Runbook",
+        "One-Day PoC Reviewer Handoff Template",
+    ]:
+        assert phrase in text
+    targets = set(_markdown_link_targets())
+    for link in [
+        "en/poc/one-day-poc-evidence-pack.md",
+        "en/poc/one-day-poc-operator-runbook.md",
+        "en/poc/one-day-poc-reviewer-handoff-template.md",
+    ]:
+        assert link in targets
+
+
+def test_reviewer_entrypoint_validation_commands_include_poc_doc_guardrails() -> None:
+    text = _entrypoint_text()
+    for command in [
+        "pytest -q veritas_os/tests/test_one_day_poc_evidence_pack_docs.py",
+        "pytest -q veritas_os/tests/test_one_day_poc_operator_runbook_docs.py",
+        "pytest -q veritas_os/tests/test_one_day_poc_reviewer_handoff_template_docs.py",
+    ]:
+        assert command in text
