@@ -258,6 +258,7 @@ Authority Evidence と Audit Log の違いは明確です。
 - **PostgreSQL本番運用ガイド**: [`docs/ja/operations/postgresql-production-guide.md`](docs/ja/operations/postgresql-production-guide.md)
 - **PostgreSQLドリルRunbook**: [`docs/ja/operations/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md)
 - **セキュリティ強化チェックリスト**: [`docs/ja/operations/security-hardening.md`](docs/ja/operations/security-hardening.md)
+- **外部セキュリティレビュー対応サマリー**: [日本語補助](docs/ja/security/external-security-remediation-summary.md) / [英語正本](docs/en/security/external-security-remediation-summary.md)
 - **データベースマイグレーション**: [`docs/ja/operations/database-migrations.md`](docs/ja/operations/database-migrations.md)
 - **バックエンドパリティカバレッジ**: [`docs/ja/validation/backend-parity-coverage.md`](docs/ja/validation/backend-parity-coverage.md)
 - **ライブPostgreSQL検証エビデンス**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)

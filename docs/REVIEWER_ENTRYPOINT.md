@@ -60,6 +60,7 @@ Key reviewer concepts:
 
 - [Enterprise Value Brief](en/positioning/enterprise-value-brief.md)
 - [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
+- For the completed external security review remediation matrix, see [External Security Review Remediation Summary](en/security/external-security-remediation-summary.md).
 - [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
 - [Sample evidence JSON](en/poc/sample-one-day-poc-evidence.json)
 - [Sample evidence Markdown](en/poc/sample-one-day-poc-evidence.md)
