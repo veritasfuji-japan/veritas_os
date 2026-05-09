@@ -54,14 +54,17 @@ def test_en_evidence_pack_sections() -> None:
 
 
 def test_en_evidence_pack_links() -> None:
-    content = Path("docs/en/poc/one-day-poc-evidence-pack.md").read_text(encoding="utf-8")
-    for needle in [
+    pack_path = Path("docs/en/poc/one-day-poc-evidence-pack.md")
+    content = pack_path.read_text(encoding="utf-8")
+    expected_links = [
         "../benchmarks/local-performance-metrics.latest.md",
         "../benchmarks/local-performance-metrics.latest.json",
         "../benchmarks/performance-metrics.md",
         "one-day-poc-performance-report.md",
-    ]:
-        assert needle in content
+    ]
+    for link in expected_links:
+        assert link in content
+        assert (pack_path.parent / link).resolve().exists()
 
 
 def test_link_surfaces_updated() -> None:
@@ -99,7 +102,7 @@ def test_forbidden_claims_absent() -> None:
             Path("docs/en/poc/one-day-poc-evidence-pack.md").read_text(encoding="utf-8"),
             Path("docs/ja/poc/one-day-poc-evidence-pack.md").read_text(encoding="utf-8"),
         ]
-    )
+    ).casefold()
     for needle in [
         "guaranteed compliance",
         "certified EU AI Act compliant",
@@ -108,4 +111,11 @@ def test_forbidden_claims_absent() -> None:
         "customer environment verified",
         "cost per request measured",
     ]:
-        assert needle not in combined
+        assert needle.casefold() not in combined
+
+
+def test_documentation_map_table_not_split() -> None:
+    content = Path("docs/DOCUMENTATION_MAP.md").read_text(encoding="utf-8")
+    assert "| EN notes |" in content
+    assert "| PoC: One-Day PoC evidence pack |" in content
+    assert "\n\n| PoC: One-Day PoC evidence pack |" not in content

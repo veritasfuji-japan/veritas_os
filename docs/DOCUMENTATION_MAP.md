@@ -64,5 +64,4 @@
 | Benchmarks | `docs/benchmarks/VERITAS_EVIDENCE_BENCHMARK_PLAN.md` | `docs/ja/validation/technical-proof-pack.md` | JA explanation / EN canonical | ベンチ証跡案内 |
 | JA manuals | — | `docs/ja/guides/user-manual.md` | JA primary | 日本語中心運用文書 |
 | EN notes | `docs/en/notes/chainlit.md` | — | EN canonical only | 補助ノート |
-
 | PoC: One-Day PoC evidence pack | `docs/en/poc/one-day-poc-evidence-pack.md` | `docs/ja/poc/one-day-poc-evidence-pack.md` | JA explanation / EN canonical | Reviewer-facing evidence checklist, walkthrough scenarios, success/failure criteria, and non-claim boundaries for One-Day PoC. |

@@ -52,7 +52,7 @@ Boundary:
 
 For external reviewers, HPAN, enterprise stakeholders, and investor diligence, use the one-day PoC smoke script to generate a sanitized evidence packet from a running VERITAS API server.
 
-- **One-Day PoC Evidence Pack**: [`docs/en/poc/one-day-poc-evidence-pack.md`](docs/en/poc/one-day-poc-evidence-pack.md)
+- **One-Day PoC Evidence Pack / Checklist**: reviewer-facing checklist and success/failure criteria (distinct from generated evidence packet output) — [`docs/en/poc/one-day-poc-evidence-pack.md`](docs/en/poc/one-day-poc-evidence-pack.md)
 
 Prerequisites:
 
