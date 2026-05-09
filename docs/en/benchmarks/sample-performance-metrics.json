@@ -1,0 +1,33 @@
+{
+  "schema_version": "performance_metrics.v1",
+  "generated_at": "sample-only",
+  "scenario": "local_deterministic_smoke_sample",
+  "environment": {
+    "python_version": "3.11.sample",
+    "platform": "sample-platform",
+    "processor": "sample-cpu",
+    "implementation": "cpython"
+  },
+  "iterations": 3,
+  "warmup": 1,
+  "metrics": {
+    "total_wall_ms": 1.234,
+    "mean_ms": 0.411333,
+    "median_ms": 0.4,
+    "p95_ms": 0.5,
+    "p99_ms": 0.5,
+    "min_ms": 0.334,
+    "max_ms": 0.5
+  },
+  "counters": {
+    "success": 3,
+    "failure": 0
+  },
+  "notes": [
+    "Sample only; not a measured result.",
+    "Deterministic local benchmark only.",
+    "No external LLM/API calls.",
+    "Not a production SLA.",
+    "Not third-party certified."
+  ]
+}

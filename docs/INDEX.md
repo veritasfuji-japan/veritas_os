@@ -45,6 +45,7 @@
 | One-Day PoC Walkthrough | [One-Day VERITAS PoC Walkthrough (EN)](en/poc/one-day-poc-walkthrough.md) — Includes sanitized JSON/Markdown evidence packet generation. | [One-Day VERITAS PoC Walkthrough (JA)](ja/poc/one-day-poc-walkthrough.md) — sanitized evidence packet（JSON/Markdown）生成を含む。 |
 | One-Day PoC Reviewer Pack | [One-Day PoC Reviewer Pack (EN)](en/poc/one-day-poc-reviewer-pack.md) | [One-Day PoC Reviewer Pack (JA)](ja/poc/one-day-poc-reviewer-pack.md) |
 | One-Day PoC Performance Benchmark | [One-Day PoC Performance Benchmark (EN)](en/poc/one-day-poc-performance-report.md) | [One-Day PoC Performance Benchmark (JA)](ja/poc/one-day-poc-performance-report.md) |
+| Performance Metrics | [Performance Metrics (EN)](en/benchmarks/performance-metrics.md) | [性能メトリクス (JA)](ja/benchmarks/performance-metrics.md) |
 | One-Day PoC Sample Evidence Packet | [Sample one-day PoC evidence (EN JSON/Markdown)](en/poc/sample-one-day-poc-evidence.json) / [Markdown](en/poc/sample-one-day-poc-evidence.md) | [Sample one-day PoC evidence（JA Markdown）](ja/poc/sample-one-day-poc-evidence.md) |
 | One-Day PoC Evidence Schema | [One-day PoC evidence schema (JSON Schema)](../schemas/poc/one_day_poc_evidence.v1.schema.json) | — |
 | AI-Assisted Development | [AI-assisted development guardrails (EN)](en/development/ai-assisted-development.md) | [AI支援開発ガードレール (JA)](ja/development/ai-assisted-development.md) |
@@ -115,6 +116,7 @@
 | One-Day PoC Walkthrough | [One-Day VERITAS PoC Walkthrough（英語正本）](en/poc/one-day-poc-walkthrough.md) | [One-Day VERITAS PoC Walkthrough（日本語）](ja/poc/one-day-poc-walkthrough.md) |
 | One-Day PoC Reviewer Pack | [One-Day PoC Reviewer Pack（英語正本）](en/poc/one-day-poc-reviewer-pack.md) | [One-Day PoC Reviewer Pack（日本語）](ja/poc/one-day-poc-reviewer-pack.md) |
 | One-Day PoC Performance Benchmark | [One-Day PoC Performance Benchmark（英語正本）](en/poc/one-day-poc-performance-report.md) | [One-Day PoC Performance Benchmark（日本語）](ja/poc/one-day-poc-performance-report.md) |
+| 性能メトリクス | [Performance Metrics（英語正本）](en/benchmarks/performance-metrics.md) | [性能メトリクス（日本語）](ja/benchmarks/performance-metrics.md) |
 | One-Day PoC サンプル証跡パケット | [Sample one-day PoC evidence（英語 JSON/Markdown）](en/poc/sample-one-day-poc-evidence.json) / [Markdown](en/poc/sample-one-day-poc-evidence.md) | [Sample one-day PoC evidence（日本語 Markdown）](ja/poc/sample-one-day-poc-evidence.md) |
 | One-Day PoC 証跡スキーマ | [One-day PoC evidence schema（JSON Schema）](../schemas/poc/one_day_poc_evidence.v1.schema.json) | — |
 | AI支援開発 | [AI-assisted development guardrails（英語正本）](en/development/ai-assisted-development.md) | [AI支援開発ガードレール（日本語）](ja/development/ai-assisted-development.md) |
