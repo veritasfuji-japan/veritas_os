@@ -47,6 +47,7 @@
 | One-Day PoC Performance Benchmark | [One-Day PoC Performance Benchmark (EN)](en/poc/one-day-poc-performance-report.md) | [One-Day PoC Performance Benchmark (JA)](ja/poc/one-day-poc-performance-report.md) |
 | One-Day PoC Evidence Pack | [One-Day PoC Evidence Pack (EN)](en/poc/one-day-poc-evidence-pack.md) | [One-Day PoC Evidence Pack (JA)](ja/poc/one-day-poc-evidence-pack.md) |
 | One-Day PoC Operator Runbook | [One-Day PoC Operator Runbook (EN)](en/poc/one-day-poc-operator-runbook.md) | [One-Day PoC運用Runbook (JA)](ja/poc/one-day-poc-operator-runbook.md) |
+| One-Day PoC Reviewer Handoff Template | [One-Day PoC Reviewer Handoff Template (EN)](en/poc/one-day-poc-reviewer-handoff-template.md) | [One-Day PoCレビュー引き渡しテンプレート (JA)](ja/poc/one-day-poc-reviewer-handoff-template.md) |
 | Performance Metrics | [Performance Metrics (EN)](en/benchmarks/performance-metrics.md) | [性能メトリクス (JA)](ja/benchmarks/performance-metrics.md) |
 | Local Performance Metrics Artifact | [Local Performance Metrics Artifact (EN)](en/benchmarks/local-performance-metrics.latest.md) / [JSON](en/benchmarks/local-performance-metrics.latest.json) | [ローカル性能メトリクス実測artifact (JA)](ja/benchmarks/local-performance-metrics.latest.md) |
 | One-Day PoC Sample Evidence Packet | [Sample one-day PoC evidence (EN JSON/Markdown)](en/poc/sample-one-day-poc-evidence.json) / [Markdown](en/poc/sample-one-day-poc-evidence.md) | [Sample one-day PoC evidence（JA Markdown）](ja/poc/sample-one-day-poc-evidence.md) |
@@ -120,6 +121,7 @@
 | One-Day PoC Reviewer Pack | [One-Day PoC Reviewer Pack（英語正本）](en/poc/one-day-poc-reviewer-pack.md) | [One-Day PoC Reviewer Pack（日本語）](ja/poc/one-day-poc-reviewer-pack.md) |
 | One-Day PoC Performance Benchmark | [One-Day PoC Performance Benchmark（英語正本）](en/poc/one-day-poc-performance-report.md) | [One-Day PoC Performance Benchmark（日本語）](ja/poc/one-day-poc-performance-report.md) |
 | One-Day PoC Operator Runbook | [One-Day PoC Operator Runbook（英語正本）](en/poc/one-day-poc-operator-runbook.md) | [One-Day PoC運用Runbook（日本語補助）](ja/poc/one-day-poc-operator-runbook.md) |
+| One-Day PoC Reviewer Handoff Template | [One-Day PoC Reviewer Handoff Template（英語正本）](en/poc/one-day-poc-reviewer-handoff-template.md) | [One-Day PoCレビュー引き渡しテンプレート（日本語補助）](ja/poc/one-day-poc-reviewer-handoff-template.md) |
 | 性能メトリクス | [Performance Metrics（英語正本）](en/benchmarks/performance-metrics.md) | [性能メトリクス（日本語）](ja/benchmarks/performance-metrics.md) |
 | One-Day PoC サンプル証跡パケット | [Sample one-day PoC evidence（英語 JSON/Markdown）](en/poc/sample-one-day-poc-evidence.json) / [Markdown](en/poc/sample-one-day-poc-evidence.md) | [Sample one-day PoC evidence（日本語 Markdown）](ja/poc/sample-one-day-poc-evidence.md) |
 | One-Day PoC 証跡スキーマ | [One-day PoC evidence schema（JSON Schema）](../schemas/poc/one_day_poc_evidence.v1.schema.json) | — |

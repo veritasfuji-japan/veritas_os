@@ -81,6 +81,7 @@ Use this pack together with existing validation and walkthrough docs. Keep all c
 
 ## Related documents
 
+- [`docs/en/poc/one-day-poc-reviewer-handoff-template.md`](one-day-poc-reviewer-handoff-template.md)
 - [`docs/en/poc/one-day-poc-operator-runbook.md`](one-day-poc-operator-runbook.md) — Use the operator runbook when preparing and packaging reviewer-facing evidence.
 - [`docs/en/benchmarks/local-performance-metrics.latest.md`](../benchmarks/local-performance-metrics.latest.md)
 - [`docs/en/benchmarks/local-performance-metrics.latest.json`](../benchmarks/local-performance-metrics.latest.json)

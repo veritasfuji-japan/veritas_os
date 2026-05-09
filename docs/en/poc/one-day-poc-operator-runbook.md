@@ -130,6 +130,7 @@ For concrete commands, follow the existing walkthrough and benchmark documents r
 ## Related documents
 
 - [`docs/en/poc/one-day-poc-evidence-pack.md`](one-day-poc-evidence-pack.md)
+- [`docs/en/poc/one-day-poc-reviewer-handoff-template.md`](one-day-poc-reviewer-handoff-template.md) — Use this template when packaging and handing off reviewer-facing PoC results.
 - [`docs/en/poc/one-day-poc-reviewer-pack.md`](one-day-poc-reviewer-pack.md)
 - [`docs/en/poc/one-day-poc-walkthrough.md`](one-day-poc-walkthrough.md)
 - [`docs/en/poc/one-day-poc-performance-report.md`](one-day-poc-performance-report.md)
