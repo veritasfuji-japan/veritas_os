@@ -23,6 +23,18 @@ def test_schema_version_and_fixture_counts() -> None:
         assert len(metric["samples"]) == payload["sample_count"]
 
 
+def test_fixture_percentiles_are_numeric_and_rounded() -> None:
+    payload = export_performance_evidence(deterministic_fixture=True)
+    for metric in payload["metrics"]:
+        summary = metric["summary"]
+        assert isinstance(summary["p50_ms"], (float, int))
+        assert isinstance(summary["p95_ms"], (float, int))
+        assert isinstance(summary["p99_ms"], (float, int))
+        assert round(summary["p50_ms"], 6) == summary["p50_ms"]
+        assert round(summary["p95_ms"], 6) == summary["p95_ms"]
+        assert round(summary["p99_ms"], 6) == summary["p99_ms"]
+
+
 def test_generated_at_fixed_timestamp_reflected() -> None:
     payload = export_performance_evidence(
         deterministic_fixture=True,
@@ -87,5 +99,26 @@ def test_markdown_renderer_sections_and_trailing_newline() -> None:
     assert "## Summary table" in markdown
     assert "## Metrics table" in markdown
     assert "## Interpretation boundaries" in markdown
+    assert markdown.endswith("\n")
+    assert not markdown.endswith("\n\n")
+
+
+def test_markdown_renderer_escapes_metric_cells() -> None:
+    payload = export_performance_evidence(deterministic_fixture=True)
+    payload["metrics"] = [
+        {
+            "name": "metric|with|pipe",
+            "status": "ok",
+            "samples": [1.0, 1.1, 1.2],
+            "summary": {"p95_ms": 1.2},
+            "notes": "line1\nline2|pipe",
+        }
+    ]
+
+    markdown = render_performance_markdown(payload)
+
+    assert "metric\\|with\\|pipe" in markdown
+    assert "line1 line2\\|pipe" in markdown
+    assert "line1\nline2|pipe" not in markdown
     assert markdown.endswith("\n")
     assert not markdown.endswith("\n\n")

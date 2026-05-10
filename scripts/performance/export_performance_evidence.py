@@ -112,9 +112,9 @@ def export_performance_evidence(
                 "samples": vals,
                 "summary": {
                     "avg_ms": round(mean(vals), 6),
-                    "p50_ms": percentile(vals, 0.50),
-                    "p95_ms": percentile(vals, 0.95),
-                    "p99_ms": percentile(vals, 0.99),
+                    "p50_ms": round(percentile(vals, 0.50), 6),
+                    "p95_ms": round(percentile(vals, 0.95), 6),
+                    "p99_ms": round(percentile(vals, 0.99), 6),
                 },
                 "notes": "deterministic fixture; not production SLA",
             }
@@ -140,6 +140,11 @@ def export_performance_evidence(
     }
 
 
+def _markdown_table_cell(value: Any) -> str:
+    """Escape markdown table cell separators and newlines."""
+    return str(value).replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+
+
 def render_performance_markdown(payload: dict[str, Any]) -> str:
     """Render markdown report for reviewers from payload."""
     lines = [
@@ -162,8 +167,12 @@ def render_performance_markdown(payload: dict[str, Any]) -> str:
         p95 = ""
         if metric["summary"] is not None:
             p95 = str(metric["summary"]["p95_ms"])
+        name = _markdown_table_cell(metric["name"])
+        status = _markdown_table_cell(metric["status"])
+        p95_cell = _markdown_table_cell(p95)
+        notes = _markdown_table_cell(metric["notes"])
         lines.append(
-            f"| {metric['name']} | {metric['status']} | {len(metric['samples'])} | {p95} | {metric['notes']} |"
+            f"| {name} | {status} | {len(metric['samples'])} | {p95_cell} | {notes} |"
         )
     lines.extend(
         [
