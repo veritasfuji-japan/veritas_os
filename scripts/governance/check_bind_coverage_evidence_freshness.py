@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from scripts.governance.export_bind_coverage_evidence import (
     OUTPUT_JSON,
@@ -16,6 +17,24 @@ FIXED_GENERATED_AT = "1970-01-01T00:00:00+00:00"
 REGENERATE_COMMAND = "python scripts/governance/export_bind_coverage_evidence.py"
 
 
+def _load_json_object(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """Load JSON object from path, returning a user-safe error reason on failure."""
+
+    try:
+        raw_payload = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, f"missing or unreadable file: {exc}"
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError as exc:
+        return None, f"invalid JSON: {exc.msg}"
+
+    if not isinstance(payload, dict):
+        return None, "JSON payload is not an object"
+    return payload, None
+
+
 def compare_bind_coverage_evidence(
     committed_json: Path,
     committed_md: Path,
@@ -25,14 +44,43 @@ def compare_bind_coverage_evidence(
     """Return stale artifact filenames when committed and generated outputs differ."""
 
     stale_files: list[str] = []
-    committed_json_payload = json.loads(committed_json.read_text(encoding="utf-8"))
-    generated_json_payload = json.loads(generated_json.read_text(encoding="utf-8"))
-    committed_json_payload["generated_at"] = FIXED_GENERATED_AT
-    generated_json_payload["generated_at"] = FIXED_GENERATED_AT
-    if committed_json_payload != generated_json_payload:
+    committed_json_payload, committed_json_error = _load_json_object(committed_json)
+    generated_json_payload, generated_json_error = _load_json_object(generated_json)
+    if committed_json_error:
+        print(f"- {committed_json}: {committed_json_error}")
         stale_files.append(str(committed_json))
-    if committed_md.read_text(encoding="utf-8") != generated_md.read_text(encoding="utf-8"):
+    if generated_json_error:
+        print(f"- {generated_json}: {generated_json_error}")
+        stale_files.append(str(committed_json))
+
+    if committed_json_payload and generated_json_payload:
+        committed_json_payload["generated_at"] = FIXED_GENERATED_AT
+        generated_json_payload["generated_at"] = FIXED_GENERATED_AT
+        if committed_json_payload != generated_json_payload:
+            stale_files.append(str(committed_json))
+
+    try:
+        committed_md_payload = committed_md.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"- {committed_md}: missing or unreadable file: {exc}")
         stale_files.append(str(committed_md))
+        committed_md_payload = None
+
+    try:
+        generated_md_payload = generated_md.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"- {generated_md}: missing or unreadable file: {exc}")
+        stale_files.append(str(committed_md))
+        generated_md_payload = None
+
+    if (
+        committed_md_payload is not None
+        and generated_md_payload is not None
+        and committed_md_payload != generated_md_payload
+    ):
+        stale_files.append(str(committed_md))
+
+    stale_files = sorted(set(stale_files))
     return stale_files
 
 

@@ -70,3 +70,55 @@ def test_generated_at_only_difference_is_not_stale(tmp_path: Path) -> None:
 
     result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
     assert result == 0
+
+
+def test_missing_committed_json_is_stale(tmp_path: Path, capsys) -> None:
+    """Missing committed JSON should be stale without traceback."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    committed_json.unlink()
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "Bind coverage evidence artifacts are stale." in output
+    assert REGENERATE_COMMAND in output
+
+
+def test_missing_committed_markdown_is_stale(tmp_path: Path, capsys) -> None:
+    """Missing committed Markdown should be stale without traceback."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    committed_md.unlink()
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "Bind coverage evidence artifacts are stale." in output
+    assert REGENERATE_COMMAND in output
+
+
+def test_invalid_committed_json_is_stale(tmp_path: Path, capsys) -> None:
+    """Invalid committed JSON should be stale without traceback."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    committed_json.write_text("{invalid", encoding="utf-8")
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "Bind coverage evidence artifacts are stale." in output
+    assert REGENERATE_COMMAND in output
+
+
+def test_non_object_committed_json_is_stale(tmp_path: Path, capsys) -> None:
+    """Non-object committed JSON should be stale without traceback."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    committed_json.write_text("[]\n", encoding="utf-8")
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "Bind coverage evidence artifacts are stale." in output
+    assert REGENERATE_COMMAND in output

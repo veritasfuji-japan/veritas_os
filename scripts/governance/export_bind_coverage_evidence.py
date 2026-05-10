@@ -27,6 +27,18 @@ OUTPUT_JSON = REPO_ROOT / "docs/en/validation/bind-coverage-evidence.latest.json
 OUTPUT_MD = REPO_ROOT / "docs/en/validation/bind-coverage-evidence.latest.md"
 
 
+def _resolve_generated_at(generated_at: str | None) -> str:
+    """Resolve generated_at with explicit validation for deterministic workflows."""
+
+    if generated_at is None:
+        return datetime.now(timezone.utc).isoformat()
+    if not str(generated_at).strip():
+        raise ValueError(
+            "generated_at must be a non-empty ISO-8601 timestamp when provided"
+        )
+    return generated_at
+
+
 def _runtime_api_routes() -> list[tuple[str, str]]:
     routes: list[tuple[str, str]] = []
     for route in app.routes:
@@ -107,7 +119,7 @@ def generate_bind_coverage_evidence(generated_at: str | None = None) -> dict[str
 
     return {
         "schema_version": "bind_coverage_evidence.v1",
-        "generated_at": generated_at or datetime.now(timezone.utc).isoformat(),
+        "generated_at": _resolve_generated_at(generated_at),
         "total_runtime_routes": len(route_rows),
         "total_effect_bearing_routes": len(effect_routes),
         "classified_routes": len(route_rows) - len(unclassified),

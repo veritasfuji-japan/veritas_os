@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import scripts.governance.export_bind_coverage_evidence as evidence_module
 from scripts.governance.export_bind_coverage_evidence import (
     EFFECT_BEARING_METHODS,
@@ -183,3 +185,15 @@ def test_deterministic_generated_at_produces_stable_payloads() -> None:
     first_markdown = evidence_module.render_bind_coverage_markdown(first)
     second_markdown = evidence_module.render_bind_coverage_markdown(second)
     assert first_markdown == second_markdown
+
+
+def test_generated_at_empty_string_raises_value_error() -> None:
+    """Empty generated_at should fail fast to avoid ambiguous timestamp fallback."""
+    with pytest.raises(ValueError, match="generated_at must be a non-empty"):
+        evidence_module.generate_bind_coverage_evidence(generated_at="")
+
+
+def test_generated_at_whitespace_raises_value_error() -> None:
+    """Whitespace-only generated_at should fail fast to preserve determinism."""
+    with pytest.raises(ValueError, match="generated_at must be a non-empty"):
+        evidence_module.generate_bind_coverage_evidence(generated_at="   ")
