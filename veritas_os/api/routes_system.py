@@ -149,7 +149,19 @@ def _security_posture_snapshot() -> Dict[str, Any]:
     srv = _get_server()
     auth_snapshot = _auth_store_health(srv)
     auth_details = auth_snapshot["details"]
-    encryption_status = get_encryption_status()
+    try:
+        encryption_status = get_encryption_status()
+    except Exception as exc:  # noqa: BLE001
+        encryption_status = {
+            "encryption_enabled": False,
+            "algorithm": "none",
+            "key_provider": "unknown",
+            "key_configured": False,
+            "secure_by_default": True,
+            "eu_ai_act_article": "Art. 12",
+            "note": "TrustLog encryption status retrieval failed.",
+            "error_type": exc.__class__.__name__,
+        }
 
     # Include runtime posture information.
     try:

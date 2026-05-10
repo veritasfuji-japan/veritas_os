@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from veritas_os.security.trustlog_posture import (
@@ -231,3 +233,29 @@ def test_encryption_status_error_is_sanitized_strict(
     assert "secret path" not in message
     assert "/prod/foo" not in message
     assert "token abc" not in message
+
+
+def test_security_posture_snapshot_sanitizes_encryption_provider_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Snapshot should stay stable and sanitized when encryption status lookup fails."""
+    monkeypatch.setenv("VERITAS_POSTURE", "staging")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+
+    import veritas_os.api.routes_system as routes_system
+
+    def _raise_provider_error() -> dict[str, bool]:
+        raise RuntimeError("secret path /prod/foo token abc")
+
+    monkeypatch.setattr(routes_system, "get_encryption_status", _raise_provider_error)
+
+    snapshot = routes_system._security_posture_snapshot()
+
+    assert snapshot["encryption"]["error_type"] == "RuntimeError"
+    assert "secret path" not in json.dumps(snapshot["encryption"], sort_keys=True)
+    assert "trustlog_secure_default" in snapshot
+
+    rendered_snapshot = json.dumps(snapshot, sort_keys=True)
+    assert "secret path" not in rendered_snapshot
+    assert "/prod/foo" not in rendered_snapshot
+    assert "token abc" not in rendered_snapshot
