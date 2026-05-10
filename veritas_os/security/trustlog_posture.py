@@ -99,7 +99,6 @@ def get_trustlog_security_posture(
             remediation.append(
                 "Set VERITAS_ENCRYPTION_KEY for encrypted TrustLog writes when validating production posture."
             )
-            pass
 
     if posture_level in {"secure", "prod"}:
         status = "blocked" if reasons else "ok"
