@@ -20,7 +20,7 @@ Reviewer-facing latency evidence for CI-safe local measurements.
 | bind.classify | bind_boundary | 0.200 | 0.290 | 0.298 | ok |  |
 | bind.validate_registry | bind_boundary | 0.400 | 0.490 | 0.498 | ok |  |
 | decide.deterministic.fixture | decide_deterministic | 2.100 | 2.190 | 2.198 | ok | External LLM provider latency is excluded. |
-| trustlog.append.local | trustlog_append | 1.000 | 1.090 | 1.098 | ok | TrustLog measurements use the configured local/test backend unless otherwise noted. |
+| trustlog.append.local | trustlog_append | 1.000 | 1.090 | 1.098 | ok | Measured with fixed-state local/test backend; per-sample log reset before append. |
 
 ## Failures / not measured
 - None

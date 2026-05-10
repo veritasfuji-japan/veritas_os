@@ -130,7 +130,7 @@
       "mean_ms": 1.0,
       "min_ms": 0.9,
       "name": "trustlog.append.local",
-      "notes": "TrustLog measurements use the configured local/test backend unless otherwise noted.",
+      "notes": "Measured with fixed-state local/test backend; per-sample log reset before append.",
       "p50_ms": 1.0,
       "p95_ms": 1.09,
       "p99_ms": 1.098,
