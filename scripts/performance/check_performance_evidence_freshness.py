@@ -47,6 +47,19 @@ def _is_iso8601_timestamp(value: Any) -> bool:
     return True
 
 
+def _normalize_payload_for_compare(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize volatile fields before deterministic payload comparison."""
+    normalized = dict(payload)
+    normalized["generated_at"] = FIXED_GENERATED_AT
+    normalized["environment"] = {
+        "python_version": "<normalized>",
+        "platform": "<normalized>",
+        "implementation": "<normalized>",
+        "ci_detected": "<normalized>",
+    }
+    return normalized
+
+
 def compare_performance_evidence(
     committed_json: Path,
     committed_md: Path,
@@ -132,6 +145,13 @@ def compare_performance_evidence(
         if committed_names != generated_names:
             stale_files.append(str(committed_json))
             reasons.append(f"{committed_json}: metric names/order differ")
+        normalized_committed = _normalize_payload_for_compare(committed)
+        normalized_generated = _normalize_payload_for_compare(generated)
+        if normalized_committed != normalized_generated:
+            stale_files.append(str(committed_json))
+            reasons.append(
+                f"{committed_json}: content differs from regenerated artifact"
+            )
 
     committed_md_text, committed_md_error = _read_text_or_error(committed_md)
     generated_md_text, generated_md_error = _read_text_or_error(generated_md)

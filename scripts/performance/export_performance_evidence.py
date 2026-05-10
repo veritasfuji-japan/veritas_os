@@ -4,7 +4,6 @@ import json
 import os
 import platform
 import statistics
-import sys
 import tempfile
 import time
 from datetime import datetime, timezone

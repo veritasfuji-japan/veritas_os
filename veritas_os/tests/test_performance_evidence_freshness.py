@@ -184,3 +184,61 @@ def test_generated_md_missing_maps_to_committed_path(tmp_path) -> None:
     assert str(committed_md) in stale_files
     assert str(generated_md) not in stale_files
     assert any("failed to generate markdown artifact" in reason for reason in reasons)
+
+
+def test_json_content_drift_detection_and_normalized_fields(tmp_path) -> None:
+    committed_json = tmp_path / "committed.json"
+    committed_md = tmp_path / "committed.md"
+    generated_json = tmp_path / "generated.json"
+    generated_md = tmp_path / "generated.md"
+    write_performance_evidence(
+        committed_json,
+        committed_md,
+        generated_at=FIXED_GENERATED_AT,
+        deterministic_fixture=True,
+    )
+    write_performance_evidence(
+        generated_json,
+        generated_md,
+        generated_at=FIXED_GENERATED_AT,
+        deterministic_fixture=True,
+    )
+
+    committed_payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    committed_payload["generated_at"] = "2000-01-01T00:00:00+00:00"
+    committed_payload["environment"] = {
+        "python_version": "x",
+        "platform": "y",
+        "implementation": "z",
+        "ci_detected": True,
+    }
+    committed_json.write_text(
+        json.dumps(committed_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    stale_files, reasons = compare_performance_evidence(
+        committed_json,
+        committed_md,
+        generated_json,
+        generated_md,
+    )
+    assert stale_files == []
+    assert not any("content differs from regenerated artifact" in reason for reason in reasons)
+
+    drift_payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    drift_payload["sample_count"] = 99
+    drift_payload["metrics"][0]["p50_ms"] = 999.0
+    drift_payload["metrics"][0]["samples"] = [999.0, 999.0, 999.0]
+    drift_payload["metrics"][0]["notes"] = "drifted"
+    committed_json.write_text(
+        json.dumps(drift_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    stale_files, reasons = compare_performance_evidence(
+        committed_json,
+        committed_md,
+        generated_json,
+        generated_md,
+    )
+    assert str(committed_json) in stale_files
+    assert any("content differs from regenerated artifact" in reason for reason in reasons)
