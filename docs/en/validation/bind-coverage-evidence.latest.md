@@ -12,6 +12,7 @@ This artifact summarizes FastAPI runtime route classification against the canoni
 | audited_exemptions | 12 |
 | unclassified_routes | 0 |
 | status | ok |
+| registry_errors | 0 |
 
 ## Bind-governed routes
 - `PUT /v1/compliance/config` (bind_target_metadata_present=True)
@@ -39,6 +40,9 @@ This artifact summarizes FastAPI runtime route classification against the canoni
 
 ## Catalog / registry consistency
 - No mismatch detected between bind target catalog and bind-governed registry targets.
+
+## Registry validation errors
+- None
 
 ## Interpretation boundaries
 - This artifact proves route classification coverage, not external legal certification.

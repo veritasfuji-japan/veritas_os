@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import scripts.governance.export_bind_coverage_evidence as evidence_module
 from scripts.governance.export_bind_coverage_evidence import (
     EFFECT_BEARING_METHODS,
     OUTPUT_JSON,
@@ -20,6 +21,7 @@ def test_generate_bind_coverage_evidence_status_ok_and_complete() -> None:
     evidence = generate_bind_coverage_evidence()
 
     assert evidence["schema_version"] == "bind_coverage_evidence.v1"
+    assert evidence["registry_errors"] == []
     assert evidence["status"] == "ok"
     assert evidence["unclassified_routes"] == []
     assert evidence["catalog_registry_mismatch"] == []
@@ -37,7 +39,8 @@ def test_effect_bearing_routes_are_classified_and_sorted() -> None:
     missing = [
         f"{row['method']} {row['path']}"
         for row in routes
-        if row["method"] in EFFECT_BEARING_METHODS and row["coverage_class"] == "unclassified"
+        if row["method"] in EFFECT_BEARING_METHODS
+        and row["coverage_class"] == "unclassified"
     ]
     assert missing == []
 
@@ -59,7 +62,10 @@ def test_write_bind_coverage_evidence_outputs_json_and_markdown(tmp_path: Path) 
     json_path = tmp_path / "bind.json"
     markdown_path = tmp_path / "bind.md"
 
-    evidence = write_bind_coverage_evidence(json_path=json_path, markdown_path=markdown_path)
+    evidence = write_bind_coverage_evidence(
+        json_path=json_path,
+        markdown_path=markdown_path,
+    )
 
     assert json_path.exists()
     assert markdown_path.exists()
@@ -84,6 +90,7 @@ def test_write_bind_coverage_evidence_outputs_json_and_markdown(tmp_path: Path) 
         "catalog_registry_mismatch",
         "audited_exemption_missing_reason",
         "audited_exemption_missing_risk_level",
+        "registry_errors",
         "status",
         "routes",
     }
@@ -111,3 +118,53 @@ def test_default_output_paths_do_not_depend_on_cwd(monkeypatch, tmp_path: Path) 
     assert OUTPUT_MD.is_absolute()
     assert OUTPUT_JSON.parent == REPO_ROOT / "docs/en/validation"
     assert OUTPUT_MD.parent == REPO_ROOT / "docs/en/validation"
+
+
+def test_non_catalog_registry_error_forces_failed_status(monkeypatch) -> None:
+    """Any registry error should propagate and fail status."""
+    monkeypatch.setattr(
+        evidence_module,
+        "validate_bind_coverage_registry",
+        lambda: ["duplicate bind coverage entry: POST /x"],
+    )
+
+    evidence = evidence_module.generate_bind_coverage_evidence()
+    markdown = evidence_module._render_markdown(evidence)
+
+    assert evidence["registry_errors"] == ["duplicate bind coverage entry: POST /x"]
+    assert evidence["status"] == "failed"
+    assert "Registry validation errors" in markdown
+    assert "duplicate bind coverage entry: POST /x" in markdown
+
+
+def test_catalog_registry_mismatch_is_in_subset_and_fails_status(monkeypatch) -> None:
+    """Catalog mismatch errors should appear in both lists and fail status."""
+    mismatch_error = "bind_governed route missing from bind target catalog: /x"
+    monkeypatch.setattr(
+        evidence_module,
+        "validate_bind_coverage_registry",
+        lambda: [mismatch_error],
+    )
+
+    evidence = evidence_module.generate_bind_coverage_evidence()
+
+    assert mismatch_error in evidence["registry_errors"]
+    assert mismatch_error in evidence["catalog_registry_mismatch"]
+    assert evidence["status"] == "failed"
+
+
+def test_effect_route_unclassified_forces_failed_status(monkeypatch) -> None:
+    """Unclassified effect-bearing routes must fail status."""
+    original_classify = evidence_module.classify_bind_coverage
+
+    def _fake_classify(path: str, method: str):
+        if method in EFFECT_BEARING_METHODS:
+            return None
+        return original_classify(path, method)
+
+    monkeypatch.setattr(evidence_module, "classify_bind_coverage", _fake_classify)
+
+    evidence = evidence_module.generate_bind_coverage_evidence()
+
+    assert evidence["unclassified_routes"]
+    assert evidence["status"] == "failed"
