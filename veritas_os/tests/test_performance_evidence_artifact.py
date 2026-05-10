@@ -1,5 +1,7 @@
 """Tests for performance evidence exporter core."""
 
+import pytest
+
 from scripts.performance.export_performance_evidence import (
     _HttpResult,
     _assert_http_status,
@@ -37,11 +39,8 @@ def test_generated_at_fixed_timestamp_reflected() -> None:
 
 def test_invalid_generated_at_raises_value_error() -> None:
     for bad in ["", "   ", "not-a-date"]:
-        try:
+        with pytest.raises(ValueError):
             export_performance_evidence(deterministic_fixture=True, generated_at=bad)
-            raise AssertionError("expected ValueError")
-        except ValueError:
-            pass
 
 
 def test_percentile_boundaries_and_out_of_range() -> None:
@@ -50,21 +49,22 @@ def test_percentile_boundaries_and_out_of_range() -> None:
     assert percentile(values, 1.0) == 3.0
 
     for bad in (-0.1, 1.1):
-        try:
+        with pytest.raises(ValueError):
             percentile(values, bad)
-            raise AssertionError("expected ValueError")
-        except ValueError:
-            pass
 
 
 def test_assert_http_status_validation() -> None:
     _assert_http_status(_HttpResult(status_code=200, body="ok"))
 
-    try:
+    with pytest.raises(RuntimeError):
         _assert_http_status(_HttpResult(status_code=500, body="internal-error"))
-        raise AssertionError("expected RuntimeError")
-    except RuntimeError:
-        pass
+
+
+def test_measure_latency_rejects_non_positive_sample_count() -> None:
+    with pytest.raises(ValueError):
+        measure_latency("bad", lambda: None, sample_count=0)
+    with pytest.raises(ValueError):
+        measure_latency("bad", lambda: None, sample_count=-1)
 
 
 def test_measure_latency_converts_runtime_error_to_failed_metric() -> None:

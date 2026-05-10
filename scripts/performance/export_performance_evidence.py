@@ -51,6 +51,9 @@ def _assert_http_status(result: _HttpResult) -> None:
 
 def measure_latency(name: str, fn: Callable[[], Any], sample_count: int) -> dict[str, Any]:
     """Measure latency and convert exceptions into failed metric records."""
+    if sample_count <= 0:
+        raise ValueError("sample_count must be positive")
+
     samples: list[float] = []
     try:
         for _ in range(sample_count):
