@@ -166,3 +166,14 @@ sha256sum -c security/sbom/baseline/node.cdx.sha256
 | `VERITAS_AUTH_REDIS_URL` | Yes (with redis) | `redis://host:6379/0` |
 | `VERITAS_CORS_ALLOW_ORIGINS` | Yes | Specific trusted origins |
 | `OPENAI_API_KEY` | Yes | Valid API key |
+
+## 12. TrustLog Secure-Default Posture Gate
+
+- `dev`: `VERITAS_TRUSTLOG_BACKEND=jsonl` and missing encryption key are allowed for local workflows, but `/v1/health` and `/v1/status` report `security_posture.trustlog_secure_default.status=degraded` with remediation.
+- `staging`: diagnostics report `degraded` when TrustLog is non-PostgreSQL and/or encryption key is missing so operators can close production-parity gaps.
+  - If `VERITAS_TRUSTLOG_BACKEND=postgresql` is selected without `VERITAS_DATABASE_URL`, startup still aborts in staging via existing backend fail-fast validation (`validate_backend_config()`).
+- `secure` and `prod`: fail-closed startup is enforced. The process raises a `RuntimeError` unless all of the following are configured:
+  - `VERITAS_TRUSTLOG_BACKEND=postgresql`
+  - `VERITAS_DATABASE_URL` is set
+  - TrustLog encryption key is configured (`VERITAS_ENCRYPTION_KEY` or a supported KMS/Vault provider)
+- Operators can verify current gate status in `/v1/health` and `/v1/status` under `security_posture.trustlog_secure_default`.
