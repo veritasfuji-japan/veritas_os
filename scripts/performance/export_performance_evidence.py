@@ -22,14 +22,18 @@ class _HttpResult:
 def _parse_generated_at(generated_at: str | None) -> str:
     if generated_at is None:
         return datetime.now(timezone.utc).isoformat()
-    if generated_at.strip() == "":
+
+    value = str(generated_at).strip()
+    if value == "":
         raise ValueError("generated_at must be a non-empty ISO-8601 string")
-    candidate = generated_at.replace("Z", "+00:00")
+
+    candidate = value.replace("Z", "+00:00")
     try:
         datetime.fromisoformat(candidate)
     except ValueError as exc:
         raise ValueError("generated_at must be a valid ISO-8601 datetime") from exc
-    return generated_at
+
+    return value
 
 
 def percentile(values: list[float], pct: float) -> float:
@@ -49,7 +53,11 @@ def _assert_http_status(result: _HttpResult) -> None:
         raise RuntimeError(f"unexpected status code: {result.status_code}")
 
 
-def measure_latency(name: str, fn: Callable[[], Any], sample_count: int) -> dict[str, Any]:
+def measure_latency(
+    name: str,
+    fn: Callable[[], Any],
+    sample_count: int,
+) -> dict[str, Any]:
     """Measure latency and convert exceptions into failed metric records."""
     if sample_count <= 0:
         raise ValueError("sample_count must be positive")
