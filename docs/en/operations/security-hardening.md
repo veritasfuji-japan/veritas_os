@@ -184,7 +184,7 @@ sha256sum -c security/sbom/baseline/node.cdx.sha256
   - `docs/en/validation/bind-coverage-evidence.latest.json`
   - `docs/en/validation/bind-coverage-evidence.latest.md`
 - Regenerate with:
-  - `python scripts/governance/export_bind_coverage_evidence.py`
+  - `python -m scripts.governance.export_bind_coverage_evidence`
 - Interpretation boundaries:
   - The artifact proves runtime route classification coverage, not external legal certification.
   - The artifact does not prove every business action is safe.
