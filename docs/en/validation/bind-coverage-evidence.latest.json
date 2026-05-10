@@ -184,7 +184,7 @@
   ],
   "catalog_registry_mismatch": [],
   "classified_routes": 47,
-  "generated_at": "2026-05-10T02:44:29.967097+00:00",
+  "generated_at": "2026-05-10T03:01:03.757787+00:00",
   "non_effect_routes": [
     {
       "bind_target_metadata_present": false,
@@ -496,6 +496,7 @@
     "/v1/system/halt",
     "/v1/system/resume"
   ],
+  "registry_errors": [],
   "routes": [
     {
       "bind_target_metadata_present": false,

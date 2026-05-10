@@ -40,6 +40,9 @@ This artifact summarizes FastAPI runtime route classification against the canoni
 ## Catalog / registry consistency
 - No mismatch detected between bind target catalog and bind-governed registry targets.
 
+## Registry validation errors
+- None
+
 ## Interpretation boundaries
 - This artifact proves route classification coverage, not external legal certification.
 - This artifact does not prove every business action is safe.

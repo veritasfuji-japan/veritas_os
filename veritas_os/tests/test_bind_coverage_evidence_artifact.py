@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scripts.governance.export_bind_coverage_evidence import (
     EFFECT_BEARING_METHODS,
+    _render_markdown,
     generate_bind_coverage_evidence,
     write_bind_coverage_evidence,
 )
@@ -18,6 +19,7 @@ def test_generate_bind_coverage_evidence_status_ok_and_complete() -> None:
 
     assert evidence["schema_version"] == "bind_coverage_evidence.v1"
     assert evidence["status"] == "ok"
+    assert evidence["registry_errors"] == []
     assert evidence["unclassified_routes"] == []
     assert evidence["catalog_registry_mismatch"] == []
     assert evidence["audited_exemption_missing_reason"] == []
@@ -51,6 +53,26 @@ def test_audited_exemptions_and_bind_catalog_consistency() -> None:
         assert row["bind_target_metadata_present"] is True
 
 
+def test_registry_errors_drive_failed_status(monkeypatch) -> None:
+    """Registry errors must be surfaced in payload and fail status."""
+
+    def _fake_registry_errors() -> list[str]:
+        return ["duplicate bind coverage entry: POST /x"]
+
+    monkeypatch.setattr(
+        "scripts.governance.export_bind_coverage_evidence.validate_bind_coverage_registry",
+        _fake_registry_errors,
+    )
+
+    evidence = generate_bind_coverage_evidence()
+    markdown = _render_markdown(evidence)
+
+    assert evidence["registry_errors"] == ["duplicate bind coverage entry: POST /x"]
+    assert evidence["status"] == "failed"
+    assert "Registry validation errors" in markdown
+    assert "duplicate bind coverage entry: POST /x" in markdown
+
+
 def test_write_bind_coverage_evidence_outputs_json_and_markdown(tmp_path: Path) -> None:
     """Writer should create JSON/MD artifacts with minimal nondeterministic data."""
     json_path = tmp_path / "bind.json"
@@ -78,6 +100,7 @@ def test_write_bind_coverage_evidence_outputs_json_and_markdown(tmp_path: Path) 
         "non_effect_routes",
         "catalog_bind_targets",
         "registry_bind_governed_targets",
+        "registry_errors",
         "catalog_registry_mismatch",
         "audited_exemption_missing_reason",
         "audited_exemption_missing_risk_level",

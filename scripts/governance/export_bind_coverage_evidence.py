@@ -42,8 +42,9 @@ def generate_bind_coverage_evidence() -> dict[str, Any]:
     """Build bind coverage evidence payload from runtime routes + registry."""
 
     runtime_routes = _runtime_api_routes()
-    catalog_paths = sorted(entry.target_path for entry in CATALOG)
-    registry_errors = validate_bind_coverage_registry()
+    catalog_path_set = {entry.target_path for entry in CATALOG}
+    catalog_paths = sorted(catalog_path_set)
+    registry_errors = sorted(validate_bind_coverage_registry())
 
     route_rows: list[dict[str, Any]] = []
     unclassified: list[str] = []
@@ -57,7 +58,7 @@ def generate_bind_coverage_evidence() -> dict[str, Any]:
         metadata_present = False
         if entry and entry.coverage_class == BindCoverageClass.BIND_GOVERNED:
             bind_governed_targets.add(path)
-            metadata_present = any(item.target_path == path for item in CATALOG)
+            metadata_present = path in catalog_path_set
 
         if entry is None:
             unclassified.append(f"{method} {path}")
@@ -93,9 +94,14 @@ def generate_bind_coverage_evidence() -> dict[str, Any]:
         if row["method"] in EFFECT_BEARING_METHODS
     ]
 
-    status = "ok"
-    if unclassified or catalog_registry_mismatch or audited_missing_reason or audited_missing_risk:
-        status = "failed"
+    status_checks = [
+        unclassified,
+        audited_missing_reason,
+        audited_missing_risk,
+        catalog_registry_mismatch,
+        registry_errors,
+    ]
+    status = "ok" if all(not issues for issues in status_checks) else "failed"
 
     return {
         "schema_version": "bind_coverage_evidence.v1",
@@ -118,6 +124,7 @@ def generate_bind_coverage_evidence() -> dict[str, Any]:
         ],
         "catalog_bind_targets": catalog_paths,
         "registry_bind_governed_targets": sorted(bind_governed_targets),
+        "registry_errors": registry_errors,
         "catalog_registry_mismatch": catalog_registry_mismatch,
         "audited_exemption_missing_reason": audited_missing_reason,
         "audited_exemption_missing_risk_level": audited_missing_risk,
@@ -172,6 +179,13 @@ def _render_markdown(evidence: dict[str, Any]) -> str:
             lines.append(f"- {item}")
     else:
         lines.append("- No mismatch detected between bind target catalog and bind-governed registry targets.")
+
+    lines.extend(["", "## Registry validation errors"])
+    if evidence["registry_errors"]:
+        for item in evidence["registry_errors"]:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- None")
 
     lines.extend(
         [
