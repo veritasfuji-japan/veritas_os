@@ -10,6 +10,22 @@ from veritas_os.security.trustlog_posture import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _clear_encryption_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests hermetic by forcing env provider and clearing external provider vars."""
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY_PROVIDER", "env")
+    monkeypatch.delenv("VERITAS_ENCRYPTION_ALLOW_ENV_FALLBACK", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_AWS_KMS_CIPHERTEXT_B64", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_AWS_KMS_KEY_ID", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_GCP_KMS_KEY_NAME", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_GCP_KMS_CIPHERTEXT_B64", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_VAULT_ADDR", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_VAULT_TOKEN", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_VAULT_KV_MOUNT", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_VAULT_SECRET_PATH", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_VAULT_SECRET_FIELD", raising=False)
+
+
 @pytest.mark.parametrize("posture", ["dev", "staging"])
 def test_non_strict_posture_jsonl_without_key_degrades(monkeypatch: pytest.MonkeyPatch, posture: str) -> None:
     """dev/staging should not fail closed for file-based TrustLog without key."""
@@ -172,3 +188,58 @@ def test_get_trustlog_security_posture_uses_explicit_posture(
     )
     assert result["posture"] == "prod"
     assert result["status"] == "ok"
+
+
+@pytest.mark.parametrize("posture", ["dev", "staging"])
+def test_non_strict_posture_handles_encryption_status_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    """dev/staging should degrade instead of crashing on provider diagnostics errors."""
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+
+    import veritas_os.security.trustlog_posture as posture_module
+
+    def _raise_runtime_error() -> dict[str, bool]:
+        raise RuntimeError("provider diagnostics failure")
+
+    monkeypatch.setattr(posture_module, "get_encryption_status", _raise_runtime_error)
+
+    result = posture_module.get_trustlog_security_posture()
+
+    assert result["status"] == "degraded"
+    assert any(
+        "TrustLog encryption status retrieval failed" in reason
+        for reason in result["reasons"]
+    )
+    posture_module.validate_trustlog_secure_defaults()
+
+
+def test_prod_posture_handles_encryption_status_exception_as_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """prod should fail closed with controlled RuntimeError on provider diagnostics errors."""
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+
+    import veritas_os.security.trustlog_posture as posture_module
+
+    def _raise_runtime_error() -> dict[str, bool]:
+        raise RuntimeError("provider diagnostics failure")
+
+    monkeypatch.setattr(posture_module, "get_encryption_status", _raise_runtime_error)
+
+    result = posture_module.get_trustlog_security_posture()
+    assert result["status"] == "blocked"
+    assert any(
+        "TrustLog encryption status retrieval failed" in reason
+        for reason in result["reasons"]
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        posture_module.validate_trustlog_secure_defaults()
+    message = str(exc_info.value)
+    assert "TrustLog secure posture violation" in message
+    assert "TrustLog encryption status retrieval failed" in message

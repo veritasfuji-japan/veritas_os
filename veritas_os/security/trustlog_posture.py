@@ -20,7 +20,23 @@ def get_trustlog_security_posture(
     """
     posture_level = posture or resolve_posture().value
     backend = get_backend_info().get("trustlog", "jsonl")
-    encryption = encryption_status if encryption_status is not None else get_encryption_status()
+    encryption_error: str | None = None
+    if encryption_status is not None:
+        encryption = encryption_status
+    else:
+        try:
+            encryption = get_encryption_status()
+        except Exception as exc:  # noqa: BLE001
+            encryption = {
+                "encryption_enabled": False,
+                "key_configured": False,
+                "secure_by_default": True,
+            }
+            encryption_error = (
+                f"{exc.__class__.__name__}: {exc}"
+                if str(exc)
+                else exc.__class__.__name__
+            )
     encryption_enabled = bool(encryption.get("encryption_enabled", False))
     key_configured = bool(encryption.get("key_configured", False))
     db_url_configured = bool((os.getenv("VERITAS_DATABASE_URL") or "").strip())
@@ -28,6 +44,17 @@ def get_trustlog_security_posture(
     reasons: list[str] = []
     remediation: list[str] = []
     status = "ok"
+    if encryption_error:
+        reasons.append(
+            f"TrustLog encryption status retrieval failed: {encryption_error}"
+        )
+        remediation.extend(
+            [
+                "Verify VERITAS_ENCRYPTION_KEY_PROVIDER configuration for the selected provider.",
+                "For local development, set VERITAS_ENCRYPTION_KEY_PROVIDER=env.",
+                "Validate KMS/Vault dependencies and credentials for the selected provider.",
+            ]
+        )
 
     if posture_level in {"secure", "prod"}:
         if backend != "postgresql":
