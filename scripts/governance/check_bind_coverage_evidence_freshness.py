@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,12 @@ def _normalize_generated_at_for_compare(
 
     if "generated_at" not in payload:
         return None, f"{path}: missing generated_at"
-    if not isinstance(payload["generated_at"], str) or not payload["generated_at"].strip():
+    raw_generated_at = payload["generated_at"]
+    if not isinstance(raw_generated_at, str) or not raw_generated_at.strip():
+        return None, f"{path}: invalid generated_at"
+    try:
+        datetime.fromisoformat(raw_generated_at.strip().replace("Z", "+00:00"))
+    except ValueError:
         return None, f"{path}: invalid generated_at"
 
     normalized = dict(payload)
@@ -42,6 +48,15 @@ def _read_text_or_error(path: Path) -> tuple[str | None, str | None]:
         return None, f"{path}: {exc.__class__.__name__}"
 
 
+def _load_json_or_error(path: Path) -> tuple[Any | None, str | None]:
+    """Load JSON or return compact error class name."""
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return None, exc.__class__.__name__
+
+
 def compare_bind_coverage_evidence(
     committed_json: Path,
     committed_md: Path,
@@ -52,22 +67,27 @@ def compare_bind_coverage_evidence(
 
     stale_files: list[str] = []
     stale_reasons: list[str] = []
-    try:
-        committed_json_payload = json.loads(committed_json.read_text(encoding="utf-8"))
-        generated_json_payload = json.loads(generated_json.read_text(encoding="utf-8"))
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        stale_files.append(str(committed_json))
-        stale_reasons.append(f"{committed_json}: failed to read JSON ({exc.__class__.__name__})")
-        committed_json_payload = None
-        generated_json_payload = None
+    committed_json_payload, committed_json_error = _load_json_or_error(committed_json)
+    generated_json_payload, generated_json_error = _load_json_or_error(generated_json)
 
-    if not isinstance(committed_json_payload, dict):
+    if committed_json_error:
+        stale_files.append(str(committed_json))
+        stale_reasons.append(f"{committed_json}: failed to read JSON ({committed_json_error})")
+    if generated_json_error:
+        stale_files.append(str(committed_json))
+        stale_reasons.append(
+            f"{committed_json}: failed to generate JSON artifact ({generated_json_error})"
+        )
+
+    if committed_json_error is None and not isinstance(committed_json_payload, dict):
         stale_files.append(str(committed_json))
         stale_reasons.append(f"{committed_json}: JSON payload must be an object")
         committed_json_payload = None
-    if not isinstance(generated_json_payload, dict):
+    if generated_json_error is None and not isinstance(generated_json_payload, dict):
         stale_files.append(str(committed_json))
-        stale_reasons.append(f"{committed_json}: failed to generate JSON artifact")
+        stale_reasons.append(
+            f"{committed_json}: failed to generate JSON artifact (JSON payload must be an object)"
+        )
         generated_json_payload = None
 
     if committed_json_payload is not None and generated_json_payload is not None:
