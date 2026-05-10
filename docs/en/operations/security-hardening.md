@@ -177,3 +177,15 @@ sha256sum -c security/sbom/baseline/node.cdx.sha256
   - `VERITAS_DATABASE_URL` is set
   - TrustLog encryption key is configured (`VERITAS_ENCRYPTION_KEY` or a supported KMS/Vault provider)
 - Operators can verify current gate status in `/v1/health` and `/v1/status` under `security_posture.trustlog_secure_default`.
+
+## 13. Bind Coverage Reviewer Evidence
+
+- Reviewer-facing artifact paths:
+  - `docs/en/validation/bind-coverage-evidence.latest.json`
+  - `docs/en/validation/bind-coverage-evidence.latest.md`
+- Regenerate with:
+  - `python scripts/governance/export_bind_coverage_evidence.py`
+- Interpretation boundaries:
+  - The artifact proves runtime route classification coverage, not external legal certification.
+  - The artifact does not prove every business action is safe.
+  - Audited exemptions remain subject to periodic governance review.
