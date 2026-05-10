@@ -267,7 +267,7 @@ def write_bind_coverage_evidence(
 def main() -> None:
     """CLI entrypoint for artifact generation."""
 
-    write_bind_coverage_evidence(generated_at=None)
+    write_bind_coverage_evidence()
 
 
 if __name__ == "__main__":

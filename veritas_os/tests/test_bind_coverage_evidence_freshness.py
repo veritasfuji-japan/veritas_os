@@ -143,3 +143,33 @@ def test_non_dict_json_is_stale(tmp_path: Path) -> None:
         generated_md=generated_md,
     )
     assert str(committed_json) in stale_files
+
+
+def test_missing_committed_markdown_is_stale(tmp_path: Path, capsys) -> None:
+    """Missing committed markdown should be stale without traceback."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    committed_md.unlink()
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "Bind coverage evidence artifacts are stale." in output
+    assert REGENERATE_COMMAND in output
+    assert "Traceback" not in output
+
+
+def test_missing_generated_markdown_is_stale(tmp_path: Path) -> None:
+    """Missing regenerated markdown should be treated as stale."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    generated_json = tmp_path / "generated.json"
+    generated_md = tmp_path / "generated.md"
+    generated_json.write_text(committed_json.read_text(encoding="utf-8"), encoding="utf-8")
+
+    stale_files = compare_bind_coverage_evidence(
+        committed_json=committed_json,
+        committed_md=committed_md,
+        generated_json=generated_json,
+        generated_md=generated_md,
+    )
+    assert str(generated_md) in stale_files

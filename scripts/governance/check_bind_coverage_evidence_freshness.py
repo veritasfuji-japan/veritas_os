@@ -31,6 +31,15 @@ def _normalize_generated_at_for_compare(
     return normalized, None
 
 
+def _read_text_or_error(path: Path) -> tuple[str | None, str | None]:
+    """Read UTF-8 text or return a compact error marker."""
+
+    try:
+        return path.read_text(encoding="utf-8"), None
+    except OSError as exc:
+        return None, f"{path}: {exc.__class__.__name__}"
+
+
 def compare_bind_coverage_evidence(
     committed_json: Path,
     committed_md: Path,
@@ -69,7 +78,17 @@ def compare_bind_coverage_evidence(
         elif normalized_committed != normalized_generated:
             stale_files.append(str(committed_json))
 
-    if committed_md.read_text(encoding="utf-8") != generated_md.read_text(encoding="utf-8"):
+    committed_md_text, committed_md_error = _read_text_or_error(committed_md)
+    generated_md_text, generated_md_error = _read_text_or_error(generated_md)
+    if committed_md_error:
+        stale_files.append(str(committed_md))
+    if generated_md_error:
+        stale_files.append(str(generated_md))
+    if (
+        committed_md_text is not None
+        and generated_md_text is not None
+        and committed_md_text != generated_md_text
+    ):
         stale_files.append(str(committed_md))
     return sorted(set(stale_files))
 
