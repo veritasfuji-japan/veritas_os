@@ -17,6 +17,16 @@ OUTPUT_MD = REPO_ROOT / "docs/en/validation/performance-evidence.latest.md"
 GENERATED_AT_ERROR_MESSAGE = "generated_at must be a non-empty ISO-8601 timestamp when provided"
 
 
+class _NullLogger:
+    """Minimal logger stub for local TrustLog latency measurement."""
+
+    def warning(self, *args: object, **kwargs: object) -> None:
+        return None
+
+    def debug(self, *args: object, **kwargs: object) -> None:
+        return None
+
+
 def _resolve_generated_at(generated_at: str | None) -> str:
     if generated_at is None:
         return datetime.now(timezone.utc).isoformat()
@@ -216,15 +226,18 @@ def generate_performance_evidence(
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 root = Path(tmp_dir)
+
                 def effective_log_paths() -> tuple[Path, Path, Path]:
                     return root, root / "trust_log.json", root / "trust_log.jsonl"
+
+                logger = _NullLogger()
 
                 def _load(path: Path | None):
                     return load_logs_json_result(
                         path,
                         max_log_file_size=1024 * 1024,
                         effective_log_paths=effective_log_paths,
-                        logger=type("L", (), {"warning": lambda *a, **k: None, "debug": lambda *a, **k: None})(),
+                        logger=logger,
                     )
 
                 metric = measure_latency(
@@ -246,7 +259,7 @@ def generate_performance_evidence(
                         ),
                         secure_chmod_fn=lambda _x: None,
                         publish_event=lambda *_a, **_k: None,
-                        logger=type("L", (), {"warning": lambda *a, **k: None, "debug": lambda *a, **k: None})(),
+                        logger=logger,
                         errstr=lambda _e: "error",
                     ),
                     sample_count,
