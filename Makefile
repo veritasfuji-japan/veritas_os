@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -272,3 +272,10 @@ drill-recovery-ci:
 
 check-bilingual-docs:
 	@python scripts/quality/check_bilingual_docs.py
+
+
+bind-coverage-evidence:
+	python -m scripts.governance.export_bind_coverage_evidence
+
+check-bind-coverage-evidence:
+	python -m scripts.governance.check_bind_coverage_evidence_freshness

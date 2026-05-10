@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import scripts.governance.export_bind_coverage_evidence as evidence_module
 from scripts.governance.export_bind_coverage_evidence import (
     EFFECT_BEARING_METHODS,
@@ -101,6 +103,26 @@ def test_write_bind_coverage_evidence_outputs_json_and_markdown(tmp_path: Path) 
     assert evidence["status"] == payload["status"]
 
 
+def test_write_bind_coverage_evidence_markdown_has_single_trailing_newline(
+    tmp_path: Path,
+) -> None:
+    """Markdown writer should normalize output to exactly one trailing newline."""
+    json_path = tmp_path / "bind.json"
+    markdown_path = tmp_path / "bind.md"
+    evidence = write_bind_coverage_evidence(
+        json_path=json_path,
+        markdown_path=markdown_path,
+        generated_at="1970-01-01T00:00:00+00:00",
+    )
+
+    markdown_text = markdown_path.read_text(encoding="utf-8")
+    rendered_markdown = evidence_module.render_bind_coverage_markdown(evidence)
+
+    assert markdown_text.endswith("\n")
+    assert not markdown_text.endswith("\n\n")
+    assert markdown_text == rendered_markdown.rstrip() + "\n"
+
+
 def test_default_output_paths_are_repo_root_anchored() -> None:
     """Default output paths should always anchor to repository root."""
     expected_root = Path(__file__).resolve().parents[2]
@@ -129,7 +151,7 @@ def test_non_catalog_registry_error_forces_failed_status(monkeypatch) -> None:
     )
 
     evidence = evidence_module.generate_bind_coverage_evidence()
-    markdown = evidence_module._render_markdown(evidence)
+    markdown = evidence_module.render_bind_coverage_markdown(evidence)
 
     assert evidence["registry_errors"] == ["duplicate bind coverage entry: POST /x"]
     assert evidence["status"] == "failed"
@@ -168,3 +190,44 @@ def test_effect_route_unclassified_forces_failed_status(monkeypatch) -> None:
 
     assert evidence["unclassified_routes"]
     assert evidence["status"] == "failed"
+
+
+def test_deterministic_generated_at_produces_stable_payloads() -> None:
+    """A fixed generated_at must produce stable JSON and markdown outputs."""
+    fixed_generated_at = "1970-01-01T00:00:00+00:00"
+
+    first = evidence_module.generate_bind_coverage_evidence(generated_at=fixed_generated_at)
+    second = evidence_module.generate_bind_coverage_evidence(generated_at=fixed_generated_at)
+
+    assert first == second
+    assert first["generated_at"] == fixed_generated_at
+
+    first_markdown = evidence_module.render_bind_coverage_markdown(first)
+    second_markdown = evidence_module.render_bind_coverage_markdown(second)
+    assert first_markdown == second_markdown
+
+
+def test_generate_bind_coverage_evidence_rejects_empty_generated_at() -> None:
+    """Empty generated_at should raise ValueError."""
+    with pytest.raises(ValueError, match="ISO-8601"):
+        evidence_module.generate_bind_coverage_evidence(generated_at="")
+
+
+def test_generate_bind_coverage_evidence_rejects_whitespace_generated_at() -> None:
+    """Whitespace-only generated_at should raise ValueError."""
+    with pytest.raises(ValueError, match="ISO-8601"):
+        evidence_module.generate_bind_coverage_evidence(generated_at="   ")
+
+
+def test_generate_bind_coverage_evidence_rejects_invalid_generated_at() -> None:
+    """Non-ISO generated_at should raise ValueError."""
+    with pytest.raises(ValueError, match="ISO-8601"):
+        evidence_module.generate_bind_coverage_evidence(generated_at="not-a-date")
+
+
+def test_generate_bind_coverage_evidence_accepts_iso_z_generated_at() -> None:
+    """ISO timestamp with Z suffix should pass validation."""
+    evidence = evidence_module.generate_bind_coverage_evidence(
+        generated_at="1970-01-01T00:00:00Z"
+    )
+    assert evidence["generated_at"] == "1970-01-01T00:00:00Z"

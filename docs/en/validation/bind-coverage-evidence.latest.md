@@ -50,7 +50,11 @@ This artifact summarizes FastAPI runtime route classification against the canoni
 - Bind-governed routes are the routes currently wired to the Bind target catalog.
 - Audited exemptions require periodic governance review.
 
+## CI freshness guard
+- CI checks these artifacts for freshness against current API routes and bind coverage sources.
+- If this check fails, rerun the generator command below and commit both artifacts.
+
 ## How to regenerate
 ```bash
-python scripts/governance/export_bind_coverage_evidence.py
+python -m scripts.governance.export_bind_coverage_evidence
 ```
