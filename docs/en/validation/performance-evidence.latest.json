@@ -1,0 +1,150 @@
+{
+  "environment": {
+    "ci_detected": false,
+    "implementation": "CPython",
+    "platform": "Linux-6.12.47-x86_64-with-glibc2.39",
+    "python_version": "3.12.3"
+  },
+  "failures": [],
+  "generated_at": "2026-05-10T15:09:41.467688+00:00",
+  "interpretation_boundaries": [
+    "This artifact is CI-safe local evidence, not a production SLA.",
+    "This artifact does not include external LLM provider latency unless explicitly measured.",
+    "This artifact does not include customer infrastructure latency.",
+    "Results should be re-measured in customer PoC environments.",
+    "TrustLog measurements use the configured local/test backend unless otherwise noted."
+  ],
+  "measurement_mode": "deterministic_fixture",
+  "metrics": [
+    {
+      "category": "api_route_smoke",
+      "max_ms": 1.2,
+      "mean_ms": 1.0999999999999999,
+      "min_ms": 1.0,
+      "name": "api.health.get",
+      "notes": "",
+      "p50_ms": 1.1,
+      "p95_ms": 1.19,
+      "p99_ms": 1.198,
+      "samples": [
+        1.0,
+        1.2,
+        1.1
+      ],
+      "status": "ok",
+      "unit": "ms"
+    },
+    {
+      "category": "api_route_smoke",
+      "max_ms": 1.9,
+      "mean_ms": 1.8,
+      "min_ms": 1.7,
+      "name": "api.status.get",
+      "notes": "",
+      "p50_ms": 1.8,
+      "p95_ms": 1.89,
+      "p99_ms": 1.898,
+      "samples": [
+        1.7,
+        1.8,
+        1.9
+      ],
+      "status": "ok",
+      "unit": "ms"
+    },
+    {
+      "category": "bind_boundary",
+      "max_ms": 0.3,
+      "mean_ms": 0.3,
+      "min_ms": 0.3,
+      "name": "bind.catalog_consistency",
+      "notes": "",
+      "p50_ms": 0.3,
+      "p95_ms": 0.3,
+      "p99_ms": 0.3,
+      "samples": [
+        0.3,
+        0.3,
+        0.3
+      ],
+      "status": "ok",
+      "unit": "ms"
+    },
+    {
+      "category": "bind_boundary",
+      "max_ms": 0.3,
+      "mean_ms": 0.2333333333333333,
+      "min_ms": 0.2,
+      "name": "bind.classify",
+      "notes": "",
+      "p50_ms": 0.2,
+      "p95_ms": 0.29,
+      "p99_ms": 0.298,
+      "samples": [
+        0.2,
+        0.3,
+        0.2
+      ],
+      "status": "ok",
+      "unit": "ms"
+    },
+    {
+      "category": "bind_boundary",
+      "max_ms": 0.5,
+      "mean_ms": 0.43333333333333335,
+      "min_ms": 0.4,
+      "name": "bind.validate_registry",
+      "notes": "",
+      "p50_ms": 0.4,
+      "p95_ms": 0.49,
+      "p99_ms": 0.498,
+      "samples": [
+        0.4,
+        0.4,
+        0.5
+      ],
+      "status": "ok",
+      "unit": "ms"
+    },
+    {
+      "category": "decide_deterministic",
+      "max_ms": 2.2,
+      "mean_ms": 2.1,
+      "min_ms": 2.0,
+      "name": "decide.deterministic.fixture",
+      "notes": "External LLM provider latency is excluded.",
+      "p50_ms": 2.1,
+      "p95_ms": 2.1900000000000004,
+      "p99_ms": 2.1980000000000004,
+      "samples": [
+        2.1,
+        2.0,
+        2.2
+      ],
+      "status": "ok",
+      "unit": "ms"
+    },
+    {
+      "category": "trustlog_append",
+      "max_ms": 1.1,
+      "mean_ms": 1.0,
+      "min_ms": 0.9,
+      "name": "trustlog.append.local",
+      "notes": "TrustLog measurements use the configured local/test backend unless otherwise noted.",
+      "p50_ms": 1.0,
+      "p95_ms": 1.09,
+      "p99_ms": 1.098,
+      "samples": [
+        0.9,
+        1.0,
+        1.1
+      ],
+      "status": "ok",
+      "unit": "ms"
+    }
+  ],
+  "sample_count": 3,
+  "schema_version": "performance_evidence.v1",
+  "status": "ok",
+  "warmup_count": 0
+}
