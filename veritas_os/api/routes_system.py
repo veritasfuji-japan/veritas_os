@@ -31,6 +31,7 @@ from veritas_os.api.pipeline_orchestrator import (
     update_runtime_config,
 )
 from veritas_os.logging.encryption import get_encryption_status
+from veritas_os.security.trustlog_posture import get_trustlog_security_posture
 from veritas_os.policy.bind_route_markers import requires_bind_boundary
 from veritas_os.policy.bind_artifacts import FinalOutcome
 from veritas_os.policy.compliance_config_update import (
@@ -164,6 +165,9 @@ def _security_posture_snapshot() -> Dict[str, Any]:
         }
     except Exception:
         posture_info = {"level": "unknown"}
+    trustlog_posture = posture_info.get("level")
+    if trustlog_posture == "unknown":
+        trustlog_posture = None
 
     return {
         "posture": posture_info,
@@ -179,6 +183,10 @@ def _security_posture_snapshot() -> Dict[str, Any]:
             "failure_mode": auth_details.get("failure_mode", "closed"),
         },
         "encryption": encryption_status,
+        "trustlog_secure_default": get_trustlog_security_posture(
+            encryption_status=encryption_status,
+            posture=trustlog_posture,
+        ),
     }
 
 
