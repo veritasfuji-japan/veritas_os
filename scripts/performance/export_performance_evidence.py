@@ -176,10 +176,34 @@ def generate_performance_evidence(
         )
         client = TestClient(app)
         metrics = [
-            measure_latency("api.health.get", "api_route_smoke", lambda: client.get("/v1/health"), sample_count, warmup_count),
-            measure_latency("api.status.get", "api_route_smoke", lambda: client.get("/v1/status"), sample_count, warmup_count),
-            measure_latency("bind.classify", "bind_boundary", lambda: classify_bind_coverage("/v1/health", "GET"), sample_count, warmup_count),
-            measure_latency("bind.validate_registry", "bind_boundary", validate_bind_coverage_registry, sample_count, warmup_count),
+            measure_latency(
+                "api.health.get",
+                "api_route_smoke",
+                lambda: client.get("/v1/health"),
+                sample_count,
+                warmup_count,
+            ),
+            measure_latency(
+                "api.status.get",
+                "api_route_smoke",
+                lambda: client.get("/v1/status"),
+                sample_count,
+                warmup_count,
+            ),
+            measure_latency(
+                "bind.classify",
+                "bind_boundary",
+                lambda: classify_bind_coverage("/v1/health", "GET"),
+                sample_count,
+                warmup_count,
+            ),
+            measure_latency(
+                "bind.validate_registry",
+                "bind_boundary",
+                validate_bind_coverage_registry,
+                sample_count,
+                warmup_count,
+            ),
             measure_latency(
                 "bind.catalog_consistency",
                 "bind_boundary",
@@ -228,16 +252,36 @@ def generate_performance_evidence(
                     sample_count,
                     warmup_count,
                 )
-                metric["notes"] = "TrustLog measurements use the configured local/test backend unless otherwise noted."
+                metric["notes"] = (
+                    "TrustLog measurements use the configured local/test backend "
+                    "unless otherwise noted."
+                )
                 metrics.append(metric)
         except Exception as exc:
-            metrics.append({
-                "name": "trustlog.append.local", "category": "trustlog_append", "unit": "ms",
-                "samples": [], "p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0,
-                "mean_ms": 0.0, "min_ms": 0.0, "max_ms": 0.0,
-                "status": "not_measured", "notes": f"error_type={exc.__class__.__name__}"
-            })
-        metrics.append(_fixture_metric("decide.deterministic.fixture", "decide_deterministic", [2.1,2.0,2.2], "External LLM provider latency is excluded."))
+            metrics.append(
+                {
+                    "name": "trustlog.append.local",
+                    "category": "trustlog_append",
+                    "unit": "ms",
+                    "samples": [],
+                    "p50_ms": 0.0,
+                    "p95_ms": 0.0,
+                    "p99_ms": 0.0,
+                    "mean_ms": 0.0,
+                    "min_ms": 0.0,
+                    "max_ms": 0.0,
+                    "status": "not_measured",
+                    "notes": f"error_type={exc.__class__.__name__}",
+                }
+            )
+        metrics.append(
+            _fixture_metric(
+                "decide.deterministic.fixture",
+                "decide_deterministic",
+                [2.1, 2.0, 2.2],
+                "External LLM provider latency is excluded.",
+            )
+        )
         mode = "ci_safe_local"
 
     metrics = sorted(metrics, key=lambda x: (x["category"], x["name"]))
@@ -267,16 +311,47 @@ def generate_performance_evidence(
 
 
 def render_performance_markdown(evidence: dict[str, Any]) -> str:
-    lines = ["# Performance Evidence Artifact", "", "## Scope", "Reviewer-facing latency evidence for CI-safe local measurements.", "", "## Summary table", "| Metric | Value |", "| --- | --- |", f"| measurement_mode | {evidence['measurement_mode']} |", f"| sample_count | {evidence['sample_count']} |", f"| warmup_count | {evidence['warmup_count']} |", f"| status | {evidence['status']} |", "", "## Metrics table", "| Name | Category | p50 ms | p95 ms | p99 ms | Status | Notes |", "| --- | --- | ---: | ---: | ---: | --- | --- |"]
+    lines = [
+        "# Performance Evidence Artifact",
+        "",
+        "## Scope",
+        "Reviewer-facing latency evidence for CI-safe local measurements.",
+        "",
+        "## Summary table",
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| measurement_mode | {evidence['measurement_mode']} |",
+        f"| sample_count | {evidence['sample_count']} |",
+        f"| warmup_count | {evidence['warmup_count']} |",
+        f"| status | {evidence['status']} |",
+        "",
+        "## Metrics table",
+        "| Name | Category | p50 ms | p95 ms | p99 ms | Status | Notes |",
+        "| --- | --- | ---: | ---: | ---: | --- | --- |",
+    ]
     for m in evidence["metrics"]:
-        lines.append(f"| {m['name']} | {m['category']} | {m['p50_ms']:.3f} | {m['p95_ms']:.3f} | {m['p99_ms']:.3f} | {m['status']} | {m['notes']} |")
+        lines.append(
+            f"| {m['name']} | {m['category']} | {m['p50_ms']:.3f} | "
+            f"{m['p95_ms']:.3f} | {m['p99_ms']:.3f} | {m['status']} | {m['notes']} |"
+        )
     lines.extend(["", "## Failures / not measured"])
     if evidence["failures"]:
         for item in evidence["failures"]:
             lines.append(f"- {item['name']}: {item['error_type']}")
     else:
         lines.append("- None")
-    lines.extend(["", "## Interpretation boundaries"] + [f"- {s}" for s in evidence["interpretation_boundaries"]] + ["", "## How to regenerate", "```bash", "python -m scripts.performance.export_performance_evidence", "```", ""])
+    lines.extend(
+        ["", "## Interpretation boundaries"]
+        + [f"- {s}" for s in evidence["interpretation_boundaries"]]
+        + [
+            "",
+            "## How to regenerate",
+            "```bash",
+            "python -m scripts.performance.export_performance_evidence",
+            "```",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
