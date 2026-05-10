@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,17 @@ def _normalize_generated_at_for_compare(
 
     if "generated_at" not in payload:
         return None, f"{path}: missing generated_at"
+
+    raw_generated_at = payload.get("generated_at")
+    if not isinstance(raw_generated_at, str):
+        return None, f"{path}: invalid generated_at"
+    normalized_generated_at = raw_generated_at.strip()
+    if not normalized_generated_at:
+        return None, f"{path}: invalid generated_at"
+    try:
+        datetime.fromisoformat(normalized_generated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None, f"{path}: invalid generated_at"
 
     normalized = dict(payload)
     normalized["generated_at"] = FIXED_GENERATED_AT
@@ -83,7 +95,7 @@ def compare_bind_coverage_evidence(
     if committed_md_error:
         stale_files.append(str(committed_md))
     if generated_md_error:
-        stale_files.append(str(generated_md))
+        stale_files.append(str(committed_md))
     if (
         committed_md_text is not None
         and generated_md_text is not None

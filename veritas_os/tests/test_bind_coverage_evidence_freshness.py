@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from scripts.governance.check_bind_coverage_evidence_freshness import (
@@ -172,4 +173,88 @@ def test_missing_generated_markdown_is_stale(tmp_path: Path) -> None:
         generated_json=generated_json,
         generated_md=generated_md,
     )
-    assert str(generated_md) in stale_files
+    assert str(committed_md) in stale_files
+    assert str(generated_md) not in stale_files
+
+
+def test_empty_generated_at_in_committed_json_is_stale(tmp_path: Path, capsys) -> None:
+    """Empty generated_at in committed JSON should be stale."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = ""
+    committed_json.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "Bind coverage evidence artifacts are stale." in output
+    assert REGENERATE_COMMAND in output
+    assert "Traceback" not in output
+
+
+def test_whitespace_generated_at_in_committed_json_is_stale(tmp_path: Path) -> None:
+    """Whitespace generated_at in committed JSON should be stale."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = "   "
+    committed_json.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    assert result == 1
+
+
+def test_invalid_generated_at_in_committed_json_is_stale(tmp_path: Path) -> None:
+    """Invalid generated_at in committed JSON should be stale."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = "not-a-date"
+    committed_json.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    assert result == 1
+
+
+def test_iso_z_generated_at_in_committed_json_is_not_stale(tmp_path: Path) -> None:
+    """Valid ISO Z generated_at should not be stale when content otherwise matches."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = "1970-01-01T00:00:00Z"
+    committed_json.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_bind_coverage_evidence_freshness(committed_json, committed_md)
+    assert result == 0
+
+
+def test_invalid_generated_at_in_generated_json_is_stale(tmp_path: Path) -> None:
+    """Invalid generated_at in regenerated JSON should mark committed JSON stale."""
+    committed_json, committed_md = _write_committed_artifacts(tmp_path, FIXED_GENERATED_AT)
+    generated_json = tmp_path / "generated.json"
+    generated_md = tmp_path / "generated.md"
+    generated_payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    generated_payload["generated_at"] = "not-a-date"
+    generated_json.write_text(
+        json.dumps(generated_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    generated_md.write_text(committed_md.read_text(encoding="utf-8"), encoding="utf-8")
+
+    stale_files = compare_bind_coverage_evidence(
+        committed_json=committed_json,
+        committed_md=committed_md,
+        generated_json=generated_json,
+        generated_md=generated_md,
+    )
+    assert str(committed_json) in stale_files
