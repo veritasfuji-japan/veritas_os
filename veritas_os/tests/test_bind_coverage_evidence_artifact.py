@@ -129,7 +129,7 @@ def test_non_catalog_registry_error_forces_failed_status(monkeypatch) -> None:
     )
 
     evidence = evidence_module.generate_bind_coverage_evidence()
-    markdown = evidence_module._render_markdown(evidence)
+    markdown = evidence_module.render_bind_coverage_markdown(evidence)
 
     assert evidence["registry_errors"] == ["duplicate bind coverage entry: POST /x"]
     assert evidence["status"] == "failed"
@@ -168,3 +168,18 @@ def test_effect_route_unclassified_forces_failed_status(monkeypatch) -> None:
 
     assert evidence["unclassified_routes"]
     assert evidence["status"] == "failed"
+
+
+def test_deterministic_generated_at_produces_stable_payloads() -> None:
+    """A fixed generated_at must produce stable JSON and markdown outputs."""
+    fixed_generated_at = "1970-01-01T00:00:00+00:00"
+
+    first = evidence_module.generate_bind_coverage_evidence(generated_at=fixed_generated_at)
+    second = evidence_module.generate_bind_coverage_evidence(generated_at=fixed_generated_at)
+
+    assert first == second
+    assert first["generated_at"] == fixed_generated_at
+
+    first_markdown = evidence_module.render_bind_coverage_markdown(first)
+    second_markdown = evidence_module.render_bind_coverage_markdown(second)
+    assert first_markdown == second_markdown

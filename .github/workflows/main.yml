@@ -203,6 +203,9 @@ jobs:
           python -m pip install -r veritas_os/requirements.txt
           python -m pip install pytest httpx anyio
 
+      - name: "[Tier 1] Check bind coverage evidence freshness"
+        run: python scripts/governance/check_bind_coverage_evidence_freshness.py
+
       - name: "[Tier 1] Run governance smoke tests"
         run: |
           set -euxo pipefail

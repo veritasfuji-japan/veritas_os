@@ -39,7 +39,7 @@ def _runtime_api_routes() -> list[tuple[str, str]]:
     return sorted(routes, key=lambda item: (item[0], item[1]))
 
 
-def generate_bind_coverage_evidence() -> dict[str, Any]:
+def generate_bind_coverage_evidence(generated_at: str | None = None) -> dict[str, Any]:
     """Build bind coverage evidence payload from runtime routes + registry."""
 
     runtime_routes = _runtime_api_routes()
@@ -107,7 +107,7 @@ def generate_bind_coverage_evidence() -> dict[str, Any]:
 
     return {
         "schema_version": "bind_coverage_evidence.v1",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": generated_at or datetime.now(timezone.utc).isoformat(),
         "total_runtime_routes": len(route_rows),
         "total_effect_bearing_routes": len(effect_routes),
         "classified_routes": len(route_rows) - len(unclassified),
@@ -135,7 +135,7 @@ def generate_bind_coverage_evidence() -> dict[str, Any]:
     }
 
 
-def _render_markdown(evidence: dict[str, Any]) -> str:
+def render_bind_coverage_markdown(evidence: dict[str, Any]) -> str:
     """Render markdown summary from evidence payload."""
 
     lines: list[str] = [
@@ -206,6 +206,10 @@ def _render_markdown(evidence: dict[str, Any]) -> str:
             "- Bind-governed routes are the routes currently wired to the Bind target catalog.",
             "- Audited exemptions require periodic governance review.",
             "",
+            "## CI freshness guard",
+            "- CI checks these artifacts for freshness against current API routes and bind coverage sources.",
+            "- If this check fails, rerun the generator command below and commit both artifacts.",
+            "",
             "## How to regenerate",
             "```bash",
             "python scripts/governance/export_bind_coverage_evidence.py",
@@ -220,10 +224,11 @@ def _render_markdown(evidence: dict[str, Any]) -> str:
 def write_bind_coverage_evidence(
     json_path: Path = OUTPUT_JSON,
     markdown_path: Path = OUTPUT_MD,
+    generated_at: str | None = None,
 ) -> dict[str, Any]:
     """Generate and write bind coverage evidence JSON and markdown artifacts."""
 
-    evidence = generate_bind_coverage_evidence()
+    evidence = generate_bind_coverage_evidence(generated_at=generated_at)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     json_payload = json.dumps(
@@ -231,7 +236,7 @@ def write_bind_coverage_evidence(
         indent=2,
         sort_keys=True,
     ) + "\n"
-    markdown_payload = _render_markdown(evidence) + "\n"
+    markdown_payload = render_bind_coverage_markdown(evidence) + "\n"
 
     json_path.write_text(json_payload, encoding="utf-8")
     markdown_path.write_text(markdown_payload, encoding="utf-8")
@@ -241,7 +246,7 @@ def write_bind_coverage_evidence(
 def main() -> None:
     """CLI entrypoint for artifact generation."""
 
-    write_bind_coverage_evidence()
+    write_bind_coverage_evidence(generated_at=None)
 
 
 if __name__ == "__main__":
