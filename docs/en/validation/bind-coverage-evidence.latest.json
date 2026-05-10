@@ -1,0 +1,976 @@
+{
+  "audited_exemption_missing_reason": [],
+  "audited_exemption_missing_risk_level": [],
+  "audited_exemptions": [
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/decide",
+      "reason": "Decision recording is reviewable output and not an execution permission path.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "audit",
+      "method": "POST",
+      "path": "/v1/decision/replay/{decision_id}",
+      "reason": "Legacy replay alias is audit-only and has no external execution side effects.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/fuji/validate",
+      "reason": "Validation endpoint evaluates gate status but does not commit execution.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/erase",
+      "reason": "Memory erasure affects local memory store but is not a bind target catalog operation.",
+      "review_required_by": "monthly",
+      "risk_level": "high"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/get",
+      "reason": "Lookup endpoint uses POST for typed request body; retrieval only.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/put",
+      "reason": "Memory write persists internal context only; no governed external execution target.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/search",
+      "reason": "Search uses POST for payload size/shape but is read semantics only.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "audit",
+      "method": "POST",
+      "path": "/v1/replay/{decision_id}",
+      "reason": "Replay endpoint reproduces prior decisions for audit and does not authorize execution.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "trust",
+      "method": "POST",
+      "path": "/v1/trust/feedback",
+      "reason": "Trust feedback updates scoring telemetry only; no execution authorization.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/wat/issue-shadow",
+      "reason": "Shadow WAT issuance is observer-lane telemetry and non-enforcement.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/wat/revocation/{wat_id}",
+      "reason": "Revocation mutates WAT lane state but is not a bind-governed execution path.",
+      "review_required_by": "monthly",
+      "risk_level": "high"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/wat/validate-shadow",
+      "reason": "Shadow validation checks signatures without granting execution privileges.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    }
+  ],
+  "bind_governed_routes": [
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "PUT",
+      "path": "/v1/compliance/config",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "PUT",
+      "path": "/v1/governance/policy",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "POST",
+      "path": "/v1/governance/policy-bundles/promote",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "POST",
+      "path": "/v1/system/halt",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "POST",
+      "path": "/v1/system/resume",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    }
+  ],
+  "catalog_bind_targets": [
+    "/v1/compliance/config",
+    "/v1/governance/policy",
+    "/v1/governance/policy-bundles/promote",
+    "/v1/system/halt",
+    "/v1/system/resume"
+  ],
+  "catalog_registry_mismatch": [],
+  "classified_routes": 47,
+  "generated_at": "2026-05-10T03:26:49.298982+00:00",
+  "non_effect_routes": [
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/api/status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/health",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/health",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    }
+  ],
+  "read_only_routes": [
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/compliance/config",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/compliance/deployment-readiness",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/events",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts/export",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts/{bind_receipt_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/decisions/export",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/live-snapshot",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/policy",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/policy/history",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/value-drift",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/metrics",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/observability/capabilities",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/report/eu_ai_act/{decision_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/report/governance",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/system/halt-status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/logs",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/stats",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/{request_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/{request_id}/prov",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trustlog/export",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trustlog/verify",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/wat/events",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/wat/{wat_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    }
+  ],
+  "registry_bind_governed_targets": [
+    "/v1/compliance/config",
+    "/v1/governance/policy",
+    "/v1/governance/policy-bundles/promote",
+    "/v1/system/halt",
+    "/v1/system/resume"
+  ],
+  "routes": [
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/api/status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/health",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/compliance/config",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "PUT",
+      "path": "/v1/compliance/config",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/compliance/deployment-readiness",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/decide",
+      "reason": "Decision recording is reviewable output and not an execution permission path.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "audit",
+      "method": "POST",
+      "path": "/v1/decision/replay/{decision_id}",
+      "reason": "Legacy replay alias is audit-only and has no external execution side effects.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/events",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/fuji/validate",
+      "reason": "Validation endpoint evaluates gate status but does not commit execution.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts/export",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts/{bind_receipt_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/decisions/export",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/live-snapshot",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/policy",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "PUT",
+      "path": "/v1/governance/policy",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "POST",
+      "path": "/v1/governance/policy-bundles/promote",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/policy/history",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/governance/value-drift",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/health",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/erase",
+      "reason": "Memory erasure affects local memory store but is not a bind target catalog operation.",
+      "review_required_by": "monthly",
+      "risk_level": "high"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/get",
+      "reason": "Lookup endpoint uses POST for typed request body; retrieval only.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/put",
+      "reason": "Memory write persists internal context only; no governed external execution target.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "memory",
+      "method": "POST",
+      "path": "/v1/memory/search",
+      "reason": "Search uses POST for payload size/shape but is read semantics only.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/metrics",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/observability/capabilities",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "audit",
+      "method": "POST",
+      "path": "/v1/replay/{decision_id}",
+      "reason": "Replay endpoint reproduces prior decisions for audit and does not authorize execution.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/report/eu_ai_act/{decision_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/report/governance",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "non_effect",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "POST",
+      "path": "/v1/system/halt",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/system/halt-status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": true,
+      "coverage_class": "bind_governed",
+      "governance_owner": null,
+      "method": "POST",
+      "path": "/v1/system/resume",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "trust",
+      "method": "POST",
+      "path": "/v1/trust/feedback",
+      "reason": "Trust feedback updates scoring telemetry only; no execution authorization.",
+      "review_required_by": "quarterly",
+      "risk_level": "low"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/logs",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/stats",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/{request_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trust/{request_id}/prov",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trustlog/export",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/trustlog/verify",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/wat/events",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/wat/issue-shadow",
+      "reason": "Shadow WAT issuance is observer-lane telemetry and non-enforcement.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/wat/revocation/{wat_id}",
+      "reason": "Revocation mutates WAT lane state but is not a bind-governed execution path.",
+      "review_required_by": "monthly",
+      "risk_level": "high"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/wat/validate-shadow",
+      "reason": "Shadow validation checks signatures without granting execution privileges.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/wat/{wat_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    }
+  ],
+  "schema_version": "bind_coverage_evidence.v1",
+  "status": "ok",
+  "total_effect_bearing_routes": 17,
+  "total_runtime_routes": 47,
+  "unclassified_routes": []
+}
