@@ -46,30 +46,40 @@ def get_trustlog_security_posture(
             f"TrustLog encryption status retrieval failed: {encryption_error_type}"
         )
         remediation.append(
-            "Check VERITAS_ENCRYPTION_KEY_PROVIDER configuration and required KMS/Vault dependencies."
+            "Check VERITAS_ENCRYPTION_KEY_PROVIDER configuration "
+            "and required KMS/Vault dependencies."
         )
         remediation.append(
-            "Use VERITAS_ENCRYPTION_KEY_PROVIDER=env for local validation, or configure the selected KMS/Vault provider correctly."
+            "Use VERITAS_ENCRYPTION_KEY_PROVIDER=env for local validation, "
+            "or configure the selected KMS/Vault provider correctly."
         )
 
     if posture_level in {"secure", "prod"}:
         if backend != "postgresql":
             reasons.append(
-                f"VERITAS_POSTURE={posture_level} requires TrustLog backend=postgresql (current={backend})."
+                "VERITAS_POSTURE="
+                f"{posture_level} requires TrustLog backend=postgresql "
+                f"(current={backend})."
             )
             remediation.append("Set VERITAS_TRUSTLOG_BACKEND=postgresql.")
         if not db_url_configured:
-            reasons.append("VERITAS_DATABASE_URL is not configured for PostgreSQL TrustLog.")
+            reasons.append(
+                "VERITAS_DATABASE_URL is not configured for PostgreSQL TrustLog."
+            )
             remediation.append("Set VERITAS_DATABASE_URL to a PostgreSQL DSN.")
         if not encryption_enabled or not key_configured:
             reasons.append("TrustLog encryption key is not configured.")
             remediation.append(
-                "Set VERITAS_ENCRYPTION_KEY or configure a supported KMS/Vault key provider."
+                "Set VERITAS_ENCRYPTION_KEY or configure a supported "
+                "KMS/Vault key provider."
             )
         status = "blocked" if reasons else "ok"
     elif posture_level == "staging":
         if backend != "postgresql":
-            reasons.append("Staging posture should use PostgreSQL TrustLog for production parity.")
+            reasons.append(
+                "Staging posture should use PostgreSQL TrustLog "
+                "for production parity."
+            )
             remediation.append("Set VERITAS_TRUSTLOG_BACKEND=postgresql.")
         if not db_url_configured:
             reasons.append("Staging posture should set VERITAS_DATABASE_URL.")
@@ -77,16 +87,19 @@ def get_trustlog_security_posture(
         if not encryption_enabled or not key_configured:
             reasons.append("Staging posture should configure TrustLog encryption key.")
             remediation.append(
-                "Set VERITAS_ENCRYPTION_KEY or configure a supported KMS/Vault key provider."
+                "Set VERITAS_ENCRYPTION_KEY or configure a supported "
+                "KMS/Vault key provider."
             )
         status = "degraded" if reasons else "ok"
     else:
         if not encryption_enabled or not key_configured:
             reasons.append(
-                "Development posture allows unencrypted startup, but TrustLog writes will fail without a key."
+                "Development posture allows unencrypted startup, "
+                "but TrustLog writes will fail without a key."
             )
             remediation.append(
-                "Set VERITAS_ENCRYPTION_KEY for encrypted TrustLog writes when validating production posture."
+                "Set VERITAS_ENCRYPTION_KEY for encrypted TrustLog writes "
+                "when validating production posture."
             )
             status = "degraded"
 

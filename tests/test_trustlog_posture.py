@@ -241,6 +241,7 @@ def test_security_posture_snapshot_sanitizes_encryption_provider_error(
     """Snapshot should stay stable and sanitized when encryption status lookup fails."""
     monkeypatch.setenv("VERITAS_POSTURE", "staging")
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY_PROVIDER", "vault")
 
     import veritas_os.api.routes_system as routes_system
 
@@ -252,9 +253,35 @@ def test_security_posture_snapshot_sanitizes_encryption_provider_error(
     snapshot = routes_system._security_posture_snapshot()
 
     assert snapshot["encryption"]["error_type"] == "RuntimeError"
+    assert snapshot["encryption"]["key_provider"] == "vault"
     assert "secret path" not in json.dumps(snapshot["encryption"], sort_keys=True)
     assert "trustlog_secure_default" in snapshot
 
+    rendered_snapshot = json.dumps(snapshot, sort_keys=True)
+    assert "secret path" not in rendered_snapshot
+    assert "/prod/foo" not in rendered_snapshot
+    assert "token abc" not in rendered_snapshot
+
+
+def test_security_posture_snapshot_error_provider_defaults_to_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Snapshot fallback should default key provider to env when unset."""
+    monkeypatch.setenv("VERITAS_POSTURE", "staging")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY_PROVIDER", raising=False)
+
+    import veritas_os.api.routes_system as routes_system
+
+    def _raise_provider_error() -> dict[str, bool]:
+        raise RuntimeError("secret path /prod/foo token abc")
+
+    monkeypatch.setattr(routes_system, "get_encryption_status", _raise_provider_error)
+
+    snapshot = routes_system._security_posture_snapshot()
+
+    assert snapshot["encryption"]["error_type"] == "RuntimeError"
+    assert snapshot["encryption"]["key_provider"] == "env"
     rendered_snapshot = json.dumps(snapshot, sort_keys=True)
     assert "secret path" not in rendered_snapshot
     assert "/prod/foo" not in rendered_snapshot

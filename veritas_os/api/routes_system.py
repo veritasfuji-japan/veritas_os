@@ -7,6 +7,7 @@ import asyncio
 import heapq
 import json
 import logging
+import os
 import queue
 import time
 from pathlib import Path
@@ -149,13 +150,16 @@ def _security_posture_snapshot() -> Dict[str, Any]:
     srv = _get_server()
     auth_snapshot = _auth_store_health(srv)
     auth_details = auth_snapshot["details"]
+    configured_key_provider = (
+        os.getenv("VERITAS_ENCRYPTION_KEY_PROVIDER", "env").strip().lower() or "env"
+    )
     try:
         encryption_status = get_encryption_status()
     except Exception as exc:  # noqa: BLE001
         encryption_status = {
             "encryption_enabled": False,
             "algorithm": "none",
-            "key_provider": "unknown",
+            "key_provider": configured_key_provider,
             "key_configured": False,
             "secure_by_default": True,
             "eu_ai_act_article": "Art. 12",
