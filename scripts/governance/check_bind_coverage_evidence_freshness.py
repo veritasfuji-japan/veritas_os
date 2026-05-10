@@ -53,7 +53,7 @@ def _load_json_or_error(path: Path) -> tuple[Any | None, str | None]:
 
     try:
         return json.loads(path.read_text(encoding="utf-8")), None
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         return None, exc.__class__.__name__
 
 
@@ -118,7 +118,10 @@ def compare_bind_coverage_evidence(
         stale_reasons.append(committed_md_error)
     if generated_md_error:
         stale_files.append(str(committed_md))
-        stale_reasons.append(f"{committed_md}: failed to generate markdown artifact")
+        generated_md_error_class = generated_md_error.split(": ", maxsplit=1)[-1]
+        stale_reasons.append(
+            f"{committed_md}: failed to generate markdown artifact ({generated_md_error_class})"
+        )
     if (
         committed_md_text is not None
         and generated_md_text is not None

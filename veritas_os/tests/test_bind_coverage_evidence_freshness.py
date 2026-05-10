@@ -174,6 +174,7 @@ def test_missing_generated_markdown_is_stale(tmp_path: Path) -> None:
     )
     assert str(committed_md) in stale_files
     assert any("failed to generate markdown artifact" in reason for reason in reasons)
+    assert any("FileNotFoundError" in reason for reason in reasons)
 
 
 def test_regenerate_command_uses_module_execution() -> None:

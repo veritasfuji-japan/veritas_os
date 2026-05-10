@@ -25,6 +25,9 @@ EFFECT_BEARING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_JSON = REPO_ROOT / "docs/en/validation/bind-coverage-evidence.latest.json"
 OUTPUT_MD = REPO_ROOT / "docs/en/validation/bind-coverage-evidence.latest.md"
+GENERATED_AT_ERROR_MESSAGE = (
+    "generated_at must be a non-empty ISO-8601 timestamp when provided"
+)
 
 
 def _resolve_generated_at(generated_at: str | None) -> str:
@@ -35,16 +38,12 @@ def _resolve_generated_at(generated_at: str | None) -> str:
 
     value = str(generated_at).strip()
     if not value:
-        raise ValueError(
-            "generated_at must be a non-empty ISO-8601 timestamp when provided"
-        )
+        raise ValueError(GENERATED_AT_ERROR_MESSAGE)
 
     try:
         datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise ValueError(
-            "generated_at must be a non-empty ISO-8601 timestamp when provided"
-        ) from exc
+        raise ValueError(GENERATED_AT_ERROR_MESSAGE) from exc
     return value
 
 
