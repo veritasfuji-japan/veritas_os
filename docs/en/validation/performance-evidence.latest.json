@@ -6,7 +6,7 @@
     "python_version": "3.12.3"
   },
   "failures": [],
-  "generated_at": "2026-05-10T09:08:47.071191+00:00",
+  "generated_at": "2026-05-10T09:46:34.155310+00:00",
   "interpretation_boundaries": [
     "This artifact is CI-safe local evidence, not a production SLA.",
     "This artifact does not include external LLM provider latency unless explicitly measured.",

@@ -95,3 +95,52 @@ def test_compare_stale_when_generated_at_invalid(tmp_path) -> None:
     stale_files, reasons = compare_performance_evidence(committed_json, committed_md, generated_json, generated_md)
     assert stale_files == [str(committed_json)]
     assert any("generated artifact invalid generated_at" in reason for reason in reasons)
+
+
+def test_compare_detects_payload_drift_metrics_samples_and_notes(tmp_path) -> None:
+    committed_json = tmp_path / "committed.json"
+    committed_md = tmp_path / "committed.md"
+    generated_json = tmp_path / "generated.json"
+    generated_md = tmp_path / "generated.md"
+    write_performance_evidence(committed_json, committed_md, generated_at=FIXED_GENERATED_AT, deterministic_fixture=True)
+    write_performance_evidence(generated_json, generated_md, generated_at=FIXED_GENERATED_AT, deterministic_fixture=True)
+
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["metrics"][0]["p50_ms"] = 999.0
+    committed_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _, reasons = compare_performance_evidence(committed_json, committed_md, generated_json, generated_md)
+    assert any("content differs from regenerated artifact" in reason for reason in reasons)
+
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["metrics"][0]["samples"] = [123.0, 456.0, 789.0]
+    committed_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _, reasons = compare_performance_evidence(committed_json, committed_md, generated_json, generated_md)
+    assert any("content differs from regenerated artifact" in reason for reason in reasons)
+
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["metrics"][0]["notes"] = "changed"
+    committed_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _, reasons = compare_performance_evidence(committed_json, committed_md, generated_json, generated_md)
+    assert any("content differs from regenerated artifact" in reason for reason in reasons)
+
+
+def test_compare_ignores_generated_at_and_environment_only_drift(tmp_path) -> None:
+    committed_json = tmp_path / "committed.json"
+    committed_md = tmp_path / "committed.md"
+    generated_json = tmp_path / "generated.json"
+    generated_md = tmp_path / "generated.md"
+    write_performance_evidence(committed_json, committed_md, generated_at=FIXED_GENERATED_AT, deterministic_fixture=True)
+    write_performance_evidence(generated_json, generated_md, generated_at=FIXED_GENERATED_AT, deterministic_fixture=True)
+
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = "2026-01-01T00:00:00+00:00"
+    payload["environment"] = {
+        "python_version": "X",
+        "platform": "Y",
+        "implementation": "Z",
+        "ci_detected": False,
+    }
+    committed_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    stale_files, reasons = compare_performance_evidence(committed_json, committed_md, generated_json, generated_md)
+    assert stale_files == []
+    assert reasons == []

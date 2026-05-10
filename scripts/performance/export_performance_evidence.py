@@ -4,7 +4,6 @@ import json
 import os
 import platform
 import statistics
-import sys
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -193,6 +192,7 @@ def generate_performance_evidence(
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 root = Path(tmp_dir)
+
                 def effective_log_paths() -> tuple[Path, Path, Path]:
                     return root, root / "trust_log.json", root / "trust_log.jsonl"
 
@@ -232,13 +232,30 @@ def generate_performance_evidence(
                 metric["notes"] = "TrustLog measurements use the configured local/test backend unless otherwise noted."
                 metrics.append(metric)
         except Exception as exc:
-            metrics.append({
-                "name": "trustlog.append.local", "category": "trustlog_append", "unit": "ms",
-                "samples": [], "p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0,
-                "mean_ms": 0.0, "min_ms": 0.0, "max_ms": 0.0,
-                "status": "not_measured", "notes": f"error_type={exc.__class__.__name__}"
-            })
-        metrics.append(_fixture_metric("decide.deterministic.fixture", "decide_deterministic", [2.1,2.0,2.2], "External LLM provider latency is excluded."))
+            metrics.append(
+                {
+                    "name": "trustlog.append.local",
+                    "category": "trustlog_append",
+                    "unit": "ms",
+                    "samples": [],
+                    "p50_ms": 0.0,
+                    "p95_ms": 0.0,
+                    "p99_ms": 0.0,
+                    "mean_ms": 0.0,
+                    "min_ms": 0.0,
+                    "max_ms": 0.0,
+                    "status": "not_measured",
+                    "notes": f"error_type={exc.__class__.__name__}",
+                }
+            )
+        metrics.append(
+            _fixture_metric(
+                "decide.deterministic.fixture",
+                "decide_deterministic",
+                [2.1, 2.0, 2.2],
+                "External LLM provider latency is excluded.",
+            )
+        )
         mode = "ci_safe_local"
 
     metrics = sorted(metrics, key=lambda x: (x["category"], x["name"]))
@@ -268,7 +285,24 @@ def generate_performance_evidence(
 
 
 def render_performance_markdown(evidence: dict[str, Any]) -> str:
-    lines = ["# Performance Evidence Artifact", "", "## Scope", "Reviewer-facing latency evidence for CI-safe local measurements.", "", "## Summary table", "| Metric | Value |", "| --- | --- |", f"| measurement_mode | {evidence['measurement_mode']} |", f"| sample_count | {evidence['sample_count']} |", f"| warmup_count | {evidence['warmup_count']} |", f"| status | {evidence['status']} |", "", "## Metrics table", "| Name | Category | p50 ms | p95 ms | p99 ms | Status | Notes |", "| --- | --- | ---: | ---: | ---: | --- | --- |"]
+    lines = [
+        "# Performance Evidence Artifact",
+        "",
+        "## Scope",
+        "Reviewer-facing latency evidence for CI-safe local measurements.",
+        "",
+        "## Summary table",
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| measurement_mode | {evidence['measurement_mode']} |",
+        f"| sample_count | {evidence['sample_count']} |",
+        f"| warmup_count | {evidence['warmup_count']} |",
+        f"| status | {evidence['status']} |",
+        "",
+        "## Metrics table",
+        "| Name | Category | p50 ms | p95 ms | p99 ms | Status | Notes |",
+        "| --- | --- | ---: | ---: | ---: | --- | --- |",
+    ]
     for m in evidence["metrics"]:
         lines.append(f"| {m['name']} | {m['category']} | {m['p50_ms']:.3f} | {m['p95_ms']:.3f} | {m['p99_ms']:.3f} | {m['status']} | {m['notes']} |")
     lines.extend(["", "## Failures / not measured"])
