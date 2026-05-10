@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -242,6 +242,12 @@ validate-postgresql-live:
 		--durations=10
 
 validate-live-postgresql: validate-postgresql-live
+
+performance-evidence:
+	python -m scripts.performance.export_performance_evidence
+
+check-performance-evidence:
+	python -m scripts.performance.check_performance_evidence_freshness
 
 validate-staged-report:
 	@echo "[veritas] Generating staged operational readiness report..."

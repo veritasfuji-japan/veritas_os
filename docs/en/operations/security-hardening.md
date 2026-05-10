@@ -189,3 +189,17 @@ sha256sum -c security/sbom/baseline/node.cdx.sha256
   - The artifact proves runtime route classification coverage, not external legal certification.
   - The artifact does not prove every business action is safe.
   - Audited exemptions remain subject to periodic governance review.
+
+## 14. Performance Evidence Artifact (Reviewer-facing)
+
+- Artifact paths:
+  - `docs/en/validation/performance-evidence.latest.json`
+  - `docs/en/validation/performance-evidence.latest.md`
+- Regenerate command:
+  - `python -m scripts.performance.export_performance_evidence`
+- Freshness check command:
+  - `python -m scripts.performance.check_performance_evidence_freshness`
+- Interpretation boundaries:
+  - This is CI-safe local evidence, not a production SLA.
+  - External LLM provider latency and customer infrastructure latency are excluded unless explicitly measured.
+  - Customer PoC and production-like environments must re-measure these latencies.
