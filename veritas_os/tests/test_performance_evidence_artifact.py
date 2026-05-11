@@ -49,6 +49,16 @@ def test_generated_at_fixed_timestamp_reflected() -> None:
     assert payload_z["generated_at"] == "1970-01-01T00:00:00Z"
 
 
+
+
+def test_generated_at_trims_surrounding_whitespace() -> None:
+    payload = export_performance_evidence(
+        deterministic_fixture=True,
+        generated_at=" 1970-01-01T00:00:00+00:00 ",
+    )
+    assert payload["generated_at"] == "1970-01-01T00:00:00+00:00"
+
+
 def test_invalid_generated_at_raises_value_error() -> None:
     for bad in ["", "   ", "not-a-date"]:
         with pytest.raises(ValueError):
@@ -122,3 +132,17 @@ def test_markdown_renderer_escapes_metric_cells() -> None:
     assert "line1\nline2|pipe" not in markdown
     assert markdown.endswith("\n")
     assert not markdown.endswith("\n\n")
+
+
+def test_noop_mode_returns_not_measured_without_metrics() -> None:
+    payload = export_performance_evidence(
+        deterministic_fixture=False,
+        generated_at="1970-01-01T00:00:00+00:00",
+    )
+
+    assert payload["schema_version"] == "performance_evidence.v1"
+    assert payload["measurement_mode"] == "not_measured"
+    assert payload["sample_count"] == 0
+    assert payload["warmup_count"] == 0
+    assert payload["metrics"] == []
+    assert payload["generated_at"] == "1970-01-01T00:00:00+00:00"

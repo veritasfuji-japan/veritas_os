@@ -22,14 +22,15 @@ class _HttpResult:
 def _parse_generated_at(generated_at: str | None) -> str:
     if generated_at is None:
         return datetime.now(timezone.utc).isoformat()
-    if generated_at.strip() == "":
+    value = str(generated_at).strip()
+    if value == "":
         raise ValueError("generated_at must be a non-empty ISO-8601 string")
-    candidate = generated_at.replace("Z", "+00:00")
+    candidate = value.replace("Z", "+00:00")
     try:
         datetime.fromisoformat(candidate)
     except ValueError as exc:
         raise ValueError("generated_at must be a valid ISO-8601 datetime") from exc
-    return generated_at
+    return value
 
 
 def percentile(values: list[float], pct: float) -> float:
