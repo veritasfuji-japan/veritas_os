@@ -63,3 +63,16 @@ and non-certification boundaries for external reviewers.
 5. `docs/en/validation/regulated-action-governance-proof-pack.md`
 6. `docs/en/guides/poc-pack-financial-quickstart.md`
 7. `docs/en/validation/external-review-handoff-regulated-action-governance.md`
+
+
+## Performance evidence artifacts (reviewer-facing)
+
+- Performance evidence exporter core is implemented in `scripts/performance/export_performance_evidence.py`.
+- Deterministic fixture artifact is available at:
+  - `docs/en/validation/performance-evidence.latest.json`
+  - `docs/en/validation/performance-evidence.latest.md`
+- Scope boundary:
+  - deterministic fixture evidence only
+  - not production SLA
+  - external LLM / customer infra latency not included
+  - customer PoC re-measurement required

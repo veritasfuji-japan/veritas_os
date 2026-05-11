@@ -1,0 +1,63 @@
+{
+  "generated_at": "1970-01-01T00:00:00+00:00",
+  "measurement_mode": "deterministic_fixture",
+  "metrics": [
+    {
+      "name": "api_health_route",
+      "notes": "deterministic fixture; not production SLA",
+      "samples": [
+        8.1,
+        8.3,
+        8.2
+      ],
+      "status": "ok",
+      "summary": {
+        "avg_ms": 8.2,
+        "p50_ms": 8.2,
+        "p95_ms": 8.3,
+        "p99_ms": 8.3
+      }
+    },
+    {
+      "name": "trustlog_append_local",
+      "notes": "deterministic fixture; not production SLA",
+      "samples": [
+        3.1,
+        3.3,
+        3.2
+      ],
+      "status": "ok",
+      "summary": {
+        "avg_ms": 3.2,
+        "p50_ms": 3.2,
+        "p95_ms": 3.3,
+        "p99_ms": 3.3
+      }
+    },
+    {
+      "name": "bind_eval_local",
+      "notes": "deterministic fixture; not production SLA",
+      "samples": [
+        4.2,
+        4.1,
+        4.3
+      ],
+      "status": "ok",
+      "summary": {
+        "avg_ms": 4.2,
+        "p50_ms": 4.2,
+        "p95_ms": 4.3,
+        "p99_ms": 4.3
+      }
+    }
+  ],
+  "notes": [
+    "Reviewer-facing deterministic fixture evidence only.",
+    "Not a production SLA statement.",
+    "External LLM provider latency is not included.",
+    "Customer infrastructure latency is not included."
+  ],
+  "sample_count": 3,
+  "schema_version": "performance_evidence.v1",
+  "warmup_count": 0
+}
