@@ -212,6 +212,7 @@ def test_write_performance_evidence_writes_json_and_markdown(tmp_path: Path) -> 
     parsed = json.loads(json_path.read_text(encoding="utf-8"))
     assert parsed["schema_version"] == "performance_evidence.v1"
     assert parsed["generated_at"] == "1970-01-01T00:00:00+00:00"
+    assert parsed["measurement_mode"] == "deterministic_fixture"
 
     json_text = json_path.read_text(encoding="utf-8")
     assert json_text.endswith("\n")
@@ -234,3 +235,16 @@ def test_cli_main_writes_default_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_
     assert exit_code == 0
     assert (tmp_path / "docs/en/validation/performance-evidence.latest.json").exists()
     assert (tmp_path / "docs/en/validation/performance-evidence.latest.md").exists()
+
+
+def test_markdown_renderer_uses_operational_wording_for_not_measured_mode() -> None:
+    payload = export_performance_evidence(
+        deterministic_fixture=False,
+        generated_at="1970-01-01T00:00:00+00:00",
+    )
+
+    markdown = render_performance_markdown(payload)
+
+    assert "reviewer-facing deterministic fixture evidence" not in markdown
+    assert "reviewer-facing operational evidence" in markdown
+    assert "This artifact is not a production SLA." in markdown

@@ -197,10 +197,9 @@ def render_performance_markdown(payload: dict[str, Any]) -> str:
         lines.append(
             f"| {name} | {status} | {len(metric['samples'])} | {p95_cell} | {notes} |"
         )
-    lines.extend(
-        [
-            "",
-            "## Interpretation boundaries",
+    measurement_mode = payload.get("measurement_mode")
+    if measurement_mode == "deterministic_fixture":
+        boundary_lines = [
             "- This artifact is reviewer-facing deterministic fixture evidence.",
             "- This artifact is not a production SLA.",
             "- This artifact does not include external LLM provider latency.",
@@ -208,19 +207,27 @@ def render_performance_markdown(payload: dict[str, Any]) -> str:
             "- Results should be re-measured in customer PoC environments.",
             "- This artifact is intended to validate exporter structure, reporting format, and deterministic evidence plumbing.",
         ]
-    )
+    else:
+        boundary_lines = [
+            "- This artifact is reviewer-facing operational evidence.",
+            "- This artifact is not a production SLA.",
+            "- This artifact does not include external LLM provider latency unless explicitly measured.",
+            "- This artifact does not include customer infrastructure latency.",
+            "- Results should be re-measured in customer PoC environments.",
+        ]
+
+    lines.extend(["", "## Interpretation boundaries", *boundary_lines])
     return "\n".join(lines) + "\n"
 
 
 def write_performance_evidence(
     json_path: Path = OUTPUT_JSON,
     markdown_path: Path = OUTPUT_MD,
-    deterministic_fixture: bool = True,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
-    """Write deterministic reviewer-facing artifacts to JSON and Markdown files."""
+    """Write deterministic reviewer-facing fixture artifacts to JSON and Markdown files."""
     payload = export_performance_evidence(
-        deterministic_fixture=deterministic_fixture,
+        deterministic_fixture=True,
         generated_at=generated_at,
     )
     markdown = render_performance_markdown(payload)
