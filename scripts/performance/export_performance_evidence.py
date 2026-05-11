@@ -232,34 +232,42 @@ def render_performance_markdown(payload: dict[str, Any]) -> str:
 
 
 def write_performance_evidence(
-    json_path: Path = OUTPUT_JSON,
-    markdown_path: Path = OUTPUT_MD,
-    deterministic_fixture: bool = True,
+    json_path: Path | None = None,
+    markdown_path: Path | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
-    """Write deterministic reviewer-facing artifacts to JSON and Markdown files."""
+    """Write deterministic reviewer-facing fixture artifacts to JSON and Markdown files."""
+    resolved_json_path = json_path if json_path is not None else OUTPUT_JSON
+    resolved_markdown_path = (
+        markdown_path if markdown_path is not None else OUTPUT_MD
+    )
     payload = export_performance_evidence(
-        deterministic_fixture=deterministic_fixture,
+        deterministic_fixture=True,
         generated_at=generated_at,
     )
     markdown = render_performance_markdown(payload)
 
-    json_path.parent.mkdir(parents=True, exist_ok=True)
-    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_json_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_markdown_path.parent.mkdir(parents=True, exist_ok=True)
 
-    json_path.write_text(
+    resolved_json_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    markdown_path.write_text(markdown.rstrip("\n") + "\n", encoding="utf-8")
+    resolved_markdown_path.write_text(markdown.rstrip("\n") + "\n", encoding="utf-8")
     return payload
 
 
 def main() -> int:
     """Generate committed reviewer-facing performance evidence artifacts."""
-    write_performance_evidence()
-    print(f"Wrote {OUTPUT_JSON}")
-    print(f"Wrote {OUTPUT_MD}")
+    json_path = OUTPUT_JSON
+    markdown_path = OUTPUT_MD
+    write_performance_evidence(
+        json_path=json_path,
+        markdown_path=markdown_path,
+    )
+    print(f"Wrote {json_path}")
+    print(f"Wrote {markdown_path}")
     return 0
 
 

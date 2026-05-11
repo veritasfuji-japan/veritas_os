@@ -231,24 +231,33 @@ def test_write_performance_evidence_writes_json_and_markdown(tmp_path: Path) -> 
     assert "reviewer-facing deterministic fixture evidence" in markdown
 
 
-def test_cli_main_writes_default_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_cli_main_writes_default_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     exporter = importlib.import_module("scripts.performance.export_performance_evidence")
+    json_path = tmp_path / "docs/en/validation/performance-evidence.latest.json"
+    md_path = tmp_path / "docs/en/validation/performance-evidence.latest.md"
     monkeypatch.setattr(
         exporter,
         "OUTPUT_JSON",
-        tmp_path / "docs/en/validation/performance-evidence.latest.json",
+        json_path,
     )
     monkeypatch.setattr(
         exporter,
         "OUTPUT_MD",
-        tmp_path / "docs/en/validation/performance-evidence.latest.md",
+        md_path,
     )
 
     exit_code = exporter.main()
 
     assert exit_code == 0
-    assert exporter.OUTPUT_JSON.exists()
-    assert exporter.OUTPUT_MD.exists()
+    assert json_path.exists()
+    assert md_path.exists()
+    output = capsys.readouterr().out
+    assert str(json_path) in output
+    assert str(md_path) in output
 
 
 def test_write_performance_evidence_resolves_default_paths_at_call_time(
@@ -267,10 +276,7 @@ def test_write_performance_evidence_resolves_default_paths_at_call_time(
         tmp_path / "docs/en/validation/performance-evidence.latest.md",
     )
 
-    exporter.write_performance_evidence(
-        json_path=exporter.OUTPUT_JSON,
-        markdown_path=exporter.OUTPUT_MD,
-    )
+    exporter.write_performance_evidence()
 
     assert exporter.OUTPUT_JSON.exists()
     assert exporter.OUTPUT_MD.exists()
