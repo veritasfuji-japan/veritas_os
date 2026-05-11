@@ -108,7 +108,10 @@ def test_markdown_drift_is_stale(tmp_path: Path) -> None:
     committed_json, committed_md = _write_fresh_artifacts(tmp_path)
 
     committed_md.write_text(
-        committed_md.read_text(encoding="utf-8") + "extra line\n",
+        committed_md.read_text(encoding="utf-8").replace(
+            "reviewer-facing deterministic fixture evidence",
+            "reviewer-facing deterministic fixture evidence updated",
+        ),
         encoding="utf-8",
     )
 
@@ -135,6 +138,40 @@ def test_missing_required_field_is_stale(tmp_path: Path) -> None:
     assert any("missing required field metrics" in reason for reason in result.reasons)
 
 
+def test_missing_required_field_does_not_add_generic_json_mismatch(
+    tmp_path: Path,
+) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    del payload["metrics"]
+    committed_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert result.fresh is False
+    assert any("missing required field metrics" in reason for reason in result.reasons)
+    assert not any("JSON payload mismatch" in reason for reason in result.reasons)
+
+
+def test_wrong_type_does_not_add_generic_json_mismatch(tmp_path: Path) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["metrics"] = "not-a-list"
+    committed_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert result.fresh is False
+    assert any("metrics must be a list" in reason for reason in result.reasons)
+    assert not any("JSON payload mismatch" in reason for reason in result.reasons)
+
+
 def test_markdown_double_trailing_newline_is_stale(tmp_path: Path) -> None:
     committed_json, committed_md = _write_fresh_artifacts(tmp_path)
 
@@ -147,6 +184,22 @@ def test_markdown_double_trailing_newline_is_stale(tmp_path: Path) -> None:
 
     assert result.fresh is False
     assert any("trailing newline" in reason for reason in result.reasons)
+    assert not any("Markdown text mismatch" in reason for reason in result.reasons)
+
+
+def test_markdown_sanity_error_does_not_add_generic_text_mismatch(
+    tmp_path: Path,
+) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    committed_md.write_text("broken markdown\n", encoding="utf-8")
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert result.fresh is False
+    assert any(
+        "missing '# Performance Evidence'" in reason for reason in result.reasons
+    )
+    assert not any("Markdown text mismatch" in reason for reason in result.reasons)
 
 
 def test_cli_main_fresh_returns_0(

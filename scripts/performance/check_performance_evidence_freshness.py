@@ -95,24 +95,34 @@ def check_performance_evidence_freshness(
 
     stale_files: list[Path] = []
     reasons: list[str] = []
+    committed_json_valid = False
+    generated_json_valid = False
+    committed_md_valid = False
+    generated_md_valid = False
 
     committed_json, committed_json_error = _load_json_or_error(resolved_json)
     if committed_json_error is not None:
         stale_files.append(resolved_json)
         reasons.append(f"{resolved_json}: failed to load JSON ({committed_json_error})")
     else:
-        for reason in _validate_json_payload(committed_json, "committed"):
+        committed_json_reasons = _validate_json_payload(committed_json, "committed")
+        for reason in committed_json_reasons:
             stale_files.append(resolved_json)
             reasons.append(f"{resolved_json}: {reason}")
+        if not committed_json_reasons:
+            committed_json_valid = True
 
     committed_md_text, committed_md_error = _read_text_or_error(resolved_md)
     if committed_md_error is not None:
         stale_files.append(resolved_md)
         reasons.append(f"{resolved_md}: failed to read markdown ({committed_md_error})")
     else:
-        for reason in _validate_markdown_text(committed_md_text, "committed"):
+        committed_md_reasons = _validate_markdown_text(committed_md_text, "committed")
+        for reason in committed_md_reasons:
             stale_files.append(resolved_md)
             reasons.append(f"{resolved_md}: {reason}")
+        if not committed_md_reasons:
+            committed_md_valid = True
 
     with TemporaryDirectory() as tmp_dir:
         generated_json_path = Path(tmp_dir) / "performance-evidence.latest.json"
@@ -140,9 +150,12 @@ def check_performance_evidence_freshness(
                 f"{resolved_json}: generated JSON invalid ({generated_json_error})"
             )
         else:
-            for reason in _validate_json_payload(generated_json, "generated"):
+            generated_json_reasons = _validate_json_payload(generated_json, "generated")
+            for reason in generated_json_reasons:
                 stale_files.append(resolved_json)
                 reasons.append(f"{resolved_json}: {reason}")
+            if not generated_json_reasons:
+                generated_json_valid = True
 
         generated_md_text, generated_md_error = _read_text_or_error(generated_md_path)
         if generated_md_error is not None:
@@ -151,19 +164,31 @@ def check_performance_evidence_freshness(
                 f"{resolved_md}: generated markdown invalid ({generated_md_error})"
             )
         else:
-            for reason in _validate_markdown_text(generated_md_text, "generated"):
+            generated_md_reasons = _validate_markdown_text(
+                generated_md_text,
+                "generated",
+            )
+            for reason in generated_md_reasons:
                 stale_files.append(resolved_md)
                 reasons.append(f"{resolved_md}: {reason}")
+            if not generated_md_reasons:
+                generated_md_valid = True
 
-        if committed_json is not None and generated_json is not None:
-            if committed_json != generated_json:
-                stale_files.append(resolved_json)
-                reasons.append(f"{resolved_json}: JSON payload mismatch")
+        if (
+            committed_json_valid
+            and generated_json_valid
+            and committed_json != generated_json
+        ):
+            stale_files.append(resolved_json)
+            reasons.append(f"{resolved_json}: JSON payload mismatch")
 
-        if committed_md_text is not None and generated_md_text is not None:
-            if committed_md_text != generated_md_text:
-                stale_files.append(resolved_md)
-                reasons.append(f"{resolved_md}: Markdown text mismatch")
+        if (
+            committed_md_valid
+            and generated_md_valid
+            and committed_md_text != generated_md_text
+        ):
+            stale_files.append(resolved_md)
+            reasons.append(f"{resolved_md}: Markdown text mismatch")
 
     unique_files = tuple(dict.fromkeys(stale_files))
     return FreshnessResult(
