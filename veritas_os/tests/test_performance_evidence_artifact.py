@@ -110,6 +110,21 @@ def test_measure_latency_rejects_non_positive_sample_count() -> None:
         measure_latency("bad", lambda: None, sample_count=-1)
 
 
+def test_measure_latency_success_path_returns_ok_metric() -> None:
+    metric = measure_latency("noop", lambda: None, sample_count=3)
+
+    assert metric["name"] == "noop"
+    assert metric["status"] == "ok"
+    assert len(metric["samples"]) == 3
+    assert metric["notes"] == ""
+    assert metric["summary"] is not None
+
+    summary = metric["summary"]
+    for key in ["avg_ms", "p50_ms", "p95_ms", "p99_ms"]:
+        assert key in summary
+        assert isinstance(summary[key], (float, int))
+
+
 def test_measure_latency_converts_runtime_error_to_failed_metric() -> None:
     def fail() -> None:
         raise RuntimeError("raw-response-body=secret")
