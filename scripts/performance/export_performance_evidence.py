@@ -6,7 +6,9 @@ This module is intentionally CI-safe and avoids external dependencies.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from datetime import datetime, timezone
+import json
 import math
 from statistics import mean
 from time import perf_counter
@@ -14,6 +16,10 @@ from typing import Any, Callable
 
 
 FIXED_GENERATED_AT = "1970-01-01T00:00:00+00:00"
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_JSON = REPO_ROOT / "docs/en/validation/performance-evidence.latest.json"
+OUTPUT_MD = REPO_ROOT / "docs/en/validation/performance-evidence.latest.md"
 
 
 @dataclass(frozen=True)
@@ -134,6 +140,20 @@ def export_performance_evidence(
         sample_count = 0
         warmup_count = 0
         metrics = []
+    if measurement_mode == "deterministic_fixture":
+        notes = [
+            "Reviewer-facing deterministic fixture evidence only.",
+            "Not a production SLA statement.",
+            "External LLM provider latency is not included.",
+            "Customer infrastructure latency is not included.",
+        ]
+    else:
+        notes = [
+            "Reviewer-facing operational evidence only.",
+            "Not a production SLA statement.",
+            "External LLM provider latency is not included unless explicitly measured.",
+            "Customer infrastructure latency is not included.",
+        ]
 
     return {
         "schema_version": "performance_evidence.v1",
@@ -142,10 +162,7 @@ def export_performance_evidence(
         "sample_count": sample_count,
         "warmup_count": warmup_count,
         "metrics": metrics,
-        "notes": [
-            "Reviewer-facing operational evidence only.",
-            "Not a production SLA statement.",
-        ],
+        "notes": notes,
     }
 
 
@@ -196,11 +213,51 @@ def render_performance_markdown(payload: dict[str, Any]) -> str:
         [
             "",
             "## Interpretation boundaries",
-            "- This evidence is for reviewer context and CI-safe checks.",
-            "- Figures are not production SLA claims.",
+            "- This artifact is reviewer-facing deterministic fixture evidence.",
+            "- This artifact is not a production SLA.",
+            "- This artifact does not include external LLM provider latency.",
+            "- This artifact does not include customer infrastructure latency.",
+            "- Results should be re-measured in customer PoC environments.",
+            "- This artifact is intended to validate exporter structure, reporting format, and deterministic evidence plumbing.",
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def write_performance_evidence(
+    json_path: Path = OUTPUT_JSON,
+    markdown_path: Path = OUTPUT_MD,
+    deterministic_fixture: bool = True,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    """Write deterministic reviewer-facing artifacts to JSON and Markdown files."""
+    payload = export_performance_evidence(
+        deterministic_fixture=deterministic_fixture,
+        generated_at=generated_at,
+    )
+    markdown = render_performance_markdown(payload)
+
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+
+    json_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    markdown_path.write_text(markdown.rstrip("\n") + "\n", encoding="utf-8")
+    return payload
+
+
+def main() -> int:
+    """Generate committed reviewer-facing performance evidence artifacts."""
+    write_performance_evidence()
+    print(f"Wrote {OUTPUT_JSON}")
+    print(f"Wrote {OUTPUT_MD}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 
 __all__ = [
@@ -208,4 +265,6 @@ __all__ = [
     "measure_latency",
     "percentile",
     "render_performance_markdown",
+    "write_performance_evidence",
+    "main",
 ]

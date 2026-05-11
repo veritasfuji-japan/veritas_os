@@ -1,6 +1,10 @@
 """Tests for performance evidence exporter core."""
 
+import json
+from pathlib import Path
+
 import pytest
+import scripts.performance.export_performance_evidence as exporter
 
 from scripts.performance.export_performance_evidence import (
     _HttpResult,
@@ -9,6 +13,7 @@ from scripts.performance.export_performance_evidence import (
     measure_latency,
     percentile,
     render_performance_markdown,
+    write_performance_evidence,
 )
 
 
@@ -42,6 +47,8 @@ def test_deterministic_fixture_default_generated_at_is_fixed() -> None:
     assert first["generated_at"] == "1970-01-01T00:00:00+00:00"
     assert second["generated_at"] == "1970-01-01T00:00:00+00:00"
     assert first["generated_at"] == second["generated_at"]
+    assert any("deterministic fixture" in note.lower() for note in first["notes"])
+    assert any("not a production sla" in note.lower() for note in first["notes"])
 
 
 def test_explicit_generated_at_is_used_for_fixture_and_noop_modes() -> None:
@@ -182,6 +189,7 @@ def test_noop_mode_returns_not_measured_without_metrics() -> None:
     assert payload["warmup_count"] == 0
     assert payload["metrics"] == []
     assert payload["generated_at"] == "1970-01-01T00:00:00+00:00"
+    assert any("operational evidence" in note.lower() for note in payload["notes"])
 
 
 def test_markdown_renderer_escapes_summary_cells() -> None:
@@ -193,3 +201,46 @@ def test_markdown_renderer_escapes_summary_cells() -> None:
 
     assert r"performance\|evidence" in markdown
     assert "line1 line2" in markdown
+
+
+def test_write_performance_evidence_writes_json_and_markdown(tmp_path: Path) -> None:
+    json_path = tmp_path / "artifact" / "performance-evidence.latest.json"
+    md_path = tmp_path / "artifact" / "performance-evidence.latest.md"
+
+    payload = write_performance_evidence(json_path=json_path, markdown_path=md_path)
+
+    assert json_path.exists()
+    assert md_path.exists()
+    assert payload["schema_version"] == "performance_evidence.v1"
+
+    parsed = json.loads(json_path.read_text(encoding="utf-8"))
+    assert parsed["schema_version"] == "performance_evidence.v1"
+    assert parsed["generated_at"] == "1970-01-01T00:00:00+00:00"
+
+    json_text = json_path.read_text(encoding="utf-8")
+    assert json_text.endswith("\n")
+
+    markdown = md_path.read_text(encoding="utf-8")
+    assert markdown.endswith("\n")
+    assert not markdown.endswith("\n\n")
+    assert "## Interpretation boundaries" in markdown
+    assert "reviewer-facing deterministic fixture evidence" in markdown
+
+
+def test_cli_main_writes_default_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        exporter,
+        "OUTPUT_JSON",
+        tmp_path / "docs/en/validation/performance-evidence.latest.json",
+    )
+    monkeypatch.setattr(
+        exporter,
+        "OUTPUT_MD",
+        tmp_path / "docs/en/validation/performance-evidence.latest.md",
+    )
+
+    exit_code = exporter.main()
+
+    assert exit_code == 0
+    assert exporter.OUTPUT_JSON.exists()
+    assert exporter.OUTPUT_MD.exists()
