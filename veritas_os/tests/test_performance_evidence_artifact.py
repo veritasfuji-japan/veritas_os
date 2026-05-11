@@ -1,5 +1,8 @@
 """Tests for performance evidence exporter core."""
 
+import json
+from pathlib import Path
+
 import pytest
 
 from scripts.performance.export_performance_evidence import (
@@ -9,6 +12,7 @@ from scripts.performance.export_performance_evidence import (
     measure_latency,
     percentile,
     render_performance_markdown,
+    write_performance_evidence,
 )
 
 
@@ -193,3 +197,40 @@ def test_markdown_renderer_escapes_summary_cells() -> None:
 
     assert r"performance\|evidence" in markdown
     assert "line1 line2" in markdown
+
+
+def test_write_performance_evidence_writes_json_and_markdown(tmp_path: Path) -> None:
+    json_path = tmp_path / "artifact" / "performance-evidence.latest.json"
+    md_path = tmp_path / "artifact" / "performance-evidence.latest.md"
+
+    payload = write_performance_evidence(json_path=json_path, markdown_path=md_path)
+
+    assert json_path.exists()
+    assert md_path.exists()
+    assert payload["schema_version"] == "performance_evidence.v1"
+
+    parsed = json.loads(json_path.read_text(encoding="utf-8"))
+    assert parsed["schema_version"] == "performance_evidence.v1"
+    assert parsed["generated_at"] == "1970-01-01T00:00:00+00:00"
+
+    json_text = json_path.read_text(encoding="utf-8")
+    assert json_text.endswith("\n")
+
+    markdown = md_path.read_text(encoding="utf-8")
+    assert markdown.endswith("\n")
+    assert not markdown.endswith("\n\n")
+    assert "## Interpretation boundaries" in markdown
+    assert "reviewer-facing deterministic fixture evidence" in markdown
+
+
+def test_cli_main_writes_default_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = __import__(
+        "scripts.performance.export_performance_evidence",
+        fromlist=["main"],
+    ).main()
+
+    assert exit_code == 0
+    assert (tmp_path / "docs/en/validation/performance-evidence.latest.json").exists()
+    assert (tmp_path / "docs/en/validation/performance-evidence.latest.md").exists()
