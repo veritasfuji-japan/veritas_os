@@ -92,7 +92,7 @@ def test_json_drift_is_stale(tmp_path: Path) -> None:
     committed_json, committed_md = _write_fresh_artifacts(tmp_path)
 
     payload = json.loads(committed_json.read_text(encoding="utf-8"))
-    payload["measurement_mode"] = "tampered"
+    payload["sample_count"] = 999
     committed_json.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -103,6 +103,91 @@ def test_json_drift_is_stale(tmp_path: Path) -> None:
     assert result.fresh is False
     assert committed_json in result.stale_files
     assert any("JSON payload mismatch" in reason for reason in result.reasons)
+
+
+def test_generated_at_non_string_is_stale(tmp_path: Path) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = 123
+    committed_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert any("generated_at must be a string" in reason for reason in result.reasons)
+    assert not any("JSON payload mismatch" in reason for reason in result.reasons)
+
+
+def test_generated_at_blank_is_stale(tmp_path: Path) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = "   "
+    committed_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert any(
+        "generated_at must be a non-empty ISO-8601 string" in reason
+        for reason in result.reasons
+    )
+    assert not any("JSON payload mismatch" in reason for reason in result.reasons)
+
+
+def test_generated_at_invalid_iso_is_stale(tmp_path: Path) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["generated_at"] = "not-a-date"
+    committed_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert any(
+        "generated_at must be a valid ISO-8601 datetime" in reason
+        for reason in result.reasons
+    )
+    assert not any("JSON payload mismatch" in reason for reason in result.reasons)
+
+
+def test_measurement_mode_non_string_is_stale(tmp_path: Path) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["measurement_mode"] = 123
+    committed_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert any(
+        "measurement_mode must be a string" in reason for reason in result.reasons
+    )
+    assert not any("JSON payload mismatch" in reason for reason in result.reasons)
+
+
+def test_measurement_mode_outside_allowed_is_stale(tmp_path: Path) -> None:
+    committed_json, committed_md = _write_fresh_artifacts(tmp_path)
+    payload = json.loads(committed_json.read_text(encoding="utf-8"))
+    payload["measurement_mode"] = "tampered"
+    committed_json.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = check_performance_evidence_freshness(committed_json, committed_md)
+
+    assert any(
+        "measurement_mode must be one of" in reason for reason in result.reasons
+    )
+    assert not any("JSON payload mismatch" in reason for reason in result.reasons)
 
 
 def test_markdown_drift_is_stale(tmp_path: Path) -> None:

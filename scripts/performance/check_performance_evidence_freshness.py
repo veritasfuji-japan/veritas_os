@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
-import json
 
 from scripts.performance.export_performance_evidence import (
     FIXED_GENERATED_AT,
@@ -17,6 +18,7 @@ from scripts.performance.export_performance_evidence import (
 
 REGENERATE_COMMAND = "python -m scripts.performance.export_performance_evidence"
 EXPECTED_SCHEMA_VERSION = "performance_evidence.v1"
+ALLOWED_MEASUREMENT_MODES = ("deterministic_fixture", "not_measured")
 REQUIRED_JSON_FIELDS = (
     "schema_version",
     "generated_at",
@@ -73,7 +75,38 @@ def _validate_json_payload(payload: Any, label: str) -> list[str]:
         reasons.append(f"{label} sample_count must be an int")
     if "warmup_count" in payload and not isinstance(payload["warmup_count"], int):
         reasons.append(f"{label} warmup_count must be an int")
+    if "generated_at" in payload:
+        reasons.extend(_validate_generated_at(payload["generated_at"], label))
+    if "measurement_mode" in payload:
+        reasons.extend(_validate_measurement_mode(payload["measurement_mode"], label))
     return reasons
+
+
+def _validate_generated_at(value: Any, label: str) -> list[str]:
+    if not isinstance(value, str):
+        return [f"{label} generated_at must be a string"]
+
+    stripped = value.strip()
+    if not stripped:
+        return [f"{label} generated_at must be a non-empty ISO-8601 string"]
+
+    try:
+        datetime.fromisoformat(stripped.replace("Z", "+00:00"))
+    except ValueError:
+        return [f"{label} generated_at must be a valid ISO-8601 datetime"]
+
+    return []
+
+
+def _validate_measurement_mode(value: Any, label: str) -> list[str]:
+    if not isinstance(value, str):
+        return [f"{label} measurement_mode must be a string"]
+
+    if value not in ALLOWED_MEASUREMENT_MODES:
+        allowed = ", ".join(ALLOWED_MEASUREMENT_MODES)
+        return [f"{label} measurement_mode must be one of {allowed}"]
+
+    return []
 
 
 def _validate_markdown_text(text: str, label: str) -> list[str]:
