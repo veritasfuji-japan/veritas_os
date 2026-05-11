@@ -244,3 +244,16 @@ def test_cli_main_writes_default_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_
     assert exit_code == 0
     assert exporter.OUTPUT_JSON.exists()
     assert exporter.OUTPUT_MD.exists()
+
+
+def test_write_performance_evidence_resolves_default_paths_at_call_time(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(exporter, "OUTPUT_JSON", tmp_path / "out.json")
+    monkeypatch.setattr(exporter, "OUTPUT_MD", tmp_path / "out.md")
+
+    exporter.write_performance_evidence()
+
+    assert exporter.OUTPUT_JSON.exists()
+    assert exporter.OUTPUT_MD.exists()
