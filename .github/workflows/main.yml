@@ -206,6 +206,9 @@ jobs:
       - name: "[Tier 1] Check bind coverage evidence freshness"
         run: python -m scripts.governance.check_bind_coverage_evidence_freshness
 
+      - name: "[Tier 1] Check performance evidence freshness"
+        run: make check-performance-evidence
+
       - name: "[Tier 1] Run governance smoke tests"
         run: |
           set -euxo pipefail
