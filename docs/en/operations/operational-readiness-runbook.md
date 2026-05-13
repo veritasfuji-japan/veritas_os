@@ -159,8 +159,10 @@ python scripts/generate_staged_readiness_report.py \
 
 ## Report Artifacts
 The staged readiness report also records the `trustlog-production-posture`
-advisory check, which runs the operator-facing TrustLog production posture
-checker without connecting to real DB/KMS/WORM services.
+advisory check, and runs it with a subprocess-scoped
+`VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE=1` override so the production
+posture path is evaluated even from a local/dev shell. The check remains
+non-blocking and does not connect to real DB/KMS/WORM services.
 
 
 ### Governance Readiness Report (v1.0)

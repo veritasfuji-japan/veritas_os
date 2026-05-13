@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import subprocess
 import sys
 import textwrap
@@ -140,15 +141,29 @@ GOVERNANCE_CHECKS: list[tuple[str, str, list[str], bool]] = [
     ),
 ]
 
+CHECK_ENV_OVERRIDES: dict[str, dict[str, str]] = {
+    "trustlog-production-posture": {
+        "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE": "1",
+    },
+}
 
-def run_check(label: str, command: list[str]) -> tuple[bool, str]:
+
+def run_check(
+    label: str,
+    command: list[str],
+    env_overrides: dict[str, str] | None = None,
+) -> tuple[bool, str]:
     """Run a single check command and return (passed, output_snippet)."""
+    env = None
+    if env_overrides:
+        env = {**os.environ, **env_overrides}
     try:
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
             timeout=60,
+            env=env,
         )
         passed = result.returncode == 0
         output = (result.stdout + result.stderr).strip()
@@ -414,7 +429,11 @@ def main() -> int:
 
     for label, tier, command, blocking in GOVERNANCE_CHECKS:
         logger.info("  [%s] %s", tier, label)
-        passed, output = run_check(label, command)
+        passed, output = run_check(
+            label,
+            command,
+            env_overrides=CHECK_ENV_OVERRIDES.get(label),
+        )
         status = "PASSED" if passed else ("FAILED" if blocking else "WARNING")
         logger.info("    → %s", status)
         results.append(

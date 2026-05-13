@@ -513,7 +513,7 @@ scripts/live_provider_validation.sh --json-report=/tmp/live-report.json
 ### Staged Readiness Report (`scripts/generate_staged_readiness_report.py`)
 
 Combines governance checks, compose validation, and live provider results into
-a single v2.0 operational readiness report (JSON + text):
+a single v2.1 operational readiness report (JSON + text):
 
 ```bash
 python scripts/generate_staged_readiness_report.py \
@@ -524,6 +524,9 @@ python scripts/generate_staged_readiness_report.py \
   --output /tmp/staged-report.json \
   --text-output /tmp/staged-report.txt
 ```
+
+The v2.1 staged report includes `trustlog-production-posture` as advisory
+governance evidence.
 
 See [`operational-readiness-runbook.md`](../operations/operational-readiness-runbook.md) for full usage and troubleshooting.
 
