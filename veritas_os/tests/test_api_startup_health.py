@@ -267,3 +267,104 @@ def test_check_runtime_feature_health_rejects_missing_atomic_io_in_production(
             has_sanitize=True,
             has_atomic_io=False,
         )
+
+
+def _trustlog_production_env() -> dict[str, str]:
+    return {
+        "VERITAS_ENV": "production",
+        "VERITAS_TRUSTLOG_BACKEND": "postgresql",
+        "VERITAS_DATABASE_URL": "postgresql://example",
+        "VERITAS_ENCRYPTION_KEY": "dummy",
+        "VERITAS_TRUSTLOG_SIGNER_BACKEND": "aws_kms",
+        "VERITAS_TRUSTLOG_KMS_KEY_ID": "dummy-kms-key",
+    }
+
+
+def test_validate_startup_security_flags_non_production_trustlog_insecure_does_not_raise(
+    monkeypatch,
+):
+    monkeypatch.delenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", raising=False)
+    monkeypatch.setenv("VERITAS_ENV", "local")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+
+    startup_health.validate_startup_security_flags(
+        logger=logging.getLogger("test.startup_health")
+    )
+
+
+def test_validate_startup_security_flags_rejects_production_insecure_trustlog(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_KMS_KEY_ID", raising=False)
+
+    with pytest.raises(RuntimeError, match="TrustLog production posture check failed"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
+def test_validate_startup_security_flags_rejects_prod_alias_insecure_trustlog(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENV", "prod")
+    monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_KMS_KEY_ID", raising=False)
+
+    with pytest.raises(RuntimeError, match="TrustLog production posture check failed"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
+def test_validate_startup_security_flags_allows_fully_configured_production_trustlog(
+    monkeypatch,
+):
+    for key, value in {
+        **_trustlog_production_env(),
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED": "1",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": "/tmp/transparency.jsonl",
+    }.items():
+        monkeypatch.setenv(key, value)
+
+    startup_health.validate_startup_security_flags(
+        logger=logging.getLogger("test.startup_health")
+    )
+
+
+def test_validate_startup_security_flags_trustlog_warning_only_does_not_raise(
+    monkeypatch,
+    caplog,
+):
+    for key, value in _trustlog_production_env().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", raising=False)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
+
+    with caplog.at_level(logging.WARNING):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+    assert "TrustLog production posture warning" in caplog.text
+
+
+def test_validate_startup_security_flags_rejects_production_file_signer_with_break_glass(
+    monkeypatch,
+):
+    for key, value in _trustlog_production_env().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD", "1")
+
+    with pytest.raises(RuntimeError, match="signer backend must be aws_kms"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
