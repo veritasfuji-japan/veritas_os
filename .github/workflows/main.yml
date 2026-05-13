@@ -263,7 +263,30 @@ jobs:
       - name: "[Tier 1] Verify YAML dependency from declared requirements"
         run: |
           set -euxo pipefail
-          python -c "import yaml"
+          python - <<'PY'
+          from importlib.metadata import version
+          from pathlib import Path
+
+          requirements = Path("veritas_os/requirements.txt").read_text()
+          expected = None
+
+          for line in requirements.splitlines():
+              normalized = line.strip()
+              if normalized.lower().startswith("pyyaml=="):
+                  expected = normalized.split("==", 1)[1]
+                  break
+
+          if expected is None:
+              raise SystemExit("PyYAML pin not found in veritas_os/requirements.txt")
+
+          resolved = version("PyYAML")
+
+          if resolved != expected:
+              raise SystemExit(f"Expected PyYAML=={expected}, got {resolved}")
+
+          import yaml
+          print(f"PyYAML resolved and importable: {resolved}")
+          PY
 
       - name: "[Tier 1] Run fast governance backend invariant tests"
         run: |
