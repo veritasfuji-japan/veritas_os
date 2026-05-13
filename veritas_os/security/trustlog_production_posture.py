@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from os import environ
 from typing import Mapping
 
+from veritas_os.security.trustlog_backend_normalization import (
+    normalize_trustlog_anchor_backend,
+    normalize_trustlog_mirror_backend,
+    normalize_trustlog_signer_backend,
+)
+
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 STRICT_PRODUCTION_POSTURE_ALIASES = frozenset(
     {"prod", "production", "secure", "hardened"}
@@ -49,36 +55,6 @@ def is_trustlog_production_posture_enforced(env: Mapping[str, str]) -> bool:
     return _is_production_mode(env)
 
 
-def _normalized_signer_backend(env: Mapping[str, str]) -> str:
-    """Normalize signer backend aliases to runtime posture canonical values."""
-    raw = _normalized(env, "VERITAS_TRUSTLOG_SIGNER_BACKEND")
-    if raw in {"", "file", "file_ed25519"}:
-        return "file"
-    if raw in {"aws_kms", "aws_kms_ed25519"}:
-        return "aws_kms"
-    return raw
-
-
-def _normalized_anchor_backend(env: Mapping[str, str]) -> str:
-    """Normalize anchor backend aliases to runtime posture canonical values."""
-    raw = _normalized(env, "VERITAS_TRUSTLOG_ANCHOR_BACKEND")
-    if raw in {"", "local", "file"}:
-        return "local"
-    if raw in {"none", "noop", "no_op"}:
-        return "noop"
-    return raw
-
-
-def _normalized_mirror_backend(env: Mapping[str, str]) -> str:
-    """Normalize mirror backend aliases to runtime posture canonical values."""
-    raw = _normalized(env, "VERITAS_TRUSTLOG_MIRROR_BACKEND")
-    if raw in {"", "local", "filesystem"}:
-        return "local"
-    if raw in {"s3_object_lock", "s3"}:
-        return "s3_object_lock"
-    return raw
-
-
 def _effective_transparency_required(env: Mapping[str, str]) -> bool:
     """Return effective transparency-required state with posture defaults."""
     raw = env.get("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED")
@@ -113,7 +89,9 @@ def check_trustlog_production_posture(
     if not (current_env.get("VERITAS_ENCRYPTION_KEY", "") or "").strip():
         failures.append("production TrustLog encryption requires VERITAS_ENCRYPTION_KEY")
 
-    signer_backend = _normalized_signer_backend(current_env)
+    signer_backend = normalize_trustlog_signer_backend(
+        current_env.get("VERITAS_TRUSTLOG_SIGNER_BACKEND")
+    )
     if signer_backend != "aws_kms":
         failures.append("production TrustLog signer backend must be aws_kms")
     elif not (current_env.get("VERITAS_TRUSTLOG_KMS_KEY_ID", "") or "").strip():
@@ -121,7 +99,9 @@ def check_trustlog_production_posture(
             "production TrustLog aws_kms signer requires VERITAS_TRUSTLOG_KMS_KEY_ID"
         )
 
-    mirror_backend = _normalized_mirror_backend(current_env)
+    mirror_backend = normalize_trustlog_mirror_backend(
+        current_env.get("VERITAS_TRUSTLOG_MIRROR_BACKEND")
+    )
     if mirror_backend == "local":
         if not (current_env.get("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "") or "").strip():
             warnings.append("production TrustLog local WORM mirror path is not configured")
@@ -142,7 +122,9 @@ def check_trustlog_production_posture(
     if not transparency_required:
         warnings.append("production TrustLog transparency anchoring is not required")
 
-    anchor_backend = _normalized_anchor_backend(current_env)
+    anchor_backend = normalize_trustlog_anchor_backend(
+        current_env.get("VERITAS_TRUSTLOG_ANCHOR_BACKEND")
+    )
     if (
         transparency_required
         and anchor_backend == "local"

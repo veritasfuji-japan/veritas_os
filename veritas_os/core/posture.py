@@ -24,6 +24,12 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from veritas_os.security.trustlog_backend_normalization import (
+    normalize_trustlog_anchor_backend,
+    normalize_trustlog_mirror_backend,
+    normalize_trustlog_signer_backend,
+)
+
 _logger = logging.getLogger(__name__)
 
 # ── Boolean parsing (mirrors config._parse_bool but self-contained) ─────
@@ -317,32 +323,23 @@ def _trustlog_signer_backend() -> str:
     Supported aliases are normalized so startup validation can apply posture
     policy consistently.
     """
-    raw = (os.getenv("VERITAS_TRUSTLOG_SIGNER_BACKEND") or "file").strip().lower()
-    if raw in {"", "file", "file_ed25519"}:
-        return "file"
-    if raw in {"aws_kms", "aws_kms_ed25519"}:
-        return "aws_kms"
-    return raw
+    return normalize_trustlog_signer_backend(
+        os.getenv("VERITAS_TRUSTLOG_SIGNER_BACKEND")
+    )
 
 
 def _trustlog_mirror_backend() -> str:
     """Return normalized TrustLog mirror backend name."""
-    raw = (os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND") or "local").strip().lower()
-    if raw in {"", "local", "filesystem"}:
-        return "local"
-    if raw in {"s3_object_lock", "s3"}:
-        return "s3_object_lock"
-    return raw
+    return normalize_trustlog_mirror_backend(
+        os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND")
+    )
 
 
 def _trustlog_anchor_backend() -> str:
     """Return normalized TrustLog anchor backend name."""
-    raw = (os.getenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND") or "local").strip().lower()
-    if raw in {"", "local", "file"}:
-        return "local"
-    if raw in {"none", "noop", "no_op"}:
-        return "noop"
-    return raw
+    return normalize_trustlog_anchor_backend(
+        os.getenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND")
+    )
 
 
 def _allow_insecure_signer_override() -> bool:
