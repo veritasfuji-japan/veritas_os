@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import subprocess
 import sys
 import textwrap
@@ -115,6 +116,12 @@ GOVERNANCE_CHECKS: list[tuple[str, str, list[str], bool]] = [
         True,
     ),
     (
+        "trustlog-production-posture",
+        "Tier 2",
+        ["python", "-m", "scripts.security.check_trustlog_production_posture"],
+        False,
+    ),
+    (
         "requirements-sync",
         "Tier 2",
         ["python", "scripts/quality/check_requirements_sync.py"],
@@ -134,15 +141,29 @@ GOVERNANCE_CHECKS: list[tuple[str, str, list[str], bool]] = [
     ),
 ]
 
+CHECK_ENV_OVERRIDES: dict[str, dict[str, str]] = {
+    "trustlog-production-posture": {
+        "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE": "1",
+    },
+}
 
-def run_check(label: str, command: list[str]) -> tuple[bool, str]:
+
+def run_check(
+    label: str,
+    command: list[str],
+    env_overrides: dict[str, str] | None = None,
+) -> tuple[bool, str]:
     """Run a single check command and return (passed, output_snippet)."""
+    env = None
+    if env_overrides:
+        env = {**os.environ, **env_overrides}
     try:
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
             timeout=60,
+            env=env,
         )
         passed = result.returncode == 0
         output = (result.stdout + result.stderr).strip()
@@ -207,7 +228,7 @@ def build_report(
     live_ok = live_summary is None or live_summary.get("overall") != "FAIL"
 
     return {
-        "schema_version": "2.0",
+        "schema_version": "2.1",
         "report_type": "staged_operational_readiness",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "release_ref": ref,
@@ -234,6 +255,7 @@ def build_report(
                 "Security invariants (pickle, bare-except, shell, eval, httpx)",
                 "Architecture boundaries (responsibility, complexity)",
                 "Quality gates (replay pipeline, env defaults, requirements)",
+                "TrustLog production posture checker output in staged readiness report",
                 "5800+ unit/integration tests with 85% coverage gate",
                 "FastAPI health/OpenAPI/decide contract smoke",
                 "Docker compose topology validation (YAML parse)",
@@ -407,7 +429,11 @@ def main() -> int:
 
     for label, tier, command, blocking in GOVERNANCE_CHECKS:
         logger.info("  [%s] %s", tier, label)
-        passed, output = run_check(label, command)
+        passed, output = run_check(
+            label,
+            command,
+            env_overrides=CHECK_ENV_OVERRIDES.get(label),
+        )
         status = "PASSED" if passed else ("FAILED" if blocking else "WARNING")
         logger.info("    → %s", status)
         results.append(

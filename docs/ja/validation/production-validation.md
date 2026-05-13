@@ -15,6 +15,7 @@
 ## 実装上の確認ポイント
 - `make quality-checks` と production/smoke 系テストを継続実行する。
 - PostgreSQL の live 検証導線と運用ドリルを定期確認する。
+- staged readiness report は v2.1 を利用し、`trustlog-production-posture` の advisory 証跡を含みます。
 - 詳細は英語正本または実装ファイルを確認してください。
 
 ## 現時点の制限
