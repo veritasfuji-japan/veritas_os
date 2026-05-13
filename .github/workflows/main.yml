@@ -201,7 +201,6 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements.txt
-          python -m pip install pytest httpx anyio
 
       - name: "[Tier 1] Check bind coverage evidence freshness"
         run: python -m scripts.governance.check_bind_coverage_evidence_freshness
@@ -258,7 +257,34 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements.txt
-          python -m pip install pytest httpx anyio
+
+      - name: "[Tier 1] Verify YAML dependency from declared requirements"
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from importlib.metadata import version
+          from pathlib import Path
+
+          requirements = Path("veritas_os/requirements.txt").read_text()
+          expected = None
+
+          for line in requirements.splitlines():
+              normalized = line.strip()
+              if normalized.lower().startswith("pyyaml=="):
+                  expected = normalized.split("==", 1)[1]
+                  break
+
+          if expected is None:
+              raise SystemExit("PyYAML pin not found in veritas_os/requirements.txt")
+
+          resolved = version("PyYAML")
+
+          if resolved != expected:
+              raise SystemExit(f"Expected PyYAML=={expected}, got {resolved}")
+
+          import yaml
+          print(f"PyYAML resolved and importable: {resolved}")
+          PY
 
       - name: "[Tier 1] Run fast governance backend invariant tests"
         run: |
@@ -269,6 +295,7 @@ jobs:
             veritas_os/tests/test_governance_repository.py \
             veritas_os/tests/test_governance_artifact_signing.py::TestGovernedRollback \
             veritas_os/tests/test_governance_artifact_signing.py::TestGovernanceHistoryDigests \
+            tests/governance/test_rsa_sandbox_receiver.py \
             --tb=short \
             --durations=20 \
             --junitxml=test-reports/governance-backend-fast.xml
