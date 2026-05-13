@@ -8,6 +8,7 @@ from typing import Callable, Optional
 
 from veritas_os.security.trustlog_production_posture import (
     check_trustlog_production_posture,
+    is_trustlog_production_posture_enforced,
 )
 
 
@@ -182,12 +183,17 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
 
 def validate_trustlog_production_posture_on_startup(*, logger: logging.Logger) -> None:
     """Validate TrustLog posture during startup with production fail-fast handling."""
-    result = check_trustlog_production_posture(dict(os.environ))
+    current_env = dict(os.environ)
+    result = check_trustlog_production_posture(current_env)
+    enforced = is_trustlog_production_posture_enforced(current_env)
     if result.failures:
         failures = "; ".join(result.failures)
         message = f"[SECURITY] TrustLog production posture check failed: {failures}"
-        if should_fail_fast_startup():
-            raise RuntimeError(f"{message}. Refusing startup in production.")
+        if enforced:
+            raise RuntimeError(
+                f"{message}. Refusing startup because TrustLog production posture "
+                "is enforced."
+            )
         logger.warning("%s", message)
 
     for warning in result.warnings:

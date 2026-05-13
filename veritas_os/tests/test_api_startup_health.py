@@ -367,3 +367,38 @@ def test_validate_startup_security_flags_rejects_production_file_signer_with_bre
         startup_health.validate_startup_security_flags(
             logger=logging.getLogger("test.startup_health")
         )
+
+
+def test_validate_startup_security_flags_rejects_required_trustlog_posture(
+    monkeypatch,
+):
+    monkeypatch.setenv("VERITAS_ENV", "local")
+    monkeypatch.setenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "1")
+    monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_KMS_KEY_ID", raising=False)
+
+    with pytest.raises(RuntimeError, match="TrustLog production posture check failed"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
+def test_validate_startup_security_flags_rejects_required_trustlog_posture_truthy_alias(
+    monkeypatch,
+):
+    monkeypatch.setenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "true")
+    monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_KMS_KEY_ID", raising=False)
+
+    with pytest.raises(RuntimeError, match="posture is enforced"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )

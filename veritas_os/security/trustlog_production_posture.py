@@ -39,6 +39,14 @@ def _is_production_mode(env: Mapping[str, str]) -> bool:
     )
 
 
+def is_trustlog_production_posture_enforced(
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    """Return True when TrustLog production posture enforcement is active."""
+    current_env = env if env is not None else environ
+    return _is_production_mode(current_env)
+
+
 def check_trustlog_production_posture(
     env: Mapping[str, str] | None = None,
 ) -> TrustLogPostureResult:

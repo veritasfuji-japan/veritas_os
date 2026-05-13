@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from os import environ
 
-from veritas_os.security.trustlog_production_posture import _env_true
 from veritas_os.security.trustlog_production_posture import check_trustlog_production_posture
 
 
