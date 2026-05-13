@@ -70,6 +70,7 @@ Variables prefixed with `VERITAS_` are project-specific.
 | `VERITAS_TRUSTLOG_ANCHOR_BACKEND` | `local` | TrustLog anchor backend (`local` = local spool receipt, `noop` = explicitly skip anchoring) |
 | `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` | `""` | Local spool path used by `VERITAS_TRUSTLOG_ANCHOR_BACKEND=local` |
 | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0` | Require transparency log anchoring (`0` = optional, `1` = required) |
+| `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE` | `false` | Checker-only flag to force production TrustLog posture validation outside production env. Runtime behavior is not changed by this flag unless the checker is invoked. |
 
 ### TrustLog transparency anchoring roadmap
 

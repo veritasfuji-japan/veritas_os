@@ -2,6 +2,10 @@
 
 This document defines production-focused TrustLog metrics, alerting guidance, and SLO suggestions.
 
+> For the operator-facing **minimum posture check** (`check-trustlog-production-posture`),
+> including failure/warning semantics and CI dummy-fixture limitations, see
+> [`postgresql-production-guide.md`](postgresql-production-guide.md#trustlog-production-posture-checker-operator-facing-minimum-posture-check).
+
 ## Metrics
 
 ### Counters

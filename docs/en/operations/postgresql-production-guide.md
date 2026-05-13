@@ -118,6 +118,91 @@ in `veritas_os/storage/db.py`.
 
 ---
 
+## TrustLog production posture checker (operator-facing minimum posture check)
+
+`check-trustlog-production-posture` is an operator-facing CLI checker for
+minimum TrustLog production posture. It validates environment-variable presence
+and posture assumptions only.
+
+- It does **not** change runtime defaults.
+- It does **not** connect to real DB/KMS/WORM services.
+- It validates env presence / posture for expected production configuration.
+- In CI, production-path enforcement is exercised with a non-secret dummy
+  fixture env.
+- Passing this checker does **not** prove real production readiness.
+- Production deployments still require separate real configuration for DB, KMS,
+  WORM, and transparency anchoring.
+
+### How to run
+
+```bash
+make check-trustlog-production-posture
+# or
+python -m scripts.security.check_trustlog_production_posture
+```
+
+### When production checks are enforced
+
+Production posture validation is strict when any of the following is true:
+
+- `VERITAS_ENV=production`
+- `VERITAS_ENV=prod`
+- `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE` is truthy (`1`, `true`, `yes`, `on`)
+
+### Production failure conditions
+
+In production mode, the checker fails if:
+
+- `VERITAS_TRUSTLOG_BACKEND` is not `postgresql`
+- `VERITAS_DATABASE_URL` and `DATABASE_URL` are both unset
+- `VERITAS_ENCRYPTION_KEY` is unset
+- `VERITAS_TRUSTLOG_SIGNER_BACKEND` is not `aws_kms`
+- `VERITAS_TRUSTLOG_KMS_KEY_ID` is unset
+
+> Note: `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` is not honored by
+> this production posture checker. In production posture, the checker requires
+> `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms` and fails for `file`, `local`,
+> `noop`, or missing signer backends even if the break-glass flag is set.
+
+### Production warning conditions
+
+In production mode, the checker warns (non-fatal) if:
+
+- `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` is unset
+- `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` is not enabled
+- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is unset
+- `VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop`
+
+> Note: WORM and transparency are warning-level in this checker, not failure-level.
+
+### CI fixture semantics and limits
+
+In GitHub Actions `[Tier 1] governance-smoke`, a step-local dummy env is used
+to run `make check-trustlog-production-posture`.
+
+- This is a deterministic fixture to ensure the checker's production-enforcement
+  path keeps working.
+- Dummy `VERITAS_DATABASE_URL` and dummy `VERITAS_TRUSTLOG_KMS_KEY_ID` are not
+  real connection targets.
+- Repository secrets are not used for this fixture.
+- This CI path does not prove real production readiness.
+
+### Recommended production env sample (placeholders only)
+
+```bash
+VERITAS_ENV=production
+VERITAS_TRUSTLOG_BACKEND=postgresql
+VERITAS_DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<database>
+VERITAS_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
+VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms
+VERITAS_TRUSTLOG_KMS_KEY_ID=<aws-kms-ed25519-key-arn>
+VERITAS_TRUSTLOG_WORM_MIRROR_PATH=<worm-mirror-path>
+VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1
+VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH=<transparency-log-path>
+```
+
+---
+
 ## 3. SSL / TLS
 
 ### Environment variable
