@@ -127,6 +127,8 @@ and posture assumptions only.
 - It does **not** change runtime defaults.
 - It does **not** connect to real DB/KMS/WORM services.
 - It validates env presence / posture for expected production configuration.
+- Runtime startup validation also enforces the same production-failure posture as fail-fast checks for `VERITAS_ENV=prod|production`.
+- Warning-only WORM/transparency findings remain non-fatal during startup and CLI checks.
 - In CI, production-path enforcement is exercised with a non-secret dummy
   fixture env.
 - Passing this checker does **not** prove real production readiness.

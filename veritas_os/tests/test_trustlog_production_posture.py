@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from scripts.security.check_trustlog_production_posture import _env_true
-from scripts.security.check_trustlog_production_posture import check_trustlog_production_posture
 from scripts.security.check_trustlog_production_posture import main
+from veritas_os.security.trustlog_production_posture import _env_true
+from veritas_os.security.trustlog_production_posture import check_trustlog_production_posture
 
 
 def _production_base_env() -> dict[str, str]:
