@@ -208,6 +208,20 @@ jobs:
       - name: "[Tier 1] Check performance evidence freshness"
         run: make check-performance-evidence
 
+      - name: "[Tier 1] Check TrustLog production posture"
+        env:
+          VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE: "1"
+          VERITAS_ENV: "production"
+          VERITAS_TRUSTLOG_BACKEND: "postgresql"
+          VERITAS_DATABASE_URL: "postgresql://veritas:veritas@localhost:5432/veritas_ci"
+          VERITAS_ENCRYPTION_KEY: "ci-dummy-encryption-key-not-a-real-secret"
+          VERITAS_TRUSTLOG_SIGNER_BACKEND: "aws_kms"
+          VERITAS_TRUSTLOG_KMS_KEY_ID: "arn:aws:kms:us-east-1:000000000000:key/ci-dummy"
+          VERITAS_TRUSTLOG_WORM_MIRROR_PATH: "/tmp/veritas-ci/worm"
+          VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED: "1"
+          VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH: "/tmp/veritas-ci/transparency.jsonl"
+        run: make check-trustlog-production-posture
+
       - name: "[Tier 1] Run governance smoke tests"
         run: |
           set -euxo pipefail
