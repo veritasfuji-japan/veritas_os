@@ -260,6 +260,11 @@ jobs:
           python -m pip install -r veritas_os/requirements.txt
           python -m pip install pytest httpx anyio
 
+      - name: "[Tier 1] Verify YAML dependency from declared requirements"
+        run: |
+          set -euxo pipefail
+          python -c "import yaml"
+
       - name: "[Tier 1] Run fast governance backend invariant tests"
         run: |
           set -euxo pipefail
@@ -269,6 +274,7 @@ jobs:
             veritas_os/tests/test_governance_repository.py \
             veritas_os/tests/test_governance_artifact_signing.py::TestGovernedRollback \
             veritas_os/tests/test_governance_artifact_signing.py::TestGovernanceHistoryDigests \
+            tests/governance/test_rsa_sandbox_receiver.py \
             --tb=short \
             --durations=20 \
             --junitxml=test-reports/governance-backend-fast.xml
