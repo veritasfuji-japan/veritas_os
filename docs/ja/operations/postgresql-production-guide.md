@@ -20,7 +20,25 @@ PostgreSQL を本番で運用する際の確認観点を、日本語で短く整
 ## TrustLog production posture checker（最小姿勢チェック）
 - `check-trustlog-production-posture` は、TrustLog の本番姿勢に必要な環境変数の有無/設定姿勢を確認する operator-facing な最小チェックです（実行: `make check-trustlog-production-posture` または `python -m scripts.security.check_trustlog_production_posture`）。
 - runtime default は変更せず、実DB/実KMS/実WORMへ接続もしません。CI の `[Tier 1] governance-smoke` では非シークレットのダミー環境変数で production enforcement path を検証しますが、実運用 readiness の証明にはなりません。
-- production mode（`VERITAS_ENV=production|prod` または `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE` が truthy）の failure 条件は、`postgresql` backend / DB URL / `VERITAS_ENCRYPTION_KEY` / `aws_kms` signer / `VERITAS_TRUSTLOG_KMS_KEY_ID` の不足です。`VERITAS_TRUSTLOG_WORM_MIRROR_PATH` 未設定、transparency 未要求、`VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` 未設定、`VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop` は warning 扱いです。
+- production posture validation が厳格化される条件は以下です。
+  - `VERITAS_ENV=production`
+  - `VERITAS_ENV=prod`
+  - `VERITAS_POSTURE=secure|hardened|prod|production`
+  - `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE` が truthy（`1`/`true`/`yes`/`on`）
+- runtime startup validation でも、上記 enforcement が active の場合は同じ production-failure posture を fail-fast で適用します（`VERITAS_ENV=prod|production`、strict `VERITAS_POSTURE`、truthy `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE`）。
+- failure 条件（起動拒否/CLI失敗）は以下です。
+  - `VERITAS_TRUSTLOG_BACKEND` が `postgresql` でない
+  - `VERITAS_DATABASE_URL` と `DATABASE_URL` が両方未設定
+  - `VERITAS_ENCRYPTION_KEY` が未設定
+  - `VERITAS_TRUSTLOG_SIGNER_BACKEND` が `aws_kms` に解決されない（`aws_kms_ed25519` は `aws_kms` 扱い）
+  - signer backend が `aws_kms` に解決されるのに `VERITAS_TRUSTLOG_KMS_KEY_ID` が未設定
+- warning 条件（startup/CLI とも non-fatal）は以下です。
+  - `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` が明示的に無効
+  - local anchor backend かつ transparency required で `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` が未設定
+  - `VERITAS_TRUSTLOG_ANCHOR_BACKEND` が `noop` に解決される（`noop`/`none`/`no_op`）
+  - local mirror backend で `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` が未設定
+  - `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` なのに `VERITAS_TRUSTLOG_S3_BUCKET`/`VERITAS_TRUSTLOG_S3_PREFIX` が不足
+  - `VERITAS_TRUSTLOG_MIRROR_BACKEND` が未知値（warning には正規化された backend 値を含む）
 - 注: `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` は、この production posture checker では考慮されません。本番姿勢チェックでは `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms` を要求し、`file` / `local` / `noop` / 未設定の signer は、break-glass フラグがあっても failure になります。
 
 ## 現時点の制限
