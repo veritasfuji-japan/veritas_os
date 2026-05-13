@@ -527,6 +527,9 @@ python scripts/generate_staged_readiness_report.py \
 
 The v2.1 staged report includes `trustlog-production-posture` as advisory
 governance evidence.
+In v2.1, advisory failures are also summarized at
+`overall_readiness.advisory_issues` / `advisory_issue_count` so non-blocking
+issues are visible without changing `deployment_ready` semantics.
 
 See [`operational-readiness-runbook.md`](../operations/operational-readiness-runbook.md) for full usage and troubleshooting.
 

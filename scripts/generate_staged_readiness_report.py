@@ -238,6 +238,8 @@ def build_report(
             "compose_validated": compose_ok,
             "live_provider_ok": live_ok,
             "deployment_ready": governance_ready and compose_ok,
+            "advisory_issues": len(advisory_failures) > 0,
+            "advisory_issue_count": len(advisory_failures),
         },
         "governance": {
             "total_checks": len(governance_results),
@@ -329,6 +331,12 @@ def render_text_report(report: dict) -> str:
     lines.append(
         f"  Live Providers:    {'✅ OK' if readiness['live_provider_ok'] else '⚠️  Not OK'}"
     )
+    advisory_summary = (
+        f"⚠️  {readiness['advisory_issue_count']} warning(s)"
+        if readiness["advisory_issues"]
+        else "✅ None"
+    )
+    lines.append(f"  Advisory Issues:   {advisory_summary}")
     lines.append("")
 
     # Governance checks
@@ -386,6 +394,10 @@ def render_text_report(report: dict) -> str:
     lines.append(f"  Governance passed:    {gov['passed']}")
     lines.append(f"  Blocking failures:    {gov['blocking_failures']}")
     lines.append(f"  Advisory failures:    {gov['advisory_failures']}")
+    if gov["advisory_failures"] > 0:
+        lines.append(
+            "  Note: advisory failures are non-blocking but require operator review."
+        )
     lines.append("")
     lines.append("=" * 66)
 

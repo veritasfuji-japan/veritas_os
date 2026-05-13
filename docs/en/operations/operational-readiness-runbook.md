@@ -163,6 +163,11 @@ advisory check, and runs it with a subprocess-scoped
 `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE=1` override so the production
 posture path is evaluated even from a local/dev shell. The check remains
 non-blocking and does not connect to real DB/KMS/WORM services.
+The JSON report surfaces advisory issues in
+`overall_readiness.advisory_issues` and
+`overall_readiness.advisory_issue_count`. Advisory failures do not flip
+`deployment_ready` by themselves, but operators must review them before
+promotion.
 
 
 ### Governance Readiness Report (v1.0)
