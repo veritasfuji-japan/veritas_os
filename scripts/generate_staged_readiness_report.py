@@ -115,6 +115,12 @@ GOVERNANCE_CHECKS: list[tuple[str, str, list[str], bool]] = [
         True,
     ),
     (
+        "trustlog-production-posture",
+        "Tier 2",
+        ["python", "-m", "scripts.security.check_trustlog_production_posture"],
+        False,
+    ),
+    (
         "requirements-sync",
         "Tier 2",
         ["python", "scripts/quality/check_requirements_sync.py"],
@@ -207,7 +213,7 @@ def build_report(
     live_ok = live_summary is None or live_summary.get("overall") != "FAIL"
 
     return {
-        "schema_version": "2.0",
+        "schema_version": "2.1",
         "report_type": "staged_operational_readiness",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "release_ref": ref,
@@ -234,6 +240,7 @@ def build_report(
                 "Security invariants (pickle, bare-except, shell, eval, httpx)",
                 "Architecture boundaries (responsibility, complexity)",
                 "Quality gates (replay pipeline, env defaults, requirements)",
+                "TrustLog production posture checker output in staged readiness report",
                 "5800+ unit/integration tests with 85% coverage gate",
                 "FastAPI health/OpenAPI/decide contract smoke",
                 "Docker compose topology validation (YAML parse)",
