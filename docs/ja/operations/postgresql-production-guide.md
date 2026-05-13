@@ -19,7 +19,7 @@ PostgreSQL を本番で運用する際の確認観点を、日本語で短く整
 
 ## TrustLog production posture checker（最小姿勢チェック）
 
-- コンパクトな運用チェックリストは `trustlog-production-readiness-checklist.md` を参照してください。
+- コンパクトな運用チェックリストは [TrustLog 本番 readiness チェックリスト](trustlog-production-readiness-checklist.md) を参照してください。
 - `check-trustlog-production-posture` は、TrustLog の本番姿勢に必要な環境変数の有無/設定姿勢を確認する operator-facing な最小チェックです（実行: `make check-trustlog-production-posture` または `python -m scripts.security.check_trustlog_production_posture`）。
 - runtime default は変更せず、実DB/実KMS/実WORMへ接続もしません。CI の `[Tier 1] governance-smoke` では非シークレットのダミー環境変数で production enforcement path を検証しますが、実運用 readiness の証明にはなりません。
 - production posture validation が厳格化される条件は以下です。
