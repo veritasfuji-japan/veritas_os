@@ -120,6 +120,8 @@ in `veritas_os/storage/db.py`.
 
 ## TrustLog production posture checker (operator-facing minimum posture check)
 
+- For a compact operator checklist, see `trustlog-production-readiness-checklist.md`.
+
 `check-trustlog-production-posture` is an operator-facing CLI checker for
 minimum TrustLog production posture. It validates environment-variable presence
 and posture assumptions only.
