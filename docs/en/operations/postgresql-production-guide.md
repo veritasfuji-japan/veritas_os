@@ -127,6 +127,8 @@ and posture assumptions only.
 - It does **not** change runtime defaults.
 - It does **not** connect to real DB/KMS/WORM services.
 - It validates env presence / posture for expected production configuration.
+- Runtime startup validation also enforces the same production-failure posture as fail-fast checks for `VERITAS_ENV=prod|production`.
+- Warning-only WORM/transparency findings remain non-fatal during startup and CLI checks.
 - In CI, production-path enforcement is exercised with a non-secret dummy
   fixture env.
 - Passing this checker does **not** prove real production readiness.
@@ -156,7 +158,7 @@ In production mode, the checker fails if:
 - `VERITAS_TRUSTLOG_BACKEND` is not `postgresql`
 - `VERITAS_DATABASE_URL` and `DATABASE_URL` are both unset
 - `VERITAS_ENCRYPTION_KEY` is unset
-- `VERITAS_TRUSTLOG_SIGNER_BACKEND` is not `aws_kms`
+- `VERITAS_TRUSTLOG_SIGNER_BACKEND` is not `aws_kms` (alias `aws_kms_ed25519` is treated as `aws_kms`)
 - `VERITAS_TRUSTLOG_KMS_KEY_ID` is unset
 
 > Note: `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` is not honored by
@@ -168,10 +170,11 @@ In production mode, the checker fails if:
 
 In production mode, the checker warns (non-fatal) if:
 
-- `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` is unset
-- `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` is not enabled
+- `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` is explicitly disabled (`0`/`false`/etc.); if unset in production posture it is treated as required by default
 - `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is unset
-- `VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop`
+- `VERITAS_TRUSTLOG_ANCHOR_BACKEND` resolves to `noop` (`noop`/`none`/`no_op`)
+- Local mirror backend is selected but `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` is unset
+- `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` without `VERITAS_TRUSTLOG_S3_BUCKET`/`VERITAS_TRUSTLOG_S3_PREFIX`
 
 > Note: WORM and transparency are warning-level in this checker, not failure-level.
 

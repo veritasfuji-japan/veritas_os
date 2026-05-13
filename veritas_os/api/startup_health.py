@@ -6,6 +6,10 @@ import logging
 import os
 from typing import Callable, Optional
 
+from veritas_os.security.trustlog_production_posture import (
+    check_trustlog_production_posture,
+)
+
 
 def _is_truthy_env(var_name: str) -> bool:
     """Return True when the named environment variable is explicitly truthy."""
@@ -172,6 +176,24 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
                 "templates to prevent production drift.",
                 message,
             )
+
+    validate_trustlog_production_posture_on_startup(logger=logger)
+
+
+def validate_trustlog_production_posture_on_startup(*, logger: logging.Logger) -> None:
+    """Validate TrustLog posture during startup with production fail-fast handling."""
+    current_env = dict(os.environ)
+    result = check_trustlog_production_posture(current_env)
+    if result.failures:
+        failures = "; ".join(result.failures)
+        message = f"[SECURITY] TrustLog production posture check failed: {failures}"
+        raise RuntimeError(
+            f"{message}. Refusing startup because TrustLog production posture is "
+            "enforced."
+        )
+
+    for warning in result.warnings:
+        logger.warning("[SECURITY] TrustLog production posture warning: %s", warning)
 
 
 def check_runtime_feature_health(
