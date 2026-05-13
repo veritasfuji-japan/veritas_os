@@ -16,7 +16,7 @@
 - `make quality-checks` と production/smoke 系テストを継続実行する。
 - PostgreSQL の live 検証導線と運用ドリルを定期確認する。
 - staged readiness report は v2.1 を利用し、`trustlog-production-posture` の advisory 証跡を含みます。
-- v2.1 では advisory failure も `overall_readiness.advisory_issues` / `advisory_issue_count` に要約されます。これらは単独では `deployment_ready` を false にしませんが、promotion 前に運用者が確認する必要があります。
+- v2.1 では advisory failure も `overall_readiness.advisory_issues` / `overall_readiness.advisory_issue_count` に要約されます。これらは単独では `deployment_ready` を false にしませんが、promotion 前に運用者が確認する必要があります。
 - 詳細は英語正本または実装ファイルを確認してください。
 
 ## 現時点の制限
