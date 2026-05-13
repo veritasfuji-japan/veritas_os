@@ -159,6 +159,11 @@ In production mode, the checker fails if:
 - `VERITAS_TRUSTLOG_SIGNER_BACKEND` is not `aws_kms`
 - `VERITAS_TRUSTLOG_KMS_KEY_ID` is unset
 
+> Note: `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` is not honored by
+> this production posture checker. In production posture, the checker requires
+> `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms` and fails for `file`, `local`,
+> `noop`, or missing signer backends even if the break-glass flag is set.
+
 ### Production warning conditions
 
 In production mode, the checker warns (non-fatal) if:
