@@ -2698,6 +2698,19 @@ def test_run_startup_config_validation_raises_in_production(monkeypatch):
         raising=False,
     )
     monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.delenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_S3_BUCKET", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_S3_PREFIX", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", raising=False)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dummy")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "dummy-kms-key")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "/tmp/worm")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/tmp/transparency.jsonl")
 
     with pytest.raises(RuntimeError, match="config invalid"):
         server._run_startup_config_validation()

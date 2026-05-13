@@ -284,6 +284,7 @@ def test_validate_startup_security_flags_non_production_trustlog_insecure_does_n
     monkeypatch,
 ):
     monkeypatch.delenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", raising=False)
+    monkeypatch.delenv("VERITAS_POSTURE", raising=False)
     monkeypatch.setenv("VERITAS_ENV", "local")
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
 
@@ -368,3 +369,34 @@ def test_validate_startup_security_flags_rejects_production_file_signer_with_bre
         startup_health.validate_startup_security_flags(
             logger=logging.getLogger("test.startup_health")
         )
+
+
+def test_validate_trustlog_production_posture_on_startup_raises_on_failures(monkeypatch):
+    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_KMS_KEY_ID", raising=False)
+
+    with pytest.raises(RuntimeError, match="TrustLog production posture check failed"):
+        startup_health.validate_trustlog_production_posture_on_startup(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
+def test_validate_trustlog_production_posture_on_startup_warns_only(monkeypatch, caplog):
+    for key, value in _trustlog_production_env().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv("VERITAS_POSTURE", raising=False)
+    monkeypatch.delenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", raising=False)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/tmp/transparency.jsonl")
+
+    with caplog.at_level(logging.WARNING):
+        startup_health.validate_trustlog_production_posture_on_startup(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+    assert "TrustLog production posture warning" in caplog.text

@@ -51,6 +51,21 @@ def test_prod_alias_enforces_production_posture() -> None:
     assert any("backend must be postgresql" in item for item in result.failures)
 
 
+def test_secure_posture_enforces_production_posture() -> None:
+    result = check_trustlog_production_posture({"VERITAS_POSTURE": "secure"})
+    assert result.passed is False
+
+
+def test_hardened_posture_enforces_production_posture() -> None:
+    result = check_trustlog_production_posture({"VERITAS_POSTURE": "hardened"})
+    assert result.passed is False
+
+
+def test_prod_posture_enforces_production_posture() -> None:
+    result = check_trustlog_production_posture({"VERITAS_POSTURE": "prod"})
+    assert result.passed is False
+
+
 def test_production_postgresql_without_database_url_fails() -> None:
     result = check_trustlog_production_posture(
         {"VERITAS_ENV": "production", "VERITAS_TRUSTLOG_BACKEND": "postgresql"}
@@ -242,6 +257,55 @@ def test_production_transparency_unset_does_not_warn_not_required() -> None:
     }
     result = check_trustlog_production_posture(env)
     assert not any("anchoring is not required" in item for item in result.warnings)
+
+
+def test_secure_posture_transparency_unset_does_not_warn_not_required() -> None:
+    env = {
+        **_production_base_env(),
+        "VERITAS_ENV": "local",
+        "VERITAS_POSTURE": "secure",
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": "/tmp/transparency.jsonl",
+    }
+    result = check_trustlog_production_posture(env)
+    assert not any("anchoring is not required" in item for item in result.warnings)
+
+
+def test_hardened_posture_transparency_unset_does_not_warn_not_required() -> None:
+    env = {
+        **_production_base_env(),
+        "VERITAS_ENV": "local",
+        "VERITAS_POSTURE": "hardened",
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": "/tmp/transparency.jsonl",
+    }
+    result = check_trustlog_production_posture(env)
+    assert not any("anchoring is not required" in item for item in result.warnings)
+
+
+def test_prod_posture_transparency_unset_does_not_warn_not_required() -> None:
+    env = {
+        **_production_base_env(),
+        "VERITAS_ENV": "local",
+        "VERITAS_POSTURE": "prod",
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": "/tmp/transparency.jsonl",
+    }
+    result = check_trustlog_production_posture(env)
+    assert not any("anchoring is not required" in item for item in result.warnings)
+
+
+def test_secure_posture_fully_configured_passes() -> None:
+    env = {
+        **_production_base_env(),
+        "VERITAS_ENV": "local",
+        "VERITAS_POSTURE": "secure",
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": "/tmp/transparency.jsonl",
+    }
+    result = check_trustlog_production_posture(env)
+    assert result.passed is True
+    assert result.failures == ()
 
 
 def test_production_transparency_explicit_zero_warns_not_required() -> None:

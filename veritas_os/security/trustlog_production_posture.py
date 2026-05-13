@@ -8,6 +8,7 @@ from typing import Mapping
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 PRODUCTION_ENV_ALIASES = {"prod", "production"}
+STRICT_POSTURE_ALIASES = {"secure", "hardened", "prod", "production"}
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ def _is_production_mode(env: Mapping[str, str]) -> bool:
     """Return True when strict production posture must be enforced."""
     return (
         _normalized(env, "VERITAS_ENV") in PRODUCTION_ENV_ALIASES
+        or _normalized(env, "VERITAS_POSTURE") in STRICT_POSTURE_ALIASES
         or _env_true(env.get("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE"))
     )
 
@@ -79,10 +81,7 @@ def _effective_transparency_required(env: Mapping[str, str]) -> bool:
     raw = env.get("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED")
     if raw is not None:
         return _env_true(raw)
-    if _is_production_mode(env):
-        return True
-    posture = _normalized(env, "VERITAS_POSTURE")
-    return posture in {"secure", "hardened", "prod", "production"}
+    return _is_production_mode(env)
 
 
 def check_trustlog_production_posture(
@@ -102,7 +101,9 @@ def check_trustlog_production_posture(
     has_database_url = bool(
         (current_env.get("VERITAS_DATABASE_URL", "") or "").strip()
     )
-    has_fallback_database_url = bool((current_env.get("DATABASE_URL", "") or "").strip())
+    has_fallback_database_url = bool(
+        (current_env.get("DATABASE_URL", "") or "").strip()
+    )
     if not (has_database_url or has_fallback_database_url):
         failures.append(
             "production TrustLog PostgreSQL backend requires VERITAS_DATABASE_URL or DATABASE_URL"
