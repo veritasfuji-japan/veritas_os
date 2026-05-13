@@ -201,7 +201,6 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements.txt
-          python -m pip install pytest httpx anyio
 
       - name: "[Tier 1] Check bind coverage evidence freshness"
         run: python -m scripts.governance.check_bind_coverage_evidence_freshness
@@ -258,7 +257,6 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements.txt
-          python -m pip install pytest httpx anyio
 
       - name: "[Tier 1] Verify YAML dependency from declared requirements"
         run: |
