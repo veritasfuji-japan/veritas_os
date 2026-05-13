@@ -163,7 +163,7 @@ In production mode, the checker fails if:
 - `VERITAS_DATABASE_URL` and `DATABASE_URL` are both unset
 - `VERITAS_ENCRYPTION_KEY` is unset
 - `VERITAS_TRUSTLOG_SIGNER_BACKEND` is not `aws_kms` (alias `aws_kms_ed25519` is treated as `aws_kms`)
-- `VERITAS_TRUSTLOG_KMS_KEY_ID` is unset
+- `VERITAS_TRUSTLOG_SIGNER_BACKEND` resolves to `aws_kms` but `VERITAS_TRUSTLOG_KMS_KEY_ID` is unset
 
 > Note: `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` is not honored by
 > this production posture checker. In production posture, the checker requires
@@ -175,7 +175,7 @@ In production mode, the checker fails if:
 In production mode, the checker warns (non-fatal) if:
 
 - `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` is explicitly disabled (`0`/`false`/etc.); if unset in production posture it is treated as required by default
-- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is unset
+- Local anchor backend is selected but `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is unset
 - `VERITAS_TRUSTLOG_ANCHOR_BACKEND` resolves to `noop` (`noop`/`none`/`no_op`)
 - Local mirror backend is selected but `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` is unset
 - `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` without `VERITAS_TRUSTLOG_S3_BUCKET`/`VERITAS_TRUSTLOG_S3_PREFIX`

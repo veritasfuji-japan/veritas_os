@@ -110,10 +110,10 @@ def check_trustlog_production_posture(
     if not (current_env.get("VERITAS_ENCRYPTION_KEY", "") or "").strip():
         failures.append("production TrustLog encryption requires VERITAS_ENCRYPTION_KEY")
 
-    if _normalized_signer_backend(current_env) != "aws_kms":
+    signer_backend = _normalized_signer_backend(current_env)
+    if signer_backend != "aws_kms":
         failures.append("production TrustLog signer backend must be aws_kms")
-
-    if not (current_env.get("VERITAS_TRUSTLOG_KMS_KEY_ID", "") or "").strip():
+    elif not (current_env.get("VERITAS_TRUSTLOG_KMS_KEY_ID", "") or "").strip():
         failures.append(
             "production TrustLog aws_kms signer requires VERITAS_TRUSTLOG_KMS_KEY_ID"
         )
@@ -138,10 +138,12 @@ def check_trustlog_production_posture(
     if not _effective_transparency_required(current_env):
         warnings.append("production TrustLog transparency anchoring is not required")
 
-    if not (current_env.get("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "") or "").strip():
-        warnings.append("production TrustLog transparency log path is not configured")
-
-    if _normalized_anchor_backend(current_env) == "noop":
+    anchor_backend = _normalized_anchor_backend(current_env)
+    if anchor_backend == "local" and not (
+        current_env.get("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "") or ""
+    ).strip():
+        warnings.append("production TrustLog local transparency log path is not configured")
+    if anchor_backend == "noop":
         warnings.append("production TrustLog anchor backend is noop")
 
     return TrustLogPostureResult(not failures, tuple(failures), tuple(warnings))

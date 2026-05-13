@@ -81,6 +81,7 @@ def test_production_file_signer_fails_even_with_override() -> None:
     }
     result = check_trustlog_production_posture(env)
     assert any("signer backend must be aws_kms" in item for item in result.failures)
+    assert not any("KMS_KEY_ID" in item for item in result.failures)
 
 
 def test_production_file_ed25519_signer_fails() -> None:
@@ -103,6 +104,18 @@ def test_production_aws_kms_without_kms_key_fails() -> None:
         "VERITAS_DATABASE_URL": "postgresql://example",
         "VERITAS_ENCRYPTION_KEY": "dummy",
         "VERITAS_TRUSTLOG_SIGNER_BACKEND": "aws_kms",
+    }
+    result = check_trustlog_production_posture(env)
+    assert any("KMS_KEY_ID" in item for item in result.failures)
+
+
+def test_production_aws_kms_ed25519_without_kms_key_fails() -> None:
+    env = {
+        "VERITAS_ENV": "production",
+        "VERITAS_TRUSTLOG_BACKEND": "postgresql",
+        "VERITAS_DATABASE_URL": "postgresql://example",
+        "VERITAS_ENCRYPTION_KEY": "dummy",
+        "VERITAS_TRUSTLOG_SIGNER_BACKEND": "aws_kms_ed25519",
     }
     result = check_trustlog_production_posture(env)
     assert any("KMS_KEY_ID" in item for item in result.failures)
@@ -231,6 +244,37 @@ def test_anchor_default_local_does_not_emit_noop_warning() -> None:
     }
     result = check_trustlog_production_posture(env)
     assert not any("anchor backend is noop" in item for item in result.warnings)
+
+
+def test_local_anchor_without_transparency_log_path_emits_local_path_warning() -> None:
+    env = {
+        **_production_base_env(),
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_ANCHOR_BACKEND": "local",
+    }
+    result = check_trustlog_production_posture(env)
+    assert any("local transparency log path" in item for item in result.warnings)
+
+
+def test_tsa_anchor_without_transparency_log_path_does_not_emit_local_path_warning() -> None:
+    env = {
+        **_production_base_env(),
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_ANCHOR_BACKEND": "tsa",
+    }
+    result = check_trustlog_production_posture(env)
+    assert not any("transparency log path" in item for item in result.warnings)
+
+
+def test_noop_anchor_without_transparency_log_path_emits_noop_only() -> None:
+    env = {
+        **_production_base_env(),
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_ANCHOR_BACKEND": "noop",
+    }
+    result = check_trustlog_production_posture(env)
+    assert any("anchor backend is noop" in item for item in result.warnings)
+    assert not any("transparency log path" in item for item in result.warnings)
 
 
 def test_require_production_flag_enforces_check() -> None:
