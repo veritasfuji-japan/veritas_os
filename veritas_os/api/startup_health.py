@@ -6,6 +6,12 @@ import logging
 import os
 from typing import Callable, Optional
 
+from veritas_os.security.trustlog_production_posture import (
+    check_trustlog_production_posture,
+)
+
+STRICT_PROFILE_ALIASES = {"prod", "production", "secure", "hardened"}
+
 
 def _is_truthy_env(var_name: str) -> bool:
     """Return True when the named environment variable is explicitly truthy."""
@@ -25,14 +31,22 @@ def _is_env_key_present(var_name: str) -> bool:
 
 
 def should_fail_fast_startup(profile: Optional[str] = None) -> bool:
-    """Return whether startup validation failures should stop app boot.
+    """Return whether startup validation errors should fail the process.
 
-    Fail-fast is active for ``prod``/``production`` (legacy) and also
-    when the posture model resolves to *secure* or *prod*.
+    When profile is provided, it is authoritative: explicit strict profiles
+    (``prod``, ``production``, ``secure``, ``hardened``) enable fail-fast,
+    while non-strict explicit profiles are not overridden by ambient
+    environment or posture flags. When profile is omitted, fail-fast is
+    enabled for strict VERITAS_ENV aliases, strict resolved posture, or a
+    truthy VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE flag.
     """
     resolved_profile = profile if profile is not None else os.getenv("VERITAS_ENV", "")
     normalized_profile = resolved_profile.strip().lower()
-    if normalized_profile in {"prod", "production"}:
+    if normalized_profile in STRICT_PROFILE_ALIASES:
+        return True
+    if profile is not None:
+        return False
+    if _is_truthy_env("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE"):
         return True
 
     # Delegate to canonical posture resolution to avoid alias drift.
@@ -172,6 +186,24 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
                 "templates to prevent production drift.",
                 message,
             )
+
+    validate_trustlog_production_posture_on_startup(logger=logger)
+
+
+def validate_trustlog_production_posture_on_startup(*, logger: logging.Logger) -> None:
+    """Validate TrustLog posture during startup with production fail-fast handling."""
+    current_env = dict(os.environ)
+    result = check_trustlog_production_posture(current_env)
+    if result.failures:
+        failures = "; ".join(result.failures)
+        message = f"[SECURITY] TrustLog production posture check failed: {failures}"
+        raise RuntimeError(
+            f"{message}. Refusing startup because TrustLog production posture is "
+            "enforced."
+        )
+
+    for warning in result.warnings:
+        logger.warning("[SECURITY] TrustLog production posture warning: %s", warning)
 
 
 def check_runtime_feature_health(
