@@ -159,11 +159,12 @@ python scripts/generate_staged_readiness_report.py \
 
 ## Report Artifacts
 
-## Interpreting staged readiness v2.1
+### Interpreting staged readiness v2.1
 
 `deployment_ready` is intentionally narrow in v2.1: it reflects blocking governance checks and a compose report only when `compose_validation` is attached. If `compose_validation` is absent, the generator treats compose as not failed, so `overall_readiness.compose_validated=true` does not prove compose validation ran. Likewise, `overall_readiness.live_provider_ok=true` does not prove live providers were checked when `live_provider_validation` is absent. Review `compose_validation`, `live_provider_validation`, `overall_readiness.advisory_issues`, `overall_readiness.advisory_issue_count`, and `governance.advisory_failure_labels` before promotion.
 
 Interpretation rules:
+
 - `deployment_ready=true` means blocking governance checks passed and no attached compose report failed.
 - `deployment_ready=true` does not mean a compose report was attached; check `compose_validation`.
 - `deployment_ready=true` does not mean all advisory issues are cleared.
