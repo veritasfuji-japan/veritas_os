@@ -164,9 +164,15 @@ def test_release_evidence_handoff_ja_related_links_exist() -> None:
 
 
 def test_release_evidence_handoff_templates_are_linked_from_public_indexes() -> None:
-    combined = "\n".join(path.read_text(encoding="utf-8") for path in INDEX_PATHS)
-    assert "docs/en/validation/release-evidence-reviewer-handoff-template.md" in combined
-    assert "docs/ja/validation/release-evidence-reviewer-handoff-template.md" in combined
+    docs_index = (REPO_ROOT / "docs/INDEX.md").read_text(encoding="utf-8")
+    docs_map = (REPO_ROOT / "docs/DOCUMENTATION_MAP.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "en/validation/release-evidence-reviewer-handoff-template.md" in docs_index
+    assert "ja/validation/release-evidence-reviewer-handoff-template.md" in docs_index
+    assert "docs/en/validation/release-evidence-reviewer-handoff-template.md" in docs_map
+    assert "docs/ja/validation/release-evidence-reviewer-handoff-template.md" in docs_map
 
 
 def test_release_evidence_handoff_ja_avoids_positive_overclaim_phrases() -> None:
@@ -182,3 +188,11 @@ def test_release_evidence_handoff_ja_avoids_positive_overclaim_phrases() -> None
         "規制承認済み",
     ]:
         assert phrase not in text
+
+
+def test_release_evidence_handoff_ja_explanation_exposes_english_canonical() -> None:
+    text = _ja_template_text()
+    assert "## 英語正本" in text
+    assert (
+        "../../en/validation/release-evidence-reviewer-handoff-template.md" in text
+    )

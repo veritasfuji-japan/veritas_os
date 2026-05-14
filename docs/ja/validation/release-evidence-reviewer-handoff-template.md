@@ -2,6 +2,10 @@
 
 この文書は、[`docs/en/validation/release-evidence-reviewer-handoff-template.md`](../../en/validation/release-evidence-reviewer-handoff-template.md) の日本語説明ページです。外部レビュアー、企業評価者、技術 DD チーム向けに、release evidence / staged readiness review の提出フォーマットの目的と読み方を整理します。
 
+## 英語正本
+
+- [`docs/en/validation/release-evidence-reviewer-handoff-template.md`](../../en/validation/release-evidence-reviewer-handoff-template.md)
+
 ## 目的
 
 - release evidence と staged readiness review を、レビュアーへ引き渡す際の提出フォーマットを明確化する。
