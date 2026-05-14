@@ -4,6 +4,7 @@ from scripts.generate_staged_readiness_report import (
     CHECK_ENV_OVERRIDES,
     GOVERNANCE_CHECKS,
     build_report,
+    load_json_report,
     run_check,
     render_text_report,
 )
@@ -26,6 +27,19 @@ def _sample_governance_results() -> list[dict]:
             "passed": False,
             "output": "TrustLog production posture check failed.",
         },
+    ]
+
+
+def _passing_blocking_governance_results() -> list[dict]:
+    """Return minimal passing blocking governance checks for semantics tests."""
+    return [
+        {
+            "label": "runtime-pickle-ban",
+            "tier": "Tier 1",
+            "blocking": True,
+            "passed": True,
+            "output": "",
+        }
     ]
 
 
@@ -450,3 +464,156 @@ def test_staged_readiness_text_report_contract_contains_schema_and_advisory_summ
     assert "Advisory Issues:" in text
     assert "warning" in text
     assert "Note: advisory failures are non-blocking but require operator review." in text
+
+
+def test_load_json_report_returns_parsed_report(tmp_path) -> None:
+    """load_json_report should return parsed JSON when the report is valid."""
+    path = tmp_path / "compose-report.json"
+    path.write_text('{"summary": {"overall": "PASS"}}', encoding="utf-8")
+
+    assert load_json_report(str(path)) == {"summary": {"overall": "PASS"}}
+
+
+def test_load_json_report_none_path_returns_none() -> None:
+    """load_json_report should return None when the report path is omitted."""
+    assert load_json_report(None) is None
+
+
+def test_load_json_report_missing_file_warns_and_returns_none(
+    tmp_path,
+    caplog,
+) -> None:
+    """Missing report artifacts should warn and return None."""
+    with caplog.at_level("WARNING"):
+        result = load_json_report(str(tmp_path / "missing.json"))
+
+    assert result is None
+    assert "Report file not found" in caplog.text
+
+
+def test_load_json_report_invalid_json_warns_and_returns_none(
+    tmp_path,
+    caplog,
+) -> None:
+    """Invalid JSON reports should warn and return None."""
+    path = tmp_path / "compose-report.json"
+    path.write_text("{not-json", encoding="utf-8")
+
+    with caplog.at_level("WARNING"):
+        result = load_json_report(str(path))
+
+    assert result is None
+    assert "Failed to parse JSON" in caplog.text
+
+
+def test_load_json_report_read_error_warns_and_returns_none(
+    tmp_path,
+    caplog,
+    monkeypatch,
+) -> None:
+    """Read errors should warn and return None for report loading."""
+    path = tmp_path / "compose-report.json"
+    path.write_text("{}", encoding="utf-8")
+
+    def raise_oserror(self, encoding=None):
+        raise OSError("boom")
+
+    monkeypatch.setattr(
+        "scripts.generate_staged_readiness_report.Path.read_text",
+        raise_oserror,
+    )
+
+    with caplog.at_level("WARNING"):
+        result = load_json_report(str(path))
+
+    assert result is None
+    assert "Failed to read report file" in caplog.text
+
+
+def test_absent_compose_report_sets_not_failed_flag_without_validation_evidence() -> None:
+    """compose_validated=True means not failed; compose_validation=None means not included."""
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=_passing_blocking_governance_results(),
+        compose_report=None,
+        live_report=None,
+    )
+
+    assert report["compose_validation"] is None
+    assert report["overall_readiness"]["compose_validated"] is True
+    assert report["overall_readiness"]["deployment_ready"] is True
+
+
+def test_absent_live_report_sets_not_failed_flag_without_provider_evidence() -> None:
+    """live_provider_ok=True means not failed; live_provider_validation=None means not included."""
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=_passing_blocking_governance_results(),
+        compose_report=None,
+        live_report=None,
+    )
+
+    assert report["live_provider_validation"] is None
+    assert report["overall_readiness"]["live_provider_ok"] is True
+    assert report["overall_readiness"]["deployment_ready"] is True
+
+
+def test_missing_compose_artifact_results_in_absent_compose_validation_semantics(
+    tmp_path,
+) -> None:
+    """Missing compose artifacts should map to absent compose validation semantics."""
+    compose_report = load_json_report(str(tmp_path / "missing-compose.json"))
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=_passing_blocking_governance_results(),
+        compose_report=compose_report,
+        live_report=None,
+    )
+
+    assert compose_report is None
+    assert report["compose_validation"] is None
+    assert report["overall_readiness"]["compose_validated"] is True
+    assert report["overall_readiness"]["deployment_ready"] is True
+
+
+def test_invalid_live_artifact_results_in_absent_live_validation_semantics(
+    tmp_path,
+) -> None:
+    """Invalid live artifacts should map to absent live validation semantics."""
+    path = tmp_path / "live-report.json"
+    path.write_text("{not-json", encoding="utf-8")
+
+    live_report = load_json_report(str(path))
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=_passing_blocking_governance_results(),
+        compose_report=None,
+        live_report=live_report,
+    )
+
+    assert live_report is None
+    assert report["live_provider_validation"] is None
+    assert report["overall_readiness"]["live_provider_ok"] is True
+    assert report["overall_readiness"]["deployment_ready"] is True
+
+
+def test_text_report_marks_absent_compose_and_live_reports_as_not_included() -> None:
+    """Text report should mark absent compose/live reports as not included."""
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=_passing_blocking_governance_results(),
+        compose_report=None,
+        live_report=None,
+    )
+
+    text = render_text_report(report)
+
+    assert "Compose Validation" in text
+    assert "Not included (run with --compose-report)" in text
+    assert "Live Provider Validation" in text
+    assert "Not included (run with --live-report)" in text
