@@ -16,8 +16,8 @@ simulated, and what requires environment-specific confirmation.
 | `make validate-compose` | Docker Compose governance smoke | After Docker changes |
 | `make validate-compose-report` | Compose validation + JSON report | Release gate |
 | `make validate-live` | Live provider checks (secrets-required) | Nightly/manual |
-| `make validate-live-report` | Live provider + JSON report | Release certification |
-| `make validate-staged-report` | Full staged readiness report | Release certification |
+| `make validate-live-report` | Live provider + JSON report | Release evidence report |
+| `make validate-staged-report` | Full staged readiness report | Release evidence report |
 | `make quality-checks` | Architecture + security scripts | Every PR (automatic) |
 
 ## Validation Tiers
@@ -198,11 +198,17 @@ Interpretation rules:
   - attached live `FAIL` does not by itself flip `deployment_ready=false`
   - absent `live_provider_validation` is treated as not failed and does not
     prove live validation ran
+- Absent `compose_validation` / `live_provider_validation` can mean the
+  subreport was not provided, the file was missing, unreadable, or invalid
+  JSON. Check generator warnings and confirm the subreport artifact exists
+  before treating summary flags as evidence.
 - Advisory failures are non-blocking but require operator review.
 - The report is evidence for release review, not production certification.
-- `make validate-staged-report` may run without `--compose-report` or
-  `--live-report`; attach both subreports separately for fuller release
-  review evidence.
+- `make validate-staged-report` runs the staged report generator without
+  attached `--compose-report` or `--live-report` inputs.
+- To attach those subreports, run the underlying generator directly, for
+  example: `python scripts/generate_staged_readiness_report.py --compose-report
+  <compose-report.json> --live-report <live-report.json> ...`
 
 The staged readiness report also records the `trustlog-production-posture`
 advisory check, and runs it with a subprocess-scoped
