@@ -208,6 +208,9 @@ Interpretation rules:
 - The with-subreports target runs compose validation and live provider
   validation first, then passes their JSON reports to
   `scripts/generate_staged_readiness_report.py`.
+- Use `make prepare-release-evidence-handoff` to copy the reviewer handoff
+  template into `release-artifacts/release-evidence-reviewer-handoff.md`
+  before packaging release evidence.
 - Live provider validation may require provider secrets and can fail when
   those secrets are not configured.
 - Operators may still run the generator directly when custom report paths are
