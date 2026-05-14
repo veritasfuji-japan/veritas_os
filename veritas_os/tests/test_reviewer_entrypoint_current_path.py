@@ -57,6 +57,8 @@ def test_reviewer_entrypoint_links_required_current_docs() -> None:
         "en/operations/provider-support-matrix.md",
         "en/operations/type-safety-baseline.md",
         "en/operations/maintainer-handoff.md",
+        "en/operations/operational-readiness-runbook.md",
+        "en/validation/production-validation.md",
     ]
     for link in required_links:
         assert link in targets
@@ -117,6 +119,11 @@ def test_reviewer_entrypoint_does_not_include_overclaim_phrases() -> None:
         "production sla guaranteed",
         "24/7 support guaranteed",
         "provider-neutral production-ready",
+        "release certification",
+        "full certification",
+        "compliance guaranteed",
+        "proves production readiness",
+        "certifies readiness",
         "fully eliminates bus-factor risk",
         "完全準拠",
         "認証済み製品",
@@ -160,3 +167,26 @@ def test_reviewer_entrypoint_validation_commands_include_poc_doc_guardrails() ->
         "pytest -q veritas_os/tests/test_one_day_poc_reviewer_handoff_template_docs.py",
     ]:
         assert command in text
+
+
+def test_reviewer_entrypoint_includes_release_evidence_path() -> None:
+    text = _entrypoint_text()
+    for phrase in [
+        "Operational Readiness Runbook",
+        "Production Validation",
+        "make validate-staged-report",
+        "make -n validate-staged-report-with-subreports",
+        "test_staged_readiness_report.py",
+        "test_staged_readiness_make_targets.py",
+        "test_operational_docs_certification_guard.py",
+        "`deployment_ready`",
+        "compose/live subreports",
+    ]:
+        assert phrase in text
+
+    targets = set(_markdown_link_targets())
+    for link in [
+        "en/operations/operational-readiness-runbook.md",
+        "en/validation/production-validation.md",
+    ]:
+        assert link in targets
