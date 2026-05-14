@@ -16,7 +16,7 @@ simulated, and what requires environment-specific confirmation.
 | `make validate-compose` | Docker Compose governance smoke | After Docker changes |
 | `make validate-compose-report` | Compose validation + JSON report | Release gate |
 | `make validate-live` | Live provider checks (secrets-required) | Nightly/manual |
-| `make validate-live-report` | Live provider + JSON report | Release certification |
+| `make validate-live-report` | Live provider + JSON report | Release evidence report |
 | `make validate-staged-report` | Staged readiness report | Release evidence report without attached compose/live subreports |
 | `make validate-staged-report-with-subreports` | Staged readiness report with compose/live subreports (secrets-required for live checks) | Release evidence report with attached subreports |
 | `make quality-checks` | Architecture + security scripts | Every PR (automatic) |
