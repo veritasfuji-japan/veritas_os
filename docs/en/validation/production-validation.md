@@ -127,6 +127,20 @@ Memory/TrustLog backend posture:
 | **TLS** | `@pytest.mark.tls` | Tier 2 (release) + Tier 3 (weekly) | TLS/security-header posture verification |
 | **Load** | `@pytest.mark.load` | Tier 2 (release) + Tier 3 (weekly) | Lightweight burst/concurrency validation |
 
+
+In the staged readiness report v2.1, `deployment_ready` is gated by blocking
+governance checks and by an attached compose report only when
+`compose_validation` is present. If `compose_validation` is absent,
+`overall_readiness.compose_validated=true` only means no compose failure was
+attached; it does not prove compose validation ran. Advisory and live provider
+findings are surfaced separately through `overall_readiness.advisory_issues`,
+`overall_readiness.advisory_issue_count`,
+`governance.advisory_failure_labels`, `overall_readiness.live_provider_ok`, and
+`live_provider_validation`; they require review but do not independently change
+`deployment_ready` in v2.1. If `live_provider_validation` is absent,
+`overall_readiness.live_provider_ok=true` does not prove live providers were
+checked.
+
 ## How to Tell If a Release Is Governance-Ready
 
 A VERITAS OS release is **governance-ready** when all of the following hold:
