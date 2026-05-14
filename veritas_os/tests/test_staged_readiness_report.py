@@ -87,6 +87,90 @@ def test_build_report_schema_version_is_2_1() -> None:
     assert report["schema_version"] == "2.1"
 
 
+def test_build_report_surfaces_advisory_issues_in_overall_readiness() -> None:
+    """Advisory failures should be summarized in overall readiness metadata."""
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=[
+            {
+                "label": "trustlog-production-posture",
+                "tier": "Tier 2",
+                "blocking": False,
+                "passed": False,
+                "output": "TrustLog production posture check failed.",
+            }
+        ],
+        compose_report=None,
+        live_report=None,
+    )
+    assert report["overall_readiness"]["deployment_ready"] is True
+    assert report["overall_readiness"]["advisory_issues"] is True
+    assert report["overall_readiness"]["advisory_issue_count"] == 1
+    assert report["governance"]["advisory_failures"] == 1
+    assert report["governance"]["advisory_failure_labels"] == [
+        "trustlog-production-posture"
+    ]
+
+
+def test_build_report_marks_no_advisory_issues_when_none() -> None:
+    """Advisory issue summary should be empty when no advisory checks fail."""
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=[],
+        compose_report=None,
+        live_report=None,
+    )
+    assert report["overall_readiness"]["advisory_issues"] is False
+    assert report["overall_readiness"]["advisory_issue_count"] == 0
+
+
+def test_render_text_report_surfaces_advisory_issue_summary() -> None:
+    """Text report should surface advisory summary and non-blocking note."""
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=[
+            {
+                "label": "trustlog-production-posture",
+                "tier": "Tier 2",
+                "blocking": False,
+                "passed": False,
+                "output": "TrustLog production posture check failed.",
+            }
+        ],
+        compose_report=None,
+        live_report=None,
+    )
+    text = render_text_report(report)
+    assert "Advisory Issues" in text
+    assert "warning" in text
+    assert "trustlog-production-posture" in text
+    assert "advisory failures are non-blocking" in text.lower()
+
+
+def test_blocking_failure_still_blocks_deployment_ready() -> None:
+    """Blocking failures must still determine deployment readiness outcome."""
+    report = build_report(
+        ref="test",
+        sha="abc",
+        governance_results=[
+            {
+                "label": "runtime-pickle-ban",
+                "tier": "Tier 1",
+                "blocking": True,
+                "passed": False,
+                "output": "failed",
+            }
+        ],
+        compose_report=None,
+        live_report=None,
+    )
+    assert report["overall_readiness"]["deployment_ready"] is False
+    assert report["overall_readiness"]["governance_ready"] is False
+
+
 def test_trustlog_posture_check_forces_enforcement_override() -> None:
     """TrustLog check should always set production posture enforcement."""
     assert CHECK_ENV_OVERRIDES["trustlog-production-posture"] == {
