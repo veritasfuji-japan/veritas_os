@@ -13,10 +13,11 @@
 - operator-facing governance surface の信頼性を、テストと証跡で裏づけます。
 
 ## 実装上の確認ポイント
+
+- staged readiness report v2.1 では、`deployment_ready` は blocking governance checks と compose validation の結果に基づきます。注意・警告扱いの失敗や live provider の失敗は、`overall_readiness.advisory_issues`、`overall_readiness.advisory_issue_count`、`governance.advisory_failure_labels`、`overall_readiness.live_provider_ok` に分けて表示されます。これらは v2.1 では単独で `deployment_ready` を未達扱いにはしませんが、昇格・本番反映の前に運用者が確認する必要があります。
 - `make quality-checks` と production/smoke 系テストを継続実行する。
 - PostgreSQL の live 検証導線と運用ドリルを定期確認する。
 - staged readiness report は v2.1 を利用し、`trustlog-production-posture` の advisory 証跡を含みます。
-- v2.1 では、注意・警告扱いの失敗も `overall_readiness.advisory_issues` / `overall_readiness.advisory_issue_count` に要約されます。これらは単独では `deployment_ready` を未達扱いにはしませんが、昇格・本番反映の前に運用者が確認する必要があります。
 - 詳細は英語正本または実装ファイルを確認してください。
 
 ## 現時点の制限

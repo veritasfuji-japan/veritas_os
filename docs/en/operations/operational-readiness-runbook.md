@@ -158,6 +158,30 @@ python scripts/generate_staged_readiness_report.py \
 ```
 
 ## Report Artifacts
+
+## Interpreting staged readiness v2.1
+
+`deployment_ready` is intentionally narrow in v2.1: it reflects blocking governance checks and compose validation. It does not certify that advisory findings are cleared or that live providers are healthy. Review `advisory_issues`, `advisory_issue_count`, `governance.advisory_failure_labels`, and `live_provider_ok` before promotion.
+
+Interpretation rules:
+- `deployment_ready=true` means blocking governance checks passed and compose validation did not fail.
+- `deployment_ready=true` does not mean all advisory issues are cleared.
+- `deployment_ready=true` does not mean live providers are healthy.
+- Operators must separately review:
+  - `overall_readiness.advisory_issues`
+  - `overall_readiness.advisory_issue_count`
+  - `governance.advisory_failure_labels`
+  - `overall_readiness.live_provider_ok`
+  - `live_provider_validation`
+- Compose validation is deployment-gating:
+  - compose `FAIL` sets `overall_readiness.compose_validated=false`
+  - compose `FAIL` makes `deployment_ready=false`
+- Live provider validation is reported but not deployment-gating in v2.1:
+  - live `FAIL` sets `overall_readiness.live_provider_ok=false`
+  - live `FAIL` does not by itself flip `deployment_ready=false`
+- Advisory failures are non-blocking but require operator review.
+- The report is evidence for release review, not production certification.
+
 The staged readiness report also records the `trustlog-production-posture`
 advisory check, and runs it with a subprocess-scoped
 `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE=1` override so the production
