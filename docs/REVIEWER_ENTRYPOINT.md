@@ -13,27 +13,30 @@ This entry point is organized around the current enterprise review path: busines
 1. [Enterprise Value Brief](en/positioning/enterprise-value-brief.md) — one-page business/investor overview.
 2. [README](../README.md) — core product definition and repository entry map.
 3. [Current Implementation Matrix](en/validation/current-implementation-matrix.md) — current implementation facts vs roadmap.
-4. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
-5. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) — how operators prepare, collect, package, and hand off PoC evidence.
-6. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) — submit-ready handoff format for PoC results.
-7. [Provider Support Matrix](en/operations/provider-support-matrix.md) — provider tiers, support boundaries, and non-claims.
-8. [Public Positioning](en/positioning/public-positioning.md) — conservative positioning and legal/compliance boundary statements.
+4. [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md) — release evidence commands, staged readiness report interpretation, and what compose/live subreports do and do not prove.
+5. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
+6. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) — how operators prepare, collect, package, and hand off PoC evidence.
+7. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) — submit-ready handoff format for PoC results.
+8. [Provider Support Matrix](en/operations/provider-support-matrix.md) — provider tiers, support boundaries, and non-claims.
+9. [Public Positioning](en/positioning/public-positioning.md) — conservative positioning and legal/compliance boundary statements.
 
 ## 30-minute technical review path
 
 1. [Enterprise Value Brief](en/positioning/enterprise-value-brief.md)
 2. [Current Implementation Matrix](en/validation/current-implementation-matrix.md)
-3. [Regulated Action Governance Proof Pack](en/validation/regulated-action-governance-proof-pack.md)
-4. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md)
-5. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md)
-6. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md)
-7. [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
-8. [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
-9. [Type Safety Baseline](en/operations/type-safety-baseline.md)
-10. [Maintainer Handoff](en/operations/maintainer-handoff.md)
-11. [Provider Support Matrix](en/operations/provider-support-matrix.md)
-12. [Regulated Action Governance Kernel](en/architecture/regulated-action-governance-kernel.md)
-13. [Bind Boundary Governance Artifacts](en/architecture/bind-boundary-governance-artifacts.md)
+3. [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md)
+4. [Production Validation](en/validation/production-validation.md)
+5. [Regulated Action Governance Proof Pack](en/validation/regulated-action-governance-proof-pack.md)
+6. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md)
+7. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md)
+8. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md)
+9. [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
+10. [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
+11. [Type Safety Baseline](en/operations/type-safety-baseline.md)
+12. [Maintainer Handoff](en/operations/maintainer-handoff.md)
+13. [Provider Support Matrix](en/operations/provider-support-matrix.md)
+14. [Regulated Action Governance Kernel](en/architecture/regulated-action-governance-kernel.md)
+15. [Bind Boundary Governance Artifacts](en/architecture/bind-boundary-governance-artifacts.md)
 
 ## What VERITAS OS is
 
@@ -54,6 +57,7 @@ Key reviewer concepts:
 |---|---|---|
 | What problem does VERITAS solve? | [Enterprise Value Brief](en/positioning/enterprise-value-brief.md) | Enterprise value, target users, and priority use cases. |
 | What is implemented today? | [Current Implementation Matrix](en/validation/current-implementation-matrix.md) | Clear separation between current facts and roadmap/foundation-only items. |
+| What release evidence exists? | [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md), [Production Validation](en/validation/production-validation.md) | Review validation tiers, staged readiness v2.1 interpretation, `deployment_ready` boundaries, and compose/live subreport handling. |
 | What should reviewers inspect in the One-Day PoC? | [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) | Evidence checklist, walkthrough scenarios, success/failure criteria, and non-claim boundaries. |
 | How should operators prepare and package the PoC evidence? | [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) | Pre-flight checklist, evidence folder layout, run sequence, redaction notes, and review handoff package. |
 | What should be handed to the reviewer after the PoC? | [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) | Submit-ready summary of scope, environment, scenarios, evidence, results, limitations, and open questions. |
@@ -77,6 +81,9 @@ Key reviewer concepts:
 - [Sample evidence Markdown](en/poc/sample-one-day-poc-evidence.md)
 - [Current Implementation Matrix](en/validation/current-implementation-matrix.md)
 - [Regulated Action Governance Proof Pack](en/validation/regulated-action-governance-proof-pack.md)
+- [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md)
+- [Production Validation](en/validation/production-validation.md)
+- Release evidence Make targets: `make validate-staged-report` and `make validate-staged-report-with-subreports`
 - [Provider Support Matrix](en/operations/provider-support-matrix.md)
 - [Type Safety Baseline](en/operations/type-safety-baseline.md)
 - [Maintainer Handoff Runbook](en/operations/maintainer-handoff.md)
@@ -100,6 +107,14 @@ pytest -q veritas_os/tests/test_type_safety_baseline.py
 pytest -q veritas_os/tests/test_maintainer_handoff_docs.py
 pytest -q veritas_os/tests/test_llm_client_anthropic_contract.py
 pytest -q veritas_os/tests/test_reviewer_entrypoint_current_path.py
+
+# Release evidence / staged readiness path
+python scripts/quality/check_operational_docs_consistency.py
+pytest -q veritas_os/tests/test_operational_docs_certification_guard.py
+pytest -q veritas_os/tests/test_staged_readiness_report.py
+pytest -q veritas_os/tests/test_staged_readiness_make_targets.py
+make validate-staged-report
+make -n validate-staged-report-with-subreports
 ```
 
 One-Day PoC command examples (API server required, API key required):
@@ -113,6 +128,8 @@ Use the Evidence Pack to decide what to inspect.
 Use the Operator Runbook to collect and organize evidence.
 Use the Reviewer Handoff Template to summarize and submit the PoC outcome.
 These documents do not create a production SLA, third-party certification, customer-environment measurement, or EU AI Act certification.
+
+For release evidence review, inspect the staged readiness report path. `make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so reviewers can use `make -n validate-staged-report-with-subreports` to inspect the command sequence safely.
 
 Boundary notes for PoC commands:
 
@@ -138,6 +155,7 @@ Boundary notes for PoC commands:
 - One-Day PoC handoff is not customer-environment verification unless explicitly run and documented in that environment.
 - Local/configured PoC output is not proof of production latency, production availability, or third-party certification.
 - Provider latency/cost is not measured unless providers are intentionally enabled and separately recorded.
+- Staged readiness and release evidence reports support review, but are not production certification, third-party certification, or customer-environment verification by themselves.
 
 ## Provider and model boundary
 
@@ -173,6 +191,9 @@ Observe Mode boundary reminders:
 - [ ] Review One-Day PoC Evidence Pack.
 - [ ] Use Operator Runbook when preparing or auditing PoC evidence collection.
 - [ ] Review completed Reviewer Handoff Template if PoC results are being submitted.
+- [ ] Review release evidence commands and staged readiness interpretation.
+- [ ] Confirm `deployment_ready` is not being treated as production certification.
+- [ ] Confirm compose/live subreports are attached or explicitly absent when reviewing release evidence.
 - [ ] Generate or inspect evidence packet.
 - [ ] Confirm Evidence Packet / Evidence Pack / Handoff Template are not being presented as production audit evidence or certification.
 - [ ] Review performance report boundaries.
