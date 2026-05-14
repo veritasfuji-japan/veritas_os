@@ -59,6 +59,7 @@ def test_reviewer_entrypoint_links_required_current_docs() -> None:
         "en/operations/maintainer-handoff.md",
         "en/operations/operational-readiness-runbook.md",
         "en/validation/production-validation.md",
+        "en/validation/release-evidence-reviewer-handoff-template.md",
     ]
     for link in required_links:
         assert link in targets
@@ -165,6 +166,7 @@ def test_reviewer_entrypoint_validation_commands_include_poc_doc_guardrails() ->
         "pytest -q veritas_os/tests/test_one_day_poc_evidence_pack_docs.py",
         "pytest -q veritas_os/tests/test_one_day_poc_operator_runbook_docs.py",
         "pytest -q veritas_os/tests/test_one_day_poc_reviewer_handoff_template_docs.py",
+        "pytest -q veritas_os/tests/test_release_evidence_reviewer_handoff_template_docs.py",
     ]:
         assert command in text
 
@@ -179,6 +181,8 @@ def test_reviewer_entrypoint_includes_release_evidence_path() -> None:
         "test_staged_readiness_report.py",
         "test_staged_readiness_make_targets.py",
         "test_operational_docs_certification_guard.py",
+        "test_release_evidence_reviewer_handoff_template_docs.py",
+        "Release Evidence Reviewer Handoff Template",
         "`deployment_ready`",
         "compose/live subreports",
     ]:
@@ -188,5 +192,6 @@ def test_reviewer_entrypoint_includes_release_evidence_path() -> None:
     for link in [
         "en/operations/operational-readiness-runbook.md",
         "en/validation/production-validation.md",
+        "en/validation/release-evidence-reviewer-handoff-template.md",
     ]:
         assert link in targets
