@@ -25,6 +25,7 @@
 | Current Implementation Matrix | [Current implementation matrix (EN)](en/validation/current-implementation-matrix.md) | — |
 | Backend Parity Coverage | [Backend parity coverage (EN)](en/validation/backend-parity-coverage.md) | [バックエンドパリティカバレッジ (JA)](ja/validation/backend-parity-coverage.md) |
 | Production Validation | [Production validation (EN)](en/validation/production-validation.md) | [本番検証 (JA)](ja/validation/production-validation.md) |
+| Release Evidence Reviewer Handoff Template | [Release evidence reviewer handoff template (EN)](en/validation/release-evidence-reviewer-handoff-template.md) | [リリース証跡レビュー引き渡しテンプレート (JA)](ja/validation/release-evidence-reviewer-handoff-template.md) |
 | PostgreSQL Production Proof Map | [PostgreSQL production proof map (EN)](en/validation/postgresql-production-proof-map.md) | [PostgreSQL本番証跡マップ (JA)](ja/validation/postgresql-production-proof-map.md) |
 | Bilingual Docs Quality Gate | — | [Bilingual docs quality gate (JA)](ja/validation/bilingual-docs-quality-gate.md) |
 | Operations | [Operations (EN)](en/operations/) | [Operations (JA)](ja/operations/) |
@@ -99,6 +100,7 @@
 | 第三者レビュー準備性 | [Third-party review readiness（英語正本）](en/validation/third-party-review-readiness.md) | [第三者レビュー準備性（日本語解説）](ja/validation/third-party-review-readiness.md) |
 | バックエンドパリティカバレッジ | [Backend parity coverage（英語正本）](en/validation/backend-parity-coverage.md) | [バックエンドパリティカバレッジ（日本語解説）](ja/validation/backend-parity-coverage.md) |
 | 本番検証 | [Production validation（英語正本）](en/validation/production-validation.md) | [本番検証（日本語解説）](ja/validation/production-validation.md) |
+| リリース証跡レビュー引き渡しテンプレート | [Release evidence reviewer handoff template（英語正本）](en/validation/release-evidence-reviewer-handoff-template.md) | [リリース証跡レビュー引き渡しテンプレート（日本語解説）](ja/validation/release-evidence-reviewer-handoff-template.md) |
 | PostgreSQL本番証跡マップ | [PostgreSQL production proof map（英語正本）](en/validation/postgresql-production-proof-map.md) | [PostgreSQL本番証跡マップ（日本語解説）](ja/validation/postgresql-production-proof-map.md) |
 | Bilingual Docs Quality Gate | — | [Bilingual docs quality gate (JA)](ja/validation/bilingual-docs-quality-gate.md) |
 | 運用 | [Operations（英語正本）](en/operations/) | [Operations（日本語）](ja/operations/) |
