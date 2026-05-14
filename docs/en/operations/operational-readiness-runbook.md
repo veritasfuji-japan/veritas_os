@@ -174,10 +174,13 @@ absent. Review `compose_validation`, `live_provider_validation`,
 
 Interpretation rules:
 
-- `deployment_ready=true` means blocking governance checks passed and no attached compose report failed.
-- `deployment_ready=true` does not mean a compose report was attached; check `compose_validation`.
+- `deployment_ready=true` means blocking governance checks passed and no
+  attached compose report failed.
+- `deployment_ready=true` does not mean a compose report was attached; check
+  `compose_validation`.
 - `deployment_ready=true` does not mean all advisory issues are cleared.
-- `deployment_ready=true` does not mean live providers are healthy or checked; check `live_provider_validation`.
+- `deployment_ready=true` does not mean live providers are healthy or checked;
+  check `live_provider_validation`.
 - Operators must separately review:
   - `compose_validation`
   - `live_provider_validation`
