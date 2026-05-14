@@ -14,7 +14,24 @@
 
 ## 実装上の確認ポイント
 
-- staged readiness report v2.1 では、`deployment_ready` は blocking governance checks と、`compose_validation` が添付されている場合の compose 結果に基づきます。`compose_validation` が未添付の場合、`overall_readiness.compose_validated=true` は「compose の失敗が添付されていない」ことを示すだけで、compose validation が実行された証明ではありません。注意・警告扱いの失敗や live provider の結果は、`overall_readiness.advisory_issues`、`overall_readiness.advisory_issue_count`、`governance.advisory_failure_labels`、`overall_readiness.live_provider_ok`、`live_provider_validation` に分けて表示されます。これらは v2.1 では単独で `deployment_ready` を未達扱いにはしませんが、昇格・本番反映の前に運用者が確認する必要があります。`live_provider_validation` が未添付の場合、`overall_readiness.live_provider_ok=true` は live provider が検証済みであることを意味しません。
+- staged readiness report v2.1 では、`deployment_ready` は
+  ブロッキング扱いのガバナンスチェック（blocking governance checks）と、
+  `compose_validation` が添付されている場合の compose 検証結果に基づきます。
+  `compose_validation` が未添付の場合、
+  `overall_readiness.compose_validated=true` は
+  「compose の失敗が添付されていない」ことを示すだけで、
+  compose 検証が実行された証明ではありません。
+- 注意・警告扱いの失敗や live provider 検証の結果は、
+  `overall_readiness.advisory_issues`、
+  `overall_readiness.advisory_issue_count`、
+  `governance.advisory_failure_labels`、
+  `overall_readiness.live_provider_ok`、
+  `live_provider_validation` に分けて表示されます。
+  これらは v2.1 では単独で `deployment_ready` を未達扱いにはしませんが、
+  昇格・本番反映の前に運用者が確認する必要があります。
+- `live_provider_validation` が未添付の場合、
+  `overall_readiness.live_provider_ok=true` は
+  live provider 検証が実行済みであることを意味しません。
 - `make quality-checks` と production/smoke 系テストを継続実行する。
 - PostgreSQL の live 検証導線と運用ドリルを定期確認する。
 - staged readiness report は v2.1 を利用し、`trustlog-production-posture` の advisory 証跡を含みます。
