@@ -17,7 +17,8 @@ simulated, and what requires environment-specific confirmation.
 | `make validate-compose-report` | Compose validation + JSON report | Release gate |
 | `make validate-live` | Live provider checks (secrets-required) | Nightly/manual |
 | `make validate-live-report` | Live provider + JSON report | Release certification |
-| `make validate-staged-report` | Full staged readiness report | Release certification |
+| `make validate-staged-report` | Staged readiness report | Release evidence report without attached compose/live subreports |
+| `make validate-staged-report-with-subreports` | Staged readiness report with compose/live subreports (secrets-required for live checks) | Release evidence report with attached subreports |
 | `make quality-checks` | Architecture + security scripts | Every PR (automatic) |
 
 ## Validation Tiers
@@ -200,11 +201,19 @@ Interpretation rules:
     prove live validation ran
 - Advisory failures are non-blocking but require operator review.
 - The report is evidence for release review, not production certification.
-- `make validate-staged-report` may run without `--compose-report` or
-  `--live-report`; attach both subreports separately for fuller release
-  review evidence.
+- `make validate-staged-report` keeps generating staged reports without
+  attached compose/live subreports.
+- Use `make validate-staged-report-with-subreports` when release review needs
+  attached `compose_validation` and `live_provider_validation` artifacts.
+- The with-subreports target runs compose validation and live provider
+  validation first, then passes their JSON reports to
+  `scripts/generate_staged_readiness_report.py`.
+- Live provider validation may require provider secrets and can fail when
+  those secrets are not configured.
+- Operators may still run the generator directly when custom report paths are
+  required.
 
-To attach those subreports, run the underlying generator directly:
+To attach those subreports with custom paths, run the underlying generator directly:
 
 ```bash
 python scripts/generate_staged_readiness_report.py \
