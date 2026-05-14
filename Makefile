@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report validate-staged-report-with-subreports db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -249,6 +249,19 @@ validate-staged-report:
 	@python scripts/generate_staged_readiness_report.py \
 		--ref $$(git describe --tags --always 2>/dev/null || echo "local") \
 		--sha $$(git rev-parse HEAD 2>/dev/null || echo "unknown") \
+		--output release-artifacts/staged-readiness-report.json \
+		--text-output release-artifacts/staged-readiness-report.txt
+
+validate-staged-report-with-subreports:
+	@echo "[veritas] Generating compose/live validation reports and staged readiness report..."
+	@mkdir -p release-artifacts
+	@bash scripts/compose_validation.sh --json-report=release-artifacts/compose-validation-report.json
+	@bash scripts/live_provider_validation.sh --json-report=release-artifacts/live-provider-report.json
+	@python scripts/generate_staged_readiness_report.py \
+		--ref $$(git describe --tags --always 2>/dev/null || echo "local") \
+		--sha $$(git rev-parse HEAD 2>/dev/null || echo "unknown") \
+		--compose-report release-artifacts/compose-validation-report.json \
+		--live-report release-artifacts/live-provider-report.json \
 		--output release-artifacts/staged-readiness-report.json \
 		--text-output release-artifacts/staged-readiness-report.txt
 

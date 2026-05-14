@@ -32,6 +32,7 @@
 - `live_provider_validation` が未添付の場合、
   `overall_readiness.live_provider_ok=true` は
   live provider 検証が実行済みであることを意味しません。
+- `make validate-staged-report` は、compose/live provider のサブレポートを添付しない staged report を生成します。昇格・本番反映前の確認で `compose_validation` と `live_provider_validation` を staged report に含めたい場合は、`make validate-staged-report-with-subreports` を使用します。この target は compose 検証と live provider 検証を先に実行し、その JSON レポートを `scripts/generate_staged_readiness_report.py` に渡します。live provider 検証には provider secrets が必要になる場合があります。
 - `make quality-checks` と production/smoke 系テストを継続実行する。
 - PostgreSQL の live 検証導線と運用ドリルを定期確認する。
 - staged readiness report は v2.1 を利用し、`trustlog-production-posture` の advisory 証跡を含みます。

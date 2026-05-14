@@ -141,6 +141,8 @@ findings are surfaced separately through `overall_readiness.advisory_issues`,
 `overall_readiness.live_provider_ok=true` does not prove live providers were
 checked.
 
+Use `make validate-staged-report` for a staged report without attached compose/live subreports. Use `make validate-staged-report-with-subreports` when release review requires `compose_validation` and `live_provider_validation` artifacts to be attached to the staged report. The subreport target runs compose and live provider validation first; live provider validation may require secrets.
+
 ## How to Tell If a Release Is Governance-Ready
 
 A VERITAS OS release is **governance-ready** when all of the following hold:
