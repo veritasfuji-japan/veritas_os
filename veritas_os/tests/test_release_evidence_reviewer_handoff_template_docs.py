@@ -144,6 +144,8 @@ def test_release_evidence_handoff_ja_explanation_has_required_content() -> None:
         "未添付",
         "認証ではない",
         "顧客環境検証ではない",
+        "make prepare-release-evidence-handoff",
+        "release-artifacts/release-evidence-reviewer-handoff.md",
     ]:
         assert phrase in text
 

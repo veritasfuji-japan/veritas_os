@@ -110,7 +110,6 @@ def test_validate_staged_report_with_subreports_dry_run_attaches_subreports() ->
 
 
 
-
 def test_prepare_release_evidence_handoff_dry_run_copies_template() -> None:
     """Handoff target should copy the release evidence reviewer template."""
     output = _run_make_dry_run("prepare-release-evidence-handoff")
@@ -121,6 +120,7 @@ def test_prepare_release_evidence_handoff_dry_run_copies_template() -> None:
         "release-artifacts/release-evidence-reviewer-handoff.md"
     ) in output
     assert "Wrote release-artifacts/release-evidence-reviewer-handoff.md" in output
+
 
 def test_staged_readiness_make_targets_are_phony() -> None:
     """Makefile should mark both staged readiness targets as phony."""
@@ -153,6 +153,7 @@ def test_docs_reference_release_evidence_handoff_make_target() -> None:
         REPO_ROOT / "docs/en/validation/release-evidence-reviewer-handoff-template.md",
         REPO_ROOT / "docs/en/operations/operational-readiness-runbook.md",
         REPO_ROOT / "docs/REVIEWER_ENTRYPOINT.md",
+        REPO_ROOT / "docs/ja/validation/release-evidence-reviewer-handoff-template.md",
     ]
 
     for path in docs:

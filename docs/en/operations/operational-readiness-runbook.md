@@ -19,6 +19,7 @@ simulated, and what requires environment-specific confirmation.
 | `make validate-live-report` | Live provider + JSON report | Release evidence report |
 | `make validate-staged-report` | Staged readiness report | Release evidence report without attached compose/live subreports |
 | `make validate-staged-report-with-subreports` | Staged readiness report with compose/live subreports (secrets-required for live checks) | Release evidence report with attached subreports |
+| `make prepare-release-evidence-handoff` | Prepare `release-artifacts/release-evidence-reviewer-handoff.md` | Reviewer handoff preparation |
 | `make quality-checks` | Architecture + security scripts | Every PR (automatic) |
 
 ## Validation Tiers
