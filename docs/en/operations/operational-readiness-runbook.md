@@ -139,7 +139,7 @@ make validate-live-report
 - Staging security headers (HSTS)
 - Web search external test suite
 
-### Staged Readiness Report (Full Certification)
+### Staged Readiness Report (Full Operational Evidence)
 
 ```bash
 # Generate the comprehensive readiness report
@@ -159,9 +159,9 @@ python scripts/generate_staged_readiness_report.py \
 
 ## Report Artifacts
 
-## Interpreting staged readiness v2.1
+### Interpreting staged readiness v2.1
 
-`deployment_ready` is intentionally narrow in v2.1: it reflects blocking governance checks and compose validation. It does not certify that advisory findings are cleared or that live providers are healthy. Review `advisory_issues`, `advisory_issue_count`, `governance.advisory_failure_labels`, and `live_provider_ok` before promotion.
+`deployment_ready` is intentionally narrow in v2.1: it reflects blocking governance checks and compose validation. It does not certify that advisory findings are cleared or that live providers are healthy. Review `overall_readiness.advisory_issues`, `overall_readiness.advisory_issue_count`, `governance.advisory_failure_labels`, `overall_readiness.live_provider_ok`, and `live_provider_validation` before promotion.
 
 Interpretation rules:
 - `deployment_ready=true` means blocking governance checks passed and compose validation did not fail.
