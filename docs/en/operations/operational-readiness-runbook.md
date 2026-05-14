@@ -158,17 +158,40 @@ python scripts/generate_staged_readiness_report.py \
 ```
 
 ## Report Artifacts
+
+## Interpreting staged readiness v2.1
+
+`deployment_ready` is intentionally narrow in v2.1: it reflects blocking governance checks and a compose report only when `compose_validation` is attached. If `compose_validation` is absent, the generator treats compose as not failed, so `overall_readiness.compose_validated=true` does not prove compose validation ran. Likewise, `overall_readiness.live_provider_ok=true` does not prove live providers were checked when `live_provider_validation` is absent. Review `compose_validation`, `live_provider_validation`, `overall_readiness.advisory_issues`, `overall_readiness.advisory_issue_count`, and `governance.advisory_failure_labels` before promotion.
+
+Interpretation rules:
+- `deployment_ready=true` means blocking governance checks passed and no attached compose report failed.
+- `deployment_ready=true` does not mean a compose report was attached; check `compose_validation`.
+- `deployment_ready=true` does not mean all advisory issues are cleared.
+- `deployment_ready=true` does not mean live providers are healthy or checked; check `live_provider_validation`.
+- Operators must separately review:
+  - `compose_validation`
+  - `live_provider_validation`
+  - `overall_readiness.advisory_issues`
+  - `overall_readiness.advisory_issue_count`
+  - `governance.advisory_failure_labels`
+  - `overall_readiness.live_provider_ok`
+- Compose validation is deployment-gating only when attached:
+  - attached compose `FAIL` sets `overall_readiness.compose_validated=false`
+  - attached compose `FAIL` makes `deployment_ready=false`
+  - absent `compose_validation` is treated as not failed and does not prove compose validation ran
+- Live provider validation is reported but not deployment-gating in v2.1:
+  - attached live `FAIL` sets `overall_readiness.live_provider_ok=false`
+  - attached live `FAIL` does not by itself flip `deployment_ready=false`
+  - absent `live_provider_validation` is treated as not failed and does not prove live validation ran
+- Advisory failures are non-blocking but require operator review.
+- The report is evidence for release review, not production certification.
+- `make validate-staged-report` may run without `--compose-report` or `--live-report`; attach both subreports separately for fuller release review evidence.
+
 The staged readiness report also records the `trustlog-production-posture`
 advisory check, and runs it with a subprocess-scoped
 `VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE=1` override so the production
 posture path is evaluated even from a local/dev shell. The check remains
 non-blocking and does not connect to real DB/KMS/WORM services.
-The JSON report surfaces advisory issues in
-`overall_readiness.advisory_issues` and
-`overall_readiness.advisory_issue_count`. Advisory failures do not flip
-`deployment_ready` by themselves, but operators must review them before
-promotion.
-
 
 ### Governance Readiness Report (v1.0)
 
