@@ -19,7 +19,7 @@ This entry point is organized around the current enterprise review path: busines
 7. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) — submit-ready handoff format for PoC results.
 8. [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md) — submit-ready format for release evidence, staged readiness interpretation, subreport presence/absence, and reviewer acknowledgement.
 9. [Provider Support Matrix](en/operations/provider-support-matrix.md) — provider tiers, support boundaries, and non-claims.
-9. [Public Positioning](en/positioning/public-positioning.md) — conservative positioning and legal/compliance boundary statements.
+10. [Public Positioning](en/positioning/public-positioning.md) — conservative positioning and legal/compliance boundary statements.
 
 ## 30-minute technical review path
 

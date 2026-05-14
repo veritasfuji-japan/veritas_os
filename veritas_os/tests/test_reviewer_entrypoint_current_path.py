@@ -195,3 +195,8 @@ def test_reviewer_entrypoint_includes_release_evidence_path() -> None:
         "en/validation/release-evidence-reviewer-handoff-template.md",
     ]:
         assert link in targets
+
+
+def test_reviewer_entrypoint_numbers_public_positioning_in_10_minute_path() -> None:
+    text = _entrypoint_text()
+    assert "10. [Public Positioning]" in text
