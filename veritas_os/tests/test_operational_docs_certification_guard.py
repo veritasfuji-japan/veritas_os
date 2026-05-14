@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+from scripts.quality import check_operational_docs_consistency as docs_checker
 from scripts.quality.check_operational_docs_consistency import (
     FORBIDDEN_POSITIVE_CERTIFICATION_PHRASES,
     _find_forbidden_positive_certification_phrases,
@@ -14,8 +16,13 @@ from scripts.quality.check_operational_docs_consistency import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_positive_certification_phrases_are_reported(tmp_path: Path) -> None:
+def test_positive_certification_phrases_are_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Every forbidden positive phrase should be reported exactly once."""
+    monkeypatch.setattr(docs_checker, "REPO_ROOT", tmp_path)
+
     for phrase in FORBIDDEN_POSITIVE_CERTIFICATION_PHRASES:
         filename = phrase.replace(" ", "_").lower().replace("/", "_")
         path = tmp_path / f"{filename}.md"
@@ -30,8 +37,11 @@ def test_positive_certification_phrases_are_reported(tmp_path: Path) -> None:
 
 def test_positive_certification_phrases_are_case_insensitive(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Forbidden phrases should be detected regardless of case."""
+    monkeypatch.setattr(docs_checker, "REPO_ROOT", tmp_path)
+
     path = tmp_path / "case.md"
     path.write_text("this says RELEASE CERTIFICATION for production", encoding="utf-8")
 
@@ -40,8 +50,13 @@ def test_positive_certification_phrases_are_case_insensitive(
     assert any("Release certification" in problem for problem in problems)
 
 
-def test_non_certification_boundary_language_is_allowed(tmp_path: Path) -> None:
+def test_non_certification_boundary_language_is_allowed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Boundary/disclaimer wording must stay allowed by the guard."""
+    monkeypatch.setattr(docs_checker, "REPO_ROOT", tmp_path)
+
     path = tmp_path / "allowed-boundary.md"
     allowed_text = """
 This document is not third-party certification.
