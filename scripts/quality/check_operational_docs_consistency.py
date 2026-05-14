@@ -57,6 +57,26 @@ DOC_MAP_REQUIRED_TOKENS = (
     "`veritas_os/README_JP.md` は補助説明",
 )
 
+FORBIDDEN_POSITIVE_CERTIFICATION_PHRASES = (
+    "Release certification",
+    "Full Certification",
+    "production certified",
+    "certified for production",
+    "compliance guaranteed",
+    "guarantees compliance",
+    "proves production readiness",
+    "proves readiness",
+    "certifies readiness",
+    "certifies production readiness",
+)
+
+OVER_CERTIFICATION_DOC_PATHS = (
+    REPO_ROOT / "docs/en/operations/operational-readiness-runbook.md",
+    REPO_ROOT / "docs/en/validation/production-validation.md",
+    REPO_ROOT / "docs/ja/validation/production-validation.md",
+    REPO_ROOT / "docs/en/validation/current-implementation-matrix.md",
+)
+
 
 def collect_missing_tokens(content: str, required_tokens: tuple[str, ...]) -> list[str]:
     """Return required markers missing from a documentation file."""
@@ -75,6 +95,22 @@ def _validate_file(path: pathlib.Path, required_tokens: tuple[str, ...]) -> list
     ]
 
 
+def _find_forbidden_positive_certification_phrases(path: pathlib.Path) -> list[str]:
+    """Return forbidden over-certification wording errors for a file."""
+    if not path.exists():
+        return [f"Missing file: {path}"]
+    content = path.read_text(encoding="utf-8")
+    lowered = content.lower()
+    problems = []
+    for phrase in FORBIDDEN_POSITIVE_CERTIFICATION_PHRASES:
+        if phrase.lower() in lowered:
+            problems.append(
+                f"{path.relative_to(REPO_ROOT)}: "
+                f"forbidden over-certification wording: {phrase}"
+            )
+    return problems
+
+
 def main() -> int:
     """Validate the P1 operational documentation contract."""
     problems = []
@@ -82,6 +118,8 @@ def main() -> int:
     problems.extend(_validate_file(README_PATH, README_REQUIRED_TOKENS))
     problems.extend(_validate_file(RUNBOOK_PATH, RUNBOOK_REQUIRED_TOKENS))
     problems.extend(_validate_file(DOC_MAP_PATH, DOC_MAP_REQUIRED_TOKENS))
+    for path in OVER_CERTIFICATION_DOC_PATHS:
+        problems.extend(_find_forbidden_positive_certification_phrases(path))
 
     if not problems:
         print("Operational documentation consistency checks passed.")
