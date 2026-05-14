@@ -30,8 +30,6 @@ def _sample_governance_results() -> list[dict]:
     ]
 
 
-
-
 def _passing_blocking_governance_results() -> list[dict]:
     """Return minimal passing blocking governance checks for semantics tests."""
     return [
@@ -43,6 +41,7 @@ def _passing_blocking_governance_results() -> list[dict]:
             "output": "",
         }
     ]
+
 
 def _sample_report() -> dict:
     """Return a representative staged readiness report payload."""
