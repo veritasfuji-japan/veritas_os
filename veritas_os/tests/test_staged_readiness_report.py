@@ -9,6 +9,37 @@ from scripts.generate_staged_readiness_report import (
 )
 
 
+def _sample_governance_results() -> list[dict]:
+    """Return representative blocking/advisory governance check outcomes."""
+    return [
+        {
+            "label": "runtime-pickle-ban",
+            "tier": "Tier 1",
+            "blocking": True,
+            "passed": True,
+            "output": "",
+        },
+        {
+            "label": "trustlog-production-posture",
+            "tier": "Tier 2",
+            "blocking": False,
+            "passed": False,
+            "output": "TrustLog production posture check failed.",
+        },
+    ]
+
+
+def _sample_report() -> dict:
+    """Return a representative staged readiness report payload."""
+    return build_report(
+        ref="v-test",
+        sha="abc123",
+        governance_results=_sample_governance_results(),
+        compose_report=None,
+        live_report=None,
+    )
+
+
 def test_governance_checks_include_trustlog_production_posture() -> None:
     """GOVERNANCE_CHECKS should register the TrustLog posture evidence check."""
     labels = [item[0] for item in GOVERNANCE_CHECKS]
@@ -239,3 +270,183 @@ def test_run_check_without_env_overrides_uses_default_env(monkeypatch) -> None:
     assert output == "ok"
     assert captured["command"] == ["python", "--version"]
     assert captured["env"] is None
+
+
+def test_staged_readiness_report_top_level_schema_contract() -> None:
+    """Top-level report keys and identity metadata should remain stable."""
+    report = _sample_report()
+    expected_keys = {
+        "schema_version",
+        "report_type",
+        "generated_at",
+        "release_ref",
+        "release_sha",
+        "overall_readiness",
+        "governance",
+        "compose_validation",
+        "live_provider_validation",
+        "coverage_matrix",
+    }
+
+    assert set(report.keys()) == expected_keys
+    assert report["schema_version"] == "2.1"
+    assert report["report_type"] == "staged_operational_readiness"
+    assert report["release_ref"] == "v-test"
+    assert report["release_sha"] == "abc123"
+
+
+def test_staged_readiness_overall_readiness_schema_contract() -> None:
+    """overall_readiness keys and value types should stay machine-readable."""
+    overall = _sample_report()["overall_readiness"]
+    expected_keys = {
+        "governance_ready",
+        "compose_validated",
+        "live_provider_ok",
+        "deployment_ready",
+        "advisory_issues",
+        "advisory_issue_count",
+    }
+
+    assert set(overall.keys()) == expected_keys
+    assert isinstance(overall["governance_ready"], bool)
+    assert isinstance(overall["compose_validated"], bool)
+    assert isinstance(overall["live_provider_ok"], bool)
+    assert isinstance(overall["deployment_ready"], bool)
+    assert isinstance(overall["advisory_issues"], bool)
+    assert isinstance(overall["advisory_issue_count"], int)
+
+
+def test_staged_readiness_governance_schema_contract() -> None:
+    """governance aggregate keys and value types should remain stable."""
+    governance = _sample_report()["governance"]
+    expected_keys = {
+        "total_checks",
+        "passed",
+        "blocking_failures",
+        "advisory_failures",
+        "checks",
+        "blocking_failure_labels",
+        "advisory_failure_labels",
+    }
+
+    assert set(governance.keys()) == expected_keys
+    assert isinstance(governance["total_checks"], int)
+    assert isinstance(governance["passed"], int)
+    assert isinstance(governance["blocking_failures"], int)
+    assert isinstance(governance["advisory_failures"], int)
+    assert isinstance(governance["checks"], list)
+    assert isinstance(governance["blocking_failure_labels"], list)
+    assert isinstance(governance["advisory_failure_labels"], list)
+
+
+def test_staged_readiness_governance_check_item_schema_contract() -> None:
+    """Each governance check item should expose the pinned check shape."""
+    checks = _sample_report()["governance"]["checks"]
+    expected_keys = {"label", "tier", "blocking", "passed", "output"}
+
+    for item in checks:
+        assert set(item.keys()) == expected_keys
+        assert isinstance(item["label"], str)
+        assert isinstance(item["tier"], str)
+        assert isinstance(item["blocking"], bool)
+        assert isinstance(item["passed"], bool)
+        assert isinstance(item["output"], str)
+
+
+def test_staged_readiness_coverage_matrix_schema_contract() -> None:
+    """coverage_matrix keys and list[str] values should remain unchanged."""
+    coverage = _sample_report()["coverage_matrix"]
+    expected_keys = {
+        "proven_in_ci",
+        "proven_in_compose",
+        "proven_with_secrets",
+        "requires_environment",
+    }
+
+    assert set(coverage.keys()) == expected_keys
+    for value in coverage.values():
+        assert isinstance(value, list)
+        assert all(isinstance(item, str) for item in value)
+    assert any(
+        "TrustLog production posture" in item
+        for item in coverage["proven_in_ci"]
+    )
+
+
+def test_staged_readiness_preserves_compose_and_live_reports() -> None:
+    """Compose/live reports should passthrough while preserving current semantics."""
+    compose_report = {
+        "summary": {"overall": "PASS"},
+        "checks": [{"name": "compose", "result": "PASS", "detail": "ok"}],
+    }
+    live_report = {
+        "summary": {"overall": "WARN"},
+        "checks": [{"name": "live", "result": "WARN", "detail": "skipped"}],
+    }
+
+    report = build_report(
+        ref="v-test",
+        sha="abc123",
+        governance_results=_sample_governance_results(),
+        compose_report=compose_report,
+        live_report=live_report,
+    )
+
+    assert report["compose_validation"] == compose_report
+    assert report["live_provider_validation"] == live_report
+    assert report["overall_readiness"]["compose_validated"] is True
+    assert report["overall_readiness"]["live_provider_ok"] is True
+
+
+def test_staged_readiness_compose_fail_blocks_deployment_ready() -> None:
+    """Compose FAIL should set compose_validated false and block deployment."""
+    report = build_report(
+        ref="v-test",
+        sha="abc123",
+        governance_results=[
+            {
+                "label": "runtime-pickle-ban",
+                "tier": "Tier 1",
+                "blocking": True,
+                "passed": True,
+                "output": "",
+            }
+        ],
+        compose_report={"summary": {"overall": "FAIL"}},
+        live_report=None,
+    )
+
+    assert report["overall_readiness"]["compose_validated"] is False
+    assert report["overall_readiness"]["deployment_ready"] is False
+
+
+def test_staged_readiness_live_fail_does_not_flip_deployment_ready() -> None:
+    """Live FAIL is informational and should not change deployment readiness."""
+    report = build_report(
+        ref="v-test",
+        sha="abc123",
+        governance_results=[
+            {
+                "label": "runtime-pickle-ban",
+                "tier": "Tier 1",
+                "blocking": True,
+                "passed": True,
+                "output": "",
+            }
+        ],
+        compose_report=None,
+        live_report={"summary": {"overall": "FAIL"}},
+    )
+
+    assert report["overall_readiness"]["live_provider_ok"] is False
+    assert report["overall_readiness"]["deployment_ready"] is True
+
+
+def test_staged_readiness_text_report_contract_contains_schema_and_advisory_summary() -> None:
+    """Text report should include schema/advisory contract wording."""
+    text = render_text_report(_sample_report())
+
+    assert "Schema:     v2.1" in text
+    assert "Advisory Issues:" in text
+    assert "warning" in text
+    assert "Note: advisory failures are non-blocking but require operator review." in text
