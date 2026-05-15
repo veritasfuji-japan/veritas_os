@@ -1,6 +1,8 @@
 # RSA ↔ VERITAS E2E サンドボックスデモ計画
 
-> 英語正本（EN）: [RSA ↔ VERITAS End-to-End Sandbox Demo Plan](../../en/guides/rsa-veritas-e2e-sandbox-demo-plan.md)
+## 英語正本
+
+- [RSA ↔ VERITAS End-to-End Sandbox Demo Plan](../../en/guides/rsa-veritas-e2e-sandbox-demo-plan.md)
 
 ## 1. 目的
 
@@ -62,15 +64,33 @@
 
 ## 6. 期待される VERITAS 出力
 
-期待されるサンドボックス出力値:
-- `continuation_decision`: `PAUSE_FOR_HUMAN_REVIEW`
-- `reason_code`: `UPSTREAM_INCOMPLETE_KYC_CONTEXT`
-- `authority_evidence_status`: `INSUFFICIENT`
-- `sandbox_bind_boundary_state`: `NOT_EVALUATED_PENDING_AUTHORITY_EVIDENCE`
-- `sandbox_commit_state`: `SUSPENDED_NOT_COMMITTED`
-- `required_next_action`: `REQUEST_ADDITIONAL_KYC_EVIDENCE_OR_HUMAN_REVIEW`
-- `original_llm_intent`: `[REDACTED]`
-- `rsa_action_taken`: `[REDACTED]`
+期待されるサンドボックスレスポンス形状:
+
+```json
+{
+  "veritas_decision": {
+    "continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+    "reason_code": "UPSTREAM_INCOMPLETE_KYC_CONTEXT",
+    "authority_evidence_status": "INSUFFICIENT",
+    "sandbox_bind_boundary_state": "NOT_EVALUATED_PENDING_AUTHORITY_EVIDENCE",
+    "sandbox_commit_state": "SUSPENDED_NOT_COMMITTED",
+    "required_next_action": "REQUEST_ADDITIONAL_KYC_EVIDENCE_OR_HUMAN_REVIEW"
+  },
+  "audit_entry": {
+    "upstream_signal_source": "RSA",
+    "rsa_status": "ALGORITHMIC_HUMILITY_ENGAGED",
+    "trigger_source": "SRC_Incomplete_Context",
+    "original_llm_intent": "[REDACTED]",
+    "rsa_action_taken": "[REDACTED]",
+    "veritas_reason": "The workflow cannot continue toward final commit because required KYC context is incomplete and authority evidence is insufficient.",
+    "timestamp": "2026-10-25T09:15:30Z",
+    "veritas_continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+    "veritas_sandbox_commit_state": "SUSPENDED_NOT_COMMITTED"
+  }
+}
+```
+
+これは sandbox 用の期待レスポンス形状であり、本番 BindReceipt や本番コンプライアンス出力ではありません。
 
 ## 7. 監査動作
 
