@@ -137,6 +137,46 @@ def test_contract_example_matches_expected_output_shape() -> None:
     }
 
 
+def test_vikki_rsa_mock_payload_ingests_as_algorithmic_humility_pause() -> None:
+    payload = RSASandboxPayload(
+        rsa_status="ALGORITHMIC_HUMILITY_ENGAGED",
+        trigger_source="SRC_Incomplete_Context",
+        original_llm_intent="Recommend_Transaction_Approval",
+        rsa_action_taken="Execution_Suspended_Awaiting_Reality_Sync",
+        timestamp="2026-10-25T09:15:30Z",
+    )
+
+    result = evaluate_rsa_sandbox_signal(payload)
+    veritas_decision = result["veritas_decision"]
+    audit_entry = result["audit_entry"]
+
+    assert veritas_decision["continuation_decision"] == "PAUSE_FOR_HUMAN_REVIEW"
+    assert veritas_decision["reason_code"] == "UPSTREAM_INCOMPLETE_KYC_CONTEXT"
+    assert veritas_decision["authority_evidence_status"] == "INSUFFICIENT"
+    assert (
+        veritas_decision["sandbox_bind_boundary_state"]
+        == "NOT_EVALUATED_PENDING_AUTHORITY_EVIDENCE"
+    )
+    assert veritas_decision["sandbox_commit_state"] == "SUSPENDED_NOT_COMMITTED"
+    assert (
+        veritas_decision["required_next_action"]
+        == "REQUEST_ADDITIONAL_KYC_EVIDENCE_OR_HUMAN_REVIEW"
+    )
+    assert audit_entry["upstream_signal_source"] == "RSA"
+    assert audit_entry["rsa_status"] == "ALGORITHMIC_HUMILITY_ENGAGED"
+    assert audit_entry["trigger_source"] == "SRC_Incomplete_Context"
+    assert audit_entry["original_llm_intent"] == "[REDACTED]"
+    assert audit_entry["rsa_action_taken"] == "[REDACTED]"
+    assert audit_entry["timestamp"] == "2026-10-25T09:15:30Z"
+    assert audit_entry["veritas_continuation_decision"] == "PAUSE_FOR_HUMAN_REVIEW"
+    assert audit_entry["veritas_sandbox_commit_state"] == "SUSPENDED_NOT_COMMITTED"
+    assert (
+        audit_entry["veritas_reason"]
+        == "The workflow cannot continue toward final commit because required "
+        "KYC context is incomplete and authority evidence is insufficient."
+    )
+
+
 def test_unknown_status_raises_contract_violation() -> None:
     payload = _payload("UNKNOWN_STATUS")
 
