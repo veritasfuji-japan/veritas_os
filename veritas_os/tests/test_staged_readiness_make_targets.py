@@ -142,6 +142,8 @@ def test_staged_readiness_make_targets_are_phony() -> None:
     assert "validate-staged-report-with-subreports" in phony_tokens
     assert "prepare-release-evidence-handoff" in phony_tokens
     assert "prepare-release-evidence-manifest" in phony_tokens
+    assert "prepare-release-evidence-checksums" in phony_tokens
+    assert "prepare-release-evidence-package" in phony_tokens
 
 
 def test_docs_reference_staged_readiness_make_targets() -> None:
@@ -173,3 +175,31 @@ def test_docs_reference_release_evidence_handoff_make_target() -> None:
         text = path.read_text(encoding="utf-8")
         assert _mentions_make_command(text, "prepare-release-evidence-handoff")
         assert _mentions_make_command(text, "prepare-release-evidence-manifest")
+        assert _mentions_make_command(text, "prepare-release-evidence-checksums")
+        assert _mentions_make_command(text, "prepare-release-evidence-package")
+
+
+def test_prepare_release_evidence_checksums_dry_run_writes_checksum_file() -> None:
+    """Checksums target should call checksum writer script."""
+    output = _run_make_dry_run("prepare-release-evidence-checksums")
+
+    assert "mkdir -p release-artifacts" in output
+    assert (
+        "python scripts/release/write_release_evidence_checksums.py "
+        "--artifacts-dir release-artifacts "
+        "--output release-artifacts/release-evidence-checksums.sha256"
+    ) in output
+    assert "Wrote release-artifacts/release-evidence-checksums.sha256" in output
+
+
+def test_prepare_release_evidence_package_dry_run_runs_expected_steps() -> None:
+    """Package target should run no-subreport preparation steps in order."""
+    output = _run_make_dry_run("prepare-release-evidence-package")
+
+    assert "Release evidence package prepared in release-artifacts/" in output
+    validate_index = output.index("make validate-staged-report")
+    handoff_index = output.index("make prepare-release-evidence-handoff")
+    manifest_index = output.index("make prepare-release-evidence-manifest")
+    checksum_index = output.index("make prepare-release-evidence-checksums")
+
+    assert validate_index < handoff_index < manifest_index < checksum_index

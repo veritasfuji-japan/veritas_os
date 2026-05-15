@@ -63,9 +63,11 @@ make validate-staged-report
 make -n validate-staged-report-with-subreports
 make prepare-release-evidence-handoff
 make prepare-release-evidence-manifest
+make prepare-release-evidence-checksums
+make prepare-release-evidence-package
 ```
 
-`make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so `make -n validate-staged-report-with-subreports` can be used to inspect the command sequence safely before running the secrets-required path. `make prepare-release-evidence-handoff` copies this template to `release-artifacts/release-evidence-reviewer-handoff.md` so operators can fill in the handoff file alongside generated staged readiness artifacts. `make prepare-release-evidence-manifest` copies the manifest template to `release-artifacts/release-evidence-manifest.md` so reviewers can navigate the submitted release evidence package.
+`make validate-staged-report` generates the no-subreport staged report. `make prepare-release-evidence-package` runs the no-subreport package path end-to-end, including checksum generation. `make prepare-release-evidence-checksums` can be run separately when regenerating checksums only. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so `make -n validate-staged-report-with-subreports` can be used to inspect the command sequence safely before running the secrets-required path. `make prepare-release-evidence-handoff` copies this template to `release-artifacts/release-evidence-reviewer-handoff.md` so operators can fill in the handoff file alongside generated staged readiness artifacts. `make prepare-release-evidence-manifest` copies the manifest template to `release-artifacts/release-evidence-manifest.md` so reviewers can navigate the submitted release evidence package.
 
 ## Evidence artifacts provided
 
@@ -75,6 +77,7 @@ make prepare-release-evidence-manifest
 | Staged readiness text | `release-artifacts/staged-readiness-report.txt` | Recommended | |
 | Compose validation JSON | `release-artifacts/compose-validation-report.json` | Conditional | Required when compose subreport is claimed attached |
 | Live provider JSON | `release-artifacts/live-provider-report.json` | Conditional | Required when live provider subreport is claimed attached |
+| Checksums | `release-artifacts/release-evidence-checksums.sha256` | Recommended | SHA256 checksums for present release evidence artifacts |
 | Command log |  | Recommended | |
 | CI status / PR URL |  | Recommended | |
 | Redaction notes |  | Conditional | |

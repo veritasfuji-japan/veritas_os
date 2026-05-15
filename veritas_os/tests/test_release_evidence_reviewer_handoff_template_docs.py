@@ -73,6 +73,7 @@ def test_release_evidence_handoff_template_has_required_artifact_paths() -> None
         "release-artifacts/staged-readiness-report.txt",
         "release-artifacts/compose-validation-report.json",
         "release-artifacts/live-provider-report.json",
+        "release-artifacts/release-evidence-checksums.sha256",
     ]:
         assert artifact in text
 
