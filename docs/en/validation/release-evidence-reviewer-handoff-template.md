@@ -61,9 +61,10 @@ pytest -q veritas_os/tests/test_staged_readiness_report.py
 pytest -q veritas_os/tests/test_staged_readiness_make_targets.py
 make validate-staged-report
 make -n validate-staged-report-with-subreports
+make prepare-release-evidence-handoff
 ```
 
-`make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so `make -n validate-staged-report-with-subreports` can be used to inspect the command sequence safely before running the secrets-required path.
+`make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so `make -n validate-staged-report-with-subreports` can be used to inspect the command sequence safely before running the secrets-required path. `make prepare-release-evidence-handoff` copies this template to `release-artifacts/release-evidence-reviewer-handoff.md` so operators can fill in the handoff file alongside generated staged readiness artifacts.
 
 ## Evidence artifacts provided
 

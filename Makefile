@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report validate-staged-report-with-subreports db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report validate-staged-report-with-subreports db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture prepare-release-evidence-handoff
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -251,6 +251,13 @@ validate-staged-report:
 		--sha $$(git rev-parse HEAD 2>/dev/null || echo "unknown") \
 		--output release-artifacts/staged-readiness-report.json \
 		--text-output release-artifacts/staged-readiness-report.txt
+
+
+prepare-release-evidence-handoff:
+	@echo "[veritas] Preparing release evidence reviewer handoff template..."
+	@mkdir -p release-artifacts
+	@cp docs/en/validation/release-evidence-reviewer-handoff-template.md release-artifacts/release-evidence-reviewer-handoff.md
+	@echo "[veritas] Wrote release-artifacts/release-evidence-reviewer-handoff.md"
 
 validate-staged-report-with-subreports:
 	@echo "[veritas] Generating compose/live validation reports and staged readiness report..."

@@ -19,6 +19,7 @@ simulated, and what requires environment-specific confirmation.
 | `make validate-live-report` | Live provider + JSON report | Release evidence report |
 | `make validate-staged-report` | Staged readiness report | Release evidence report without attached compose/live subreports |
 | `make validate-staged-report-with-subreports` | Staged readiness report with compose/live subreports (secrets-required for live checks) | Release evidence report with attached subreports |
+| `make prepare-release-evidence-handoff` | Prepare `release-artifacts/release-evidence-reviewer-handoff.md` | Reviewer handoff preparation |
 | `make quality-checks` | Architecture + security scripts | Every PR (automatic) |
 
 ## Validation Tiers
@@ -208,6 +209,9 @@ Interpretation rules:
 - The with-subreports target runs compose validation and live provider
   validation first, then passes their JSON reports to
   `scripts/generate_staged_readiness_report.py`.
+- Use `make prepare-release-evidence-handoff` to copy the reviewer handoff
+  template into `release-artifacts/release-evidence-reviewer-handoff.md`
+  before packaging release evidence.
 - Live provider validation may require provider secrets and can fail when
   those secrets are not configured.
 - Operators may still run the generator directly when custom report paths are
