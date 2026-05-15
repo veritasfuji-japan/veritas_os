@@ -86,7 +86,7 @@ Key reviewer concepts:
 - [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md)
 - [Production Validation](en/validation/production-validation.md)
 - [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md)
-- Release evidence Make targets: `make validate-staged-report` and `make validate-staged-report-with-subreports`
+- Release evidence Make targets: `make validate-staged-report`, `make validate-staged-report-with-subreports`, and `make prepare-release-evidence-handoff`
 - [Provider Support Matrix](en/operations/provider-support-matrix.md)
 - [Type Safety Baseline](en/operations/type-safety-baseline.md)
 - [Maintainer Handoff Runbook](en/operations/maintainer-handoff.md)
@@ -119,6 +119,7 @@ pytest -q veritas_os/tests/test_staged_readiness_report.py
 pytest -q veritas_os/tests/test_staged_readiness_make_targets.py
 make validate-staged-report
 make -n validate-staged-report-with-subreports
+make prepare-release-evidence-handoff
 ```
 
 One-Day PoC command examples (API server required, API key required):
@@ -133,7 +134,7 @@ Use the Operator Runbook to collect and organize evidence.
 Use the Reviewer Handoff Template to summarize and submit the PoC outcome.
 These documents do not create a production SLA, third-party certification, customer-environment measurement, or EU AI Act certification.
 
-For release evidence review, inspect the staged readiness report path. `make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so reviewers can use `make -n validate-staged-report-with-subreports` to inspect the command sequence safely.
+For release evidence review, inspect the staged readiness report path. `make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so reviewers can use `make -n validate-staged-report-with-subreports` to inspect the command sequence safely. Run `make prepare-release-evidence-handoff` to prepare `release-artifacts/release-evidence-reviewer-handoff.md` from the reviewer handoff template for submission.
 
 Boundary notes for PoC commands:
 
