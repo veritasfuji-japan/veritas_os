@@ -161,5 +161,3 @@ Live provider validation may require provider secrets and may skip checks when s
 - [`docs/en/operations/operational-readiness-runbook.md`](../operations/operational-readiness-runbook.md)
 - [`docs/en/validation/production-validation.md`](production-validation.md)
 - [`docs/en/validation/current-implementation-matrix.md`](current-implementation-matrix.md)
-
-
