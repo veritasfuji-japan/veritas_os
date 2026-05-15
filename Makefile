@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report validate-staged-report-with-subreports db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture prepare-release-evidence-handoff prepare-release-evidence-manifest
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report validate-staged-report-with-subreports db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture prepare-release-evidence-handoff prepare-release-evidence-manifest prepare-release-evidence-checksums prepare-release-evidence-package
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -318,3 +318,18 @@ prepare-release-evidence-manifest:
 	@mkdir -p release-artifacts
 	@cp docs/en/validation/release-evidence-manifest-template.md release-artifacts/release-evidence-manifest.md
 	@echo "[veritas] Wrote release-artifacts/release-evidence-manifest.md"
+
+prepare-release-evidence-checksums:
+	@echo "[veritas] Writing release evidence checksums..."
+	@mkdir -p release-artifacts
+	@python scripts/release/write_release_evidence_checksums.py --artifacts-dir release-artifacts --output release-artifacts/release-evidence-checksums.sha256
+	@echo "[veritas] Wrote release-artifacts/release-evidence-checksums.sha256"
+
+
+prepare-release-evidence-package:
+	@echo "[veritas] Preparing no-subreport release evidence package..."
+	@$(MAKE) validate-staged-report
+	@$(MAKE) prepare-release-evidence-handoff
+	@$(MAKE) prepare-release-evidence-manifest
+	@$(MAKE) prepare-release-evidence-checksums
+	@echo "[veritas] Release evidence package prepared in release-artifacts/"

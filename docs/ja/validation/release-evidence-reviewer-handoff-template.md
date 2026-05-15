@@ -22,7 +22,9 @@
 4. 必要に応じて redaction 方針と実行環境（local / CI / staging / customer-managed）を追記します。
 5. `make prepare-release-evidence-handoff` を実行すると、英語正本テンプレートを `release-artifacts/release-evidence-reviewer-handoff.md` にコピーできます。
 6. `make prepare-release-evidence-manifest` で `release-artifacts/release-evidence-manifest.md` を準備できます。
-7. manifest は提出パッケージの索引、handoff は解釈・確認・acknowledgement の記録です。
+7. `make prepare-release-evidence-checksums` で `release-artifacts/release-evidence-checksums.sha256` を準備できます。
+8. `make prepare-release-evidence-package` で no-subreport package preparation を 1 コマンドで実行できます。
+9. manifest は提出パッケージの索引、handoff は解釈・確認・acknowledgement の記録です。
 8. `release-artifacts/release-evidence-reviewer-handoff.md` を、staged readiness report などの生成済み証跡と一緒に記入・提出します。
 
 ## 提出する主な証跡
@@ -32,6 +34,7 @@
 - `release-artifacts/compose-validation-report.json`（compose subreport を添付した場合）
 - `release-artifacts/live-provider-report.json`（live provider subreport を添付した場合）
 - 実行コマンドログ、CI 状態、PR URL、レビューノート
+- `release-artifacts/release-evidence-checksums.sha256`
 
 ## `deployment_ready` の読み方
 

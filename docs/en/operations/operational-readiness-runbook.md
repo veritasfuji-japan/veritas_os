@@ -21,6 +21,8 @@ simulated, and what requires environment-specific confirmation.
 | `make validate-staged-report-with-subreports` | Staged readiness report with compose/live subreports (secrets-required for live checks) | Release evidence report with attached subreports |
 | `make prepare-release-evidence-handoff` | Prepare `release-artifacts/release-evidence-reviewer-handoff.md` | Reviewer handoff preparation |
 | `make prepare-release-evidence-manifest` | Prepare `release-artifacts/release-evidence-manifest.md` | Release evidence package index |
+| `make prepare-release-evidence-checksums` | Prepare `release-artifacts/release-evidence-checksums.sha256` | Release evidence checksum index |
+| `make prepare-release-evidence-package` | Prepare no-subreport release evidence package | Release evidence package preparation |
 | `make quality-checks` | Architecture + security scripts | Every PR (automatic) |
 
 ## Validation Tiers
@@ -214,6 +216,10 @@ Interpretation rules:
   template into `release-artifacts/release-evidence-reviewer-handoff.md`
   before packaging release evidence.
 - Use `make prepare-release-evidence-manifest` to copy the release evidence manifest template into `release-artifacts/release-evidence-manifest.md` before packaging release evidence.
+- Use `make prepare-release-evidence-checksums` to generate `release-artifacts/release-evidence-checksums.sha256` for present release evidence artifacts.
+- Use `make prepare-release-evidence-package` to run the no-subreport package path (`validate-staged-report`, handoff, manifest, checksums) in one command.
+- Compose/live with-subreports evidence still requires separate, secrets-aware execution.
+- Checksums help detect changes in submitted files, but they are not tamper-proof storage or third-party attestation by themselves.
 - Live provider validation may require provider secrets and can fail when
   those secrets are not configured.
 - Operators may still run the generator directly when custom report paths are

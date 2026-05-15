@@ -16,7 +16,9 @@
 
 1. `make prepare-release-evidence-manifest` を実行し、`release-artifacts/release-evidence-manifest.md` を準備します。
 2. `make prepare-release-evidence-handoff` を実行し、`release-artifacts/release-evidence-reviewer-handoff.md` を準備します。
-3. manifest で提出物の索引を埋め、handoff file で reviewer-facing interpretation / acknowledgement を記録します。
+3. `make prepare-release-evidence-checksums` で `release-artifacts/release-evidence-checksums.sha256` を生成します。
+4. `make prepare-release-evidence-package` を使うと、no-subreport release evidence package を 1 コマンドで準備できます。
+5. manifest で提出物の索引を埋め、handoff file で reviewer-facing interpretation / acknowledgement を記録します。
 
 ## 主な提出物
 
@@ -26,6 +28,7 @@
 - `release-artifacts/staged-readiness-report.txt`
 - `release-artifacts/compose-validation-report.json`
 - `release-artifacts/live-provider-report.json`
+- `release-artifacts/release-evidence-checksums.sha256`
 
 ## compose/live artifact の確認
 
@@ -41,6 +44,8 @@
 
 - 本番認証ではない。
 - 第三者認証ではない。
+- checksum は提出ファイルの変更確認を助けるが、それ自体は第三者証明ではない。
+- checksum は提出ファイルの変更確認を助けるが、それ自体は改ざん不能保管ではない。
 - 顧客環境で実行・記録されていない限り、顧客環境検証ではない。
 
 ## 関連文書

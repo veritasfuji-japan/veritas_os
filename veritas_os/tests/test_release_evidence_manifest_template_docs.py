@@ -50,16 +50,22 @@ def test_release_evidence_manifest_en_has_required_sections_and_content() -> Non
     for artifact in [
         "release-artifacts/release-evidence-manifest.md",
         "release-artifacts/release-evidence-reviewer-handoff.md",
+        "release-artifacts/release-evidence-checksums.sha256",
         "release-artifacts/staged-readiness-report.json",
         "release-artifacts/staged-readiness-report.txt",
         "release-artifacts/compose-validation-report.json",
         "release-artifacts/live-provider-report.json",
+        "release-artifacts/release-evidence-checksums.sha256",
     ]:
         assert artifact in text
 
     for command in [
         "make prepare-release-evidence-manifest",
         "make prepare-release-evidence-handoff",
+        "make prepare-release-evidence-checksums",
+        "make prepare-release-evidence-package",
+        "make prepare-release-evidence-checksums",
+        "make prepare-release-evidence-package",
         "make validate-staged-report",
         "make -n validate-staged-report-with-subreports",
     ]:
@@ -71,6 +77,8 @@ def test_release_evidence_manifest_boundary_phrases_and_banned_phrases() -> None
     for phrase in [
         "not production certification",
         "not third-party certification",
+        "not third-party attestation",
+        "not tamper-proof storage",
         "not customer-environment verification",
         "deployment_ready=true",
         "absent compose/live artifacts",
@@ -98,9 +106,14 @@ def test_release_evidence_manifest_ja_required_content_and_banned_phrases() -> N
         "make prepare-release-evidence-manifest",
         "release-artifacts/release-evidence-manifest.md",
         "make prepare-release-evidence-handoff",
+        "make prepare-release-evidence-checksums",
+        "make prepare-release-evidence-package",
         "release-artifacts/release-evidence-reviewer-handoff.md",
+        "release-artifacts/release-evidence-checksums.sha256",
         "本番認証ではない",
         "第三者認証ではない",
+        "第三者証明ではない",
+        "改ざん不能保管ではない",
         "顧客環境検証ではない",
     ]:
         assert phrase in text
