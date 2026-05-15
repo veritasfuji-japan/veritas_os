@@ -310,6 +310,7 @@ jobs:
             veritas_os/tests/test_governance_artifact_signing.py::TestGovernedRollback \
             veritas_os/tests/test_governance_artifact_signing.py::TestGovernanceHistoryDigests \
             tests/governance/test_rsa_sandbox_receiver.py \
+            tests/governance/test_rsa_veritas_e2e_harness.py \
             --tb=short \
             --durations=20 \
             --junitxml=test-reports/governance-backend-fast.xml
