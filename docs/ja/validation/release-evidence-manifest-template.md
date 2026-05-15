@@ -8,7 +8,7 @@
 
 ## 目的
 
-- manifest は release evidence package の索引です。
+- manifest はリリース証跡パッケージの索引です。
 - 提出物の存在/未存在、必須/条件付き項目、確認境界を 1 枚で共有します。
 - 本番認証ではない境界を明示します。
 
@@ -17,7 +17,7 @@
 1. `make prepare-release-evidence-manifest` を実行し、`release-artifacts/release-evidence-manifest.md` を準備します。
 2. `make prepare-release-evidence-handoff` を実行し、`release-artifacts/release-evidence-reviewer-handoff.md` を準備します。
 3. `make prepare-release-evidence-checksums` で `release-artifacts/release-evidence-checksums.sha256` を生成します。
-4. `make prepare-release-evidence-package` を使うと、no-subreport release evidence package を 1 コマンドで準備できます。
+4. `make prepare-release-evidence-package` を使うと、サブレポートなしのリリース証跡パッケージを 1 コマンドで準備できます。
 5. manifest で提出物の索引を埋め、handoff file で reviewer-facing interpretation / acknowledgement を記録します。
 
 ## 主な提出物

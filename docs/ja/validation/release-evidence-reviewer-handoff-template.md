@@ -23,7 +23,7 @@
 5. `make prepare-release-evidence-handoff` を実行すると、英語正本テンプレートを `release-artifacts/release-evidence-reviewer-handoff.md` にコピーできます。
 6. `make prepare-release-evidence-manifest` で `release-artifacts/release-evidence-manifest.md` を準備できます。
 7. `make prepare-release-evidence-checksums` で `release-artifacts/release-evidence-checksums.sha256` を準備できます。
-8. `make prepare-release-evidence-package` で no-subreport package preparation を 1 コマンドで実行できます。
+8. `make prepare-release-evidence-package` で、サブレポートなしのリリース証跡パッケージ準備を 1 コマンドで実行できます。
 9. manifest は提出パッケージの索引、handoff は解釈・確認・acknowledgement の記録です。
 10. `release-artifacts/release-evidence-reviewer-handoff.md` を、staged readiness report などの生成済み証跡と一緒に記入・提出します。
 
