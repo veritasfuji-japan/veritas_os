@@ -62,9 +62,10 @@ pytest -q veritas_os/tests/test_staged_readiness_make_targets.py
 make validate-staged-report
 make -n validate-staged-report-with-subreports
 make prepare-release-evidence-handoff
+make prepare-release-evidence-manifest
 ```
 
-`make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so `make -n validate-staged-report-with-subreports` can be used to inspect the command sequence safely before running the secrets-required path. `make prepare-release-evidence-handoff` copies this template to `release-artifacts/release-evidence-reviewer-handoff.md` so operators can fill in the handoff file alongside generated staged readiness artifacts.
+`make validate-staged-report` generates the no-subreport staged report. `make validate-staged-report-with-subreports` attaches compose/live reports but may require provider secrets, so `make -n validate-staged-report-with-subreports` can be used to inspect the command sequence safely before running the secrets-required path. `make prepare-release-evidence-handoff` copies this template to `release-artifacts/release-evidence-reviewer-handoff.md` so operators can fill in the handoff file alongside generated staged readiness artifacts. `make prepare-release-evidence-manifest` copies the manifest template to `release-artifacts/release-evidence-manifest.md` so reviewers can navigate the submitted release evidence package.
 
 ## Evidence artifacts provided
 
@@ -156,6 +157,9 @@ Live provider validation may require provider secrets and may skip checks when s
 ## Related documents
 
 - [`docs/REVIEWER_ENTRYPOINT.md`](../../REVIEWER_ENTRYPOINT.md)
+- [`docs/en/validation/release-evidence-manifest-template.md`](release-evidence-manifest-template.md)
 - [`docs/en/operations/operational-readiness-runbook.md`](../operations/operational-readiness-runbook.md)
 - [`docs/en/validation/production-validation.md`](production-validation.md)
 - [`docs/en/validation/current-implementation-matrix.md`](current-implementation-matrix.md)
+
+

@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report validate-staged-report-with-subreports db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture prepare-release-evidence-handoff
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke check-bilingual-docs quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report validate-staged-report-with-subreports db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision bind-coverage-evidence check-bind-coverage-evidence performance-evidence check-performance-evidence check-trustlog-production-posture prepare-release-evidence-handoff prepare-release-evidence-manifest
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -311,3 +311,10 @@ check-performance-evidence:
 
 check-trustlog-production-posture:
 	python -m scripts.security.check_trustlog_production_posture
+
+
+prepare-release-evidence-manifest:
+	@echo "[veritas] Preparing release evidence manifest template..."
+	@mkdir -p release-artifacts
+	@cp docs/en/validation/release-evidence-manifest-template.md release-artifacts/release-evidence-manifest.md
+	@echo "[veritas] Wrote release-artifacts/release-evidence-manifest.md"
