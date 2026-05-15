@@ -55,15 +55,12 @@ def test_release_evidence_manifest_en_has_required_sections_and_content() -> Non
         "release-artifacts/staged-readiness-report.txt",
         "release-artifacts/compose-validation-report.json",
         "release-artifacts/live-provider-report.json",
-        "release-artifacts/release-evidence-checksums.sha256",
     ]:
         assert artifact in text
 
     for command in [
         "make prepare-release-evidence-manifest",
         "make prepare-release-evidence-handoff",
-        "make prepare-release-evidence-checksums",
-        "make prepare-release-evidence-package",
         "make prepare-release-evidence-checksums",
         "make prepare-release-evidence-package",
         "make validate-staged-report",

@@ -24,8 +24,16 @@ def _sha256_hex(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def _display_path(artifacts_dir: Path, artifact_name: str) -> str:
+    """Return a portable checksum display path for an artifact."""
+    return (Path(artifacts_dir.name) / artifact_name).as_posix()
+
+
 def write_release_evidence_checksums(artifacts_dir: Path, output: Path) -> int:
     """Write checksums for present expected artifacts and return count."""
+    artifacts_dir = artifacts_dir.resolve()
+    output = output.resolve()
+
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -37,7 +45,7 @@ def write_release_evidence_checksums(artifacts_dir: Path, output: Path) -> int:
         if not artifact_path.exists() or artifact_path.resolve() == output.resolve():
             continue
         digest = _sha256_hex(artifact_path)
-        lines.append(f"{digest}  {artifact_path.as_posix()}")
+        lines.append(f"{digest}  {_display_path(artifacts_dir, artifact_name)}")
         count += 1
 
     output.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")

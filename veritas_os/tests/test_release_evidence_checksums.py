@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+import sys
 from pathlib import Path
 
 SCRIPT_RELATIVE_PATH = Path("scripts/release/write_release_evidence_checksums.py")
@@ -21,7 +22,7 @@ EXPECTED_ORDER = [
 
 def _run_script(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["python", str(SCRIPT_PATH), *args],
+        [sys.executable, str(SCRIPT_PATH), *args],
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -126,3 +127,31 @@ def test_write_release_evidence_checksums_cli_defaults(tmp_path: Path) -> None:
     result = _run_script(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert (artifacts_dir / "release-evidence-checksums.sha256").exists()
+
+
+def test_write_release_evidence_checksums_emits_relative_paths_for_absolute_artifacts_dir(
+    tmp_path: Path,
+) -> None:
+    artifacts_dir = tmp_path / "release-artifacts"
+    artifacts_dir.mkdir()
+    artifact = artifacts_dir / "staged-readiness-report.json"
+    artifact.write_text("json", encoding="utf-8")
+    output_file = artifacts_dir / "release-evidence-checksums.sha256"
+
+    result = _run_script(
+        tmp_path,
+        "--artifacts-dir",
+        str(artifacts_dir),
+        "--output",
+        str(output_file),
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = _parse_output_lines(output_file)
+    assert rows == [
+        (
+            hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            "release-artifacts/staged-readiness-report.json",
+        )
+    ]
+    assert str(tmp_path) not in output_file.read_text(encoding="utf-8")
