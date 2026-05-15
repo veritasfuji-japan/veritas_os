@@ -155,3 +155,30 @@ def test_write_release_evidence_checksums_emits_relative_paths_for_absolute_arti
         )
     ]
     assert str(tmp_path) not in output_file.read_text(encoding="utf-8")
+
+
+def test_write_release_evidence_checksums_preserves_relative_artifacts_dir_parent_components(
+    tmp_path: Path,
+) -> None:
+    artifacts_dir = tmp_path / "out" / "release-artifacts"
+    artifacts_dir.mkdir(parents=True)
+    artifact = artifacts_dir / "staged-readiness-report.json"
+    artifact.write_text("json", encoding="utf-8")
+    output_file = artifacts_dir / "release-evidence-checksums.sha256"
+
+    result = _run_script(
+        tmp_path,
+        "--artifacts-dir",
+        "out/release-artifacts",
+        "--output",
+        "out/release-artifacts/release-evidence-checksums.sha256",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = _parse_output_lines(output_file)
+    assert rows == [
+        (
+            hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            "out/release-artifacts/staged-readiness-report.json",
+        )
+    ]

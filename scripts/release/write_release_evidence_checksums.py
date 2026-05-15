@@ -24,13 +24,27 @@ def _sha256_hex(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _display_path(artifacts_dir: Path, artifact_name: str) -> str:
+def _display_artifacts_dir(artifacts_dir: Path) -> Path:
+    """Return a portable display directory for checksum entries."""
+    if artifacts_dir.is_absolute():
+        return Path(artifacts_dir.name)
+
+    normalized_parts = [part for part in artifacts_dir.parts if part not in ("", ".")]
+    if not normalized_parts:
+        return Path("release-artifacts")
+    return Path(*normalized_parts)
+
+
+def _display_path(display_artifacts_dir: Path, artifact_name: str) -> str:
     """Return a portable checksum display path for an artifact."""
-    return (Path(artifacts_dir.name) / artifact_name).as_posix()
+    return (display_artifacts_dir / artifact_name).as_posix()
 
 
 def write_release_evidence_checksums(artifacts_dir: Path, output: Path) -> int:
     """Write checksums for present expected artifacts and return count."""
+    raw_artifacts_dir = artifacts_dir
+    display_artifacts_dir = _display_artifacts_dir(raw_artifacts_dir)
+
     artifacts_dir = artifacts_dir.resolve()
     output = output.resolve()
 
@@ -45,7 +59,7 @@ def write_release_evidence_checksums(artifacts_dir: Path, output: Path) -> int:
         if not artifact_path.exists() or artifact_path.resolve() == output.resolve():
             continue
         digest = _sha256_hex(artifact_path)
-        lines.append(f"{digest}  {_display_path(artifacts_dir, artifact_name)}")
+        lines.append(f"{digest}  {_display_path(display_artifacts_dir, artifact_name)}")
         count += 1
 
     output.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
