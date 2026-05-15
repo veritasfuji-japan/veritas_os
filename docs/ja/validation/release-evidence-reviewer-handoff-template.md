@@ -18,6 +18,8 @@
 2. `deployment_ready` の値だけで判断せず、compose/live subreport の添付有無を確認します。
 3. advisory findings と未解決事項を記録し、レビュアー判断に必要な補足を残します。
 4. 必要に応じて redaction 方針と実行環境（local / CI / staging / customer-managed）を追記します。
+5. `make prepare-release-evidence-handoff` を実行すると、英語正本テンプレートを `release-artifacts/release-evidence-reviewer-handoff.md` にコピーできます。
+6. `release-artifacts/release-evidence-reviewer-handoff.md` を、staged readiness report などの生成済み証跡と一緒に記入・提出します。
 
 ## 提出する主な証跡
 
