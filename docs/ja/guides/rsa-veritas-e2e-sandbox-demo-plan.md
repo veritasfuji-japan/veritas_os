@@ -1,6 +1,9 @@
 # RSA ↔ VERITAS E2E サンドボックスデモ計画
 
-> 英語正本（EN）: [RSA ↔ VERITAS End-to-End Sandbox Demo Plan](../../en/guides/rsa-veritas-e2e-sandbox-demo-plan.md)
+## 英語正本
+
+- [RSA ↔ VERITAS End-to-End Sandbox Demo Plan](../../en/guides/rsa-veritas-e2e-sandbox-demo-plan.md)
+
 
 ## 1. 目的
 
