@@ -7,7 +7,7 @@ This document defines a minimal, documentation-only end-to-end sandbox demo plan
 A prerequisite baseline is already merged:
 - RSA sandbox receiver
 - EN/JA interface docs
-- Tier 1 CI coverage
+- `governance-backend-fast` CI coverage for `tests/governance/test_rsa_sandbox_receiver.py` in `.github/workflows/main.yml`
 - Vikki RSA mock payload ingestion fixture
 
 ## 2. Non-goals
@@ -83,15 +83,33 @@ result = evaluate_rsa_sandbox_signal(payload)
 
 ## 6. Expected VERITAS output
 
-Expected sandbox output values:
-- `continuation_decision`: `PAUSE_FOR_HUMAN_REVIEW`
-- `reason_code`: `UPSTREAM_INCOMPLETE_KYC_CONTEXT`
-- `authority_evidence_status`: `INSUFFICIENT`
-- `sandbox_bind_boundary_state`: `NOT_EVALUATED_PENDING_AUTHORITY_EVIDENCE`
-- `sandbox_commit_state`: `SUSPENDED_NOT_COMMITTED`
-- `required_next_action`: `REQUEST_ADDITIONAL_KYC_EVIDENCE_OR_HUMAN_REVIEW`
-- `original_llm_intent`: `[REDACTED]`
-- `rsa_action_taken`: `[REDACTED]`
+Expected sandbox response shape:
+
+```json
+{
+  "veritas_decision": {
+    "continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+    "reason_code": "UPSTREAM_INCOMPLETE_KYC_CONTEXT",
+    "authority_evidence_status": "INSUFFICIENT",
+    "sandbox_bind_boundary_state": "NOT_EVALUATED_PENDING_AUTHORITY_EVIDENCE",
+    "sandbox_commit_state": "SUSPENDED_NOT_COMMITTED",
+    "required_next_action": "REQUEST_ADDITIONAL_KYC_EVIDENCE_OR_HUMAN_REVIEW"
+  },
+  "audit_entry": {
+    "upstream_signal_source": "RSA",
+    "rsa_status": "ALGORITHMIC_HUMILITY_ENGAGED",
+    "trigger_source": "SRC_Incomplete_Context",
+    "original_llm_intent": "[REDACTED]",
+    "rsa_action_taken": "[REDACTED]",
+    "veritas_reason": "The workflow cannot continue toward final commit because required KYC context is incomplete and authority evidence is insufficient.",
+    "timestamp": "2026-10-25T09:15:30Z",
+    "veritas_continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+    "veritas_sandbox_commit_state": "SUSPENDED_NOT_COMMITTED"
+  }
+}
+```
+
+This is the sandbox response shape, not a production BindReceipt or production compliance output.
 
 ## 7. Audit behavior
 
