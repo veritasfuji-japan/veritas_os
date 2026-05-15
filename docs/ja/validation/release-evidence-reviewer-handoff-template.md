@@ -5,6 +5,8 @@
 ## 英語正本
 
 - [`docs/en/validation/release-evidence-reviewer-handoff-template.md`](../../en/validation/release-evidence-reviewer-handoff-template.md)
+- [`docs/en/validation/release-evidence-manifest-template.md`](../../en/validation/release-evidence-manifest-template.md)
+- [`docs/ja/validation/release-evidence-manifest-template.md`](release-evidence-manifest-template.md)
 
 ## 目的
 
@@ -19,7 +21,9 @@
 3. advisory findings と未解決事項を記録し、レビュアー判断に必要な補足を残します。
 4. 必要に応じて redaction 方針と実行環境（local / CI / staging / customer-managed）を追記します。
 5. `make prepare-release-evidence-handoff` を実行すると、英語正本テンプレートを `release-artifacts/release-evidence-reviewer-handoff.md` にコピーできます。
-6. `release-artifacts/release-evidence-reviewer-handoff.md` を、staged readiness report などの生成済み証跡と一緒に記入・提出します。
+6. `make prepare-release-evidence-manifest` で `release-artifacts/release-evidence-manifest.md` を準備できます。
+7. manifest は提出パッケージの索引、handoff は解釈・確認・acknowledgement の記録です。
+8. `release-artifacts/release-evidence-reviewer-handoff.md` を、staged readiness report などの生成済み証跡と一緒に記入・提出します。
 
 ## 提出する主な証跡
 
@@ -53,6 +57,8 @@
 ## 関連文書
 
 - [`docs/en/validation/release-evidence-reviewer-handoff-template.md`](../../en/validation/release-evidence-reviewer-handoff-template.md)
+- [`docs/en/validation/release-evidence-manifest-template.md`](../../en/validation/release-evidence-manifest-template.md)
+- [`docs/ja/validation/release-evidence-manifest-template.md`](release-evidence-manifest-template.md)
 - [`docs/REVIEWER_ENTRYPOINT.md`](../../REVIEWER_ENTRYPOINT.md)
 - [`docs/en/operations/operational-readiness-runbook.md`](../../en/operations/operational-readiness-runbook.md)
 - [`docs/en/validation/production-validation.md`](../../en/validation/production-validation.md)

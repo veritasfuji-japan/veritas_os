@@ -59,7 +59,7 @@ Key reviewer concepts:
 |---|---|---|
 | What problem does VERITAS solve? | [Enterprise Value Brief](en/positioning/enterprise-value-brief.md) | Enterprise value, target users, and priority use cases. |
 | What is implemented today? | [Current Implementation Matrix](en/validation/current-implementation-matrix.md) | Clear separation between current facts and roadmap/foundation-only items. |
-| What release evidence exists? | [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md), [Production Validation](en/validation/production-validation.md), [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md) | Review validation tiers, staged readiness v2.1 interpretation, `deployment_ready` boundaries, compose/live subreport handling, and handoff expectations. |
+| What release evidence exists? | [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md), [Production Validation](en/validation/production-validation.md), [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md), [Release Evidence Manifest Template](en/validation/release-evidence-manifest-template.md) | Review validation tiers, staged readiness v2.1 interpretation, `deployment_ready` boundaries, compose/live subreport handling, and handoff expectations. |
 | What should reviewers inspect in the One-Day PoC? | [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) | Evidence checklist, walkthrough scenarios, success/failure criteria, and non-claim boundaries. |
 | How should operators prepare and package the PoC evidence? | [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) | Pre-flight checklist, evidence folder layout, run sequence, redaction notes, and review handoff package. |
 | What should be handed to the reviewer after the PoC? | [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) | Submit-ready summary of scope, environment, scenarios, evidence, results, limitations, and open questions. |
@@ -86,7 +86,7 @@ Key reviewer concepts:
 - [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md)
 - [Production Validation](en/validation/production-validation.md)
 - [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md)
-- Release evidence Make targets: `make validate-staged-report`, `make validate-staged-report-with-subreports`, and `make prepare-release-evidence-handoff`
+- Release evidence Make targets: `make validate-staged-report`, `make validate-staged-report-with-subreports`, `make prepare-release-evidence-handoff`, and `make prepare-release-evidence-manifest`
 - [Provider Support Matrix](en/operations/provider-support-matrix.md)
 - [Type Safety Baseline](en/operations/type-safety-baseline.md)
 - [Maintainer Handoff Runbook](en/operations/maintainer-handoff.md)
@@ -120,6 +120,7 @@ pytest -q veritas_os/tests/test_staged_readiness_make_targets.py
 make validate-staged-report
 make -n validate-staged-report-with-subreports
 make prepare-release-evidence-handoff
+make prepare-release-evidence-manifest
 ```
 
 One-Day PoC command examples (API server required, API key required):

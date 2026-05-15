@@ -120,6 +120,18 @@ def test_prepare_release_evidence_handoff_dry_run_copies_template() -> None:
     assert "Wrote release-artifacts/release-evidence-reviewer-handoff.md" in output
 
 
+def test_prepare_release_evidence_manifest_dry_run_copies_template() -> None:
+    """Manifest target should copy the release evidence manifest template."""
+    output = _run_make_dry_run("prepare-release-evidence-manifest")
+
+    assert "mkdir -p release-artifacts" in output
+    assert (
+        "cp docs/en/validation/release-evidence-manifest-template.md "
+        "release-artifacts/release-evidence-manifest.md"
+    ) in output
+    assert "Wrote release-artifacts/release-evidence-manifest.md" in output
+
+
 def test_staged_readiness_make_targets_are_phony() -> None:
     """Makefile should mark both staged readiness targets as phony."""
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
@@ -129,6 +141,7 @@ def test_staged_readiness_make_targets_are_phony() -> None:
     assert "validate-staged-report" in phony_tokens
     assert "validate-staged-report-with-subreports" in phony_tokens
     assert "prepare-release-evidence-handoff" in phony_tokens
+    assert "prepare-release-evidence-manifest" in phony_tokens
 
 
 def test_docs_reference_staged_readiness_make_targets() -> None:
@@ -148,6 +161,8 @@ def test_docs_reference_staged_readiness_make_targets() -> None:
 def test_docs_reference_release_evidence_handoff_make_target() -> None:
     """Release evidence docs should reference the handoff preparation target."""
     docs = [
+        REPO_ROOT / "docs/en/validation/release-evidence-manifest-template.md",
+        REPO_ROOT / "docs/ja/validation/release-evidence-manifest-template.md",
         REPO_ROOT / "docs/en/validation/release-evidence-reviewer-handoff-template.md",
         REPO_ROOT / "docs/en/operations/operational-readiness-runbook.md",
         REPO_ROOT / "docs/REVIEWER_ENTRYPOINT.md",
@@ -157,3 +172,4 @@ def test_docs_reference_release_evidence_handoff_make_target() -> None:
     for path in docs:
         text = path.read_text(encoding="utf-8")
         assert _mentions_make_command(text, "prepare-release-evidence-handoff")
+        assert _mentions_make_command(text, "prepare-release-evidence-manifest")
