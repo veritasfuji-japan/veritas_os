@@ -1,5 +1,9 @@
 """Governance domain persistence abstractions."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from veritas_os.governance.authority_evidence import (
     AuthorityEvidence,
     AuthorityEvidenceValidationResult,
@@ -39,7 +43,6 @@ from veritas_os.governance.models import (
     GovernancePolicyEventRecord,
     GovernancePolicyRecord,
 )
-from veritas_os.governance.postgresql_repository import PostgresGovernanceRepository
 from veritas_os.governance.repository import GovernanceRepository
 
 __all__ = [
@@ -72,3 +75,14 @@ __all__ = [
     "validate_governance_backend",
     "validate_runtime_authority",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily resolve optional PostgreSQL governance repository exports."""
+    if name == "PostgresGovernanceRepository":
+        from veritas_os.governance.postgresql_repository import (
+            PostgresGovernanceRepository,
+        )
+
+        return PostgresGovernanceRepository
+    raise AttributeError(name)

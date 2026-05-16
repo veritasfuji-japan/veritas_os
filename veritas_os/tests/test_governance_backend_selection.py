@@ -114,7 +114,11 @@ def test_governance_backend_postgresql_path_works(monkeypatch: pytest.MonkeyPatc
         def health_check(self) -> None:
             return
 
-    monkeypatch.setattr(governance_factory, "PostgresGovernanceRepository", _StubPostgresRepo)
+    monkeypatch.setattr(
+        governance_factory,
+        "_resolve_postgres_repository_class",
+        lambda: _StubPostgresRepo,
+    )
 
     repo = governance_factory.create_governance_repository(
         policy_path=Path("unused-policy.json"),

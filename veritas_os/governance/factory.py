@@ -28,7 +28,6 @@ def _resolve_postgres_repository_class() -> type[GovernanceRepository]:
     return PostgresGovernanceRepository
 
 
-
 def create_governance_repository(
     *,
     policy_path: Path,
