@@ -22,6 +22,7 @@ from veritas_os.core.continuation_runtime.enforcement import (
     EnforcementConditionType,
     EnforcementCondition,
     EnforcementEvent,
+    SeverityLevel,
     EnforcementConfig,
     ContinuationEnforcementEvaluator,
 )
@@ -114,6 +115,22 @@ class TestEnforcementAction:
 
 
 # =====================================================================
+# SeverityLevel enum
+# =====================================================================
+
+
+class TestSeverityLevel:
+    def test_severity_values(self):
+        assert SeverityLevel.INFO.value == "info"
+        assert SeverityLevel.MEDIUM.value == "medium"
+        assert SeverityLevel.HIGH.value == "high"
+        assert SeverityLevel.CRITICAL.value == "critical"
+
+    def test_severity_str(self):
+        assert str(SeverityLevel.CRITICAL) == "critical"
+
+
+# =====================================================================
 # EnforcementCondition serialization
 # =====================================================================
 
@@ -164,6 +181,7 @@ class TestEnforcementEvent:
             reasoning="test reasoning",
             severity="critical",
         )
+        assert event.severity == SeverityLevel.CRITICAL
         d = event.to_dict()
         assert d["mode"] == "enforce"
         assert d["action"] == "halt_chain"
@@ -175,6 +193,41 @@ class TestEnforcementEvent:
         assert restored.mode == EnforcementMode.ENFORCE
         assert restored.action == EnforcementAction.HALT_CHAIN
         assert restored.is_enforced is True
+        assert restored.severity == SeverityLevel.CRITICAL
+
+    def test_event_severity_accepts_enum_and_serializes_string(self):
+        event = EnforcementEvent(severity=SeverityLevel.HIGH)
+        assert event.severity == SeverityLevel.HIGH
+        assert event.to_dict()["severity"] == "high"
+
+    def test_event_from_dict_unknown_severity_falls_back_to_info(self):
+        event = EnforcementEvent.from_dict({"severity": "crit"})
+        assert event.severity == SeverityLevel.INFO
+        assert event.to_dict()["severity"] == "info"
+
+    def test_event_constructor_case_variant_severity_falls_back_to_info(self):
+        event = EnforcementEvent(severity="CRITICAL")
+        assert event.severity == SeverityLevel.INFO
+
+
+    def test_event_constructor_whitespace_padded_severity_falls_back_to_info(self):
+        event = EnforcementEvent(severity=" critical ")
+        assert event.severity == SeverityLevel.INFO
+
+    def test_event_to_dict_handles_reassigned_string_severity(self):
+        event = EnforcementEvent(severity=SeverityLevel.HIGH)
+        event.severity = "critical"
+        assert event.to_dict()["severity"] == "critical"
+
+    def test_event_to_dict_falls_back_for_reassigned_unknown_severity(self):
+        event = EnforcementEvent(severity=SeverityLevel.HIGH)
+        event.severity = "crit"
+        assert event.to_dict()["severity"] == "info"
+
+    def test_event_to_dict_falls_back_for_reassigned_case_variant_severity(self):
+        event = EnforcementEvent(severity=SeverityLevel.HIGH)
+        event.severity = "CRITICAL"
+        assert event.to_dict()["severity"] == "info"
 
     def test_event_has_required_fields(self):
         event = EnforcementEvent()
@@ -581,7 +634,7 @@ class TestSeverityComputation:
         )
         halt_events = [e for e in events if e.action == EnforcementAction.HALT_CHAIN]
         assert len(halt_events) >= 1
-        assert halt_events[0].severity == "critical"
+        assert halt_events[0].severity == SeverityLevel.CRITICAL
 
     def test_require_human_review_is_high(self):
         evaluator = _make_evaluator(mode=EnforcementMode.ENFORCE)
@@ -597,7 +650,7 @@ class TestSeverityComputation:
             if e.action == EnforcementAction.REQUIRE_HUMAN_REVIEW
         ]
         assert len(review_events) >= 1
-        assert review_events[0].severity == "high"
+        assert review_events[0].severity == SeverityLevel.HIGH
 
     def test_escalate_alert_is_medium(self):
         evaluator = _make_evaluator(mode=EnforcementMode.ENFORCE)
@@ -611,7 +664,7 @@ class TestSeverityComputation:
             if e.action == EnforcementAction.ESCALATE_ALERT
         ]
         assert len(alert_events) >= 1
-        assert alert_events[0].severity == "medium"
+        assert alert_events[0].severity == SeverityLevel.MEDIUM
 
 
 # =====================================================================

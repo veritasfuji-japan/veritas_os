@@ -86,6 +86,35 @@ class EnforcementAction(str, Enum):
 # =====================================================================
 
 
+class SeverityLevel(str, Enum):
+    """Operator-facing severity levels for enforcement events."""
+
+    INFO = "info"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def _coerce_severity(value: Any) -> SeverityLevel:
+    """Return canonical severity for exact values, else safe INFO fallback.
+
+    Only canonical lowercase severity values are accepted. Case variants,
+    whitespace-padded values, non-string values, and unknown strings fall
+    back to INFO so audit artifacts never carry non-canonical severities.
+    """
+    if isinstance(value, SeverityLevel):
+        return value
+    if isinstance(value, str):
+        try:
+            return SeverityLevel(value)
+        except ValueError:
+            return SeverityLevel.INFO
+    return SeverityLevel.INFO
+
+
 class EnforcementConditionType(str, Enum):
     """Types of high-confidence conditions that trigger enforcement."""
 
@@ -176,7 +205,11 @@ class EnforcementEvent:
     # context for operator
     claim_status: str = ""
     boundary_outcome: str = ""
-    severity: str = "info"
+    severity: SeverityLevel = SeverityLevel.INFO
+
+    def __post_init__(self) -> None:
+        """Normalize severity to constrained enum values."""
+        self.severity = _coerce_severity(self.severity)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a JSON-serializable dict representation."""
@@ -198,7 +231,7 @@ class EnforcementEvent:
             "reason_codes": list(self.reason_codes),
             "claim_status": self.claim_status,
             "boundary_outcome": self.boundary_outcome,
-            "severity": self.severity,
+            "severity": _coerce_severity(self.severity).value,
         }
 
     @classmethod
@@ -209,6 +242,8 @@ class EnforcementEvent:
             data["mode"] = EnforcementMode(data["mode"])
         if "action" in data and isinstance(data["action"], str):
             data["action"] = EnforcementAction(data["action"])
+        if "severity" in data:
+            data["severity"] = _coerce_severity(data["severity"])
         if "conditions_evaluated" in data:
             data["conditions_evaluated"] = [
                 EnforcementCondition.from_dict(c) if isinstance(c, dict) else c
@@ -677,15 +712,15 @@ class ContinuationEnforcementEvaluator:
         self,
         condition: EnforcementCondition,
         action: EnforcementAction,
-    ) -> str:
+    ) -> SeverityLevel:
         """Compute severity level for operator visibility."""
         if action == EnforcementAction.HALT_CHAIN:
-            return "critical"
+            return SeverityLevel.CRITICAL
         if action == EnforcementAction.REQUIRE_HUMAN_REVIEW:
-            return "high"
+            return SeverityLevel.HIGH
         if condition.confidence >= 0.95:
-            return "high"
-        return "medium"
+            return SeverityLevel.HIGH
+        return SeverityLevel.MEDIUM
 
     def _build_reasoning(
         self,
