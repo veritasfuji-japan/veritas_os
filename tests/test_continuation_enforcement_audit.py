@@ -22,6 +22,7 @@ from veritas_os.core.continuation_runtime.enforcement import (
     EnforcementConditionType,
     EnforcementCondition,
     EnforcementEvent,
+    SeverityLevel,
     EnforcementConfig,
     ContinuationEnforcementEvaluator,
 )
@@ -325,9 +326,15 @@ class TestOperatorVisibility:
             policy_violation_detected=True,
             replay_divergence_ratio=0.8,
         )
-        valid_severities = {"info", "medium", "high", "critical"}
+        valid_severities = {
+            SeverityLevel.INFO,
+            SeverityLevel.MEDIUM,
+            SeverityLevel.HIGH,
+            SeverityLevel.CRITICAL,
+        }
         for event in events:
             assert event.severity in valid_severities
+            assert event.to_dict()["severity"] in {"info", "medium", "high", "critical"}
 
     def test_conditions_met_includes_explanation(self):
         config = EnforcementConfig(mode=EnforcementMode.ADVISORY)
