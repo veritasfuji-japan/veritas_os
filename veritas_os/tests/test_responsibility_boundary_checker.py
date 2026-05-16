@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scripts.architecture.check_responsibility_boundaries import (
     REMEDIATION_LINK,
+    _collect_violations,
     BoundaryIssue,
     BoundaryRule,
     DocAlignmentIssue,
@@ -973,3 +974,236 @@ def test_classify_issue_theme_promotes_fuji_and_memory_violations_to_security() 
 
     assert classify_issue_theme(fuji_issue) == "security"
     assert classify_issue_theme(memory_issue) == "security"
+
+def test_collect_boundary_issues_detects_forbidden_import_in_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Forbidden imports in helper modules should be reported as violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji_helpers.py", "import veritas_os.core.kernel\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "fuji"
+    assert violations[0].forbidden_module == "kernel"
+    assert violations[0].path.name == "fuji_helpers.py"
+
+
+def test_check_boundaries_detects_forbidden_import_in_memory_helper_module(
+    tmp_path: Path,
+) -> None:
+    """check_boundaries should report violations coming from memory helpers."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(
+        tmp_path / "memory_security.py",
+        "from veritas_os.core import planner\n",
+    )
+
+    issues = check_boundaries(core_dir=tmp_path)
+
+    assert len(issues) == 1
+    assert "memory" in issues[0]
+    assert "planner" in issues[0]
+    assert "memory_security.py" in issues[0]
+
+
+def test_custom_kernel_rule_applies_to_kernel_helper_modules(tmp_path: Path) -> None:
+    """Custom kernel rules should apply to kernel helper modules as well."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(
+        tmp_path / "kernel_stages.py",
+        "from veritas_os.core.memory import add\n",
+    )
+
+    custom_rule = BoundaryRule(
+        source_module="kernel",
+        forbidden_imports=frozenset({"memory"}),
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path, rules=(custom_rule,))
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].path.name == "kernel_stages.py"
+    assert violations[0].source_module == "kernel"
+    assert violations[0].forbidden_module == "memory"
+
+
+def test_collect_boundary_issues_reports_helper_syntax_error_with_path(
+    tmp_path: Path,
+) -> None:
+    """Syntax errors in helper modules should report the helper file path."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji_helpers.py", "def broken(:\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    input_invalid_issues = [issue for issue in issues if issue.code == "input_invalid"]
+    assert len(input_invalid_issues) == 1
+    assert input_invalid_issues[0].path.name == "fuji_helpers.py"
+
+
+def test_collect_boundary_issues_detects_forbidden_import_in_package_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Forbidden imports inside package helpers should be reported."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "fuji"
+    package_dir.mkdir()
+    _write_module(package_dir / "__init__.py", "# fuji package\n")
+    _write_module(
+        package_dir / "fuji_helpers.py",
+        "import veritas_os.core.kernel\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "fuji"
+    assert violations[0].forbidden_module == "kernel"
+    assert violations[0].path.name == "fuji_helpers.py"
+    assert violations[0].path.parent.name == "fuji"
+
+
+def test_collect_boundary_issues_detects_forbidden_import_in_package_helper_with_nonprefixed_name(
+    tmp_path: Path,
+) -> None:
+    """Package helper scans should include non-prefixed Python module names."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "memory"
+    package_dir.mkdir()
+    _write_module(package_dir / "__init__.py", "# memory package\n")
+    _write_module(
+        package_dir / "security.py",
+        "from veritas_os.core import planner\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "memory"
+    assert violations[0].forbidden_module == "planner"
+    assert violations[0].path.parent.name == "memory"
+    assert violations[0].path.name == "security.py"
+
+
+def test_check_boundaries_reports_syntax_error_in_package_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Text-mode checker should return clean syntax errors for package helpers."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "fuji"
+    package_dir.mkdir()
+    _write_module(package_dir / "__init__.py", "# fuji package\n")
+    _write_module(package_dir / "fuji_helpers.py", "def broken(:\n")
+
+    issues = check_boundaries(core_dir=tmp_path)
+
+    assert len(issues) == 1
+    assert "invalid Python syntax" in issues[0]
+    assert "fuji_helpers.py" in issues[0]
+
+
+def test_collect_violations_skips_bad_helper_but_keeps_other_violations(
+    tmp_path: Path,
+) -> None:
+    """Violation collection should skip bad helpers and keep valid violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji_helpers.py", "def broken(:\n")
+    _write_module(tmp_path / "fuji_policy.py", "import veritas_os.core.kernel\n")
+
+    violations = _collect_violations(core_dir=tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].source_module == "fuji"
+    assert violations[0].forbidden_module == "kernel"
+    assert violations[0].path.name == "fuji_policy.py"
+
+
+def test_collect_boundary_issues_detects_forbidden_import_in_nested_package_helper(
+    tmp_path: Path,
+) -> None:
+    """Nested package helper modules should be scanned for violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "memory"
+    nested_dir = package_dir / "search"
+    nested_dir.mkdir(parents=True)
+    _write_module(package_dir / "__init__.py", "# memory package\n")
+    _write_module(nested_dir / "__init__.py", "# memory search package\n")
+    _write_module(
+        nested_dir / "adapter.py",
+        "from veritas_os.core import planner\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "memory"
+    assert violations[0].forbidden_module == "planner"
+    assert violations[0].path.name == "adapter.py"
+    assert violations[0].path.parent.name == "search"
+
+
+def test_boundary_matching_does_not_promote_imported_symbol_prefixes(
+    tmp_path: Path,
+) -> None:
+    """Symbol imports that start with module prefixes should not be promoted."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(
+        tmp_path / "planner.py",
+        "from veritas_os.core.utils import fuji_codes_const\n",
+    )
+
+    assert check_boundaries(core_dir=tmp_path) == []
+
+
+def test_build_remediation_guide_deduplicates_same_source_forbidden_pair(
+    tmp_path: Path,
+) -> None:
+    """Remediation guide should not duplicate the same forbidden pair rows."""
+    violations = [
+        ViolationDetail(
+            source_module="fuji",
+            forbidden_module="kernel",
+            path=tmp_path / "fuji_helpers.py",
+        ),
+        ViolationDetail(
+            source_module="fuji",
+            forbidden_module="kernel",
+            path=tmp_path / "fuji_policy.py",
+        ),
+    ]
+
+    guide = build_remediation_guide(violations)
+
+    assert guide.count("fuji -> kernel") == 1
+
+
+def test_collect_boundary_issues_ignores_vendor_subpackage_helpers(
+    tmp_path: Path,
+) -> None:
+    """Helpers under vendor directories should be excluded from scans."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    vendor_dir = tmp_path / "memory" / "vendor"
+    vendor_dir.mkdir(parents=True)
+    _write_module(tmp_path / "memory" / "__init__.py", "# memory package\n")
+    _write_module(vendor_dir / "adapter.py", "from veritas_os.core import planner\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert [issue for issue in issues if issue.code == "boundary_violation"] == []
