@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scripts.architecture.check_responsibility_boundaries import (
     REMEDIATION_LINK,
+    _collect_violations,
     BoundaryIssue,
     BoundaryRule,
     DocAlignmentIssue,
@@ -1112,3 +1113,46 @@ def test_check_boundaries_reports_syntax_error_in_package_helper_module(
     assert len(issues) == 1
     assert "invalid Python syntax" in issues[0]
     assert "fuji_helpers.py" in issues[0]
+
+
+def test_collect_violations_skips_bad_helper_but_keeps_other_violations(
+    tmp_path: Path,
+) -> None:
+    """Violation collection should skip bad helpers and keep valid violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji_helpers.py", "def broken(:\n")
+    _write_module(tmp_path / "fuji_policy.py", "import veritas_os.core.kernel\n")
+
+    violations = _collect_violations(core_dir=tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].source_module == "fuji"
+    assert violations[0].forbidden_module == "kernel"
+    assert violations[0].path.name == "fuji_policy.py"
+
+
+def test_collect_boundary_issues_detects_forbidden_import_in_nested_package_helper(
+    tmp_path: Path,
+) -> None:
+    """Nested package helper modules should be scanned for violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "memory"
+    nested_dir = package_dir / "search"
+    nested_dir.mkdir(parents=True)
+    _write_module(package_dir / "__init__.py", "# memory package\n")
+    _write_module(nested_dir / "__init__.py", "# memory search package\n")
+    _write_module(
+        nested_dir / "adapter.py",
+        "from veritas_os.core import planner\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "memory"
+    assert violations[0].forbidden_module == "planner"
+    assert violations[0].path.name == "adapter.py"
+    assert violations[0].path.parent.name == "search"

@@ -247,7 +247,15 @@ def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
 
 
 def _resolve_module_source_paths(core_dir: Path, module_name: str) -> tuple[Path, ...]:
-    """Resolve source paths for a logical module and its helper modules."""
+    """Resolve source paths for a logical module and its helper modules.
+
+    Ownership contract:
+    - ``core/{module}.py`` and ``core/{module}/__init__.py`` belong to ``{module}``.
+    - Top-level ``core/{module}_*.py`` files are treated as helper shims owned by
+      ``{module}``.
+    - Python files under ``core/{module}/`` (recursively) are treated as
+      implementation helpers owned by ``{module}``.
+    """
     candidates: list[Path] = []
     flat_path = core_dir / f"{module_name}.py"
     if flat_path.exists():
@@ -261,7 +269,9 @@ def _resolve_module_source_paths(core_dir: Path, module_name: str) -> tuple[Path
     candidates.extend(sorted(core_dir.glob(f"{module_name}_*.py")))
     if package_dir.exists() and package_dir.is_dir():
         candidates.extend(
-            path for path in sorted(package_dir.glob("*.py")) if path.name != "__init__.py"
+            path
+            for path in sorted(package_dir.rglob("*.py"))
+            if path.name != "__init__.py"
         )
 
     unique: list[Path] = []
@@ -437,16 +447,17 @@ def _collect_violations(
     """Collect structured violation details for remediation guidance output.
 
     Input errors are reported by collect_boundary_issues/check_boundaries;
-    this helper only returns actual boundary violations.
+    this helper skips unreadable or unparsable files and only returns actual
+    boundary violations.
     """
     violation_details: list[ViolationDetail] = []
     for rule in rules:
         for path in _resolve_module_source_paths(core_dir, rule.source_module):
             try:
                 source = path.read_text(encoding="utf-8")
-            except FileNotFoundError:
+                tree = ast.parse(source, filename=str(path))
+            except (FileNotFoundError, PermissionError, SyntaxError):
                 continue
-            tree = ast.parse(source, filename=str(path))
             imported = _collect_imported_names(tree)
             violations = sorted(imported & rule.forbidden_imports)
             for forbidden_module in violations:
