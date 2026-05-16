@@ -564,6 +564,8 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                     )
                 errors.append(msg)
 
+    errors.extend(_validate_policy_signing_crypto(defaults))
+
     # ── Layer 2: backend-specific config validation (vendor-aware) ───
     errors.extend(
         _validate_backend_config(
@@ -575,6 +577,27 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     )
 
     return errors
+
+
+def _validate_policy_signing_crypto(defaults: PostureDefaults) -> List[str]:
+    """Validate policy signing crypto availability for strict posture."""
+    if defaults.posture not in {PostureLevel.SECURE, PostureLevel.PROD}:
+        return []
+    try:
+        from veritas_os.policy.signing import (
+            has_crypto_backend,
+            signing_crypto_missing_message,
+        )
+    except ImportError as exc:
+        return [
+            "Policy signing crypto availability check failed: "
+            f"{exc}. Install with `pip install 'veritas-os[signing]'`."
+        ]
+
+    if has_crypto_backend():
+        return []
+
+    return [signing_crypto_missing_message()]
 
 
 # ── Startup banner ──────────────────────────────────────────────────────

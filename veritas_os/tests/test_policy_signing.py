@@ -13,6 +13,8 @@ from veritas_os.policy.runtime_adapter import (
     verify_manifest_signature,
 )
 from veritas_os.policy.signing import (
+    has_crypto_backend,
+    signing_crypto_missing_message,
     generate_keypair,
     sign_manifest,
     verify_manifest_ed25519,
@@ -27,6 +29,18 @@ def _load_json(path: Path) -> dict:
 
 
 # --- signing module unit tests ---
+
+
+def test_has_crypto_backend_reflects_import_state() -> None:
+    assert has_crypto_backend() is True
+
+
+def test_signing_crypto_missing_message_mentions_install_extra() -> None:
+    message = signing_crypto_missing_message()
+    assert "cryptography" in message
+    assert "Ed25519" in message
+    assert "secure/prod posture" in message
+    assert "veritas-os[signing]" in message
 
 
 def test_generate_keypair_produces_pem_bytes() -> None:
