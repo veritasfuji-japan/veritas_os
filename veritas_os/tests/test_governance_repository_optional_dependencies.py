@@ -26,21 +26,21 @@ def _block_psycopg_import(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return attempted
 
 
-def _drop_governance_modules() -> None:
-    """Drop governance modules so each test can re-import with fresh state."""
+def _drop_governance_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Temporarily drop governance modules so tests can re-import fresh state."""
     for name in [
         "veritas_os.governance",
         "veritas_os.governance.factory",
         "veritas_os.governance.postgresql_repository",
     ]:
-        sys.modules.pop(name, None)
+        monkeypatch.delitem(sys.modules, name, raising=False)
 
 
 def test_governance_factory_import_does_not_require_psycopg(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     attempted = _block_psycopg_import(monkeypatch)
-    _drop_governance_modules()
+    _drop_governance_modules(monkeypatch)
 
     importlib.import_module("veritas_os.governance.factory")
 
@@ -51,7 +51,7 @@ def test_postgresql_repository_module_import_does_not_require_psycopg(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     attempted = _block_psycopg_import(monkeypatch)
-    _drop_governance_modules()
+    _drop_governance_modules(monkeypatch)
 
     importlib.import_module("veritas_os.governance.postgresql_repository")
 
@@ -63,7 +63,7 @@ def test_file_governance_repository_creation_does_not_require_psycopg(
     tmp_path: Path,
 ) -> None:
     attempted = _block_psycopg_import(monkeypatch)
-    _drop_governance_modules()
+    _drop_governance_modules(monkeypatch)
     monkeypatch.setenv("VERITAS_GOVERNANCE_BACKEND", "file")
 
     factory = importlib.import_module("veritas_os.governance.factory")
@@ -85,7 +85,7 @@ def test_postgresql_governance_backend_requires_postgresql_extra_when_psycopg_mi
     tmp_path: Path,
 ) -> None:
     attempted = _block_psycopg_import(monkeypatch)
-    _drop_governance_modules()
+    _drop_governance_modules(monkeypatch)
     monkeypatch.setenv("VERITAS_GOVERNANCE_BACKEND", "postgresql")
     monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://example/example")
 
