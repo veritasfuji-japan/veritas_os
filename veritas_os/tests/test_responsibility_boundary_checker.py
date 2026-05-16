@@ -1046,3 +1046,69 @@ def test_collect_boundary_issues_reports_helper_syntax_error_with_path(
     input_invalid_issues = [issue for issue in issues if issue.code == "input_invalid"]
     assert len(input_invalid_issues) == 1
     assert input_invalid_issues[0].path.name == "fuji_helpers.py"
+
+
+def test_collect_boundary_issues_detects_forbidden_import_in_package_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Forbidden imports inside package helpers should be reported."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "fuji"
+    package_dir.mkdir()
+    _write_module(package_dir / "__init__.py", "# fuji package\n")
+    _write_module(
+        package_dir / "fuji_helpers.py",
+        "import veritas_os.core.kernel\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "fuji"
+    assert violations[0].forbidden_module == "kernel"
+    assert violations[0].path.name == "fuji_helpers.py"
+    assert violations[0].path.parent.name == "fuji"
+
+
+def test_collect_boundary_issues_detects_forbidden_import_in_package_helper_with_nonprefixed_name(
+    tmp_path: Path,
+) -> None:
+    """Package helper scans should include non-prefixed Python module names."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "memory"
+    package_dir.mkdir()
+    _write_module(package_dir / "__init__.py", "# memory package\n")
+    _write_module(
+        package_dir / "security.py",
+        "from veritas_os.core import planner\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "memory"
+    assert violations[0].forbidden_module == "planner"
+    assert violations[0].path.parent.name == "memory"
+    assert violations[0].path.name == "security.py"
+
+
+def test_check_boundaries_reports_syntax_error_in_package_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Text-mode checker should return clean syntax errors for package helpers."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "fuji"
+    package_dir.mkdir()
+    _write_module(package_dir / "__init__.py", "# fuji package\n")
+    _write_module(package_dir / "fuji_helpers.py", "def broken(:\n")
+
+    issues = check_boundaries(core_dir=tmp_path)
+
+    assert len(issues) == 1
+    assert "invalid Python syntax" in issues[0]
+    assert "fuji_helpers.py" in issues[0]

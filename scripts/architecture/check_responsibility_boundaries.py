@@ -218,7 +218,17 @@ def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
                 f"Boundary check error: '{rule.source_module}' not found at {path}"
             )
             continue
-        tree = ast.parse(source, filename=str(path))
+        except PermissionError:
+            messages.append(f"Boundary check error: permission denied for {path}")
+            continue
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            messages.append(
+                "Boundary check error: invalid Python syntax in "
+                f"{path} at line {exc.lineno}"
+            )
+            continue
         imported = _collect_imported_names(tree)
         violations = sorted(imported & rule.forbidden_imports)
         messages.extend(
@@ -232,28 +242,27 @@ def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
 
 
 def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
-    """Resolve module source path for flat module or package module."""
-    path = core_dir / f"{module_name}.py"
-    if path.exists():
-        return path
-    pkg_init = core_dir / module_name / "__init__.py"
-    if pkg_init.exists():
-        return pkg_init
-    return path
+    """Resolve the primary source path for backward-compatible callers."""
+    return _resolve_module_source_paths(core_dir, module_name)[0]
 
 
 def _resolve_module_source_paths(core_dir: Path, module_name: str) -> tuple[Path, ...]:
-    """Resolve source paths for a module and its helper modules."""
+    """Resolve source paths for a logical module and its helper modules."""
     candidates: list[Path] = []
     flat_path = core_dir / f"{module_name}.py"
     if flat_path.exists():
         candidates.append(flat_path)
 
-    pkg_init = core_dir / module_name / "__init__.py"
+    package_dir = core_dir / module_name
+    pkg_init = package_dir / "__init__.py"
     if pkg_init.exists():
         candidates.append(pkg_init)
 
     candidates.extend(sorted(core_dir.glob(f"{module_name}_*.py")))
+    if package_dir.exists() and package_dir.is_dir():
+        candidates.extend(
+            path for path in sorted(package_dir.glob("*.py")) if path.name != "__init__.py"
+        )
 
     unique: list[Path] = []
     seen: set[Path] = set()
@@ -425,7 +434,11 @@ def _collect_violations(
     core_dir: Path,
     rules: Iterable[BoundaryRule] = DEFAULT_RULES,
 ) -> list[ViolationDetail]:
-    """Collect structured violation details for remediation guidance output."""
+    """Collect structured violation details for remediation guidance output.
+
+    Input errors are reported by collect_boundary_issues/check_boundaries;
+    this helper only returns actual boundary violations.
+    """
     violation_details: list[ViolationDetail] = []
     for rule in rules:
         for path in _resolve_module_source_paths(core_dir, rule.source_module):
