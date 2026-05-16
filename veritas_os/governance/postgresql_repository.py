@@ -12,8 +12,6 @@ from datetime import datetime, timezone
 from time import monotonic
 from typing import Any, Callable, Iterator
 
-from psycopg.types.json import Jsonb
-
 from veritas_os.governance.repository import (
     GovernanceRepository,
     GovernanceWriteConflictError,
@@ -25,6 +23,31 @@ from veritas_os.observability.metrics import (
     record_governance_repository_operation,
     set_db_health_status,
 )
+
+
+
+
+def _jsonb(value: Any) -> Any:
+    """Wrap payload as Jsonb only when psycopg json helpers are available."""
+    try:
+        from psycopg.types.json import Jsonb
+    except ImportError as exc:
+        raise RuntimeError(
+            "PostgreSQL governance backend requires psycopg. "
+            "Install with `pip install 'veritas-os[postgresql]'`."
+        ) from exc
+    return Jsonb(value)
+
+
+def _unwrap_jsonb(value: Any) -> Any:
+    """Return raw JSON payload from Jsonb values when psycopg is installed."""
+    try:
+        from psycopg.types.json import Jsonb
+    except ImportError:
+        return value
+    if isinstance(value, Jsonb):
+        return value.obj
+    return value
 
 
 class PostgresGovernanceRepository(GovernanceRepository):
@@ -43,7 +66,8 @@ class PostgresGovernanceRepository(GovernanceRepository):
             import psycopg
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError(
-                "psycopg is required for PostgresGovernanceRepository"
+                "PostgreSQL governance backend requires psycopg. "
+                "Install with `pip install 'veritas-os[postgresql]'`."
             ) from exc
 
         dsn = self._database_url or build_conninfo()
@@ -76,9 +100,7 @@ class PostgresGovernanceRepository(GovernanceRepository):
                     if row is None:
                         conn.rollback()
                         return default_factory()
-                    payload = row[0]
-                    if isinstance(payload, Jsonb):
-                        payload = payload.obj
+                    payload = _unwrap_jsonb(row[0])
                     conn.rollback()
                     return payload if isinstance(payload, dict) else default_factory()
         except Exception:
@@ -133,7 +155,7 @@ class PostgresGovernanceRepository(GovernanceRepository):
                             event.changed_by,
                             self._parse_timestamp(event.changed_at),
                             "",
-                            Jsonb({
+                            _jsonb({
                                 "previous_version": event.previous_version,
                                 "new_version": event.new_version,
                             }),
@@ -353,12 +375,12 @@ class PostgresGovernanceRepository(GovernanceRepository):
                         """,
                         (
                             str(updated.get("version", "")),
-                            Jsonb(updated),
+                            _jsonb(updated),
                             new_digest,
                             changed_at,
                             changed_by,
                             next_revision,
-                            Jsonb({"expected_previous_digest": expected_digest}),
+                            _jsonb({"expected_previous_digest": expected_digest}),
                         ),
                     )
                     new_policy_id = cur.fetchone()[0]
@@ -389,7 +411,7 @@ class PostgresGovernanceRepository(GovernanceRepository):
                             changed_by,
                             changed_at,
                             reason,
-                            Jsonb({
+                            _jsonb({
                                 "previous_version": previous.get("version"),
                                 "new_version": updated.get("version"),
                                 "previous_revision": current_revision,
@@ -413,7 +435,7 @@ class PostgresGovernanceRepository(GovernanceRepository):
                                 event_id,
                                 approval["reviewer"],
                                 approval["signature"],
-                                Jsonb({}),
+                                _jsonb({}),
                             ),
                         )
                 conn.commit()
