@@ -252,9 +252,24 @@ def _read_governance_log_retention(
         )
         with resolved_path.open(encoding="utf-8") as fh:
             gov = json.load(fh)
-        return int(gov.get("log_retention", {}).get("retention_days", 90))
+        return _extract_log_retention_days(gov)
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return 90
+
+
+def _extract_log_retention_days(gov: Any) -> int:
+    """Extract retention days from nested or legacy governance payload keys."""
+    if not isinstance(gov, Mapping):
+        return 90
+
+    log_retention = gov.get("log_retention")
+    if isinstance(log_retention, Mapping) and "retention_days" in log_retention:
+        return int(log_retention["retention_days"])
+
+    if "log_retention_days" in gov:
+        return int(gov["log_retention_days"])
+
+    return 90
 
 
 # ---------------------------------------------------------------------------
