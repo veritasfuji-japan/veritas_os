@@ -721,7 +721,7 @@ class ContinuationEnforcementEvaluator:
         self,
         condition: EnforcementCondition,
         action: EnforcementAction,
-    ) -> SeverityLevel:
+    ) -> str:
         """Build explicit, inspectable reasoning string."""
         return (
             f"Enforcement action '{action.value}' triggered by "
