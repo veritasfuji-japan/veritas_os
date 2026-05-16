@@ -43,6 +43,19 @@ class BoundaryIssue:
     forbidden_module: str | None = None
 
 
+@dataclass(frozen=True)
+class ImportedNames:
+    """Imported names split by module-path leaves and imported symbol leaves."""
+
+    module_names: frozenset[str]
+    symbol_names: frozenset[str]
+
+    @property
+    def all_names(self) -> set[str]:
+        """Return both module and symbol leaves as a single set."""
+        return set(self.module_names) | set(self.symbol_names)
+
+
 THEME_BY_ISSUE_CODE: dict[str, str] = {
     "boundary_violation": "architecture",
     "doc_alignment_error": "operations",
@@ -178,6 +191,17 @@ MODULE_DOCSTRING_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
     "fuji": RECOMMENDED_EXTENSION_POINTS["fuji"],
     "memory": RECOMMENDED_EXTENSION_POINTS["memory"],
 }
+EXCLUDED_HELPER_PATH_PARTS: frozenset[str] = frozenset(
+    {
+        "__pycache__",
+        ".pytest_cache",
+        "tests",
+        "test",
+        "fixtures",
+        "vendor",
+        "third_party",
+    }
+)
 
 
 def _normalize_module_name(module_name: str) -> str:
@@ -185,65 +209,147 @@ def _normalize_module_name(module_name: str) -> str:
     return module_name.rsplit(".", maxsplit=1)[-1]
 
 
-def _collect_imported_names(tree: ast.Module) -> set[str]:
-    """Collect imported module names from a module AST."""
-    imported: set[str] = set()
+def _collect_imported_name_parts(tree: ast.Module) -> ImportedNames:
+    """Collect module-leaf and symbol-leaf imports from a module AST."""
+    module_names: set[str] = set()
+    symbol_names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                imported.add(_normalize_module_name(alias.name))
+                module_names.add(_normalize_module_name(alias.name))
         elif isinstance(node, ast.ImportFrom):
-            # Include imported symbols to detect patterns like:
-            #   from veritas_os.core import kernel
-            # This is a forbidden dependency equivalent to
-            #   import veritas_os.core.kernel
-            for alias in node.names:
-                imported.add(_normalize_module_name(alias.name))
             if node.module:
-                imported.add(_normalize_module_name(node.module))
+                module_names.add(_normalize_module_name(node.module))
+                for alias in node.names:
+                    if node.module == "veritas_os.core":
+                        module_names.add(_normalize_module_name(alias.name))
+                    else:
+                        symbol_names.add(_normalize_module_name(alias.name))
             else:
                 for alias in node.names:
-                    imported.add(_normalize_module_name(alias.name))
-    return imported
+                    symbol_names.add(_normalize_module_name(alias.name))
+    return ImportedNames(
+        module_names=frozenset(module_names),
+        symbol_names=frozenset(symbol_names),
+    )
+
+
+def _collect_imported_names(tree: ast.Module) -> set[str]:
+    """Collect imported module and symbol leaf names from a module AST."""
+    return _collect_imported_name_parts(tree).all_names
+
+
+def _expand_logical_import_aliases(module_names: frozenset[str]) -> set[str]:
+    """Expand helper module imports to their logical core module names."""
+    expanded = set(module_names)
+    for module_name in module_names:
+        for logical_name in ("planner", "kernel", "fuji", "memory", "pipeline"):
+            if module_name.startswith(f"{logical_name}_"):
+                expanded.add(logical_name)
+    return expanded
+
+
+def _collect_boundary_import_names(tree: ast.Module) -> set[str]:
+    """Collect module import names used for responsibility-boundary matching."""
+    parts = _collect_imported_name_parts(tree)
+    return _expand_logical_import_aliases(parts.module_names)
 
 
 def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
     """Check one rule and return violation messages, one per forbidden import found."""
-    path = core_dir / f"{rule.source_module}.py"
-    if not path.exists():
-        pkg_init = core_dir / rule.source_module / "__init__.py"
-        if pkg_init.exists():
-            path = pkg_init
-    try:
-        source = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return [f"Boundary check error: '{rule.source_module}' not found at {path}"]
-    tree = ast.parse(source, filename=str(path))
-    imported = _collect_imported_names(tree)
-    violations = sorted(imported & rule.forbidden_imports)
-
-    return [
-        f"Boundary violation: '{rule.source_module}' imports forbidden module '{v}' ({path})"
-        for v in violations
-    ]
+    messages: list[str] = []
+    for path in _resolve_module_source_paths(core_dir, rule.source_module):
+        try:
+            source = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            messages.append(
+                f"Boundary check error: '{rule.source_module}' not found at {path}"
+            )
+            continue
+        except PermissionError:
+            messages.append(f"Boundary check error: permission denied for {path}")
+            continue
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            messages.append(
+                "Boundary check error: invalid Python syntax in "
+                f"{path} at line {exc.lineno}"
+            )
+            continue
+        imported = _collect_boundary_import_names(tree)
+        violations = sorted(imported & rule.forbidden_imports)
+        messages.extend(
+            [
+                "Boundary violation: "
+                f"'{rule.source_module}' imports forbidden module '{v}' ({path})"
+                for v in violations
+            ]
+        )
+    return messages
 
 
 def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
-    """Resolve module source path for flat module or package module."""
-    path = core_dir / f"{module_name}.py"
-    if path.exists():
-        return path
-    pkg_init = core_dir / module_name / "__init__.py"
+    """Resolve the primary source path for backward-compatible callers."""
+    return _resolve_module_source_paths(core_dir, module_name)[0]
+
+
+def _resolve_module_source_paths(core_dir: Path, module_name: str) -> tuple[Path, ...]:
+    """Resolve source paths for a logical module and its helper modules.
+
+    Ownership contract:
+    - ``core/{module}.py`` and ``core/{module}/__init__.py`` belong to ``{module}``.
+    - Top-level ``core/{module}_*.py`` files are treated as helper shims owned by
+      ``{module}``.
+    - Python files under ``core/{module}/`` (recursively) are treated as
+      implementation helpers owned by ``{module}``.
+    - Helper scans skip common non-owned subtrees such as ``tests``,
+      ``fixtures``, ``vendor``, and ``third_party``.
+    """
+    candidates: list[Path] = []
+    flat_path = core_dir / f"{module_name}.py"
+    if flat_path.exists():
+        candidates.append(flat_path)
+
+    package_dir = core_dir / module_name
+    pkg_init = package_dir / "__init__.py"
     if pkg_init.exists():
-        return pkg_init
-    return path
+        candidates.append(pkg_init)
+
+    candidates.extend(sorted(core_dir.glob(f"{module_name}_*.py")))
+    if package_dir.exists() and package_dir.is_dir():
+        candidates.extend(
+            path
+            for path in sorted(package_dir.rglob("*.py"))
+            if _is_boundary_helper_path(path, package_dir)
+        )
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        unique.append(path)
+
+    if not unique:
+        return (flat_path,)
+    return tuple(unique)
 
 
 def _parse_imported_names(path: Path) -> set[str]:
-    """Parse a module and return imported names from its AST."""
+    """Parse a module and return boundary-relevant imported names from its AST."""
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
-    return _collect_imported_names(tree)
+    return _collect_boundary_import_names(tree)
+
+
+def _is_boundary_helper_path(path: Path, package_dir: Path) -> bool:
+    """Return whether a package path should be scanned as a helper module."""
+    relative_parts = set(path.relative_to(package_dir).parts[:-1])
+    if relative_parts & EXCLUDED_HELPER_PATH_PARTS:
+        return False
+    return path.suffix == ".py"
 
 
 def _load_module_docstring(path: Path) -> str:
@@ -334,58 +440,61 @@ def collect_boundary_issues(
             )
         )
     for rule in rules:
-        path = _resolve_module_source_path(core_dir, rule.source_module)
-        try:
-            imported = _parse_imported_names(path)
-        except FileNotFoundError:
-            issues.append(
-                BoundaryIssue(
-                    code="input_invalid",
-                    message=f"Boundary check error: '{rule.source_module}' not found at {path}",
-                    path=path,
-                    source_module=rule.source_module,
+        for path in _resolve_module_source_paths(core_dir, rule.source_module):
+            try:
+                imported = _parse_imported_names(path)
+            except FileNotFoundError:
+                issues.append(
+                    BoundaryIssue(
+                        code="input_invalid",
+                        message=(
+                            f"Boundary check error: '{rule.source_module}' "
+                            f"not found at {path}"
+                        ),
+                        path=path,
+                        source_module=rule.source_module,
+                    )
                 )
-            )
-            continue
-        except PermissionError:
-            issues.append(
-                BoundaryIssue(
-                    code="permission_denied",
-                    message=f"Boundary check error: permission denied for {path}",
-                    path=path,
-                    source_module=rule.source_module,
+                continue
+            except PermissionError:
+                issues.append(
+                    BoundaryIssue(
+                        code="permission_denied",
+                        message=f"Boundary check error: permission denied for {path}",
+                        path=path,
+                        source_module=rule.source_module,
+                    )
                 )
-            )
-            continue
-        except SyntaxError as exc:
-            issues.append(
-                BoundaryIssue(
-                    code="input_invalid",
-                    message=(
-                        "Boundary check error: invalid Python syntax in "
-                        f"{path} at line {exc.lineno}"
-                    ),
-                    path=path,
-                    source_module=rule.source_module,
+                continue
+            except SyntaxError as exc:
+                issues.append(
+                    BoundaryIssue(
+                        code="input_invalid",
+                        message=(
+                            "Boundary check error: invalid Python syntax in "
+                            f"{path} at line {exc.lineno}"
+                        ),
+                        path=path,
+                        source_module=rule.source_module,
+                    )
                 )
-            )
-            continue
+                continue
 
-        violations = sorted(imported & rule.forbidden_imports)
-        for forbidden_module in violations:
-            issues.append(
-                BoundaryIssue(
-                    code="boundary_violation",
-                    message=(
-                        "Boundary violation: "
-                        f"'{rule.source_module}' imports forbidden module "
-                        f"'{forbidden_module}' ({path})"
-                    ),
-                    path=path,
-                    source_module=rule.source_module,
-                    forbidden_module=forbidden_module,
+            violations = sorted(imported & rule.forbidden_imports)
+            for forbidden_module in violations:
+                issues.append(
+                    BoundaryIssue(
+                        code="boundary_violation",
+                        message=(
+                            "Boundary violation: "
+                            f"'{rule.source_module}' imports forbidden module "
+                            f"'{forbidden_module}' ({path})"
+                        ),
+                        path=path,
+                        source_module=rule.source_module,
+                        forbidden_module=forbidden_module,
+                    )
                 )
-            )
     return issues
 
 
@@ -393,25 +502,30 @@ def _collect_violations(
     core_dir: Path,
     rules: Iterable[BoundaryRule] = DEFAULT_RULES,
 ) -> list[ViolationDetail]:
-    """Collect structured violation details for remediation guidance output."""
+    """Collect structured violation details for remediation guidance output.
+
+    Input errors are reported by collect_boundary_issues/check_boundaries;
+    this helper skips unreadable or unparsable files and only returns actual
+    boundary violations.
+    """
     violation_details: list[ViolationDetail] = []
     for rule in rules:
-        path = core_dir / f"{rule.source_module}.py"
-        try:
-            source = path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            continue
-        tree = ast.parse(source, filename=str(path))
-        imported = _collect_imported_names(tree)
-        violations = sorted(imported & rule.forbidden_imports)
-        for forbidden_module in violations:
-            violation_details.append(
-                ViolationDetail(
-                    source_module=rule.source_module,
-                    forbidden_module=forbidden_module,
-                    path=path,
+        for path in _resolve_module_source_paths(core_dir, rule.source_module):
+            try:
+                source = path.read_text(encoding="utf-8")
+                tree = ast.parse(source, filename=str(path))
+            except (FileNotFoundError, PermissionError, SyntaxError):
+                continue
+            imported = _collect_boundary_import_names(tree)
+            violations = sorted(imported & rule.forbidden_imports)
+            for forbidden_module in violations:
+                violation_details.append(
+                    ViolationDetail(
+                        source_module=rule.source_module,
+                        forbidden_module=forbidden_module,
+                        path=path,
+                    )
                 )
-            )
     return violation_details
 
 
@@ -421,7 +535,12 @@ def build_remediation_guide(
 ) -> str:
     """Build a CI-friendly remediation guide for boundary violations."""
     rows: list[str] = []
+    seen_pairs: set[tuple[str, str]] = set()
     for violation in violations:
+        pair = (violation.source_module, violation.forbidden_module)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
         alternatives = ", ".join(
             ALLOWED_DEPENDENCY_GUIDE.get(violation.source_module, ("N/A",))
         )

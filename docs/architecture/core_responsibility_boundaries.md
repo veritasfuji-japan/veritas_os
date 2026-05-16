@@ -118,6 +118,9 @@ When changing one of the four core modules above:
    the boundary checker guidance in `scripts/architecture/check_responsibility_boundaries.py`.
 3. Do not move responsibilities across Planner / Kernel / FUJI / MemoryOS unless
    the architecture review explicitly approves the boundary change.
+4. The boundary checker intentionally skips helper files under common non-owned
+   directories such as `tests/`, `fixtures/`, `vendor/`, and `third_party/`
+   inside a logical module package.
 
 ## Security note
 
