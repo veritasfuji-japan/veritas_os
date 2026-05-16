@@ -185,6 +185,31 @@ def _normalize_module_name(module_name: str) -> str:
     return module_name.rsplit(".", maxsplit=1)[-1]
 
 
+LOGICAL_MODULE_PREFIXES: tuple[str, ...] = (
+    "planner",
+    "kernel",
+    "fuji",
+    "memory",
+    "pipeline",
+)
+
+
+def _expand_logical_import_aliases(imported: Iterable[str]) -> set[str]:
+    """Expand helper-module import leaves to their logical module owners."""
+    expanded = set(imported)
+    for name in imported:
+        for prefix in LOGICAL_MODULE_PREFIXES:
+            if name.startswith(f"{prefix}_"):
+                expanded.add(prefix)
+    return expanded
+
+
+def _format_syntax_error_message(path: Path, exc: SyntaxError) -> str:
+    """Format a boundary-check syntax error message with a stable line fallback."""
+    line: int | str = exc.lineno if exc.lineno is not None else "unknown line"
+    return f"Boundary check error: invalid Python syntax in {path} at line {line}"
+
+
 def _collect_imported_names(tree: ast.Module) -> set[str]:
     """Collect imported module names from a module AST."""
     imported: set[str] = set()
@@ -224,12 +249,9 @@ def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
         try:
             tree = ast.parse(source, filename=str(path))
         except SyntaxError as exc:
-            messages.append(
-                "Boundary check error: invalid Python syntax in "
-                f"{path} at line {exc.lineno}"
-            )
+            messages.append(_format_syntax_error_message(path, exc))
             continue
-        imported = _collect_imported_names(tree)
+        imported = _expand_logical_import_aliases(_collect_imported_names(tree))
         violations = sorted(imported & rule.forbidden_imports)
         messages.extend(
             [
@@ -239,11 +261,6 @@ def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
             ]
         )
     return messages
-
-
-def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
-    """Resolve the primary source path for backward-compatible callers."""
-    return _resolve_module_source_paths(core_dir, module_name)[0]
 
 
 def _resolve_module_source_paths(core_dir: Path, module_name: str) -> tuple[Path, ...]:
@@ -268,11 +285,7 @@ def _resolve_module_source_paths(core_dir: Path, module_name: str) -> tuple[Path
 
     candidates.extend(sorted(core_dir.glob(f"{module_name}_*.py")))
     if package_dir.exists() and package_dir.is_dir():
-        candidates.extend(
-            path
-            for path in sorted(package_dir.rglob("*.py"))
-            if path.name != "__init__.py"
-        )
+        candidates.extend(sorted(package_dir.rglob("*.py")))
 
     unique: list[Path] = []
     seen: set[Path] = set()
@@ -412,17 +425,15 @@ def collect_boundary_issues(
                 issues.append(
                     BoundaryIssue(
                         code="input_invalid",
-                        message=(
-                            "Boundary check error: invalid Python syntax in "
-                            f"{path} at line {exc.lineno}"
-                        ),
+                        message=_format_syntax_error_message(path, exc),
                         path=path,
                         source_module=rule.source_module,
                     )
                 )
                 continue
 
-            violations = sorted(imported & rule.forbidden_imports)
+            expanded_imported = _expand_logical_import_aliases(imported)
+            violations = sorted(expanded_imported & rule.forbidden_imports)
             for forbidden_module in violations:
                 issues.append(
                     BoundaryIssue(
@@ -458,7 +469,7 @@ def _collect_violations(
                 tree = ast.parse(source, filename=str(path))
             except (FileNotFoundError, PermissionError, SyntaxError):
                 continue
-            imported = _collect_imported_names(tree)
+            imported = _expand_logical_import_aliases(_collect_imported_names(tree))
             violations = sorted(imported & rule.forbidden_imports)
             for forbidden_module in violations:
                 violation_details.append(

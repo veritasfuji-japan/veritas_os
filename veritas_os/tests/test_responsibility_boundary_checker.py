@@ -8,6 +8,7 @@ from pathlib import Path
 from scripts.architecture.check_responsibility_boundaries import (
     REMEDIATION_LINK,
     _collect_violations,
+    _format_syntax_error_message,
     BoundaryIssue,
     BoundaryRule,
     DocAlignmentIssue,
@@ -171,6 +172,46 @@ def test_check_boundaries_detects_from_core_import_pattern(tmp_path: Path) -> No
     assert len(issues) == 1
     assert "planner" in issues[0]
     assert "kernel" in issues[0]
+
+
+def test_check_boundaries_detects_forbidden_import_of_kernel_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Helper import leaves should map to logical forbidden modules."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(
+        tmp_path / "planner.py",
+        "from veritas_os.core import kernel_stages\n",
+    )
+
+    issues = check_boundaries(core_dir=tmp_path)
+
+    assert len(issues) == 1
+    assert "planner" in issues[0]
+    assert "kernel" in issues[0]
+    assert "planner.py" in issues[0]
+
+
+def test_collect_boundary_issues_detects_forbidden_import_of_memory_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Logical-module aliases should detect helper imports as owner modules."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(
+        tmp_path / "planner.py",
+        "import veritas_os.core.memory_security\n",
+    )
+    custom_rule = BoundaryRule(
+        source_module="planner",
+        forbidden_imports=frozenset({"memory"}),
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path, rules=(custom_rule,))
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "planner"
+    assert violations[0].forbidden_module == "memory"
 
 
 def test_build_remediation_guide_contains_required_columns(tmp_path: Path) -> None:
@@ -1156,3 +1197,39 @@ def test_collect_boundary_issues_detects_forbidden_import_in_nested_package_help
     assert violations[0].forbidden_module == "planner"
     assert violations[0].path.name == "adapter.py"
     assert violations[0].path.parent.name == "search"
+
+
+def test_collect_boundary_issues_detects_forbidden_import_in_nested_package_init(
+    tmp_path: Path,
+) -> None:
+    """Nested package __init__.py files should be scanned for violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    package_dir = tmp_path / "memory"
+    nested_dir = package_dir / "search"
+    nested_dir.mkdir(parents=True)
+    _write_module(package_dir / "__init__.py", "# memory package\n")
+    _write_module(
+        nested_dir / "__init__.py",
+        "from veritas_os.core import planner\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "memory"
+    assert violations[0].forbidden_module == "planner"
+    assert violations[0].path.name == "__init__.py"
+    assert violations[0].path.parent.name == "search"
+
+
+def test_format_syntax_error_message_handles_missing_lineno(tmp_path: Path) -> None:
+    """Syntax-error formatter should use unknown line when lineno is missing."""
+    exc = SyntaxError("bad")
+    exc.lineno = None
+
+    message = _format_syntax_error_message(tmp_path / "bad.py", exc)
+
+    assert "unknown line" in message
+    assert "line None" not in message

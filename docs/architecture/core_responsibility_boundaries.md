@@ -119,6 +119,15 @@ When changing one of the four core modules above:
 3. Do not move responsibilities across Planner / Kernel / FUJI / MemoryOS unless
    the architecture review explicitly approves the boundary change.
 
+### Helper module ownership convention
+
+The CI responsibility-boundary checker treats top-level
+`veritas_os/core/{module}_*.py` files as helper shims owned by the corresponding
+logical `{module}`. Python files under `veritas_os/core/{module}/` are also treated
+as implementation helpers for that logical module, including nested subpackages.
+Contributors should avoid using a `{module}_*.py` prefix for files owned by a
+different logical module.
+
 ## Security note
 
 Boundary violations are not only a maintainability issue. They can also weaken
