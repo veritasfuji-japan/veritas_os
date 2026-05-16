@@ -34,16 +34,17 @@ Changes (GAP-01/GAP-02 review improvements):
 
 from __future__ import annotations
 
+import functools
+import hashlib
+import json
 import logging
 import os
 import re
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, MutableMapping
-import functools
-import hashlib
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -212,21 +213,63 @@ def validate_bench_mode_synthetic_data(
 # ---------------------------------------------------------------------------
 # P1-6: Governance config reading helper
 # ---------------------------------------------------------------------------
-def _read_governance_log_retention() -> int:
-    """Read log retention days from ``governance.json``.
+def _default_governance_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "api" / "governance.json"
+
+
+def _resolve_governance_path(
+    governance_path: str | os.PathLike[str] | None = None,
+    *,
+    repo_root: str | os.PathLike[str] | None = None,
+) -> Path:
+    if governance_path is not None:
+        return Path(governance_path)
+    if repo_root is not None:
+        return Path(repo_root) / "veritas_os" / "api" / "governance.json"
+    return _default_governance_path()
+
+
+def _read_governance_log_retention(
+    governance_path: str | os.PathLike[str] | None = None,
+    *,
+    repo_root: str | os.PathLike[str] | None = None,
+) -> int:
+    """Read log retention days from governance configuration.
+
+    Resolution order:
+
+    * explicit ``governance_path``
+    * ``repo_root/veritas_os/api/governance.json`` when ``repo_root`` is set
+    * bundled ``veritas_os/api/governance.json``
 
     Falls back to 90 if the file is missing or malformed so that existing
     behaviour is preserved when governance.json is not available.
     """
     try:
-        governance_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "api", "governance.json",
+        resolved_path = _resolve_governance_path(
+            governance_path,
+            repo_root=repo_root,
         )
-        with open(governance_path) as fh:
+        with resolved_path.open(encoding="utf-8") as fh:
             gov = json.load(fh)
-        return int(gov.get("log_retention", {}).get("retention_days", 90))
+        return _extract_log_retention_days(gov)
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return 90
+
+
+def _extract_log_retention_days(gov: Any) -> int:
+    """Extract retention days from nested or legacy governance payload keys."""
+    if not isinstance(gov, Mapping):
+        return 90
+
+    log_retention = gov.get("log_retention")
+    if isinstance(log_retention, Mapping) and "retention_days" in log_retention:
+        return int(log_retention["retention_days"])
+
+    if "log_retention_days" in gov:
+        return int(gov["log_retention_days"])
+
+    return 90
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +282,8 @@ def validate_audit_readiness_for_high_risk(
     log_retention_days: int | None = None,
     notification_flow_ready: bool | None = None,
     encryption_enabled: bool | None = None,
+    governance_path: str | os.PathLike[str] | None = None,
+    repo_root: str | os.PathLike[str] | None = None,
 ) -> Dict[str, Any]:
     """Reject high-risk use when audit infrastructure is incomplete.
 
@@ -249,11 +294,15 @@ def validate_audit_readiness_for_high_risk(
     *encryption_enabled* are ``None`` the function auto-detects the
     current environment state:
 
-    * ``log_retention_days`` — read from ``governance.json``.
+    * ``log_retention_days`` — read from ``governance.json`` using
+      ``governance_path`` when specified, ``repo_root/veritas_os/api/governance.json``
+      when ``repo_root`` is specified, else the bundled default path.
     * ``notification_flow_ready`` — ``True`` when
       ``VERITAS_HUMAN_REVIEW_WEBHOOK_URL`` is set.
     * ``encryption_enabled`` — ``True`` when
       ``VERITAS_ENCRYPTION_KEY`` is set.
+
+    Explicit ``log_retention_days`` takes precedence over path lookups.
     """
     cfg = config or EUComplianceConfig()
     if not cfg.require_audit_for_high_risk:
@@ -264,7 +313,10 @@ def validate_audit_readiness_for_high_risk(
 
     # Auto-detect values from the environment when not explicitly provided.
     if log_retention_days is None:
-        log_retention_days = _read_governance_log_retention()
+        log_retention_days = _read_governance_log_retention(
+            governance_path,
+            repo_root=repo_root,
+        )
 
     if notification_flow_ready is None:
         notification_flow_ready = bool(
@@ -1193,6 +1245,9 @@ def validate_deployment_readiness(
     Args:
         repo_root: Absolute path to the repository root.  When ``None``
             the function walks up from this file to locate the repo root.
+            This path is also used to resolve
+            ``repo_root/veritas_os/api/governance.json`` for log-retention
+            checks.
 
     Returns:
         Dict with ``ready`` (bool), ``checks`` (per-artefact status),
@@ -1244,7 +1299,7 @@ def validate_deployment_readiness(
     # P1-6: Environment infrastructure checks
     env_encryption = bool(os.environ.get("VERITAS_ENCRYPTION_KEY"))
     env_webhook = bool(os.environ.get("VERITAS_HUMAN_REVIEW_WEBHOOK_URL"))
-    env_retention = _read_governance_log_retention()
+    env_retention = _read_governance_log_retention(repo_root=repo_root)
 
     environment: Dict[str, Any] = {
         "encryption_enabled": env_encryption,
