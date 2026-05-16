@@ -8,11 +8,24 @@ from pathlib import Path
 
 from veritas_os.governance.config import validate_governance_backend
 from veritas_os.governance.file_repository import FileGovernanceRepository
-from veritas_os.governance.postgresql_repository import PostgresGovernanceRepository
 from veritas_os.governance.repository import GovernanceRepository
 from veritas_os.observability.metrics import set_db_backend_selected
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_postgres_repository_class() -> type[GovernanceRepository]:
+    """Resolve PostgreSQL repository class only when backend selection requires it."""
+    try:
+        from veritas_os.governance.postgresql_repository import (
+            PostgresGovernanceRepository,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "PostgreSQL governance backend requires the optional "
+            "postgresql dependencies. Install with `pip install 'veritas-os[postgresql]'`."
+        ) from exc
+    return PostgresGovernanceRepository
 
 
 def create_governance_repository(
@@ -28,7 +41,7 @@ def create_governance_repository(
     if backend == "postgresql":
         logger.info("Governance backend: postgresql")
         set_db_backend_selected("governance", "postgresql")
-        repository = PostgresGovernanceRepository()
+        repository = _resolve_postgres_repository_class()()
         repository.health_check()
         return repository
 
