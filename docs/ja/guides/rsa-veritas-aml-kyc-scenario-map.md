@@ -154,16 +154,16 @@
 
 ## 12. セキュリティおよび法務上の制約
 
-- sandbox-only
-- not production AML/KYC compliance logic
-- not regulatory approval
-- not third-party certification
-- not legal advice
-- no real customer, financial, medical, KYC, or regulated data
-- raw upstream fields remain redacted by default
-- Vikki’s RSA internal logic remains external
-- VERITAS core governance logic remains separate
-- no commercial/customer-facing demo without separate written agreement covering ownership, credit, and commercial use
+- 本シナリオは sandbox-only です。
+- 本シナリオは本番 AML/KYC コンプライアンスロジックではありません。
+- 本シナリオは規制当局の承認を意味しません。
+- 本シナリオは第三者認証を意味しません。
+- 本シナリオは法的助言ではありません。
+- 実在の顧客データ、金融データ、医療データ、KYCデータ、その他規制対象データを使用してはいけません。
+- raw upstream fields は既定で redacted のまま維持します。
+- Vikki の RSA 内部ロジックは VERITAS 外部のまま維持します。
+- VERITAS のコアガバナンスロジックは本シナリオマップとは分離して維持します。
+- 所有権、クレジット、商用利用を明記した別途の書面合意なしに、commercial/customer-facing demo を実施してはいけません。
 
 ## 13. Vikki が次にマップすべき内容
 
