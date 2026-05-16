@@ -24,9 +24,6 @@ from veritas_os.observability.metrics import (
     set_db_health_status,
 )
 
-
-
-
 def _jsonb(value: Any) -> Any:
     """Wrap payload as Jsonb only when psycopg json helpers are available."""
     try:

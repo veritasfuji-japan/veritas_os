@@ -13,6 +13,7 @@ from veritas_os.observability.metrics import set_db_backend_selected
 
 logger = logging.getLogger(__name__)
 
+
 def _resolve_postgres_repository_class() -> type[GovernanceRepository]:
     """Resolve PostgreSQL repository class only when backend selection requires it."""
     try:
@@ -41,8 +42,7 @@ def create_governance_repository(
     if backend == "postgresql":
         logger.info("Governance backend: postgresql")
         set_db_backend_selected("governance", "postgresql")
-        repository_cls = _resolve_postgres_repository_class()
-        repository = repository_cls()
+        repository = _resolve_postgres_repository_class()()
         repository.health_check()
         return repository
 

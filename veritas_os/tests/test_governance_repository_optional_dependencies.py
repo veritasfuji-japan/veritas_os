@@ -43,6 +43,15 @@ def test_governance_factory_import_does_not_require_psycopg(
     assert "veritas_os.governance.postgresql_repository" not in sys.modules
 
 
+def test_postgresql_repository_module_import_does_not_require_psycopg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _block_psycopg_import(monkeypatch)
+    _drop_governance_modules()
+
+    importlib.import_module("veritas_os.governance.postgresql_repository")
+
+
 def test_file_governance_repository_creation_does_not_require_psycopg(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
