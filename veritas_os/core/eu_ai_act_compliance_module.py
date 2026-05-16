@@ -1230,6 +1230,9 @@ def validate_deployment_readiness(
     Args:
         repo_root: Absolute path to the repository root.  When ``None``
             the function walks up from this file to locate the repo root.
+            This path is also used to resolve
+            ``repo_root/veritas_os/api/governance.json`` for log-retention
+            checks.
 
     Returns:
         Dict with ``ready`` (bool), ``checks`` (per-artefact status),
@@ -1281,7 +1284,7 @@ def validate_deployment_readiness(
     # P1-6: Environment infrastructure checks
     env_encryption = bool(os.environ.get("VERITAS_ENCRYPTION_KEY"))
     env_webhook = bool(os.environ.get("VERITAS_HUMAN_REVIEW_WEBHOOK_URL"))
-    env_retention = _read_governance_log_retention()
+    env_retention = _read_governance_log_retention(repo_root=repo_root)
 
     environment: Dict[str, Any] = {
         "encryption_enabled": env_encryption,
