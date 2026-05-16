@@ -5,9 +5,6 @@ import logging
 import os
 from typing import Any, Optional
 
-from fastapi import Depends
-from fastapi.responses import JSONResponse, Response
-
 logger = logging.getLogger(__name__)
 
 
@@ -23,13 +20,34 @@ def _metrics_auth_required() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
-def _build_prometheus_endpoint():
+def _resolve_fastapi_responses() -> tuple[type[Any], type[Any]]:
+    try:
+        from fastapi.responses import JSONResponse, Response
+    except ImportError as exc:
+        raise RuntimeError(
+            "Prometheus metrics endpoint requires FastAPI response dependencies. "
+            "Install API dependencies before enabling VERITAS_METRICS_EXPORTER=prometheus."
+        ) from exc
+    return JSONResponse, Response
+
+
+def _resolve_fastapi_depends() -> Any:
+    try:
+        from fastapi import Depends
+    except ImportError as exc:
+        raise RuntimeError(
+            "Authenticated Prometheus metrics endpoint requires FastAPI. "
+            "Install API dependencies before enabling VERITAS_METRICS_AUTH=1."
+        ) from exc
+    return Depends
+
+
+def _build_prometheus_endpoint() -> Any:
+    JSONResponse, Response = _resolve_fastapi_responses()
     try:
         from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
     except Exception:
-        CONTENT_TYPE_LATEST = "application/json"
-
-        def endpoint() -> Response:
+        def endpoint() -> Any:
             return JSONResponse(
                 status_code=503,
                 content={"ok": False, "error": "prometheus_client is not installed"},
@@ -37,7 +55,7 @@ def _build_prometheus_endpoint():
 
         return endpoint
 
-    def endpoint() -> Response:
+    def endpoint() -> Any:
         return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     return endpoint
@@ -51,6 +69,7 @@ def _install_prometheus_endpoint(app: Any, auth_dependency: Optional[Any]) -> No
     endpoint = _build_prometheus_endpoint()
     dependencies = []
     if _metrics_auth_required() and auth_dependency is not None:
+        Depends = _resolve_fastapi_depends()
         dependencies = [Depends(auth_dependency)]
     app.add_api_route("/metrics", endpoint, methods=["GET"], include_in_schema=False, dependencies=dependencies)
     _METRICS_ROUTE_INSTALLED = True
