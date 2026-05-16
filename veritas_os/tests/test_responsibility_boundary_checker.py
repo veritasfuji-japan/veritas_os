@@ -973,3 +973,76 @@ def test_classify_issue_theme_promotes_fuji_and_memory_violations_to_security() 
 
     assert classify_issue_theme(fuji_issue) == "security"
     assert classify_issue_theme(memory_issue) == "security"
+
+def test_collect_boundary_issues_detects_forbidden_import_in_helper_module(
+    tmp_path: Path,
+) -> None:
+    """Forbidden imports in helper modules should be reported as violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji_helpers.py", "import veritas_os.core.kernel\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].source_module == "fuji"
+    assert violations[0].forbidden_module == "kernel"
+    assert violations[0].path.name == "fuji_helpers.py"
+
+
+def test_check_boundaries_detects_forbidden_import_in_memory_helper_module(
+    tmp_path: Path,
+) -> None:
+    """check_boundaries should report violations coming from memory helpers."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(
+        tmp_path / "memory_security.py",
+        "from veritas_os.core import planner\n",
+    )
+
+    issues = check_boundaries(core_dir=tmp_path)
+
+    assert len(issues) == 1
+    assert "memory" in issues[0]
+    assert "planner" in issues[0]
+    assert "memory_security.py" in issues[0]
+
+
+def test_custom_kernel_rule_applies_to_kernel_helper_modules(tmp_path: Path) -> None:
+    """Custom kernel rules should apply to kernel helper modules as well."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(
+        tmp_path / "kernel_stages.py",
+        "from veritas_os.core.memory import add\n",
+    )
+
+    custom_rule = BoundaryRule(
+        source_module="kernel",
+        forbidden_imports=frozenset({"memory"}),
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path, rules=(custom_rule,))
+
+    violations = [issue for issue in issues if issue.code == "boundary_violation"]
+    assert len(violations) == 1
+    assert violations[0].path.name == "kernel_stages.py"
+    assert violations[0].source_module == "kernel"
+    assert violations[0].forbidden_module == "memory"
+
+
+def test_collect_boundary_issues_reports_helper_syntax_error_with_path(
+    tmp_path: Path,
+) -> None:
+    """Syntax errors in helper modules should report the helper file path."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji_helpers.py", "def broken(:\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    input_invalid_issues = [issue for issue in issues if issue.code == "input_invalid"]
+    assert len(input_invalid_issues) == 1
+    assert input_invalid_issues[0].path.name == "fuji_helpers.py"

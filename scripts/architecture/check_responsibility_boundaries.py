@@ -209,23 +209,26 @@ def _collect_imported_names(tree: ast.Module) -> set[str]:
 
 def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
     """Check one rule and return violation messages, one per forbidden import found."""
-    path = core_dir / f"{rule.source_module}.py"
-    if not path.exists():
-        pkg_init = core_dir / rule.source_module / "__init__.py"
-        if pkg_init.exists():
-            path = pkg_init
-    try:
-        source = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return [f"Boundary check error: '{rule.source_module}' not found at {path}"]
-    tree = ast.parse(source, filename=str(path))
-    imported = _collect_imported_names(tree)
-    violations = sorted(imported & rule.forbidden_imports)
-
-    return [
-        f"Boundary violation: '{rule.source_module}' imports forbidden module '{v}' ({path})"
-        for v in violations
-    ]
+    messages: list[str] = []
+    for path in _resolve_module_source_paths(core_dir, rule.source_module):
+        try:
+            source = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            messages.append(
+                f"Boundary check error: '{rule.source_module}' not found at {path}"
+            )
+            continue
+        tree = ast.parse(source, filename=str(path))
+        imported = _collect_imported_names(tree)
+        violations = sorted(imported & rule.forbidden_imports)
+        messages.extend(
+            [
+                "Boundary violation: "
+                f"'{rule.source_module}' imports forbidden module '{v}' ({path})"
+                for v in violations
+            ]
+        )
+    return messages
 
 
 def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
@@ -237,6 +240,32 @@ def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
     if pkg_init.exists():
         return pkg_init
     return path
+
+
+def _resolve_module_source_paths(core_dir: Path, module_name: str) -> tuple[Path, ...]:
+    """Resolve source paths for a module and its helper modules."""
+    candidates: list[Path] = []
+    flat_path = core_dir / f"{module_name}.py"
+    if flat_path.exists():
+        candidates.append(flat_path)
+
+    pkg_init = core_dir / module_name / "__init__.py"
+    if pkg_init.exists():
+        candidates.append(pkg_init)
+
+    candidates.extend(sorted(core_dir.glob(f"{module_name}_*.py")))
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        unique.append(path)
+
+    if not unique:
+        return (flat_path,)
+    return tuple(unique)
 
 
 def _parse_imported_names(path: Path) -> set[str]:
@@ -334,58 +363,61 @@ def collect_boundary_issues(
             )
         )
     for rule in rules:
-        path = _resolve_module_source_path(core_dir, rule.source_module)
-        try:
-            imported = _parse_imported_names(path)
-        except FileNotFoundError:
-            issues.append(
-                BoundaryIssue(
-                    code="input_invalid",
-                    message=f"Boundary check error: '{rule.source_module}' not found at {path}",
-                    path=path,
-                    source_module=rule.source_module,
+        for path in _resolve_module_source_paths(core_dir, rule.source_module):
+            try:
+                imported = _parse_imported_names(path)
+            except FileNotFoundError:
+                issues.append(
+                    BoundaryIssue(
+                        code="input_invalid",
+                        message=(
+                            f"Boundary check error: '{rule.source_module}' "
+                            f"not found at {path}"
+                        ),
+                        path=path,
+                        source_module=rule.source_module,
+                    )
                 )
-            )
-            continue
-        except PermissionError:
-            issues.append(
-                BoundaryIssue(
-                    code="permission_denied",
-                    message=f"Boundary check error: permission denied for {path}",
-                    path=path,
-                    source_module=rule.source_module,
+                continue
+            except PermissionError:
+                issues.append(
+                    BoundaryIssue(
+                        code="permission_denied",
+                        message=f"Boundary check error: permission denied for {path}",
+                        path=path,
+                        source_module=rule.source_module,
+                    )
                 )
-            )
-            continue
-        except SyntaxError as exc:
-            issues.append(
-                BoundaryIssue(
-                    code="input_invalid",
-                    message=(
-                        "Boundary check error: invalid Python syntax in "
-                        f"{path} at line {exc.lineno}"
-                    ),
-                    path=path,
-                    source_module=rule.source_module,
+                continue
+            except SyntaxError as exc:
+                issues.append(
+                    BoundaryIssue(
+                        code="input_invalid",
+                        message=(
+                            "Boundary check error: invalid Python syntax in "
+                            f"{path} at line {exc.lineno}"
+                        ),
+                        path=path,
+                        source_module=rule.source_module,
+                    )
                 )
-            )
-            continue
+                continue
 
-        violations = sorted(imported & rule.forbidden_imports)
-        for forbidden_module in violations:
-            issues.append(
-                BoundaryIssue(
-                    code="boundary_violation",
-                    message=(
-                        "Boundary violation: "
-                        f"'{rule.source_module}' imports forbidden module "
-                        f"'{forbidden_module}' ({path})"
-                    ),
-                    path=path,
-                    source_module=rule.source_module,
-                    forbidden_module=forbidden_module,
+            violations = sorted(imported & rule.forbidden_imports)
+            for forbidden_module in violations:
+                issues.append(
+                    BoundaryIssue(
+                        code="boundary_violation",
+                        message=(
+                            "Boundary violation: "
+                            f"'{rule.source_module}' imports forbidden module "
+                            f"'{forbidden_module}' ({path})"
+                        ),
+                        path=path,
+                        source_module=rule.source_module,
+                        forbidden_module=forbidden_module,
+                    )
                 )
-            )
     return issues
 
 
@@ -396,22 +428,22 @@ def _collect_violations(
     """Collect structured violation details for remediation guidance output."""
     violation_details: list[ViolationDetail] = []
     for rule in rules:
-        path = core_dir / f"{rule.source_module}.py"
-        try:
-            source = path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            continue
-        tree = ast.parse(source, filename=str(path))
-        imported = _collect_imported_names(tree)
-        violations = sorted(imported & rule.forbidden_imports)
-        for forbidden_module in violations:
-            violation_details.append(
-                ViolationDetail(
-                    source_module=rule.source_module,
-                    forbidden_module=forbidden_module,
-                    path=path,
+        for path in _resolve_module_source_paths(core_dir, rule.source_module):
+            try:
+                source = path.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                continue
+            tree = ast.parse(source, filename=str(path))
+            imported = _collect_imported_names(tree)
+            violations = sorted(imported & rule.forbidden_imports)
+            for forbidden_module in violations:
+                violation_details.append(
+                    ViolationDetail(
+                        source_module=rule.source_module,
+                        forbidden_module=forbidden_module,
+                        path=path,
+                    )
                 )
-            )
     return violation_details
 
 
