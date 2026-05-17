@@ -138,17 +138,9 @@ def install_memory_store_compat_hooks(
         limit: int = 20,
         contains: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        return recent_records_compat(
-            store=self,
-            helper_module=_memory_store_module,
-            original_helper=_ORIGINAL_FILTER_RECENT_RECORDS,
-            fallback_helper=getattr(
-                memory_module, "filter_recent_records", filter_recent_records,
-            ),
-            user_id=user_id,
-            contains=contains,
-            limit=limit,
-        )
+        records = self.list_all(user_id)
+        helper = getattr(memory_module, "filter_recent_records", filter_recent_records)
+        return helper(records, limit=limit, contains=contains)
 
     def _simple_score_compat(self: MemoryStore, query: str, text: str) -> float:
         return _simple_score_impl(query, text)

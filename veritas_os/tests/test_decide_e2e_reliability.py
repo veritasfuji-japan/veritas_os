@@ -272,7 +272,7 @@ class TestFujiRejectionPath:
         monkeypatch.setattr(p, "fuji_core", fake_fuji)
 
         # Also patch lazy import path in pipeline_policy
-        import veritas_os.core.pipeline_policy as pp
+        import veritas_os.core.pipeline.pipeline_policy as pp
         original_lazy = pp._lazy_import
         def mock_lazy(name, attr):
             if "fuji" in str(name):
@@ -330,7 +330,7 @@ class TestFujiRejectionPath:
         )
         monkeypatch.setattr(p, "fuji_core", fake_fuji)
 
-        import veritas_os.core.pipeline_policy as pp
+        import veritas_os.core.pipeline.pipeline_policy as pp
         original_lazy = pp._lazy_import
         def mock_lazy(name, attr):
             if "fuji" in str(name):
