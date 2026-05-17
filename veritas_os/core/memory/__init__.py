@@ -40,6 +40,7 @@ import os
 import time
 import threading
 import logging
+import warnings
 
 from ..config import capability_cfg, emit_capability_manifest, cfg
 from .memory_security import (
@@ -180,10 +181,12 @@ if capability_cfg.emit_manifest_on_import:
 
 memory_model_core = None
 try:
-    from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
+    from . import models as memory_model_core  # type: ignore
 except (ImportError, ModuleNotFoundError):
     try:
-        from . import models as memory_model_core  # type: ignore
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
     except (ImportError, ModuleNotFoundError):
         memory_model_core = None
 
@@ -430,13 +433,30 @@ def locked_memory(path: Path, timeout: float = 5.0):
 
 def _compat_locked_memory(path: Path, timeout: float = 5.0) -> Any:
     """Route shared MemoryStore locking through memory.py for test compatibility."""
-    return locked_memory(path, timeout=timeout)
+    memory_module = sys.modules[__name__]
+    return memory_module.locked_memory(path, timeout=timeout)
+
+
+def _compat_filter_recent_records(
+    records: List[Dict[str, Any]],
+    *,
+    contains: Optional[str] = None,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """Route recent-record filtering through memory.py for test compatibility."""
+    memory_module = sys.modules[__name__]
+    return memory_module.filter_recent_records(
+        records,
+        contains=contains,
+        limit=limit,
+    )
 
 
 install_memory_store_compat_hooks(
     locked_memory_fn=_compat_locked_memory,
     get_mem_vec_fn=_get_mem_vec,
     memory_module=sys.modules[__name__],
+    filter_recent_records_fn=_compat_filter_recent_records,
 )
 
 
