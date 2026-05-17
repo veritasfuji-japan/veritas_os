@@ -40,6 +40,7 @@ import os
 import time
 import threading
 import logging
+import warnings
 
 from ..config import capability_cfg, emit_capability_manifest, cfg
 from .memory_security import (
@@ -180,10 +181,12 @@ if capability_cfg.emit_manifest_on_import:
 
 memory_model_core = None
 try:
-    from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
+    from . import models as memory_model_core  # type: ignore
 except (ImportError, ModuleNotFoundError):
     try:
-        from . import models as memory_model_core  # type: ignore
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
     except (ImportError, ModuleNotFoundError):
         memory_model_core = None
 
