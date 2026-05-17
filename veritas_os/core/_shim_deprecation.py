@@ -9,7 +9,13 @@ SHIM_REMOVAL_DATE = "2026-08-01"
 
 
 def warn_legacy_core_shim(*, legacy_module: str, canonical_module: str) -> None:
-    """Warn when a legacy core shim import path is used."""
+    """Warn when a legacy core shim import path is used.
+
+    This intentionally uses DeprecationWarning rather than
+    FutureWarning/UserWarning so production runtime imports are not noisy by
+    default. CI, tests, and application boundaries can opt in with warning
+    filters when migration enforcement is desired.
+    """
     warnings.warn(
         (
             f"{legacy_module} is a deprecated compatibility shim; "

@@ -236,10 +236,14 @@ def test_all_legacy_core_shims_call_deprecation_helper() -> None:
         if "__pycache__" in path.parts:
             continue
         text = path.read_text(encoding="utf-8")
-        if not _is_legacy_shim_source(text):
+        is_legacy_shim = _is_legacy_shim_source(text)
+        calls_helper = (
+            "_warn_legacy_core_shim(" in text
+            or "warn_legacy_core_shim(" in text
+        )
+        if not is_legacy_shim or calls_helper:
             continue
-        if "_warn_legacy_core_shim(" not in text and "warn_legacy_core_shim(" not in text:
-            missing.append(path.relative_to(ROOT).as_posix())
+        missing.append(path.relative_to(ROOT).as_posix())
 
     assert not missing, (
         "Legacy core shims missing deprecation warning: " + ", ".join(missing)
