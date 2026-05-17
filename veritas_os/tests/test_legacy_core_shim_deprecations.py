@@ -100,8 +100,6 @@ def test_shim_deprecation_helper_message_contract() -> None:
     assert "2026-08-01" in message
 
 
-
-
 def test_pipeline_compat_shim_preserves_pipeline_logger_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -201,6 +199,7 @@ def test_assert_shim_warning_removes_legacy_sys_modules_entry_when_absent_before
             sys.modules[legacy_module] = previous
         else:
             sys.modules.pop(legacy_module, None)
+
 
 def _is_legacy_shim_source(text: str) -> bool:
     return (
