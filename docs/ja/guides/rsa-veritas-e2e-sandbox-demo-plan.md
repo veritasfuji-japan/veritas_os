@@ -5,6 +5,16 @@
 - [RSA ↔ VERITAS End-to-End Sandbox Demo Plan](../../en/guides/rsa-veritas-e2e-sandbox-demo-plan.md)
 
 
+## 用語整理: RSA、V.I.K.I.、VERITAS
+
+- RSA は理論的フレームワークおよび基底ルールセットです。
+- V.I.K.I.（Vital Interface for Kinetic Integration）は、行動チェックを実行し、RSA-compatible な upstream signal を出力する operational middleware 実装です。
+- VERITAS は downstream の commit governance boundary であり、emit された payload を受信して continuation decisioning・audit output・commit blocking を担います。
+- 互換性維持のため、`rsa_status` など既存 payload field 名は変更しません。
+- `RSASandboxPayload` は VERITAS 側 receiver contract 名として現行のまま維持します。
+- V.I.K.I. は RSA-compatible payload の operational producer として記述できます。
+- VERITAS は V.I.K.I. の internal reasoning を消費せず、emit された payload のみを消費します。
+
 ## 1. 目的
 
 本書は、RSA ↔ VERITAS 連携における最小構成のサンドボックス E2E デモ計画（ドキュメント専用）を定義します。目的は、Vikki の実運用 RSA ラッパー接続や VERITAS 本番ガバナンス挙動の変更を行わずに、インターフェース整合性と下流の継続可否判断／監査記録の期待形を確認することです。

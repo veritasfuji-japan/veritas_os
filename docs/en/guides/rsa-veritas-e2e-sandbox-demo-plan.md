@@ -1,5 +1,15 @@
 # RSA ↔ VERITAS End-to-End Sandbox Demo Plan
 
+## Terminology note: RSA, V.I.K.I., and VERITAS
+
+- RSA is the theoretical framework and underlying rule set.
+- V.I.K.I. (Vital Interface for Kinetic Integration) is the operational middleware implementation that performs behavioral checks and emits RSA-compatible upstream signals.
+- VERITAS is the downstream commit governance boundary that consumes emitted payloads and performs continuation decisioning, audit output, and commit blocking.
+- Existing payload field names such as `rsa_status` remain unchanged for compatibility.
+- `RSASandboxPayload` remains the current VERITAS-side receiver contract name.
+- V.I.K.I. may be described as the operational producer of RSA-compatible payloads.
+- VERITAS does not consume V.I.K.I. internal reasoning; it consumes only the emitted payload.
+
 ## 1. Purpose
 
 This document defines a minimal, documentation-only end-to-end sandbox demo plan for the RSA ↔ VERITAS integration path. The demo validates interface compatibility and downstream continuation/audit behavior without integrating Vikki’s real RSA wrapper or changing VERITAS runtime governance logic.
