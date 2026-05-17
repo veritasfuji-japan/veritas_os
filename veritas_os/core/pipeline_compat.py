@@ -10,5 +10,5 @@ _TARGET_MODULE = "veritas_os.core.pipeline.pipeline_compat"
 _warn_legacy_core_shim(legacy_module=__name__, canonical_module=_TARGET_MODULE)
 _target = _import_module(_TARGET_MODULE)
 if hasattr(_target, "logger"):
-    _target.logger = _logging.getLogger(__name__)
+    _target.logger = _logging.getLogger("veritas_os.core.pipeline")
 _sys.modules[__name__] = _target
