@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 import time
 import math
+import importlib
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import logging
@@ -107,8 +108,8 @@ def collect_memory_evidence(
         return result
 
     try:
-        from . import memory as mem_core
-        memory_summary = mem_core.summarize_for_planner(
+        memory_module = importlib.import_module("veritas_os.core.memory")
+        memory_summary = memory_module.summarize_for_planner(
             user_id=user_id,
             query=query,
             limit=pipeline_cfg.memory_search_limit,
@@ -653,7 +654,10 @@ def save_episode_to_memory(
         return True
 
     try:
-        from . import memory as mem_core
+        memory_module = importlib.import_module("veritas_os.core.memory")
+        mem_store = getattr(memory_module, "MEM", None)
+        if mem_store is None:
+            return False
 
         user_id = context.get("user_id", "cli")
         req_id = context.get("request_id", uuid.uuid4().hex)
@@ -678,9 +682,9 @@ def save_episode_to_memory(
         }
 
         try:
-            mem_core.MEM.put("episodic", episode_record)
+            mem_store.put("episodic", episode_record)
         except TypeError:
-            mem_core.MEM.put(
+            mem_store.put(
                 user_id,
                 f"decision:{req_id}",
                 episode_record,
