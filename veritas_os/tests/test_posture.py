@@ -413,6 +413,79 @@ class TestValidatePostureStartup:
         assert any("unconditionally refused" in e for e in errors)
 
 
+def _crypto_errors(errors: list[str]) -> list[str]:
+    return [
+        err
+        for err in errors
+        if "cryptography" in err or "veritas-os[signing]" in err
+    ]
+
+
+class TestPolicySigningCryptoPostureValidation:
+    """Policy signing cryptography checks are strict-posture fail-fast."""
+
+    def test_validate_policy_signing_crypto_skips_dev_and_staging(self, monkeypatch):
+        _clean_env(monkeypatch)
+        import veritas_os.policy.signing as signing
+
+        monkeypatch.setattr(signing, "has_crypto_backend", lambda: False)
+
+        for level in (PostureLevel.DEV, PostureLevel.STAGING):
+            defaults = derive_defaults(level)
+            errors = validate_posture_startup(defaults)
+            assert _crypto_errors(errors) == []
+
+    def test_validate_policy_signing_crypto_errors_in_secure_when_missing(
+        self,
+        monkeypatch,
+    ):
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:1:key/a")
+        import veritas_os.policy.signing as signing
+
+        monkeypatch.setattr(signing, "has_crypto_backend", lambda: False)
+
+        errors = validate_posture_startup(derive_defaults(PostureLevel.SECURE))
+        crypto_errors = _crypto_errors(errors)
+        assert crypto_errors
+        assert any("cryptography" in err and "veritas-os[signing]" in err for err in crypto_errors)
+
+    def test_validate_policy_signing_crypto_errors_in_prod_when_missing(
+        self,
+        monkeypatch,
+    ):
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:1:key/a")
+        import veritas_os.policy.signing as signing
+
+        monkeypatch.setattr(signing, "has_crypto_backend", lambda: False)
+
+        errors = validate_posture_startup(derive_defaults(PostureLevel.PROD))
+        crypto_errors = _crypto_errors(errors)
+        assert crypto_errors
+        assert any("cryptography" in err and "veritas-os[signing]" in err for err in crypto_errors)
+
+    def test_validate_policy_signing_crypto_allows_strict_when_available(
+        self,
+        monkeypatch,
+    ):
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:1:key/a")
+        import veritas_os.policy.signing as signing
+
+        monkeypatch.setattr(signing, "has_crypto_backend", lambda: True)
+
+        errors = validate_posture_startup(derive_defaults(PostureLevel.SECURE))
+        assert _crypto_errors(errors) == []
+
+
+
 # ============================================================
 # init_posture — full startup flow
 # ============================================================
@@ -448,6 +521,20 @@ class TestInitPosture:
         d = init_posture(explicit="prod")
         assert d.posture == PostureLevel.PROD
         assert d.is_strict is True
+
+    def test_init_posture_secure_fails_when_policy_crypto_missing(self, monkeypatch):
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:1:key/a")
+        import veritas_os.policy.signing as signing
+
+        monkeypatch.setattr(signing, "has_crypto_backend", lambda: False)
+
+        with pytest.raises(PostureStartupError) as exc_info:
+            init_posture(explicit="secure", fail_on_error=True)
+
+        assert "cryptography" in str(exc_info.value) or "veritas-os[signing]" in str(exc_info.value)
 
     def test_secure_fails_without_integrations(self, monkeypatch):
         _clean_env(monkeypatch)

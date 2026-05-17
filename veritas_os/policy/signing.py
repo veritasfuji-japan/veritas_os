@@ -31,6 +31,20 @@ except ImportError:  # pragma: no cover – optional dependency
 SIGNING_ALGORITHM = "ed25519"
 
 
+def has_crypto_backend() -> bool:
+    """Return True when Ed25519 cryptography backend is available."""
+    return _HAS_CRYPTO
+
+
+def signing_crypto_missing_message() -> str:
+    """Return operator guidance when policy signing crypto is unavailable."""
+    return (
+        "Policy signing requires the 'cryptography' package for Ed25519 "
+        "verification in secure/prod posture. Install with "
+        "`pip install 'veritas-os[signing]'` or use the full install profile."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Key management helpers
 # ---------------------------------------------------------------------------
