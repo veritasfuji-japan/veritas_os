@@ -2,6 +2,7 @@ import importlib
 import importlib.util
 import sys
 import types
+import warnings
 from pathlib import Path
 
 import pytest
@@ -194,6 +195,49 @@ def test_assert_shim_warning_restores_legacy_sys_modules_entry(
         else:
             sys.modules.pop(legacy_module, None)
 
+
+
+
+def test_memory_package_import_does_not_emit_legacy_memory_model_warning() -> None:
+    previous_memory = sys.modules.get("veritas_os.core.memory")
+    previous_legacy = sys.modules.get("veritas_os.core.models.memory_model")
+    previous_llm_client = sys.modules.get("veritas_os.core.llm_client")
+    had_memory = "veritas_os.core.memory" in sys.modules
+    had_legacy = "veritas_os.core.models.memory_model" in sys.modules
+    had_llm_client = "veritas_os.core.llm_client" in sys.modules
+
+    try:
+        sys.modules.pop("veritas_os.core.memory", None)
+        sys.modules.pop("veritas_os.core.models.memory_model", None)
+        sys.modules["veritas_os.core.llm_client"] = types.ModuleType(
+            "veritas_os.core.llm_client"
+        )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", DeprecationWarning)
+            importlib.import_module("veritas_os.core.memory")
+
+        messages = [str(item.message) for item in caught]
+        assert not any(
+            "veritas_os.core.models.memory_model is a deprecated compatibility shim"
+            in message
+            for message in messages
+        )
+    finally:
+        if had_memory:
+            sys.modules["veritas_os.core.memory"] = previous_memory
+        else:
+            sys.modules.pop("veritas_os.core.memory", None)
+
+        if had_legacy:
+            sys.modules["veritas_os.core.models.memory_model"] = previous_legacy
+        else:
+            sys.modules.pop("veritas_os.core.models.memory_model", None)
+
+        if had_llm_client:
+            sys.modules["veritas_os.core.llm_client"] = previous_llm_client
+        else:
+            sys.modules.pop("veritas_os.core.llm_client", None)
 
 def test_assert_shim_warning_removes_legacy_sys_modules_entry_when_absent_before(
     monkeypatch: pytest.MonkeyPatch,
