@@ -4,6 +4,16 @@
 
 - [RSA ↔ VERITAS AML/KYC Scenario Map](../../en/guides/rsa-veritas-aml-kyc-scenario-map.md)
 
+## 用語整理: RSA、V.I.K.I.、VERITAS
+
+- RSA は理論的フレームワークおよび基底ルールセットです。
+- V.I.K.I.（Vital Interface for Kinetic Integration）は、行動チェックを実行し、RSA-compatible な upstream signal を出力する operational middleware 実装です。
+- VERITAS は downstream の commit governance boundary であり、emit された payload を受信して continuation decisioning・audit output・commit blocking を担います。
+- 互換性維持のため、`rsa_status` など既存 payload field 名は変更しません。
+- `RSASandboxPayload` は VERITAS 側 receiver contract 名として現行のまま維持します。
+- V.I.K.I. は RSA-compatible payload の operational producer として記述できます。
+- VERITAS は V.I.K.I. の internal reasoning を消費せず、emit された payload のみを消費します。
+
 ## 1. 目的
 
 この文書は、RSA ↔ VERITAS 連携計画のためのサンドボックス限定コラボレーション成果物を定義します。
@@ -67,13 +77,20 @@
 | node_id | actor | input | operation | output | RSA responsibility | VERITAS responsibility | audit relevance |
 |---|---|---|---|---|---|---|---|
 | `AML_KYC_NODE_01_REQUEST_RECEIVED` | Upstream financial-agent workflow | 取引承認推奨のドラフト要求 | サンドボックス文脈で要求受信 | 要求が上流処理経路へ入る | 外部上流での要求受理 | まだ処理なし | 監査タイムラインの開始点 |
-| `AML_KYC_NODE_02_KYC_CONTEXT_CHECK` | RSA (external) | 要求 + 利用可能な KYC 文脈 | KYC 完全性に対する RSA 側行動/文脈チェック | KYC 文脈不足を評価 | KYC不足・不確実性の検知 | まだ処理なし | 下流停止判断の根拠を明示 |
-| `AML_KYC_NODE_03_INCOMPLETE_CONTEXT_DETECTED` | RSA (external) | KYC チェック結果 | 承認意図に紐づく文脈不足として分類 | `SRC_Incomplete_Context` を内部選定 | トリガー種別と安全姿勢の決定 | まだ処理なし | payload 発行前の原因追跡 |
-| `AML_KYC_NODE_04_RSA_SIGNAL_EMITTED` | RSA (external) | トリガー分類 + 元の意図 | humility engaged 状態で sandbox payload 発行 | `ALGORITHMIC_HUMILITY_ENGAGED` payload | 合意済み外部シグナルの発行 | まだ処理なし | VERITAS が参照する上流スナップショット |
+| `AML_KYC_NODE_02_KYC_CONTEXT_CHECK` | V.I.K.I. / RSA-compatible middleware（upstream） | 要求 + 利用可能な KYC 文脈 | Internal context check を実施 | emitted flag なしの informational / silent reality check | 外部 payload をまだ emit せず内部コンテキスト検証を実施 | まだ処理なし | 上流タイムラインでの pre-flag 確認を記録 |
+| `AML_KYC_NODE_03_INCOMPLETE_CONTEXT_DETECTED` | V.I.K.I. / RSA-compatible middleware（upstream） | Internal context check 結果 | incomplete context と Toxic Helpfulness risk を検知し internal state を遷移 | internal state を `ALGORITHMIC_HUMILITY_ENGAGED` へ遷移、pause class、実行停止準備 | payload emit 前に risk 分類と pause posture へ移行 | まだ処理なし | 外部 signal emit 前の上流リスク遷移を保存 |
+| `AML_KYC_NODE_04_RSA_SIGNAL_EMITTED` | V.I.K.I. / RSA-compatible middleware（upstream） | internal state + 元の意図 | `[RSA_FLAG: ALGORITHMIC_HUMILITY_ENGAGED]` を emit、上流で Unilateral Memory Overwrite を適用、LLM を hard halt して VERITAS へ signal transfer | VERITAS 消費用の RSA-compatible payload を emit | 合意済み外部 signal payload の emit と上流実行経路の停止 | まだ処理なし | VERITAS が消費する上流 signal snapshot 境界を定義 |
 | `AML_KYC_NODE_05_VERITAS_PAYLOAD_CONSTRUCTED` | VERITAS sandbox receiver | RSA 由来 `RSASandboxPayload` | fixture payload の解析/検証と下流入力化 | VERITAS マッピング入力生成 | 追加動作なし（RSA外部維持） | 受信と継続判断評価の準備 | 受信境界とマッピング境界の記録 |
 | `AML_KYC_NODE_06_VERITAS_DECISION_EVALUATED` | VERITAS decision mapping | 解析済み RSA payload | 継続判断・authority evidence 状態へマッピング | `PAUSE_FOR_HUMAN_REVIEW` と不足状態 | 追加動作なし | 下流判断値を確定し commit 進行を止める | ガバナンス観点の中核判断点 |
 | `AML_KYC_NODE_07_AUDIT_ENTRY_WRITTEN` | VERITAS audit output | 判断結果 + 上流シグナル項目 | 既定で raw 項目を秘匿した監査エントリ記録 | 理由・状態・commit状態を含む監査記録 | 追加動作なし | 監査可能な叙述と秘匿済み表現を出力 | 生データ露出なしに説明責任を担保 |
 | `AML_KYC_NODE_08_FINAL_COMMIT_BLOCKED` | VERITAS continuation gate | 継続判断 + 監査記録 | 追加証跡/人手レビューまで未コミット状態を強制 | 最終コミットをサンドボックスで阻止 | 追加動作なし | 最終コミットを防止し次アクションを要求 | 非コミット制御の最終証跡 |
+
+### 上流/下流の境界ノート
+
+- Node 2〜4 は upstream の V.I.K.I. / RSA-side mapping です。
+- Node 5〜8 は VERITAS-side のまま維持します。
+- VERITAS が消費するのは Node 4 で emit された payload のみです。
+- ランタイム挙動は unchanged です。
 
 ## 7. RSA 側シグナル・プレースホルダ
 

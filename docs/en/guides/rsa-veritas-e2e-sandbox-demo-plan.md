@@ -1,34 +1,44 @@
 # RSA ↔ VERITAS End-to-End Sandbox Demo Plan
 
+## Terminology note: RSA, V.I.K.I., and VERITAS
+
+- RSA is the theoretical framework and underlying rule set.
+- V.I.K.I. (Vital Interface for Kinetic Integration) is the operational middleware implementation that performs behavioral checks and emits RSA-compatible upstream signals.
+- VERITAS is the downstream commit governance boundary that consumes emitted payloads and performs continuation decisioning, audit output, and commit blocking.
+- Existing payload field names such as `rsa_status` remain unchanged for compatibility.
+- `RSASandboxPayload` remains the current VERITAS-side receiver contract name.
+- V.I.K.I. may be described as the operational producer of RSA-compatible payloads.
+- VERITAS does not consume V.I.K.I. internal reasoning; it consumes only the emitted payload.
+
 ## 1. Purpose
 
-This document defines a minimal, documentation-only end-to-end sandbox demo plan for the RSA ↔ VERITAS integration path. The demo validates interface compatibility and downstream continuation/audit behavior without integrating Vikki’s real RSA wrapper or changing VERITAS runtime governance logic.
+This document defines a minimal, documentation-only end-to-end sandbox demo plan for the RSA ↔ VERITAS integration path. The demo validates interface compatibility and downstream continuation/audit behavior without integrating V.I.K.I. live operational middleware logic or changing VERITAS runtime governance logic.
 
 A prerequisite baseline is already merged:
 - RSA sandbox receiver
 - EN/JA interface docs
 - `governance-backend-fast` CI coverage for `tests/governance/test_rsa_sandbox_receiver.py` in `.github/workflows/main.yml`
-- Vikki RSA mock payload ingestion fixture
+- V.I.K.I. RSA-compatible mock payload ingestion fixture
 
 ## 2. Non-goals
 
 This demo does **not**:
-- connect to Vikki’s real RSA wrapper
-- import or expose Vikki’s internal RSA logic inside VERITAS
+- connect to V.I.K.I. live operational middleware
+- import or expose V.I.K.I. internal reasoning or implementation logic inside VERITAS
 - change runtime code paths, production policy, or release gates
 - change test behavior or add production assertions
 - claim production AML/KYC readiness, compliance approval, or certification
 
 ## 3. Boundary rules
 
-- RSA remains an external upstream signal source.
+- V.I.K.I. remains external to VERITAS as the operational producer of RSA-compatible upstream payloads.
 - VERITAS remains responsible only for downstream continuation decisioning and audit entry creation in this demo.
 - Sandbox-only boundaries are preserved end to end.
 - No Planner / Kernel / Fuji / MemoryOS responsibility expansion is introduced.
 
 ## 4. Demo flow
 
-1. RSA mock wrapper emits a static JSON payload.
+1. V.I.K.I. middleware emits an RSA-compatible static JSON sandbox payload.
 2. Payload uses the agreed interface contract fields:
    - `rsa_status`
    - `trigger_source`
@@ -83,7 +93,7 @@ result = evaluate_rsa_sandbox_signal(payload)
 
 ## 6. Expected VERITAS output
 
-Expected sandbox response shape:
+Expected sandbox response shape (with compatibility fixture names retained, including `rsa_status` and `RSASandboxPayload`):
 
 ```json
 {
@@ -128,14 +138,14 @@ The audit entry should:
 - This is not legal advice.
 - Raw upstream fields must remain redacted by default.
 - No real customer, financial, medical, KYC, or regulated data should be used.
-- Vikki’s RSA internal logic remains external.
+- V.I.K.I. internal reasoning remains external and is not consumed by VERITAS.
 - VERITAS core governance logic remains separate.
 - No commercial/customer-facing demo should be performed without a separate written agreement covering ownership, credit, and commercial use.
 
 ## 9. What remains outside this demo
 
 Outside this plan:
-- real RSA wrapper connectivity and transport hardening
+- live V.I.K.I. connectivity and transport hardening
 - production governance/bind admissibility decisions
 - compliance/legal/regulatory interpretation
 - customer-facing workflows and commercial packaging
@@ -143,4 +153,4 @@ Outside this plan:
 
 ## 10. Next implementation step
 
-Implement a thin sandbox harness invocation that parses the static JSON into a `dict`, constructs `RSASandboxPayload(**payload_dict)`, then calls `evaluate_rsa_sandbox_signal(payload)` and prints/verifies only the expected sandbox decision and audit-shape outputs above, without modifying production runtime behavior.
+Implement a thin sandbox harness invocation where V.I.K.I. emits the RSA-compatible static JSON payload, the harness parses it into a `dict`, constructs `RSASandboxPayload(**payload_dict)`, then calls `evaluate_rsa_sandbox_signal(payload)` and prints/verifies only the expected sandbox decision and audit-shape outputs above, without modifying production runtime behavior.
