@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -54,7 +55,12 @@ def _load_memory_model() -> Tuple[Any, Any, Any]:
     _pgl_fn = _default_predict_gate_label
 
     try:
-        from veritas_os.core.models import memory_model as memory_model_core
+        try:
+            from veritas_os.core.memory import models as memory_model_core
+        except (ImportError, ModuleNotFoundError):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                from veritas_os.core.models import memory_model as memory_model_core
 
         _mem_vec = getattr(memory_model_core, "MEM_VEC", None)
         _mem_clf = getattr(memory_model_core, "MEM_CLF", None)
