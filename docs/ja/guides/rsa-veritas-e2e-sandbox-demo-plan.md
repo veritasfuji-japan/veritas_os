@@ -5,34 +5,44 @@
 - [RSA ↔ VERITAS End-to-End Sandbox Demo Plan](../../en/guides/rsa-veritas-e2e-sandbox-demo-plan.md)
 
 
+## 用語整理: RSA、V.I.K.I.、VERITAS
+
+- RSA は理論的フレームワークおよび基底ルールセットです。
+- V.I.K.I.（Vital Interface for Kinetic Integration）は、行動チェックを実行し、RSA-compatible な upstream signal を出力する operational middleware 実装です。
+- VERITAS は downstream の commit governance boundary であり、emit された payload を受信して continuation decisioning・audit output・commit blocking を担います。
+- 互換性維持のため、`rsa_status` など既存 payload field 名は変更しません。
+- `RSASandboxPayload` は VERITAS 側 receiver contract 名として現行のまま維持します。
+- V.I.K.I. は RSA-compatible payload の operational producer として記述できます。
+- VERITAS は V.I.K.I. の internal reasoning を消費せず、emit された payload のみを消費します。
+
 ## 1. 目的
 
-本書は、RSA ↔ VERITAS 連携における最小構成のサンドボックス E2E デモ計画（ドキュメント専用）を定義します。目的は、Vikki の実運用 RSA ラッパー接続や VERITAS 本番ガバナンス挙動の変更を行わずに、インターフェース整合性と下流の継続可否判断／監査記録の期待形を確認することです。
+本書は、RSA ↔ VERITAS 連携における最小構成のサンドボックス E2E デモ計画（ドキュメント専用）を定義します。目的は、V.I.K.I. の live operational middleware 接続や VERITAS 本番ガバナンス挙動の変更を行わずに、インターフェース整合性と下流の継続可否判断／監査記録の期待形を確認することです。
 
 前提となる作業はすでにマージ済みです。
 - RSA sandbox receiver
 - EN/JA interface docs
 - `.github/workflows/main.yml` の `governance-backend-fast` CI による `tests/governance/test_rsa_sandbox_receiver.py` の実行対象化
-- Vikki RSA mock payload ingestion fixture
+- V.I.K.I. RSA-compatible mock payload ingestion fixture
 
 ## 2. 非目標
 
 このデモでは次を行いません。
-- Vikki の実運用 RSA ラッパーへの接続
-- Vikki の RSA 内部ロジックを VERITAS 内に取り込むこと
+- V.I.K.I. の live operational middleware への接続
+- V.I.K.I. の internal reasoning / 実装ロジックを VERITAS 内に取り込むこと
 - ランタイムコード、テスト、リリースゲート、運用ポリシーの変更
 - 本番 AML/KYC 準拠、規制承認、認証取得の主張
 
 ## 3. 境界ルール
 
-- RSA は外部の上流シグナルソースのままとする。
+- V.I.K.I. は VERITAS 外部の operational producer として、RSA-compatible な upstream payload を emit する。
 - VERITAS は本デモにおいて、下流の継続判断と監査エントリ生成のみに責務を限定する。
 - サンドボックス専用の境界を end-to-end で維持する。
 - Planner / Kernel / Fuji / MemoryOS の責務を越える変更は行わない。
 
 ## 4. デモフロー
 
-1. RSA mock wrapper が静的 JSON payload を送出する。
+1. V.I.K.I. middleware が RSA-compatible な静的 JSON sandbox payload を emit する。
 2. payload は合意済みインターフェース契約フィールドを使用する。
    - `rsa_status`
    - `trigger_source`
@@ -87,7 +97,7 @@ result = evaluate_rsa_sandbox_signal(payload)
 
 ## 6. 期待される VERITAS 出力
 
-期待される sandbox レスポンス形状:
+期待される sandbox レスポンス形状（`rsa_status` と `RSASandboxPayload` などの compatibility fixture 名は維持）:
 
 ```json
 {
@@ -132,14 +142,14 @@ result = evaluate_rsa_sandbox_signal(payload)
 - 本デモは法的助言ではありません。
 - 上流の生フィールドは既定で redacted のままにする必要があります。
 - 実在の顧客データ、金融データ、医療データ、KYC データ、その他規制対象データを使用してはいけません。
-- Vikki の RSA 内部ロジックは外部のまま維持します。
+- V.I.K.I. の internal reasoning は外部のまま維持し、VERITAS はそれを消費しません。
 - VERITAS のコアガバナンスロジックは分離を維持します。
 - 所有権・クレジット・商用利用を明記した別途書面合意なしに、商用／顧客向けデモを実施してはいけません。
 
 ## 9. このデモの対象外
 
 本計画の対象外:
-- 実運用 RSA ラッパー接続と通信ハードニング
+- live V.I.K.I. 接続と通信ハードニング
 - 本番の bind/admissibility を含むガバナンス判断
 - コンプライアンス／法務／規制解釈
 - 顧客向け運用フローや商用パッケージ化
@@ -147,4 +157,4 @@ result = evaluate_rsa_sandbox_signal(payload)
 
 ## 10. 次の実装ステップ
 
-本番ランタイム挙動を変更せず、静的 JSON を `dict` にパースし、`RSASandboxPayload(**payload_dict)` を生成してから `evaluate_rsa_sandbox_signal(payload)` を呼び出し、上記のサンドボックス判断値と監査出力形状のみを確認する薄いサンドボックスハーネス呼び出しを別PRで実装します（このPRでは実装しません）。
+本番ランタイム挙動を変更せず、V.I.K.I. が emit した RSA-compatible な静的 JSON を `dict` にパースし、`RSASandboxPayload(**payload_dict)` を生成してから `evaluate_rsa_sandbox_signal(payload)` を呼び出し、上記のサンドボックス判断値と監査出力形状のみを確認する薄いサンドボックスハーネス呼び出しを別PRで実装します（このPRでは実装しません）。
