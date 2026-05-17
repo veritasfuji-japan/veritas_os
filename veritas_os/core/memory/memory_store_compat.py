@@ -65,6 +65,7 @@ def install_memory_store_compat_hooks(
     locked_memory_fn: Callable[..., Any],
     get_mem_vec_fn: Callable[[], Any],
     memory_module: Any,
+    filter_recent_records_fn: Optional[Callable[..., Any]] = None,
 ) -> None:
     """Patch ``MemoryStore`` methods to route through importable symbols.
 
@@ -209,7 +210,9 @@ def install_memory_store_compat_hooks(
     # ---- Apply patches ----
     _memory_store_module.locked_memory = locked_memory_fn
     _memory_store_module.erase_user_data = erase_user_data
-    _memory_store_module.filter_recent_records = filter_recent_records
+    _memory_store_module.filter_recent_records = (
+        filter_recent_records_fn or filter_recent_records
+    )
     _memory_store_module.build_kvs_search_hits = build_kvs_search_hits
     MemoryStore._parse_expires_at = staticmethod(_parse_expires_at_compat)
     MemoryStore._normalize_lifecycle = staticmethod(_normalize_lifecycle_compat)
