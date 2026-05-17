@@ -212,6 +212,22 @@ def test_assert_shim_warning_removes_legacy_sys_modules_entry_when_absent_before
             sys.modules.pop(legacy_module, None)
 
 
+def test_memory_package_prefers_canonical_memory_models_import() -> None:
+    memory_init = (CORE_DIR / "memory" / "__init__.py").read_text(encoding="utf-8")
+
+    canonical_import = "from . import models as memory_model_core"
+    legacy_import = (
+        "from veritas_os.core.models import memory_model "
+        "as memory_model_core"
+    )
+
+    assert canonical_import in memory_init
+    assert legacy_import in memory_init
+    assert memory_init.index(canonical_import) < memory_init.index(legacy_import)
+    assert "with warnings.catch_warnings():" in memory_init
+    assert 'warnings.simplefilter("ignore", DeprecationWarning)' in memory_init
+
+
 def _is_legacy_shim_source(text: str) -> bool:
     return (
         text.startswith('"""Backward-compatible module alias')
