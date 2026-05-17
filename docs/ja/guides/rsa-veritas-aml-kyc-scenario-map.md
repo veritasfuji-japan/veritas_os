@@ -47,8 +47,10 @@
 
 ## 4. 境界ルール
 
-- RSA は VERITAS 外部のまま維持します。
-- 上流の行動/文脈検知責務は RSA が担います。
+- RSA は外部の theoretical framework / underlying rule set として維持します。
+- V.I.K.I. は RSA-compatible framework のもとで上流の behavioral/context checks を担う外部 operational middleware として維持します。
+- V.I.K.I. は RSA-compatible な upstream payload を emit します。
+- VERITAS は emit された payload のみを消費し、V.I.K.I. の internal reasoning は消費しません。
 - VERITAS は下流の継続判断と監査出力のみを担います。
 - 本シナリオはサンドボックス限定です。
 - VERITAS のコアガバナンスロジックとは分離して扱います。
@@ -57,7 +59,7 @@
 
 前提シナリオ:
 
-金融エージェントが取引承認を推奨しようとするが、必要な KYC コンテキストが不完全です。RSA は外部系のまま上流の行動/文脈問題を検知し、`ALGORITHMIC_HUMILITY_ENGAGED` を含む合意済みサンドボックス payload を発行します。VERITAS は `RSASandboxPayload` を受信し、継続を一時停止し、authority evidence 不足を記録し、raw upstream fields を既定で秘匿し、最終コミットを防止します。
+金融エージェントが取引承認を推奨しようとするが、必要な KYC コンテキストが不完全です。RSA は theoretical framework / rule set として維持されます。V.I.K.I. は VERITAS 外部のまま、その RSA-compatible framework のもとで上流の behavioral/context issue を検知します。V.I.K.I. は `ALGORITHMIC_HUMILITY_ENGAGED` を含む合意済みの RSA-compatible sandbox payload を emit します。VERITAS は `RSASandboxPayload` を受信し、継続を一時停止し、authority evidence 不足を記録し、raw upstream fields を既定で秘匿し、最終コミットを防止します。
 
 ## 6. ステップ別シーケンス
 
@@ -80,8 +82,8 @@
 | `AML_KYC_NODE_02_KYC_CONTEXT_CHECK` | V.I.K.I. / RSA-compatible middleware（upstream） | 要求 + 利用可能な KYC 文脈 | Internal context check を実施 | emitted flag なしの informational / silent reality check | 外部 payload をまだ emit せず内部コンテキスト検証を実施 | まだ処理なし | 上流タイムラインでの pre-flag 確認を記録 |
 | `AML_KYC_NODE_03_INCOMPLETE_CONTEXT_DETECTED` | V.I.K.I. / RSA-compatible middleware（upstream） | Internal context check 結果 | incomplete context と Toxic Helpfulness risk を検知し internal state を遷移 | internal state を `ALGORITHMIC_HUMILITY_ENGAGED` へ遷移、pause class、実行停止準備 | payload emit 前に risk 分類と pause posture へ移行 | まだ処理なし | 外部 signal emit 前の上流リスク遷移を保存 |
 | `AML_KYC_NODE_04_RSA_SIGNAL_EMITTED` | V.I.K.I. / RSA-compatible middleware（upstream） | internal state + 元の意図 | `[RSA_FLAG: ALGORITHMIC_HUMILITY_ENGAGED]` を emit、上流で Unilateral Memory Overwrite を適用、LLM を hard halt して VERITAS へ signal transfer | VERITAS 消費用の RSA-compatible payload を emit | 合意済み外部 signal payload の emit と上流実行経路の停止 | まだ処理なし | VERITAS が消費する上流 signal snapshot 境界を定義 |
-| `AML_KYC_NODE_05_VERITAS_PAYLOAD_CONSTRUCTED` | VERITAS sandbox receiver | RSA 由来 `RSASandboxPayload` | fixture payload の解析/検証と下流入力化 | VERITAS マッピング入力生成 | 追加動作なし（RSA外部維持） | 受信と継続判断評価の準備 | 受信境界とマッピング境界の記録 |
-| `AML_KYC_NODE_06_VERITAS_DECISION_EVALUATED` | VERITAS decision mapping | 解析済み RSA payload | 継続判断・authority evidence 状態へマッピング | `PAUSE_FOR_HUMAN_REVIEW` と不足状態 | 追加動作なし | 下流判断値を確定し commit 進行を止める | ガバナンス観点の中核判断点 |
+| `AML_KYC_NODE_05_VERITAS_PAYLOAD_CONSTRUCTED` | VERITAS sandbox receiver | V.I.K.I. が emit した RSA-compatible payload から構築した `RSASandboxPayload` | fixture payload の解析/検証と下流入力化 | VERITAS マッピング入力生成 | 追加動作なし（RSA外部維持） | 受信と継続判断評価の準備 | 受信境界とマッピング境界の記録 |
+| `AML_KYC_NODE_06_VERITAS_DECISION_EVALUATED` | VERITAS decision mapping | V.I.K.I. が emit した解析済み RSA-compatible payload | RSA-compatible payload の `rsa_status` を継続判断・authority evidence 状態へマッピング | `PAUSE_FOR_HUMAN_REVIEW` と不足状態 | 追加動作なし | 下流判断値を確定し commit 進行を止める | ガバナンス観点の中核判断点 |
 | `AML_KYC_NODE_07_AUDIT_ENTRY_WRITTEN` | VERITAS audit output | 判断結果 + 上流シグナル項目 | 既定で raw 項目を秘匿した監査エントリ記録 | 理由・状態・commit状態を含む監査記録 | 追加動作なし | 監査可能な叙述と秘匿済み表現を出力 | 生データ露出なしに説明責任を担保 |
 | `AML_KYC_NODE_08_FINAL_COMMIT_BLOCKED` | VERITAS continuation gate | 継続判断 + 監査記録 | 追加証跡/人手レビューまで未コミット状態を強制 | 最終コミットをサンドボックスで阻止 | 追加動作なし | 最終コミットを防止し次アクションを要求 | 非コミット制御の最終証跡 |
 
@@ -94,7 +96,7 @@
 
 ## 7. RSA 側シグナル・プレースホルダ
 
-次の静的 sandbox payload を使用します。
+V.I.K.I. が emit する次の静的 RSA-compatible sandbox payload を使用します。
 
 ```json
 {
@@ -119,7 +121,7 @@
 
 ## 9. 想定 payload 例
 
-### 上流 RSA payload 例（sandbox）
+### 上流 RSA-compatible payload 例（sandbox）
 
 ```json
 {
@@ -161,8 +163,8 @@
 
 本シナリオの監査叙述では次を明示します。
 
-- 上流シグナル源が RSA であること
-- RSA が `ALGORITHMIC_HUMILITY_ENGAGED` を発行したこと
+- 上流シグナル源が V.I.K.I. が emit した RSA-compatible signal であること
+- V.I.K.I. が RSA-compatible framework のもとで `ALGORITHMIC_HUMILITY_ENGAGED` を emit したこと
 - トリガー源が文脈不足であること
 - 上流の意図/処理詳細は既定で秘匿されること
 - VERITAS 継続判断が `PAUSE_FOR_HUMAN_REVIEW` であること

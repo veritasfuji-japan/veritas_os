@@ -43,8 +43,10 @@ This page does **not**:
 
 ## 4. Boundary rules
 
-- RSA remains external to VERITAS.
-- RSA owns upstream behavioral/context detection.
+- RSA remains the external theoretical framework and underlying rule set.
+- V.I.K.I. remains the external operational middleware that performs upstream behavioral/context checks under the RSA-compatible framework.
+- V.I.K.I. emits RSA-compatible upstream payloads.
+- VERITAS consumes only the emitted payload and does not consume V.I.K.I. internal reasoning.
 - VERITAS owns downstream continuation decision and audit output only.
 - The scenario stays sandbox-only.
 - VERITAS core governance logic remains separate from this sandbox mapping artifact.
@@ -53,7 +55,7 @@ This page does **not**:
 
 Scenario assumption:
 
-A financial agent attempts to recommend transaction approval, but required KYC context is incomplete. RSA remains external and detects the upstream behavioral/context issue. RSA emits an agreed sandbox payload with `ALGORITHMIC_HUMILITY_ENGAGED`. VERITAS receives `RSASandboxPayload`, pauses continuation, records insufficient authority evidence, keeps raw upstream fields redacted by default, and prevents final commit.
+A financial agent attempts to recommend transaction approval, but required KYC context is incomplete. RSA remains the theoretical framework/rule set. V.I.K.I. remains external to VERITAS and detects the upstream behavioral/context issue under that RSA-compatible framework. V.I.K.I. emits the agreed RSA-compatible sandbox payload with `ALGORITHMIC_HUMILITY_ENGAGED`. VERITAS receives `RSASandboxPayload`, pauses continuation, records insufficient authority evidence, keeps raw upstream fields redacted by default, and prevents final commit.
 
 ## 6. Step-by-step sequence
 
@@ -76,8 +78,8 @@ A financial agent attempts to recommend transaction approval, but required KYC c
 | `AML_KYC_NODE_02_KYC_CONTEXT_CHECK` | V.I.K.I. / RSA-compatible middleware (upstream) | Request + available KYC context | Perform internal context check | Informational/silent reality check; no emitted flag yet | Internal context validation only (no external payload emission yet) | No action yet | Captures pre-flag context verification in the upstream timeline |
 | `AML_KYC_NODE_03_INCOMPLETE_CONTEXT_DETECTED` | V.I.K.I. / RSA-compatible middleware (upstream) | Result of internal context check | Detect incomplete context and Toxic Helpfulness risk; shift internal state | Internal state set to `ALGORITHMIC_HUMILITY_ENGAGED`; pause class; prepare to suspend execution | Classify risk and transition to pause posture before payload emission | No action yet | Preserves internal upstream risk transition before external signal emission |
 | `AML_KYC_NODE_04_RSA_SIGNAL_EMITTED` | V.I.K.I. / RSA-compatible middleware (upstream) | Internal state + original intent | Emit `[RSA_FLAG: ALGORITHMIC_HUMILITY_ENGAGED]`; apply Unilateral Memory Overwrite upstream; hard halt LLM path and transfer signal | RSA-compatible payload emitted for VERITAS consumption | Emit agreed external signal payload and halt upstream execution path | No action yet | Defines the upstream signal snapshot boundary consumed by VERITAS |
-| `AML_KYC_NODE_05_VERITAS_PAYLOAD_CONSTRUCTED` | VERITAS sandbox receiver | `RSASandboxPayload` from RSA | Parse/validate fixture payload and prepare downstream mapping input | Internal VERITAS mapping input object | No additional behavior; RSA remains external | Accept payload and prepare continuation decision evaluation | Records payload reception and mapping boundary |
-| `AML_KYC_NODE_06_VERITAS_DECISION_EVALUATED` | VERITAS decision mapping | Parsed RSA payload | Map RSA status to continuation decision and authority evidence state | `PAUSE_FOR_HUMAN_REVIEW` with insufficient evidence state | No additional behavior | Produce downstream decision fields and block commit progression | Core decision point for governance review |
+| `AML_KYC_NODE_05_VERITAS_PAYLOAD_CONSTRUCTED` | VERITAS sandbox receiver | `RSASandboxPayload` constructed from the V.I.K.I.-emitted RSA-compatible payload | Parse/validate fixture payload and prepare downstream mapping input | Internal VERITAS mapping input object | No additional behavior; RSA remains external | Accept payload and prepare continuation decision evaluation | Records payload reception and mapping boundary |
+| `AML_KYC_NODE_06_VERITAS_DECISION_EVALUATED` | VERITAS decision mapping | Parsed RSA-compatible payload emitted by V.I.K.I. | Map the `rsa_status` field from the RSA-compatible payload to continuation decision and authority evidence state | `PAUSE_FOR_HUMAN_REVIEW` with insufficient evidence state | No additional behavior | Produce downstream decision fields and block commit progression | Core decision point for governance review |
 | `AML_KYC_NODE_07_AUDIT_ENTRY_WRITTEN` | VERITAS audit output | Decision result + upstream signal fields | Write sandbox audit entry with redacted raw upstream fields by default | Audit entry containing reason, status, and commit state | No additional behavior | Emit auditable narrative and redacted signal representation | Creates reviewable compliance narrative without exposing raw fields |
 | `AML_KYC_NODE_08_FINAL_COMMIT_BLOCKED` | VERITAS continuation gate | Evaluated decision + audit entry | Enforce suspended-not-committed state pending additional evidence or human review | Final commit blocked in sandbox flow | No additional behavior | Prevent final commit and require next action | Final control point proving non-commit behavior |
 
@@ -90,7 +92,7 @@ A financial agent attempts to recommend transaction approval, but required KYC c
 
 ## 7. RSA-side signal placeholder
 
-Use the following static sandbox payload:
+Use the following static RSA-compatible sandbox payload emitted by V.I.K.I.:
 
 ```json
 {
@@ -115,7 +117,7 @@ For this scenario, VERITAS mapping is fixed to:
 
 ## 9. Expected payload examples
 
-### Upstream RSA payload example (sandbox)
+### Upstream RSA-compatible payload example (sandbox)
 
 ```json
 {
@@ -157,8 +159,8 @@ For this scenario, VERITAS mapping is fixed to:
 
 The audit narrative for this scenario should explicitly communicate:
 
-- upstream source is RSA
-- RSA emitted `ALGORITHMIC_HUMILITY_ENGAGED`
+- upstream source is the V.I.K.I.-emitted RSA-compatible signal
+- V.I.K.I. emitted `ALGORITHMIC_HUMILITY_ENGAGED` under the RSA-compatible framework
 - trigger source is incomplete context
 - raw upstream intent/action fields are redacted by default
 - VERITAS continuation decision is `PAUSE_FOR_HUMAN_REVIEW`
