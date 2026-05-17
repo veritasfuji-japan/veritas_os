@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -35,7 +36,9 @@ predict_gate_label = _default_predict_gate_label
 
 def _mem_model_path() -> str:
     try:
-        from veritas_os.core.models import memory_model as mm
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from veritas_os.core.models import memory_model as mm
         for k in ("MODEL_FILE", "MODEL_PATH"):
             if hasattr(mm, k):
                 return str(getattr(mm, k))
@@ -54,15 +57,15 @@ def _load_memory_model() -> Tuple[Any, Any, Any]:
     _pgl_fn = _default_predict_gate_label
 
     try:
-        from veritas_os.core.models import memory_model as memory_model_core
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from veritas_os.core.models import memory_model as memory_model_core
 
         _mem_vec = getattr(memory_model_core, "MEM_VEC", None)
         _mem_clf = getattr(memory_model_core, "MEM_CLF", None)
 
-        if hasattr(memory_model_core, "predict_gate_label"):
-            from veritas_os.core.models.memory_model import (
-                predict_gate_label as _pgl_raw,
-            )
+        _pgl_raw = getattr(memory_model_core, "predict_gate_label", None)
+        if callable(_pgl_raw):
 
             def _safe_pgl(text: str) -> Dict[str, float]:
                 try:
