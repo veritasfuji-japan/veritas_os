@@ -101,9 +101,6 @@ def test_shim_deprecation_helper_message_contract() -> None:
 
 
 
-
-
-
 def test_nested_memory_model_shim_emits_deprecation_warning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -112,6 +109,7 @@ def test_nested_memory_model_shim_emits_deprecation_warning(
         "veritas_os.core.models.memory_model",
         "veritas_os.core.memory.models",
     )
+
 
 def test_pipeline_compat_shim_preserves_pipeline_logger_name(
     monkeypatch: pytest.MonkeyPatch,
@@ -213,6 +211,7 @@ def test_assert_shim_warning_removes_legacy_sys_modules_entry_when_absent_before
         else:
             sys.modules.pop(legacy_module, None)
 
+
 def _is_legacy_shim_source(text: str) -> bool:
     return (
         text.startswith('"""Backward-compatible module alias')
@@ -235,7 +234,7 @@ def test_all_legacy_core_shims_call_deprecation_helper() -> None:
         text = path.read_text(encoding="utf-8")
         if not _is_legacy_shim_source(text):
             continue
-        if "warn_legacy_core_shim" not in text:
+        if "_warn_legacy_core_shim(" not in text and "warn_legacy_core_shim(" not in text:
             missing.append(path.relative_to(ROOT).as_posix())
 
     assert not missing, (
