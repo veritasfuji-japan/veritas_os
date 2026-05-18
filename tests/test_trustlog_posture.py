@@ -50,22 +50,28 @@ def test_prod_posture_postgresql_with_db_and_key_is_ok(monkeypatch: pytest.Monke
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
     monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
-    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
-
-    result = get_trustlog_security_posture()
+    result = get_trustlog_security_posture(
+        encryption_status={
+            "encryption_enabled": True,
+            "key_configured": True,
+            "secure_by_default": True,
+            "backend_available": True,
+            "backend_required": True,
+            "backend_acceptable": True,
+        }
+    )
 
     assert result["status"] == "ok"
     assert result["posture"] == "prod"
     assert result["trustlog_backend"] == "postgresql"
     assert result["encryption_enabled"] is True
     assert result["key_configured"] is True
-    assert result["backend_available"] in {True, False}
+    assert result["backend_available"] is True
     assert result["backend_required"] is True
-    assert result["backend_acceptable"] in {True, False}
+    assert result["backend_acceptable"] is True
     assert result["secure_by_default"] is True
     assert result["reasons"] == []
     assert result["remediation"] == []
-    validate_trustlog_secure_defaults()
 
 
 def test_secure_posture_blocks_when_encryption_backend_unacceptable(

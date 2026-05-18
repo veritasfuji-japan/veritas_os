@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from scripts.security.check_trustlog_production_posture import main
 from veritas_os.security.trustlog_production_posture import check_trustlog_production_posture
 
@@ -420,3 +422,56 @@ def test_cli_main_returns_zero_in_production_fully_configured(monkeypatch) -> No
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/tmp/transparency.jsonl")
     assert main() == 0
+
+
+def test_production_posture_fails_when_encryption_backend_unacceptable(monkeypatch) -> None:
+    """Production posture checker must fail when backend_acceptable is false."""
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setattr(
+        posture_module,
+        "get_encryption_status",
+        lambda: {
+            "encryption_enabled": True,
+            "key_configured": True,
+            "backend_available": False,
+            "backend_required": True,
+            "backend_acceptable": False,
+        },
+    )
+
+    result = posture_module.check_trustlog_production_posture(_production_base_env())
+    assert result.passed is False
+    assert any("AES-256-GCM" in item for item in result.failures)
+
+
+def test_startup_validation_fails_when_encryption_backend_unacceptable(monkeypatch) -> None:
+    """Startup validation must fail-fast when production backend is unacceptable."""
+    import logging
+
+    import veritas_os.api.startup_health as startup_health
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dummy")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "dummy-kms-key")
+
+    monkeypatch.setattr(
+        posture_module,
+        "get_encryption_status",
+        lambda: {
+            "encryption_enabled": True,
+            "key_configured": True,
+            "backend_available": False,
+            "backend_required": True,
+            "backend_acceptable": False,
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="AES-256-GCM|backend|cryptography"):
+        startup_health.validate_trustlog_production_posture_on_startup(
+            logger=logging.getLogger(__name__)
+        )
