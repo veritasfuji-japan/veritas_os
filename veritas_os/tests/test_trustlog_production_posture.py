@@ -475,3 +475,60 @@ def test_startup_validation_fails_when_encryption_backend_unacceptable(monkeypat
         startup_health.validate_trustlog_production_posture_on_startup(
             logger=logging.getLogger(__name__)
         )
+
+
+def test_production_env_dict_enforces_backend_when_process_env_is_dev(monkeypatch) -> None:
+    """Explicit env mapping must drive backend requirement independent of process env."""
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setenv("VERITAS_ENV", "dev")
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
+
+    result = posture_module.check_trustlog_production_posture(_production_base_env())
+    assert result.passed is False
+    assert any("AES-256-GCM" in item for item in result.failures)
+
+
+def test_checker_returns_structured_failure_when_encryption_status_raises(
+    monkeypatch,
+) -> None:
+    """Encryption status exceptions must become sanitized structured failures."""
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", True)
+
+    def _raise_status_error():
+        raise RuntimeError("secret token abc /prod/foo")
+
+    monkeypatch.setattr(posture_module, "get_encryption_status", _raise_status_error)
+
+    result = posture_module.check_trustlog_production_posture(_production_base_env())
+    assert result.passed is False
+    assert any("status retrieval failed: RuntimeError" in item for item in result.failures)
+    assert not any("secret token" in item for item in result.failures)
+
+
+def test_startup_validation_fails_when_encryption_status_raises(monkeypatch) -> None:
+    """Startup validation must fail-fast with structured failure on status exceptions."""
+    import logging
+
+    import veritas_os.api.startup_health as startup_health
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dummy")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "dummy-kms-key")
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", True)
+
+    def _raise_status_error():
+        raise RuntimeError("secret token abc /prod/foo")
+
+    monkeypatch.setattr(posture_module, "get_encryption_status", _raise_status_error)
+
+    with pytest.raises(RuntimeError, match="status retrieval failed: RuntimeError"):
+        startup_health.validate_trustlog_production_posture_on_startup(
+            logger=logging.getLogger(__name__)
+        )

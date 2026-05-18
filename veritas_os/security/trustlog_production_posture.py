@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from os import environ
 from typing import Mapping
 
+import veritas_os.logging.encryption as encryption_module
 from veritas_os.logging.encryption import get_encryption_status
 from veritas_os.security.trustlog_backend_normalization import (
     normalize_trustlog_anchor_backend,
@@ -90,11 +91,26 @@ def check_trustlog_production_posture(
     if not (current_env.get("VERITAS_ENCRYPTION_KEY", "") or "").strip():
         failures.append("production TrustLog encryption requires VERITAS_ENCRYPTION_KEY")
     else:
-        encryption_status = get_encryption_status()
-        if not bool(encryption_status.get("backend_acceptable", True)):
+        backend_required = _is_production_mode(current_env)
+        backend_available = bool(getattr(encryption_module, "_USE_REAL_AES", False))
+        backend_acceptable = (not backend_required) or backend_available
+        if not backend_acceptable:
             failures.append(
                 "TrustLog encryption backend is not acceptable for production posture; "
                 "cryptography-backed AES-256-GCM is required."
+            )
+        try:
+            encryption_status = get_encryption_status()
+            raw_error_type = encryption_status.get("error_type")
+            if isinstance(raw_error_type, str) and raw_error_type.strip():
+                failures.append(
+                    "TrustLog encryption status retrieval failed: "
+                    f"{raw_error_type.strip()}"
+                )
+        except Exception as exc:  # noqa: BLE001
+            failures.append(
+                "TrustLog encryption status retrieval failed: "
+                f"{exc.__class__.__name__}"
             )
 
     signer_backend = normalize_trustlog_signer_backend(
