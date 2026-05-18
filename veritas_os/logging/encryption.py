@@ -222,7 +222,13 @@ class EncryptionBackendUnavailable(RuntimeError):
 
 
 def _strict_encryption_backend_required() -> bool:
-    """Return whether active posture requires cryptography-backed AES-GCM."""
+    """Return whether current runtime must require cryptography-backed AES-GCM."""
+    env_posture = (os.getenv("VERITAS_ENV") or "").strip().lower()
+    enforce_production = _is_truthy(
+        os.getenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "")
+    )
+    if enforce_production or env_posture in {"production", "prod"}:
+        return True
     posture = resolve_posture()
     return posture in {PostureLevel.SECURE, PostureLevel.PROD}
 

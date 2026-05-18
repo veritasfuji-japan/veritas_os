@@ -306,3 +306,27 @@ class TestStrictPostureEncryptionBackend:
         assert "production" in message or "prod" in message
         assert "VERITAS_POSTURE" in message
         assert "VERITAS_ENV" in message
+
+    def test_require_production_flag_enforces_strict_backend_in_dev_posture(
+        self,
+        monkeypatch,
+    ):
+        """Production posture enforcement flag must force strict backend in DEV posture."""
+        import veritas_os.logging.encryption as enc
+        from veritas_os.logging.encryption import (
+            EncryptionBackendUnavailable,
+            decrypt,
+            encrypt,
+            generate_key,
+        )
+
+        monkeypatch.setenv("VERITAS_POSTURE", "dev")
+        monkeypatch.setenv("VERITAS_ENV", "dev")
+        monkeypatch.setenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "1")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        with pytest.raises(EncryptionBackendUnavailable):
+            encrypt("strict due to enforcement flag")
+        with pytest.raises(EncryptionBackendUnavailable):
+            decrypt("ENC:hmac-ctr:Zm9v")

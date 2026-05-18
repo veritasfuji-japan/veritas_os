@@ -428,6 +428,7 @@ def test_production_posture_fails_when_encryption_backend_unacceptable(monkeypat
     """Production posture checker must fail when backend_acceptable is false."""
     import veritas_os.security.trustlog_production_posture as posture_module
 
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
     monkeypatch.setattr(
         posture_module,
         "get_encryption_status",
