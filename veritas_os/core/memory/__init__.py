@@ -463,6 +463,21 @@ install_memory_store_compat_hooks(
 )
 
 
+def _recent_via_memory_facade(
+    self: MemoryStore,
+    user_id: str,
+    limit: int = 20,
+    contains: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Route MemoryStore.recent through memory facade globals for monkeypatch compatibility."""
+    records = self.list_all(user_id)
+    helper = globals()["filter_recent_records"]
+    return helper(records, limit=limit, contains=contains)
+
+
+MemoryStore.recent = _recent_via_memory_facade
+
+
 # ============================
 # Evidence read for /v1/decide
 # ============================
