@@ -65,6 +65,7 @@ def install_memory_store_compat_hooks(
     locked_memory_fn: Callable[..., Any],
     get_mem_vec_fn: Callable[[], Any],
     memory_module: Any,
+    filter_recent_records_fn: Optional[Callable[..., Any]] = None,
 ) -> None:
     """Patch ``MemoryStore`` methods to route through importable symbols.
 
@@ -138,17 +139,17 @@ def install_memory_store_compat_hooks(
         limit: int = 20,
         contains: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        return recent_records_compat(
-            store=self,
-            helper_module=_memory_store_module,
-            original_helper=_ORIGINAL_FILTER_RECENT_RECORDS,
-            fallback_helper=getattr(
-                memory_module, "filter_recent_records", filter_recent_records,
-            ),
-            user_id=user_id,
-            contains=contains,
-            limit=limit,
-        )
+        records = self.list_all(user_id)
+
+        import sys
+
+        facade = sys.modules.get("veritas_os.core.memory")
+        if facade is not None:
+            helper = getattr(facade, "filter_recent_records", None)
+            if callable(helper):
+                return helper(records, limit=limit, contains=contains)
+
+        return filter_recent_records(records, limit=limit, contains=contains)
 
     def _simple_score_compat(self: MemoryStore, query: str, text: str) -> float:
         return _simple_score_impl(query, text)
@@ -217,7 +218,9 @@ def install_memory_store_compat_hooks(
     # ---- Apply patches ----
     _memory_store_module.locked_memory = locked_memory_fn
     _memory_store_module.erase_user_data = erase_user_data
-    _memory_store_module.filter_recent_records = filter_recent_records
+    _memory_store_module.filter_recent_records = (
+        filter_recent_records_fn or filter_recent_records
+    )
     _memory_store_module.build_kvs_search_hits = build_kvs_search_hits
     MemoryStore._parse_expires_at = staticmethod(_parse_expires_at_compat)
     MemoryStore._normalize_lifecycle = staticmethod(_normalize_lifecycle_compat)

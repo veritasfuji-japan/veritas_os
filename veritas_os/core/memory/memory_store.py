@@ -22,6 +22,7 @@ import logging
 
 from .memory_storage import locked_memory
 from .memory_summary_helpers import build_planner_summary
+from .memory_store_helpers import filter_recent_records
 from .memory_compliance import (
     erase_user_data,
     is_record_legal_hold,
@@ -380,46 +381,16 @@ class MemoryStore:
     ) -> List[Dict[str, Any]]:
         """最近のレコードを取得"""
         items = self.list_all(user_id)
-        items.sort(key=lambda r: r.get("ts", 0), reverse=True)
 
-        if contains:
-            s = contains.strip()
-            filtered: List[Dict[str, Any]] = []
-            for r in items:
-                v = r.get("value")
-                if isinstance(v, dict):
-                    q = str(v.get("query") or v.get("text") or "")
-                else:
-                    q = str(v)
-                if s in q:
-                    filtered.append(r)
-            items = filtered
+        import sys
 
-        return items[:limit]
+        memory_module = sys.modules.get("veritas_os.core.memory")
+        if memory_module is not None:
+            helper = getattr(memory_module, "filter_recent_records", None)
+            if callable(helper):
+                return helper(items, limit=limit, contains=contains)
 
-    def _simple_score(self, query: str, text: str) -> float:
-        """シンプルな類似度スコア計算"""
-        q = (query or "").strip().lower()
-        t = (text or "").strip().lower()
-        if not q or not t:
-            return 0.0
-
-        # 部分一致
-        if q in t or t in q:
-            base = 0.5
-        else:
-            base = 0.0
-
-        # トークン一致
-        q_tokens = set(q.split())
-        t_tokens = set(t.split())
-        if q_tokens and t_tokens:
-            inter = q_tokens & t_tokens
-            token_score = len(inter) / max(len(q_tokens), 1)
-        else:
-            token_score = 0.0
-
-        return min(1.0, base + 0.5 * token_score)
+        return filter_recent_records(items, limit=limit, contains=contains)
 
     def search(
         self,
