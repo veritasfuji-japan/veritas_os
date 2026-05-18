@@ -340,6 +340,42 @@ def test_get_trustlog_security_posture_dev_error_type_is_degraded(
     assert result["reasons"]
 
 
+def test_dev_posture_blocks_when_backend_required_and_unacceptable() -> None:
+    """DEV posture must still block when encryption status marks backend as required."""
+    result = get_trustlog_security_posture(
+        posture="dev",
+        encryption_status={
+            "encryption_enabled": True,
+            "key_configured": True,
+            "secure_by_default": True,
+            "backend_available": False,
+            "backend_required": True,
+            "backend_acceptable": False,
+        },
+    )
+
+    assert result["status"] == "blocked"
+    assert any("AES-256-GCM" in reason for reason in result["reasons"])
+
+
+def test_dev_posture_not_blocked_when_backend_not_required() -> None:
+    """DEV posture should remain non-blocking when backend is not required."""
+    result = get_trustlog_security_posture(
+        posture="dev",
+        encryption_status={
+            "encryption_enabled": True,
+            "key_configured": True,
+            "secure_by_default": True,
+            "backend_available": False,
+            "backend_required": False,
+            "backend_acceptable": True,
+        },
+    )
+
+    assert result["status"] == "ok"
+    assert result["reasons"] == []
+
+
 def test_security_posture_snapshot_fallback_key_provider_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
