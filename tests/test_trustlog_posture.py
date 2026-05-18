@@ -54,17 +54,50 @@ def test_prod_posture_postgresql_with_db_and_key_is_ok(monkeypatch: pytest.Monke
 
     result = get_trustlog_security_posture()
 
-    assert result == {
-        "status": "ok",
-        "posture": "prod",
-        "trustlog_backend": "postgresql",
-        "encryption_enabled": True,
-        "key_configured": True,
-        "secure_by_default": True,
-        "reasons": [],
-        "remediation": [],
-    }
+    assert result["status"] == "ok"
+    assert result["posture"] == "prod"
+    assert result["trustlog_backend"] == "postgresql"
+    assert result["encryption_enabled"] is True
+    assert result["key_configured"] is True
+    assert result["backend_available"] in {True, False}
+    assert result["backend_required"] is True
+    assert result["backend_acceptable"] in {True, False}
+    assert result["secure_by_default"] is True
+    assert result["reasons"] == []
+    assert result["remediation"] == []
     validate_trustlog_secure_defaults()
+
+
+def test_secure_posture_blocks_when_encryption_backend_unacceptable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Strict posture must block when backend_acceptable is false."""
+    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+
+    import veritas_os.security.trustlog_posture as posture_module
+
+    monkeypatch.setattr(
+        posture_module,
+        "get_encryption_status",
+        lambda: {
+            "encryption_enabled": True,
+            "key_configured": True,
+            "secure_by_default": True,
+            "backend_available": False,
+            "backend_required": True,
+            "backend_acceptable": False,
+        },
+    )
+
+    result = posture_module.get_trustlog_security_posture()
+    assert result["status"] == "blocked"
+    assert result["backend_acceptable"] is False
+    assert any("backend" in reason.lower() for reason in result["reasons"])
+
+    with pytest.raises(RuntimeError, match="TrustLog secure posture violation"):
+        posture_module.validate_trustlog_secure_defaults()
 
 
 def test_secure_posture_missing_database_url_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -284,3 +284,25 @@ class TestStrictPostureEncryptionBackend:
         assert status["backend_available"] is False
         assert status["backend_required"] is True
         assert status["backend_acceptable"] is False
+
+    def test_strict_backend_error_mentions_resolved_posture_sources(self, monkeypatch):
+        """Strict backend error should mention resolved posture and env sources."""
+        import veritas_os.logging.encryption as enc
+        from veritas_os.logging.encryption import (
+            EncryptionBackendUnavailable,
+            encrypt,
+            generate_key,
+        )
+
+        monkeypatch.delenv("VERITAS_POSTURE", raising=False)
+        monkeypatch.setenv("VERITAS_ENV", "production")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        with pytest.raises(EncryptionBackendUnavailable) as excinfo:
+            encrypt("strict")
+
+        message = str(excinfo.value)
+        assert "production" in message or "prod" in message
+        assert "VERITAS_POSTURE" in message
+        assert "VERITAS_ENV" in message

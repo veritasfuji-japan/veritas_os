@@ -230,8 +230,11 @@ def _strict_encryption_backend_required() -> bool:
 def _require_strong_encryption_backend() -> None:
     """Fail fast when strict posture requires AES-GCM but backend is unavailable."""
     if _strict_encryption_backend_required() and not _USE_REAL_AES:
+        posture = resolve_posture()
         raise EncryptionBackendUnavailable(
-            "VERITAS_POSTURE=secure/prod requires cryptography-backed AES-256-GCM. "
+            "Resolved VERITAS posture "
+            f"{posture.value!r} requires cryptography-backed AES-256-GCM. "
+            "This may be set via VERITAS_POSTURE or inferred from VERITAS_ENV. "
             "Install veritas-os[signing] or include cryptography in the deployment image."
         )
 

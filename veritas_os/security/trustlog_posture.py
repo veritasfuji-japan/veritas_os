@@ -47,6 +47,9 @@ def get_trustlog_security_posture(
             encryption_error_type = raw_error_type.strip()
     encryption_enabled = bool(encryption.get("encryption_enabled", False))
     key_configured = bool(encryption.get("key_configured", False))
+    backend_available = bool(encryption.get("backend_available", False))
+    backend_required = bool(encryption.get("backend_required", False))
+    backend_acceptable = bool(encryption.get("backend_acceptable", True))
     db_url_configured = bool((os.getenv("VERITAS_DATABASE_URL") or "").strip())
 
     reasons: list[str] = []
@@ -78,6 +81,14 @@ def get_trustlog_security_posture(
             reasons.append("TrustLog encryption key is not configured.")
             remediation.append(
                 "Set VERITAS_ENCRYPTION_KEY or configure a supported KMS/Vault key provider."
+            )
+        if not backend_acceptable:
+            reasons.append(
+                "TrustLog encryption backend is not acceptable for strict posture; "
+                "cryptography-backed AES-256-GCM is required."
+            )
+            remediation.append(
+                "Install veritas-os[signing] or include cryptography in the deployment image."
             )
     elif posture_level == "staging":
         if backend != "postgresql":
@@ -111,6 +122,9 @@ def get_trustlog_security_posture(
         "trustlog_backend": backend,
         "encryption_enabled": encryption_enabled,
         "key_configured": key_configured,
+        "backend_available": backend_available,
+        "backend_required": backend_required,
+        "backend_acceptable": backend_acceptable,
         "secure_by_default": bool(encryption.get("secure_by_default", True)),
         "reasons": reasons,
         "remediation": remediation,
@@ -125,7 +139,8 @@ def validate_trustlog_secure_defaults() -> None:
             "TrustLog secure posture violation: "
             f"VERITAS_POSTURE={posture_info['posture']} requires "
             "VERITAS_TRUSTLOG_BACKEND=postgresql, VERITAS_DATABASE_URL, "
-            "and configured encryption key. Set VERITAS_DATABASE_URL and "
-            "VERITAS_ENCRYPTION_KEY or a supported KMS/Vault provider. "
+            "configured encryption key, and acceptable encryption backend. "
+            "Set VERITAS_DATABASE_URL, VERITAS_ENCRYPTION_KEY or a supported "
+            "KMS/Vault provider, and ensure cryptography-backed AES-256-GCM is available. "
             f"Reasons: {'; '.join(posture_info['reasons'])}"
         )
