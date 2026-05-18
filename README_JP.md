@@ -718,7 +718,7 @@ make db-upgrade
 - **JSONL → PostgreSQLインポート** — 冪等な `veritas-migrate` CLI（dry-run、レジューム、インポート後ハッシュチェーン検証）
 - **競合テスト** — `test_pg_trustlog_contention.py` に25テスト、並行/バースト/障害シナリオでチェーン完全性を検証
 - **可観測性** — `/v1/metrics` でプール使用率、ヘルス、`pg_stat_activity`（長時間クエリ、idle-in-tx、アドバイザリロック待機者）を公開。`test_pg_metrics.py` に28テスト
-- **リカバリドリル** — `scripts/drill_postgres_recovery.sh` によるバックアップ → リストア → 検証の自動化。`test_drill_postgres_recovery.py` に31テスト
+- **リカバリドリル** — `scripts/drill_postgres_recovery.sh` によるバックアップ → リストア → 検証の自動化。`test_drill_postgres_recovery.py` に21テスト
 
 ### 既存データの移行（JSONL → PostgreSQL）
 
@@ -782,7 +782,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 
 | レイヤー | 技術 |
 |---|---|
-| フレームワーク | Next.js 16.2.3（App Router） |
+| フレームワーク | Next.js 16.2.6（App Router） |
 | 言語 | TypeScript 5.7 |
 | スタイリング | Tailwind CSS 3.4 + CVA（class-variance-authority） |
 | アイコン | Lucide React |
@@ -1557,7 +1557,11 @@ make validate
 | `VERITAS_DB_POOL_MIN_SIZE` | `2` | PostgreSQLコネクションプール最小サイズ |
 | `VERITAS_DB_POOL_MAX_SIZE` | `10` | PostgreSQLコネクションプール最大サイズ |
 | `VERITAS_DB_SSLMODE` | `prefer` | PostgreSQL SSLモード（`prefer`, `require`, `verify-full`） |
-| `VERITAS_DB_AUTO_MIGRATE` | `false`（ローカル）/ `true`（Docker） | 起動時にAlembicマイグレーションを自動実行 |
+
+> **スキーママイグレーション**: PostgreSQL スキーマはバックエンド起動時に**自動適用されません**。
+> `docker compose up` 後（およびローカル開発時）に `make db-upgrade` を一度実行して、
+> Alembic 経由でスキーマを作成/更新してください。マイグレーションはどの環境でも
+> 独立したデプロイ手順として扱います。
 
 ### ネットワーク & CORS
 
@@ -1711,7 +1715,7 @@ make validate
 - ✅ Policy-as-Code: YAML/JSON → IR → コンパイル済みルール（Ed25519署名バンドル、テスト自動生成）
 - ✅ マルチプロバイダLLM: OpenAI（production）、Anthropic/Google（planned）、Ollama/OpenRouter（experimental）
 - ✅ PostgreSQLストレージバックエンド: MemoryOS・TrustLog用プラガブルバックエンド（Alembicマイグレーション、アドバイザリロックチェーン直列化、195+パリティテスト）。JSONL → PostgreSQLインポート手順、スモーク/リリースバリデーション統合、レガシーパスクリーンアップ含む。[`docs/ja/operations/postgresql-production-guide.md`](docs/ja/operations/postgresql-production-guide.md) 参照。
-- ✅ PostgreSQL本番ハードニング: 競合テスト（25テスト）、プール/アクティビティメトリクス（28テスト）、バックアップ/リストア/リカバリドリルスクリプトとテスト（31テスト）。[`docs/ja/operations/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) 参照。
+- ✅ PostgreSQL本番ハードニング: 競合テスト（25+テスト）、プール/アクティビティメトリクス（28+テスト）、バックアップ/リストア/リカバリドリルスクリプトとテスト（21テスト）。[`docs/ja/operations/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) 参照。
 - ✅ Continuation Runtime（Phase-1）: チェーンレベル継続観測レイヤー、スナップショット/レシート/エンフォースメントイベントアーキテクチャ。`docs/architecture/continuation_runtime_adr.md` 参照。
 - ✅ ガバナンス成果物署名: Ed25519署名ポリシーバンドル、ランタイム署名検証、意思決定出力へのガバナンスID。[`docs/ja/governance/governance-artifact-lifecycle.md`](docs/ja/governance/governance-artifact-lifecycle.md) 参照。
 - ✅ S3 Object Lock TrustLogミラー: WORM準拠ミラーバックエンド（保持、legal hold、リモート検証）。[`docs/ja/operations/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) 参照。

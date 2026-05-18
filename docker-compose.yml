@@ -53,7 +53,8 @@ services:
       VERITAS_MEMORY_BACKEND: ${VERITAS_MEMORY_BACKEND:-postgresql}
       VERITAS_TRUSTLOG_BACKEND: ${VERITAS_TRUSTLOG_BACKEND:-postgresql}
       VERITAS_DATABASE_URL: ${VERITAS_DATABASE_URL:?Set VERITAS_DATABASE_URL in .env before running docker compose}
-      VERITAS_DB_AUTO_MIGRATE: ${VERITAS_DB_AUTO_MIGRATE:-true}
+      # NOTE: Alembic migrations are NOT auto-run on backend startup.
+      # Run `make db-upgrade` once after `docker compose up` to create/upgrade schema.
     depends_on:
       postgres:
         condition: service_healthy

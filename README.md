@@ -880,7 +880,7 @@ for the full procedure including rollback.
 - **JSONL → PostgreSQL import** — idempotent `veritas-migrate` CLI with dry-run, resume, and post-import hash-chain verification.
 - **Contention testing** — 25 tests in `test_pg_trustlog_contention.py` verify chain integrity under concurrent/burst/failure scenarios.
 - **Observability** — `/v1/metrics` exposes pool utilization, health, and `pg_stat_activity` (long-running queries, idle-in-tx, advisory lock waiters). 28 tests in `test_pg_metrics.py`.
-- **Recovery drill** — `scripts/drill_postgres_recovery.sh` automates backup → restore → verify cycle. 31 tests in `test_drill_postgres_recovery.py`.
+- **Recovery drill** — `scripts/drill_postgres_recovery.sh` automates backup → restore → verify cycle. 21 tests in `test_drill_postgres_recovery.py`.
 
 ### Production deployment
 
@@ -913,7 +913,7 @@ The frontend is a **Next.js 16** (React 18, TypeScript) dashboard that provides 
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16.2.3 (App Router) |
+| Framework | Next.js 16.2.6 (App Router) |
 | Language | TypeScript 5.7 |
 | Styling | Tailwind CSS 3.4 + CVA (class-variance-authority) |
 | Icons | Lucide React |
@@ -1725,7 +1725,11 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `VERITAS_DB_POOL_MIN_SIZE` | `2` | PostgreSQL connection pool minimum size |
 | `VERITAS_DB_POOL_MAX_SIZE` | `10` | PostgreSQL connection pool maximum size |
 | `VERITAS_DB_SSLMODE` | `prefer` | PostgreSQL SSL mode (`prefer`, `require`, `verify-full`) |
-| `VERITAS_DB_AUTO_MIGRATE` | `false` (local) / `true` (Docker) | Auto-run Alembic migrations on startup |
+
+> **Schema migrations**: PostgreSQL schema is **not** auto-applied on backend startup.
+> After `docker compose up` (or for local dev), run `make db-upgrade` once to create
+> or upgrade the schema via Alembic. Treat migrations as a discrete deployment step
+> in every environment.
 
 ### Network & CORS
 
@@ -1898,7 +1902,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
 - ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/en/operations/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md).
-- ✅ PostgreSQL production hardening: contention tests (25 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (31 tests). See [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
+- ✅ PostgreSQL production hardening: contention tests (25+ tests), pool/activity metrics (28+ tests), backup/restore/recovery drill scripts and tests (21 tests). See [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
 - ✅ Continuation Runtime (Phase-1): chain-level continuation observation layer with snapshot/receipt/enforcement event architecture. See `docs/architecture/continuation_runtime_adr.md`.
 - ✅ Governance artifact signing: Ed25519-signed policy bundles, runtime signature verification, governance identity in decision outputs. See [`docs/en/governance/governance-artifact-lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md).
 - ✅ S3 Object Lock TrustLog mirror: WORM-compliant mirror backend with retention, legal hold, and remote verification. See [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
