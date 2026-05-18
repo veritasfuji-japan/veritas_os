@@ -36,6 +36,7 @@ Passing this checklist is not sufficient by itself and does not certify complian
 | TrustLog backend | `VERITAS_TRUSTLOG_BACKEND=postgresql` | Run `make check-trustlog-production-posture` | No failure for backend | `jsonl` is dev/demo only |
 | Database URL | `VERITAS_DATABASE_URL` or `DATABASE_URL` set | Run checker / inspect secret injection | No database URL failure | Do not print secrets in logs |
 | Encryption key | `VERITAS_ENCRYPTION_KEY` set | Run checker / inspect secret source | No encryption key failure | Use external secret manager in production |
+| Encryption backend hardening | In `secure`/`prod`, `cryptography` backend for AES-256-GCM is available | Validate deployment image / run startup checks | No runtime `EncryptionBackendUnavailable` during TrustLog encrypt/decrypt | Install `veritas-os[signing]` or include `cryptography`; `dev`/`staging` may use HMAC-CTR fallback for compatibility |
 | Managed signer | `VERITAS_TRUSTLOG_SIGNER_BACKEND` resolves to `aws_kms` | Run checker | No signer backend failure | `aws_kms_ed25519` is accepted; `file`/`file_ed25519` fail |
 | KMS key id | `VERITAS_TRUSTLOG_KMS_KEY_ID` set when signer resolves to `aws_kms` | Run checker / inspect KMS env | No `KMS_KEY_ID` failure | Checker does not call KMS |
 | Break-glass override | `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` must not be relied on | Inspect env | Checker still fails file signer even if override is set | Production posture checker ignores the flag |

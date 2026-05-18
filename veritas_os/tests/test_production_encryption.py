@@ -204,3 +204,83 @@ class TestEncryptionEnabled:
         from veritas_os.logging.encryption import is_encryption_enabled
 
         assert is_encryption_enabled() is False
+
+
+@pytest.mark.production
+class TestStrictPostureEncryptionBackend:
+    """Verify strict posture backend requirements for TrustLog encryption."""
+
+    def test_encrypt_allows_hmac_ctr_fallback_in_dev_when_cryptography_unavailable(
+        self,
+        monkeypatch,
+    ):
+        """DEV posture keeps compatibility fallback when cryptography is unavailable."""
+        from veritas_os.logging.encryption import encrypt, generate_key
+        import veritas_os.logging.encryption as enc
+
+        monkeypatch.setenv("VERITAS_POSTURE", "dev")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        ciphertext = encrypt("dev compatible fallback")
+        assert ciphertext.startswith("ENC:hmac-ctr:")
+
+    @pytest.mark.parametrize("posture", ["secure", "prod"])
+    def test_encrypt_fails_in_strict_posture_when_cryptography_unavailable(
+        self,
+        monkeypatch,
+        posture,
+    ):
+        """SECURE/PROD must fail fast when AES-GCM backend is unavailable."""
+        import veritas_os.logging.encryption as enc
+        from veritas_os.logging.encryption import (
+            EncryptionBackendUnavailable,
+            encrypt,
+            generate_key,
+        )
+
+        monkeypatch.setenv("VERITAS_POSTURE", posture)
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        with pytest.raises(EncryptionBackendUnavailable):
+            encrypt("strict posture should fail fast")
+
+    @pytest.mark.parametrize("posture", ["secure", "prod"])
+    def test_decrypt_fails_in_strict_posture_when_cryptography_unavailable(
+        self,
+        monkeypatch,
+        posture,
+    ):
+        """SECURE/PROD decrypt path also fail-fast when backend is unavailable."""
+        import veritas_os.logging.encryption as enc
+        from veritas_os.logging.encryption import (
+            EncryptionBackendUnavailable,
+            decrypt,
+            generate_key,
+        )
+
+        monkeypatch.setenv("VERITAS_POSTURE", posture)
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        with pytest.raises(EncryptionBackendUnavailable):
+            decrypt("ENC:hmac-ctr:Zm9v")
+
+    def test_get_encryption_status_reports_backend_requirement(self, monkeypatch):
+        """Status must expose backend availability/requirement in strict posture."""
+        import veritas_os.logging.encryption as enc
+        from veritas_os.logging.encryption import (
+            generate_key,
+            get_encryption_status,
+        )
+
+        monkeypatch.setenv("VERITAS_POSTURE", "prod")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        status = get_encryption_status()
+        assert status["posture"] == "prod"
+        assert status["backend_available"] is False
+        assert status["backend_required"] is True
+        assert status["backend_acceptable"] is False
