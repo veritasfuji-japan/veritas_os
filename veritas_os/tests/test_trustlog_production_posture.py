@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from scripts.security.check_trustlog_production_posture import main
 from veritas_os.security.trustlog_production_posture import check_trustlog_production_posture
 
@@ -420,3 +422,74 @@ def test_cli_main_returns_zero_in_production_fully_configured(monkeypatch) -> No
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/tmp/transparency.jsonl")
     assert main() == 0
+
+
+def test_production_posture_fails_when_encryption_backend_unacceptable(monkeypatch) -> None:
+    """Production posture checker must fail when AES-GCM backend is unavailable."""
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
+
+    result = posture_module.check_trustlog_production_posture(_production_base_env())
+    assert result.passed is False
+    assert any("AES-256-GCM" in item for item in result.failures)
+
+
+def test_startup_validation_fails_when_encryption_backend_unacceptable(monkeypatch) -> None:
+    """Startup validation must fail-fast when production backend is unacceptable."""
+    import logging
+
+    import veritas_os.api.startup_health as startup_health
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dummy")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "dummy-kms-key")
+
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
+
+    with pytest.raises(RuntimeError, match="AES-256-GCM|backend|cryptography"):
+        startup_health.validate_trustlog_production_posture_on_startup(
+            logger=logging.getLogger(__name__)
+        )
+
+
+def test_production_env_dict_enforces_backend_when_process_env_is_dev(monkeypatch) -> None:
+    """Explicit env mapping must drive backend requirement independent of process env."""
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setenv("VERITAS_ENV", "dev")
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
+
+    result = posture_module.check_trustlog_production_posture(_production_base_env())
+    assert result.passed is False
+    assert any("AES-256-GCM" in item for item in result.failures)
+
+
+def test_production_env_dict_no_backend_failure_when_backend_available(
+    monkeypatch,
+) -> None:
+    """Backend availability check should pass when AES-GCM backend is available."""
+    import veritas_os.security.trustlog_production_posture as posture_module
+
+    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", True)
+
+    result = posture_module.check_trustlog_production_posture(_production_base_env())
+    assert not any("AES-256-GCM" in item for item in result.failures)
+
+
+def test_missing_encryption_key_uses_current_env_failure() -> None:
+    """Missing key must fail via explicit current_env validation path."""
+    env = {
+        "VERITAS_ENV": "production",
+        "VERITAS_TRUSTLOG_BACKEND": "postgresql",
+        "VERITAS_DATABASE_URL": "postgresql://example",
+        "VERITAS_TRUSTLOG_SIGNER_BACKEND": "aws_kms",
+        "VERITAS_TRUSTLOG_KMS_KEY_ID": "dummy-kms-key",
+    }
+    result = check_trustlog_production_posture(env)
+    assert result.passed is False
+    assert any("VERITAS_ENCRYPTION_KEY" in item for item in result.failures)
