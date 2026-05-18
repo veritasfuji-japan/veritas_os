@@ -328,5 +328,7 @@ class TestStrictPostureEncryptionBackend:
 
         with pytest.raises(EncryptionBackendUnavailable):
             encrypt("strict due to enforcement flag")
-        with pytest.raises(EncryptionBackendUnavailable):
+        with pytest.raises(EncryptionBackendUnavailable) as excinfo:
             decrypt("ENC:hmac-ctr:Zm9v")
+        message = str(excinfo.value)
+        assert "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE" in message

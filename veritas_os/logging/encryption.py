@@ -237,10 +237,17 @@ def _require_strong_encryption_backend() -> None:
     """Fail fast when strict posture requires AES-GCM but backend is unavailable."""
     if _strict_encryption_backend_required() and not _USE_REAL_AES:
         posture = resolve_posture()
+        env_posture = (os.getenv("VERITAS_POSTURE") or "").strip() or "<unset>"
+        env_runtime = (os.getenv("VERITAS_ENV") or "").strip() or "<unset>"
+        enforced = (os.getenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE") or "").strip()
+        enforcement_flag = enforced or "<unset>"
         raise EncryptionBackendUnavailable(
-            "Resolved VERITAS posture "
-            f"{posture.value!r} requires cryptography-backed AES-256-GCM. "
-            "This may be set via VERITAS_POSTURE or inferred from VERITAS_ENV. "
+            "Strong encryption backend is required because strict TrustLog posture is active. "
+            f"Resolved posture={posture.value!r}, VERITAS_POSTURE={env_posture!r}, "
+            f"VERITAS_ENV={env_runtime!r}, "
+            "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE="
+            f"{enforcement_flag!r}. Strict mode can be triggered by resolved secure/prod posture, "
+            "VERITAS_ENV=production/prod, or VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE truthy. "
             "Install veritas-os[signing] or include cryptography in the deployment image."
         )
 
