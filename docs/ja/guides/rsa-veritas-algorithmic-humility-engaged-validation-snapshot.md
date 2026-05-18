@@ -1,16 +1,16 @@
-# RSA ↔ VERITAS SAFE_PROCEED 検証スナップショット
+# RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED 検証スナップショット
 
 ## 英語正本
 
-- [RSA ↔ VERITAS SAFE_PROCEED Validation Snapshot](../../en/guides/rsa-veritas-safe-proceed-validation-snapshot.md)
+- [RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED Validation Snapshot](../../en/guides/rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 
 ## 1. 目的
 
-本ページは、V.I.K.I. ↔ VERITAS / RSA-compatible フローにおける SAFE_PROCEED の静的サンドボックス・バリアントを記録するものです。
+本ページは、V.I.K.I. ↔ VERITAS / RSA-compatible フローにおける ALGORITHMIC_HUMILITY_ENGAGED の静的サンドボックス・バリアントを記録するものです。
 
-これは静的 fixture ラダーにおける normal-continuation ケースです。
+これは静的 fixture ラダーにおける pause / human-review ケースです。
 
-目的は、emit された上流 RSA-compatible signal が safe continuation を示すとき、VERITAS が通常の bind-boundary evaluation に向けて継続できることを示す点にあります。
+目的は、emit された上流 RSA-compatible signal が required context の不足または authority evidence の不十分さを示すとき、VERITAS が continuation を一時停止できることを示す点にあります。
 
 ## 2. 現在のベースライン
 
@@ -22,10 +22,9 @@
 - 既存の E2E サンドボックス・ハーネス。
 - 既存の governance-backend-fast CI カバレッジ。
 - 既存の E2E sandbox validation snapshot。
-- 既存の ALGORITHMIC_HUMILITY_ENGAGED 検証スナップショット。
-- 既存の ALGORITHMIC_HUMILITY_ENGAGED dedicated validation snapshot。
-- 既存の DENSITY_THROTTLED 検証スナップショット。
-- 既存の DEFERRAL_ENGAGED 検証スナップショット。
+- 既存の SAFE_PROCEED validation snapshot。
+- 既存の DENSITY_THROTTLED validation snapshot。
+- 既存の DEFERRAL_ENGAGED validation snapshot。
 - 既存の static fixture matrix。
 
 ## 3. 用語互換性ノート
@@ -43,11 +42,11 @@
 
 ```json
 {
-  "rsa_status": "SAFE_PROCEED",
-  "trigger_source": "SRC_Safe_Proceed",
-  "original_llm_intent": "Continue_To_Normal_Bind_Boundary_Evaluation",
-  "rsa_action_taken": "No_Upstream_Intervention_Required",
-  "timestamp": "2026-10-25T09:10:30Z"
+  "rsa_status": "ALGORITHMIC_HUMILITY_ENGAGED",
+  "trigger_source": "SRC_Incomplete_Context",
+  "original_llm_intent": "Recommend_Transaction_Approval",
+  "rsa_action_taken": "Execution_Suspended_Awaiting_Reality_Sync",
+  "timestamp": "2026-10-25T09:15:30Z"
 }
 ```
 
@@ -55,8 +54,8 @@
 
 ```json
 {
-  "continuation_decision": "CONTINUE_TO_BIND_BOUNDARY",
-  "reason_code": "UPSTREAM_SAFE_PROCEED_SIGNAL",
+  "continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+  "reason_code": "UPSTREAM_INCOMPLETE_KYC_CONTEXT",
   "authority_evidence_status": "INSUFFICIENT",
   "sandbox_bind_boundary_state": "NOT_EVALUATED_PENDING_AUTHORITY_EVIDENCE",
   "sandbox_commit_state": "SUSPENDED_NOT_COMMITTED",
@@ -69,32 +68,32 @@
 ```json
 {
   "upstream_signal_source": "RSA",
-  "rsa_status": "SAFE_PROCEED",
-  "trigger_source": "SRC_Safe_Proceed",
+  "rsa_status": "ALGORITHMIC_HUMILITY_ENGAGED",
+  "trigger_source": "SRC_Incomplete_Context",
   "original_llm_intent": "[REDACTED]",
   "rsa_action_taken": "[REDACTED]",
-  "veritas_reason": "The upstream RSA signal indicates the workflow may continue toward normal bind-boundary evaluation.",
-  "timestamp": "2026-10-25T09:10:30Z",
-  "veritas_continuation_decision": "CONTINUE_TO_BIND_BOUNDARY",
+  "veritas_reason": "The workflow cannot continue toward final commit because required KYC context is incomplete and authority evidence is insufficient.",
+  "timestamp": "2026-10-25T09:15:30Z",
+  "veritas_continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
   "veritas_sandbox_commit_state": "SUSPENDED_NOT_COMMITTED"
 }
 ```
 
 ## 7. このスナップショットで検証されること
 
-- SAFE_PROCEED ステータスが既存の RSASandboxPayload 契約で表現可能であること。
-- VERITAS が SAFE_PROCEED を CONTINUE_TO_BIND_BOUNDARY へ決定論的にマッピングすること。
-- VERITAS が UPSTREAM_SAFE_PROCEED_SIGNAL を記録すること。
+- ALGORITHMIC_HUMILITY_ENGAGED ステータスが既存の RSASandboxPayload 契約で表現可能であること。
+- VERITAS が ALGORITHMIC_HUMILITY_ENGAGED を PAUSE_FOR_HUMAN_REVIEW へ決定論的にマッピングすること。
+- VERITAS が UPSTREAM_INCOMPLETE_KYC_CONTEXT を記録すること。
 - 上流の intent/action 生データがデフォルトで redaction されること。
-- 本バリアントが静的 fixture ラダーにおける normal-continuation ケースを示すこと。
-- 本バリアントは sandbox fixture であり production final commit ではないため、sandbox_commit_state が SUSPENDED_NOT_COMMITTED のままであること。
+- 本バリアントが静的 fixture ラダーにおける pause / human-review ケースを示すこと。
+- sandbox_commit_state が SUSPENDED_NOT_COMMITTED のままであること。
 - live V.I.K.I. ロジックへ接続せずとも現行 E2E サンドボックス経路がレビュー可能であること。
 
 ## 8. このスナップショットで検証されないこと
 
 - live V.I.K.I. middleware への接続は行いません。
 - V.I.K.I. の内部 reasoning は検証しません。
-- 実際の transaction や workflow が安全であることは証明しません。
+- 実際の transaction や workflow が unsafe であることは証明しません。
 - 現実世界の compliance status は判定しません。
 - 本番 AML/KYC コンプライアンスは実装しません。
 - 規制当局の承認は提供しません。
@@ -132,9 +131,9 @@ DEFERRAL_ENGAGED:
 
 ## 10. 次のサンドボックス・ステップ
 
-この SAFE_PROCEED スナップショットがマージされると、現行の 4 つの static fixture バリアントはそれぞれ個別の検証スナップショットを持つ状態になります。
+このページと SAFE_PROCEED ページがマージされると、現行の 4 つの static fixture variants はそれぞれ個別の validation snapshots を持つ状態になります。
 
-次の安全な sandbox ステップは、以下へリンクする軽量な reviewer index page を作成することです。
+次の安全な sandbox ステップは、以下へリンクする lightweight reviewer index page を作成することです。
 
 - E2E sandbox validation snapshot
 - SAFE_PROCEED validation snapshot
@@ -145,4 +144,4 @@ DEFERRAL_ENGAGED:
 - AML/KYC scenario map
 - E2E sandbox demo plan
 
-reviewer index の文書化とレビュー完了前に、live V.I.K.I. connection を追加すべきではありません。
+reviewer index page の文書化とレビュー完了前に、live V.I.K.I. connection を追加すべきではありません。

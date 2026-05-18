@@ -1,12 +1,12 @@
-# RSA ↔ VERITAS SAFE_PROCEED Validation Snapshot
+# RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED Validation Snapshot
 
 ## 1. Purpose
 
-This document records the SAFE_PROCEED static sandbox variant for the V.I.K.I. ↔ VERITAS / RSA-compatible flow.
+This document records the ALGORITHMIC_HUMILITY_ENGAGED static sandbox variant for the V.I.K.I. ↔ VERITAS / RSA-compatible flow.
 
-This is the normal-continuation case in the static fixture ladder.
+This is the pause / human-review case in the static fixture ladder.
 
-The goal is to show that VERITAS can continue toward normal bind-boundary evaluation when the emitted upstream RSA-compatible signal indicates safe continuation.
+The goal is to show that VERITAS can pause continuation when the emitted upstream RSA-compatible signal indicates incomplete required context or insufficient authority evidence.
 
 ## 2. Current baseline
 
@@ -18,8 +18,7 @@ The current merged baseline includes:
 - Existing E2E sandbox harness.
 - Existing governance-backend-fast CI coverage.
 - Existing E2E sandbox validation snapshot.
-- Existing ALGORITHMIC_HUMILITY_ENGAGED validation snapshot.
-- Existing ALGORITHMIC_HUMILITY_ENGAGED dedicated validation snapshot.
+- Existing SAFE_PROCEED validation snapshot.
 - Existing DENSITY_THROTTLED validation snapshot.
 - Existing DEFERRAL_ENGAGED validation snapshot.
 - Existing static fixture matrix.
@@ -39,11 +38,11 @@ The current merged baseline includes:
 
 ```json
 {
-  "rsa_status": "SAFE_PROCEED",
-  "trigger_source": "SRC_Safe_Proceed",
-  "original_llm_intent": "Continue_To_Normal_Bind_Boundary_Evaluation",
-  "rsa_action_taken": "No_Upstream_Intervention_Required",
-  "timestamp": "2026-10-25T09:10:30Z"
+  "rsa_status": "ALGORITHMIC_HUMILITY_ENGAGED",
+  "trigger_source": "SRC_Incomplete_Context",
+  "original_llm_intent": "Recommend_Transaction_Approval",
+  "rsa_action_taken": "Execution_Suspended_Awaiting_Reality_Sync",
+  "timestamp": "2026-10-25T09:15:30Z"
 }
 ```
 
@@ -51,8 +50,8 @@ The current merged baseline includes:
 
 ```json
 {
-  "continuation_decision": "CONTINUE_TO_BIND_BOUNDARY",
-  "reason_code": "UPSTREAM_SAFE_PROCEED_SIGNAL",
+  "continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+  "reason_code": "UPSTREAM_INCOMPLETE_KYC_CONTEXT",
   "authority_evidence_status": "INSUFFICIENT",
   "sandbox_bind_boundary_state": "NOT_EVALUATED_PENDING_AUTHORITY_EVIDENCE",
   "sandbox_commit_state": "SUSPENDED_NOT_COMMITTED",
@@ -65,32 +64,32 @@ The current merged baseline includes:
 ```json
 {
   "upstream_signal_source": "RSA",
-  "rsa_status": "SAFE_PROCEED",
-  "trigger_source": "SRC_Safe_Proceed",
+  "rsa_status": "ALGORITHMIC_HUMILITY_ENGAGED",
+  "trigger_source": "SRC_Incomplete_Context",
   "original_llm_intent": "[REDACTED]",
   "rsa_action_taken": "[REDACTED]",
-  "veritas_reason": "The upstream RSA signal indicates the workflow may continue toward normal bind-boundary evaluation.",
-  "timestamp": "2026-10-25T09:10:30Z",
-  "veritas_continuation_decision": "CONTINUE_TO_BIND_BOUNDARY",
+  "veritas_reason": "The workflow cannot continue toward final commit because required KYC context is incomplete and authority evidence is insufficient.",
+  "timestamp": "2026-10-25T09:15:30Z",
+  "veritas_continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
   "veritas_sandbox_commit_state": "SUSPENDED_NOT_COMMITTED"
 }
 ```
 
 ## 7. What this validates
 
-- The SAFE_PROCEED status is represented by the existing RSASandboxPayload contract.
-- VERITAS deterministically maps SAFE_PROCEED to CONTINUE_TO_BIND_BOUNDARY.
-- VERITAS records UPSTREAM_SAFE_PROCEED_SIGNAL.
+- The ALGORITHMIC_HUMILITY_ENGAGED status is represented by the existing RSASandboxPayload contract.
+- VERITAS deterministically maps ALGORITHMIC_HUMILITY_ENGAGED to PAUSE_FOR_HUMAN_REVIEW.
+- VERITAS records UPSTREAM_INCOMPLETE_KYC_CONTEXT.
 - Raw upstream intent/action fields are redacted by default.
-- This variant demonstrates the normal-continuation case in the static fixture ladder.
-- The sandbox commit state remains SUSPENDED_NOT_COMMITTED because this is still a sandbox fixture, not a production final commit.
+- This variant demonstrates the pause / human-review case in the static fixture ladder.
+- The sandbox commit state remains SUSPENDED_NOT_COMMITTED.
 - The current E2E sandbox path remains reviewable without connecting live V.I.K.I. logic.
 
 ## 8. What this does not validate
 
 - It does not connect live V.I.K.I. middleware.
 - It does not validate V.I.K.I. internal reasoning.
-- It does not prove that a real transaction or workflow is safe.
+- It does not prove that a real transaction or workflow is unsafe.
 - It does not determine real-world compliance status.
 - It does not implement production AML/KYC compliance.
 - It does not provide regulatory approval.
@@ -128,9 +127,9 @@ DEFERRAL_ENGAGED:
 
 ## 10. Next sandbox step
 
-After this SAFE_PROCEED snapshot is merged, all four current static fixture variants have individual validation snapshots.
+After this page and the SAFE_PROCEED page are merged, all four current static fixture variants have individual validation snapshots.
 
-The next safe sandbox step should be a lightweight reviewer index page linking:
+The next safe sandbox step is a lightweight reviewer index page linking:
 
 - E2E sandbox validation snapshot
 - SAFE_PROCEED validation snapshot

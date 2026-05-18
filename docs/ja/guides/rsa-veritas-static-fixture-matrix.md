@@ -67,7 +67,7 @@ DEFERRAL_ENGAGED
 - [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](../../en/guides/rsa-veritas-e2e-sandbox-validation-snapshot.md)
 - [SAFE_PROCEED validation snapshot](./rsa-veritas-safe-proceed-validation-snapshot.md)
 - [RSA ↔ VERITAS DENSITY_THROTTLED Validation Snapshot](../../en/guides/rsa-veritas-density-throttled-validation-snapshot.md)
-- [RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED Validation Snapshot](../../en/guides/rsa-veritas-e2e-sandbox-validation-snapshot.md)
+- [ALGORITHMIC_HUMILITY_ENGAGED validation snapshot](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 - [RSA ↔ VERITAS DEFERRAL_ENGAGED Validation Snapshot](../../en/guides/rsa-veritas-deferral-engaged-validation-snapshot.md)
 
 ## 7. この文書で検証できること

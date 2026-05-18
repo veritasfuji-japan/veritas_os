@@ -60,10 +60,10 @@ This ladder gives reviewers a compact view of the sandbox governance behavior wi
 
 This matrix is designed to be read alongside the existing snapshot pages:
 
-- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md) (ALGORITHMIC_HUMILITY_ENGAGED validation snapshot)
+- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md)
 - [SAFE_PROCEED validation snapshot](./rsa-veritas-safe-proceed-validation-snapshot.md)
 - [RSA ↔ VERITAS DENSITY_THROTTLED Validation Snapshot](./rsa-veritas-density-throttled-validation-snapshot.md)
-- [RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md)
+- [ALGORITHMIC_HUMILITY_ENGAGED validation snapshot](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 - [RSA ↔ VERITAS DEFERRAL_ENGAGED Validation Snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 
 ## 7. What this validates
