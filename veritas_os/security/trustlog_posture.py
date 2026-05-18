@@ -68,7 +68,10 @@ def get_trustlog_security_posture(
             "or configure the selected KMS/Vault provider correctly."
         )
 
-    if posture_level in {"secure", "prod"}:
+    strict_posture = posture_level in {"secure", "prod"}
+    strict_backend_required = strict_posture or backend_required
+
+    if strict_posture:
         if backend != "postgresql":
             reasons.append(
                 f"VERITAS_POSTURE={posture_level} requires TrustLog backend=postgresql (current={backend})."
@@ -81,14 +84,6 @@ def get_trustlog_security_posture(
             reasons.append("TrustLog encryption key is not configured.")
             remediation.append(
                 "Set VERITAS_ENCRYPTION_KEY or configure a supported KMS/Vault key provider."
-            )
-        if not backend_acceptable:
-            reasons.append(
-                "TrustLog encryption backend is not acceptable for strict posture; "
-                "cryptography-backed AES-256-GCM is required."
-            )
-            remediation.append(
-                "Install veritas-os[signing] or include cryptography in the deployment image."
             )
     elif posture_level == "staging":
         if backend != "postgresql":
@@ -111,7 +106,16 @@ def get_trustlog_security_posture(
                 "Set VERITAS_ENCRYPTION_KEY for encrypted TrustLog writes when validating production posture."
             )
 
-    if posture_level in {"secure", "prod"}:
+    if strict_backend_required and not backend_acceptable:
+        reasons.append(
+            "TrustLog encryption backend is not acceptable for strict posture; "
+            "cryptography-backed AES-256-GCM is required."
+        )
+        remediation.append(
+            "Install veritas-os[signing] or include cryptography in the deployment image."
+        )
+
+    if strict_backend_required:
         status = "blocked" if reasons else "ok"
     else:
         status = "degraded" if reasons else "ok"

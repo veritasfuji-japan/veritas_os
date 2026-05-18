@@ -428,7 +428,11 @@ def test_production_posture_fails_when_encryption_backend_unacceptable(monkeypat
     """Production posture checker must fail when AES-GCM backend is unavailable."""
     import veritas_os.security.trustlog_production_posture as posture_module
 
-    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
+    monkeypatch.setattr(
+        posture_module.encryption_module,
+        "is_strong_encryption_backend_available",
+        lambda: False,
+    )
 
     result = posture_module.check_trustlog_production_posture(_production_base_env())
     assert result.passed is False
@@ -449,7 +453,11 @@ def test_startup_validation_fails_when_encryption_backend_unacceptable(monkeypat
     monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
     monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "dummy-kms-key")
 
-    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
+    monkeypatch.setattr(
+        posture_module.encryption_module,
+        "is_strong_encryption_backend_available",
+        lambda: False,
+    )
 
     with pytest.raises(RuntimeError, match="AES-256-GCM|backend|cryptography"):
         startup_health.validate_trustlog_production_posture_on_startup(
@@ -462,7 +470,11 @@ def test_production_env_dict_enforces_backend_when_process_env_is_dev(monkeypatc
     import veritas_os.security.trustlog_production_posture as posture_module
 
     monkeypatch.setenv("VERITAS_ENV", "dev")
-    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", False)
+    monkeypatch.setattr(
+        posture_module.encryption_module,
+        "is_strong_encryption_backend_available",
+        lambda: False,
+    )
 
     result = posture_module.check_trustlog_production_posture(_production_base_env())
     assert result.passed is False
@@ -475,7 +487,11 @@ def test_production_env_dict_no_backend_failure_when_backend_available(
     """Backend availability check should pass when AES-GCM backend is available."""
     import veritas_os.security.trustlog_production_posture as posture_module
 
-    monkeypatch.setattr(posture_module.encryption_module, "_USE_REAL_AES", True)
+    monkeypatch.setattr(
+        posture_module.encryption_module,
+        "is_strong_encryption_backend_available",
+        lambda: True,
+    )
 
     result = posture_module.check_trustlog_production_posture(_production_base_env())
     assert not any("AES-256-GCM" in item for item in result.failures)

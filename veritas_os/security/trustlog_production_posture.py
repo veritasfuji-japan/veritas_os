@@ -89,15 +89,11 @@ def check_trustlog_production_posture(
 
     if not (current_env.get("VERITAS_ENCRYPTION_KEY", "") or "").strip():
         failures.append("production TrustLog encryption requires VERITAS_ENCRYPTION_KEY")
-    else:
-        backend_required = _is_production_mode(current_env)
-        backend_available = bool(getattr(encryption_module, "_USE_REAL_AES", False))
-        backend_acceptable = (not backend_required) or backend_available
-        if not backend_acceptable:
-            failures.append(
-                "TrustLog encryption backend is not acceptable for production posture; "
-                "cryptography-backed AES-256-GCM is required."
-            )
+    elif not encryption_module.is_strong_encryption_backend_available():
+        failures.append(
+            "TrustLog encryption backend is not acceptable for production posture; "
+            "cryptography-backed AES-256-GCM is required."
+        )
 
     signer_backend = normalize_trustlog_signer_backend(
         current_env.get("VERITAS_TRUSTLOG_SIGNER_BACKEND")

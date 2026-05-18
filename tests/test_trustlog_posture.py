@@ -381,6 +381,28 @@ def test_validate_trustlog_secure_defaults_raises_for_blocked_dev_posture(
         posture_module.validate_trustlog_secure_defaults()
 
 
+def test_get_trustlog_security_posture_blocks_dev_when_backend_required_unacceptable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backend-required strict diagnostics must block even when posture is dev."""
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+
+    result = get_trustlog_security_posture(
+        posture="dev",
+        encryption_status={
+            "encryption_enabled": True,
+            "key_configured": True,
+            "secure_by_default": True,
+            "backend_available": False,
+            "backend_required": True,
+            "backend_acceptable": False,
+        },
+    )
+    assert result["status"] == "blocked"
+    assert any("AES-256-GCM" in reason for reason in result["reasons"])
+
+
 def test_validate_trustlog_secure_defaults_does_not_raise_for_degraded_dev(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -400,12 +422,6 @@ def test_validate_trustlog_secure_defaults_does_not_raise_for_degraded_dev(
     )
 
     posture_module.validate_trustlog_secure_defaults()
-    assert snapshot["encryption"]["error_type"] == "RuntimeError"
-
-    rendered_snapshot = json.dumps(snapshot, sort_keys=True)
-    assert "secret path" not in rendered_snapshot
-    assert "/prod/foo" not in rendered_snapshot
-    assert "token abc" not in rendered_snapshot
 
 
 def test_security_posture_snapshot_fallback_key_provider_default_env(

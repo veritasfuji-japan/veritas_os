@@ -358,3 +358,18 @@ class TestStrictPostureEncryptionBackend:
             encrypt("strict due to VERITAS_ENV alias")
         with pytest.raises(EncryptionBackendUnavailable):
             decrypt("ENC:hmac-ctr:Zm9v")
+
+    def test_require_strong_backend_short_circuits_when_aesgcm_available(
+        self,
+        monkeypatch,
+    ):
+        """Strong backend guard must not resolve posture when AES-GCM is available."""
+        import veritas_os.logging.encryption as enc
+
+        monkeypatch.setattr(enc, "_USE_REAL_AES", True)
+
+        def _raise_if_called(*args, **kwargs):
+            raise AssertionError("strict posture checks should not run when AES-GCM is available")
+
+        monkeypatch.setattr(enc, "_strict_encryption_backend_required", _raise_if_called)
+        enc._require_strong_encryption_backend()
