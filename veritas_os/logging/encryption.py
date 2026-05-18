@@ -50,6 +50,7 @@ _AESGCM_NONCE_SIZE = 12
 # via HMAC-SHA256 so that both encryption and authentication use 256-bit keys.
 _HMAC_CTR_ENC_INFO = b"veritas-hmac-ctr-enc"
 _HMAC_CTR_MAC_INFO = b"veritas-hmac-ctr-mac"
+_STRICT_RUNTIME_ENV_ALIASES = frozenset({"prod", "production", "secure", "hardened"})
 
 
 def _derive_hmac_ctr_keys(master: bytes) -> tuple[bytes, bytes]:
@@ -227,7 +228,7 @@ def _strict_encryption_backend_required() -> bool:
     enforce_production = _is_truthy(
         os.getenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "")
     )
-    if enforce_production or env_posture in {"production", "prod"}:
+    if enforce_production or env_posture in _STRICT_RUNTIME_ENV_ALIASES:
         return True
     posture = resolve_posture()
     return posture in {PostureLevel.SECURE, PostureLevel.PROD}
@@ -247,7 +248,8 @@ def _require_strong_encryption_backend() -> None:
             f"VERITAS_ENV={env_runtime!r}, "
             "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE="
             f"{enforcement_flag!r}. Strict mode can be triggered by resolved secure/prod posture, "
-            "VERITAS_ENV=production/prod, or VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE truthy. "
+            "VERITAS_ENV=production/prod/secure/hardened, "
+            "or VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE truthy. "
             "Install veritas-os[signing] or include cryptography in the deployment image."
         )
 

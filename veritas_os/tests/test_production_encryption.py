@@ -332,3 +332,29 @@ class TestStrictPostureEncryptionBackend:
             decrypt("ENC:hmac-ctr:Zm9v")
         message = str(excinfo.value)
         assert "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE" in message
+
+    @pytest.mark.parametrize("env_alias", ["secure", "hardened"])
+    def test_legacy_strict_veritas_env_aliases_enforce_backend_in_dev_posture(
+        self,
+        monkeypatch,
+        env_alias,
+    ):
+        """VERITAS_ENV strict aliases must enforce AES-GCM even with dev posture."""
+        import veritas_os.logging.encryption as enc
+        from veritas_os.logging.encryption import (
+            EncryptionBackendUnavailable,
+            decrypt,
+            encrypt,
+            generate_key,
+        )
+
+        monkeypatch.setenv("VERITAS_POSTURE", "dev")
+        monkeypatch.setenv("VERITAS_ENV", env_alias)
+        monkeypatch.delenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", raising=False)
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        with pytest.raises(EncryptionBackendUnavailable):
+            encrypt("strict due to VERITAS_ENV alias")
+        with pytest.raises(EncryptionBackendUnavailable):
+            decrypt("ENC:hmac-ctr:Zm9v")
