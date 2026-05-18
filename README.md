@@ -11,7 +11,7 @@
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Release Gate](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen) <!-- snapshot value; CI gate (≥85%) is enforced by .github/workflows/main.yml -->
 ![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-blue)
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
@@ -49,6 +49,13 @@ Boundary:
 - Fixture-backed PoC evidence should not be presented as live bank-side integration.
 
 ## One-Day PoC Evidence Packet
+
+> **PoC entry points overview** — There are three related PoC surfaces in this README:
+> 1. **One-Day PoC Evidence Packet** (this section): smoke script + sanitized evidence pack for any running VERITAS API.
+> 2. [AML/KYC Reviewer Walkthrough Quickstart](#amlkyc-reviewer-walkthrough-quickstart): deterministic fixture demo accessed via `/?demo_scenario=aml_kyc_reviewer_walkthrough`.
+> 3. [AML/KYC Beachhead PoC Pack](#amlkyc-beachhead-poc-pack-what-you-can-run-in-1-day): 1-day fixture-set runnable from `scripts/run_aml_kyc_poc_fixture.py`.
+>
+> Start with #1 for general reviewer evidence, #2 for a UI walkthrough, #3 for a regulated-action fixture set.
 
 For external reviewers, HPAN, enterprise stakeholders, and investor diligence, use the one-day PoC smoke script to generate a sanitized evidence packet from a running VERITAS API server.
 
@@ -164,6 +171,8 @@ Related reviewer docs:
 ## Governance Review Workflow
 
 VERITAS OS does not only record governance artifacts. It connects them into a Mission Control → Audit review workflow:
+
+> The diagram below renders in Mermaid-capable viewers (GitHub, GitLab, modern Markdown previews). If your viewer shows raw `flowchart LR` source, refer to the numbered prose description directly below the diagram — both describe the same workflow.
 
 ```mermaid
 flowchart LR
@@ -285,7 +294,12 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 
 ## Fact vs roadmap (read this first)
 
+**Core (beta)**
+
 - **Current fact (beta):** Core decision pipeline, bind artifact lineage (`decision -> execution_intent -> bind_receipt`), bind-time admissibility checks, FUJI fail-closed gating, TrustLog lineage, Mission Control workflows, and governance endpoints are implemented.
+
+**Bind-boundary surface**
+
 - **Current fact (bind policy surface):** Bind-boundary adjudication is currently wired on at least five operator-governed effect paths:
   1) `PUT /v1/governance/policy` (governance policy update path),
   2) `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path), and
@@ -295,15 +309,27 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **Current fact (bind outcome public contract):** Governance bind responses expose legacy flat bind fields (`bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, `bind_receipt_id`) and additive `bind_summary` objects as a shared compact bind vocabulary.
 - **Current fact (bind coverage registry):** VERITAS maintains a tested bind coverage registry for API effect paths. Effect-bearing routes must be classified as `bind_governed` or explicitly documented as `audited_exemption` with reason/risk metadata, reducing the risk that recorded decisions are treated as execution permission without a binding artifact.
 - **Current fact (bind artifact family):** `BindReceipt` is persisted as a full governance artifact and carries canonical target metadata as part of the artifact contract.
+
+**Pre-bind surfaces**
+
 - **Current fact (pre-bind participation schema):** `/v1/decide` supports an optional additive `participation_signal` object as an upstream signal family (`participation_signal -> decision -> execution_intent -> bind_receipt`) for participation admissibility; bind-time commitment admissibility remains unchanged.
 - **Current fact (pre-bind structural detection):** `/v1/decide` can emit optional additive `pre_bind_detection_summary` / `pre_bind_detection_detail` fields that classify structural participation state (`informative|participatory|decision_shaping`) from the participation signal family; this is upstream-only and does not change bind-time governance.
 - **Current fact (pre-bind preservation layer):** `/v1/decide` can emit optional additive `pre_bind_preservation_summary` / `pre_bind_preservation_detail` fields that classify governability-preservation state (`open|degrading|collapsed`) and intervention viability; this is distinct from detection and does not replace bind-time governance.
+
+**Pre-bind formation transition / operator recovery**
+
 - **Current fact (covered transition-path refusal):** On the covered `/v1/decide` transition path, lineage promotability now prevents non-promotable pre-bind formation lineage from constructing an ExecutionIntent, with additive `transition_refusal` diagnostics.
 - **Current fact (transition/actionability consistency):** On the covered `/v1/decide` path, formation transition refusal also normalizes actionability so structurally refused lineage is not presented as actionable after bind.
 - **Current fact (operator recovery normalization):** On the covered `/v1/decide` path, formation transition refusal now normalizes operator recovery semantics to `HOLD` and `RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE`.
 - **Current fact (completed pre-bind formation refusal operator flow):** On the covered `/v1/decide` path, non-promotable pre-bind formation lineage is structurally refused before ExecutionIntent construction. The response withholds ExecutionIntent / BindReceipt fields, normalizes actionability to `formation_transition_refused`, sets operator recovery to `RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE`, and the Console displays this as pre-bind formation refusal rather than bind failure.
+
+**Contract surfaces & operator flow**
+
 - **Current fact (OpenAPI parity):** `openapi.yaml` now explicitly declares the additive `/v1/decide` pre-bind surfaces (`participation_signal`, `pre_bind_detection_summary/detail`, `pre_bind_preservation_summary/detail`) as optional fields, aligned with runtime and architecture vocabulary.
 - **Current fact (replay/operator flow):** Operator surfaces expose bind artifacts via list/export/detail endpoints (`/v1/governance/bind-receipts`, `/v1/governance/bind-receipts/export`, `/v1/governance/bind-receipts/{bind_receipt_id}`), with mutation/export responses reusing `bind_summary` for triage and audit workflows.
+
+**Boundary & roadmap**
+
 - **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.
 - **Roadmap / future direction:** Bind-boundary policy surface is expected to expand to more effect paths and become a broader standardization framework for multi-path effect governance; this is direction, not a claim of full completion today.
 - **Roadmap:** Expanded enterprise integrations (for example deeper IdP/JWT scope models and broader distributed failure-mode validation).
@@ -341,13 +367,8 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 
 ## Quick Links
 
-- **AML/KYC Beachhead (1-day PoC quickstart)**: [`docs/en/guides/poc-pack-financial-quickstart.md`](docs/en/guides/poc-pack-financial-quickstart.md)
-- **AML/KYC Governance Template Contract**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
-- **External Audit / Evidence Bundle Readiness**: [`docs/en/validation/external-audit-readiness.md`](docs/en/validation/external-audit-readiness.md)
-- **External Technical Proof Pack (review/pilot/DD/audit)**: [`docs/en/validation/technical-proof-pack.md`](docs/en/validation/technical-proof-pack.md)
-- **Third-Party Review Readiness (compact index)**: [`docs/en/validation/third-party-review-readiness.md`](docs/en/validation/third-party-review-readiness.md)
-- **Current Implementation Matrix (external reviewer snapshot)**: [`docs/en/validation/current-implementation-matrix.md`](docs/en/validation/current-implementation-matrix.md)
-- **AML/KYC Short Positioning (customer / operator / investor)**: [`docs/en/positioning/aml-kyc-beachhead-short-positioning.md`](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
+### Project & paper
+
 - **Official Website**: https://veritas-website-navy.vercel.app/
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
@@ -357,21 +378,30 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **Security Policy**: [`SECURITY.md`](SECURITY.md)
 - **Documentation Index**: [`docs/INDEX.md`](docs/INDEX.md)
-- **PostgreSQL Production Guide**: [`docs/en/operations/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md)
-- **PostgreSQL Drill Runbook**: [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md)
-- **Security Hardening**: [`docs/en/operations/security-hardening.md`](docs/en/operations/security-hardening.md)
-- **External Security Review Remediation Summary**: [`docs/en/security/external-security-remediation-summary.md`](docs/en/security/external-security-remediation-summary.md) / [`docs/ja/security/external-security-remediation-summary.md`](docs/ja/security/external-security-remediation-summary.md)
-- **Database Migrations**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
-- **Backend Parity Coverage**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
-- **PostgreSQL Production Proof Map (compact)**: [`docs/en/validation/postgresql-production-proof-map.md`](docs/en/validation/postgresql-production-proof-map.md)
-- [Release Gate Recovery Case Study](docs/en/validation/release-gate-recovery-case-study.md) — a real failure-to-green example showing how VERITAS OS blocks release promotion until governance backend, Docker runtime, and test isolation failures are fixed.
-- **Live PostgreSQL Validation Evidence**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
-- **Legacy Path Cleanup**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
-- **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
+- **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
 - **Documentation Hub (EN)**: [`docs/en/README.md`](docs/en/README.md)
 - **Documentation Hub (JA)**: [`docs/ja/README.md`](docs/ja/README.md)
+
+### Reviewer / PoC / Audit
+
+- **AML/KYC Beachhead (1-day PoC quickstart)**: [`docs/en/guides/poc-pack-financial-quickstart.md`](docs/en/guides/poc-pack-financial-quickstart.md)
+- **AML/KYC Governance Template Contract**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
+- **External Audit / Evidence Bundle Readiness**: [`docs/en/validation/external-audit-readiness.md`](docs/en/validation/external-audit-readiness.md)
+- **External Technical Proof Pack (review/pilot/DD/audit)**: [`docs/en/validation/technical-proof-pack.md`](docs/en/validation/technical-proof-pack.md)
+- **Third-Party Review Readiness (compact index)**: [`docs/en/validation/third-party-review-readiness.md`](docs/en/validation/third-party-review-readiness.md)
+- **Current Implementation Matrix (external reviewer snapshot)**: [`docs/en/validation/current-implementation-matrix.md`](docs/en/validation/current-implementation-matrix.md)
+- **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
+- [Release Gate Recovery Case Study](docs/en/validation/release-gate-recovery-case-study.md) — a real failure-to-green example showing how VERITAS OS blocks release promotion until governance backend, Docker runtime, and test isolation failures are fixed.
+
+### Positioning
+
+- **AML/KYC Short Positioning (customer / operator / investor)**: [`docs/en/positioning/aml-kyc-beachhead-short-positioning.md`](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 - **Public Positioning Guide (EN)**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
 - **Public Positioning Guide (JA)**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
+- **Governance Upgrade Press Summary**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
+
+### Architecture
+
 - **Decision Semantics Contract**: [`docs/en/architecture/decision-semantics.md`](docs/en/architecture/decision-semantics.md)
 - **Bind-Boundary Governance Artifacts**: [`docs/en/architecture/bind-boundary-governance-artifacts.md`](docs/en/architecture/bind-boundary-governance-artifacts.md)
 - **Bind-Time Admissibility Evaluator**: [`docs/en/architecture/bind_time_admissibility_evaluator.md`](docs/en/architecture/bind_time_admissibility_evaluator.md)
@@ -382,16 +412,29 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **Regulated Action Governance Kernel**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
 - **Authority Evidence vs Audit Log**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)
 - **AML/KYC Regulated Action Path (Use Case)**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
+
+### Governance & compliance
+
 - **Regulated Action Governance Proof Pack**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
 - **Regulated Action Governance Quality Gate**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
 - **Regulated Action Governance External Review Handoff Pack**: [`docs/en/validation/external-review-handoff-regulated-action-governance.md`](docs/en/validation/external-review-handoff-regulated-action-governance.md)
 - **Regulated Action Governance External Reviewer Feedback Template**: [`docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md`](docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md)
 - **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening (canonical gate + evidence profile)**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
-- **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
-- **Operations Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 - **Governance Signing Runbook**: [`docs/en/operations/governance-artifact-signing.md`](docs/en/operations/governance-artifact-signing.md)
-- **Governance Upgrade Press Summary**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
+
+### Operations / storage / security
+
+- **PostgreSQL Production Guide**: [`docs/en/operations/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md)
+- **PostgreSQL Drill Runbook**: [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md)
+- **PostgreSQL Production Proof Map (compact)**: [`docs/en/validation/postgresql-production-proof-map.md`](docs/en/validation/postgresql-production-proof-map.md)
+- **Live PostgreSQL Validation Evidence**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
+- **Database Migrations**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
+- **Backend Parity Coverage**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
+- **Legacy Path Cleanup**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
+- **Security Hardening**: [`docs/en/operations/security-hardening.md`](docs/en/operations/security-hardening.md)
+- **External Security Review Remediation Summary**: [`docs/en/security/external-security-remediation-summary.md`](docs/en/security/external-security-remediation-summary.md) / [`docs/ja/security/external-security-remediation-summary.md`](docs/ja/security/external-security-remediation-summary.md)
+- **Operations Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 
 ## AML/KYC Beachhead PoC Pack (what you can run in 1 day)
 
@@ -410,7 +453,9 @@ Start here:
 - [External Audit Readiness](docs/en/validation/external-audit-readiness.md)
 - [Short Positioning by audience](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 
-## 🚀 Quick Start (TL;DR)
+## ⚡ 60-Second Start (Docker Compose TL;DR)
+
+> For the full local-dev and Docker walkthrough, see [Quick Start](#-quick-start) below.
 
 ```bash
 # Clone & start with Docker Compose (recommended)
@@ -468,13 +513,17 @@ Verification-oriented docs:
 
 ## Contents
 
+- [60-Second Start (Docker Compose TL;DR)](#-60-second-start-docker-compose-tldr)
+- [PostgreSQL Production Path & Validation Status](#postgresql-production-path--validation-status)
 - [Beta at a Glance](#-beta-at-a-glance)
+- [Runtime Posture Guarantees](#-runtime-posture-guarantees)
 - [Why VERITAS?](#-why-veritas)
 - [What It Does](#-what-it-does)
-- [Quick Start](#-quick-start)
 - [Project Structure](#-project-structure)
+- [Storage Backends](#-storage-backends)
 - [Frontend — Mission Control Dashboard](#-frontend--mission-control-dashboard)
 - [API Overview](#-api-overview)
+- [Quick Start](#-quick-start)
 - [Docker Compose (Full Stack)](#-docker-compose-full-stack)
 - [Docker (Backend Only)](#-docker-backend-only)
 - [Architecture (High-Level)](#-architecture-high-level)
@@ -487,6 +536,7 @@ Verification-oriented docs:
 - [License](#-license)
 - [Contributing](#-contributing)
 - [Citation (BibTeX)](#-citation-bibtex)
+- [Contact](#-contact)
 
 ---
 
@@ -639,16 +689,20 @@ Decision output semantics:
   regression and demo workflows (`veritas_os/sample_data/governance/financial_regulatory_templates.json`);
   see `docs/en/guides/financial-governance-templates.md`.
 
-Pipeline stages:
+Pipeline stages (17 traced stages — IDs match `trace_session.stage(...)` in `veritas_os/core/pipeline/__init__.py`):
 
 ```text
-Input Normalize → Memory Retrieval → Web Search → Options Normalize
-  → Core Execute → Absorb Results → Fallback Alternatives → Model Boost
-  → Debate → Critique → FUJI Precheck → ValueCore → Gate Decision
-  → Value Learning (EMA) → Compute Metrics → Evidence Hardening
-  → Response Assembly → Persist (Audit + Memory + World) → Finalize Evidence
-  → Build Replay Snapshot
+input_norm → memory_retrieval → web_search → normalize_options
+  → kernel_execute → absorb_raw_results → fallback_alternatives → model_boost
+  → debate → critique → continuation_shadow → fuji_gate
+  → value_learning_ema → compute_metrics → evidence_hardening
+  → build_response → persist
 ```
+
+> FUJI/ValueCore/Replay-snapshot substeps execute inside their parent stages
+> (`fuji_gate`, `value_learning_ema`, `persist`). Audit persistence, memory write,
+> world-state update, and replay-snapshot build are part of the single `persist`
+> stage.
 
 Bundled subsystems:
 
@@ -687,7 +741,7 @@ This separation is one of the reasons VERITAS is easier to audit and safer to ev
 veritas_os/                  ← Monorepo root
 ├── veritas_os/              ← Python backend (FastAPI)
 │   ├── api/                 ← REST API server, schemas, governance
-│   │   ├── server.py        ← FastAPI app with 37 endpoints
+│   │   ├── server.py        ← FastAPI app with 48+ endpoints
 │   │   ├── routes_decide.py ← Decision & replay endpoints
 │   │   ├── routes_trust.py  ← TrustLog & audit endpoints
 │   │   ├── routes_memory.py ← Memory CRUD endpoints
@@ -721,7 +775,7 @@ veritas_os/                  ← Monorepo root
 │   ├── prompts/             ← Prompt templates for LLM interactions
 │   ├── reporting/           ← Report generation utilities
 │   ├── benchmarks/          ← Performance benchmark data
-│   └── tests/               ← 6600+ Python tests (+ top-level tests/)
+│   └── tests/               ← 7800+ Python tests (+ top-level tests/)
 ├── frontend/                ← Next.js 16 Mission Control dashboard
 │   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
 │   ├── components/          ← Shared React components
@@ -801,7 +855,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 
 The `veritas-migrate` CLI is **idempotent** — re-running after a partial failure
 safely resumes by skipping already-imported entries. See
-[`docs/postgresql-production-guide.md` §11](docs/en/operations/postgresql-production-guide.md)
+[`docs/en/operations/postgresql-production-guide.md` §11](docs/en/operations/postgresql-production-guide.md)
 for the full procedure including rollback.
 
 ### Verification tools
@@ -830,7 +884,7 @@ for the full procedure including rollback.
 
 ### Production deployment
 
-See [`docs/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md) for:
+See [`docs/en/operations/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md) for:
 - Pool sizing, SSL/TLS, statement timeout configuration
 - Backup/restore, replication/HA guidance
 - JSONL → PostgreSQL import via `veritas-migrate` CLI (dry-run, resume, rollback, verification)
@@ -841,13 +895,13 @@ See [`docs/postgresql-production-guide.md`](docs/en/operations/postgresql-produc
 - Metrics reference (JSON fields, Prometheus gauges, interpretation guide)
 - Known limitations and future work (pgvector, partitioning, CDC)
 
-See [`docs/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md) for:
+See [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md) for:
 - Backup / restore / recovery drill procedures and scripts
 - Safe / unsafe HA boundaries for TrustLog writes
 - Incident response playbooks (corruption, tampering)
 - `make drill-backup`, `make drill-restore`, `make drill-recovery`, `make drill-recovery-ci`
 
-See also: [`docs/database-migrations.md`](docs/en/operations/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/en/validation/backend-parity-coverage.md) | [`docs/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
+See also: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md) | [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md) | [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
 
 ---
 
@@ -973,7 +1027,7 @@ For operator guidance and outcome interpretation, see
 > **Signed governance artifacts** — In secure/prod posture, policy bundles must be Ed25519-signed.
 > Decision artifacts include a `governance_identity` field showing which governance policy was in
 > force (version, digest, signature verification result, signer identity).
-> See [`docs/governance_artifact_lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md) for the
+> See [`docs/en/governance/governance-artifact-lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md) for the
 > full lifecycle, key management, and migration guide.
 
 ### Compliance & Reporting
@@ -1075,7 +1129,7 @@ pip install -e ".[full]"     # all features (recommended)
 # pip install -e ".[ml]"    # core + ML tooling
 ```
 
-> See [`docs/dependency-profiles.md`](docs/en/operations/dependency-profiles.md) for all
+> See [`docs/en/operations/dependency-profiles.md`](docs/en/operations/dependency-profiles.md) for all
 > install profiles and the dependency classification table.
 
 > [!WARNING]
@@ -1161,6 +1215,7 @@ python -m uvicorn veritas_os.api.server:app --reload --port 8000
 ```bash
 # Frontend reads frontend/.env.development automatically via Next.js.
 # Ensure VERITAS_API_KEY in frontend/.env.development matches your backend.
+# Both terminals must source the SAME .env so backend/frontend share secrets.
 set -a && source .env && set +a
 pnpm ui:dev
 ```
@@ -1275,43 +1330,38 @@ Dockerfile `CMD` accordingly before building the image.
 ```text
 ┌──────────────────────────────────────────────────────┐
 │  Frontend (Next.js 16 / React 18 / TypeScript)       │
-│  ┌────────┬──────────┬───────────┬──────────┬──────┐ │
-│  │  Home  │ Console  │   Audit   │Governance│ Risk │ │
-│  └────┬───┴────┬─────┴─────┬─────┴────┬─────┴──┬───┘ │
-│       │ BFF Proxy (httpOnly cookie, CSP nonce)  │     │
-│       └─────────────────┬───────────────────────┘     │
-└─────────────────────────┼─────────────────────────────┘
+│  ┌────────┬─────────┬─────────┬──────────┬────────┐  │
+│  │  Home  │ Console │  Audit  │Governance│  Risk  │  │
+│  └────────┴─────────┴─────────┴──────────┴────────┘  │
+│            BFF Proxy (httpOnly cookie, CSP nonce)    │
+└─────────────────────────┬────────────────────────────┘
                           │ /api/veritas/*
-┌─────────────────────────┼─────────────────────────────┐
-│  Backend (FastAPI / Python 3.11+)                      │
-│       ┌─────────────────┴─────────────────────┐       │
-│       │           API Server (server.py)       │       │
-│       │   Auth · Rate Limit · CORS · PII mask  │       │
-│       └────┬──────┬──────┬──────┬──────┬──────┘       │
-│            │      │      │      │      │              │
-│  ┌─────────┴┐ ┌───┴───┐ ┌┴─────┐ ┌────┴──┐ ┌────────┴┐│
-│  │ Pipeline ││Govern- ││Memory││Trust  ││Compli-  ││
-│  │Orchestr. ││ ance   ││ API  ││ API   ││ ance    ││
-│  └────┬─────┘└────────┘└──┬───┘└───┬───┘└─────────┘│
-│       │                    │       │               │
-│  ┌────┴────────────────────┴───────┴────────────┐  │
-│  │            Core Decision Engine               │  │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ │  │
-│  │  │ Kernel │ │ Debate │ │Critique│ │Planner │ │  │
-│  │  └────┬───┘ └────────┘ └────────┘ └────────┘ │  │
-│  │       │                                       │  │
-│  │  ┌────┴───┐ ┌────────┐ ┌────────┐ ┌────────┐ │  │
-│  │  │  FUJI  │ │Value   │ │MemoryOS│ │ World  │ │  │
-│  │  │  Gate  │ │ Core   │ │(Vector)│ │ Model  │ │  │
-│  │  └────────┘ └────────┘ └────────┘ └────────┘ │  │
-│  └──────────────────┬───────────────────────────┘  │
-│                     │                              │
-│  ┌──────────────────┴───────────────────────────┐  │
-│  │  Infrastructure                               │  │
-│  │  LLM Client · TrustLog · Replay · Sanitize   │  │
-│  │  Atomic I/O · Signing · Tools (Web/GitHub)    │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────┴────────────────────────────┐
+│  Backend (FastAPI / Python 3.11+)                    │
+│  ┌────────────────────────────────────────────────┐  │
+│  │           API Server (server.py)               │  │
+│  │     Auth · Rate Limit · CORS · PII mask        │  │
+│  └────────────────────────────────────────────────┘  │
+│  ┌──────────┬──────────┬────────┬───────┬────────┐   │
+│  │ Pipeline │Governance│ Memory │ Trust │Compli- │   │
+│  │ Orchestr.│   API    │  API   │  API  │ ance   │   │
+│  └──────────┴──────────┴────────┴───────┴────────┘   │
+│  ┌────────────────────────────────────────────────┐  │
+│  │            Core Decision Engine                │  │
+│  │  ┌────────┐┌────────┐┌────────┐┌─────────┐     │  │
+│  │  │ Kernel ││ Debate ││Critique││ Planner │     │  │
+│  │  └────────┘└────────┘└────────┘└─────────┘     │  │
+│  │  ┌────────┐┌────────┐┌────────┐┌─────────┐     │  │
+│  │  │  FUJI  ││ Value  ││MemoryOS││  World  │     │  │
+│  │  │  Gate  ││  Core  ││(Vector)││  Model  │     │  │
+│  │  └────────┘└────────┘└────────┘└─────────┘     │  │
+│  └────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────┐  │
+│  │  Infrastructure                                │  │
+│  │  LLM Client · TrustLog · Replay · Sanitize     │  │
+│  │  Atomic I/O · Signing · Tools (Web/GitHub)     │  │
+│  └────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Core execution path
@@ -1591,8 +1641,8 @@ Additional CI workflows:
   production-path operational verification
 - Advisory: failures are visible but do not block release
 
-See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for the complete
-tier model and [`docs/RELEASE_PROCESS.md`](docs/en/operations/release-process.md) for the release process.
+See [`docs/en/validation/production-validation.md`](docs/en/validation/production-validation.md) for the complete
+tier model and [`docs/en/operations/release-process.md`](docs/en/operations/release-process.md) for the release process.
 
 Type safety baseline command (incremental, not repository-wide strict typing):
 
@@ -1635,11 +1685,11 @@ make validate
 
 Production validation is also available as a **separate CI workflow**
 (`production-validation.yml`) triggered manually or on a weekly schedule.
-See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for
+See [`docs/en/validation/production-validation.md`](docs/en/validation/production-validation.md) for
 the complete strategy, verification matrix, and remaining production risks.
 
 For backend semantics parity scope, see
-[`docs/BACKEND_PARITY_COVERAGE.md`](docs/en/validation/backend-parity-coverage.md).
+[`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md).
 
 ---
 
@@ -1847,11 +1897,11 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Security hardening: input validation, secret/log hygiene, runtime posture system
 - ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
-- ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md).
-- ✅ PostgreSQL production hardening: contention tests (25 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (31 tests). See [`docs/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
+- ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/en/operations/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md).
+- ✅ PostgreSQL production hardening: contention tests (25 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (31 tests). See [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
 - ✅ Continuation Runtime (Phase-1): chain-level continuation observation layer with snapshot/receipt/enforcement event architecture. See `docs/architecture/continuation_runtime_adr.md`.
-- ✅ Governance artifact signing: Ed25519-signed policy bundles, runtime signature verification, governance identity in decision outputs. See [`docs/governance_artifact_lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md).
-- ✅ S3 Object Lock TrustLog mirror: WORM-compliant mirror backend with retention, legal hold, and remote verification. See [`docs/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
+- ✅ Governance artifact signing: Ed25519-signed policy bundles, runtime signature verification, governance identity in decision outputs. See [`docs/en/governance/governance-artifact-lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md).
+- ✅ S3 Object Lock TrustLog mirror: WORM-compliant mirror backend with retention, legal hold, and remote verification. See [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
 
 **Next milestones**:
 - Promote Anthropic / Google LLM providers to production tier
@@ -1925,6 +1975,11 @@ We welcome contributions! Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for gu
 ---
 
 ## 📝 Citation (BibTeX)
+
+> The `year` field reflects the Zenodo deposit year for the cited DOI (a stable
+> reference snapshot). Other dates elsewhere in this README refer to the
+> ongoing project (current beta is on a 2026 cadence) and are intentionally
+> distinct from the citation year.
 
 ```bibtex
 @software{veritas_os_2025,
