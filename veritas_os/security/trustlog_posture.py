@@ -47,6 +47,9 @@ def get_trustlog_security_posture(
             encryption_error_type = raw_error_type.strip()
     encryption_enabled = bool(encryption.get("encryption_enabled", False))
     key_configured = bool(encryption.get("key_configured", False))
+    backend_available = bool(encryption.get("backend_available", False))
+    backend_required = bool(encryption.get("backend_required", False))
+    backend_acceptable = bool(encryption.get("backend_acceptable", True))
     db_url_configured = bool((os.getenv("VERITAS_DATABASE_URL") or "").strip())
 
     reasons: list[str] = []
@@ -78,6 +81,14 @@ def get_trustlog_security_posture(
             reasons.append("TrustLog encryption key is not configured.")
             remediation.append(
                 "Set VERITAS_ENCRYPTION_KEY or configure a supported KMS/Vault key provider."
+            )
+        if not backend_acceptable:
+            reasons.append(
+                "TrustLog encryption backend is not acceptable for strict posture; "
+                "cryptography-backed AES-256-GCM is required."
+            )
+            remediation.append(
+                "Install veritas-os[signing] or include cryptography in the deployment image."
             )
     elif posture_level == "staging":
         if backend != "postgresql":
@@ -111,6 +122,9 @@ def get_trustlog_security_posture(
         "trustlog_backend": backend,
         "encryption_enabled": encryption_enabled,
         "key_configured": key_configured,
+        "backend_available": backend_available,
+        "backend_required": backend_required,
+        "backend_acceptable": backend_acceptable,
         "secure_by_default": bool(encryption.get("secure_by_default", True)),
         "reasons": reasons,
         "remediation": remediation,
@@ -118,14 +132,22 @@ def get_trustlog_security_posture(
 
 
 def validate_trustlog_secure_defaults() -> None:
-    """Fail closed when secure/prod posture violates TrustLog hardening baseline."""
+    """Fail closed whenever TrustLog posture diagnostics report blocked status."""
     posture_info = get_trustlog_security_posture()
-    if posture_info["posture"] in {"secure", "prod"} and posture_info["status"] == "blocked":
+    if posture_info["status"] == "blocked":
+        posture = posture_info.get("posture", "<unknown>")
+        backend_required = posture_info.get("backend_required", "<unknown>")
+        backend_acceptable = posture_info.get("backend_acceptable", "<unknown>")
+        reasons = posture_info.get("reasons", [])
+        reasons_text = "; ".join(str(item) for item in reasons)
         raise RuntimeError(
             "TrustLog secure posture violation: "
-            f"VERITAS_POSTURE={posture_info['posture']} requires "
-            "VERITAS_TRUSTLOG_BACKEND=postgresql, VERITAS_DATABASE_URL, "
-            "and configured encryption key. Set VERITAS_DATABASE_URL and "
-            "VERITAS_ENCRYPTION_KEY or a supported KMS/Vault provider. "
-            f"Reasons: {'; '.join(posture_info['reasons'])}"
+            "blocking controls can be triggered by secure/prod posture, "
+            "VERITAS_ENV strict aliases (production/prod/secure/hardened), or "
+            "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE truthy. "
+            f"posture={posture!r}, backend_required={backend_required!r}, "
+            f"backend_acceptable={backend_acceptable!r}. "
+            "Ensure VERITAS_TRUSTLOG_BACKEND=postgresql, VERITAS_DATABASE_URL, "
+            "configured encryption key, and cryptography-backed AES-256-GCM backend. "
+            f"Reasons: {reasons_text}"
         )
