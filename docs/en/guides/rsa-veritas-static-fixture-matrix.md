@@ -18,6 +18,7 @@ The current merged baseline includes:
 - Existing ALGORITHMIC_HUMILITY_ENGAGED validation snapshot.
 - Existing DENSITY_THROTTLED validation snapshot.
 - Existing DEFERRAL_ENGAGED validation snapshot.
+- Existing SAFE_PROCEED validation snapshot.
 
 ## 3. Terminology compatibility note
 
@@ -60,7 +61,9 @@ This ladder gives reviewers a compact view of the sandbox governance behavior wi
 This matrix is designed to be read alongside the existing snapshot pages:
 
 - [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md) (ALGORITHMIC_HUMILITY_ENGAGED validation snapshot)
+- [SAFE_PROCEED validation snapshot](./rsa-veritas-safe-proceed-validation-snapshot.md)
 - [RSA ↔ VERITAS DENSITY_THROTTLED Validation Snapshot](./rsa-veritas-density-throttled-validation-snapshot.md)
+- [RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md)
 - [RSA ↔ VERITAS DEFERRAL_ENGAGED Validation Snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 
 ## 7. What this validates
@@ -85,6 +88,8 @@ This matrix is designed to be read alongside the existing snapshot pages:
 
 ## 9. Next sandbox step
 
-After this matrix is merged, the next safe sandbox step is to add a SAFE_PROCEED validation snapshot or a lightweight reviewer index page linking all RSA ↔ VERITAS sandbox artifacts.
+All four current static fixture variants now have individual validation snapshots.
 
-No live V.I.K.I. connection should be added before the static fixture matrix and reviewer index are documented and reviewed.
+The next safe sandbox step is to add a lightweight reviewer index page linking the E2E sandbox validation snapshot, all four individual fixture snapshots, the static fixture matrix, the AML/KYC scenario map, and the E2E sandbox demo plan.
+
+No live V.I.K.I. connection should be added before the reviewer index is documented and reviewed.
