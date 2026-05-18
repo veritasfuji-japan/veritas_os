@@ -110,6 +110,53 @@ class TestEncryptDecryptFlow:
         with pytest.raises(encryption.DecryptionError):
             encryption.decrypt(ciphertext)
 
+    def test_encrypt_allows_hmac_ctr_fallback_in_dev_when_cryptography_unavailable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch)
+        monkeypatch.setenv("VERITAS_POSTURE", "dev")
+        monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
+
+        ciphertext = encryption.encrypt("compat")
+
+        assert ciphertext.startswith("ENC:hmac-ctr:")
+
+    def test_encrypt_fails_in_secure_when_cryptography_unavailable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch)
+        monkeypatch.setenv("VERITAS_POSTURE", "secure")
+        monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
+
+        with pytest.raises(encryption.EncryptionBackendUnavailable):
+            encryption.encrypt("strict")
+
+    def test_encrypt_fails_in_prod_when_cryptography_unavailable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch)
+        monkeypatch.setenv("VERITAS_POSTURE", "prod")
+        monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
+
+        with pytest.raises(encryption.EncryptionBackendUnavailable):
+            encryption.encrypt("strict")
+
+    def test_encrypt_uses_aesgcm_in_prod_when_available(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch)
+        monkeypatch.setenv("VERITAS_POSTURE", "prod")
+        monkeypatch.setattr(encryption, "_USE_REAL_AES", True)
+        monkeypatch.setattr(encryption, "_encrypt_aesgcm_raw", lambda plaintext, key: "stub")
+
+        ciphertext = encryption.encrypt("strict")
+
+        assert ciphertext == "ENC:aesgcm:stub"
+
 
 class TestFallbackAndExceptionPath:
     def test_legacy_like_marker_without_separator_fails_closed(
@@ -158,3 +205,20 @@ class TestFallbackAndExceptionPath:
 
         with pytest.raises(encryption.DecryptionError, match="invalid base64 payload"):
             encryption.decrypt("ENC:hmac-ctr:not_base64!!!")
+
+
+class TestEncryptionStatus:
+    def test_get_encryption_status_reports_backend_required_and_unavailable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch)
+        monkeypatch.setenv("VERITAS_POSTURE", "secure")
+        monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
+
+        status = encryption.get_encryption_status()
+
+        assert status["posture"] == "secure"
+        assert status["backend_required"] is True
+        assert status["backend_available"] is False
+        assert status["backend_acceptable"] is False

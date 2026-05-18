@@ -35,6 +35,7 @@ PostgreSQL production guide、runtime startup validation、CI checks、live prov
 | TrustLog backend | `VERITAS_TRUSTLOG_BACKEND=postgresql` | `make check-trustlog-production-posture` を実行 | backend failure が出ない | `jsonl` は dev/demo 用です |
 | Database URL | `VERITAS_DATABASE_URL` または `DATABASE_URL` が設定されている | checker 実行 / secret injection を確認 | database URL failure が出ない | secret 値をログに出さないでください |
 | Encryption key | `VERITAS_ENCRYPTION_KEY` が設定されている | checker 実行 / secret source を確認 | encryption key failure が出ない | production では外部 secret manager を使います |
+| Encryption backend | `secure` / `prod` では cryptography-backed AES-256-GCM を必須にする | deployment image / dependencies と `get_encryption_status()` を確認 | `backend_required=true` かつ `backend_available=true` かつ `backend_acceptable=true` | `veritas-os[signing]` の導入、または deployment image に `cryptography` を含めてください。`dev` / `staging` は互換性のため HMAC-CTR fallback を許容します |
 | Managed signer | `VERITAS_TRUSTLOG_SIGNER_BACKEND` が `aws_kms` に解決される | checker を実行 | signer backend failure が出ない | `aws_kms_ed25519` は許可、`file` / `file_ed25519` は failure です |
 | KMS key id | signer が `aws_kms` に解決される場合 `VERITAS_TRUSTLOG_KMS_KEY_ID` が設定されている | checker 実行 / KMS 関連 env を確認 | `KMS_KEY_ID` failure が出ない | checker は KMS へ接続しません |
 | Break-glass override | `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` に依存しない | env を確認 | override があっても file signer は failure | production posture checker はこのフラグを無視します |

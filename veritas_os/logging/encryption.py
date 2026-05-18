@@ -38,6 +38,8 @@ import secrets
 import struct
 from typing import Optional, Protocol, Tuple
 
+from veritas_os.core.posture import PostureLevel, resolve_posture
+
 logger = logging.getLogger(__name__)
 
 _AES_BLOCK = 16
@@ -215,6 +217,10 @@ class DecryptionError(RuntimeError):
     """Raised when decryption fails (fail-closed principle)."""
 
 
+class EncryptionBackendUnavailable(RuntimeError):
+    """Raised when strict posture requires AES-GCM but cryptography is unavailable."""
+
+
 # ---------------------------------------------------------------------------
 # Optional real AES backend
 # ---------------------------------------------------------------------------
@@ -310,6 +316,21 @@ def _legacy_decrypt_enabled() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _strict_encryption_backend_required() -> bool:
+    """Return True when posture requires cryptography-backed AES-GCM."""
+    posture = resolve_posture()
+    return posture in {PostureLevel.SECURE, PostureLevel.PROD}
+
+
+def _require_strong_encryption_backend() -> None:
+    """Fail fast in strict posture when cryptography backend is unavailable."""
+    if _strict_encryption_backend_required() and not _USE_REAL_AES:
+        raise EncryptionBackendUnavailable(
+            "VERITAS_POSTURE=secure/prod requires cryptography-backed AES-256-GCM. "
+            "Install veritas-os[signing] or include cryptography in the deployment image."
+        )
+
+
 def _split_encrypted_token(token: str) -> Tuple[str, str]:
     """Parse ``ENC:<algorithm>:<base64>`` with explicit fail-closed checks.
 
@@ -387,6 +408,8 @@ def encrypt(plaintext: str) -> str:
             "call generate_key() to create one."
         )
 
+    _require_strong_encryption_backend()
+
     if _USE_REAL_AES:
         return "ENC:aesgcm:" + _encrypt_aesgcm_raw(plaintext, key)
     return "ENC:hmac-ctr:" + _encrypt_hmac_ctr_raw(plaintext, key)
@@ -411,6 +434,8 @@ def decrypt(ciphertext: str) -> str:
         raise EncryptionKeyMissing(
             "Cannot decrypt: VERITAS_ENCRYPTION_KEY not set"
         )
+
+    _require_strong_encryption_backend()
 
     try:
         algorithm, payload = _split_encrypted_token(ciphertext)
@@ -507,19 +532,31 @@ def get_encryption_status() -> dict:
     enabled = is_encryption_enabled()
     backend = "AES-256-GCM" if _USE_REAL_AES else "HMAC-SHA256 CTR-mode"
     provider = os.getenv(_ENCRYPTION_PROVIDER_ENV, "env").strip().lower() or "env"
+    posture = resolve_posture()
+    backend_required = _strict_encryption_backend_required()
+    backend_acceptable = (not backend_required) or _USE_REAL_AES
     return {
         "encryption_enabled": enabled,
         "algorithm": backend if enabled else "none",
         "key_provider": provider,
         "key_configured": enabled,
+        "posture": posture.value,
+        "backend_available": _USE_REAL_AES,
+        "backend_required": backend_required,
+        "backend_acceptable": backend_acceptable,
         "secure_by_default": True,
         "eu_ai_act_article": "Art. 12",
         "note": (
             f"At-rest encryption is active ({backend})."
-            if enabled
+            if enabled and backend_acceptable
             else (
-                "VERITAS_ENCRYPTION_KEY is NOT configured. "
-                "TrustLog writes will fail until a key is set."
+                "At-rest encryption key is configured but backend is not acceptable for "
+                f"VERITAS_POSTURE={posture.value}. Install cryptography for AES-256-GCM."
+                if enabled
+                else (
+                    "VERITAS_ENCRYPTION_KEY is NOT configured. "
+                    "TrustLog writes will fail until a key is set."
+                )
             )
         ),
     }
