@@ -126,17 +126,16 @@ DEFERRAL_ENGAGED:
 
 ## 10. Next sandbox step
 
-After this SAFE_PROCEED snapshot is merged, all four current static fixture variants have individual validation snapshots.
+After this SAFE_PROCEED snapshot is merged, the current static fixture variants are covered by the matrix and snapshot documentation. SAFE_PROCEED, DENSITY_THROTTLED, and DEFERRAL_ENGAGED have dedicated per-variant snapshots, while ALGORITHMIC_HUMILITY_ENGAGED is covered by the broader E2E sandbox validation snapshot.
 
 The next safe sandbox step should be a lightweight reviewer index page linking:
 
 - E2E sandbox validation snapshot
-- SAFE_PROCEED validation snapshot
-- DENSITY_THROTTLED validation snapshot
-- ALGORITHMIC_HUMILITY_ENGAGED validation snapshot
-- DEFERRAL_ENGAGED validation snapshot
+- available per-variant snapshots (SAFE_PROCEED, DENSITY_THROTTLED, DEFERRAL_ENGAGED)
 - static fixture matrix
 - AML/KYC scenario map
 - E2E sandbox demo plan
+
+A dedicated ALGORITHMIC_HUMILITY_ENGAGED per-variant page may be added later if strict one-page-per-status symmetry is desired.
 
 No live V.I.K.I. connection should be added before the reviewer index is documented and reviewed.

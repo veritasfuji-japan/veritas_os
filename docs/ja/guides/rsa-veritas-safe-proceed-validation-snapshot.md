@@ -130,17 +130,16 @@ DEFERRAL_ENGAGED:
 
 ## 10. 次のサンドボックス・ステップ
 
-この SAFE_PROCEED スナップショットがマージされると、現行の 4 つの static fixture バリアントはそれぞれ個別の検証スナップショットを持つ状態になります。
+この SAFE_PROCEED スナップショットがマージされると、現行の static fixture variants は matrix と snapshot documentation によってカバーされる状態になります。SAFE_PROCEED、DENSITY_THROTTLED、DEFERRAL_ENGAGED は dedicated per-variant snapshot を持ち、ALGORITHMIC_HUMILITY_ENGAGED は broader E2E sandbox validation snapshot によってカバーされます。
 
 次の安全な sandbox ステップは、以下へリンクする軽量な reviewer index page を作成することです。
 
 - E2E sandbox validation snapshot
-- SAFE_PROCEED validation snapshot
-- DENSITY_THROTTLED validation snapshot
-- ALGORITHMIC_HUMILITY_ENGAGED validation snapshot
-- DEFERRAL_ENGAGED validation snapshot
+- 利用可能な per-variant snapshots（SAFE_PROCEED、DENSITY_THROTTLED、DEFERRAL_ENGAGED）
 - static fixture matrix
 - AML/KYC scenario map
 - E2E sandbox demo plan
+
+A dedicated ALGORITHMIC_HUMILITY_ENGAGED per-variant page は、1 status = 1 page の対称性を厳密に求める場合に後続で追加可能です。
 
 reviewer index の文書化とレビュー完了前に、live V.I.K.I. connection を追加すべきではありません。
