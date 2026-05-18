@@ -22,6 +22,7 @@
 - 既存の ALGORITHMIC_HUMILITY_ENGAGED validation snapshot。
 - 既存の DENSITY_THROTTLED validation snapshot。
 - 既存の DEFERRAL_ENGAGED validation snapshot。
+- 既存の SAFE_PROCEED validation snapshot。
 
 ## 3. 用語互換性ノート
 
@@ -63,9 +64,10 @@ DEFERRAL_ENGAGED
 
 本マトリクスは、既存の snapshot pages と合わせて参照する想定です。
 
-- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](../../en/guides/rsa-veritas-e2e-sandbox-validation-snapshot.md)（ALGORITHMIC_HUMILITY_ENGAGED validation snapshot）
-- [RSA ↔ VERITAS DENSITY_THROTTLED Validation Snapshot](../../en/guides/rsa-veritas-density-throttled-validation-snapshot.md)
-- [RSA ↔ VERITAS DEFERRAL_ENGAGED Validation Snapshot](../../en/guides/rsa-veritas-deferral-engaged-validation-snapshot.md)
+- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md) — ALGORITHMIC_HUMILITY_ENGAGED の E2E path を含みます。
+- [SAFE_PROCEED validation snapshot](./rsa-veritas-safe-proceed-validation-snapshot.md)
+- [RSA ↔ VERITAS DENSITY_THROTTLED Validation Snapshot](./rsa-veritas-density-throttled-validation-snapshot.md)
+- [RSA ↔ VERITAS DEFERRAL_ENGAGED Validation Snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 
 ## 7. この文書で検証できること
 
@@ -89,6 +91,10 @@ DEFERRAL_ENGAGED
 
 ## 9. 次の sandbox ステップ
 
-この matrix のマージ後、次の安全な sandbox ステップは SAFE_PROCEED validation snapshot の追加、または RSA ↔ VERITAS sandbox artifacts 全体をつなぐ lightweight reviewer index page の追加です。
+現行の static fixture variants は matrix と snapshot documentation によりカバーされています。SAFE_PROCEED、DENSITY_THROTTLED、DEFERRAL_ENGAGED は個別の per-variant snapshot を持ち、ALGORITHMIC_HUMILITY_ENGAGED はより広い E2E sandbox validation snapshot でカバーされています。
 
-static fixture matrix と reviewer index が文書化・レビューされる前に、live V.I.K.I. connection を追加すべきではありません。
+次の安全な sandbox ステップは、E2E sandbox validation snapshot、利用可能な per-variant snapshots、static fixture matrix、AML/KYC scenario map、E2E sandbox demo plan をリンクする lightweight reviewer index page の追加です。
+
+将来的に 1 status = 1 page の対称性を厳密に求める場合は、ALGORITHMIC_HUMILITY_ENGAGED の専用 per-variant snapshot を後続の documentation PR で追加できます。
+
+reviewer index page が文書化・レビューされる前に、live V.I.K.I. connection を追加すべきではありません。
