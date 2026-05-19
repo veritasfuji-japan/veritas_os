@@ -64,9 +64,10 @@ DEFERRAL_ENGAGED
 
 本マトリクスは、既存の snapshot pages と合わせて参照する想定です。
 
-- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md) — ALGORITHMIC_HUMILITY_ENGAGED の E2E path を含みます。
+- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md) — static harness output path の general E2E artifact です。
 - [SAFE_PROCEED validation snapshot](./rsa-veritas-safe-proceed-validation-snapshot.md)
 - [RSA ↔ VERITAS DENSITY_THROTTLED Validation Snapshot](./rsa-veritas-density-throttled-validation-snapshot.md)
+- [RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED Validation Snapshot](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 - [RSA ↔ VERITAS DEFERRAL_ENGAGED Validation Snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 
 ## 7. この文書で検証できること
@@ -91,10 +92,10 @@ DEFERRAL_ENGAGED
 
 ## 9. 次の sandbox ステップ
 
-現行の static fixture variants は matrix と snapshot documentation によりカバーされています。SAFE_PROCEED、DENSITY_THROTTLED、DEFERRAL_ENGAGED は個別の per-variant snapshot を持ち、ALGORITHMIC_HUMILITY_ENGAGED はより広い E2E sandbox validation snapshot でカバーされています。
+現行の static fixture variants は、SAFE_PROCEED、DENSITY_THROTTLED、ALGORITHMIC_HUMILITY_ENGAGED、DEFERRAL_ENGAGED の4ステータスすべてについて、matrix と dedicated per-variant snapshot documentation でカバーされています。
 
-次の安全な sandbox ステップは、E2E sandbox validation snapshot、利用可能な per-variant snapshots、static fixture matrix、AML/KYC scenario map、E2E sandbox demo plan をリンクする lightweight reviewer index page の追加です。
+次の安全な sandbox ステップは、general E2E artifact と4つの per-variant snapshots へのリンクハブとして、static fixture matrix と sandbox reviewer index の整合を維持することです。
 
-将来的に 1 status = 1 page の対称性を厳密に求める場合は、ALGORITHMIC_HUMILITY_ENGAGED の専用 per-variant snapshot を後続の documentation PR で追加できます。
+その整合レビュー後の次の安全なステップは、将来の live V.I.K.I. integration に向けた separate design note です。
 
-reviewer index page が文書化・レビューされる前に、live V.I.K.I. connection を追加すべきではありません。
+この documentation PR で live V.I.K.I. connection を追加してはいけません。
