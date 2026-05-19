@@ -173,6 +173,91 @@ def test_check_boundaries_detects_from_core_import_pattern(tmp_path: Path) -> No
     assert "kernel" in issues[0]
 
 
+def test_pipeline_helper_importing_kernel_is_boundary_violation(tmp_path: Path) -> None:
+    """Pipeline helper modules should not import the kernel orchestrator surface."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    _write_module(tmp_path / "pipeline_execute.py", "from veritas_os.core import kernel\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert any(
+        issue.code == "boundary_violation"
+        and issue.source_module == "pipeline"
+        and issue.forbidden_module == "kernel"
+        and issue.path == tmp_path / "pipeline_execute.py"
+        for issue in issues
+    )
+
+
+def test_pipeline_helpers_allow_pipeline_owned_imports(tmp_path: Path) -> None:
+    """Pipeline helper modules may import other pipeline-owned modules."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    _write_module(tmp_path / "pipeline_execute.py", "from veritas_os.core import pipeline_inputs\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert not any(
+        issue.code == "boundary_violation" and issue.source_module == "pipeline"
+        for issue in issues
+    )
+
+
+def test_pipeline_rule_still_excludes_vendor_and_third_party_helpers(
+    tmp_path: Path,
+) -> None:
+    """Excluded helper paths should remain out-of-scope for boundary matching."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    (tmp_path / "pipeline" / "vendor").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "pipeline" / "third_party").mkdir(parents=True, exist_ok=True)
+    _write_module(
+        tmp_path / "pipeline" / "vendor" / "shim.py",
+        "import veritas_os.core.kernel\n",
+    )
+    _write_module(
+        tmp_path / "pipeline" / "third_party" / "shim.py",
+        "import veritas_os.core.kernel\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert not any(
+        issue.code == "boundary_violation" and issue.source_module == "pipeline"
+        for issue in issues
+    )
+
+
+def test_pipeline_rule_alias_expansion_maps_kernel_helper_names(
+    tmp_path: Path,
+) -> None:
+    """Logical alias expansion should map kernel_* helper imports to kernel ownership."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    _write_module(
+        tmp_path / "pipeline_execute.py",
+        "from veritas_os.core import kernel_stages\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert any(
+        issue.code == "boundary_violation"
+        and issue.source_module == "pipeline"
+        and issue.forbidden_module == "kernel"
+        for issue in issues
+    )
+
+
 def test_build_remediation_guide_contains_required_columns(tmp_path: Path) -> None:
     """Remediation guide should include forbidden dependency, alternatives, and link."""
     violations = [

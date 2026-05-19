@@ -121,6 +121,9 @@ When changing one of the four core modules above:
 4. The boundary checker intentionally skips helper files under common non-owned
    directories such as `tests/`, `fixtures/`, `vendor/`, and `third_party/`
    inside a logical module package.
+5. Boundary checks apply to helper/stage surfaces too (for example
+   `kernel_*.py`, `pipeline_*.py`, and `pipeline/*.py`) so responsibility
+   cycles cannot hide in orchestration-adjacent helper modules.
 
 ## Security note
 

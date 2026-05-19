@@ -105,6 +105,10 @@ DEFAULT_RULES: tuple[BoundaryRule, ...] = (
         source_module="memory",
         forbidden_imports=frozenset({"kernel", "planner", "fuji"}),
     ),
+    BoundaryRule(
+        source_module="pipeline",
+        forbidden_imports=frozenset({"kernel"}),
+    ),
 )
 
 
