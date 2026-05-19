@@ -245,6 +245,53 @@ def _is_boundary_relevant_relative_alias(alias_name: str) -> bool:
     return any(normalized.startswith(f"{module}_") for module in LOGICAL_CORE_MODULES)
 
 
+def _is_boundary_relevant_module_name(module_name: str) -> bool:
+    """Return whether a module leaf name is relevant for boundary checks."""
+    normalized = _normalize_module_name(module_name)
+    if normalized in LOGICAL_CORE_MODULES:
+        return True
+    return any(normalized.startswith(f"{module}_") for module in LOGICAL_CORE_MODULES)
+
+
+def _extract_lazy_import_module_names(node: ast.AST) -> set[str]:
+    """Extract boundary-relevant modules from narrow `_lazy_import(...)` calls."""
+    if not isinstance(node, ast.Call):
+        return set()
+
+    function_name = ""
+    if isinstance(node.func, ast.Name):
+        function_name = node.func.id
+    elif isinstance(node.func, ast.Attribute):
+        function_name = node.func.attr
+    if function_name != "_lazy_import":
+        return set()
+
+    if not node.args:
+        return set()
+
+    first_argument = node.args[0]
+    if not isinstance(first_argument, ast.Constant) or not isinstance(
+        first_argument.value, str
+    ):
+        return set()
+    first_name = _normalize_module_name(first_argument.value)
+
+    lazy_modules: set[str] = set()
+    if _is_boundary_relevant_module_name(first_name):
+        lazy_modules.add(first_name)
+
+    if first_argument.value == "veritas_os.core" and len(node.args) > 1:
+        second_argument = node.args[1]
+        if isinstance(second_argument, ast.Constant) and isinstance(
+            second_argument.value, str
+        ):
+            second_name = _normalize_module_name(second_argument.value)
+            if _is_boundary_relevant_module_name(second_name):
+                lazy_modules.add(second_name)
+
+    return lazy_modules
+
+
 def _collect_imported_name_parts(tree: ast.Module) -> ImportedNames:
     """Collect module-leaf and symbol-leaf imports from a module AST."""
     module_names: set[str] = set()
@@ -270,6 +317,7 @@ def _collect_imported_name_parts(tree: ast.Module) -> ImportedNames:
             else:
                 for alias in node.names:
                     symbol_names.add(_normalize_module_name(alias.name))
+        module_names.update(_extract_lazy_import_module_names(node))
     return ImportedNames(
         module_names=frozenset(module_names),
         symbol_names=frozenset(symbol_names),

@@ -319,6 +319,73 @@ def test_pipeline_relative_import_of_pipeline_helper_is_allowed(tmp_path: Path) 
     )
 
 
+def test_pipeline_lazy_import_of_kernel_module_is_boundary_violation(
+    tmp_path: Path,
+) -> None:
+    """Lazy import should classify veritas_os.core.kernel as kernel dependency."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    _write_module(
+        tmp_path / "pipeline_execute.py",
+        '_lazy_import("veritas_os.core.kernel", None)\n',
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert any(
+        issue.code == "boundary_violation"
+        and issue.source_module == "pipeline"
+        and issue.forbidden_module == "kernel"
+        and issue.path == tmp_path / "pipeline_execute.py"
+        for issue in issues
+    )
+
+
+def test_pipeline_lazy_import_of_kernel_symbol_is_boundary_violation(
+    tmp_path: Path,
+) -> None:
+    """Lazy import should classify core+kernel symbol pattern as kernel dependency."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    _write_module(
+        tmp_path / "pipeline_execute.py",
+        '_lazy_import("veritas_os.core", "kernel")\n',
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert any(
+        issue.code == "boundary_violation"
+        and issue.source_module == "pipeline"
+        and issue.forbidden_module == "kernel"
+        and issue.path == tmp_path / "pipeline_execute.py"
+        for issue in issues
+    )
+
+
+def test_pipeline_lazy_import_of_pipeline_helper_is_allowed(tmp_path: Path) -> None:
+    """Lazy imports of pipeline-owned helpers should not trigger kernel violations."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    _write_module(
+        tmp_path / "pipeline_execute.py",
+        '_lazy_import("veritas_os.core", "pipeline_execute")\n',
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert not any(
+        issue.code == "boundary_violation" and issue.source_module == "pipeline"
+        for issue in issues
+    )
+
+
 def test_build_remediation_guide_contains_required_columns(tmp_path: Path) -> None:
     """Remediation guide should include forbidden dependency, alternatives, and link."""
     violations = [
