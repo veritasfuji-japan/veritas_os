@@ -1286,8 +1286,7 @@ class TestCheckRequiredModules:
     def test_missing_kernel(self, monkeypatch):
         monkeypatch.setattr(pipeline, "veritas_core", None)
         monkeypatch.setattr(pipeline, "fuji_core", MagicMock())
-        with pytest.raises(ImportError, match="kernel"):
-            pipeline._check_required_modules()
+        pipeline._check_required_modules()
 
     def test_missing_fuji(self, monkeypatch):
         monkeypatch.setattr(pipeline, "veritas_core", MagicMock())
@@ -1298,7 +1297,7 @@ class TestCheckRequiredModules:
     def test_missing_both(self, monkeypatch):
         monkeypatch.setattr(pipeline, "veritas_core", None)
         monkeypatch.setattr(pipeline, "fuji_core", None)
-        with pytest.raises(ImportError, match="kernel.*fuji"):
+        with pytest.raises(ImportError, match="fuji"):
             pipeline._check_required_modules()
 
 
@@ -1808,8 +1807,7 @@ from veritas_os.core import pipeline as pl
 
 
 class TestCheckRequiredModules_v2:
-    """_check_required_modules must raise ImportError when core modules are
-    absent and succeed silently when they are present."""
+    """_check_required_modules treats fuji as required and kernel as injected."""
 
     def test_both_present_no_error(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", types.SimpleNamespace())
@@ -1819,8 +1817,7 @@ class TestCheckRequiredModules_v2:
     def test_kernel_missing(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", None)
         monkeypatch.setattr(pl, "fuji_core", types.SimpleNamespace())
-        with pytest.raises(ImportError, match="kernel"):
-            pl._check_required_modules()
+        pl._check_required_modules()
 
     def test_fuji_missing(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", types.SimpleNamespace())
@@ -1831,7 +1828,7 @@ class TestCheckRequiredModules_v2:
     def test_both_missing(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", None)
         monkeypatch.setattr(pl, "fuji_core", None)
-        with pytest.raises(ImportError, match="kernel.*fuji"):
+        with pytest.raises(ImportError, match="fuji"):
             pl._check_required_modules()
 
 
@@ -2343,11 +2340,18 @@ class TestRunDecidePipelineOrchestration:
 
     @pytest.mark.anyio
     async def test_kernel_missing_raises(self, pipeline_env, monkeypatch):
-        """When veritas_core is None, pipeline must raise ImportError."""
+        """Kernel missing should degrade and keep a structured response contract."""
         monkeypatch.setattr(pipeline_env, "veritas_core", None)
         body = {"query": "should fail", "context": {"user_id": "u1"}}
-        with pytest.raises(ImportError, match="kernel"):
-            await pipeline_env.run_decide_pipeline(DummyReqModel(body), DummyRequest())
+        payload = await pipeline_env.run_decide_pipeline(
+            DummyReqModel(body),
+            DummyRequest(),
+        )
+        assert isinstance(payload, dict)
+        assert isinstance(payload.get("alternatives"), list)
+        extras = payload.get("extras") or {}
+        env_tools = extras.get("env_tools") or {}
+        assert env_tools.get("kernel_missing") is True
 
 
 # =========================================================
@@ -3855,12 +3859,10 @@ from veritas_os.core import pipeline as pl
 class TestCheckRequiredModulesMessages:
     """Verify the ImportError message contains the correct module names."""
 
-    def test_kernel_only_missing_mentions_kernel_not_fuji(self, monkeypatch):
+    def test_kernel_only_missing_is_non_fatal(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", None)
         monkeypatch.setattr(pl, "fuji_core", types.SimpleNamespace())
-        with pytest.raises(ImportError, match="kernel") as exc_info:
-            pl._check_required_modules()
-        assert "fuji" not in str(exc_info.value)
+        assert pl._check_required_modules() is None
 
     def test_fuji_only_missing_mentions_fuji_not_kernel(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", types.SimpleNamespace())
@@ -3869,13 +3871,12 @@ class TestCheckRequiredModulesMessages:
             pl._check_required_modules()
         assert "kernel" not in str(exc_info.value)
 
-    def test_both_missing_message_contains_both(self, monkeypatch):
+    def test_both_missing_message_mentions_fuji_and_fatal(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", None)
         monkeypatch.setattr(pl, "fuji_core", None)
         with pytest.raises(ImportError) as exc_info:
             pl._check_required_modules()
         msg = str(exc_info.value)
-        assert "kernel" in msg
         assert "fuji" in msg
         assert "FATAL" in msg
 
