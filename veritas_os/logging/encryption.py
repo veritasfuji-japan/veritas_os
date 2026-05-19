@@ -59,6 +59,8 @@ _STREAM_BLOCK = 32  # SHA-256 output size
 _LEGACY_DECRYPT_ENV = "VERITAS_ENCRYPTION_LEGACY_DECRYPT"
 _ENCRYPTION_PROVIDER_ENV = "VERITAS_ENCRYPTION_KEY_PROVIDER"
 _ALLOW_ENV_FALLBACK_ENV = "VERITAS_ENCRYPTION_ALLOW_ENV_FALLBACK"
+_STRICT_POSTURE_ALIASES = frozenset({"secure", "prod", "production", "hardened"})
+_STRICT_ENV_ALIASES = frozenset({"prod", "production", "secure", "hardened"})
 
 
 class EncryptionKeyProvider(Protocol):
@@ -215,6 +217,10 @@ class DecryptionError(RuntimeError):
     """Raised when decryption fails (fail-closed principle)."""
 
 
+class EncryptionBackendUnavailable(RuntimeError):
+    """Raised when production posture requires AES-GCM but it is unavailable."""
+
+
 # ---------------------------------------------------------------------------
 # Optional real AES backend
 # ---------------------------------------------------------------------------
@@ -232,6 +238,43 @@ except BaseException:  # noqa: BLE001
 # ---------------------------------------------------------------------------
 # Key helpers
 # ---------------------------------------------------------------------------
+
+
+def _normalized_env_value(key: str) -> str:
+    """Return a normalized runtime environment value for posture checks."""
+    return (os.getenv(key) or "").strip().lower()
+
+
+def _backend_required_for_current_env() -> bool:
+    """Return True when current runtime env requires cryptography AES-GCM."""
+    require_posture = _is_truthy(
+        os.getenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "")
+    )
+    return (
+        _normalized_env_value("VERITAS_POSTURE") in _STRICT_POSTURE_ALIASES
+        or _normalized_env_value("VERITAS_ENV") in _STRICT_ENV_ALIASES
+        or require_posture
+    )
+
+
+def _encryption_backend_unavailable_message() -> str:
+    """Build a sanitized fail-fast message for missing AES-GCM support."""
+    return (
+        "TrustLog production posture requires cryptography-backed "
+        "AES-256-GCM encryption backend. "
+        f"VERITAS_POSTURE={os.getenv('VERITAS_POSTURE', '')!r}; "
+        f"VERITAS_ENV={os.getenv('VERITAS_ENV', '')!r}; "
+        "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE="
+        f"{os.getenv('VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE', '')!r}. "
+        "Install cryptography or use dev/staging posture where the "
+        "HMAC-CTR fallback remains available."
+    )
+
+
+def _ensure_encryption_backend_available_for_posture() -> None:
+    """Fail fast when production posture cannot use AES-256-GCM."""
+    if _backend_required_for_current_env() and not _USE_REAL_AES:
+        raise EncryptionBackendUnavailable(_encryption_backend_unavailable_message())
 
 
 def generate_key() -> str:
@@ -379,6 +422,8 @@ def encrypt(plaintext: str) -> str:
     if not isinstance(plaintext, str):
         raise TypeError(f"encrypt() requires a str, got {type(plaintext).__name__}")
 
+    _ensure_encryption_backend_available_for_posture()
+
     key = _get_key_bytes()
     if key is None:
         raise EncryptionKeyMissing(
@@ -403,6 +448,8 @@ def decrypt(ciphertext: str) -> str:
     Returns the original string unchanged if it does not start with ``ENC:``.
     Raises :class:`EncryptionKeyMissing` when the key is required but absent.
     """
+    _ensure_encryption_backend_available_for_posture()
+
     if not ciphertext.startswith("ENC:"):
         return ciphertext
 
@@ -507,12 +554,24 @@ def get_encryption_status() -> dict:
     enabled = is_encryption_enabled()
     backend = "AES-256-GCM" if _USE_REAL_AES else "HMAC-SHA256 CTR-mode"
     provider = os.getenv(_ENCRYPTION_PROVIDER_ENV, "env").strip().lower() or "env"
+    posture = (
+        _normalized_env_value("VERITAS_POSTURE")
+        or _normalized_env_value("VERITAS_ENV")
+        or "dev"
+    )
+    backend_available = bool(_USE_REAL_AES)
+    backend_required = _backend_required_for_current_env()
+    backend_acceptable = not backend_required or backend_available
     return {
         "encryption_enabled": enabled,
         "algorithm": backend if enabled else "none",
         "key_provider": provider,
         "key_configured": enabled,
         "secure_by_default": True,
+        "posture": posture,
+        "backend_available": backend_available,
+        "backend_required": backend_required,
+        "backend_acceptable": backend_acceptable,
         "eu_ai_act_article": "Art. 12",
         "note": (
             f"At-rest encryption is active ({backend})."

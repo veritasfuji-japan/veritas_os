@@ -49,8 +49,15 @@ def test_prod_posture_postgresql_with_db_and_key_is_ok(monkeypatch: pytest.Monke
     """prod should pass when PostgreSQL and encryption key are configured."""
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
-    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+    monkeypatch.setenv(
+        "VERITAS_DATABASE_URL",
+        "postgresql://user:pass@localhost:5432/veritas",
+    )
     monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+
+    import veritas_os.logging.encryption as enc
+
+    monkeypatch.setattr(enc, "_USE_REAL_AES", True)
 
     result = get_trustlog_security_posture()
 
@@ -61,6 +68,9 @@ def test_prod_posture_postgresql_with_db_and_key_is_ok(monkeypatch: pytest.Monke
         "encryption_enabled": True,
         "key_configured": True,
         "secure_by_default": True,
+        "backend_available": True,
+        "backend_required": True,
+        "backend_acceptable": True,
         "reasons": [],
         "remediation": [],
     }
@@ -73,6 +83,10 @@ def test_secure_posture_missing_database_url_is_blocked(monkeypatch: pytest.Monk
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
     monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
     monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+
+    import veritas_os.logging.encryption as enc
+
+    monkeypatch.setattr(enc, "_USE_REAL_AES", True)
 
     result = get_trustlog_security_posture()
 
@@ -102,7 +116,10 @@ def test_get_trustlog_security_posture_uses_provided_encryption_status(
     """Provided encryption status should bypass internal get_encryption_status call."""
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
-    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+    monkeypatch.setenv(
+        "VERITAS_DATABASE_URL",
+        "postgresql://user:pass@localhost:5432/veritas",
+    )
 
     import veritas_os.security.trustlog_posture as posture_module
 
@@ -155,7 +172,10 @@ def test_get_trustlog_security_posture_uses_explicit_posture(
 ) -> None:
     """Explicit posture input should avoid resolve_posture fallback logic."""
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
-    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+    monkeypatch.setenv(
+        "VERITAS_DATABASE_URL",
+        "postgresql://user:pass@localhost:5432/veritas",
+    )
 
     import veritas_os.security.trustlog_posture as posture_module
 
@@ -212,7 +232,10 @@ def test_encryption_status_error_is_sanitized_strict(
     """Strict postures should block and raise sanitized startup error messages."""
     monkeypatch.setenv("VERITAS_POSTURE", posture)
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
-    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+    monkeypatch.setenv(
+        "VERITAS_DATABASE_URL",
+        "postgresql://user:pass@localhost:5432/veritas",
+    )
     monkeypatch.setenv("VERITAS_ENCRYPTION_KEY_PROVIDER", "env")
 
     import veritas_os.security.trustlog_posture as posture_module
@@ -343,3 +366,56 @@ def test_security_posture_snapshot_fallback_key_provider_default_env(
 
     snapshot = routes_system._security_posture_snapshot()
     assert snapshot["encryption"]["key_provider"] == "env"
+
+
+def test_secure_posture_blocks_when_backend_is_unacceptable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """secure/prod posture should block if AES-GCM backend is unavailable."""
+    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv(
+        "VERITAS_DATABASE_URL",
+        "postgresql://user:pass@localhost:5432/veritas",
+    )
+
+    result = get_trustlog_security_posture(
+        encryption_status={
+            "encryption_enabled": True,
+            "key_configured": True,
+            "secure_by_default": True,
+            "backend_available": False,
+            "backend_required": True,
+            "backend_acceptable": False,
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["backend_acceptable"] is False
+    assert any("AES-256-GCM" in reason for reason in result["reasons"])
+
+
+def test_prod_posture_does_not_rely_only_on_backend_acceptable_mock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """prod posture should still require configured encryption key."""
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+    monkeypatch.setenv(
+        "VERITAS_DATABASE_URL",
+        "postgresql://user:pass@localhost:5432/veritas",
+    )
+
+    result = get_trustlog_security_posture(
+        encryption_status={
+            "encryption_enabled": False,
+            "key_configured": False,
+            "secure_by_default": True,
+            "backend_available": True,
+            "backend_required": True,
+            "backend_acceptable": True,
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert any("encryption key" in reason for reason in result["reasons"])

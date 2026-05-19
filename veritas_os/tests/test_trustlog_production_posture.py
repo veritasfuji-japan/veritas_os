@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+
 from scripts.security.check_trustlog_production_posture import main
+from veritas_os.logging import encryption as encryption_module
 from veritas_os.security.trustlog_production_posture import check_trustlog_production_posture
+
+
+@pytest.fixture(autouse=True)
+def _aes_backend_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default tests to an available AES-GCM backend independent of host deps."""
+    monkeypatch.setattr(encryption_module, "_USE_REAL_AES", True)
 
 
 def _production_base_env() -> dict[str, str]:
@@ -420,3 +429,56 @@ def test_cli_main_returns_zero_in_production_fully_configured(monkeypatch) -> No
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/tmp/transparency.jsonl")
     assert main() == 0
+
+
+def test_production_posture_fails_when_aes_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production posture checker should read monkeypatchable AES flag directly."""
+    monkeypatch.setattr(encryption_module, "_USE_REAL_AES", False)
+    env = {
+        **_production_base_env(),
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": "/tmp/transparency.jsonl",
+    }
+
+    result = check_trustlog_production_posture(env)
+
+    assert result.passed is False
+    assert any("cryptography-backed AES-256-GCM" in item for item in result.failures)
+
+
+def test_explicit_env_mapping_ignores_process_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit env checks should depend only on current_env values."""
+    monkeypatch.setattr(encryption_module, "_USE_REAL_AES", False)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    env = {
+        "VERITAS_ENV": "dev",
+        "VERITAS_TRUSTLOG_BACKEND": "jsonl",
+    }
+
+    result = check_trustlog_production_posture(env)
+
+    assert result.passed is True
+    assert result.failures == ()
+
+
+def test_require_flag_env_mapping_fails_when_aes_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit require flag should enforce AES-GCM backend availability."""
+    monkeypatch.setattr(encryption_module, "_USE_REAL_AES", False)
+    env = {
+        **_production_base_env(),
+        "VERITAS_ENV": "dev",
+        "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE": "1",
+        "VERITAS_TRUSTLOG_WORM_MIRROR_PATH": "/tmp/worm",
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": "/tmp/transparency.jsonl",
+    }
+
+    result = check_trustlog_production_posture(env)
+
+    assert result.passed is False
+    assert any("cryptography-backed AES-256-GCM" in item for item in result.failures)
