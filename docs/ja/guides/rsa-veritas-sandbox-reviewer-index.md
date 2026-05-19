@@ -32,6 +32,7 @@
 7. [ALGORITHMIC_HUMILITY_ENGAGED 検証スナップショット](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 8. [DEFERRAL_ENGAGED 検証スナップショット](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 9. [Live V.I.K.I. integration design note（将来設計アーティファクト）](./rsa-veritas-live-viki-integration-design-note.md)
+10. [Live V.I.K.I. integration reviewer checklist（review-gate artifact / documentation-only）](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
@@ -98,8 +99,8 @@
 
 1. general E2E artifact と4つの per-variant snapshots の導線として、static fixture matrix と reviewer index のリンク整合を維持する。
 2. maintainers がコミット済み出力 artifact を望む場合、`examples/sandbox/rsa_veritas_e2e_harness.py` から小さな生成サンプル出力ファイルを追加する。
-3. external review 向けの reviewer checklist を追加する。
-4. 静的ドキュメントセットのレビュー完了後に限り、live V.I.K.I. integration 用の別 design document を検討する。
+3. live adapter 提案時の review gate として reviewer checklist を利用する。
+4. 静的ドキュメントセットのレビュー完了後に限り、live V.I.K.I. integration 用の別 design / contract artifact を検討する。
 
 この PR で live V.I.K.I. connection を追加してはいけません。
 
