@@ -74,6 +74,12 @@ def resolve_decision_pipeline(
         state.attempted = True
         try:
             pipeline = importlib.import_module("veritas_os.core.pipeline")
+            try:
+                kernel = importlib.import_module("veritas_os.core.kernel")
+                if hasattr(pipeline, "set_veritas_core"):
+                    pipeline.set_veritas_core(kernel)
+            except Exception as exc:  # pragma: no cover - optional runtime injection
+                logger.warning("kernel injection into pipeline failed: %s", errstr(exc))
             state.obj = pipeline
             state.err = None
             return pipeline

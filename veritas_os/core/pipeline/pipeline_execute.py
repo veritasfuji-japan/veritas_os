@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional
 
 from .pipeline_types import PipelineContext
 from .pipeline_helpers import (
-    _lazy_import,
     _extract_rejection,
     _summarize_last_output,
     _warn,
@@ -35,18 +34,10 @@ async def stage_core_execute(
     Parameters
     ----------
     veritas_core:
-        Pre-resolved kernel module. When ``None`` (default), the kernel
-        is lazily imported here.  Passing the module explicitly allows the
-        caller (pipeline.py) to provide a value that tests can
-        monkeypatch on the *pipeline* module.
+        Pre-resolved kernel module or kernel adapter. This stage relies on
+        injected dependencies only and does not import kernel directly.
     """
     from . import self_healing
-
-    if veritas_core is None:
-        veritas_core = (
-            _lazy_import("veritas_os.core.kernel", None)
-            or _lazy_import("veritas_os.core", "kernel")
-        )
 
     core_decide = None
     try:

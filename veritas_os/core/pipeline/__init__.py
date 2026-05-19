@@ -65,6 +65,7 @@ import inspect  # noqa: F401 – re-exported; tests access pipeline.inspect
 import logging
 import os
 import time
+from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -298,8 +299,6 @@ def _warn(msg: str) -> None:
 def _check_required_modules() -> None:
     """必須モジュールの存在を確認し、欠落時は明確なエラーを出す"""
     missing = []
-    if veritas_core is None:
-        missing.append("kernel")
     if fuji_core is None:
         missing.append("fuji")
     if missing:
@@ -309,12 +308,14 @@ def _check_required_modules() -> None:
         )
 
 
-# ---- kernel (REQUIRED) ----
-veritas_core: Any = None
-try:
-    from .. import kernel as veritas_core
-except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    _warn(f"[ERROR][pipeline] kernel import failed (REQUIRED): {repr(e)}")
+# ---- kernel (INJECTED via allowed callers) ----
+veritas_core: Any = SimpleNamespace()
+
+
+def set_veritas_core(module: Any) -> None:
+    """Inject kernel module/adapter from an allowed higher-level boundary."""
+    global veritas_core
+    veritas_core = module if module is not None else SimpleNamespace()
 
 # ---- fuji (REQUIRED) ----
 fuji_core: Any = None
