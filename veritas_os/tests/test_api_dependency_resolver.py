@@ -146,7 +146,7 @@ def test_resolve_decision_pipeline_logs_kernel_import_failure(caplog, monkeypatc
         raise AssertionError(f"unexpected import: {name}")
 
     monkeypatch.setattr(dependency_resolver.importlib, "import_module", _import)
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.ERROR):
         resolved = dependency_resolver.resolve_decision_pipeline(
             state,
             errstr=_errstr,
@@ -154,4 +154,4 @@ def test_resolve_decision_pipeline_logs_kernel_import_failure(caplog, monkeypatc
         )
 
     assert resolved is pipeline
-    assert "kernel import failed for pipeline injection" in caplog.text
+    assert "kernel module unavailable" in caplog.text

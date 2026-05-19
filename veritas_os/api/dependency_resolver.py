@@ -76,9 +76,10 @@ def resolve_decision_pipeline(
             pipeline = importlib.import_module("veritas_os.core.pipeline")
             try:
                 kernel = importlib.import_module("veritas_os.core.kernel")
-            except (ImportError, ModuleNotFoundError) as exc:  # pragma: no cover - optional runtime
-                logger.warning(
-                    "kernel import failed for pipeline injection: %s",
+            except (ImportError, ModuleNotFoundError) as exc:
+                logger.error(
+                    "kernel module unavailable; decide pipeline will run in degraded "
+                    "mode and downstream governance commits will be refused: %s",
                     errstr(exc),
                     exc_info=True,
                 )

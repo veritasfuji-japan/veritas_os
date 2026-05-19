@@ -11,6 +11,8 @@ Handles:
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Any, Dict, List, Optional
 
 from .pipeline_types import PipelineContext
@@ -21,6 +23,8 @@ from .pipeline_helpers import (
 )
 
 logger = logging.getLogger(__name__)
+_KERNEL_MISSING_LOG_LOCK = threading.Lock()
+_KERNEL_MISSING_LOGGED = False
 
 
 async def stage_core_execute(
@@ -58,9 +62,23 @@ async def stage_core_execute(
 
     core_context: Dict[str, Any] = {}
     if core_decide is None:
-        ctx.response_extras.setdefault("env_tools", {})
-        if isinstance(ctx.response_extras["env_tools"], dict):
-            ctx.response_extras["env_tools"]["kernel_missing"] = True
+        global _KERNEL_MISSING_LOGGED
+        with _KERNEL_MISSING_LOG_LOCK:
+            if not _KERNEL_MISSING_LOGGED:
+                logger.error(
+                    "core decide unavailable: kernel was not injected via "
+                    "set_veritas_core; pipeline running in degraded mode "
+                    "(governance commit must be refused downstream)"
+                )
+                _KERNEL_MISSING_LOGGED = True
+            else:
+                logger.debug(
+                    "core decide still unavailable (suppressed after first ERROR)"
+                )
+        env_tools = ctx.response_extras.setdefault("env_tools", {})
+        if isinstance(env_tools, dict):
+            env_tools["kernel_missing"] = True
+            env_tools["kernel_degraded_at"] = time.time()
         _warn("[decide] kernel.decide missing -> skip core call")
     else:
         core_context = dict(ctx.context or {})
