@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
+import { type TrajectoryShapingLineage } from "../../../../../../components/dashboard-types";
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
 import { buildAmlKycReviewerWalkthroughPayload } from "../../../../../../lib/aml-kyc-reviewer-walkthrough";
 import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
@@ -102,6 +103,87 @@ function mapPreBoundaryCollapsePhaseToSnapshot(phase: Record<string, unknown>): 
   };
 }
 
+function buildTrajectoryShapingLineageV0(): TrajectoryShapingLineage {
+  return {
+    scenario_id: PRE_BOUNDARY_COLLAPSE_SCENARIO,
+    version: "v0",
+    initial_option_space: {
+      options: ["A", "B", "C", "D"],
+      effective_optionality: "full",
+    },
+    sequence: [
+      {
+        phase_id: "phase_1_open_framing",
+        phase_label: "Phase 1 — Participation / open framing",
+        exposure_state: "symmetric",
+        reinforcement_state: "none",
+        divergence_state: "open",
+        participation_state: "informative",
+        preservation_state: "open",
+        intervention_viability: "high",
+        structural_marker: "reachable_space_open",
+      },
+      {
+        phase_id: "phase_2_iterative_shaping",
+        phase_label: "Phase 2 — Iterative shaping",
+        exposure_state: "asymmetric_emerging",
+        reinforcement_state: "a_b_reinforced",
+        divergence_state: "contracting",
+        participation_state: "participatory",
+        preservation_state: "degrading",
+        intervention_viability: "medium",
+        structural_marker: "first_detectable_asymmetry",
+      },
+      {
+        phase_id: "phase_3_pre_boundary_collapse",
+        phase_label: "Phase 3 — Pre-boundary collapse",
+        exposure_state: "asymmetric",
+        reinforcement_state: "a_b_dominant",
+        divergence_state: "collapsed",
+        participation_state: "decision_shaping",
+        preservation_state: "collapsed",
+        intervention_viability: "low",
+        structural_marker: "intervention_viability_loss",
+      },
+      {
+        phase_id: "phase_4_bind",
+        phase_label: "Phase 4 — Bind",
+        exposure_state: "already_narrowed",
+        reinforcement_state: "trajectory_committed",
+        divergence_state: "effectively_closed",
+        participation_state: "decision_shaping",
+        preservation_state: "collapsed",
+        intervention_viability: "low",
+        bind_outcome: "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
+        structural_marker: "bind_over_narrowed_space",
+      },
+    ],
+    transition_points: {
+      first_detectable_asymmetry_phase: "phase_2_iterative_shaping",
+      divergence_contraction_phase: "phase_2_iterative_shaping",
+      participation_shift_phase: "phase_3_pre_boundary_collapse",
+      preservation_degradation_phase: "phase_2_iterative_shaping",
+      intervention_viability_loss_phase: "phase_3_pre_boundary_collapse",
+      bind_evaluation_phase: "phase_4_bind",
+    },
+    evidence_requirements: [
+      "option_exposure_trace",
+      "reinforcement_asymmetry_trace",
+      "divergence_contraction_trace",
+      "participation_shift_marker",
+      "preservation_degradation_marker",
+      "intervention_threshold_marker",
+      "bind_evaluation_snapshot",
+    ],
+    summary: {
+      concise:
+        "Decision lineage records what was bound; trajectory shaping lineage records how reachable alternatives became structurally unavailable before bind.",
+      operator:
+        "Formal admissibility can still hold at bind while effective intervention capacity has already been lost upstream.",
+    },
+  };
+}
+
 async function resolveDemoScenarioPayload(request: Request): Promise<Record<string, unknown> | null> {
   const demoScenario = resolveDemoScenario(request);
   if (demoScenario === AML_KYC_REVIEWER_WALKTHROUGH_SCENARIO) {
@@ -131,6 +213,7 @@ async function resolveDemoScenarioPayload(request: Request): Promise<Record<stri
       bind_outcome: finalPhaseSnapshot.bind_outcome,
       concise_rationale: finalPhaseSnapshot.concise_rationale,
       phase_snapshots: phaseSnapshots,
+      trajectory_shaping_lineage: buildTrajectoryShapingLineageV0(),
     },
   };
 }

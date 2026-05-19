@@ -112,6 +112,11 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       "bind_outcome: FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
     );
     await expect(walkthrough).toContainText("lineage evidence summary");
+    await expect(walkthrough).toContainText("Trajectory Shaping Lineage v0");
+    await expect(walkthrough).toContainText("Decision-space transformation before bind");
+    await expect(walkthrough).toContainText("first detectable asymmetry");
+    await expect(walkthrough).toContainText("intervention viability loss");
+    await expect(walkthrough).toContainText("bind evaluation");
 
     const timeline = page.locator('section[aria-label="governance layer timeline"]');
     await expect(timeline).toBeVisible();

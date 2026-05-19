@@ -232,6 +232,26 @@ describe("MissionPage", () => {
                 concise_rationale: "Bind remains formally admissible.",
               },
             ],
+            trajectory_shaping_lineage: {
+              scenario_id: "pre_boundary_collapse",
+              version: "v0",
+              initial_option_space: { options: ["A", "B", "C", "D"], effective_optionality: "full" },
+              // sequence is intentionally empty: component renders transition_points/summary only
+              sequence: [],
+              transition_points: {
+                first_detectable_asymmetry_phase: "phase_2_iterative_shaping",
+                divergence_contraction_phase: "phase_2_iterative_shaping",
+                participation_shift_phase: "phase_3_pre_boundary_collapse",
+                preservation_degradation_phase: "phase_2_iterative_shaping",
+                intervention_viability_loss_phase: "phase_3_pre_boundary_collapse",
+                bind_evaluation_phase: "phase_4_bind",
+              },
+              evidence_requirements: [],
+              summary: {
+                concise: "Decision lineage records what was bound; trajectory shaping lineage records how reachable alternatives became structurally unavailable before bind.",
+                operator: "Formal admissibility can still hold at bind while effective intervention capacity has already been lost upstream.",
+              },
+            },
           }}
         />
       </I18nProvider>,
@@ -246,6 +266,12 @@ describe("MissionPage", () => {
     expect(screen.getAllByText(/participation_state:/).length).toBeGreaterThan(1);
     expect(screen.getAllByText("decision_shaping").length).toBeGreaterThan(0);
     expect(screen.getAllByText("collapsed").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("trajectory-shaping-lineage-panel")).toBeInTheDocument();
+    expect(screen.getByText("Trajectory Shaping Lineage v0")).toBeInTheDocument();
+    expect(screen.getByText("Decision-space transformation before bind")).toBeInTheDocument();
+    expect(screen.getByText(/first detectable asymmetry:/)).toBeInTheDocument();
+    expect(screen.getByText(/intervention viability loss:/)).toBeInTheDocument();
+    expect(screen.getByText(/bind evaluation:/)).toBeInTheDocument();
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
