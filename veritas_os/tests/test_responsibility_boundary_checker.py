@@ -258,6 +258,78 @@ def test_pipeline_rule_alias_expansion_maps_kernel_helper_names(
     )
 
 
+def test_pipeline_package_relative_import_of_kernel_is_violation(
+    tmp_path: Path,
+) -> None:
+    """Pipeline package relative imports should detect kernel orchestrator usage."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    (tmp_path / "pipeline").mkdir(parents=True, exist_ok=True)
+    _write_module(
+        tmp_path / "pipeline" / "__init__.py",
+        "from .. import kernel as veritas_core\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert any(
+        issue.code == "boundary_violation"
+        and issue.source_module == "pipeline"
+        and issue.forbidden_module == "kernel"
+        and issue.path == tmp_path / "pipeline" / "__init__.py"
+        for issue in issues
+    )
+
+
+def test_pipeline_package_relative_import_of_kernel_helper_is_violation(
+    tmp_path: Path,
+) -> None:
+    """Relative imports of kernel_* helpers should map to logical kernel ownership."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    (tmp_path / "pipeline").mkdir(parents=True, exist_ok=True)
+    _write_module(
+        tmp_path / "pipeline" / "__init__.py",
+        "from .. import kernel_stages\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert any(
+        issue.code == "boundary_violation"
+        and issue.source_module == "pipeline"
+        and issue.forbidden_module == "kernel"
+        and issue.path == tmp_path / "pipeline" / "__init__.py"
+        for issue in issues
+    )
+
+
+def test_pipeline_package_relative_import_of_pipeline_helper_is_allowed(
+    tmp_path: Path,
+) -> None:
+    """Pipeline-owned relative helper imports should remain allowed."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    (tmp_path / "pipeline").mkdir(parents=True, exist_ok=True)
+    _write_module(
+        tmp_path / "pipeline" / "__init__.py",
+        "from . import pipeline_execute\n",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    assert not any(
+        issue.code == "boundary_violation" and issue.source_module == "pipeline"
+        for issue in issues
+    )
+
+
 def test_build_remediation_guide_contains_required_columns(tmp_path: Path) -> None:
     """Remediation guide should include forbidden dependency, alternatives, and link."""
     violations = [
