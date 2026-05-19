@@ -3859,7 +3859,7 @@ from veritas_os.core import pipeline as pl
 class TestCheckRequiredModulesMessages:
     """Verify the ImportError message contains the correct module names."""
 
-    def test_kernel_only_missing_mentions_kernel_not_fuji(self, monkeypatch):
+    def test_kernel_only_missing_is_non_fatal(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", None)
         monkeypatch.setattr(pl, "fuji_core", types.SimpleNamespace())
         assert pl._check_required_modules() is None
@@ -3871,7 +3871,7 @@ class TestCheckRequiredModulesMessages:
             pl._check_required_modules()
         assert "kernel" not in str(exc_info.value)
 
-    def test_both_missing_message_contains_both(self, monkeypatch):
+    def test_both_missing_message_mentions_fuji_and_fatal(self, monkeypatch):
         monkeypatch.setattr(pl, "veritas_core", None)
         monkeypatch.setattr(pl, "fuji_core", None)
         with pytest.raises(ImportError) as exc_info:
