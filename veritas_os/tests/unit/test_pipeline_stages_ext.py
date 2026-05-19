@@ -5141,6 +5141,32 @@ async def test_stage_core_execute_kernel_missing_degraded_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stage_core_execute_without_injected_kernel_skips_core_call() -> None:
+    """When kernel is not injected, stage should degrade without core invocation."""
+    calls = []
+
+    async def should_not_run(**_kwargs: Any) -> Dict[str, Any]:
+        calls.append("called")
+        return {}
+
+    ctx = PipelineContext(
+        query="q",
+        request_id="req-kernel-not-injected",
+        response_extras={"env_tools": {}},
+    )
+
+    await stage_core_execute(
+        ctx,
+        call_core_decide_fn=should_not_run,
+        append_trust_log_fn=lambda _entry: None,
+        veritas_core=None,
+    )
+
+    assert calls == []
+    assert ctx.response_extras["env_tools"]["kernel_missing"] is True
+
+
+@pytest.mark.asyncio
 async def test_stage_core_execute_self_healing_invoked_and_trustlog_best_effort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

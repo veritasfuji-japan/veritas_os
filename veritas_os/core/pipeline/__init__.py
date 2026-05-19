@@ -298,8 +298,6 @@ def _warn(msg: str) -> None:
 def _check_required_modules() -> None:
     """必須モジュールの存在を確認し、欠落時は明確なエラーを出す"""
     missing = []
-    if veritas_core is None:
-        missing.append("kernel")
     if fuji_core is None:
         missing.append("fuji")
     if missing:
@@ -309,12 +307,8 @@ def _check_required_modules() -> None:
         )
 
 
-# ---- kernel (REQUIRED) ----
+# ---- kernel (INJECTED) ----
 veritas_core: Any = None
-try:
-    from .. import kernel as veritas_core
-except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    _warn(f"[ERROR][pipeline] kernel import failed (REQUIRED): {repr(e)}")
 
 # ---- fuji (REQUIRED) ----
 fuji_core: Any = None

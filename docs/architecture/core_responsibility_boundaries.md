@@ -4,11 +4,12 @@
 
 This document defines the current public contract, recommended extension points,
 and compatibility layers for the core VERITAS modules that most often attract
-structural complexity: Planner, Kernel, FUJI, and MemoryOS.
+structural complexity: Planner, Kernel, Pipeline, FUJI, and MemoryOS.
 
 The goal is intentionally narrow:
 
-- preserve the existing Planner / Kernel / FUJI / MemoryOS responsibility split;
+- preserve the existing Planner / Kernel / Pipeline / FUJI / MemoryOS
+  responsibility split;
 - show contributors the recommended extension point before they edit a large
   compatibility-heavy file;
 - make it easier for CI and code review to distinguish a valid extension from a
@@ -57,6 +58,30 @@ The goal is intentionally narrow:
 - response-shape compatibility and fallback handling remain in `kernel.py`;
 - new scoring or staging logic should move into stage/helper modules instead of
   deepening the main orchestrator.
+
+### Pipeline (`veritas_os.core.pipeline`)
+
+**Owns**:
+- pipeline-stage decomposition and compatibility-safe request/response shaping;
+- sequencing of pipeline helper stages without reintroducing kernel-level
+  orchestration cycles.
+
+**Public contract**:
+- stable pipeline entry point exposed through `veritas_os.core.pipeline`
+  (`veritas_os/core/pipeline/__init__.py`).
+
+**Preferred extension points**:
+- `veritas_os.core.pipeline_inputs`
+- `veritas_os.core.pipeline_execute`
+- `veritas_os.core.pipeline_policy`
+- `veritas_os.core.pipeline_response`
+- `veritas_os.core.pipeline_persist`
+- `veritas_os.core.pipeline_replay`
+
+**Compatibility layer notes**:
+- `pipeline/__init__.py` keeps compatibility-facing wrappers;
+- new pipeline behavior should be implemented in helper modules above and should
+  not depend on `veritas_os.core.kernel` orchestrator modules.
 
 ### FUJI (`veritas_os.core.fuji`)
 
@@ -110,17 +135,21 @@ The goal is intentionally narrow:
 
 ## Change policy
 
-When changing one of the four core modules above:
+When changing one of the five core modules above:
 
 1. Prefer an existing helper/stage module over adding another branch to the main
    module.
 2. If a change adds a new recommended extension point, update this document and
    the boundary checker guidance in `scripts/architecture/check_responsibility_boundaries.py`.
-3. Do not move responsibilities across Planner / Kernel / FUJI / MemoryOS unless
-   the architecture review explicitly approves the boundary change.
+3. Do not move responsibilities across Planner / Kernel / Pipeline / FUJI /
+   MemoryOS unless the architecture review explicitly approves the boundary
+   change.
 4. The boundary checker intentionally skips helper files under common non-owned
    directories such as `tests/`, `fixtures/`, `vendor/`, and `third_party/`
    inside a logical module package.
+5. Boundary checks apply to helper/stage surfaces too (for example
+   `kernel_*.py`, `pipeline_*.py`, and `pipeline/*.py`) so responsibility
+   cycles cannot hide in orchestration-adjacent helper modules.
 
 ## Security note
 
