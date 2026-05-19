@@ -108,3 +108,50 @@ def test_lazy_state_defaults_are_thread_safe():
     assert first.err is None
     assert first.attempted is False
     assert first.lock is not second.lock
+
+
+def test_resolve_decision_pipeline_injects_kernel_when_available(monkeypatch):
+    state = _make_state()
+    injected: list[object] = []
+    pipeline = SimpleNamespace(set_veritas_core=lambda module: injected.append(module))
+    kernel = SimpleNamespace(decide=lambda **_kwargs: {})
+
+    def _import(name: str):
+        if name == "veritas_os.core.pipeline":
+            return pipeline
+        if name == "veritas_os.core.kernel":
+            return kernel
+        raise AssertionError(f"unexpected import: {name}")
+
+    monkeypatch.setattr(dependency_resolver.importlib, "import_module", _import)
+    resolved = dependency_resolver.resolve_decision_pipeline(
+        state,
+        errstr=_errstr,
+        logger=logging.getLogger(__name__),
+    )
+
+    assert resolved is pipeline
+    assert injected == [kernel]
+
+
+def test_resolve_decision_pipeline_logs_kernel_import_failure(caplog, monkeypatch):
+    state = _make_state()
+    pipeline = SimpleNamespace(set_veritas_core=lambda _module: None)
+
+    def _import(name: str):
+        if name == "veritas_os.core.pipeline":
+            return pipeline
+        if name == "veritas_os.core.kernel":
+            raise ImportError("kernel missing")
+        raise AssertionError(f"unexpected import: {name}")
+
+    monkeypatch.setattr(dependency_resolver.importlib, "import_module", _import)
+    with caplog.at_level(logging.WARNING):
+        resolved = dependency_resolver.resolve_decision_pipeline(
+            state,
+            errstr=_errstr,
+            logger=logging.getLogger(__name__),
+        )
+
+    assert resolved is pipeline
+    assert "kernel import failed for pipeline injection" in caplog.text

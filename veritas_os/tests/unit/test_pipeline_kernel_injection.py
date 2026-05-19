@@ -14,9 +14,13 @@ from veritas_os.core.pipeline.pipeline_types import PipelineContext
 
 def test_set_veritas_core_supports_monkeypatch_compatible_placeholder() -> None:
     """`set_veritas_core(None)` should preserve attribute-monkeypatch compatibility."""
-    pipeline.set_veritas_core(None)
-    setattr(pipeline.veritas_core, "decide", lambda **_kwargs: {})
-    assert callable(pipeline.veritas_core.decide)
+    original = pipeline.veritas_core
+    try:
+        pipeline.set_veritas_core(None)
+        setattr(pipeline.veritas_core, "decide", lambda **_kwargs: {})
+        assert callable(pipeline.veritas_core.decide)
+    finally:
+        pipeline.set_veritas_core(original)
 
 
 @pytest.mark.asyncio

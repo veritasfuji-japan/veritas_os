@@ -76,10 +76,18 @@ def resolve_decision_pipeline(
             pipeline = importlib.import_module("veritas_os.core.pipeline")
             try:
                 kernel = importlib.import_module("veritas_os.core.kernel")
-                if hasattr(pipeline, "set_veritas_core"):
-                    pipeline.set_veritas_core(kernel)
-            except Exception as exc:  # pragma: no cover - optional runtime injection
-                logger.warning("kernel injection into pipeline failed: %s", errstr(exc))
+            except (ImportError, ModuleNotFoundError) as exc:  # pragma: no cover - optional runtime
+                logger.warning(
+                    "kernel import failed for pipeline injection: %s",
+                    errstr(exc),
+                    exc_info=True,
+                )
+            else:
+                if not hasattr(pipeline, "set_veritas_core"):
+                    raise RuntimeError(
+                        "pipeline.set_veritas_core is required for kernel injection"
+                    )
+                pipeline.set_veritas_core(kernel)
             state.obj = pipeline
             state.err = None
             return pipeline
