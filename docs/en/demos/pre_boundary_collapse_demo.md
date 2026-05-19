@@ -96,6 +96,30 @@ snapshot payload.
 This preserves vocabulary and backend contracts while making the paradox
 visible at first glance: **formally valid, structurally collapsed**.
 
+## Trajectory Shaping Lineage v0
+
+Lineage is not only a record of what decision was eventually bound. In this
+demo, lineage also records how the reachable decision space transformed before
+bind.
+
+`trajectory_shaping_lineage` is exposed as an additive snapshot field under
+`governance_layer_snapshot` for `demo_scenario=pre_boundary_collapse`.
+
+It captures a sequence of structural markers:
+
+- exposure asymmetry emergence
+- divergence contraction
+- participation shift from informative/participatory to decision-shaping
+- preservation degradation and intervention threshold crossing
+- final bind evaluation over an already narrowed space
+
+This sequence makes the pattern reusable for reviewers: they can reason about
+where intervention remained viable, where structural loss began, and what bind
+ultimately evaluated.
+
+Known limitation: this is a deterministic representative demo lineage and is
+not production certification.
+
 
 ## Run and verification entrypoint
 

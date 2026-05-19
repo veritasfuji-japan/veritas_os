@@ -82,6 +82,42 @@ export interface GovernanceObservation {
   audit_required?: boolean;
 }
 
+export interface TrajectoryShapingLineagePhase {
+  phase_id: string;
+  phase_label: string;
+  exposure_state: string;
+  reinforcement_state: string;
+  divergence_state: string;
+  participation_state: string;
+  preservation_state: string;
+  intervention_viability: string;
+  structural_marker: string;
+  bind_outcome?: string;
+}
+
+export interface TrajectoryShapingLineage {
+  scenario_id: string;
+  version: string;
+  initial_option_space: {
+    options: string[];
+    effective_optionality: string;
+  };
+  sequence: TrajectoryShapingLineagePhase[];
+  transition_points: {
+    first_detectable_asymmetry_phase: string;
+    divergence_contraction_phase: string;
+    participation_shift_phase: string;
+    preservation_degradation_phase: string;
+    intervention_viability_loss_phase: string;
+    bind_evaluation_phase: string;
+  };
+  evidence_requirements: string[];
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface PreBindGovernanceSnapshot {
   demo_scenario?: string;
   source_state?: string | null;
@@ -99,6 +135,7 @@ export interface PreBindGovernanceSnapshot {
   evidence_bundle_summary?: unknown | null;
   reviewer_expected_steps?: Array<string | Record<string, unknown>> | null;
   phase_snapshots?: Array<Record<string, unknown>>;
+  trajectory_shaping_lineage?: TrajectoryShapingLineage;
   participation_state?: string;
   preservation_state?: string;
   intervention_viability?: string;

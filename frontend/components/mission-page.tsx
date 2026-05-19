@@ -394,6 +394,20 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
               );
             })}
           </ol>
+          {governanceSnapshot?.trajectory_shaping_lineage ? (
+            <div className="mt-3 rounded-md border border-border/60 bg-background/70 p-3 text-xs">
+              <p className="font-semibold">Trajectory Shaping Lineage v0</p>
+              <p className="text-muted-foreground">Decision-space transformation before bind</p>
+              <ul className="mt-2 space-y-1">
+                <li>initial option space: <span className="font-mono">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.initial_option_space.options)}</span></li>
+                <li>first detectable asymmetry: <span className="font-mono">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.transition_points.first_detectable_asymmetry_phase)}</span></li>
+                <li>divergence contraction: <span className="font-mono">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.transition_points.divergence_contraction_phase)}</span></li>
+                <li>intervention viability loss: <span className="font-mono">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.transition_points.intervention_viability_loss_phase)}</span></li>
+                <li>bind evaluation: <span className="font-mono">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.transition_points.bind_evaluation_phase)}</span></li>
+                <li>summary: <span className="text-muted-foreground">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.summary.concise)}</span></li>
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

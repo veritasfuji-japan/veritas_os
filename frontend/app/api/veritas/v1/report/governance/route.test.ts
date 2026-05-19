@@ -231,6 +231,13 @@ describe("/api/veritas/v1/report/governance", () => {
         intervention_viability: string;
         bind_outcome: string;
         phase_snapshots: Array<Record<string, unknown>>;
+        trajectory_shaping_lineage: {
+          scenario_id: string;
+          version: string;
+          initial_option_space: { options: string[] };
+          sequence: Array<Record<string, unknown>>;
+          transition_points: Record<string, string>;
+        };
       };
     };
     expect(payload.governance_layer_snapshot.phase_snapshots).toHaveLength(4);
@@ -252,6 +259,17 @@ describe("/api/veritas/v1/report/governance", () => {
       effective_optionality: "full",
       option_exposure_summary: "A:high, B:high, C:high, D:high",
       reinforcement_asymmetry_summary: "none",
+    });
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage).toMatchObject({
+      scenario_id: "pre_boundary_collapse",
+      version: "v0",
+      initial_option_space: { options: ["A", "B", "C", "D"] },
+    });
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.sequence).toHaveLength(4);
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.transition_points).toMatchObject({
+      first_detectable_asymmetry_phase: "phase_2_iterative_shaping",
+      intervention_viability_loss_phase: "phase_3_pre_boundary_collapse",
+      bind_evaluation_phase: "phase_4_bind",
     });
   });
 
