@@ -395,7 +395,11 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
             })}
           </ol>
           {governanceSnapshot?.trajectory_shaping_lineage ? (
-            <div className="mt-3 rounded-md border border-border/60 bg-background/70 p-3 text-xs">
+            <div
+              aria-label="trajectory shaping lineage"
+              data-testid="trajectory-shaping-lineage-panel"
+              className="mt-3 rounded-md border border-border/60 bg-background/70 p-3 text-xs"
+            >
               <p className="font-semibold">Trajectory Shaping Lineage v0</p>
               <p className="text-muted-foreground">Decision-space transformation before bind</p>
               <ul className="mt-2 space-y-1">

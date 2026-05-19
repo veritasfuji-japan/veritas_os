@@ -265,6 +265,15 @@ describe("/api/veritas/v1/report/governance", () => {
       version: "v0",
       initial_option_space: { options: ["A", "B", "C", "D"] },
     });
+    expect(
+      payload.governance_layer_snapshot.trajectory_shaping_lineage.summary,
+    ).toMatchObject({
+      concise: expect.any(String),
+      operator: expect.any(String),
+    });
+    expect(
+      payload.governance_layer_snapshot.trajectory_shaping_lineage.evidence_requirements,
+    ).toHaveLength(7);
     expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.sequence).toHaveLength(4);
     expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.transition_points).toMatchObject({
       first_detectable_asymmetry_phase: "phase_2_iterative_shaping",

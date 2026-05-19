@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
+import { type TrajectoryShapingLineage } from "../../../../../../components/dashboard-types";
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
 import { buildAmlKycReviewerWalkthroughPayload } from "../../../../../../lib/aml-kyc-reviewer-walkthrough";
 import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
@@ -102,7 +103,7 @@ function mapPreBoundaryCollapsePhaseToSnapshot(phase: Record<string, unknown>): 
   };
 }
 
-function buildTrajectoryShapingLineageV0(): Record<string, unknown> {
+function buildTrajectoryShapingLineageV0(): TrajectoryShapingLineage {
   return {
     scenario_id: PRE_BOUNDARY_COLLAPSE_SCENARIO,
     version: "v0",

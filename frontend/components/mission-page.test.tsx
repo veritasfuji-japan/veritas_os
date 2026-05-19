@@ -236,6 +236,7 @@ describe("MissionPage", () => {
               scenario_id: "pre_boundary_collapse",
               version: "v0",
               initial_option_space: { options: ["A", "B", "C", "D"], effective_optionality: "full" },
+              // sequence is intentionally empty: component renders transition_points/summary only
               sequence: [],
               transition_points: {
                 first_detectable_asymmetry_phase: "phase_2_iterative_shaping",
@@ -265,6 +266,7 @@ describe("MissionPage", () => {
     expect(screen.getAllByText(/participation_state:/).length).toBeGreaterThan(1);
     expect(screen.getAllByText("decision_shaping").length).toBeGreaterThan(0);
     expect(screen.getAllByText("collapsed").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("trajectory-shaping-lineage-panel")).toBeInTheDocument();
     expect(screen.getByText("Trajectory Shaping Lineage v0")).toBeInTheDocument();
     expect(screen.getByText("Decision-space transformation before bind")).toBeInTheDocument();
     expect(screen.getByText(/first detectable asymmetry:/)).toBeInTheDocument();
