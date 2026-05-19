@@ -60,9 +60,10 @@ This ladder gives reviewers a compact view of the sandbox governance behavior wi
 
 This matrix is designed to be read alongside the existing snapshot pages:
 
-- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md) — includes the ALGORITHMIC_HUMILITY_ENGAGED E2E path.
+- [RSA ↔ VERITAS E2E Sandbox Validation Snapshot](./rsa-veritas-e2e-sandbox-validation-snapshot.md) — general E2E artifact for the static harness output path.
 - [SAFE_PROCEED validation snapshot](./rsa-veritas-safe-proceed-validation-snapshot.md)
 - [RSA ↔ VERITAS DENSITY_THROTTLED Validation Snapshot](./rsa-veritas-density-throttled-validation-snapshot.md)
+- [RSA ↔ VERITAS ALGORITHMIC_HUMILITY_ENGAGED Validation Snapshot](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 - [RSA ↔ VERITAS DEFERRAL_ENGAGED Validation Snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 
 ## 7. What this validates
@@ -87,10 +88,10 @@ This matrix is designed to be read alongside the existing snapshot pages:
 
 ## 9. Next sandbox step
 
-The current static fixture variants are now covered by the matrix and snapshot documentation. SAFE_PROCEED, DENSITY_THROTTLED, and DEFERRAL_ENGAGED have dedicated per-variant snapshots, while ALGORITHMIC_HUMILITY_ENGAGED is covered by the broader E2E sandbox validation snapshot.
+The current static fixture variants are now covered by the matrix and dedicated per-variant snapshot documentation for all four statuses: SAFE_PROCEED, DENSITY_THROTTLED, ALGORITHMIC_HUMILITY_ENGAGED, and DEFERRAL_ENGAGED.
 
-The next safe sandbox step is to add a lightweight reviewer index page linking the E2E sandbox validation snapshot, available per-variant snapshots, the static fixture matrix, the AML/KYC scenario map, and the E2E sandbox demo plan.
+The next safe sandbox step is to keep the static fixture matrix and sandbox reviewer index aligned as the canonical link hubs for the general E2E artifact and the four per-variant snapshots.
 
-If strict one-page-per-status symmetry is required later, a dedicated ALGORITHMIC_HUMILITY_ENGAGED per-variant snapshot can be added in a follow-up documentation PR.
+After that alignment is reviewed, the next safe step is a separate design note for future live V.I.K.I. integration.
 
-No live V.I.K.I. connection should be added before the reviewer index is documented and reviewed.
+No live V.I.K.I. connection should be added in this documentation PR.

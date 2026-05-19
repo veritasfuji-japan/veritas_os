@@ -23,10 +23,10 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 4. [Static fixture matrix](./rsa-veritas-static-fixture-matrix.md)
 5. [SAFE_PROCEED validation snapshot](./rsa-veritas-safe-proceed-validation-snapshot.md)
 6. [DENSITY_THROTTLED validation snapshot](./rsa-veritas-density-throttled-validation-snapshot.md)
-7. [DEFERRAL_ENGAGED validation snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
+7. [ALGORITHMIC_HUMILITY_ENGAGED validation snapshot](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
+8. [DEFERRAL_ENGAGED validation snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 
-- `ALGORITHMIC_HUMILITY_ENGAGED` is currently covered by the broader E2E sandbox validation snapshot.
-- A dedicated `ALGORITHMIC_HUMILITY_ENGAGED` per-variant page may be added later if strict one-page-per-status symmetry is desired.
+All four static fixture variants now have dedicated per-variant validation snapshots.
 
 ## 4. Artifact map
 
@@ -38,6 +38,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 | Static fixture matrix | Compares all supported static fixture statuses. | How does VERITAS map each upstream status? |
 | SAFE_PROCEED validation snapshot | Documents normal continuation. | What happens when the upstream signal says proceed? |
 | DENSITY_THROTTLED validation snapshot | Documents soft upstream intervention. | What happens when the upstream output was modified but not hard-blocked? |
+| ALGORITHMIC_HUMILITY_ENGAGED validation snapshot | Documents pause / human-review gating for incomplete context or insufficient authority evidence. | What happens when required KYC context is incomplete? |
 | DEFERRAL_ENGAGED validation snapshot | Documents hard final-commit block. | What happens when a critical upstream deferral signal is emitted? |
 
 ## 5. Static fixture ladder
@@ -59,8 +60,8 @@ Current static fixture ladder:
 
 Clarifications:
 
-- `SAFE_PROCEED`, `DENSITY_THROTTLED`, and `DEFERRAL_ENGAGED` currently have dedicated per-variant snapshot pages.
-- `ALGORITHMIC_HUMILITY_ENGAGED` is currently covered by the broader E2E sandbox validation snapshot.
+- `SAFE_PROCEED`, `DENSITY_THROTTLED`, `ALGORITHMIC_HUMILITY_ENGAGED`, and `DEFERRAL_ENGAGED` all have dedicated per-variant snapshot pages.
+- The E2E sandbox validation snapshot remains a separate general E2E artifact.
 
 ## 6. What this documentation set validates
 
@@ -88,7 +89,7 @@ Clarifications:
 
 ## 8. Next safe sandbox steps
 
-1. Add a dedicated `ALGORITHMIC_HUMILITY_ENGAGED` per-variant validation snapshot if strict one-page-per-status symmetry is desired.
+1. Keep the static fixture matrix and reviewer index synchronized as the canonical navigation hubs for the general E2E artifact and four per-variant snapshots.
 2. Add a small generated sample output file from `examples/sandbox/rsa_veritas_e2e_harness.py` if maintainers want a committed output artifact.
 3. Add a reviewer checklist for external review.
 4. Only after the static documentation set is reviewed, consider a separate design document for live V.I.K.I. integration.
