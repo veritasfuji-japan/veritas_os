@@ -25,6 +25,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 6. [DENSITY_THROTTLED validation snapshot](./rsa-veritas-density-throttled-validation-snapshot.md)
 7. [ALGORITHMIC_HUMILITY_ENGAGED validation snapshot](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 8. [DEFERRAL_ENGAGED validation snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
+9. [Live V.I.K.I. integration design note (future design artifact)](./rsa-veritas-live-viki-integration-design-note.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
@@ -97,3 +98,5 @@ Clarifications:
 No live V.I.K.I. connection should be added in this PR.
 
 Live integration should be a later design phase, not part of the static sandbox documentation pass.
+
+The live V.I.K.I. integration page in this set is a future-design artifact only and does not introduce runtime integration.

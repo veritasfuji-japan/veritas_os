@@ -31,6 +31,7 @@
 6. [DENSITY_THROTTLED 検証スナップショット](./rsa-veritas-density-throttled-validation-snapshot.md)
 7. [ALGORITHMIC_HUMILITY_ENGAGED 検証スナップショット](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 8. [DEFERRAL_ENGAGED 検証スナップショット](./rsa-veritas-deferral-engaged-validation-snapshot.md)
+9. [Live V.I.K.I. integration design note（将来設計アーティファクト）](./rsa-veritas-live-viki-integration-design-note.md)
 
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
@@ -103,3 +104,5 @@
 この PR で live V.I.K.I. connection を追加してはいけません。
 
 live integration は後続の design phase とし、静的 sandbox documentation pass には含めません。
+
+本索引に追加された live V.I.K.I. integration ページは将来設計アーティファクトのみであり、runtime integration は導入しません。
