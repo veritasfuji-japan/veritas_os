@@ -47,6 +47,7 @@ def get_trustlog_security_posture(
             encryption_error_type = raw_error_type.strip()
     encryption_enabled = bool(encryption.get("encryption_enabled", False))
     key_configured = bool(encryption.get("key_configured", False))
+    backend_acceptable = bool(encryption.get("backend_acceptable", True))
     db_url_configured = bool((os.getenv("VERITAS_DATABASE_URL") or "").strip())
 
     reasons: list[str] = []
@@ -78,6 +79,13 @@ def get_trustlog_security_posture(
             reasons.append("TrustLog encryption key is not configured.")
             remediation.append(
                 "Set VERITAS_ENCRYPTION_KEY or configure a supported KMS/Vault key provider."
+            )
+        if not backend_acceptable:
+            reasons.append(
+                "TrustLog production posture requires cryptography-backed AES-256-GCM."
+            )
+            remediation.append(
+                "Install cryptography so TrustLog can use AES-256-GCM in secure/prod posture."
             )
     elif posture_level == "staging":
         if backend != "postgresql":
@@ -112,6 +120,9 @@ def get_trustlog_security_posture(
         "encryption_enabled": encryption_enabled,
         "key_configured": key_configured,
         "secure_by_default": bool(encryption.get("secure_by_default", True)),
+        "backend_available": bool(encryption.get("backend_available", True)),
+        "backend_required": bool(encryption.get("backend_required", False)),
+        "backend_acceptable": backend_acceptable,
         "reasons": reasons,
         "remediation": remediation,
     }

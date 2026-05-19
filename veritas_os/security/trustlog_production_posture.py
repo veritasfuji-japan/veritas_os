@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from os import environ
 from typing import Mapping
 
+from veritas_os.logging import encryption as encryption_module
 from veritas_os.security.trustlog_backend_normalization import (
     normalize_trustlog_anchor_backend,
     normalize_trustlog_mirror_backend,
@@ -55,6 +56,11 @@ def is_trustlog_production_posture_enforced(env: Mapping[str, str]) -> bool:
     return _is_production_mode(env)
 
 
+def _encryption_backend_available() -> bool:
+    """Return whether the monkeypatchable AES-GCM backend flag is enabled."""
+    return bool(encryption_module._USE_REAL_AES)
+
+
 def _effective_transparency_required(env: Mapping[str, str]) -> bool:
     """Return effective transparency-required state with posture defaults."""
     raw = env.get("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED")
@@ -88,6 +94,14 @@ def check_trustlog_production_posture(
 
     if not (current_env.get("VERITAS_ENCRYPTION_KEY", "") or "").strip():
         failures.append("production TrustLog encryption requires VERITAS_ENCRYPTION_KEY")
+
+    backend_required = _is_production_mode(current_env)
+    backend_available = _encryption_backend_available()
+    backend_acceptable = not backend_required or backend_available
+    if not backend_acceptable:
+        failures.append(
+            "production TrustLog encryption requires cryptography-backed AES-256-GCM"
+        )
 
     signer_backend = normalize_trustlog_signer_backend(
         current_env.get("VERITAS_TRUSTLOG_SIGNER_BACKEND")

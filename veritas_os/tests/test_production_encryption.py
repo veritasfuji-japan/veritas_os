@@ -204,3 +204,103 @@ class TestEncryptionEnabled:
         from veritas_os.logging.encryption import is_encryption_enabled
 
         assert is_encryption_enabled() is False
+
+
+@pytest.mark.production
+class TestProductionEncryptionBackendHardening:
+    """Verify production posture refuses the HMAC-CTR fallback backend."""
+
+    @pytest.mark.parametrize(
+        ("env_var", "value"),
+        [
+            ("VERITAS_POSTURE", "secure"),
+            ("VERITAS_POSTURE", "prod"),
+            ("VERITAS_ENV", "production"),
+            ("VERITAS_ENV", "prod"),
+            ("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "1"),
+        ],
+    )
+    def test_encrypt_requires_aes_gcm_when_production_posture_is_active(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        env_var: str,
+        value: str,
+    ) -> None:
+        """Production posture must fail fast when AES-GCM is unavailable."""
+        import veritas_os.logging.encryption as enc
+
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", enc.generate_key())
+        monkeypatch.delenv("VERITAS_POSTURE", raising=False)
+        monkeypatch.delenv("VERITAS_ENV", raising=False)
+        monkeypatch.delenv(
+            "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE",
+            raising=False,
+        )
+        monkeypatch.setenv(env_var, value)
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        with pytest.raises(enc.EncryptionBackendUnavailable) as exc_info:
+            enc.encrypt("production data")
+
+        message = str(exc_info.value)
+        assert "VERITAS_POSTURE" in message
+        assert "VERITAS_ENV" in message
+        assert "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE" in message
+        assert "cryptography-backed AES-256-GCM" in message
+
+    def test_decrypt_requires_aes_gcm_when_production_posture_is_active(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Production posture must reject decryption before using fallback backend."""
+        import veritas_os.logging.encryption as enc
+
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", enc.generate_key())
+        monkeypatch.setenv("VERITAS_ENV", "production")
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        with pytest.raises(enc.EncryptionBackendUnavailable):
+            enc.decrypt("ENC:hmac-ctr:payload")
+
+    def test_dev_posture_keeps_hmac_ctr_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Development posture must continue to allow HMAC-CTR fallback."""
+        import veritas_os.logging.encryption as enc
+
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", enc.generate_key())
+        monkeypatch.setenv("VERITAS_POSTURE", "dev")
+        monkeypatch.delenv("VERITAS_ENV", raising=False)
+        monkeypatch.delenv(
+            "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE",
+            raising=False,
+        )
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        ciphertext = enc.encrypt("development data")
+        assert ciphertext.startswith("ENC:hmac-ctr:")
+        assert enc.decrypt(ciphertext) == "development data"
+
+    def test_get_encryption_status_reports_backend_acceptability(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Runtime status should expose posture-gated backend diagnostics."""
+        import veritas_os.logging.encryption as enc
+
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", enc.generate_key())
+        monkeypatch.setenv("VERITAS_POSTURE", "secure")
+        monkeypatch.delenv("VERITAS_ENV", raising=False)
+        monkeypatch.delenv(
+            "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE",
+            raising=False,
+        )
+        monkeypatch.setattr(enc, "_USE_REAL_AES", False)
+
+        status = enc.get_encryption_status()
+
+        assert status["posture"] == "secure"
+        assert status["backend_available"] is False
+        assert status["backend_required"] is True
+        assert status["backend_acceptable"] is False
