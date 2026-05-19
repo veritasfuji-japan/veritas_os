@@ -215,6 +215,7 @@ class TestProductionEncryptionBackendHardening:
         [
             ("VERITAS_POSTURE", "secure"),
             ("VERITAS_POSTURE", "prod"),
+            ("VERITAS_POSTURE", "hardened"),
             ("VERITAS_ENV", "production"),
             ("VERITAS_ENV", "prod"),
             ("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "1"),
@@ -282,15 +283,17 @@ class TestProductionEncryptionBackendHardening:
         assert ciphertext.startswith("ENC:hmac-ctr:")
         assert enc.decrypt(ciphertext) == "development data"
 
+    @pytest.mark.parametrize("posture", ["secure", "hardened"])
     def test_get_encryption_status_reports_backend_acceptability(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        posture: str,
     ) -> None:
         """Runtime status should expose posture-gated backend diagnostics."""
         import veritas_os.logging.encryption as enc
 
         monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", enc.generate_key())
-        monkeypatch.setenv("VERITAS_POSTURE", "secure")
+        monkeypatch.setenv("VERITAS_POSTURE", posture)
         monkeypatch.delenv("VERITAS_ENV", raising=False)
         monkeypatch.delenv(
             "VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE",
@@ -300,7 +303,7 @@ class TestProductionEncryptionBackendHardening:
 
         status = enc.get_encryption_status()
 
-        assert status["posture"] == "secure"
+        assert status["posture"] == posture
         assert status["backend_available"] is False
         assert status["backend_required"] is True
         assert status["backend_acceptable"] is False

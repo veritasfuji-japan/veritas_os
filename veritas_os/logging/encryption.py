@@ -59,6 +59,8 @@ _STREAM_BLOCK = 32  # SHA-256 output size
 _LEGACY_DECRYPT_ENV = "VERITAS_ENCRYPTION_LEGACY_DECRYPT"
 _ENCRYPTION_PROVIDER_ENV = "VERITAS_ENCRYPTION_KEY_PROVIDER"
 _ALLOW_ENV_FALLBACK_ENV = "VERITAS_ENCRYPTION_ALLOW_ENV_FALLBACK"
+_STRICT_POSTURE_ALIASES = frozenset({"secure", "prod", "production", "hardened"})
+_STRICT_ENV_ALIASES = frozenset({"prod", "production", "secure", "hardened"})
 
 
 class EncryptionKeyProvider(Protocol):
@@ -245,13 +247,12 @@ def _normalized_env_value(key: str) -> str:
 
 def _backend_required_for_current_env() -> bool:
     """Return True when current runtime env requires cryptography AES-GCM."""
-    production_aliases = {"prod", "production", "secure", "hardened"}
     require_posture = _is_truthy(
         os.getenv("VERITAS_REQUIRE_PRODUCTION_TRUSTLOG_POSTURE", "")
     )
     return (
-        _normalized_env_value("VERITAS_POSTURE") in {"secure", "prod"}
-        or _normalized_env_value("VERITAS_ENV") in production_aliases
+        _normalized_env_value("VERITAS_POSTURE") in _STRICT_POSTURE_ALIASES
+        or _normalized_env_value("VERITAS_ENV") in _STRICT_ENV_ALIASES
         or require_posture
     )
 
