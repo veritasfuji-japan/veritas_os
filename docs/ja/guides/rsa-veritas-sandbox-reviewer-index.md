@@ -29,10 +29,10 @@
 4. [静的フィクスチャ・マトリクス](./rsa-veritas-static-fixture-matrix.md)
 5. [SAFE_PROCEED 検証スナップショット](./rsa-veritas-safe-proceed-validation-snapshot.md)
 6. [DENSITY_THROTTLED 検証スナップショット](./rsa-veritas-density-throttled-validation-snapshot.md)
-7. [DEFERRAL_ENGAGED 検証スナップショット](./rsa-veritas-deferral-engaged-validation-snapshot.md)
+7. [ALGORITHMIC_HUMILITY_ENGAGED 検証スナップショット](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
+8. [DEFERRAL_ENGAGED 検証スナップショット](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 
-- `ALGORITHMIC_HUMILITY_ENGAGED` は、現時点では包括的な E2E sandbox validation snapshot に含まれています。
-- 厳密な one-page-per-status の対称性が必要であれば、将来 `ALGORITHMIC_HUMILITY_ENGAGED` 専用ページを追加できます。
+4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
 ## 4. Artifact map
 
@@ -44,6 +44,7 @@
 | Static fixture matrix | サポートされる静的フィクスチャ status を比較します。 | VERITAS は各 upstream status をどうマップするか？ |
 | SAFE_PROCEED validation snapshot | 通常継続のケースを文書化します。 | upstream signal が proceed のとき何が起こるか？ |
 | DENSITY_THROTTLED validation snapshot | soft な upstream 介入を文書化します。 | upstream output が修正されたが hard-block ではない場合、何が起こるか？ |
+| ALGORITHMIC_HUMILITY_ENGAGED validation snapshot | required context 不足・authority evidence 不足時の pause / human-review gating を文書化します。 | required KYC context が incomplete の場合、何が起こるか？ |
 | DEFERRAL_ENGAGED validation snapshot | hard な final-commit block を文書化します。 | 重大な upstream deferral signal が発行された場合、何が起こるか？ |
 
 ## 5. Static fixture ladder
@@ -65,8 +66,8 @@
 
 補足:
 
-- `SAFE_PROCEED`、`DENSITY_THROTTLED`、`DEFERRAL_ENGAGED` には現時点で専用の per-variant snapshot ページがあります。
-- `ALGORITHMIC_HUMILITY_ENGAGED` は現時点では広域の E2E sandbox validation snapshot でカバーされています。
+- `SAFE_PROCEED`、`DENSITY_THROTTLED`、`ALGORITHMIC_HUMILITY_ENGAGED`、`DEFERRAL_ENGAGED` はすべて専用の per-variant snapshot ページがあります。
+- E2E sandbox validation snapshot は、別個の general E2E artifact として維持されます。
 
 ## 6. この文書セットが検証すること
 
@@ -94,7 +95,7 @@
 
 ## 8. 次の安全な sandbox ステップ
 
-1. one-page-per-status の対称性が必要であれば、`ALGORITHMIC_HUMILITY_ENGAGED` 専用の per-variant validation snapshot を追加する。
+1. general E2E artifact と4つの per-variant snapshots の導線として、static fixture matrix と reviewer index のリンク整合を維持する。
 2. maintainers がコミット済み出力 artifact を望む場合、`examples/sandbox/rsa_veritas_e2e_harness.py` から小さな生成サンプル出力ファイルを追加する。
 3. external review 向けの reviewer checklist を追加する。
 4. 静的ドキュメントセットのレビュー完了後に限り、live V.I.K.I. integration 用の別 design document を検討する。
