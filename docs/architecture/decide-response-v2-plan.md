@@ -79,6 +79,98 @@ The following is a proposal, not a final schema:
 }
 ```
 
+### Enforcement Response Examples (non-normative)
+
+Example 1 — FUJI BLOCK:
+
+```json
+{
+  "schema_version": "decide_response.v2",
+  "decision": {
+    "answer": null,
+    "alternatives": [],
+    "recommendation": null,
+    "confidence": null
+  },
+  "governance": {
+    "fuji_decision": {},
+    "policy_result": {},
+    "enforcement": {
+      "action": "BLOCK",
+      "reason": "Policy violation: risk level exceeded configured threshold."
+    },
+    "risk": {}
+  },
+  "evidence": {
+    "items": [],
+    "retrieval": {},
+    "citations": []
+  },
+  "audit": {
+    "request_id": "...",
+    "trace_id": "...",
+    "trustlog_ref": "<non-null: block event MUST be logged>",
+    "replay_ref": null
+  },
+  "diagnostics": {
+    "warnings": [],
+    "degraded_modes": [],
+    "tool_status": {}
+  },
+  "compat": {
+    "v1_fields": {},
+    "migration_notes": []
+  }
+}
+```
+
+Example 2 — FUJI DEFER:
+
+```json
+{
+  "schema_version": "decide_response.v2",
+  "decision": {
+    "answer": null,
+    "alternatives": [],
+    "recommendation": null,
+    "confidence": null
+  },
+  "governance": {
+    "fuji_decision": {},
+    "policy_result": {},
+    "enforcement": {
+      "action": "DEFER",
+      "defer_target": "<human-review queue reference>"
+    },
+    "risk": {}
+  },
+  "evidence": {
+    "items": [],
+    "retrieval": {},
+    "citations": []
+  },
+  "audit": {
+    "request_id": "...",
+    "trace_id": "...",
+    "trustlog_ref": "<non-null: defer event MUST be logged>",
+    "replay_ref": null
+  },
+  "diagnostics": {
+    "warnings": [],
+    "degraded_modes": [],
+    "tool_status": {}
+  },
+  "compat": {
+    "v1_fields": {},
+    "migration_notes": []
+  }
+}
+```
+
+> These enforcement paths are the canonical cases where `audit.trustlog_ref` MUST be non-null.
+> The block/defer event is always logged to TrustLog regardless of whether a `decision.answer`
+> is returned. v1 compatibility tests (Phase 2) must include at least one BLOCK scenario.
+
 ### Section intent (non-normative)
 
 - `decision`: user-facing decision/result semantics.
