@@ -12,6 +12,11 @@
 - これは live middleware connection ではありません。
 - これは production AML/KYC compliance ではありません。
 - これは将来レビューのための boundary と validation の設計メモです。
+- この design note は reviewer checklist と併読してレビューします。
+
+関連する review-gate artifact:
+
+- [Live V.I.K.I. integration reviewer checklist](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 
 ## 2. 現在の静的ベースライン
 
@@ -26,6 +31,7 @@
 - DENSITY_THROTTLED validation snapshot
 - ALGORITHMIC_HUMILITY_ENGAGED validation snapshot
 - DEFERRAL_ENGAGED validation snapshot
+- Live V.I.K.I. integration reviewer checklist（documentation-only の review-gate artifact）
 
 static fixture ladder は現在、対称的にそろっています。
 

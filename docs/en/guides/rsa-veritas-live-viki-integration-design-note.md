@@ -8,6 +8,11 @@ This document is a design note for a possible future live V.I.K.I. integration.
 - This is not a live middleware connection.
 - This is not production AML/KYC compliance.
 - This is a boundary and validation design note for future review.
+- This design note should be reviewed together with the reviewer checklist.
+
+Related review-gate artifact:
+
+- [Live V.I.K.I. integration reviewer checklist](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 
 ## 2. Current static baseline
 
@@ -22,6 +27,7 @@ The static sandbox documentation set already includes:
 - DENSITY_THROTTLED validation snapshot.
 - ALGORITHMIC_HUMILITY_ENGAGED validation snapshot.
 - DEFERRAL_ENGAGED validation snapshot.
+- Live V.I.K.I. integration reviewer checklist (documentation-only review-gate artifact).
 
 The static fixture ladder is now symmetrical:
 

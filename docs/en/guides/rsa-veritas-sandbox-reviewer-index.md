@@ -26,6 +26,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 7. [ALGORITHMIC_HUMILITY_ENGAGED validation snapshot](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 8. [DEFERRAL_ENGAGED validation snapshot](./rsa-veritas-deferral-engaged-validation-snapshot.md)
 9. [Live V.I.K.I. integration design note (future design artifact)](./rsa-veritas-live-viki-integration-design-note.md)
+10. [Live V.I.K.I. integration reviewer checklist (review-gate artifact, documentation-only)](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
@@ -92,8 +93,8 @@ Clarifications:
 
 1. Keep the static fixture matrix and reviewer index synchronized as the canonical navigation hubs for the general E2E artifact and four per-variant snapshots.
 2. Add a small generated sample output file from `examples/sandbox/rsa_veritas_e2e_harness.py` if maintainers want a committed output artifact.
-3. Add a reviewer checklist for external review.
-4. Only after the static documentation set is reviewed, consider a separate design document for live V.I.K.I. integration.
+3. Use the live integration reviewer checklist as a required review-gate artifact for future live adapter proposals.
+4. Only after the static documentation set is reviewed, consider a separate design or contract artifact for live V.I.K.I. integration.
 
 No live V.I.K.I. connection should be added in this PR.
 
