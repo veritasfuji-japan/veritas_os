@@ -4,23 +4,27 @@
 Pipeline core‑decision execution stage.
 
 Handles:
-- kernel.decide invocation via call_core_decide
+- injected kernel.decide invocation via call_core_decide when available
+- graceful degraded fallback when kernel decide is not injected
 - Self‑healing retry loop
 """
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Any, Dict, List, Optional
 
 from .pipeline_types import PipelineContext
 from .pipeline_helpers import (
-    _lazy_import,
     _extract_rejection,
     _summarize_last_output,
     _warn,
 )
 
 logger = logging.getLogger(__name__)
+_KERNEL_MISSING_LOG_LOCK = threading.Lock()
+_KERNEL_MISSING_LOGGED = False
 
 
 async def stage_core_execute(
@@ -30,23 +34,19 @@ async def stage_core_execute(
     append_trust_log_fn: Any,
     veritas_core: Any = None,
 ) -> None:
-    """Run kernel.decide and self‑healing loop, mutating *ctx* in place.
+    """Run injected core decide when available, then self-healing, mutating *ctx*.
 
     Parameters
     ----------
     veritas_core:
-        Pre-resolved kernel module. When ``None`` (default), the kernel
-        is lazily imported here.  Passing the module explicitly allows the
-        caller (pipeline.py) to provide a value that tests can
-        monkeypatch on the *pipeline* module.
+        Pre-resolved kernel module or kernel adapter injected by an allowed
+        higher-level boundary. This stage relies on injected dependencies only
+        and does not import kernel directly. If ``veritas_core.decide`` is not
+        available, the stage skips the core call and marks degraded behavior by
+        setting ``ctx.response_extras['env_tools']['kernel_missing'] = True``.
+        This preserves the pipeline/kernel responsibility boundary.
     """
     from . import self_healing
-
-    if veritas_core is None:
-        veritas_core = (
-            _lazy_import("veritas_os.core.kernel", None)
-            or _lazy_import("veritas_os.core", "kernel")
-        )
 
     core_decide = None
     try:
@@ -62,9 +62,23 @@ async def stage_core_execute(
 
     core_context: Dict[str, Any] = {}
     if core_decide is None:
-        ctx.response_extras.setdefault("env_tools", {})
-        if isinstance(ctx.response_extras["env_tools"], dict):
-            ctx.response_extras["env_tools"]["kernel_missing"] = True
+        global _KERNEL_MISSING_LOGGED
+        with _KERNEL_MISSING_LOG_LOCK:
+            if not _KERNEL_MISSING_LOGGED:
+                logger.error(
+                    "core decide unavailable: kernel was not injected via "
+                    "set_veritas_core; pipeline running in degraded mode "
+                    "(governance commit must be refused downstream)"
+                )
+                _KERNEL_MISSING_LOGGED = True
+            else:
+                logger.debug(
+                    "core decide still unavailable (suppressed after first ERROR)"
+                )
+        env_tools = ctx.response_extras.setdefault("env_tools", {})
+        if isinstance(env_tools, dict):
+            env_tools["kernel_missing"] = True
+            env_tools["kernel_degraded_at"] = time.time()
         _warn("[decide] kernel.decide missing -> skip core call")
     else:
         core_context = dict(ctx.context or {})
