@@ -105,6 +105,10 @@ DEFAULT_RULES: tuple[BoundaryRule, ...] = (
         source_module="memory",
         forbidden_imports=frozenset({"kernel", "planner", "fuji"}),
     ),
+    BoundaryRule(
+        source_module="pipeline",
+        forbidden_imports=frozenset({"kernel"}),
+    ),
 )
 
 
@@ -128,6 +132,14 @@ ALLOWED_DEPENDENCY_GUIDE: dict[str, tuple[str, ...]] = {
         "veritas_os.core.memory_store",
         "veritas_os.core.memory_helpers",
         "veritas_os.core.memory_security",
+    ),
+    "pipeline": (
+        "veritas_os.core.pipeline_inputs",
+        "veritas_os.core.pipeline_execute",
+        "veritas_os.core.pipeline_policy",
+        "veritas_os.core.pipeline_response",
+        "veritas_os.core.pipeline_persist",
+        "veritas_os.core.pipeline_replay",
     ),
 }
 
@@ -157,12 +169,21 @@ RECOMMENDED_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
         "veritas_os.core.memory_lifecycle",
         "veritas_os.core.memory_security",
     ),
+    "pipeline": (
+        "veritas_os.core.pipeline_inputs",
+        "veritas_os.core.pipeline_execute",
+        "veritas_os.core.pipeline_policy",
+        "veritas_os.core.pipeline_response",
+        "veritas_os.core.pipeline_persist",
+        "veritas_os.core.pipeline_replay",
+    ),
 }
 
 
 REMEDIATION_LINK = "docs/architecture/core_responsibility_boundaries.md"
 DOC_SECTION_TO_MODULE: dict[str, str] = {
     "Planner": "planner",
+    "Pipeline": "pipeline",
     "Kernel": "kernel",
     "FUJI": "fuji",
     "MemoryOS": "memory",
@@ -202,11 +223,26 @@ EXCLUDED_HELPER_PATH_PARTS: frozenset[str] = frozenset(
         "third_party",
     }
 )
+LOGICAL_CORE_MODULES: tuple[str, ...] = (
+    "planner",
+    "kernel",
+    "fuji",
+    "memory",
+    "pipeline",
+)
 
 
 def _normalize_module_name(module_name: str) -> str:
     """Normalize import paths to the core module leaf name."""
     return module_name.rsplit(".", maxsplit=1)[-1]
+
+
+def _is_boundary_relevant_relative_alias(alias_name: str) -> bool:
+    """Return whether a relative import alias is boundary-relevant."""
+    normalized = _normalize_module_name(alias_name)
+    if normalized in LOGICAL_CORE_MODULES:
+        return True
+    return any(normalized.startswith(f"{module}_") for module in LOGICAL_CORE_MODULES)
 
 
 def _collect_imported_name_parts(tree: ast.Module) -> ImportedNames:
@@ -225,9 +261,30 @@ def _collect_imported_name_parts(tree: ast.Module) -> ImportedNames:
                         module_names.add(_normalize_module_name(alias.name))
                     else:
                         symbol_names.add(_normalize_module_name(alias.name))
+            elif node.level > 0:
+                for alias in node.names:
+                    if _is_boundary_relevant_relative_alias(alias.name):
+                        module_names.add(_normalize_module_name(alias.name))
+                    else:
+                        symbol_names.add(_normalize_module_name(alias.name))
             else:
                 for alias in node.names:
                     symbol_names.add(_normalize_module_name(alias.name))
+        elif isinstance(node, ast.Call):
+            if not (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "_lazy_import"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                continue
+            module_arg = node.args[0].value
+            module_names.add(_normalize_module_name(module_arg))
+            if len(node.args) >= 2:
+                attr_arg = node.args[1]
+                if isinstance(attr_arg, ast.Constant) and isinstance(attr_arg.value, str):
+                    module_names.add(_normalize_module_name(attr_arg.value))
     return ImportedNames(
         module_names=frozenset(module_names),
         symbol_names=frozenset(symbol_names),
@@ -243,7 +300,7 @@ def _expand_logical_import_aliases(module_names: frozenset[str]) -> set[str]:
     """Expand helper module imports to their logical core module names."""
     expanded = set(module_names)
     for module_name in module_names:
-        for logical_name in ("planner", "kernel", "fuji", "memory", "pipeline"):
+        for logical_name in LOGICAL_CORE_MODULES:
             if module_name.startswith(f"{logical_name}_"):
                 expanded.add(logical_name)
     return expanded
