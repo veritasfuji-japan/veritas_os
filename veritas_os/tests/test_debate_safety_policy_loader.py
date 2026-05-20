@@ -168,6 +168,18 @@ def test_export_hardcoded_inventory_has_reviewable_non_empty_metadata() -> None:
 
 def test_export_hardcoded_inventory_category_name_snapshot() -> None:
     inventory = export_hardcoded_debate_safety_inventory()
+
+    # INTENTIONAL SNAPSHOT — do not relax or delete without review.
+    #
+    # This assertion fails whenever a category is added to or removed from
+    # _HARDCODED_CATEGORY_MAP in debate_safety_policy_loader.py.
+    # That failure is deliberate: it forces the developer to:
+    #   1. Update this list to include the new category name.
+    #   2. Document the corresponding parity gap (or resolution) in:
+    #      docs/architecture/debate-safety-policy-yaml-plan.md
+    #
+    # Phase 3 is blocked until all parity gaps are intentionally resolved.
+    # See: Phase 3 entry checklist in debate-safety-policy-yaml-plan.md
     assert sorted(inventory["categories"].keys()) == [
         "actionable_intent_patterns",
         "ascii_risk_negation_by_keyword",
