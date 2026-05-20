@@ -174,6 +174,13 @@ Example 2 — FUJI DEFER:
 ### Section intent (non-normative)
 
 - `decision`: user-facing decision/result semantics.
+  - `answer`: primary string output surfaced to the API caller.
+  - `alternatives`: ordered list of alternative decision strings; empty list when not applicable.
+  - `recommendation`: structured output object for ranked/typed planner results (see Task 6).
+  - `confidence`: `float | null`, range 0.0–1.0. `null` when the pipeline did not produce
+    a calibrated confidence signal. Derived by Kernel aggregation across pipeline stages;
+    not sourced from any single stage. This field is **advisory only** and MUST NOT gate
+    FUJI enforcement decisions.
 - `governance`: FUJI/policy/enforcement/risk outputs needed for policy review and compliance.
 - `evidence`: evidence items, retrieval context, and citation metadata.
 - `audit`: stable identifiers for tracing and replay linkage.
