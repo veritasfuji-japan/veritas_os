@@ -5,6 +5,8 @@
 - **Type**: Architecture proposal only.
 - **Implementation status**: Not implemented.
 - **Scope of this PR**: Documentation only; no runtime behavior change.
+- **Horizon**: H-3 — planned but not committed to any current sprint; requires Phase 0
+  completion before scheduling. (H-1 = in-sprint, H-2 = next sprint, H-3 = backlog/planned.)
 
 ## Problem Statement
 
