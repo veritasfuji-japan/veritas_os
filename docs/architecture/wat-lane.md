@@ -27,6 +27,51 @@ See also:
 - [DecideResponse v2 Plan](./decide-response-v2-plan.md)
 - [TrustLog Storage Consolidation](./trustlog_storage_consolidation.md)
 
+## WAT token structure
+
+The current v1 implementation persists **WAT lane event records** (audit entries),
+not a standalone signed bearer token object. The structure below is sourced from
+`veritas_os/audit/wat_events.py` and route request/response models in
+`veritas_os/api/routes_wat.py`.
+
+| Field | Type | Description |
+|---|---|---|
+| `event_id` | `string` (UUID) | Unique event record identifier generated at write time. |
+| `ts` | `string` | Write timestamp in canonical UTC format (`YYYY-MM-DDTHH:MM:SSZ`). |
+| `event_ts` | `string` | Canonical event timestamp; same normalization rule as `ts` in v1. |
+| `lane` | `string` | Fixed event lane label: `wat_shadow`. |
+| `wat_id` | `string` | Stable WAT identifier used to correlate lane events. |
+| `event_type` | `string` | One of supported WAT event types (issued/validated/replay/revocation/etc.). |
+| `actor` | `string` | Initiator identity (for API routes typically `api:<rbac_role>`). |
+| `status` | `string` | Event outcome label (`ok` / `warning`, depending on path). |
+| `details.metadata` | `object` | Retained event metadata (includes fields such as `psid`, `ttl_seconds`, `mode`, `reason`, warning and validation context when present). |
+| `details.event_pointers` | `object` | Pointer-style references; includes `observable_digest_ref` when provided/valid. |
+| `details.observable_digest_ref` | `string` | Canonical separate-store digest locator/reference (locator-form expected). |
+| `details.observable_digest_access_class` | `string` | Access-class label for observable digest linkage (`restricted` or `privileged`). |
+| `details.wat_metadata_retention_ttl_seconds` | `integer` | Metadata retention TTL applied to this event record. |
+| `details.wat_event_pointer_retention_ttl_seconds` | `integer` | Event-pointer retention TTL applied to this event record. |
+| `details.observable_digest_retention_ttl_seconds` | `integer` | Observable-digest reference retention TTL applied to this event record. |
+| `details.retention_policy_version` | `string` | Retention-policy version label persisted with the record. |
+| `details.retention_enforced_at_write` | `boolean` | Whether retention policy enforcement was active at write time. |
+| `details.retention_boundary_assertion` | `object` | Assertion result for retention-boundary checks (`outcome`, `failed_reasons`). |
+| `trustlog_anchor_ref` | `object` | TrustLog append result reference (`trustlog_decision_id`, `payload_hash`, `anchor_backend`, `anchor_status`) or error payload on append failure. |
+
+**Signing mechanism (v1):**
+- WAT lane records themselves are not assigned a dedicated per-token `hmac` or
+  per-token `Ed25519` signature field in the WAT event schema.
+- Integrity linkage is provided by `trustlog_anchor_ref`, produced via TrustLog
+  signed append helpers (`append_signed_decision`) that use the project
+  signing stack (Ed25519 key material in TrustLog signing utilities).
+
+**Expiry semantics (v1):**
+- No standalone WAT token expiry claim (for example `exp`) is persisted as a
+  first-class top-level token field in the WAT event record schema.
+- `ttl_seconds` may appear in event metadata for issuance telemetry input, but
+  this is metadata attached to lane events, not a separately validated token
+  lifetime contract.
+
+**Canonical `event_ts` format:** `YYYY-MM-DDTHH:MM:SSZ` (UTC, seconds precision).
+
 ## High-level request/response flow
 
 ### A) Direct WAT API lane (`/v1/wat/*`)
@@ -70,8 +115,11 @@ Current implementation allows WAT to be handled as:
 - **audited exemption / observer lane** for bind-governed execution controls on
   `/v1/wat/issue-shadow`, `/v1/wat/validate-shadow`, and `/v1/wat/revocation/{wat_id}`;
 - simplified shadow telemetry semantics (event write/read focused);
-- policy flag `revocation.auto_escalate_confirmed_revocations` is schema-visible
-  but runtime no-op in v1 (explicit confirmation still required).
+- ⚠️ **v1 no-op flag**: `revocation.auto_escalate_confirmed_revocations` is
+  present in the policy schema but has **no runtime effect** in v1.
+  Operators must not rely on automatic escalation; explicit confirmation
+  (`CONFIRM_REVOKED_CONFIRMED`) is always required.
+  Activating this flag requires a future implementation — see issue tracker.
 
 ## What WAT must never bypass
 
@@ -103,6 +151,11 @@ Current degraded/failure characteristics:
 - Required operator runbook behavior if TrustLog anchor append repeatedly fails
   (currently warning log path exists in helper code).
 
+📌 **Tracking**: These items are unresolved operational gaps. Create a
+GitHub issue for each and link here (replace `#TBD` below):
+- SLO/error-budget for WAT event write/read: issue #TBD
+- Operator runbook for repeated TrustLog anchor-append failure: issue #TBD
+
 ## Testing expectations
 
 Minimum lane checks should include:
@@ -127,8 +180,11 @@ Existing implementation coverage: `tests/test_wat_api.py`.
 - Revocation API:
   - `POST /v1/wat/revocation/{wat_id}` always emits pending revocation;
     confirmed event is emitted only with explicit confirmation phrase.
-- In v1, `auto_escalate_confirmed_revocations` should be treated as
-  non-runtime/non-activating.
+- ⚠️ **v1 no-op flag**: `revocation.auto_escalate_confirmed_revocations` is
+  present in the policy schema but has **no runtime effect** in v1.
+  Operators must not rely on automatic escalation; explicit confirmation
+  (`CONFIRM_REVOKED_CONFIRMED`) is always required.
+  Activating this flag requires a future implementation — see issue tracker.
 
 ## Non-goals
 
