@@ -1,34 +1,33 @@
-"""Validation tests for the Debate safety policy example YAML skeleton."""
-
-from __future__ import annotations
-
-from pathlib import Path
+import pathlib
 
 import yaml
 
+from veritas_os.policy.debate_safety_policy_schema import (
+    DebateSafetyPolicy,
+    PolicyMode,
+)
 
-def test_debate_safety_policy_example_yaml_parses_and_has_expected_shape() -> None:
-    """Example policy file should parse and preserve required scaffold keys."""
-    policy_path = Path("configs/debate_safety_policy.example.yaml")
+EXAMPLE_YAML_PATH = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "configs"
+    / "debate_safety_policy.example.yaml"
+)
 
-    assert policy_path.exists()
-    loaded = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
 
-    assert isinstance(loaded, dict)
-    assert loaded.get("schema_version") == 1
-    assert isinstance(loaded.get("policy_id"), str)
-    assert loaded.get("mode") == "example_only"
+def test_example_yaml_parses_against_schema():
+    raw = yaml.safe_load(EXAMPLE_YAML_PATH.read_text(encoding="utf-8"))
+    policy = DebateSafetyPolicy.model_validate(raw)
+    assert policy.mode == PolicyMode.example_only
 
-    categories = loaded.get("categories")
-    assert isinstance(categories, dict)
-    assert categories
 
-    for category_name, category in categories.items():
-        assert isinstance(category_name, str)
-        assert isinstance(category, dict)
-        assert isinstance(category.get("severity"), str)
-        assert isinstance(category.get("action"), str)
-        patterns = category.get("patterns")
-        assert isinstance(patterns, list)
-        assert patterns
-        assert all(isinstance(pattern, str) for pattern in patterns)
+def test_example_yaml_has_at_least_one_category():
+    raw = yaml.safe_load(EXAMPLE_YAML_PATH.read_text(encoding="utf-8"))
+    policy = DebateSafetyPolicy.model_validate(raw)
+    assert len(policy.categories) >= 1
+
+
+def test_each_category_has_non_empty_patterns():
+    raw = yaml.safe_load(EXAMPLE_YAML_PATH.read_text(encoding="utf-8"))
+    policy = DebateSafetyPolicy.model_validate(raw)
+    for name, cat in policy.categories.items():
+        assert len(cat.patterns) >= 1, f"Category '{name}' has no patterns"
