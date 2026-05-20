@@ -186,6 +186,15 @@ Example 2 — FUJI DEFER:
     not sourced from any single stage. This field is **advisory only** and MUST NOT gate
     FUJI enforcement decisions.
 - `governance`: FUJI/policy/enforcement/risk outputs needed for policy review and compliance.
+  - `fuji_decision`: output of the FUJI Gate evaluation for this decision request.
+  - `policy_result`: result of policy rule evaluation prior to FUJI Gate.
+  - `enforcement`: enforcement action taken (`ALLOW` / `BLOCK` / `DEFER`) with reason or
+    defer target. See "Enforcement Response Examples" above.
+  - `risk`: risk signal output. Maps from `risk_delta` computed in the Debate stage
+    (`debate.py`) combined with any FUJI policy risk classification result.
+    Schema TBD during Phase 0 inventory; minimum expected fields:
+    - `delta: float` — raw risk delta from Debate stage
+    - `level: str` — classified level: `"LOW"` | `"MEDIUM"` | `"HIGH"` | `"CRITICAL"`
 - `evidence`: evidence items, retrieval context, and citation metadata.
 - `audit`: stable identifiers for tracing and replay linkage.
   - `request_id`, `trace_id`: map from existing v1 fields; exact v1 key names
