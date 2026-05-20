@@ -174,9 +174,13 @@ Example 2 — FUJI DEFER:
 ### Section intent (non-normative)
 
 - `decision`: user-facing decision/result semantics.
-  - `answer`: primary string output surfaced to the API caller.
+  - `answer`: primary string output surfaced to the API caller. Maps directly from the
+    v1 top-level `answer` (or equivalent) field. Always a string or `null` (on BLOCK/DEFER).
   - `alternatives`: ordered list of alternative decision strings; empty list when not applicable.
-  - `recommendation`: structured output object for ranked/typed planner results (see Task 6).
+  - `recommendation`: structured output object for cases where the pipeline produces a
+    ranked or typed recommendation (e.g. multi-option Planner output). `null` when the
+    pipeline produces a plain answer. **New field with no v1 equivalent**; introduction
+    scoped to Phase 3. Do not populate in Phase 1 shadow payload.
   - `confidence`: `float | null`, range 0.0–1.0. `null` when the pipeline did not produce
     a calibrated confidence signal. Derived by Kernel aggregation across pipeline stages;
     not sourced from any single stage. This field is **advisory only** and MUST NOT gate
