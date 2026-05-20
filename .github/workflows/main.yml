@@ -712,7 +712,9 @@ jobs:
     name: test-slow (py3.12)
     needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Full requirements include heavy ML wheels (e.g., torch), so allow extra
+    # install headroom to avoid timeout cancellations before slow tests start.
+    timeout-minutes: 20
 
     env:
       PYTHONUNBUFFERED: "1"
