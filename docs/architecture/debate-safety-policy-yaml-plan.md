@@ -86,6 +86,17 @@ These constants are the baseline behavior to preserve while migrating.
 - Compare shadow policy evaluation with hardcoded evaluation in tests.
 - Fail tests on unexpected drift.
 
+### Phase 2.5 — Export hardcoded inventory + conservative parity visibility
+
+- Export a review-facing hardcoded inventory metadata report from
+  `veritas_os/policy/debate_safety_policy_loader.py`.
+- Keep parity reporting conservative (`parity_unknown` is expected until full
+  inventory alignment is intentionally addressed).
+- Runtime Debate enforcement remains hardcoded and authoritative.
+- YAML remains non-authoritative in this phase.
+- Phase 3 is blocked until inventory parity gaps are intentionally resolved and
+  documented.
+
 ### Phase 3 — Feature-flag YAML enforcement
 
 - Gate YAML-based enforcement behind explicit capability/feature flag.
@@ -130,3 +141,21 @@ These constants are the baseline behavior to preserve while migrating.
 - Future production strict-mode requirement remains: malformed production policy
   must fail closed, but Phase 2 does not activate production enforcement from
   YAML.
+
+## Phase 2.5 status update (inventory export only)
+
+- Hardcoded Debate safety inventory metadata is now exportable for review/test
+  visibility (category names and pattern counts).
+- Parity report remains conservative by design and must not be interpreted as
+  semantic equivalence proof.
+- Runtime enforcement is still hardcoded in `veritas_os/core/debate.py`.
+- YAML policy remains non-authoritative and does not drive runtime decisions.
+
+## Phase 3 entry checklist (must pass before activation work)
+
+- No missing hardcoded categories in parity inventory, or an explicit and
+  reviewed migration decision documenting each remaining gap.
+- Parity-focused tests pass in CI.
+- Any feature flag for YAML enforcement defaults to off.
+- Malformed policy fail-closed behavior is designed and test-covered.
+- Policy diagnostics avoid raw PII/secrets output.
