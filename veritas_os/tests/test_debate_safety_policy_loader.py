@@ -81,6 +81,29 @@ def test_loader_fails_on_schema_invalid_empty_pattern_string(tmp_path: Path) -> 
         load_debate_safety_policy_from_yaml(schema_invalid)
 
 
+def test_loader_fails_on_schema_invalid_empty_patterns_list(tmp_path: Path) -> None:
+    """patterns: [] must be rejected — list itself must be non-empty (Field min_length=1)."""
+    schema_invalid = tmp_path / "schema_invalid_empty_patterns_list.yaml"
+    schema_invalid.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "policy_id: invalid-empty-patterns-list",
+                "mode: example_only",
+                "categories:",
+                "  dangerous_terms_ja:",
+                "    severity: high",
+                "    action: block",
+                "    patterns: []",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DebateSafetyPolicySchemaError):
+        load_debate_safety_policy_from_yaml(schema_invalid)
+
+
 def test_loader_fails_on_schema_invalid_empty_categories(tmp_path: Path) -> None:
     schema_invalid = tmp_path / "schema_invalid_empty_categories.yaml"
     schema_invalid.write_text(
