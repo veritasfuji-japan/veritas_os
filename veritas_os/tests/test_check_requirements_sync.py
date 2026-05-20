@@ -12,7 +12,7 @@ def test_extract_dependency_name_normalizes_extras_and_markers() -> None:
     assert checker.extract_dependency_name("Foo_Bar[baz]>=1.2; python_version<'3.13'") == "foo-bar"
 
 
-def test_expected_dependency_names_expands_full_extra_closure() -> None:
+def test_expected_full_dependency_names_expands_full_extra_closure() -> None:
     """Expected set should include nested extras referenced by ``full``."""
     pyproject_data = {
         "project": {
@@ -25,9 +25,26 @@ def test_expected_dependency_names_expands_full_extra_closure() -> None:
         }
     }
 
-    expected = checker.expected_dependency_names(pyproject_data)
+    expected = checker.expected_full_dependency_names(pyproject_data)
 
     assert expected == {"alpha", "beta", "gamma"}
+
+
+def test_expected_core_dependency_names_reads_project_dependencies_only() -> None:
+    """Core expected set should match only ``[project].dependencies`` names."""
+    pyproject_data = {
+        "project": {
+            "dependencies": ["alpha==1.0", "bravo>=2.0"],
+            "optional-dependencies": {
+                "ml": ["charlie==3.0"],
+                "full": ["veritas-os[ml]"],
+            },
+        },
+    }
+
+    expected = checker.expected_core_dependency_names(pyproject_data)
+
+    assert expected == {"alpha", "bravo"}
 
 
 def test_main_returns_success_for_current_repository_manifests(capsys) -> None:
