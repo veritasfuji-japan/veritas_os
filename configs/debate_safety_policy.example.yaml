@@ -3,6 +3,25 @@
 # This file is a documentation-oriented skeleton for future Debate
 # safety policy-as-data migration. It is NOT runtime-enforced in the
 # current phase and must not be treated as source of truth yet.
+#
+# COVERAGE NOTE
+# ----------------------------------------------
+# The pattern categories in this file are ILLUSTRATIVE ONLY and do NOT
+# represent a complete or accurate transcription of the hardcoded constants
+# currently in veritas_os/core/debate.py.
+#
+# Full Phase 0 inventory of constants to migrate:
+#   _DANGER_TERMS_JA, _DANGER_PATTERNS_EN, _BENIGN_CONTEXT_STRONG_TERMS,
+#   _BENIGN_CONTEXT_WEAK_TERMS, _DANGEROUS_INTENT_PATTERNS,
+#   _ACTIONABLE_INTENT_PATTERNS, _INSTRUCTIONAL_CUE_PATTERNS,
+#   _RISK_NEGATION_TERMS, _ASCII_RISK_NEGATION_BY_KEYWORD,
+#   _JA_RISK_NEGATION_BY_KEYWORD, _REFUSAL_CONTEXT_PATTERNS,
+#   _RISK_KEYWORDS_WEIGHTED, _REGULATORY_AMBIGUITY_PATTERNS,
+#   _REGULATORY_AMBIGUITY_NEGATION_TERMS
+#
+# Do NOT use this file as a parity reference for Phase 2 shadow loading.
+# A full authoritative policy YAML must be derived directly from debate.py
+# under Phase 2 and verified with snapshot tests before enforcement.
 
 schema_version: 1
 policy_id: debate-safety-example-v0
@@ -10,6 +29,7 @@ mode: example_only
 notes:
   - "Non-authoritative example for Phase 0/1 migration planning."
   - "Do not wire into runtime without strict validation and parity proof."
+  - "Patterns shown are illustrative; they do not cover all 14 hardcoded constant groups. See COVERAGE NOTE at top of file."
 
 categories:
   dangerous_terms_ja:

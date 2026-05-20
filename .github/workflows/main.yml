@@ -716,8 +716,12 @@ jobs:
     name: test-slow (py3.12)
     needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
-    # Full requirements include heavy ML wheels (e.g., torch), so allow extra
-    # install headroom to avoid timeout cancellations before slow tests start.
+    # test-slow installs the full requirements.txt which includes heavy optional
+    # ML wheels (e.g. torch, torchvision). On a cold runner cache these can take
+    # 8-12 minutes to install before pytest even starts. The 20-minute ceiling
+    # provides headroom without masking genuine test hangs; do not reduce below
+    # 15 minutes without first verifying that the full wheel install completes
+    # within the new limit on a cache-miss run.
     timeout-minutes: 20
 
     env:
