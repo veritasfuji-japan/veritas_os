@@ -113,3 +113,20 @@ These constants are the baseline behavior to preserve while migrating.
   `docs/ja/guides/fuji-eu-enterprise-strict-usage.md`
 - Responsibility boundaries:
   `docs/architecture/core_responsibility_boundaries.md`
+
+## Phase 2 status update (shadow-only)
+
+- A dedicated shadow loader is now available at
+  `veritas_os/policy/debate_safety_policy_loader.py`.
+- Loader behavior is intentionally non-authoritative:
+  - loads YAML from an explicit local path only,
+  - uses `yaml.safe_load`,
+  - validates with `DebateSafetyPolicy.model_validate`,
+  - raises explicit errors for malformed YAML or schema violations.
+- Debate runtime enforcement remains hardcoded in `veritas_os/core/debate.py`.
+- YAML policy is **not** the source of truth in Phase 2 and must not be used to
+  switch enforcement behavior.
+- Operator warning: Do **not** treat YAML policy as authoritative yet.
+- Future production strict-mode requirement remains: malformed production policy
+  must fail closed, but Phase 2 does not activate production enforcement from
+  YAML.
