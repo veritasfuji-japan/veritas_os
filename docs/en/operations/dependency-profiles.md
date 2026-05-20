@@ -20,7 +20,8 @@ keeping full backward compatibility via the `[full]` extra.
 | **+ System** | `pip install ".[system]"` | Adds psutil, trio, pinned starlette for system monitoring scripts. |
 | **+ PostgreSQL** | `pip install ".[postgresql]"` | Adds psycopg 3, psycopg-pool, Alembic for PostgreSQL storage backend. |
 | **Full** | `pip install ".[full]"` | All optional groups. Equivalent to the old flat install. |
-| **requirements.txt** | `pip install -r veritas_os/requirements.txt` | Full pinned list — CI and Docker default. |
+| **requirements-core.txt** | `pip install -r veritas_os/requirements-core.txt` | Core pinned production set (blocking Python dependency audit target). |
+| **requirements.txt** | `pip install -r veritas_os/requirements.txt` | Full pinned list (core + optional groups), used for compatibility/full environments. |
 
 ## Dependency Classification
 
@@ -71,13 +72,15 @@ keeping full backward compatibility via the `[full]` extra.
 
 ## CI / Docker Behavior
 
-- **CI** (`main.yml`): Installs via `requirements.txt` → full dependency set. No change needed.
+- **CI blocking dependency audit** (`main.yml`, `security-gates.yml`): `pip-audit -r veritas_os/requirements-core.txt --desc`.
+- **CI informational full audit**: `pip-audit -r veritas_os/requirements.txt --desc` with non-blocking status, so optional ML/security posture remains visible.
+- **CI install paths**: Some jobs still install `requirements.txt` for full-coverage test environments.
 - **Docker** (`Dockerfile`): Installs via `requirements.txt` → full dependency set. No change needed.
 - **`setup.sh`**: Installs via `requirements.txt` → full dependency set. No change needed.
 
-All existing workflows continue to install the complete dependency set.
-The extras mechanism is additive — it enables _lighter_ installs without
-breaking the default path.
+This split keeps core production dependency audit blocking, while tracking
+optional ML and other full-profile risks without turning optional packages into
+default production blockers.
 
 ## Future Candidates for Optional-ization
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Validate dependency name sync between pyproject extras and requirements.txt.
+"""Validate dependency name sync between pyproject and requirements manifests.
 
-This guard enforces that ``veritas_os/requirements.txt`` stays aligned with the
-packages resolved by ``pyproject.toml``'s core dependencies plus the ``full``
-extra closure. Version-pinning strategy can differ between files; this checker
-intentionally validates normalized package *names* to prevent silent drift.
+This guard enforces:
+1) ``veritas_os/requirements-core.txt`` aligns with ``[project].dependencies``.
+2) ``veritas_os/requirements.txt`` aligns with core + ``full`` extra closure.
+Version-pinning strategy can differ between files; this checker intentionally
+validates normalized package *names* to prevent silent drift.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from collections.abc import Mapping
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 REQUIREMENTS_PATH = REPO_ROOT / "veritas_os" / "requirements.txt"
+REQUIREMENTS_CORE_PATH = REPO_ROOT / "veritas_os" / "requirements-core.txt"
 
 _SELF_PACKAGE = "veritas-os"
 _NAME_SPLIT_PATTERN = re.compile(r"[<>=!~;\s]")
@@ -64,8 +66,20 @@ def _expand_extra(
     return expanded
 
 
-def expected_dependency_names(pyproject_data: dict[str, object]) -> set[str]:
-    """Build expected dependency-name set from core + full extra dependencies."""
+def expected_core_dependency_names(pyproject_data: dict[str, object]) -> set[str]:
+    """Build expected core dependency-name set from project dependencies."""
+    project_table = pyproject_data.get("project")
+    if not isinstance(project_table, dict):
+        raise ValueError("[project] table is missing in pyproject.toml")
+
+    dependencies = project_table.get("dependencies", [])
+    if not isinstance(dependencies, list):
+        raise ValueError("[project.dependencies] is malformed")
+    return {extract_dependency_name(spec) for spec in dependencies}
+
+
+def expected_full_dependency_names(pyproject_data: dict[str, object]) -> set[str]:
+    """Build expected full dependency-name set from core + full extra closure."""
     project_table = pyproject_data.get("project")
     if not isinstance(project_table, dict):
         raise ValueError("[project] table is missing in pyproject.toml")
@@ -93,30 +107,56 @@ def requirements_dependency_names(requirements_content: str) -> set[str]:
 
 def main() -> int:
     """Run requirements sync check and print actionable drift diagnostics."""
-    if not PYPROJECT_PATH.exists() or not REQUIREMENTS_PATH.exists():
+    if (
+        not PYPROJECT_PATH.exists()
+        or not REQUIREMENTS_PATH.exists()
+        or not REQUIREMENTS_CORE_PATH.exists()
+    ):
         print("[SYNC] Required dependency manifest file is missing.")
         return 1
 
     pyproject_data = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
-    expected = expected_dependency_names(pyproject_data)
-    actual = requirements_dependency_names(REQUIREMENTS_PATH.read_text(encoding="utf-8"))
+    expected_core = expected_core_dependency_names(pyproject_data)
+    expected_full = expected_full_dependency_names(pyproject_data)
+    actual_core = requirements_dependency_names(
+        REQUIREMENTS_CORE_PATH.read_text(encoding="utf-8"),
+    )
+    actual_full = requirements_dependency_names(
+        REQUIREMENTS_PATH.read_text(encoding="utf-8"),
+    )
 
-    missing = sorted(expected - actual)
-    unexpected = sorted(actual - expected)
+    core_missing = sorted(expected_core - actual_core)
+    core_unexpected = sorted(actual_core - expected_core)
+    full_missing = sorted(expected_full - actual_full)
+    full_unexpected = sorted(actual_full - expected_full)
 
-    if not missing and not unexpected:
+    if not core_missing and not core_unexpected and not full_missing and not full_unexpected:
         print("Dependency manifests are in sync (name-level).")
         return 0
 
-    print("[SYNC] requirements.txt is out of sync with pyproject full dependency set:")
-    for pkg in missing:
-        print(f"- missing in requirements.txt: {pkg}")
-    for pkg in unexpected:
-        print(f"- unexpected in requirements.txt: {pkg}")
+    if core_missing or core_unexpected:
+        print(
+            "[SYNC] requirements-core.txt is out of sync with pyproject "
+            "core dependency set:",
+        )
+        for pkg in core_missing:
+            print(f"- missing in requirements-core.txt: {pkg}")
+        for pkg in core_unexpected:
+            print(f"- unexpected in requirements-core.txt: {pkg}")
+    if full_missing or full_unexpected:
+        print(
+            "[SYNC] requirements.txt is out of sync with pyproject full "
+            "dependency set:",
+        )
+        for pkg in full_missing:
+            print(f"- missing in requirements.txt: {pkg}")
+        for pkg in full_unexpected:
+            print(f"- unexpected in requirements.txt: {pkg}")
 
     print(
-        "Hint: align veritas_os/requirements.txt with pyproject.toml "
-        "([project.dependencies] + [project.optional-dependencies].full).",
+        "Hint: align veritas_os/requirements-core.txt with pyproject.toml "
+        "[project.dependencies], and align veritas_os/requirements.txt with "
+        "[project.dependencies] + [project.optional-dependencies].full.",
     )
     return 1
 
