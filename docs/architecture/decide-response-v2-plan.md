@@ -177,7 +177,9 @@ Example 2 — FUJI DEFER:
 - `governance`: FUJI/policy/enforcement/risk outputs needed for policy review and compliance.
 - `evidence`: evidence items, retrieval context, and citation metadata.
 - `audit`: stable identifiers for tracing and replay linkage.
-  - `request_id`, `trace_id`: map from existing v1 fields.
+  - `request_id`, `trace_id`: map from existing v1 fields; exact v1 key names
+    to be confirmed during Phase 0 field inventory (v2 names are canonical and
+    may differ from v1 key names).
   - `trustlog_ref`: stable identifier referencing the TrustLog entry for this decision;
     MUST be non-null for all FUJI enforcement events (BLOCK, DEFER).
   - `replay_ref`: **new field with no v1 equivalent**. Introduction scoped to Phase 3.
