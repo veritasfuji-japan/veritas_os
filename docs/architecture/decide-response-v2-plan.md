@@ -184,12 +184,13 @@ Example 2 — FUJI DEFER:
     Format TBD during Phase 0 inventory (candidate: opaque string token referencing the
     Continuation Runtime replay index). MUST NOT be populated in the Phase 1 shadow payload.
 - `diagnostics`: operational signals for internal debugging/health visibility.
-- `compat`: transitional envelope for v1-compatible consumers. `v1_fields` is a
-  **field-mapping index** (not a data copy) of the form
-  `{ "v1_field_name": "v2.section.field_path" }`, populated only when the response
-  is served to a caller that has not opted into v2.
-  Callers MUST NOT receive both the structured v2 sections and a full v1 copy simultaneously.
-  `migration_notes` carries human-readable deprecation notices keyed by v1 field name.
+- `compat`: transitional envelope for v1-compatible consumers.
+  - `v1_fields`: **field-mapping index** (not a data copy) of the form
+    `{ "v1_field_name": "v2.section.field_path" }`, populated only when the response
+    is served to a caller that has not opted into v2.
+    Callers MUST NOT receive both the structured v2 sections and a full v1 copy simultaneously.
+    The mapping index MUST NOT include fields excluded by Rule 5 (secrets, raw PII).
+  - `migration_notes`: human-readable deprecation notices keyed by v1 field name.
 
 ## Compatibility and Safety Rules
 
