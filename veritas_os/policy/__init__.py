@@ -1,5 +1,8 @@
 """Policy-as-Code public interfaces for schema validation and canonicalization."""
 
+# debate_safety_policy_schema: Phase 1 schema definition only.
+# Not wired into runtime enforcement. See debate-safety-policy-yaml-plan.md.
+
 from .compiler import COMPILER_VERSION, CompileResult, compile_policy_to_bundle
 from .bind_artifacts import (
     BindReceipt,
