@@ -58,6 +58,47 @@ def test_loader_fails_on_schema_invalid_yaml(tmp_path: Path) -> None:
         load_debate_safety_policy_from_yaml(schema_invalid)
 
 
+def test_loader_fails_on_schema_invalid_empty_pattern_string(tmp_path: Path) -> None:
+    schema_invalid = tmp_path / "schema_invalid_empty_pattern.yaml"
+    schema_invalid.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "policy_id: invalid-empty-pattern",
+                "mode: example_only",
+                "categories:",
+                "  dangerous_terms_ja:",
+                "    severity: high",
+                "    action: block",
+                "    patterns:",
+                '      - ""',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DebateSafetyPolicySchemaError):
+        load_debate_safety_policy_from_yaml(schema_invalid)
+
+
+def test_loader_fails_on_schema_invalid_empty_categories(tmp_path: Path) -> None:
+    schema_invalid = tmp_path / "schema_invalid_empty_categories.yaml"
+    schema_invalid.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "policy_id: invalid-empty-categories",
+                "mode: example_only",
+                "categories: {}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DebateSafetyPolicySchemaError):
+        load_debate_safety_policy_from_yaml(schema_invalid)
+
+
 def test_loader_does_not_call_runtime_enforcement(monkeypatch) -> None:
     called = {"run_debate": False}
 

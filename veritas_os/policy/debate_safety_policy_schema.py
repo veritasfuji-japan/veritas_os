@@ -37,14 +37,20 @@ class PolicyAction(str, Enum):
 class PatternCategory(pydantic.BaseModel):
     severity: Severity
     action: PolicyAction
-    patterns: list[Annotated[str, pydantic.StringConstraints(min_length=1)]]
+    patterns: Annotated[
+        list[Annotated[str, pydantic.StringConstraints(min_length=1)]],
+        pydantic.Field(min_length=1),
+    ]
 
 
 class DebateSafetyPolicy(pydantic.BaseModel):
     schema_version: int
     policy_id: str
     mode: PolicyMode
-    notes: list[str] = []
-    categories: dict[str, PatternCategory]
+    notes: list[str] = pydantic.Field(default_factory=list)
+    categories: Annotated[
+        dict[str, PatternCategory],
+        pydantic.Field(min_length=1),
+    ]
 
     model_config = pydantic.ConfigDict(extra="forbid")
