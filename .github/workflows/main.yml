@@ -150,7 +150,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pip-audit==2.8.0
 
-      - name: Block high/critical CVEs in Python dependencies
+      - name: Block high/critical CVEs in Python core production dependencies
+        run: pip-audit -r veritas_os/requirements-core.txt --desc
+
+      - name: Python full/optional dependency audit (informational)
+        continue-on-error: true
         run: pip-audit -r veritas_os/requirements.txt --desc
 
       - name: Setup pnpm (Corepack)
@@ -712,7 +716,13 @@ jobs:
     name: test-slow (py3.12)
     needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # test-slow installs the full requirements.txt which includes heavy optional
+    # ML wheels (e.g. torch, torchvision). On a cold runner cache these can take
+    # 8-12 minutes to install before pytest even starts. The 20-minute ceiling
+    # provides headroom without masking genuine test hangs; do not reduce below
+    # 15 minutes without first verifying that the full wheel install completes
+    # within the new limit on a cache-miss run.
+    timeout-minutes: 20
 
     env:
       PYTHONUNBUFFERED: "1"

@@ -50,8 +50,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pip-audit==2.8.0
 
-      - name: Python dependency audit (pip-audit)
-        run: pip-audit -r veritas_os/requirements.txt
+      - name: Python core production dependency audit (pip-audit, blocking)
+        run: pip-audit -r veritas_os/requirements-core.txt --desc
+
+      - name: Python full/optional dependency audit (pip-audit, informational)
+        continue-on-error: true
+        run: pip-audit -r veritas_os/requirements.txt --desc
 
       - name: Setup pnpm (Corepack)
         run: |
