@@ -285,3 +285,62 @@ This plan is intentionally aligned with current boundary and safety principles:
 - No immediate SDK breaking changes.
 
 This document defines a migration strategy, not a shipping v2 implementation.
+
+## Appendix: Non-normative TypedDict Sketch
+
+> **NON-NORMATIVE** — subject to change during Phase 0 field inventory.
+> This sketch exists to make section boundaries machine-checkable, not to finalize
+> nested field schemas. Nested types use `dict` as a placeholder until Phase 0 completes.
+
+```python
+from __future__ import annotations
+from typing import TypedDict, Optional
+
+
+class DecisionSection(TypedDict):
+    answer: Optional[str]
+    alternatives: list[str]
+    recommendation: Optional[dict]   # new in Phase 3; null until then
+    confidence: Optional[float]      # 0.0–1.0; null when unavailable
+
+
+class GovernanceSection(TypedDict):
+    fuji_decision: dict
+    policy_result: dict
+    enforcement: dict                # action: ALLOW | BLOCK | DEFER
+    risk: dict                       # delta: float, level: LOW|MEDIUM|HIGH|CRITICAL
+
+
+class EvidenceSection(TypedDict):
+    items: list[dict]
+    retrieval: dict
+    citations: list[dict]
+
+
+class AuditSection(TypedDict):
+    request_id: str
+    trace_id: str
+    trustlog_ref: Optional[str]      # MUST be non-null for BLOCK/DEFER events
+    replay_ref: Optional[str]        # new in Phase 3; null until then
+
+
+class DiagnosticsSection(TypedDict):
+    warnings: list[str]
+    degraded_modes: list[str]
+    tool_status: dict
+
+
+class CompatSection(TypedDict):
+    v1_fields: dict[str, str]        # mapping index: v1_field_name -> v2.section.field_path
+    migration_notes: list[str]
+
+
+class DecideResponseV2(TypedDict):
+    schema_version: str              # "decide_response.v2"
+    decision: DecisionSection
+    governance: GovernanceSection
+    evidence: EvidenceSection
+    audit: AuditSection
+    diagnostics: DiagnosticsSection
+    compat: CompatSection
+```
