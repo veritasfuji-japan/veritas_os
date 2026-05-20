@@ -177,6 +177,12 @@ Example 2 — FUJI DEFER:
 - `governance`: FUJI/policy/enforcement/risk outputs needed for policy review and compliance.
 - `evidence`: evidence items, retrieval context, and citation metadata.
 - `audit`: stable identifiers for tracing and replay linkage.
+  - `request_id`, `trace_id`: map from existing v1 fields.
+  - `trustlog_ref`: stable identifier referencing the TrustLog entry for this decision;
+    MUST be non-null for all FUJI enforcement events (BLOCK, DEFER).
+  - `replay_ref`: **new field with no v1 equivalent**. Introduction scoped to Phase 3.
+    Format TBD during Phase 0 inventory (candidate: opaque string token referencing the
+    Continuation Runtime replay index). MUST NOT be populated in the Phase 1 shadow payload.
 - `diagnostics`: operational signals for internal debugging/health visibility.
 - `compat`: transitional envelope for v1-compatible consumers. `v1_fields` is a
   **field-mapping index** (not a data copy) of the form
@@ -219,6 +225,8 @@ Example 2 — FUJI DEFER:
 
 - Expose v2 in internal API surfaces and SDK preview pathways.
 - Publish migration notes and mapping guidance from v1 fields to v2 sections.
+- Define `replay_ref` format (opaque token vs. structured ref) and populate it in the
+  SDK preview pathway alongside `trustlog_ref`.
 
 ### Phase 4 — Controlled Deprecation of Selected v1 Compat Fields
 
