@@ -194,6 +194,7 @@ Example 2 — FUJI DEFER:
     defer target. See "Enforcement Response Examples" above.
   - `risk`: risk signal output. Maps from `risk_delta` computed in the Debate stage
     (`debate.py`) combined with any FUJI policy risk classification result.
+    For Debate policy-as-data migration planning, see `docs/architecture/debate-safety-policy-yaml-plan.md`.
     Schema TBD during Phase 0 inventory; minimum expected fields:
     - `delta: float` — raw risk delta from Debate stage
     - `level: str` — classified level: `"LOW"` | `"MEDIUM"` | `"HIGH"` | `"CRITICAL"`

@@ -1,0 +1,40 @@
+# EXAMPLE / NON-AUTHORITATIVE
+# ----------------------------------------------
+# This file is a documentation-oriented skeleton for future Debate
+# safety policy-as-data migration. It is NOT runtime-enforced in the
+# current phase and must not be treated as source of truth yet.
+
+schema_version: 1
+policy_id: debate-safety-example-v0
+mode: example_only
+notes:
+  - "Non-authoritative example for Phase 0/1 migration planning."
+  - "Do not wire into runtime without strict validation and parity proof."
+
+categories:
+  dangerous_terms_ja:
+    severity: high
+    action: escalate_or_block
+    patterns:
+      - "自殺"
+      - "爆弾"
+      - "麻薬"
+  dangerous_terms_en:
+    severity: high
+    action: escalate_or_block
+    patterns:
+      - "\\bweapon\\b"
+      - "\\bmalware\\b"
+      - "\\bphishing\\b"
+  dangerous_intent:
+    severity: critical
+    action: block
+    patterns:
+      - "(?:作り方|作成方法|やり方|手順).{0,8}(?:爆弾|麻薬|ウイルス|ハッキング)"
+      - "\\b(?:how to make|steps? to)\\b.{0,24}\\b(?:bomb|malware|drugs?|hack(?:ing)?)\\b"
+  instructional_cues:
+    severity: medium
+    action: review
+    patterns:
+      - "(?:方法|手順|具体的|チュートリアル|コード).{0,12}(?:ハッキング|ウイルス|爆弾|麻薬|侵入)"
+      - "\\b(?:tutorial|walkthrough|code sample|script)\\b.{0,24}\\b(?:malware|virus|bomb|drugs?|hack(?:ing)?)\\b"
