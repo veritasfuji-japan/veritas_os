@@ -178,7 +178,12 @@ Example 2 — FUJI DEFER:
 - `evidence`: evidence items, retrieval context, and citation metadata.
 - `audit`: stable identifiers for tracing and replay linkage.
 - `diagnostics`: operational signals for internal debugging/health visibility.
-- `compat`: transitional envelope for v1-compatible consumers.
+- `compat`: transitional envelope for v1-compatible consumers. `v1_fields` is a
+  **field-mapping index** (not a data copy) of the form
+  `{ "v1_field_name": "v2.section.field_path" }`, populated only when the response
+  is served to a caller that has not opted into v2.
+  Callers MUST NOT receive both the structured v2 sections and a full v1 copy simultaneously.
+  `migration_notes` carries human-readable deprecation notices keyed by v1 field name.
 
 ## Compatibility and Safety Rules
 
@@ -188,6 +193,8 @@ Example 2 — FUJI DEFER:
 4. Governance/audit fields must remain **replay-safe** and deterministic enough for investigation workflows.
 5. Diagnostics must not leak secrets or raw PII.
 6. `trustlog_ref` and `replay_ref` should be stable identifiers, not raw internal blobs.
+7. `compat.v1_fields` MUST be a mapping index, not a data copy. Full v1 payload
+   mirroring is explicitly prohibited to prevent payload doubling.
 
 ## Phased Migration Plan
 
