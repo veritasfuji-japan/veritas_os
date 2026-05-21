@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from veritas_os.policy.debate_safety_policy_loader import (
+    NOTE_RUNTIME_ENFORCEMENT_HARDCODED,
     DebateSafetyPolicySchemaError,
     DebateSafetyPolicyYamlSyntaxError,
     compare_policy_to_hardcoded_inventory,
@@ -147,7 +148,7 @@ def test_parity_report_is_conservative_phase2() -> None:
     assert len(report.missing_hardcoded_categories) >= 1
     assert report.hardcoded_pattern_count is not None
     assert report.yaml_pattern_count >= 1
-    assert any("Runtime enforcement remains hardcoded" in note for note in report.notes)
+    assert NOTE_RUNTIME_ENFORCEMENT_HARDCODED in report.notes
 
 
 def test_export_hardcoded_inventory_has_reviewable_non_empty_metadata() -> None:

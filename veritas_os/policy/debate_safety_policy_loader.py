@@ -18,6 +18,12 @@ import yaml
 from veritas_os.core import debate
 from veritas_os.policy.debate_safety_policy_schema import DebateSafetyPolicy
 
+# Sentinel note used by compare_policy_to_hardcoded_inventory() to signal that
+# runtime Debate enforcement is still hardcoded and YAML is non-authoritative.
+NOTE_RUNTIME_ENFORCEMENT_HARDCODED: str = (
+    "Runtime enforcement remains hardcoded in veritas_os.core.debate"
+)
+
 
 class DebateSafetyPolicyLoadError(ValueError):
     """Base error for debate safety policy shadow-loading failures."""
@@ -145,7 +151,8 @@ def compare_policy_to_hardcoded_inventory(
     yaml_pattern_count = sum(len(category.patterns) for category in policy.categories.values())
 
     notes: list[str] = [
-        "Phase 2 shadow-only comparison. Runtime enforcement remains hardcoded.",
+        "Phase 2 shadow-only comparison.",
+        NOTE_RUNTIME_ENFORCEMENT_HARDCODED,
         "Semantic regex equivalence is not validated in this report.",
     ]
 
