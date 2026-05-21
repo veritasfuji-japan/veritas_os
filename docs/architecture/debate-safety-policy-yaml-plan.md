@@ -144,6 +144,10 @@ These constants are the baseline behavior to preserve while migrating.
   `veritas_os/core/debate.py`; YAML remains non-authoritative.
 - Phase 3 (feature-flagged YAML enforcement) is blocked until intentional
   inventory-parity decisions are documented and approved.
+- Required review artifact before Phase 3: `docs/architecture/debate-safety-policy-migration-map.md`
+  (Phase 2.6 mapping baseline).
+- Phase 3 remains blocked until the migration mapping document is reviewed and
+  approved by maintainers.
 
 ### Phase 3 entry checklist
 
