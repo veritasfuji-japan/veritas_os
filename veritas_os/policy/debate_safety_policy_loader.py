@@ -45,6 +45,28 @@ class DebateSafetyPolicyParityReport:
     notes: list[str]
 
 
+def export_hardcoded_debate_safety_inventory() -> dict[str, Any]:
+    """Export current hardcoded Debate safety inventory metadata.
+
+    Returns a review-friendly summary for tests and operator visibility.
+    Runtime enforcement remains hardcoded and authoritative.
+    """
+    categories: dict[str, dict[str, int]] = {}
+    total_pattern_count = 0
+
+    for category_name, value in _HARDCODED_CATEGORY_MAP.items():
+        pattern_count = _count_category_patterns(value)
+        categories[category_name] = {"pattern_count": pattern_count}
+        total_pattern_count += pattern_count
+
+    return {
+        "categories": categories,
+        "total_pattern_count": total_pattern_count,
+        "source": "veritas_os.core.debate",
+        "authoritative": True,
+    }
+
+
 _HARDCODED_CATEGORY_MAP: dict[str, Any] = {
     "danger_terms_ja": debate._DANGER_TERMS_JA,
     "danger_patterns_en": debate._DANGER_PATTERNS_EN,
@@ -139,11 +161,32 @@ def compare_policy_to_hardcoded_inventory(
     )
 
 
+def build_debate_safety_policy_shadow_report(
+    policy: DebateSafetyPolicy,
+) -> dict[str, Any]:
+    """Build a CLI-free review report for shadow-loaded policy visibility."""
+    parity = compare_policy_to_hardcoded_inventory(policy)
+    return {
+        "policy_id": policy.policy_id,
+        "mode": policy.mode.value,
+        "schema_version": policy.schema_version,
+        "parity_status": parity.status,
+        "yaml_category_count": len(parity.yaml_categories),
+        "hardcoded_category_count": len(parity.hardcoded_categories),
+        "missing_hardcoded_categories": parity.missing_hardcoded_categories,
+        "extra_yaml_categories": parity.extra_yaml_categories,
+        "enforcement_authoritative": "hardcoded",
+    }
+
+
 def _count_hardcoded_patterns() -> int:
     total = 0
     for value in _HARDCODED_CATEGORY_MAP.values():
-        if isinstance(value, dict):
-            total += sum(len(items) for items in value.values())
-        else:
-            total += len(value)
+        total += _count_category_patterns(value)
     return total
+
+
+def _count_category_patterns(value: Any) -> int:
+    if isinstance(value, dict):
+        return sum(len(items) for items in value.values())
+    return len(value)
