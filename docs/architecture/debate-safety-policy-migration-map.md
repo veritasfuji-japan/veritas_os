@@ -41,6 +41,17 @@ The current hardcoded inventory exported by
 > - `derived`: YAML value derived from structured/weighted source, not copied verbatim
 > - `TBD`: unresolved mapping design
 
+
+> Note: three proposed YAML category names differ from their hardcoded
+> counterparts. In all other cases the proposed YAML category name is
+> identical to the hardcoded name.
+>
+> | Hardcoded name                  | Proposed YAML name               |
+> |---|---|
+> | ascii_risk_negation_by_keyword  | risk_negation_by_keyword_ascii   |
+> | ja_risk_negation_by_keyword     | risk_negation_by_keyword_ja      |
+> | risk_keywords_weighted          | risk_keyword_weights             |
+
 | Hardcoded category | Proposed YAML category | Migration status | Notes / risks |
 |---|---|---|---|
 | `danger_terms_ja` | `danger_terms_ja` | `direct` | Low structural risk; semantic parity still requires regex/term review. |
@@ -87,6 +98,11 @@ Phase 3 remains blocked until all criteria below are satisfied:
 5. Fail-closed behavior is designed for malformed production policy.
 6. No remote policy fetch.
 7. No runtime enforcement switch yet.
+8. Migration mapping document is promoted to a machine-readable artifact
+   (e.g. a structured YAML or JSON file under docs/architecture/) and a
+   validation script confirms that every key in _HARDCODED_CATEGORY_MAP
+   has an explicit entry in the mapping file before Phase 3 enforcement
+   is enabled.
 
 ## Security and operations note
 
