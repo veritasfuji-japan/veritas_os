@@ -10,6 +10,7 @@ from veritas_os.policy.debate_safety_policy_loader import (
     DebateSafetyPolicySchemaError,
     DebateSafetyPolicyYamlSyntaxError,
     compare_policy_to_hardcoded_inventory,
+    export_hardcoded_debate_safety_inventory,
     load_debate_safety_policy_from_yaml,
 )
 from veritas_os.policy.debate_safety_policy_schema import PolicyMode
@@ -146,3 +147,39 @@ def test_parity_report_is_conservative_phase2() -> None:
     assert len(report.missing_hardcoded_categories) >= 1
     assert report.hardcoded_pattern_count is not None
     assert report.yaml_pattern_count >= 1
+    assert any("Runtime enforcement remains hardcoded" in note for note in report.notes)
+
+
+def test_export_hardcoded_inventory_has_reviewable_non_empty_metadata() -> None:
+    inventory = export_hardcoded_debate_safety_inventory()
+
+    assert isinstance(inventory.categories, dict)
+    assert len(inventory.categories) >= 1
+    assert inventory.total_pattern_count > 0
+    assert inventory.source == "veritas_os.core.debate"
+    assert inventory.authoritative is True
+
+    for category_name, category in inventory.categories.items():
+        assert category_name
+        assert isinstance(category["pattern_count"], int)
+        assert category["pattern_count"] >= 0
+
+
+def test_export_hardcoded_inventory_category_name_snapshot() -> None:
+    inventory = export_hardcoded_debate_safety_inventory()
+    assert sorted(inventory.categories.keys()) == [
+        "actionable_intent_patterns",
+        "ascii_risk_negation_by_keyword",
+        "benign_context_strong_terms",
+        "benign_context_weak_terms",
+        "danger_patterns_en",
+        "danger_terms_ja",
+        "dangerous_intent_patterns",
+        "instructional_cue_patterns",
+        "ja_risk_negation_by_keyword",
+        "refusal_context_patterns",
+        "regulatory_ambiguity_negation_terms",
+        "regulatory_ambiguity_patterns",
+        "risk_keywords_weighted",
+        "risk_negation_terms",
+    ]

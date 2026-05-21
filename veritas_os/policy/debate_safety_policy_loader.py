@@ -45,6 +45,16 @@ class DebateSafetyPolicyParityReport:
     notes: list[str]
 
 
+@dataclass(frozen=True)
+class DebateSafetyHardcodedInventory:
+    """Review-facing export of hardcoded Debate safety inventory metadata."""
+
+    categories: dict[str, dict[str, int]]
+    total_pattern_count: int
+    source: str
+    authoritative: bool
+
+
 _HARDCODED_CATEGORY_MAP: dict[str, Any] = {
     "danger_terms_ja": debate._DANGER_TERMS_JA,
     "danger_patterns_en": debate._DANGER_PATTERNS_EN,
@@ -61,6 +71,29 @@ _HARDCODED_CATEGORY_MAP: dict[str, Any] = {
     "regulatory_ambiguity_patterns": debate._REGULATORY_AMBIGUITY_PATTERNS,
     "regulatory_ambiguity_negation_terms": debate._REGULATORY_AMBIGUITY_NEGATION_TERMS,
 }
+
+
+def export_hardcoded_debate_safety_inventory() -> DebateSafetyHardcodedInventory:
+    """Export hardcoded Debate safety inventory metadata for review/testing.
+
+    The returned dataclass is intentionally metadata-only and does not alter
+    runtime enforcement. Hardcoded logic in ``veritas_os.core.debate`` remains
+    authoritative.
+    """
+    categories: dict[str, dict[str, int]] = {}
+    for category_name, value in _HARDCODED_CATEGORY_MAP.items():
+        categories[category_name] = {
+            "pattern_count": _count_patterns_for_category(value),
+        }
+
+    return DebateSafetyHardcodedInventory(
+        categories=categories,
+        total_pattern_count=sum(
+            category["pattern_count"] for category in categories.values()
+        ),
+        source="veritas_os.core.debate",
+        authoritative=True,
+    )
 
 
 def load_debate_safety_policy_from_yaml(path: str | Path) -> DebateSafetyPolicy:
@@ -142,8 +175,12 @@ def compare_policy_to_hardcoded_inventory(
 def _count_hardcoded_patterns() -> int:
     total = 0
     for value in _HARDCODED_CATEGORY_MAP.values():
-        if isinstance(value, dict):
-            total += sum(len(items) for items in value.values())
-        else:
-            total += len(value)
+        total += _count_patterns_for_category(value)
     return total
+
+
+def _count_patterns_for_category(category: Any) -> int:
+    """Count regex/term entries for one hardcoded Debate category."""
+    if isinstance(category, dict):
+        return sum(len(items) for items in category.values())
+    return len(category)
