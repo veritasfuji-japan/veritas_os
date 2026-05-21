@@ -62,7 +62,7 @@ def export_hardcoded_debate_safety_inventory() -> dict[str, Any]:
     return {
         "categories": categories,
         "total_pattern_count": total_pattern_count,
-        "source": "veritas_os.core.debate",
+        "source": debate.__name__,
         "authoritative": True,
     }
 
@@ -175,15 +175,13 @@ def build_debate_safety_policy_shadow_report(
         "hardcoded_category_count": len(parity.hardcoded_categories),
         "missing_hardcoded_categories": parity.missing_hardcoded_categories,
         "extra_yaml_categories": parity.extra_yaml_categories,
+        "notes": parity.notes,
         "enforcement_authoritative": "hardcoded",
     }
 
 
 def _count_hardcoded_patterns() -> int:
-    total = 0
-    for value in _HARDCODED_CATEGORY_MAP.values():
-        total += _count_category_patterns(value)
-    return total
+    return sum(_count_category_patterns(v) for v in _HARDCODED_CATEGORY_MAP.values())
 
 
 def _count_category_patterns(value: Any) -> int:

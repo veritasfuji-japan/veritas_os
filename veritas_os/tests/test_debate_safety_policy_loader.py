@@ -14,6 +14,7 @@ from veritas_os.policy.debate_safety_policy_loader import (
     export_hardcoded_debate_safety_inventory,
     load_debate_safety_policy_from_yaml,
 )
+from veritas_os.core import debate
 from veritas_os.policy.debate_safety_policy_schema import PolicyMode
 
 
@@ -154,7 +155,7 @@ def test_parity_report_is_conservative_phase2() -> None:
 def test_export_hardcoded_inventory_has_non_empty_categories_and_counts() -> None:
     inventory = export_hardcoded_debate_safety_inventory()
 
-    assert inventory["source"] == "veritas_os.core.debate"
+    assert inventory["source"] == debate.__name__
     assert inventory["authoritative"] is True
     assert isinstance(inventory["categories"], dict)
     assert len(inventory["categories"]) >= 1
@@ -164,6 +165,9 @@ def test_export_hardcoded_inventory_has_non_empty_categories_and_counts() -> Non
         assert category_name
         assert isinstance(metadata["pattern_count"], int)
         assert metadata["pattern_count"] >= 0
+    assert sum(
+        meta["pattern_count"] for meta in inventory["categories"].values()
+    ) == inventory["total_pattern_count"]
 
 
 def test_export_hardcoded_inventory_category_snapshot_names_only() -> None:
@@ -198,4 +202,5 @@ def test_build_shadow_report_visibility_fields() -> None:
     assert report["yaml_category_count"] >= 1
     assert report["hardcoded_category_count"] >= 1
     assert len(report["missing_hardcoded_categories"]) >= 1
+    assert report["notes"]
     assert report["enforcement_authoritative"] == "hardcoded"
