@@ -86,9 +86,22 @@ These constants are the baseline behavior to preserve while migrating.
 - Compare shadow policy evaluation with hardcoded evaluation in tests.
 - Fail tests on unexpected drift.
 
-### Phase 3 — Feature-flag YAML enforcement
+### Phase 3a — Optional local shadow diagnostics (no enforcement impact)
 
-- Gate YAML-based enforcement behind explicit capability/feature flag.
+- Add optional runtime-visible diagnostics for a local YAML shadow policy via
+  `VERITAS_DEBATE_SAFETY_POLICY_SHADOW_PATH`.
+- Default remains off; if the env var is unset there is no YAML load and no
+  runtime decision impact.
+- Diagnostics must be safe/sanitized and must not include raw policy blobs or
+  secrets.
+- No remote fetch is allowed (`http://` and `https://` paths are rejected).
+- Runtime enforcement remains hardcoded and authoritative in
+  `veritas_os/core/debate.py`.
+
+### Phase 3b/3c — Feature-flag YAML enforcement (blocked pending human review)
+
+- Any enforcement-path switch requires explicit human review/approval, parity
+  evidence, and dedicated fail-closed test coverage before release.
 - Keep default behavior aligned with current hardcoded path until parity proof passes.
 
 ### Phase 4 — Retire duplicated hardcoded patterns after parity proof
