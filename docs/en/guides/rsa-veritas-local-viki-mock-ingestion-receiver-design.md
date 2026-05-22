@@ -205,6 +205,10 @@ Additional constraints:
 - It does not provide legal advice.
 - It does not change production runtime governance.
 
+Reference:
+
+- [Local V.I.K.I. mock receiver test fixture plan (documentation-only)](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
+
 ## 13. Recommended next PR after this note
 
 After this design note is merged, the next safe PR should be either:

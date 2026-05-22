@@ -209,6 +209,10 @@ v1 互換性契約は変更しません。
 - legal advice は提供しません。
 - production runtime governance は変更しません。
 
+参照:
+
+- [Local V.I.K.I. mock receiver test fixture plan（documentation-only）](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
+
 ## 13. このノートの次に推奨される PR
 
 この設計ノートがマージされた後、次の安全な PR は以下のいずれかです。
