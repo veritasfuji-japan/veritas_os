@@ -107,8 +107,13 @@ Future tests may generate dynamic timestamps, but fixture examples should remain
 | VIKI_NEG_006 | Empty trigger_source | trigger_source is empty string | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
 | VIKI_NEG_007 | Unknown rsa_status | rsa_status = "UNKNOWN_STATE" | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
 | VIKI_NEG_008 | Invalid timestamp format | timestamp is not RFC 3339 UTC | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
-| VIKI_NEG_009 | Clock skew too large | timestamp differs from receiver clock by more than 300 seconds | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
+| VIKI_NEG_009 | Clock skew too large | timestamp differs from receiver clock by strictly more than 300 seconds (skew > 300 s is rejected; skew = 300 s is accepted) | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
 | VIKI_NEG_010 | Payload shape mismatch | payload is array or nested wrapper instead of expected object | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
+
+Clock skew boundary note: the threshold is exclusive.
+A payload with a timestamp exactly 300 seconds in the past or future is accepted.
+A payload with a timestamp 301 seconds or more in the past or future is rejected.
+Implementations must use strict inequality (skew > 300) not greater-than-or-equal (skew >= 300).
 
 ## 7. Timeout and unreachable fixture matrix
 

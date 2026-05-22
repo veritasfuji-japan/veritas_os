@@ -103,8 +103,13 @@
 | VIKI_NEG_006 | Empty trigger_source | trigger_source is empty string | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
 | VIKI_NEG_007 | Unknown rsa_status | rsa_status = "UNKNOWN_STATE" | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
 | VIKI_NEG_008 | Invalid timestamp format | timestamp is not RFC 3339 UTC | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
-| VIKI_NEG_009 | Clock skew too large | timestamp differs from receiver clock by more than 300 seconds | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
+| VIKI_NEG_009 | Clock skew too large | timestamp differs from receiver clock by strictly more than 300 seconds (skew > 300 s is rejected; skew = 300 s is accepted) | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
 | VIKI_NEG_010 | Payload shape mismatch | payload is array or nested wrapper instead of expected object | fail closed | UPSTREAM_MOCK_PAYLOAD_INVALID |
+
+Clock skew boundary note: 閾値は exclusive です。
+timestamp が過去または未来にちょうど 300 seconds の payload は accepted です。
+timestamp が過去または未来に 301 seconds 以上ずれた payload は rejected です。
+実装では strict inequality（skew > 300）を使用し、greater-than-or-equal（skew >= 300）を使用してはいけません。
 
 ## 7. Timeout / unreachable fixture matrix
 
