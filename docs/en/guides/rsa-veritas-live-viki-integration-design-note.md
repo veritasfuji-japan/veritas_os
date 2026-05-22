@@ -10,8 +10,9 @@ This document is a design note for a possible future live V.I.K.I. integration.
 - This is a boundary and validation design note for future review.
 - This design note should be reviewed together with the reviewer checklist.
 
-Related review-gate artifact:
+Related documentation artifacts:
 
+- [Local V.I.K.I. mock ingestion receiver design (Phase 2 local mock artifact, documentation-only)](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 - [Live V.I.K.I. integration reviewer checklist](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 
 ## 2. Current static baseline

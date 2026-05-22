@@ -31,8 +31,9 @@
 6. [DENSITY_THROTTLED 検証スナップショット](./rsa-veritas-density-throttled-validation-snapshot.md)
 7. [ALGORITHMIC_HUMILITY_ENGAGED 検証スナップショット](./rsa-veritas-algorithmic-humility-engaged-validation-snapshot.md)
 8. [DEFERRAL_ENGAGED 検証スナップショット](./rsa-veritas-deferral-engaged-validation-snapshot.md)
-9. [Live V.I.K.I. integration design note（将来設計アーティファクト）](./rsa-veritas-live-viki-integration-design-note.md)
-10. [Live V.I.K.I. integration reviewer checklist（review-gate artifact / documentation-only）](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
+9. [Local V.I.K.I. mock ingestion receiver design（Phase 2 local mock artifact / documentation-only）](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
+10. [Live V.I.K.I. integration design note（将来設計アーティファクト / documentation-only）](./rsa-veritas-live-viki-integration-design-note.md)
+11. [Live V.I.K.I. integration reviewer checklist（review-gate artifact / documentation-only）](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
@@ -48,6 +49,7 @@
 | DENSITY_THROTTLED validation snapshot | soft な upstream 介入を文書化します。 | upstream output が修正されたが hard-block ではない場合、何が起こるか？ |
 | ALGORITHMIC_HUMILITY_ENGAGED validation snapshot | required context 不足・authority evidence 不足時の pause / human-review gating を文書化します。 | required KYC context が incomplete の場合、何が起こるか？ |
 | DEFERRAL_ENGAGED validation snapshot | hard な final-commit block を文書化します。 | 重大な upstream deferral signal が発行された場合、何が起こるか？ |
+| Local V.I.K.I. mock ingestion receiver design | VERITAS 側 local mock receiver の受信・検証・fail-closed ルールを実装前に定義します。 | runtime integration を導入せず、synthetic local mock payload を VERITAS がどう受信・検証すべきか？ |
 
 ## 5. Static fixture ladder
 

@@ -12,6 +12,7 @@ This checklist is for reviewing future live V.I.K.I. integration proposals.
 References:
 
 - [Live V.I.K.I. integration design note](./rsa-veritas-live-viki-integration-design-note.md)
+- [Local V.I.K.I. mock ingestion receiver design (documentation-only)](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 - [Sandbox reviewer index](./rsa-veritas-sandbox-reviewer-index.md)
 
 ## 2. Review status legend
