@@ -2,8 +2,11 @@
 
 ## Purpose
 
-This document defines the **Phase 2.6 planning/mapping baseline** for migrating
+This document defines the **Phase 2.6/2.7 planning/mapping baseline** for migrating
 hardcoded Debate safety categories into a future YAML policy model.
+
+Machine-readable artifact: `docs/architecture/debate-safety-policy-migration-map.yaml`
+(planning-only, non-authoritative).
 
 It exists to prevent accidental behavior drift during Phase 3 planning:
 
@@ -98,14 +101,22 @@ Phase 3 remains blocked until all criteria below are satisfied:
 5. Fail-closed behavior is designed for malformed production policy.
 6. No remote policy fetch.
 7. No runtime enforcement switch yet.
-8. Migration mapping document is promoted to a machine-readable artifact
-   (e.g. a structured YAML or JSON file under docs/architecture/) and a
-   validation script confirms that every key in _HARDCODED_CATEGORY_MAP
-   has an explicit entry in the mapping file before Phase 3 enforcement
-   is enabled.
+8. Machine-readable migration mapping artifact is present at
+   `docs/architecture/debate-safety-policy-migration-map.yaml`, and a
+   validator/test confirms that every key in _HARDCODED_CATEGORY_MAP
+   has an explicit entry in that file.
+9. The mapping validator is green in CI and human review explicitly approves
+   the mapping before any Phase 3 enforcement-path switch is considered.
 
 ## Security and operations note
 
 This migration area is safety-sensitive. Any mapping change that can alter
 runtime behavior must be reviewed as a security-relevant change before
 feature-flagged enforcement is considered.
+
+
+## Phase 2.7 artifact status
+
+The YAML mapping artifact is **planning-only** and **non-authoritative** in
+Phase 2.7. Runtime enforcement remains hardcoded. Phase 3 remains blocked
+until the mapping validator passes and human review approves the mapping.

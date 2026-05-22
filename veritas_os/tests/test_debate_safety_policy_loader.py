@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from veritas_os.policy.debate_safety_policy_loader import (
     build_debate_safety_policy_shadow_report,
@@ -204,3 +205,51 @@ def test_build_shadow_report_visibility_fields() -> None:
     assert len(report["missing_hardcoded_categories"]) >= 1
     assert report["notes"]
     assert report["enforcement_authoritative"] == "hardcoded"
+
+MIGRATION_MAP_YAML_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "docs"
+    / "architecture"
+    / "debate-safety-policy-migration-map.yaml"
+)
+
+_ALLOWED_MIGRATION_STATUS = {"direct", "split", "merge", "derived", "TBD"}
+
+
+def test_migration_map_yaml_covers_hardcoded_inventory_exactly() -> None:
+    """Ensure planning mapping artifact fully and explicitly covers hardcoded categories."""
+    payload = yaml.safe_load(MIGRATION_MAP_YAML_PATH.read_text(encoding="utf-8"))
+    assert isinstance(payload, dict)
+
+    mappings = payload.get("mappings")
+    assert isinstance(mappings, list)
+
+    hardcoded_inventory = export_hardcoded_debate_safety_inventory()
+    hardcoded_categories = set(hardcoded_inventory["categories"].keys())
+
+    mapped_categories: list[str] = []
+    for entry in mappings:
+        assert isinstance(entry, dict)
+
+        hardcoded_category = entry.get("hardcoded_category")
+        proposed_yaml_category = entry.get("proposed_yaml_category")
+        migration_status = entry.get("migration_status")
+
+        assert isinstance(hardcoded_category, str)
+        assert hardcoded_category.strip()
+        assert hardcoded_category not in mapped_categories
+
+        assert isinstance(proposed_yaml_category, str)
+        assert proposed_yaml_category.strip()
+
+        assert migration_status in _ALLOWED_MIGRATION_STATUS
+
+        mapped_categories.append(hardcoded_category)
+
+    mapped_categories_set = set(mapped_categories)
+    missing_categories = sorted(hardcoded_categories - mapped_categories_set)
+    unknown_categories = sorted(mapped_categories_set - hardcoded_categories)
+
+    assert missing_categories == []
+    assert unknown_categories == []
+    assert len(mapped_categories) == len(hardcoded_categories)
