@@ -1,60 +1,78 @@
-# EXAMPLE / NON-AUTHORITATIVE
-# ----------------------------------------------
-# This file is a documentation-oriented skeleton for future Debate
-# safety policy-as-data migration. It is NOT runtime-enforced in the
-# current phase and must not be treated as source of truth yet.
-#
-# COVERAGE NOTE
-# ----------------------------------------------
-# The pattern categories in this file are ILLUSTRATIVE ONLY and do NOT
-# represent a complete or accurate transcription of the hardcoded constants
-# currently in veritas_os/core/debate.py.
-#
-# Full Phase 0 inventory of constants to migrate:
-#   _DANGER_TERMS_JA, _DANGER_PATTERNS_EN, _BENIGN_CONTEXT_STRONG_TERMS,
-#   _BENIGN_CONTEXT_WEAK_TERMS, _DANGEROUS_INTENT_PATTERNS,
-#   _ACTIONABLE_INTENT_PATTERNS, _INSTRUCTIONAL_CUE_PATTERNS,
-#   _RISK_NEGATION_TERMS, _ASCII_RISK_NEGATION_BY_KEYWORD,
-#   _JA_RISK_NEGATION_BY_KEYWORD, _REFUSAL_CONTEXT_PATTERNS,
-#   _RISK_KEYWORDS_WEIGHTED, _REGULATORY_AMBIGUITY_PATTERNS,
-#   _REGULATORY_AMBIGUITY_NEGATION_TERMS
-#
-# Do NOT use this file as a parity reference for Phase 2 shadow loading.
-# A full authoritative policy YAML must be derived directly from debate.py
-# under Phase 2 and verified with snapshot tests before enforcement.
-
 schema_version: 1
-policy_id: debate-safety-example-v0
+policy_id: debate-safety-shadow-example-v1
 mode: example_only
 notes:
-  - "Non-authoritative example for Phase 0/1 migration planning."
-  - "Do not wire into runtime without strict validation and parity proof."
-  - "Patterns shown are illustrative; they do not cover all 14 hardcoded constant groups. See COVERAGE NOTE at top of file."
+  - "Phase 3a diagnostics-only fixture."
+  - "Non-authoritative: hardcoded debate enforcement remains source of truth."
 
 categories:
-  dangerous_terms_ja:
+  danger_terms_ja:
     severity: high
     action: escalate_or_block
     patterns:
-      - "自殺"
-      - "爆弾"
-      - "麻薬"
-  dangerous_terms_en:
+      - "危険語"
+  danger_patterns_en:
     severity: high
     action: escalate_or_block
     patterns:
-      - "\\bweapon\\b"
-      - "\\bmalware\\b"
-      - "\\bphishing\\b"
-  dangerous_intent:
+      - "\\bdanger\\b"
+  benign_context_strong_terms:
+    severity: low
+    action: review
+    patterns:
+      - "safety context"
+  benign_context_weak_terms:
+    severity: low
+    action: review
+    patterns:
+      - "educational"
+  dangerous_intent_patterns:
     severity: critical
     action: block
     patterns:
-      - "(?:作り方|作成方法|やり方|手順).{0,8}(?:爆弾|麻薬|ウイルス|ハッキング)"
-      - "\\b(?:how to make|steps? to)\\b.{0,24}\\b(?:bomb|malware|drugs?|hack(?:ing)?)\\b"
-  instructional_cues:
+      - "intent to cause harm"
+  actionable_intent_patterns:
+    severity: high
+    action: block
+    patterns:
+      - "step by step harm"
+  instructional_cue_patterns:
     severity: medium
     action: review
     patterns:
-      - "(?:方法|手順|具体的|チュートリアル|コード).{0,12}(?:ハッキング|ウイルス|爆弾|麻薬|侵入)"
-      - "\\b(?:tutorial|walkthrough|code sample|script)\\b.{0,24}\\b(?:malware|virus|bomb|drugs?|hack(?:ing)?)\\b"
+      - "tutorial for misuse"
+  risk_negation_terms:
+    severity: low
+    action: review
+    patterns:
+      - "not a risk"
+  ascii_risk_negation_by_keyword:
+    severity: low
+    action: review
+    patterns:
+      - "not-malicious"
+  ja_risk_negation_by_keyword:
+    severity: low
+    action: review
+    patterns:
+      - "悪意はない"
+  refusal_context_patterns:
+    severity: medium
+    action: review
+    patterns:
+      - "refuse unsafe request"
+  risk_keywords_weighted:
+    severity: high
+    action: escalate_or_block
+    patterns:
+      - "high-risk keyword"
+  regulatory_ambiguity_patterns:
+    severity: medium
+    action: review
+    patterns:
+      - "regulatory ambiguity"
+  regulatory_ambiguity_negation_terms:
+    severity: low
+    action: review
+    patterns:
+      - "compliance clarified"

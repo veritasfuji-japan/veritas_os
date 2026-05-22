@@ -115,7 +115,27 @@ def test_stage_debate_behavior_unchanged_with_shadow_diagnostics(monkeypatch) ->
         telos_score=0.0,
         response_extras={},
     )
-    ctx_with = PipelineContext(**{**base_ctx.__dict__, "response_extras": {}})
+    ctx_with = PipelineContext(
+        query="q",
+        user_id="u",
+        body={},
+        context={},
+        fast_mode=False,
+        is_veritas_query=False,
+        explicit_options=[],
+        input_alts=[],
+        alternatives=[{"id": "x", "world": {"utility": 1.0}}],
+        chosen={},
+        evidence=[],
+        web_evidence=[],
+        critique={},
+        debate=[],
+        raw={},
+        plan={},
+        fuji={},
+        telos_score=0.0,
+        response_extras={},
+    )
 
     monkeypatch.delenv(SHADOW_PATH_ENV_VAR, raising=False)
     stage_debate(base_ctx, debate_core=DummyDebate(), _warn=lambda m: None)

@@ -7,6 +7,7 @@ Debate enforcement behavior.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from veritas_os.policy.debate_safety_policy_loader import (
@@ -91,6 +92,7 @@ def _error_diagnostics(status: str, exc: Exception, *, strict: bool) -> dict[str
 
 def _sanitize_error_message(exc: Exception) -> str:
     text = str(exc).strip().replace("\n", " ")
+    text = re.sub(r"[^\s]+[/\\][^\s]*", "<path>", text)
     return (text[:240] + "...") if len(text) > 240 else text
 
 
