@@ -34,6 +34,7 @@
 9. [Local V.I.K.I. mock ingestion receiver design（Phase 2 local mock artifact / documentation-only）](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 10. [Live V.I.K.I. integration design note（将来設計アーティファクト / documentation-only）](./rsa-veritas-live-viki-integration-design-note.md)
 11. [Live V.I.K.I. integration reviewer checklist（review-gate artifact / documentation-only）](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
+12. [Local V.I.K.I. mock receiver test fixture plan（Phase 2 local mock artifact / documentation-only）](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
 
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
@@ -50,6 +51,7 @@
 | ALGORITHMIC_HUMILITY_ENGAGED validation snapshot | required context 不足・authority evidence 不足時の pause / human-review gating を文書化します。 | required KYC context が incomplete の場合、何が起こるか？ |
 | DEFERRAL_ENGAGED validation snapshot | hard な final-commit block を文書化します。 | 重大な upstream deferral signal が発行された場合、何が起こるか？ |
 | Local V.I.K.I. mock ingestion receiver design | VERITAS 側 local mock receiver の受信・検証・fail-closed ルールを実装前に定義します。 | runtime integration を導入せず、synthetic local mock payload を VERITAS がどう受信・検証すべきか？ |
+| Local V.I.K.I. mock receiver test fixture plan | receiver 実装前・テスト実装前に positive/negative/timeout/audit の fixture coverage を定義します。 | 将来の receiver tests で fail-closed 挙動を検証するために、どの fixture セットを実装すべきか？ |
 
 ## 5. Static fixture ladder
 

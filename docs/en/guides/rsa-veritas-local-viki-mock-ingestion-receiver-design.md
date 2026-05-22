@@ -92,7 +92,7 @@ Required fields:
 - trigger_source
 - timestamp
 - timestamp — required; must be a valid RFC 3339 UTC string (e.g. 2026-05-20T23:01:35.876Z); millisecond precision accepted, sub-millisecond precision is not required.
-- timestamp — clock skew: payloads with a timestamp more than 300 seconds (5 minutes) in the past or future relative to the VERITAS receiver clock must be rejected as a validation failure. Reason code: UPSTREAM_MOCK_PAYLOAD_INVALID.
+- timestamp — clock skew: payloads with a timestamp strictly more than 300 seconds (5 minutes) in the past or future relative to the VERITAS receiver clock must be rejected as a validation failure (skew > 300 s; skew = 300 s is accepted). Reason code: UPSTREAM_MOCK_PAYLOAD_INVALID.
 
 Optional accepted fields:
 
@@ -204,6 +204,10 @@ Additional constraints:
 - It does not provide regulatory approval.
 - It does not provide legal advice.
 - It does not change production runtime governance.
+
+Reference:
+
+- [Local V.I.K.I. mock receiver test fixture plan (documentation-only)](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
 
 ## 13. Recommended next PR after this note
 

@@ -17,6 +17,7 @@
 
 - [Live V.I.K.I. integration design note](./rsa-veritas-live-viki-integration-design-note.md)
 - [Local V.I.K.I. mock ingestion receiver design（documentation-only）](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
+- [Local V.I.K.I. mock receiver test fixture plan（documentation-only / receiver 未実装 / tests 未実装 / production endpoint 追加なし）](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
 - [Sandbox reviewer index](./rsa-veritas-sandbox-reviewer-index.md)
 
 ## 2. Review status legend

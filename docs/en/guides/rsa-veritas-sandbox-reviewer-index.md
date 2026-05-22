@@ -28,6 +28,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 9. [Local V.I.K.I. mock ingestion receiver design (Phase 2 local mock artifact, documentation-only)](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 10. [Live V.I.K.I. integration design note (future design artifact, documentation-only)](./rsa-veritas-live-viki-integration-design-note.md)
 11. [Live V.I.K.I. integration reviewer checklist (review-gate artifact, documentation-only)](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
+12. [Local V.I.K.I. mock receiver test fixture plan (Phase 2 local mock artifact, documentation-only)](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
@@ -44,6 +45,7 @@ All four static fixture variants now have dedicated per-variant validation snaps
 | ALGORITHMIC_HUMILITY_ENGAGED validation snapshot | Documents pause / human-review gating for incomplete context or insufficient authority evidence. | What happens when required KYC context is incomplete? |
 | DEFERRAL_ENGAGED validation snapshot | Documents hard final-commit block. | What happens when a critical upstream deferral signal is emitted? |
 | Local V.I.K.I. mock ingestion receiver design | Defines VERITAS-side local mock receiver behavior and fail-closed rules before implementation. | How should VERITAS receive and validate synthetic local mock payloads without runtime integration? |
+| Local V.I.K.I. mock receiver test fixture plan | Defines positive/negative/timeout/audit fixture coverage before any receiver or test implementation. | What fixture set should future receiver tests implement to prove fail-closed behavior? |
 
 ## 5. Static fixture ladder
 
