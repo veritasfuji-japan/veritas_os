@@ -198,3 +198,15 @@ def test_guard_blocks_receiver_before_payload_processing(
         match="VERITAS_LOCAL_VIKI_MOCK_RECEIVER_ENABLE=1",
     ):
         ingest_local_viki_mock_payload("{", receiver_now=datetime.now(UTC))
+
+
+def test_guard_blocks_unreachable_decision_before_processing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("VERITAS_LOCAL_VIKI_MOCK_RECEIVER_ENABLE", raising=False)
+
+    with pytest.raises(
+        RuntimeError,
+        match="VERITAS_LOCAL_VIKI_MOCK_RECEIVER_ENABLE=1",
+    ):
+        build_local_viki_mock_unreachable_decision(receiver_now=datetime.now(UTC))

@@ -150,6 +150,11 @@ def ingest_local_viki_mock_payload(
             raise ValueError("timestamp clock skew exceeded")
 
         optional_values: dict[str, str] = {}
+        # Optional fields: if present, must be a non-empty string.
+        # A present-but-invalid value (None, non-string, empty) is rejected
+        # as UPSTREAM_MOCK_PAYLOAD_INVALID rather than silently redacted,
+        # because an invalid value indicates a malformed payload, not a
+        # legitimate field that should be suppressed.
         for field in _OPTIONAL_TEXT_FIELDS:
             value = parsed.get(field, _UNSPECIFIED_PLACEHOLDER)
             if value == _UNSPECIFIED_PLACEHOLDER:
