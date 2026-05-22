@@ -120,3 +120,9 @@ feature-flagged enforcement is considered.
 The YAML mapping artifact is **planning-only** and **non-authoritative** in
 Phase 2.7. Runtime enforcement remains hardcoded. Phase 3 remains blocked
 until the mapping validator passes and human review approves the mapping.
+
+## Phase 3a note (diagnostics-only)
+
+Phase 3a introduces optional local YAML shadow diagnostics only. It does not
+introduce any enforcement switch, and malformed YAML cannot weaken hardcoded
+Debate safety behavior.

@@ -24,6 +24,9 @@ from uuid import uuid4
 
 from .pipeline_types import PipelineContext, DEFAULT_CONFIDENCE
 from .pipeline_evidence import _norm_evidence_item, _dedupe_evidence
+from veritas_os.policy.debate_safety_policy_runtime_shadow import (
+    build_debate_safety_policy_shadow_diagnostics_from_env,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -283,6 +286,10 @@ def stage_debate(
     except (KeyError, TypeError, AttributeError) as e:
         _warn(f"[DebateOS] skipped: {e}")
         debate_result = {}
+
+    shadow_diag = build_debate_safety_policy_shadow_diagnostics_from_env()
+    if shadow_diag.get("enabled") is True:
+        ctx.response_extras["debate_safety_policy_shadow"] = shadow_diag
 
     if isinstance(debate_result, dict) and debate_result:
         deb_opts = debate_result.get("options") or []
