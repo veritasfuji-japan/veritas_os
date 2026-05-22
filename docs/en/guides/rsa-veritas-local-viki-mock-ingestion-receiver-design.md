@@ -91,6 +91,8 @@ Required fields:
 - rsa_status
 - trigger_source
 - timestamp
+- timestamp — required; must be a valid RFC 3339 UTC string (e.g. 2026-05-20T23:01:35.876Z); millisecond precision accepted, sub-millisecond precision is not required.
+- timestamp — clock skew: payloads with a timestamp more than 300 seconds (5 minutes) in the past or future relative to the VERITAS receiver clock must be rejected as a validation failure. Reason code: UPSTREAM_MOCK_PAYLOAD_INVALID.
 
 Optional accepted fields:
 
@@ -140,6 +142,7 @@ Clarifications:
 
 - Only a schema-valid SAFE_PROCEED emitted by the mock generator may continue toward normal bind-boundary evaluation.
 - No payload / timeout / malformed payload must never be converted into SAFE_PROCEED.
+- Note: These reason_code values are reserved identifiers. Formal definitions will be added to core/errors.py when the local mock receiver is implemented. Do not treat these strings as stable constants until that PR is merged.
 
 ## 9. Audit and redaction rules
 
