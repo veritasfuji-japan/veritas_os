@@ -14,8 +14,9 @@
 - これは将来レビューのための boundary と validation の設計メモです。
 - この design note は reviewer checklist と併読してレビューします。
 
-関連する review-gate artifact:
+関連する文書アーティファクト:
 
+- [Local V.I.K.I. mock ingestion receiver design（Phase 2 local mock artifact / documentation-only）](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 - [Live V.I.K.I. integration reviewer checklist](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 
 ## 2. 現在の静的ベースライン
