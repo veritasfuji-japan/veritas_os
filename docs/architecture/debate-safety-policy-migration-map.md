@@ -102,7 +102,7 @@ Phase 3 remains blocked until all criteria below are satisfied:
 6. No remote policy fetch.
 7. No runtime enforcement switch yet.
 8. Machine-readable migration mapping artifact is present at
-   `docs/architecture/debate-safety-policy-migration-map.yaml`, and a
+   docs/architecture/debate-safety-policy-migration-map.yaml, and a
    validator/test confirms that every key in _HARDCODED_CATEGORY_MAP
    has an explicit entry in that file.
 9. The mapping validator is green in CI and human review explicitly approves
