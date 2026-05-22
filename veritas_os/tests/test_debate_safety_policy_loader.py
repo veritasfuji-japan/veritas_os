@@ -214,6 +214,7 @@ MIGRATION_MAP_YAML_PATH = (
 )
 
 _ALLOWED_MIGRATION_STATUS = {"direct", "split", "merge", "derived", "TBD"}
+_ALLOWED_RISK_LEVELS = {"low", "medium", "high", "critical"}
 
 
 def test_migration_map_yaml_covers_hardcoded_inventory_exactly() -> None:
@@ -243,6 +244,10 @@ def test_migration_map_yaml_covers_hardcoded_inventory_exactly() -> None:
         assert proposed_yaml_category.strip()
 
         assert migration_status in _ALLOWED_MIGRATION_STATUS
+        risk_level = entry.get("risk_level")
+        assert risk_level in _ALLOWED_RISK_LEVELS, (
+            f"Entry '{hardcoded_category}' has invalid risk_level: {risk_level!r}"
+        )
 
         mapped_categories.append(hardcoded_category)
 
