@@ -157,10 +157,11 @@ def test_invalid_payloads_fail_closed(raw_payload: object) -> None:
 @pytest.mark.parametrize(
     ("offset_seconds", "expected_reason"),
     [
-        (299, "UPSTREAM_SAFE_PROCEED_SIGNAL"),
-        (300, "UPSTREAM_SAFE_PROCEED_SIGNAL"),
-        (301, UPSTREAM_MOCK_PAYLOAD_INVALID),
-        (-301, UPSTREAM_MOCK_PAYLOAD_INVALID),
+        (299, "UPSTREAM_SAFE_PROCEED_SIGNAL"),  # past, within threshold (accepted)
+        (300, "UPSTREAM_SAFE_PROCEED_SIGNAL"),  # past, at boundary (accepted)
+        (301, UPSTREAM_MOCK_PAYLOAD_INVALID),  # past, over threshold (rejected)
+        (-299, "UPSTREAM_SAFE_PROCEED_SIGNAL"),  # future, within threshold (accepted)
+        (-301, UPSTREAM_MOCK_PAYLOAD_INVALID),  # future, over threshold (rejected)
     ],
 )
 def test_clock_skew_threshold(offset_seconds: int, expected_reason: str) -> None:
