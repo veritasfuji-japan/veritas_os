@@ -1,0 +1,88 @@
+# Debate safety migration mapping artifact (Phase 2.7).
+# Planning-only and non-authoritative: runtime enforcement remains hardcoded.
+# See docs/architecture/debate-safety-policy-migration-map.md.
+
+mappings:
+  - hardcoded_category: danger_terms_ja
+    proposed_yaml_category: danger_terms_ja
+    migration_status: direct
+    risk_level: medium
+    notes: "Low structural risk; semantic parity still requires regex/term review."
+
+  - hardcoded_category: danger_patterns_en
+    proposed_yaml_category: danger_patterns_en
+    migration_status: direct
+    risk_level: medium
+    notes: "Low structural risk; language-boundary edge cases still need validation."
+
+  - hardcoded_category: benign_context_strong_terms
+    proposed_yaml_category: benign_context_strong_terms
+    migration_status: direct
+    risk_level: high
+    notes: "Context interaction risk if used without companion weak/context signals."
+
+  - hardcoded_category: benign_context_weak_terms
+    proposed_yaml_category: benign_context_weak_terms
+    migration_status: direct
+    risk_level: high
+    notes: "Weak signals are calibration-sensitive; avoid accidental weighting drift."
+
+  - hardcoded_category: dangerous_intent_patterns
+    proposed_yaml_category: dangerous_intent_patterns
+    migration_status: direct
+    risk_level: high
+    notes: "High safety sensitivity; must preserve strict intent matching behavior."
+
+  - hardcoded_category: actionable_intent_patterns
+    proposed_yaml_category: actionable_intent_patterns
+    migration_status: direct
+    risk_level: high
+    notes: "Actionability semantics may be coupled to runtime scoring/decision flow."
+
+  - hardcoded_category: instructional_cue_patterns
+    proposed_yaml_category: instructional_cue_patterns
+    migration_status: direct
+    risk_level: high
+    notes: "Cue patterns can be over-broad; parity review must include false-positive risk."
+
+  - hardcoded_category: risk_negation_terms
+    proposed_yaml_category: risk_negation_terms
+    migration_status: direct
+    risk_level: high
+    notes: "Negation handling is brittle; do not migrate without targeted tests."
+
+  - hardcoded_category: ascii_risk_negation_by_keyword
+    proposed_yaml_category: risk_negation_by_keyword_ascii
+    migration_status: derived
+    risk_level: high
+    notes: "Keyword-indexed structure may need canonical ordering/normalization rules."
+
+  - hardcoded_category: ja_risk_negation_by_keyword
+    proposed_yaml_category: risk_negation_by_keyword_ja
+    migration_status: derived
+    risk_level: high
+    notes: "Locale-specific tokenization/normalization rules must be explicitly defined."
+
+  - hardcoded_category: refusal_context_patterns
+    proposed_yaml_category: refusal_context_patterns
+    migration_status: direct
+    risk_level: high
+    notes: "Refusal heuristics can suppress risk; migration must verify no safety weakening."
+
+  - hardcoded_category: risk_keywords_weighted
+    proposed_yaml_category: risk_keyword_weights
+    migration_status: derived
+    risk_level: high
+    notes: "Weighted map cannot be blindly converted to flat patterns without scoring design."
+
+  - hardcoded_category: regulatory_ambiguity_patterns
+    proposed_yaml_category: regulatory_ambiguity_patterns
+    migration_status: direct
+    risk_level: high
+    notes: "Ambiguity logic interacts with policy interpretation; preserve conservative behavior."
+
+  - hardcoded_category: regulatory_ambiguity_negation_terms
+    proposed_yaml_category: regulatory_ambiguity_negation_terms
+    migration_status: direct
+    risk_level: high
+    notes: "Negation + ambiguity coupling requires explicit precedence/ordering in Phase 3 design."
