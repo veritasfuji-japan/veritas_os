@@ -19,6 +19,31 @@ EXAMPLE_YAML_PATH = (
 )
 
 
+def _make_debate_test_context() -> PipelineContext:
+    """Create a minimal PipelineContext fixture for stage_debate tests."""
+    return PipelineContext(
+        query="q",
+        user_id="u",
+        body={},
+        context={},
+        fast_mode=False,
+        is_veritas_query=False,
+        explicit_options=[],
+        input_alts=[],
+        alternatives=[{"id": "x", "world": {"utility": 1.0}}],
+        chosen={},
+        evidence=[],
+        web_evidence=[],
+        critique={},
+        debate=[],
+        raw={},
+        plan={},
+        fuji_dict={},
+        telos=0.0,
+        response_extras={},
+    )
+
+
 def test_shadow_diagnostics_not_configured_when_path_unset() -> None:
     diag = build_debate_safety_policy_shadow_diagnostics(None)
     assert diag == {
@@ -94,48 +119,8 @@ def test_stage_debate_behavior_unchanged_with_shadow_diagnostics(monkeypatch) ->
                 "raw": {"safe": True},
             }
 
-    base_ctx = PipelineContext(
-        query="q",
-        user_id="u",
-        body={},
-        context={},
-        fast_mode=False,
-        is_veritas_query=False,
-        explicit_options=[],
-        input_alts=[],
-        alternatives=[{"id": "x", "world": {"utility": 1.0}}],
-        chosen={},
-        evidence=[],
-        web_evidence=[],
-        critique={},
-        debate=[],
-        raw={},
-        plan={},
-        fuji={},
-        telos_score=0.0,
-        response_extras={},
-    )
-    ctx_with = PipelineContext(
-        query="q",
-        user_id="u",
-        body={},
-        context={},
-        fast_mode=False,
-        is_veritas_query=False,
-        explicit_options=[],
-        input_alts=[],
-        alternatives=[{"id": "x", "world": {"utility": 1.0}}],
-        chosen={},
-        evidence=[],
-        web_evidence=[],
-        critique={},
-        debate=[],
-        raw={},
-        plan={},
-        fuji={},
-        telos_score=0.0,
-        response_extras={},
-    )
+    base_ctx = _make_debate_test_context()
+    ctx_with = _make_debate_test_context()
 
     monkeypatch.delenv(SHADOW_PATH_ENV_VAR, raising=False)
     stage_debate(base_ctx, debate_core=DummyDebate(), _warn=lambda m: None)

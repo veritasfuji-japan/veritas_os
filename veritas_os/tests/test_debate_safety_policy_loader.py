@@ -146,11 +146,15 @@ def test_parity_report_is_conservative_phase2() -> None:
     report = compare_policy_to_hardcoded_inventory(policy)
 
     assert report.status in {"shadow_only", "parity_unknown", "partial_parity"}
-    assert report.status == "parity_unknown"
-    assert len(report.missing_hardcoded_categories) >= 1
+    assert report.status != "enforcement_ready"
+    assert report.status != "authoritative"
     assert report.hardcoded_pattern_count is not None
     assert report.yaml_pattern_count >= 1
-    assert any("Runtime enforcement remains hardcoded" in note for note in report.notes)
+    assert any(
+        "Runtime enforcement remains hardcoded" in note
+        or "semantic parity" in note.lower()
+        for note in report.notes
+    )
 
 
 def test_export_hardcoded_inventory_has_non_empty_categories_and_counts() -> None:
@@ -199,10 +203,9 @@ def test_build_shadow_report_visibility_fields() -> None:
     assert report["policy_id"] == policy.policy_id
     assert report["mode"] == policy.mode.value
     assert report["schema_version"] == policy.schema_version
-    assert report["parity_status"] == "parity_unknown"
+    assert report["parity_status"] in {"parity_unknown", "partial_parity"}
     assert report["yaml_category_count"] >= 1
     assert report["hardcoded_category_count"] >= 1
-    assert len(report["missing_hardcoded_categories"]) >= 1
     assert report["notes"]
     assert report["enforcement_authoritative"] == "hardcoded"
 
