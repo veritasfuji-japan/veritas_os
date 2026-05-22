@@ -21,6 +21,7 @@ classifiers = [
 dependencies = [
   # --- API / Server (required) ---
   "fastapi==0.121.0",
+  "starlette==1.0.1",
   "uvicorn==0.30.3",
   "pydantic==2.8.2",
   "python-dotenv==1.2.2",
