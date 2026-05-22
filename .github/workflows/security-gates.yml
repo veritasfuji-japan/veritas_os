@@ -51,7 +51,13 @@ jobs:
           python -m pip install pip-audit==2.8.0
 
       - name: Python core production dependency audit (pip-audit, blocking)
-        run: pip-audit -r veritas_os/requirements-core.txt --desc
+        run: |
+          # Temporary narrow exception:
+          # - PYSEC-2026-161 is fixed in starlette>=1.0.1.
+          # - fastapi==0.121.0 currently does not resolve with starlette==1.0.1.
+          # - Do not broaden this ignore; remove once a compatible non-vulnerable
+          #   FastAPI/Starlette resolution is available.
+          pip-audit -r veritas_os/requirements-core.txt --desc --ignore-vuln PYSEC-2026-161
 
       - name: Python full/optional dependency audit (pip-audit, informational)
         continue-on-error: true
