@@ -33,6 +33,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 14. [Local V.I.K.I. mock receiver validation snapshot (Phase 2 local mock implementation validation record, documentation-only)](./rsa-veritas-local-viki-mock-receiver-validation-snapshot.md)
 15. [Local V.I.K.I. mock receiver E2E harness validation snapshot (Phase 2 local mock fixture-driven harness validation record, documentation-only)](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
 16. [Controlled live V.I.K.I. payload schema draft (required pre-live schema gate, documentation-only)](./rsa-veritas-controlled-live-viki-payload-schema-draft.md)
+17. [Controlled live V.I.K.I. transport authentication design (required pre-live transport/auth gate, documentation-only)](./rsa-veritas-controlled-live-viki-transport-authentication-design.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
