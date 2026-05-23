@@ -1,6 +1,7 @@
 # RSA ↔ VERITAS Live V.I.K.I. Integration Reviewer Checklist
 
 - [Controlled live V.I.K.I. replay protection and correlation-id design（pre-live 必須 replay/correlation gate、documentation-only、runtime 変更なし、live integration なし）](./rsa-veritas-controlled-live-viki-replay-correlation-design.md)
+- [Controlled live V.I.K.I. redaction and observability design（pre-live 必須 redaction/observability gate、documentation-only、runtime 変更なし、live integration なし）](./rsa-veritas-controlled-live-viki-redaction-observability-design.md)
 ## 英語正本
 
 - [RSA ↔ VERITAS Live V.I.K.I. Integration Reviewer Checklist](../../en/guides/rsa-veritas-live-viki-integration-reviewer-checklist.md)
