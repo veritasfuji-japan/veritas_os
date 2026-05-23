@@ -1,0 +1,23 @@
+{
+  "event_type": "fail_closed_emitted",
+  "event_version": "v1alpha1",
+  "schema_version": "v1alpha1",
+  "upstream_signal_source": "RSA",
+  "request_id": "req_viki_duplicate_001",
+  "correlation_id": "corr_viki_veritas_duplicate_b",
+  "timestamp": "2026-05-20T23:01:40.876Z",
+  "payload_issued_at": "2026-05-20T23:01:40.876Z",
+  "authentication_result_class": "AUTHENTICATED",
+  "integrity_result_class": "INTEGRITY_VALID",
+  "replay_result_class": "REPLAY_DUPLICATE_REQUEST_ID",
+  "schema_validation_result_class": "SCHEMA_VALID",
+  "redaction_result_class": "REDACTION_VALID",
+  "veritas_continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+  "veritas_reason_code": "CONTROLLED_LIVE_REPLAY_DUPLICATE_REQUEST_ID",
+  "veritas_sandbox_commit_state": "SUSPENDED_NOT_COMMITTED",
+  "required_next_action": "REQUEST_HUMAN_REVIEW_OR_RETRY_WITH_VALID_UPSTREAM_STATE",
+  "final_commit_approved": false,
+  "fixture_name": "invalid_duplicate_request_id_scenario_b_v1alpha1.json",
+  "fixture_classification": "FIXTURE_REPLAY_SCENARIO_DUPLICATE",
+  "failure_class": "replay_failure"
+}

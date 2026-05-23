@@ -250,3 +250,7 @@ tests / runtime / live V.I.K.I. / transport / authentication / replay cache / ob
 
 最優先推奨:
 - static synthetic fixtures のみを使い、offline 実行し、live transport を追加しない controlled live fixture validation test skeleton。
+
+## 関連フィクスチャ成果物
+
+関連資料: [Controlled live V.I.K.I. observability event fixture examples](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)。
