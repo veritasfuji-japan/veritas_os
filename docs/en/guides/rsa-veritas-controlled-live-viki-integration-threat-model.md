@@ -12,6 +12,7 @@ This document defines the threat model for a **future** controlled live V.I.K.I.
 - This does not process real KYC data.
 - This does not provide legal or regulatory approval.
 - This exists to define review gates before any controlled live integration is attempted.
+- Controlled live payload schema draft is a required pre-live schema gate artifact: [RSA ↔ VERITAS Controlled Live V.I.K.I. Payload Schema Draft](./rsa-veritas-controlled-live-viki-payload-schema-draft.md).
 
 ## 2. Current baseline
 
