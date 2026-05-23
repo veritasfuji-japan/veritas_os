@@ -94,9 +94,10 @@ Implemented clock skew rule:
 
 | Clock skew | Expected result |
 | --- | --- |
-| 299 seconds | accepted |
-| 300 seconds | accepted |
-| 301 seconds | fail closed |
+| 299 seconds (past) | accepted |
+| 300 seconds (past, boundary) | accepted |
+| -299 seconds / future skew 299 seconds | accepted |
+| 301 seconds (past) | fail closed |
 | -301 seconds / future skew 301 seconds | fail closed |
 
 Failed clock skew validation maps to:
