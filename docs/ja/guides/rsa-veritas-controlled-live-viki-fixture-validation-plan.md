@@ -20,6 +20,13 @@
 
 fixture validation test skeleton 実装前に、本計画のレビューを必須とする。
 
+## 1.1 実装ステータス更新
+
+以下に **test-only** / **offline** / **synthetic-fixture-only** の validation skeleton が追加済み:
+- `tests/governance/test_controlled_live_viki_fixture_validation.py`
+
+この追加は runtime behavior、endpoint、network call、credential、replay cache 実装、logging 実装、observability 実装、live V.I.K.I. integration を導入しない。
+
 ## 2. 現在のベースライン
 
 以下の pre-live gate は既に存在する:

@@ -18,6 +18,13 @@ This is **not**:
 
 This plan must be reviewed before any fixture validation test skeleton is implemented.
 
+## 1.1 Implementation status update
+
+A **test-only**, **offline**, and **synthetic-fixture-only** validation skeleton now exists at:
+- `tests/governance/test_controlled_live_viki_fixture_validation.py`
+
+This adds no runtime behavior, endpoints, network calls, credentials, replay cache implementation, logging implementation, observability implementation, or live V.I.K.I. integration.
+
 ## 2. Current baseline
 
 The following pre-live gates already exist:
