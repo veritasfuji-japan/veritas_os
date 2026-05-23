@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1alpha1",
+  "rsa_status": "DEFERRAL_ENGAGED",
+  "trigger_source": "SRC_Severe_Context_Decay",
+  "timestamp": "2026-05-20T23:01:35.876Z",
+  "request_id": "req_viki_000004",
+  "correlation_id": "corr_viki_veritas_000004",
+  "payload_issued_at": "2026-05-20T23:01:35.876Z",
+  "source_environment": "controlled-test",
+  "source_instance_id": "viki-controlled-synthetic-001",
+  "rsa_action_taken": "Final_Commit_Deferred_Due_To_Context_Decay",
+  "original_llm_intent": "Proceed_To_Final_Commit",
+  "upstream_confidence_class": "LOW",
+  "upstream_latency_ms": 126,
+  "upstream_reason_code": "UPSTREAM_SEVERE_CONTEXT_DECAY"
+}

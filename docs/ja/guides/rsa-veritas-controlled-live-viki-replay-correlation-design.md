@@ -431,3 +431,8 @@ replay/correlation 実装前チェックリスト:
 - replay/correlation fixture examples
 
 最も安全な次 PR は、引き続き documentation-only の redaction and observability design です。replay/correlation fields を安全に監査記録へ残しつつ、sensitive payload leakage を防ぐ設計が先行して必要なためです。
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples（documentation-and-fixture-only の pre-live artifact。runtime changes / tests / live integration は追加しない）。](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

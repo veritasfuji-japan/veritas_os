@@ -408,3 +408,8 @@ The next safe PR after this schema draft should be one of:
 Recommended:
 
 The safest next PR is controlled transport/authentication design, still documentation-only, because the schema contract should be followed by a secure transport boundary before any runtime implementation.
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples (documentation-and-fixture-only pre-live artifact; no runtime changes, tests, or live integration).](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

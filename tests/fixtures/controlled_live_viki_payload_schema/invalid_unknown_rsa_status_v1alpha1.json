@@ -1,0 +1,11 @@
+{
+  "schema_version": "v1alpha1",
+  "rsa_status": "UNKNOWN_STATE",
+  "trigger_source": "SRC_Unknown_State",
+  "timestamp": "2026-05-20T23:01:35.876Z",
+  "request_id": "req_viki_invalid_001",
+  "correlation_id": "corr_viki_veritas_invalid_001",
+  "payload_issued_at": "2026-05-20T23:01:35.876Z",
+  "source_environment": "controlled-test",
+  "source_instance_id": "viki-controlled-synthetic-001"
+}

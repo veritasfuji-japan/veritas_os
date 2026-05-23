@@ -206,3 +206,8 @@ After this design note is merged, the next safe PR should be either:
 - a local mock adapter design note.
 
 Do not implement live V.I.K.I. integration until the design note and checklist are reviewed.
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples (documentation-and-fixture-only pre-live artifact; no runtime changes, tests, or live integration).](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)
