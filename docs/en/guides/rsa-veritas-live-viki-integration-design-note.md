@@ -16,6 +16,7 @@ Related documentation artifacts:
 - [Live V.I.K.I. integration reviewer checklist](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 - [Controlled live V.I.K.I. integration threat model (documentation-only pre-live gate)](./rsa-veritas-controlled-live-viki-integration-threat-model.md)
 - [Controlled live V.I.K.I. payload schema draft (required pre-live schema gate, documentation-only)](./rsa-veritas-controlled-live-viki-payload-schema-draft.md)
+- [Controlled live V.I.K.I. transport authentication design (required pre-live transport/auth gate, documentation-only)](./rsa-veritas-controlled-live-viki-transport-authentication-design.md)
 
 ## 2. Current static baseline
 
