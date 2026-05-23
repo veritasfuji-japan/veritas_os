@@ -30,6 +30,7 @@ from veritas_os.core.posture import (
     reset_active_posture,
     resolve_posture,
     set_active_posture,
+    validate_bind_adjudication_production_posture,
     validate_posture_startup,
 )
 
@@ -1188,3 +1189,65 @@ class TestCapabilityAwareRefusalMessages:
         # No capability errors for signer or mirror
         assert not any("managed_signing" in e for e in errors)
         assert not any("immutable_retention" in e for e in errors)
+
+
+class TestBindAdjudicationProductionPosture:
+    """Bind-adjudication safety guard in secure/prod posture."""
+
+    @staticmethod
+    def _policy_with_safe_bind(**overrides):
+        bind = {
+            "ttl_required": True,
+            "approval_freshness_required": True,
+            "rollback_on_apply_failure": True,
+        }
+        bind.update(overrides)
+        return {"bind_adjudication": bind}
+
+    @pytest.mark.parametrize(
+        ("field", "field_path"),
+        [
+            ("ttl_required", "bind_adjudication.ttl_required"),
+            (
+                "approval_freshness_required",
+                "bind_adjudication.approval_freshness_required",
+            ),
+            (
+                "rollback_on_apply_failure",
+                "bind_adjudication.rollback_on_apply_failure",
+            ),
+        ],
+    )
+    def test_helper_rejects_unsafe_field(self, field, field_path):
+        policy = self._policy_with_safe_bind(**{field: False})
+        errors = validate_bind_adjudication_production_posture(policy)
+        assert any(field_path in error for error in errors)
+
+    def test_helper_accepts_safe_bind_config(self):
+        assert validate_bind_adjudication_production_posture(
+            self._policy_with_safe_bind()
+        ) == []
+
+    def test_prod_posture_rejects_unsafe_bind_policy(self, monkeypatch):
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:key")
+        monkeypatch.setattr(
+            "veritas_os.core.posture._validate_policy_signing_crypto",
+            lambda defaults: [],
+        )
+        monkeypatch.setattr(
+            "veritas_os.api.governance.get_policy",
+            lambda: self._policy_with_safe_bind(ttl_required=False),
+        )
+        errors = validate_posture_startup(derive_defaults(PostureLevel.PROD))
+        assert any("bind_adjudication.ttl_required" in error for error in errors)
+
+    def test_dev_posture_remains_compatible_for_unsafe_bind_policy(self, monkeypatch):
+        _clean_env(monkeypatch)
+        monkeypatch.setattr(
+            "veritas_os.api.governance.get_policy",
+            lambda: self._policy_with_safe_bind(ttl_required=False),
+        )
+        assert validate_posture_startup(derive_defaults(PostureLevel.DEV)) == []

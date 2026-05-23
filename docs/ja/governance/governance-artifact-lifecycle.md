@@ -15,6 +15,11 @@
 ## 実装上の確認ポイント
 - ポリシーバンドル昇格 API と署名検証手順の紐付け。
 - 失効・ロールバック時の Replay 影響確認。
+- `bind_adjudication` を運用で有効化する場合、`secure` / `prod` 姿勢では
+  `ttl_required` / `approval_freshness_required` /
+  `rollback_on_apply_failure` を `true` にすること（fail-closed 要件）。
+- 新しい governance / bind 設定を追加する場合は、production posture での
+  fail-closed テストを同時に追加すること。
 - 詳細は英語正本または実装ファイルを確認してください。
 
 ## 現時点の制限

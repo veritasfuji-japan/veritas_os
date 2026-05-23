@@ -47,6 +47,31 @@ consumes only these fields:
 - `approval_freshness_required`
 - `rollback_on_apply_failure`
 
+### Production/Strict posture guard for bind adjudication
+
+In `secure` and `prod` posture, bind adjudication now applies a fail-closed
+posture guard for production safety. The following fields must be explicitly
+`true` when `bind_adjudication` is configured:
+
+- `bind_adjudication.ttl_required`
+- `bind_adjudication.approval_freshness_required`
+- `bind_adjudication.rollback_on_apply_failure`
+
+Rationale:
+
+- `ttl_required=true`: prevents stale approval artifacts from being reused.
+- `approval_freshness_required=true`: enforces recent, operator-intended
+  approval state instead of long-lived approvals.
+- `rollback_on_apply_failure=true`: ensures partial apply failures are
+  automatically reverted, preventing split-brain policy state.
+
+Compatibility note:
+
+- Dev/default posture intentionally remains permissive for local and migration
+  workflows.
+- Secure/prod posture must be fail-closed for these controls; unsafe values are
+  rejected at startup validation time.
+
 ### 2. Approve (4-Eyes)
 
 By default, governance updates require two distinct approvals (4-eyes

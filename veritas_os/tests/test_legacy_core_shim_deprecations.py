@@ -48,11 +48,21 @@ def _assert_shim_warning(
         with pytest.warns(DeprecationWarning) as warning:
             module = _load_shim_module(legacy_module)
 
-        message = str(warning[0].message)
-        assert legacy_module in message
-        assert canonical_module in message
-        assert SHIM_REMOVAL_VERSION in message
-        assert SHIM_REMOVAL_DATE in message
+        messages = [str(item.message) for item in warning]
+        matching_messages = [
+            message
+            for message in messages
+            if legacy_module in message
+            and canonical_module in message
+            and SHIM_REMOVAL_VERSION in message
+            and SHIM_REMOVAL_DATE in message
+        ]
+        assert matching_messages, (
+            "Expected shim deprecation warning not found. "
+            f"legacy_module={legacy_module!r}, "
+            f"canonical_module={canonical_module!r}, "
+            f"captured_messages={messages!r}"
+        )
         assert module is fake_target
     finally:
         if had_previous_legacy:
