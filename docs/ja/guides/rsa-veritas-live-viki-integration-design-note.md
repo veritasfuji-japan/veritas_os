@@ -1,5 +1,6 @@
 # RSA ↔ VERITAS Live V.I.K.I. Integration Design Note
 
+- [Controlled live V.I.K.I. replay protection and correlation-id design（pre-live 必須 replay/correlation gate、documentation-only、runtime 変更なし、live integration なし）](./rsa-veritas-controlled-live-viki-replay-correlation-design.md)
 ## 英語正本
 
 - [RSA ↔ VERITAS Live V.I.K.I. Integration Design Note](../../en/guides/rsa-veritas-live-viki-integration-design-note.md)
