@@ -566,6 +566,8 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
 
     errors.extend(_validate_policy_signing_crypto(defaults))
 
+    errors.extend(_validate_bind_adjudication_posture(defaults))
+
     # ── Layer 2: backend-specific config validation (vendor-aware) ───
     errors.extend(
         _validate_backend_config(
@@ -577,6 +579,58 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     )
 
     return errors
+
+
+def validate_bind_adjudication_production_posture(policy: object) -> List[str]:
+    """Validate production-safe bind-adjudication controls.
+
+    This guard intentionally applies only when a policy explicitly defines a
+    ``bind_adjudication`` section so existing development/backward-compatible
+    policy artifacts are not broken by default.
+    """
+    payload: Dict[str, object] = {}
+    if isinstance(policy, dict):
+        payload = policy
+    elif hasattr(policy, "model_dump"):
+        dumped = getattr(policy, "model_dump")()
+        if isinstance(dumped, dict):
+            payload = dumped
+
+    bind_section = payload.get("bind_adjudication")
+    if not isinstance(bind_section, dict):
+        return []
+
+    required_true = {
+        "ttl_required": "bind_adjudication.ttl_required",
+        "approval_freshness_required": (
+            "bind_adjudication.approval_freshness_required"
+        ),
+        "rollback_on_apply_failure": "bind_adjudication.rollback_on_apply_failure",
+    }
+    errors: List[str] = []
+    for key, label in required_true.items():
+        if bind_section.get(key) is not True:
+            errors.append(
+                f"{label} must be true in strict posture "
+                "(secure/prod fail-closed requirement)."
+            )
+    return errors
+
+
+def _validate_bind_adjudication_posture(defaults: PostureDefaults) -> List[str]:
+    """Validate bind-adjudication policy posture constraints."""
+    if defaults.posture not in {PostureLevel.SECURE, PostureLevel.PROD}:
+        return []
+    try:
+        from veritas_os.api.governance import get_policy
+
+        policy = get_policy()
+    except Exception as exc:
+        return [
+            "Failed to load governance policy for bind adjudication posture "
+            f"validation: {exc}"
+        ]
+    return validate_bind_adjudication_production_posture(policy)
 
 
 def _validate_policy_signing_crypto(defaults: PostureDefaults) -> List[str]:
