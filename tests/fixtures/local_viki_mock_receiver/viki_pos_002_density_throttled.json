@@ -1,0 +1,7 @@
+{
+  "rsa_status": "DENSITY_THROTTLED",
+  "trigger_source": "SEI_Entropy_Spike",
+  "original_llm_intent": "Generate_High_Density_Operational_Response",
+  "rsa_action_taken": "Output_Density_Throttled_Before_Emission",
+  "timestamp": "2026-05-20T23:01:35.876Z"
+}
