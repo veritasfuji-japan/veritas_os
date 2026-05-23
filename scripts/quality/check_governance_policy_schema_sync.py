@@ -7,11 +7,14 @@ import json
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from pydantic import ValidationError
 
 from veritas_os.api.governance import GovernancePolicy
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 GOVERNANCE_PATH = REPO_ROOT / "veritas_os" / "api" / "governance.json"
 
 
