@@ -85,6 +85,6 @@ These fixtures ensure review coverage for payload-shape expectations only.
 
 ## 7. Recommended next PR
 
-The next safe PR should define a controlled live failure-mode test plan or fixture validation plan, still without runtime integration.
+The next safe PR should define a controlled live fixture validation plan or failure-mode test skeleton, still without runtime integration.
 
 Do not implement live transport before these fixture examples and the failure-mode plan are reviewed.
