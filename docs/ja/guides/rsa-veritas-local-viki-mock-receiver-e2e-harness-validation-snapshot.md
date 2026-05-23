@@ -79,6 +79,8 @@ Negative fixtures は、malformed / missing / unknown / invalid / shape mismatch
 | `tests/fixtures/local_viki_mock_receiver/viki_neg_003_unknown_rsa_status.json` | Unknown rsa_status | PAUSE_FOR_HUMAN_REVIEW | UPSTREAM_MOCK_PAYLOAD_INVALID | SUSPENDED_NOT_COMMITTED | REQUEST_VALID_SYNTHETIC_PAYLOAD_OR_HUMAN_REVIEW | Implemented |
 | `tests/fixtures/local_viki_mock_receiver/viki_neg_004_invalid_timestamp.json` | Invalid timestamp | PAUSE_FOR_HUMAN_REVIEW | UPSTREAM_MOCK_PAYLOAD_INVALID | SUSPENDED_NOT_COMMITTED | REQUEST_VALID_SYNTHETIC_PAYLOAD_OR_HUMAN_REVIEW | Implemented |
 | `tests/fixtures/local_viki_mock_receiver/viki_neg_005_payload_shape_array.json` | Payload shape is array instead of object | PAUSE_FOR_HUMAN_REVIEW | UPSTREAM_MOCK_PAYLOAD_INVALID | SUSPENDED_NOT_COMMITTED | REQUEST_VALID_SYNTHETIC_PAYLOAD_OR_HUMAN_REVIEW | Implemented |
+| `tests/fixtures/local_viki_mock_receiver/viki_neg_006_missing_trigger_source.json` | Missing trigger_source | PAUSE_FOR_HUMAN_REVIEW | UPSTREAM_MOCK_PAYLOAD_INVALID | SUSPENDED_NOT_COMMITTED | REQUEST_VALID_SYNTHETIC_PAYLOAD_OR_HUMAN_REVIEW | Implemented |
+| `tests/fixtures/local_viki_mock_receiver/viki_neg_007_null_required_field.json` | rsa_status present but null | PAUSE_FOR_HUMAN_REVIEW | UPSTREAM_MOCK_PAYLOAD_INVALID | SUSPENDED_NOT_COMMITTED | REQUEST_VALID_SYNTHETIC_PAYLOAD_OR_HUMAN_REVIEW | Implemented |
 
 ## 6. Guard validation
 
@@ -171,6 +173,8 @@ E2E harness は次を保持します。
 - unknown `rsa_status` は proceed しない。
 - invalid timestamp は proceed しない。
 - array payload shape は proceed しない。
+- missing trigger_source は proceed しない。
+- 必須フィールドが存在していても null の場合は proceed しない。
 - default audit redaction が維持される。
 - 明示 guard が検証される。
 - live V.I.K.I. connection は存在しない。
