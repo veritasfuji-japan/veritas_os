@@ -19,6 +19,7 @@
 - [Local V.I.K.I. mock ingestion receiver design（documentation-only）](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 - [Local V.I.K.I. mock receiver test fixture plan（documentation-only / receiver 未実装 / tests 未実装 / production endpoint 追加なし）](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
 - [Sandbox reviewer index](./rsa-veritas-sandbox-reviewer-index.md)
+- [Controlled live V.I.K.I. integration threat model (documentation-only pre-live gate)](./rsa-veritas-controlled-live-viki-integration-threat-model.md)
 
 ## 2. Review status legend
 

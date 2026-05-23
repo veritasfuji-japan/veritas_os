@@ -204,3 +204,8 @@ E2E harness は次を保持します。
 推奨:
 
 最も安全な次 PR は controlled live V.I.K.I. integration threat model です。理由は、local mock phase に design notes / fixture plan / implementation / validation snapshot / fixture-driven E2E harness がそろっているためです。
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. integration threat model (documentation-only pre-live gate)](./rsa-veritas-controlled-live-viki-integration-threat-model.md)

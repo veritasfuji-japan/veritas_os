@@ -28,9 +28,10 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 9. [Local V.I.K.I. mock ingestion receiver design (Phase 2 local mock artifact, documentation-only)](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 10. [Live V.I.K.I. integration design note (future design artifact, documentation-only)](./rsa-veritas-live-viki-integration-design-note.md)
 11. [Live V.I.K.I. integration reviewer checklist (review-gate artifact, documentation-only)](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
-12. [Local V.I.K.I. mock receiver test fixture plan (Phase 2 local mock artifact, documentation-only)](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
-13. [Local V.I.K.I. mock receiver validation snapshot (Phase 2 local mock implementation validation record, documentation-only)](./rsa-veritas-local-viki-mock-receiver-validation-snapshot.md)
-14. [Local V.I.K.I. mock receiver E2E harness validation snapshot (Phase 2 local mock fixture-driven harness validation record, documentation-only)](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
+12. [Controlled live V.I.K.I. integration threat model (pre-live review-gate artifact, documentation-only)](./rsa-veritas-controlled-live-viki-integration-threat-model.md)
+13. [Local V.I.K.I. mock receiver test fixture plan (Phase 2 local mock artifact, documentation-only)](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
+14. [Local V.I.K.I. mock receiver validation snapshot (Phase 2 local mock implementation validation record, documentation-only)](./rsa-veritas-local-viki-mock-receiver-validation-snapshot.md)
+15. [Local V.I.K.I. mock receiver E2E harness validation snapshot (Phase 2 local mock fixture-driven harness validation record, documentation-only)](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 

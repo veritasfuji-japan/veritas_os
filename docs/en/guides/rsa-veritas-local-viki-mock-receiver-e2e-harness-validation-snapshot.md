@@ -200,3 +200,8 @@ The next safe PR should be one of:
 Recommended:
 
 The safest next PR is the controlled live V.I.K.I. integration threat model, because the local mock phase now has design notes, fixture plan, implementation, validation snapshot, and fixture-driven E2E harness.
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. integration threat model (documentation-only pre-live gate)](./rsa-veritas-controlled-live-viki-integration-threat-model.md)
