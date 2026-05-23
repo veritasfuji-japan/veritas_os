@@ -25,6 +25,10 @@ The current merged baseline includes:
 
 This fixture plan follows the local mock ingestion receiver design and remains local-only and synthetic-data-only.
 
+Implemented follow-up artifact:
+
+- [Local V.I.K.I. mock receiver E2E harness validation snapshot](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
+
 ## 3. Test boundary model
 
 - V.I.K.I. mock generator emits synthetic RSA-compatible payloads.
