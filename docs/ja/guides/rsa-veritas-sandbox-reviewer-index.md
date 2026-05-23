@@ -42,6 +42,7 @@
 17. [Controlled live V.I.K.I. transport authentication design（pre-live 必須 transport/auth gate、documentation-only）](./rsa-veritas-controlled-live-viki-transport-authentication-design.md)
 18. [Controlled live V.I.K.I. replay protection and correlation-id design（pre-live 必須 replay/correlation gate、documentation-only）](./rsa-veritas-controlled-live-viki-replay-correlation-design.md)
 19. [Controlled live V.I.K.I. redaction and observability design（pre-live 必須 redaction/observability gate、documentation-only）](./rsa-veritas-controlled-live-viki-redaction-observability-design.md)
+20. [Controlled live V.I.K.I. payload schema fixture examples（pre-live fixture artifact、documentation-and-fixture-only）](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)
 
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 

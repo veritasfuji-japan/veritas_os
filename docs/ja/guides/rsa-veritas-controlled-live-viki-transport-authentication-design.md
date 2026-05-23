@@ -402,3 +402,8 @@ transport implementation 前のチェックリスト:
 - controlled live integration implementation plan
 
 最も安全な次 PR は、documentation-only のまま進める replay protection and correlation-id design です。transport authentication は runtime implementation 前に replay protection と対でレビューされる必要があります。
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples（documentation-and-fixture-only の pre-live artifact。runtime changes / tests / live integration は追加しない）。](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

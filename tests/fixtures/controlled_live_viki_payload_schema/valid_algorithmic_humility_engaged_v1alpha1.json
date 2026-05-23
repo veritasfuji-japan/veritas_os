@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1alpha1",
+  "rsa_status": "ALGORITHMIC_HUMILITY_ENGAGED",
+  "trigger_source": "SRC_Incomplete_Context",
+  "timestamp": "2026-05-20T23:01:35.876Z",
+  "request_id": "req_viki_000003",
+  "correlation_id": "corr_viki_veritas_000003",
+  "payload_issued_at": "2026-05-20T23:01:35.876Z",
+  "source_environment": "controlled-test",
+  "source_instance_id": "viki-controlled-synthetic-001",
+  "rsa_action_taken": "Execution_Suspended_Awaiting_Reality_Sync",
+  "original_llm_intent": "Recommend_Transaction_Approval",
+  "upstream_confidence_class": "LOW",
+  "upstream_latency_ms": 112,
+  "upstream_reason_code": "UPSTREAM_INCOMPLETE_CONTEXT"
+}

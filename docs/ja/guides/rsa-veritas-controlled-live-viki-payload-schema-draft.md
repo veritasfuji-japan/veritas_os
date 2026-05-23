@@ -404,3 +404,8 @@ live payload implementation 前の checklist:
 推奨:
 
 最も安全な次 PR は controlled transport/authentication design（documentation-only）です。schema contract の直後に secure transport boundary を先に確定し、runtime implementation より前にレビュー可能な境界を固定するためです。
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples（documentation-and-fixture-only の pre-live artifact。runtime changes / tests / live integration は追加しない）。](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

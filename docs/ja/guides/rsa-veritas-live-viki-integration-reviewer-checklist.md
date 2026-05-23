@@ -146,3 +146,8 @@ Reviewer decision:
 - controlled integration threat model
 
 design note と reviewer checklist のレビュー完了前に、live V.I.K.I. integration を実装してはいけません。
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples（documentation-and-fixture-only の pre-live artifact。runtime changes / tests / live integration は追加しない）。](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

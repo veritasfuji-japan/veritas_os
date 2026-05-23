@@ -427,3 +427,8 @@ redaction/observability implementation 前チェックリスト:
 - observability event taxonomy fixture plan
 
 最も安全な次 PR は、live payload schema fixture examples（documentation-only または fixture-only、synthetic data 限定）です。schema / transport-auth / replay-correlation / redaction-observability の各 gate を runtime 実装前に具体的な synthetic examples で固定化できるためです。
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples（documentation-and-fixture-only の pre-live artifact。runtime changes / tests / live integration は追加しない）。](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

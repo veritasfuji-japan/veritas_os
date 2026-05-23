@@ -427,3 +427,8 @@ The next safe PR should be one of:
 - replay/correlation fixture examples
 
 The safest next PR is redaction and observability design, still documentation-only, because replay/correlation fields must be logged safely without leaking sensitive payloads.
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples (documentation-and-fixture-only pre-live artifact; no runtime changes, tests, or live integration).](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

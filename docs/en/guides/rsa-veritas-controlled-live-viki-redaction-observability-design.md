@@ -418,3 +418,8 @@ The next safe PR should be one of:
 - observability event taxonomy fixture plan
 
 The safest next PR is live payload schema fixture examples, still documentation-only or fixture-only with synthetic data, because the schema, transport/auth, replay/correlation, and redaction/observability gates should be represented as concrete synthetic examples before any runtime implementation.
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples (documentation-and-fixture-only pre-live artifact; no runtime changes, tests, or live integration).](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

@@ -398,3 +398,8 @@ The next safe PR should be one of:
 - controlled live integration implementation plan
 
 The safest next PR is replay protection and correlation-id design, still documentation-only, because transport authentication must be paired with replay protection before any runtime implementation.
+
+
+## Related pre-live artifact
+
+- [Controlled live V.I.K.I. payload schema fixture examples (documentation-and-fixture-only pre-live artifact; no runtime changes, tests, or live integration).](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)

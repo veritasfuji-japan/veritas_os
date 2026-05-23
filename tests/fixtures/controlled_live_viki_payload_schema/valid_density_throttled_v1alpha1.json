@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1alpha1",
+  "rsa_status": "DENSITY_THROTTLED",
+  "trigger_source": "SEI_Entropy_Spike",
+  "timestamp": "2026-05-20T23:01:35.876Z",
+  "request_id": "req_viki_000002",
+  "correlation_id": "corr_viki_veritas_000002",
+  "payload_issued_at": "2026-05-20T23:01:35.876Z",
+  "source_environment": "controlled-test",
+  "source_instance_id": "viki-controlled-synthetic-001",
+  "rsa_action_taken": "Output_Density_Throttled_Before_Emission",
+  "original_llm_intent": "Generate_High_Density_Operational_Response",
+  "upstream_confidence_class": "MEDIUM",
+  "upstream_latency_ms": 94,
+  "upstream_reason_code": "UPSTREAM_ENTROPY_SPIKE"
+}
