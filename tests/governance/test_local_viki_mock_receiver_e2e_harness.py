@@ -86,6 +86,8 @@ def test_local_fixture_e2e_positive(
         "viki_neg_003_unknown_rsa_status.json",
         "viki_neg_004_invalid_timestamp.json",
         "viki_neg_005_payload_shape_array.json",
+        "viki_neg_006_missing_trigger_source.json",
+        "viki_neg_007_null_required_field.json",
     ],
 )
 def test_local_fixture_e2e_negative(monkeypatch: pytest.MonkeyPatch, fixture_name: str) -> None:
