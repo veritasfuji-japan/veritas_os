@@ -161,6 +161,7 @@ ALL LLM calls MUST go through `veritas_os/core/llm_client.py`. Never call OpenAI
 - File names: snake_case (Python), kebab-case (TypeScript).
 - Commit messages: conventional commits format.
 - DCO sign-off required: `Signed-off-by: Name <email>`.
+- Any governance schema change must update the committed governance policy sample and schema drift tests in the same PR.
 
 ## 6. Testing Rules
 

@@ -94,6 +94,16 @@ External AI feedback must not become a merge blocker by itself.
 5. Missing tests for code changes
 6. Refactor or style suggestions
 
+## Governance Schema Drift Guardrail
+
+- Baseline governance log retention must remain **180 days**.
+- High-risk governance log retention must remain **365 days**.
+- Any governance schema change must update, in the same PR:
+  - `veritas_os/api/governance.py` Pydantic schema,
+  - `veritas_os/api/governance.json` committed policy sample,
+  - governance roundtrip/drift regression tests,
+  - `scripts/quality/check_governance_policy_schema_sync.py` validation guard.
+
 ## Non-Goals
 
 This guide does not introduce:

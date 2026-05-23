@@ -77,6 +77,9 @@ jobs:
       - name: requirements.txt sync check
         run: python scripts/quality/check_requirements_sync.py
 
+      - name: Governance policy/schema sync check
+        run: python scripts/quality/check_governance_policy_schema_sync.py
+
       - name: Memory directory allowlist check
         env:
           VERITAS_ENV: "production"
@@ -244,6 +247,9 @@ jobs:
             --tb=short \
             --durations=10 \
             --junitxml=test-reports/smoke.xml
+
+      - name: "[Tier 1] Guard governance policy against test mutation"
+        run: git diff --exit-code -- veritas_os/api/governance.json
 
       - name: Upload smoke test report
         if: always()

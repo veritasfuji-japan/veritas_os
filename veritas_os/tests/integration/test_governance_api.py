@@ -359,7 +359,7 @@ class TestGovernanceModule:
         assert policy.fuji_rules.pii_check is True
         assert policy.risk_thresholds.allow_upper == 0.40
         assert policy.auto_stop.enabled is True
-        assert policy.log_retention.retention_days == 90
+        assert policy.log_retention.retention_days == 180
         assert policy.wat.enabled is False
         assert policy.wat.issuance_mode == "shadow_only"
         assert policy.psid.enforcement_mode == "full_digest_only"

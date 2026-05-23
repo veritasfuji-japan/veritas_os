@@ -14,9 +14,12 @@ from __future__ import annotations
 import asyncio
 import inspect
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
+
+from veritas_os.api.governance import set_governance_repository_factory
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -100,3 +103,21 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "contention: advisory-lock contention and concurrency integration tests",
     )
+
+
+@pytest.fixture(autouse=True)
+def _reset_governance_repository_factory():
+    """Prevent governance repository factory state leakage across tests."""
+    yield
+    set_governance_repository_factory(None)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _restore_committed_governance_json():
+    """Protect committed governance policy from accidental test mutations."""
+    governance_path = Path(__file__).resolve().parents[1] / "api" / "governance.json"
+    original = governance_path.read_text(encoding="utf-8")
+    yield
+    current = governance_path.read_text(encoding="utf-8")
+    if current != original:
+        governance_path.write_text(original, encoding="utf-8")
