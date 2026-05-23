@@ -29,6 +29,10 @@
 
 本計画は local mock ingestion receiver design に従い、local-only / synthetic-data-only を維持します。
 
+実装後の関連アーティファクト:
+
+- [Local V.I.K.I. mock receiver E2E harness validation snapshot](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
+
 ## 3. テスト境界モデル
 
 - V.I.K.I. mock generator は synthetic RSA-compatible payloads を出力します。

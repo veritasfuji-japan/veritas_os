@@ -4,6 +4,10 @@
 
 This snapshot documents the current implemented validation state of the VERITAS-side local V.I.K.I. mock receiver.
 
+Related artifact:
+
+- [Local V.I.K.I. mock receiver E2E harness validation snapshot](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
+
 - This is documentation-only.
 - This is not a new implementation.
 - This is not a live V.I.K.I. integration.

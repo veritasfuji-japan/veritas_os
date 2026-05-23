@@ -2,6 +2,10 @@
 
 ## 1. Purpose
 
+関連アーティファクト:
+
+- [Local V.I.K.I. mock receiver E2E harness validation snapshot](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
+
 このスナップショットは、VERITAS 側ローカル V.I.K.I. モックレシーバーの**現在実装済み**の検証状態を記録するものです。
 
 - これは documentation-only の更新です。
