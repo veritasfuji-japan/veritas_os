@@ -50,6 +50,8 @@
 25. [Controlled live V.I.K.I. observability event taxonomy fixture plan（pre-live taxonomy planning artifact、documentation-only）](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md)
 26. [Controlled live V.I.K.I. observability event fixture validation test skeleton（offline synthetic-fixture tests のみ、test-only / static validation only。runtime behavior・endpoint・network・credentials・replay cache・logging・telemetry・observability runtime・live integration なし）](../../../tests/governance/test_controlled_live_viki_observability_event_fixtures.py)
 
+26. [Controlled live V.I.K.I. observability event fixture examples（pre-live fixture artifact、fixture-and-documentation-only / runtime・test・logging・telemetry・observability・live integration 変更なし）](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)
+
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
 ## 4. Artifact map

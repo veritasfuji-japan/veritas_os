@@ -1,0 +1,22 @@
+{
+  "event_type": "upstream_timeout",
+  "event_version": "v1alpha1",
+  "schema_version": "v1alpha1",
+  "upstream_signal_source": "RSA",
+  "request_id": "req_viki_timeout_001",
+  "correlation_id": "corr_viki_veritas_timeout_001",
+  "timestamp": "2026-05-20T23:01:35.876Z",
+  "payload_issued_at": "2026-05-20T23:01:35.876Z",
+  "authentication_result_class": "AUTHENTICATION_NOT_EVALUATED",
+  "integrity_result_class": "INTEGRITY_NOT_EVALUATED",
+  "replay_result_class": "REPLAY_NOT_EVALUATED",
+  "schema_validation_result_class": "SCHEMA_NOT_EVALUATED",
+  "redaction_result_class": "REDACTION_NOT_EVALUATED",
+  "veritas_continuation_decision": "PAUSE_FOR_HUMAN_REVIEW",
+  "veritas_reason_code": "CONTROLLED_LIVE_UPSTREAM_TIMEOUT",
+  "veritas_sandbox_commit_state": "SUSPENDED_NOT_COMMITTED",
+  "required_next_action": "REQUEST_HUMAN_REVIEW_OR_RETRY_WITH_VALID_UPSTREAM_STATE",
+  "final_commit_approved": false,
+  "failure_class": "upstream_availability_failure",
+  "decision_source": "simulated_failure_mode"
+}

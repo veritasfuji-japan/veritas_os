@@ -424,3 +424,7 @@ The next safe PR should be one of:
 
 Recommended:
 - The safest next PR is a controlled live fixture validation test skeleton that uses only static synthetic fixtures, runs offline, and does not add live transport.
+
+## Related fixture artifact
+
+See also: [Controlled live V.I.K.I. observability event fixture examples](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md).
