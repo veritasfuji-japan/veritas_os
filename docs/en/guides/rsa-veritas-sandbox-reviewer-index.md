@@ -40,6 +40,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 21. [Controlled live V.I.K.I. failure-mode test plan (pre-live failure test planning artifact, documentation-only)](./rsa-veritas-controlled-live-viki-failure-mode-test-plan.md)
 22. [Controlled live V.I.K.I. fixture validation plan (pre-live fixture classification planning artifact, documentation-only)](./rsa-veritas-controlled-live-viki-fixture-validation-plan.md)
 23. [Controlled live V.I.K.I. fixture validation test skeleton (offline synthetic-fixture tests only; test-only, no runtime/live integration)](../../../tests/governance/test_controlled_live_viki_fixture_validation.py)
+24. [Controlled live V.I.K.I. failure-mode test skeleton (offline synthetic-fixture tests only; test-only, no runtime behavior, endpoint, network, credentials, replay cache, logging, observability, or live integration)](../../../tests/governance/test_controlled_live_viki_failure_modes.py)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 

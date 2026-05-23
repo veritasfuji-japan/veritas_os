@@ -48,6 +48,8 @@ Notes:
 - The current implemented path is local-only, synthetic-data-only, and no-network.
 - This controlled live failure-mode test plan is a future test planning artifact only.
 - It does not introduce live runtime behavior.
+- Offline test skeleton now exists at `tests/governance/test_controlled_live_viki_failure_modes.py` (test-only, synthetic-fixture-only, no runtime/live integration).
+- The failure-mode test skeleton does not introduce endpoints, network calls, credentials, replay cache implementation, logging implementation, or observability implementation.
 
 ## 3. Fixture set under review
 
