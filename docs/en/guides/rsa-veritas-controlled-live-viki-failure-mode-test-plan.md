@@ -383,3 +383,5 @@ The next safe PR should be one of:
 Recommendation:
 
 The safest next PR is a controlled live fixture validation plan or test skeleton that still uses only synthetic fixtures and does not add live transport.
+
+<!-- ci-retrigger: required checks refresh only; no runtime/test/CI changes. -->
