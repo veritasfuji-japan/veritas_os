@@ -19,6 +19,7 @@
 - [Local V.I.K.I. mock ingestion receiver design（Phase 2 local mock artifact / documentation-only）](./rsa-veritas-local-viki-mock-ingestion-receiver-design.md)
 - [Live V.I.K.I. integration reviewer checklist](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 - [Controlled live V.I.K.I. integration threat model (documentation-only pre-live gate)](./rsa-veritas-controlled-live-viki-integration-threat-model.md)
+- [Controlled live V.I.K.I. payload schema draft（pre-live 必須 schema gate、documentation-only）](./rsa-veritas-controlled-live-viki-payload-schema-draft.md)
 
 ## 2. 現在の静的ベースライン
 

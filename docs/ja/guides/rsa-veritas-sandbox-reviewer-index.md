@@ -38,6 +38,7 @@
 13. [Local V.I.K.I. mock receiver test fixture plan（Phase 2 local mock artifact / documentation-only）](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
 14. [Local V.I.K.I. mock receiver validation snapshot（Phase 2 ローカルモック実装検証記録、documentation-only）](./rsa-veritas-local-viki-mock-receiver-validation-snapshot.md)
 15. [Local V.I.K.I. mock receiver E2E harness validation snapshot（Phase 2 fixture-driven harness 検証記録、documentation-only）](./rsa-veritas-local-viki-mock-receiver-e2e-harness-validation-snapshot.md)
+16. [Controlled live V.I.K.I. payload schema draft（pre-live 必須 schema gate、documentation-only）](./rsa-veritas-controlled-live-viki-payload-schema-draft.md)
 
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
