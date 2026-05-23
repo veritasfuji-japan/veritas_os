@@ -38,6 +38,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 19. [Controlled live V.I.K.I. redaction and observability design (required pre-live redaction/observability gate, documentation-only)](./rsa-veritas-controlled-live-viki-redaction-observability-design.md)
 20. [Controlled live V.I.K.I. payload schema fixture examples (pre-live fixture artifact, documentation-and-fixture-only)](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)
 21. [Controlled live V.I.K.I. failure-mode test plan (pre-live failure test planning artifact, documentation-only)](./rsa-veritas-controlled-live-viki-failure-mode-test-plan.md)
+22. [Controlled live V.I.K.I. fixture validation plan (pre-live fixture classification planning artifact, documentation-only)](./rsa-veritas-controlled-live-viki-fixture-validation-plan.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
