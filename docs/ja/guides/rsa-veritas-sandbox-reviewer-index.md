@@ -47,6 +47,7 @@
 22. [Controlled live V.I.K.I. fixture validation plan（pre-live fixture 分類計画アーティファクト、documentation-only）](./rsa-veritas-controlled-live-viki-fixture-validation-plan.md)
 23. [Controlled live V.I.K.I. fixture validation test skeleton（offline synthetic-fixture tests のみ、test-only / runtime・live integration なし）](../../../tests/governance/test_controlled_live_viki_fixture_validation.py)
 24. [Controlled live V.I.K.I. failure-mode test skeleton（offline synthetic-fixture tests のみ、test-only / runtime behavior・endpoint・network・credentials・replay cache・logging・observability・live integration なし）](../../../tests/governance/test_controlled_live_viki_failure_modes.py)
+25. [Controlled live V.I.K.I. observability event taxonomy fixture plan（pre-live taxonomy planning artifact、documentation-only）](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md)
 
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 

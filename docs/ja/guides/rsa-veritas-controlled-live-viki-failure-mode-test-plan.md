@@ -21,6 +21,9 @@
 
 この計画は、controlled live runtime implementation を開始する前にレビューされる必要があります。
 
+関連する pre-live artifact:
+- [Controlled live V.I.K.I. observability event taxonomy fixture plan](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md)（documentation-only / runtime・tests・fixtures・live integration 追加なし）。
+
 ## 2. 現在の baseline
 
 以下の pre-live gates は既に存在します。

@@ -17,6 +17,9 @@ This document defines redaction and observability requirements for a future cont
 - This does not provide legal or regulatory approval.
 - This design must be reviewed before any live logging, telemetry, audit pipeline, endpoint, or live middleware implementation begins.
 
+Related pre-live artifact:
+- [Controlled live V.I.K.I. observability event taxonomy fixture plan](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md) (documentation-only; no runtime/tests/fixtures/live integration).
+
 ## 2. Current baseline
 
 The following pre-live gates already exist:

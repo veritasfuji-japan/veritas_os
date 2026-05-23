@@ -20,6 +20,9 @@
 
 fixture validation test skeleton 実装前に、本計画のレビューを必須とする。
 
+関連する pre-live artifact:
+- [Controlled live V.I.K.I. observability event taxonomy fixture plan](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md)（documentation-only / runtime・tests・fixtures・live integration 追加なし）。
+
 ## 1.1 実装ステータス更新
 
 以下に **test-only** / **offline** / **synthetic-fixture-only** の validation skeleton が追加済み:
