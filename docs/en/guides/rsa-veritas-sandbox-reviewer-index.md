@@ -29,6 +29,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 10. [Live V.I.K.I. integration design note (future design artifact, documentation-only)](./rsa-veritas-live-viki-integration-design-note.md)
 11. [Live V.I.K.I. integration reviewer checklist (review-gate artifact, documentation-only)](./rsa-veritas-live-viki-integration-reviewer-checklist.md)
 12. [Local V.I.K.I. mock receiver test fixture plan (Phase 2 local mock artifact, documentation-only)](./rsa-veritas-local-viki-mock-receiver-test-fixture-plan.md)
+13. [Local V.I.K.I. mock receiver validation snapshot (Phase 2 local mock implementation validation record, documentation-only)](./rsa-veritas-local-viki-mock-receiver-validation-snapshot.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
