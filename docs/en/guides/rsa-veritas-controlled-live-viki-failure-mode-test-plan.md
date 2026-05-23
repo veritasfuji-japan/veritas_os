@@ -17,6 +17,9 @@ This page is documentation-only.
 
 This plan must be reviewed before any controlled live runtime implementation begins.
 
+Related pre-live artifact:
+- [Controlled live V.I.K.I. observability event taxonomy fixture plan](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md) (documentation-only; no runtime/tests/fixtures/live integration).
+
 ## 2. Current baseline
 
 The following pre-live gates already exist:

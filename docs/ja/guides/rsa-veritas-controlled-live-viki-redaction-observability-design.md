@@ -21,6 +21,9 @@
 - これは法的・規制上の承認を提供しません。
 - この設計は、live logging / telemetry / audit pipeline / endpoint / live middleware 実装開始前にレビューされる必要があります。
 
+関連する pre-live artifact:
+- [Controlled live V.I.K.I. observability event taxonomy fixture plan](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md)（documentation-only / runtime・tests・fixtures・live integration 追加なし）。
+
 ## 2. Current baseline
 
 以下の pre-live gate は既存として整備済みです。
