@@ -35,6 +35,7 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 16. [Controlled live V.I.K.I. payload schema draft (required pre-live schema gate, documentation-only)](./rsa-veritas-controlled-live-viki-payload-schema-draft.md)
 17. [Controlled live V.I.K.I. transport authentication design (required pre-live transport/auth gate, documentation-only)](./rsa-veritas-controlled-live-viki-transport-authentication-design.md)
 18. [Controlled live V.I.K.I. replay protection and correlation-id design (required pre-live replay/correlation gate, documentation-only)](./rsa-veritas-controlled-live-viki-replay-correlation-design.md)
+19. [Controlled live V.I.K.I. redaction and observability design (required pre-live redaction/observability gate, documentation-only)](./rsa-veritas-controlled-live-viki-redaction-observability-design.md)
 
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
