@@ -300,3 +300,7 @@ Recommended next safe PR options:
 - controlled live integration implementation plan
 
 Safest next PR: controlled live observability event fixture examples (synthetic-fixture-only, no runtime, no network, no logging implementation, no telemetry implementation).
+
+## Related fixture artifact
+
+See also: [Controlled live V.I.K.I. observability event fixture examples](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md).

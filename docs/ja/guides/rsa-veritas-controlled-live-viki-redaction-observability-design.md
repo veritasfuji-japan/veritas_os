@@ -435,3 +435,7 @@ redaction/observability implementation 前チェックリスト:
 ## Related pre-live artifact
 
 - [Controlled live V.I.K.I. payload schema fixture examples（documentation-and-fixture-only の pre-live artifact。runtime changes / tests / live integration は追加しない）。](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)
+
+## 関連フィクスチャ成果物
+
+関連資料: [Controlled live V.I.K.I. observability event fixture examples](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)。
