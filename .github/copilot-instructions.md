@@ -163,6 +163,28 @@ ALL LLM calls MUST go through `veritas_os/core/llm_client.py`. Never call OpenAI
 - DCO sign-off required: `Signed-off-by: Name <email>`.
 - Any governance schema change must update the committed governance policy sample and schema drift tests in the same PR.
 
+### Schema-contract changes must update all artifacts
+
+Any change to a Pydantic schema, governance policy schema, API response schema, config schema, or policy model **must** update all related artifacts in the same PR.
+
+Required checklist for schema/config contract changes:
+- [ ] Update the Pydantic/schema model.
+- [ ] Update committed JSON/YAML sample or default files.
+- [ ] Update roundtrip serialization tests.
+- [ ] Update schema/config drift guard checks where applicable.
+- [ ] Update operational documentation.
+- [ ] Verify tests do not mutate committed production config artifacts.
+- [ ] Run the relevant sync/check script(s).
+
+Governance-specific requirement:
+- For `veritas_os/api/governance.py` and `veritas_os/api/governance.json`, every schema change must preserve committed JSON fields through `GovernancePolicy.model_validate(data).model_dump()`.
+- Every such change must pass `python scripts/quality/check_governance_policy_schema_sync.py`.
+
+AI-agent warning:
+- Rapid parallel agent development frequently introduces schema drift.
+- Do not merge schema changes that only update code or only update sample JSON.
+- Schema, sample policy, tests, docs, and CI guard must move together.
+
 ## 6. Testing Rules
 
 ### Python Tests
@@ -202,6 +224,7 @@ pnpm --filter frontend e2e   # Playwright E2E
 - [ ] New endpoints have `X-API-Key` authentication
 - [ ] Governance endpoints have RBAC guard
 - [ ] Web search results pass toxicity filter
+- [ ] Schema/config changes include sample artifact updates and roundtrip drift tests.
 
 ## 8. Key Environment Variables
 
