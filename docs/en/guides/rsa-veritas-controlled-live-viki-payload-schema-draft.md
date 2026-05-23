@@ -1,5 +1,6 @@
 # RSA ↔ VERITAS Controlled Live V.I.K.I. Payload Schema Draft
 
+- [Controlled live V.I.K.I. replay protection and correlation-id design (required pre-live replay/correlation gate, documentation-only; no runtime changes; no live integration)](./rsa-veritas-controlled-live-viki-replay-correlation-design.md)
 ## 1. Purpose
 
 This document defines the **draft payload schema** for a future controlled live V.I.K.I. integration.

@@ -1,5 +1,6 @@
 # RSA ↔ VERITAS Controlled Live V.I.K.I. Payload Schema Draft
 
+- [Controlled live V.I.K.I. replay protection and correlation-id design（pre-live 必須 replay/correlation gate、documentation-only、runtime 変更なし、live integration なし）](./rsa-veritas-controlled-live-viki-replay-correlation-design.md)
 ## 英語正本
 
 - [RSA ↔ VERITAS Controlled Live V.I.K.I. Payload Schema Draft](../../en/guides/rsa-veritas-controlled-live-viki-payload-schema-draft.md)
