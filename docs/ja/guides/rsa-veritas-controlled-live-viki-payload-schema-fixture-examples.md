@@ -87,6 +87,6 @@
 
 ## 7. 推奨される次PR
 
-次の安全なPRは、runtime integration を行わない controlled live failure-mode test plan または fixture validation plan の追加です。
+次の安全なPRは、runtime integration を行わない controlled live fixture validation plan または failure-mode test skeleton の追加です。
 
 これらの fixture examples と failure-mode plan のレビュー完了前に、live transport を実装してはいけません。
