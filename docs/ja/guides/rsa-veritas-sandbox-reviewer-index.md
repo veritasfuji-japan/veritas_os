@@ -52,6 +52,8 @@
 27. [Controlled live V.I.K.I. observability event fixture examples（pre-live fixture artifact、fixture-and-documentation-only / runtime・test・logging・telemetry・observability・live integration 変更なし）](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)
 28. [Controlled live V.I.K.I. integration implementation plan（pre-live 実装順序アーティファクト、documentation-only / runtime・tests・fixtures・logging implementation・telemetry implementation・observability runtime implementation・live integration 変更なし）](./rsa-veritas-controlled-live-viki-integration-implementation-plan.md)
 
+29. [Controlled live V.I.K.I. runtime interface skeleton plan（pre-live runtime boundary artifact、documentation-only / runtime code・tests・fixtures・endpoints・network calls・replay cache・logging implementation・telemetry implementation・observability runtime implementation・live integration 変更なし）](./rsa-veritas-controlled-live-viki-runtime-interface-skeleton-plan.md)
+
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
 ## 4. Artifact map

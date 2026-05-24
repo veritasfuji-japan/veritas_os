@@ -40,6 +40,7 @@ runtime integration PR を作成する前に、本計画のレビューを必須
 - controlled live observability event taxonomy fixture plan
 - controlled live observability event fixture examples
 - controlled live observability event fixture validation test skeleton
+- controlled live runtime interface skeleton plan
 
 現在の検証経路は offline・synthetic-fixture-only・no-network です。
 
