@@ -48,6 +48,8 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 
 29. [Controlled live V.I.K.I. runtime interface skeleton plan (pre-live runtime-boundary artifact, documentation-only; no runtime code, tests, fixtures, endpoints, network calls, replay cache, logging implementation, telemetry implementation, observability runtime implementation, or live integration)](./rsa-veritas-controlled-live-viki-runtime-interface-skeleton-plan.md)
 
+30. [Controlled live V.I.K.I. default-disabled behavior test skeleton (offline synthetic-input-only tests; test-only, no runtime behavior, endpoint, network, credentials, replay cache, logging implementation, telemetry implementation, observability runtime implementation, or live integration)](../../../tests/governance/test_controlled_live_viki_default_disabled.py)
+
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
 ## 4. Artifact map
