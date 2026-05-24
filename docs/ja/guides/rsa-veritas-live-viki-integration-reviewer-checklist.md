@@ -24,6 +24,7 @@
 - [Controlled live V.I.K.I. integration threat model (documentation-only pre-live gate)](./rsa-veritas-controlled-live-viki-integration-threat-model.md)
 - [Controlled live V.I.K.I. payload schema draft（pre-live 必須 schema gate、documentation-only）](./rsa-veritas-controlled-live-viki-payload-schema-draft.md)
 - [Controlled live V.I.K.I. transport authentication design（pre-live 必須 transport/auth gate、documentation-only）](./rsa-veritas-controlled-live-viki-transport-authentication-design.md)
+- [Controlled live V.I.K.I. integration implementation plan（pre-live 実装順序アーティファクト、documentation-only。runtime changes / tests / fixtures / logging implementation / telemetry implementation / observability runtime implementation / live integration は追加しない）](./rsa-veritas-controlled-live-viki-integration-implementation-plan.md)
 
 ## 2. Review status legend
 
