@@ -46,6 +46,8 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 27. [Controlled live V.I.K.I. observability event fixture examples (pre-live fixture artifact, fixture-and-documentation-only; no runtime/test/logging/telemetry/observability/live integration changes)](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)
 28. [Controlled live V.I.K.I. integration implementation plan (pre-live implementation-sequencing artifact, documentation-only; no runtime, tests, fixtures, logging implementation, telemetry implementation, observability runtime implementation, or live integration)](./rsa-veritas-controlled-live-viki-integration-implementation-plan.md)
 
+29. [Controlled live V.I.K.I. runtime interface skeleton plan (pre-live runtime-boundary artifact, documentation-only; no runtime code, tests, fixtures, endpoints, network calls, replay cache, logging implementation, telemetry implementation, observability runtime implementation, or live integration)](./rsa-veritas-controlled-live-viki-runtime-interface-skeleton-plan.md)
+
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
 ## 4. Artifact map

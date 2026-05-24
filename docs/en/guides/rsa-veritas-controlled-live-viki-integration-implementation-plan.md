@@ -36,6 +36,7 @@ The following controlled live pre-live gates already exist:
 - controlled live observability event taxonomy fixture plan
 - controlled live observability event fixture examples
 - controlled live observability event fixture validation test skeleton
+- controlled live runtime interface skeleton plan
 
 Current validated paths are offline, synthetic-fixture-only, and no-network.
 
