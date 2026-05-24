@@ -54,6 +54,8 @@
 
 29. [Controlled live V.I.K.I. runtime interface skeleton plan（pre-live runtime boundary artifact、documentation-only / runtime code・tests・fixtures・endpoints・network calls・replay cache・logging implementation・telemetry implementation・observability runtime implementation・live integration 変更なし）](./rsa-veritas-controlled-live-viki-runtime-interface-skeleton-plan.md)
 
+30. [Controlled live V.I.K.I. default-disabled behavior test skeleton（offline synthetic-input-only tests のみ、test-only / runtime behavior・endpoint・network・credentials・replay cache・logging implementation・telemetry implementation・observability runtime implementation・live integration なし）](../../../tests/governance/test_controlled_live_viki_default_disabled.py)
+
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
 ## 4. Artifact map

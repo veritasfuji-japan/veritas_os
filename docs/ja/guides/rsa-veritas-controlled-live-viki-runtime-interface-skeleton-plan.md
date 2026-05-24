@@ -373,3 +373,10 @@ Future tests should verify:
 Recommended next PR title:
 
 `tests: add controlled live V.I.K.I. default-disabled behavior skeleton`
+
+## 10. test-only default-disabled skeleton の現状
+
+test-only の default-disabled behavior skeleton は
+[`tests/governance/test_controlled_live_viki_default_disabled.py`](../../../tests/governance/test_controlled_live_viki_default_disabled.py) に追加済みです。
+
+この追加は offline / synthetic-input-only であり、runtime behavior、endpoint behavior、network calls、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime implementation、live V.I.K.I. integration は導入しません。

@@ -371,3 +371,10 @@ The safest next PR is a test-only controlled live default-disabled behavior test
 Recommended next PR title:
 
 `tests: add controlled live V.I.K.I. default-disabled behavior skeleton`
+
+## 10. Test-only default-disabled skeleton status
+
+A test-only default-disabled behavior skeleton now exists at
+[`tests/governance/test_controlled_live_viki_default_disabled.py`](../../../tests/governance/test_controlled_live_viki_default_disabled.py).
+
+This addition is offline and synthetic-input-only, and does not introduce runtime behavior, endpoint behavior, network calls, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime implementation, or live V.I.K.I. integration.
