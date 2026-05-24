@@ -378,3 +378,9 @@ A test-only default-disabled behavior skeleton now exists at
 [`tests/governance/test_controlled_live_viki_default_disabled.py`](../../../tests/governance/test_controlled_live_viki_default_disabled.py).
 
 This addition is offline and synthetic-input-only, and does not introduce runtime behavior, endpoint behavior, network calls, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime implementation, or live V.I.K.I. integration.
+
+## Runtime status update (2026-05-24)
+
+A first minimal runtime module now exists at `veritas_os/governance/controlled_live_viki_interface.py`, with runtime validation in `tests/governance/test_controlled_live_viki_runtime_interface.py`.
+
+This runtime interface is disabled by default and local in-process only. It does not introduce endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache, logging implementation, telemetry implementation, observability runtime, or production behavior.
