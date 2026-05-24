@@ -380,3 +380,9 @@ test-only の default-disabled behavior skeleton は
 [`tests/governance/test_controlled_live_viki_default_disabled.py`](../../../tests/governance/test_controlled_live_viki_default_disabled.py) に追加済みです。
 
 この追加は offline / synthetic-input-only であり、runtime behavior、endpoint behavior、network calls、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime implementation、live V.I.K.I. integration は導入しません。
+
+## Runtime status update (2026-05-24)
+
+最初の最小 runtime module は `veritas_os/governance/controlled_live_viki_interface.py` に追加され、runtime validation は `tests/governance/test_controlled_live_viki_runtime_interface.py` に追加されました。
+
+この runtime interface は disabled-by-default かつ local in-process only です。endpoint behavior / network behavior / live V.I.K.I. integration / credentials / replay cache / logging implementation / telemetry implementation / observability runtime / production behavior は導入していません。

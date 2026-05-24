@@ -131,3 +131,6 @@
 live integration は後続の design phase とし、静的 sandbox documentation pass には含めません。
 
 本索引に追加された live V.I.K.I. integration ページは将来設計アーティファクトのみであり、runtime integration は導入しません。
+
+31. [Controlled live V.I.K.I. runtime interface（disabled-by-default の local in-process runtime のみ。endpoint behavior・network behavior・live integration・credentials・replay cache・logging implementation・telemetry implementation・observability runtime を導入しない）](../../../veritas_os/governance/controlled_live_viki_interface.py)
+32. [Controlled live V.I.K.I. runtime interface tests（offline かつ deterministic fail-closed runtime validation）](../../../tests/governance/test_controlled_live_viki_runtime_interface.py)

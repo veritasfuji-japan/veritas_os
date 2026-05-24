@@ -125,3 +125,6 @@ No live V.I.K.I. connection should be added in this PR.
 Live integration should be a later design phase, not part of the static sandbox documentation pass.
 
 The live V.I.K.I. integration page in this set is a future-design artifact only and does not introduce runtime integration.
+
+31. [Controlled live V.I.K.I. runtime interface (disabled-by-default local in-process runtime only; no endpoint behavior, network behavior, live integration, credentials, replay cache, logging implementation, telemetry implementation, or observability runtime)](../../../veritas_os/governance/controlled_live_viki_interface.py)
+32. [Controlled live V.I.K.I. runtime interface tests (offline and deterministic fail-closed runtime validation)](../../../tests/governance/test_controlled_live_viki_runtime_interface.py)
