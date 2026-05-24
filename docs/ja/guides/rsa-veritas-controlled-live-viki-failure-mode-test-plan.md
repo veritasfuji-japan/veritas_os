@@ -392,3 +392,7 @@ duplicate シナリオの期待値:
 推奨:
 
 最も安全な次PRは、synthetic fixtures のみを使い live transport を追加しない controlled live fixture validation plan または test skeleton です。
+
+## 関連フィクスチャ成果物
+
+関連資料: [Controlled live V.I.K.I. observability event fixture examples](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)。

@@ -182,3 +182,7 @@ fail-closed constraints:
 - controlled live integration implementation plan
 
 いずれも synthetic-fixture-only を維持し、runtime・network・logging implementation・telemetry implementation を導入しません。
+
+## 関連フィクスチャ成果物
+
+関連資料: [Controlled live V.I.K.I. observability event fixture examples](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)。

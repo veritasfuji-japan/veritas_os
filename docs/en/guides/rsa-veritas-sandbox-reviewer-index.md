@@ -44,6 +44,8 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 25. [Controlled live V.I.K.I. observability event taxonomy fixture plan (pre-live taxonomy planning artifact, documentation-only)](./rsa-veritas-controlled-live-viki-observability-event-taxonomy-fixture-plan.md)
 26. [Controlled live V.I.K.I. observability event fixture validation test skeleton (offline synthetic-fixture tests only; test-only, static validation only; no runtime behavior, endpoint, network, credentials, replay cache, logging, telemetry, observability runtime, or live integration)](../../../tests/governance/test_controlled_live_viki_observability_event_fixtures.py)
 
+26. [Controlled live V.I.K.I. observability event fixture examples (pre-live fixture artifact, fixture-and-documentation-only; no runtime/test/logging/telemetry/observability/live integration changes)](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md)
+
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
 ## 4. Artifact map

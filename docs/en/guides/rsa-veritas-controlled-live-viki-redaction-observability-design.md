@@ -426,3 +426,7 @@ The safest next PR is live payload schema fixture examples, still documentation-
 ## Related pre-live artifact
 
 - [Controlled live V.I.K.I. payload schema fixture examples (documentation-and-fixture-only pre-live artifact; no runtime changes, tests, or live integration).](./rsa-veritas-controlled-live-viki-payload-schema-fixture-examples.md)
+
+## Related fixture artifact
+
+See also: [Controlled live V.I.K.I. observability event fixture examples](./rsa-veritas-controlled-live-viki-observability-event-fixture-examples.md).
