@@ -160,6 +160,13 @@ def _load_all_event_fixtures() -> dict[str, dict]:
     return {name: _load_event_fixture(name) for name in sorted(EXPECTED_FIXTURES)}
 
 
+def _event_fixture_texts() -> dict[str, str]:
+    return {
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted(FIXTURE_DIR.glob("*.json"))
+    }
+
+
 def _is_timezone_aware_timestamp(value: str) -> bool:
     if not isinstance(value, str) or not value:
         return False
@@ -309,11 +316,9 @@ def test_observability_event_skeleton_uses_static_offline_inputs_only() -> None:
     forbidden_env_access = "os" + "." + "environ"
     assert forbidden_env_access not in source
 
-    precheck_source = source.split(
-        "def test_observability_event_skeleton_uses_static_offline_inputs_only",
-        maxsplit=1,
-    )[0]
-    lowered = precheck_source.lower()
-    banned_substrings = ["https://", "http://", "api_key", "bearer "]
-    for token in banned_substrings:
-        assert token not in lowered
+    external_url_tokens = ("http" + "://", "https" + "://")
+    credential_tokens = ("api" + "_" + "key", "bearer" + " ")
+    for fixture_name, fixture_text in _event_fixture_texts().items():
+        lowered_fixture = fixture_text.lower()
+        for token in external_url_tokens + credential_tokens:
+            assert token not in lowered_fixture, fixture_name
