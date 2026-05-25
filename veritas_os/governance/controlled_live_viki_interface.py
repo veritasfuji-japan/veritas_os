@@ -32,11 +32,11 @@ def is_controlled_live_viki_enabled(value: str | None) -> bool:
 
 
 def _extract_string_field(
-    payload: Mapping[str, object] | None,
+    payload: object,
     field_name: str,
     default_value: str,
 ) -> str:
-    if payload is None:
+    if not isinstance(payload, Mapping):
         return default_value
     raw_value = payload.get(field_name)
     if isinstance(raw_value, str) and raw_value.strip():
@@ -65,7 +65,7 @@ def build_controlled_live_viki_disabled_decision(
 
 
 def receive_controlled_live_viki_payload(
-    payload: Mapping[str, object] | None = None,
+    payload: object = None,
     *,
     feature_flag_value: str | None = None,
     seen_request_ids: MutableMapping[str, str] | None = None,

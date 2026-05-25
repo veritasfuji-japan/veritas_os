@@ -196,10 +196,16 @@ def test_receiver_schema_adapter_runtime_wiring_module_is_no_network_no_endpoint
 
 def test_receiver_schema_adapter_runtime_wiring_does_not_touch_downstream_contract() -> None:
     interface_source = Path("veritas_os/governance/controlled_live_viki_interface.py").read_text(encoding="utf-8")
+    adapter_source = Path("veritas_os/governance/controlled_live_viki_schema_adapter.py").read_text(
+        encoding="utf-8",
+    )
+    payload = _load_payload_fixture("valid_safe_proceed_v1alpha1.json")
 
     assert "viki_status" not in interface_source
     assert "VIKIPayload" not in interface_source
-    assert "rsa_status" in interface_source
+    assert "rsa_status" in adapter_source
+    assert payload["rsa_status"] == "SAFE_PROCEED"
+    assert classify_controlled_live_viki_schema_input(payload) == ADAPTER_VALID
 
     result = receive_controlled_live_viki_payload(feature_flag_value=None)
     assert result["upstream_signal_source"] == "RSA"
