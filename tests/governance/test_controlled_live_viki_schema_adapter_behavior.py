@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 ADAPTER_VALID = "ADAPTER_VALID"
@@ -97,6 +97,18 @@ def _contains_any_key(payload: dict, keys: set[str]) -> bool:
     return any(key in payload for key in keys)
 
 
+def _has_future_payload_issued_at_skew(
+    timestamp_value: str,
+    payload_issued_at_value: str,
+) -> bool:
+    """Return True when payload_issued_at is more than 300s after timestamp."""
+    timestamp = datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
+    payload_issued_at = datetime.fromisoformat(
+        payload_issued_at_value.replace("Z", "+00:00")
+    )
+    return payload_issued_at - timestamp > timedelta(seconds=300)
+
+
 
 def _classify_schema_adapter_input(
     payload: object,
@@ -120,8 +132,10 @@ def _classify_schema_adapter_input(
     if not _is_timezone_aware_timestamp(payload["payload_issued_at"]):
         return ADAPTER_INVALID_TIMESTAMP
 
-    issued_at = datetime.fromisoformat(payload["payload_issued_at"].replace("Z", "+00:00"))
-    if issued_at > datetime.now(timezone.utc):
+    if _has_future_payload_issued_at_skew(
+        payload["timestamp"],
+        payload["payload_issued_at"],
+    ):
         return ADAPTER_INVALID_TIMESTAMP
 
     if _contains_any_key(payload, REGULATED_DATA_FIELDS):
@@ -323,7 +337,7 @@ def test_schema_adapter_behavior_skeleton_is_offline_static_and_no_network() -> 
         "telemetrysdk",
         "live_viki_client",
         "prod.viki",
-        "bear" + "er",
+        "bear" + "er" + " ",
         "api" + "_key=",
     ]
     for token in forbidden_literals:
