@@ -130,3 +130,6 @@ The live V.I.K.I. integration page in this set is a future-design artifact only 
 
 31. [Controlled live V.I.K.I. runtime interface (disabled-by-default local in-process runtime only; no endpoint behavior, network behavior, live integration, credentials, replay cache, logging implementation, telemetry implementation, or observability runtime)](../../../veritas_os/governance/controlled_live_viki_interface.py)
 32. [Controlled live V.I.K.I. runtime interface tests (offline and deterministic fail-closed runtime validation)](../../../tests/governance/test_controlled_live_viki_runtime_interface.py)
+
+33. [Controlled live V.I.K.I. runtime schema adapter (local/pure/offline only; no endpoint, network, live integration, credentials, replay cache implementation, logging implementation, telemetry implementation, or observability runtime)](../../../veritas_os/governance/controlled_live_viki_schema_adapter.py)
+34. [Controlled live V.I.K.I. runtime schema adapter tests (fixture-driven deterministic runtime validation)](../../../tests/governance/test_controlled_live_viki_schema_adapter_runtime.py)

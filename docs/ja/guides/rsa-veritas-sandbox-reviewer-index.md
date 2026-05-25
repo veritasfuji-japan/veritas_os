@@ -136,3 +136,6 @@ live integration は後続の design phase とし、静的 sandbox documentation
 
 31. [Controlled live V.I.K.I. runtime interface（disabled-by-default の local in-process runtime のみ。endpoint behavior・network behavior・live integration・credentials・replay cache・logging implementation・telemetry implementation・observability runtime を導入しない）](../../../veritas_os/governance/controlled_live_viki_interface.py)
 32. [Controlled live V.I.K.I. runtime interface tests（offline かつ deterministic fail-closed runtime validation）](../../../tests/governance/test_controlled_live_viki_runtime_interface.py)
+
+33. [Controlled live V.I.K.I. runtime schema adapter (local/pure/offline only; no endpoint, network, live integration, credentials, replay cache implementation, logging implementation, telemetry implementation, or observability runtime)](../../../veritas_os/governance/controlled_live_viki_schema_adapter.py)
+34. [Controlled live V.I.K.I. runtime schema adapter tests (fixture-driven deterministic runtime validation)](../../../tests/governance/test_controlled_live_viki_schema_adapter_runtime.py)

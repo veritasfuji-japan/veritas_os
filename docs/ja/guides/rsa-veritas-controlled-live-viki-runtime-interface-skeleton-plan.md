@@ -393,3 +393,11 @@ test-only の schema adapter behavior skeleton は
 最初の最小 runtime module は `veritas_os/governance/controlled_live_viki_interface.py` に追加され、runtime validation は `tests/governance/test_controlled_live_viki_runtime_interface.py` に追加されました。
 
 この runtime interface は disabled-by-default かつ local in-process only です。endpoint behavior / network behavior / live V.I.K.I. integration / credentials / replay cache / logging implementation / telemetry implementation / observability runtime / production behavior は導入していません。
+
+## Runtime schema adapter status update
+
+ローカル・pure・offline の runtime schema adapter が `veritas_os/governance/controlled_live_viki_schema_adapter.py` に追加され、runtime テストは `tests/governance/test_controlled_live_viki_schema_adapter_runtime.py` にあります。
+
+この adapter が追加するのは deterministic な payload classification と fail-closed decision 構築のみです。endpoint behavior・network behavior・live V.I.K.I. integration・credentials・replay cache implementation・logging implementation・telemetry implementation・observability runtime・production behavior は追加しません。
+
+`SAFE_PROCEED` は upstream signal のままであり、adapter の fail-closed decision では `final_commit_approved` は常に `false` のままです。
