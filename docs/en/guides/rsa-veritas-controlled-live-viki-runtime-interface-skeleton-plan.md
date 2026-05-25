@@ -427,3 +427,12 @@ It is intentionally offline and synthetic-fixture-only, does **not** wire runtim
 SAFE_PROCEED remains an upstream signal only, and `final_commit_approved` remains `false` in this skeleton.
 
 Test-only note: `tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_behavior.py` now defines an offline schema-valid RSA handoff behavior skeleton. It is test-only and does not implement runtime handoff, endpoints, network/synthetic network ingestion, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior. `SAFE_PROCEED` remains an upstream signal only and `final_commit_approved` remains `false`. A later explicit runtime PR may wire this handoff path under fail-closed constraints.
+
+## Runtime update note (schema-valid RSA handoff helper)
+
+A local/offline schema-valid RSA handoff helper now exists at:
+
+- `veritas_os/governance/controlled_live_viki_rsa_handoff.py`
+- `tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_runtime.py`
+
+This helper is deterministic and fail-closed. It does not open endpoint behavior, does not add network behavior or synthetic network ingestion, does not integrate live V.I.K.I., and does not introduce credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior. `SAFE_PROCEED` remains an upstream signal only and `final_commit_approved` remains `false`. Receiver behavior remains not-ready until a later explicit wiring PR.
