@@ -391,3 +391,11 @@ This addition is offline and synthetic-fixture-only, and does not introduce sche
 A first minimal runtime module now exists at `veritas_os/governance/controlled_live_viki_interface.py`, with runtime validation in `tests/governance/test_controlled_live_viki_runtime_interface.py`.
 
 This runtime interface is disabled by default and local in-process only. It does not introduce endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache, logging implementation, telemetry implementation, observability runtime, or production behavior.
+
+## Runtime schema adapter status update
+
+A local, pure, offline runtime schema adapter now exists at `veritas_os/governance/controlled_live_viki_schema_adapter.py`, with runtime coverage in `tests/governance/test_controlled_live_viki_schema_adapter_runtime.py`.
+
+This adapter adds deterministic payload classification and fail-closed decision construction only. It does not add endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior.
+
+`SAFE_PROCEED` remains only an upstream signal, and adapter fail-closed decisions keep `final_commit_approved` as `false`.
