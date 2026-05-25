@@ -401,3 +401,11 @@ test-only の schema adapter behavior skeleton は
 この adapter が追加するのは deterministic な payload classification と fail-closed decision 構築のみです。endpoint behavior・network behavior・live V.I.K.I. integration・credentials・replay cache implementation・logging implementation・telemetry implementation・observability runtime・production behavior は追加しません。
 
 `SAFE_PROCEED` は upstream signal のままであり、adapter の fail-closed decision では `final_commit_approved` は常に `false` のままです。
+
+## Receiver から schema adapter への wiring behavior test skeleton の状態
+
+`tests/governance/test_controlled_live_viki_receiver_schema_adapter_wiring_behavior.py` に **test-only** の receiver schema-adapter wiring behavior skeleton が追加されています。
+
+この skeleton は意図的に offline / synthetic fixture 専用であり、runtime behavior の wiring はまだ実装していません。endpoint behavior、network behavior、live V.I.K.I. integration、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior は追加していません。
+
+SAFE_PROCEED は upstream signal のままであり、この skeleton でも `final_commit_approved` は `false` のままです。

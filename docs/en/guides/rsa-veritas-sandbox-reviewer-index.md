@@ -133,3 +133,5 @@ The live V.I.K.I. integration page in this set is a future-design artifact only 
 
 33. [Controlled live V.I.K.I. runtime schema adapter (local/pure/offline only; no endpoint, network, live integration, credentials, replay cache implementation, logging implementation, telemetry implementation, or observability runtime)](../../../veritas_os/governance/controlled_live_viki_schema_adapter.py)
 34. [Controlled live V.I.K.I. runtime schema adapter tests (fixture-driven deterministic runtime validation)](../../../tests/governance/test_controlled_live_viki_schema_adapter_runtime.py)
+
+- Receiver schema-adapter wiring behavior test skeleton (test-only, offline, no runtime wiring): `tests/governance/test_controlled_live_viki_receiver_schema_adapter_wiring_behavior.py`
