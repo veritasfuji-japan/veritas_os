@@ -438,3 +438,9 @@ local/offline の schema-valid RSA handoff helper が追加されました。
 - `tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_runtime.py`
 
 この helper は deterministic fail-closed を維持し、endpoint behavior・network behavior・synthetic network ingestion・live V.I.K.I. integration を導入しません。credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior も導入しません。`SAFE_PROCEED` は upstream signal のままで、`final_commit_approved` は常に `false` です。receiver behavior は後続の明示的 wiring PR まで not-ready のままです。
+
+## Update (runtime wiring)
+- Receiver valid-payload path now calls the RSA handoff helper in local/offline runtime only: `veritas_os/governance/controlled_live_viki_interface.py` -> `veritas_os/governance/controlled_live_viki_rsa_handoff.py`.
+- Runtime coverage added in `tests/governance/test_controlled_live_viki_receiver_rsa_handoff_wiring_runtime.py`.
+- No endpoint, network behavior, synthetic ingestion, live V.I.K.I. integration, credentials, replay cache, logging, telemetry, or observability runtime added.
+- `SAFE_PROCEED` remains upstream-only signal; `final_commit_approved` remains `false`; endpoint work remains a later explicit PR.

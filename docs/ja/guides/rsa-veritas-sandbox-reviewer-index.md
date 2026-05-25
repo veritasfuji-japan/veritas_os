@@ -146,3 +146,9 @@ live integration は後続の design phase とし、静的 sandbox documentation
 
 36. [Controlled live V.I.K.I. schema-valid RSA handoff runtime helper（local/offline fail-closed helper のみ。endpoint behavior・network behavior・synthetic network ingestion・live integration・credentials・replay cache implementation・logging implementation・telemetry implementation・observability runtime を導入せず、SAFE_PROCEED は upstream-only、final_commit_approved は false を維持）](../../../veritas_os/governance/controlled_live_viki_rsa_handoff.py)
 37. [Controlled live V.I.K.I. schema-valid RSA handoff runtime tests（offline deterministic fail-closed runtime checks）](../../../tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_runtime.py)
+
+## Update (runtime wiring)
+- Receiver valid-payload path now calls the RSA handoff helper in local/offline runtime only: `veritas_os/governance/controlled_live_viki_interface.py` -> `veritas_os/governance/controlled_live_viki_rsa_handoff.py`.
+- Runtime coverage added in `tests/governance/test_controlled_live_viki_receiver_rsa_handoff_wiring_runtime.py`.
+- No endpoint, network behavior, synthetic ingestion, live V.I.K.I. integration, credentials, replay cache, logging, telemetry, or observability runtime added.
+- `SAFE_PROCEED` remains upstream-only signal; `final_commit_approved` remains `false`; endpoint work remains a later explicit PR.
