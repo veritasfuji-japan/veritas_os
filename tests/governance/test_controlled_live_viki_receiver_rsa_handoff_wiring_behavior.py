@@ -354,7 +354,7 @@ def test_receiver_rsa_handoff_wiring_behavior_skeleton_does_not_modify_runtime_m
         payload,
         feature_flag_value="true",
     )
-    assert _reason_code(runtime_result) == "CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED"
+    assert _reason_code(runtime_result) == "CONTROLLED_LIVE_RSA_HANDOFF_SAFE_PROCEED_NOT_FINAL"
 
     disallowed_import_roots = {"requests", "httpx", "urllib", "socket"}
 

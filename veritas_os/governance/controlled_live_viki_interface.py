@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping
 
+from veritas_os.governance.controlled_live_viki_rsa_handoff import (
+    build_controlled_live_viki_rsa_handoff_decision,
+)
 from veritas_os.governance.controlled_live_viki_schema_adapter import (
     ADAPTER_VALID,
     build_controlled_live_viki_schema_fail_closed_decision,
@@ -19,7 +22,6 @@ from veritas_os.governance.controlled_live_viki_schema_adapter import (
 CONTROLLED_LIVE_VIKI_FEATURE_FLAG = "VERITAS_CONTROLLED_LIVE_VIKI_ENABLE"
 
 _DISABLED_REASON_CODE = "CONTROLLED_LIVE_DISABLED"
-_SCHEMA_VALID_NOT_YET_WIRED_REASON_CODE = "CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED"
 _REQUIRED_NEXT_ACTION = "REQUEST_HUMAN_REVIEW_OR_RETRY_WITH_VALID_UPSTREAM_STATE"
 _DEFAULT_REQUEST_ID = "req_viki_disabled_001"
 _DEFAULT_CORRELATION_ID = "corr_viki_veritas_disabled_001"
@@ -106,9 +108,12 @@ def receive_controlled_live_viki_payload(
             schema_version=schema_version,
         )
 
-    return build_controlled_live_viki_schema_fail_closed_decision(
-        _SCHEMA_VALID_NOT_YET_WIRED_REASON_CODE,
-        request_id=request_id,
-        correlation_id=correlation_id,
-        schema_version=schema_version,
-    )
+    if not isinstance(payload, Mapping):
+        return build_controlled_live_viki_schema_fail_closed_decision(
+            "CONTROLLED_LIVE_INVALID_JSON_OBJECT",
+            request_id=request_id,
+            correlation_id=correlation_id,
+            schema_version=schema_version,
+        )
+
+    return build_controlled_live_viki_rsa_handoff_decision(payload)

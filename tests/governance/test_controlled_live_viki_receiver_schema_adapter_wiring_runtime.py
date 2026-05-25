@@ -81,7 +81,7 @@ def test_receiver_schema_adapter_runtime_wiring_true_flag_valid_safe_proceed_rem
     assert payload["rsa_status"] == "SAFE_PROCEED"
 
     result = receive_controlled_live_viki_payload(payload, feature_flag_value="true")
-    assert _reason_code(result) == "CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED"
+    assert _reason_code(result) == "CONTROLLED_LIVE_RSA_HANDOFF_SAFE_PROCEED_NOT_FINAL"
     assert result["final_commit_approved"] is False
     assert result["veritas_sandbox_commit_state"] == "SUSPENDED_NOT_COMMITTED"
     assert result["veritas_continuation_decision"] == "PAUSE_FOR_HUMAN_REVIEW"
@@ -95,12 +95,24 @@ def test_receiver_schema_adapter_runtime_wiring_true_flag_valid_non_safe_proceed
         "valid_deferral_engaged_v1alpha1.json",
     ]
 
+    expected = {
+        "valid_density_throttled_v1alpha1.json": (
+            "CONTROLLED_LIVE_RSA_HANDOFF_DENSITY_THROTTLED"
+        ),
+        "valid_algorithmic_humility_engaged_v1alpha1.json": (
+            "CONTROLLED_LIVE_RSA_HANDOFF_ALGORITHMIC_HUMILITY_ENGAGED"
+        ),
+        "valid_deferral_engaged_v1alpha1.json": (
+            "CONTROLLED_LIVE_RSA_HANDOFF_DEFERRAL_ENGAGED"
+        ),
+    }
+
     for fixture_name in fixtures:
         payload = _load_payload_fixture(fixture_name)
         assert classify_controlled_live_viki_schema_input(payload) == ADAPTER_VALID
 
         result = receive_controlled_live_viki_payload(payload, feature_flag_value="true")
-        assert _reason_code(result) == "CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED"
+        assert _reason_code(result) == expected[fixture_name]
         assert result["final_commit_approved"] is False
         assert result["veritas_sandbox_commit_state"] == "SUSPENDED_NOT_COMMITTED"
 
@@ -121,7 +133,7 @@ def test_receiver_schema_adapter_runtime_wiring_duplicate_request_id_fails_close
         seen_request_ids=seen_request_ids,
     )
 
-    assert _reason_code(result_a) == "CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED"
+    assert _reason_code(result_a) == "CONTROLLED_LIVE_RSA_HANDOFF_SAFE_PROCEED_NOT_FINAL"
     assert _reason_code(result_b) == "CONTROLLED_LIVE_REPLAY_DUPLICATE_REQUEST_ID"
     assert result_b["final_commit_approved"] is False
     assert result_b["veritas_sandbox_commit_state"] == "SUSPENDED_NOT_COMMITTED"

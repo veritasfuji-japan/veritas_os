@@ -145,4 +145,4 @@ def test_rsa_handoff_runtime_does_not_modify_receiver_or_schema_adapter_behavior
     assert classify_controlled_live_viki_schema_input(payload) == ADAPTER_VALID
     interface_source = Path("veritas_os/governance/controlled_live_viki_interface.py").read_text(encoding="utf-8")
     assert "CONTROLLED_LIVE_DISABLED" in interface_source
-    assert "CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED" in interface_source
+    assert "build_controlled_live_viki_rsa_handoff_decision" in interface_source
