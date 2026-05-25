@@ -56,6 +56,8 @@
 
 30. [Controlled live V.I.K.I. default-disabled behavior test skeleton（offline synthetic-input-only tests のみ、test-only / runtime behavior・endpoint・network・credentials・replay cache・logging implementation・telemetry implementation・observability runtime implementation・live integration なし）](../../../tests/governance/test_controlled_live_viki_default_disabled.py)
 
+31. [Controlled live V.I.K.I. schema adapter behavior test skeleton（offline synthetic-fixture tests のみ、test-only / runtime behavior・endpoint・network・credentials・replay cache・logging implementation・telemetry implementation・observability runtime implementation・live integration なし）](../../../tests/governance/test_controlled_live_viki_schema_adapter_behavior.py)
+
 4つの static fixture variants はすべて dedicated per-variant validation snapshots を持つ状態です。
 
 ## 4. Artifact map

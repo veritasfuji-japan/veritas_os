@@ -381,6 +381,13 @@ test-only の default-disabled behavior skeleton は
 
 この追加は offline / synthetic-input-only であり、runtime behavior、endpoint behavior、network calls、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime implementation、live V.I.K.I. integration は導入しません。
 
+## 11. test-only schema adapter behavior skeleton の現状
+
+test-only の schema adapter behavior skeleton は
+[`tests/governance/test_controlled_live_viki_schema_adapter_behavior.py`](../../../tests/governance/test_controlled_live_viki_schema_adapter_behavior.py) に追加済みです。
+
+この追加は offline / synthetic-fixture-only であり、schema adapter runtime behavior、endpoint behavior、network calls、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime implementation、live V.I.K.I. integration は導入しません。
+
 ## Runtime status update (2026-05-24)
 
 最初の最小 runtime module は `veritas_os/governance/controlled_live_viki_interface.py` に追加され、runtime validation は `tests/governance/test_controlled_live_viki_runtime_interface.py` に追加されました。
