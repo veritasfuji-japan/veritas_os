@@ -444,3 +444,5 @@ local/offline の schema-valid RSA handoff helper が追加されました。
 - Runtime coverage added in `tests/governance/test_controlled_live_viki_receiver_rsa_handoff_wiring_runtime.py`.
 - No endpoint, network behavior, synthetic ingestion, live V.I.K.I. integration, credentials, replay cache, logging, telemetry, or observability runtime added.
 - `SAFE_PROCEED` remains upstream-only signal; `final_commit_approved` remains `false`; endpoint work remains a later explicit PR.
+
+テスト専用の synthetic ingestion endpoint behavior skeleton は `tests/governance/test_controlled_live_viki_synthetic_ingestion_endpoint_behavior.py` に追加済みです。これは test-only の contract modeling であり、endpoint 実装、synthetic network ingestion の開放、endpoint/runtime network behavior、live V.I.K.I. integration、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior は導入しません。`SAFE_PROCEED` は upstream-only のままで、`final_commit_approved` は `false` のままです。将来の runtime PR でのみ、fail-closed 制約下の local synthetic endpoint 実装を検討できます。
