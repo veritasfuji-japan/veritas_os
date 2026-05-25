@@ -399,3 +399,11 @@ A local, pure, offline runtime schema adapter now exists at `veritas_os/governan
 This adapter adds deterministic payload classification and fail-closed decision construction only. It does not add endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior.
 
 `SAFE_PROCEED` remains only an upstream signal, and adapter fail-closed decisions keep `final_commit_approved` as `false`.
+
+## Receiver-to-schema-adapter wiring behavior test skeleton status
+
+A **test-only** receiver schema-adapter wiring behavior skeleton now exists at `tests/governance/test_controlled_live_viki_receiver_schema_adapter_wiring_behavior.py`.
+
+It is intentionally offline and synthetic-fixture-only, does **not** wire runtime behavior yet, and does **not** add endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior.
+
+SAFE_PROCEED remains an upstream signal only, and `final_commit_approved` remains `false` in this skeleton.
