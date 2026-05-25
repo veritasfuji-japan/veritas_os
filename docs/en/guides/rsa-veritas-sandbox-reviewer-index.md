@@ -135,3 +135,5 @@ The live V.I.K.I. integration page in this set is a future-design artifact only 
 34. [Controlled live V.I.K.I. runtime schema adapter tests (fixture-driven deterministic runtime validation)](../../../tests/governance/test_controlled_live_viki_schema_adapter_runtime.py)
 
 - Receiver schema-adapter wiring behavior test skeleton (test-only, offline, no runtime wiring): `tests/governance/test_controlled_live_viki_receiver_schema_adapter_wiring_behavior.py`
+
+35. [Controlled live V.I.K.I. schema-valid RSA handoff behavior test skeleton (offline fixture-driven tests only; test-only, no runtime handoff implementation, endpoint behavior, network behavior/synthetic network ingestion, live integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior; SAFE_PROCEED remains upstream-only and final_commit_approved remains false)](../../../tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_behavior.py)

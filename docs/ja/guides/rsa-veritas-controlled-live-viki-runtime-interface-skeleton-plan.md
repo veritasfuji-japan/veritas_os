@@ -427,3 +427,5 @@ test-only の schema adapter behavior skeleton は
 この skeleton は意図的に offline / synthetic fixture 専用であり、runtime behavior の wiring はまだ実装していません。endpoint behavior、network behavior、live V.I.K.I. integration、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior は追加していません。
 
 SAFE_PROCEED は upstream signal のままであり、この skeleton でも `final_commit_approved` は `false` のままです。
+
+テスト専用ノート: `tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_behavior.py` に、schema-valid payload の RSA-compatible handoff contract を定義する offline の behavior skeleton を追加済みです。これは test-only であり、runtime handoff 実装、endpoint 追加、network/synthetic network ingestion、live V.I.K.I. integration、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior は導入しません。`SAFE_PROCEED` は upstream signal のままで、`final_commit_approved` は `false` を維持します。将来の明示的な runtime PR でのみ、fail-closed 制約下の handoff wiring を検討します。
