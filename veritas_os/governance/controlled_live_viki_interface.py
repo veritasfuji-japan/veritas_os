@@ -7,12 +7,19 @@ telemetry, or live V.I.K.I. integration behavior.
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping, MutableMapping
+
+from veritas_os.governance.controlled_live_viki_schema_adapter import (
+    ADAPTER_VALID,
+    build_controlled_live_viki_schema_fail_closed_decision,
+    classify_controlled_live_viki_schema_input,
+    controlled_live_viki_reason_code_for_classification,
+)
 
 CONTROLLED_LIVE_VIKI_FEATURE_FLAG = "VERITAS_CONTROLLED_LIVE_VIKI_ENABLE"
 
 _DISABLED_REASON_CODE = "CONTROLLED_LIVE_DISABLED"
-_NOT_IMPLEMENTED_REASON_CODE = "CONTROLLED_LIVE_RUNTIME_NOT_IMPLEMENTED"
+_SCHEMA_VALID_NOT_YET_WIRED_REASON_CODE = "CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED"
 _REQUIRED_NEXT_ACTION = "REQUEST_HUMAN_REVIEW_OR_RETRY_WITH_VALID_UPSTREAM_STATE"
 _DEFAULT_REQUEST_ID = "req_viki_disabled_001"
 _DEFAULT_CORRELATION_ID = "corr_viki_veritas_disabled_001"
@@ -61,6 +68,7 @@ def receive_controlled_live_viki_payload(
     payload: Mapping[str, object] | None = None,
     *,
     feature_flag_value: str | None = None,
+    seen_request_ids: MutableMapping[str, str] | None = None,
 ) -> dict[str, object]:
     """Receive a local payload and return deterministic fail-closed decisions."""
     request_id = _extract_string_field(payload, "request_id", _DEFAULT_REQUEST_ID)
@@ -83,6 +91,24 @@ def receive_controlled_live_viki_payload(
     if not is_controlled_live_viki_enabled(feature_flag_value):
         return decision
 
-    decision["veritas_reason_code"] = _NOT_IMPLEMENTED_REASON_CODE
-    decision["decision_source"] = "controlled_live_viki_runtime_interface_not_implemented"
-    return decision
+    classification = classify_controlled_live_viki_schema_input(
+        payload,
+        seen_request_ids=seen_request_ids,
+    )
+    if classification != ADAPTER_VALID:
+        reason_code = controlled_live_viki_reason_code_for_classification(classification)
+        if reason_code is None:
+            reason_code = "CONTROLLED_LIVE_INVALID_JSON_OBJECT"
+        return build_controlled_live_viki_schema_fail_closed_decision(
+            reason_code,
+            request_id=request_id,
+            correlation_id=correlation_id,
+            schema_version=schema_version,
+        )
+
+    return build_controlled_live_viki_schema_fail_closed_decision(
+        _SCHEMA_VALID_NOT_YET_WIRED_REASON_CODE,
+        request_id=request_id,
+        correlation_id=correlation_id,
+        schema_version=schema_version,
+    )

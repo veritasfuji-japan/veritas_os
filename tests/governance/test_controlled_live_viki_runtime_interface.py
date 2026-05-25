@@ -45,11 +45,11 @@ def test_runtime_interface_feature_flag_empty_false_or_unknown_is_disabled() -> 
         assert decision["veritas_continuation_decision"] != "SAFE_PROCEED"
 
 
-def test_runtime_interface_true_is_only_enabled_value_but_live_behavior_is_not_implemented() -> None:
+def test_runtime_interface_true_is_only_enabled_value_but_remains_fail_closed_not_ready() -> None:
     assert is_controlled_live_viki_enabled("true") is True
 
     decision = receive_controlled_live_viki_payload(feature_flag_value="true")
-    assert decision["veritas_reason_code"] == "CONTROLLED_LIVE_RUNTIME_NOT_IMPLEMENTED"
+    assert decision["reason_code"] == "CONTROLLED_LIVE_INVALID_JSON_OBJECT"
     assert decision["veritas_continuation_decision"] == EXPECTED_CONTINUATION
     assert decision["veritas_sandbox_commit_state"] == EXPECTED_COMMIT_STATE
     assert decision["required_next_action"] == EXPECTED_NEXT_ACTION
