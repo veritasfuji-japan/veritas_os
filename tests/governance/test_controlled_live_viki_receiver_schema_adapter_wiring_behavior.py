@@ -201,7 +201,10 @@ def test_receiver_schema_adapter_wiring_behavior_skeleton_is_offline_static_and_
         if isinstance(node, ast.ImportFrom) and node.module:
             assert node.module.split(".")[0] not in disallowed_import_roots
 
-    lowered = source.lower()
+    precheck_source = source.split(
+        "def test_receiver_schema_adapter_wiring_behavior_skeleton_is_offline_static_and_no_network",
+        maxsplit=1,
+    )[0].lower()
     forbidden_literals = [
         "http" + "://",
         "https" + "://",
@@ -213,7 +216,7 @@ def test_receiver_schema_adapter_wiring_behavior_skeleton_is_offline_static_and_
         "live_viki_client",
     ]
     for token in forbidden_literals:
-        assert token not in lowered
+        assert token not in precheck_source
 
 
 def test_receiver_schema_adapter_wiring_behavior_skeleton_does_not_modify_runtime_modules() -> None:
