@@ -23,6 +23,24 @@
 
 runtime interface PR を作成する前に、本計画のレビューを必須とします。
 
+## Runtime wiring status（現状）
+
+runtime receiver は runtime code 上で local schema adapter に接続済みですが、fail-closed / not-ready を維持しています。
+
+- Runtime receiver: `veritas_os/governance/controlled_live_viki_interface.py`
+- Runtime schema adapter: `veritas_os/governance/controlled_live_viki_schema_adapter.py`
+- Runtime wiring tests: `tests/governance/test_controlled_live_viki_receiver_schema_adapter_wiring_runtime.py`
+
+挙動サマリ:
+
+- feature flag が厳密一致 `"true"` 以外の場合、`CONTROLLED_LIVE_DISABLED` を維持。
+- feature flag が `"true"` の場合、schema adapter validation のみ実行。
+- 有効な schema payload は `CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED` を返す。
+- 無効な schema payload は schema adapter の reason code mapping で fail-closed。
+- `SAFE_PROCEED` は upstream signal のままで、`final_commit_approved` は `false` のまま。
+
+この runtime wiring は local/offline の範囲に限定され、endpoint behavior、network behavior、live V.I.K.I. integration、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior は追加しません。
+
 ## 2. 現在の baseline
 
 以下の controlled live pre-live gates は既に存在します。

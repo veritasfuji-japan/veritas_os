@@ -19,6 +19,24 @@ This plan does not add secrets or credentials, does not process real KYC data, a
 
 This plan must be reviewed before any runtime interface PR is created.
 
+## Runtime wiring status (current)
+
+The runtime receiver is now wired to the local schema adapter in runtime code, but it remains fail-closed and not-ready:
+
+- Runtime receiver: `veritas_os/governance/controlled_live_viki_interface.py`
+- Runtime schema adapter: `veritas_os/governance/controlled_live_viki_schema_adapter.py`
+- Runtime wiring tests: `tests/governance/test_controlled_live_viki_receiver_schema_adapter_wiring_runtime.py`
+
+Behavior summary:
+
+- Feature flag disabled (anything except exact `"true"`) still returns `CONTROLLED_LIVE_DISABLED`.
+- Feature flag `"true"` runs schema adapter validation only.
+- Valid schema payloads return `CONTROLLED_LIVE_SCHEMA_VALID_NOT_YET_WIRED`.
+- Invalid schema payloads fail closed using schema-adapter reason-code mapping.
+- `SAFE_PROCEED` remains an upstream signal only and `final_commit_approved` remains `false`.
+
+This runtime wiring remains local/offline and does not add endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior.
+
 ## 2. Current baseline
 
 The following controlled live pre-live gates already exist:
