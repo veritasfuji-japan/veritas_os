@@ -444,3 +444,5 @@ This helper is deterministic and fail-closed. It does not open endpoint behavior
 - Runtime coverage added in `tests/governance/test_controlled_live_viki_receiver_rsa_handoff_wiring_runtime.py`.
 - No endpoint, network behavior, synthetic ingestion, live V.I.K.I. integration, credentials, replay cache, logging, telemetry, or observability runtime added.
 - `SAFE_PROCEED` remains upstream-only signal; `final_commit_approved` remains `false`; endpoint work remains a later explicit PR.
+
+Test-only synthetic ingestion endpoint behavior skeleton now exists at `tests/governance/test_controlled_live_viki_synthetic_ingestion_endpoint_behavior.py`. This is test-only contract modeling and does not implement an endpoint, open synthetic network ingestion, introduce endpoint/runtime network behavior, connect live V.I.K.I., add credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior. `SAFE_PROCEED` remains upstream-only and `final_commit_approved` remains `false`. A future runtime PR may implement a local synthetic endpoint only under fail-closed constraints.
