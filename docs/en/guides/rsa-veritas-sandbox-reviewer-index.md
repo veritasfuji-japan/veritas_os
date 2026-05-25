@@ -50,6 +50,8 @@ It consolidates the scenario map, demo plan, validation snapshots, and static fi
 
 30. [Controlled live V.I.K.I. default-disabled behavior test skeleton (offline synthetic-input-only tests; test-only, no runtime behavior, endpoint, network, credentials, replay cache, logging implementation, telemetry implementation, observability runtime implementation, or live integration)](../../../tests/governance/test_controlled_live_viki_default_disabled.py)
 
+31. [Controlled live V.I.K.I. schema adapter behavior test skeleton (offline synthetic-fixture tests only; test-only, no runtime behavior, endpoint, network, credentials, replay cache, logging implementation, telemetry implementation, observability runtime implementation, or live integration)](../../../tests/governance/test_controlled_live_viki_schema_adapter_behavior.py)
+
 All four static fixture variants now have dedicated per-variant validation snapshots.
 
 ## 4. Artifact map

@@ -379,6 +379,13 @@ A test-only default-disabled behavior skeleton now exists at
 
 This addition is offline and synthetic-input-only, and does not introduce runtime behavior, endpoint behavior, network calls, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime implementation, or live V.I.K.I. integration.
 
+## 11. Test-only schema adapter behavior skeleton status
+
+A test-only schema adapter behavior skeleton now exists at
+[`tests/governance/test_controlled_live_viki_schema_adapter_behavior.py`](../../../tests/governance/test_controlled_live_viki_schema_adapter_behavior.py).
+
+This addition is offline and synthetic-fixture-only, and does not introduce schema adapter runtime behavior, endpoint behavior, network calls, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime implementation, or live V.I.K.I. integration.
+
 ## Runtime status update (2026-05-24)
 
 A first minimal runtime module now exists at `veritas_os/governance/controlled_live_viki_interface.py`, with runtime validation in `tests/governance/test_controlled_live_viki_runtime_interface.py`.
