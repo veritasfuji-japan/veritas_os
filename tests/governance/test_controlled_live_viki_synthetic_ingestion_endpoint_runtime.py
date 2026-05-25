@@ -60,7 +60,20 @@ assert INTERFACE_SPEC is not None
 assert INTERFACE_SPEC.loader is not None
 INTERFACE_MODULE = importlib.util.module_from_spec(INTERFACE_SPEC)
 INTERFACE_SPEC.loader.exec_module(INTERFACE_MODULE)
+sys.modules["veritas_os.governance.controlled_live_viki_interface"] = INTERFACE_MODULE
 receive_controlled_live_viki_payload = INTERFACE_MODULE.receive_controlled_live_viki_payload
+
+ENDPOINT_SPEC = importlib.util.spec_from_file_location(
+    "controlled_live_viki_synthetic_endpoint_runtime",
+    ENDPOINT_RUNTIME_PATH,
+)
+assert ENDPOINT_SPEC is not None
+assert ENDPOINT_SPEC.loader is not None
+ENDPOINT_MODULE = importlib.util.module_from_spec(ENDPOINT_SPEC)
+ENDPOINT_SPEC.loader.exec_module(ENDPOINT_MODULE)
+handle_controlled_live_viki_synthetic_ingestion_request = (
+    ENDPOINT_MODULE.handle_controlled_live_viki_synthetic_ingestion_request
+)
 
 EXPECTED_PATH = "/synthetic/controlled-live-viki"
 EXPECTED_METHOD = "POST"
@@ -99,77 +112,6 @@ def _reason_code(result: dict) -> str:
     return str(result.get("reason_code") or result.get("veritas_reason_code") or "")
 
 
-def _future_synthetic_ingestion_endpoint_response(
-    payload: object,
-    *,
-    feature_flag_value: str | None,
-    method: str = "POST",
-    path: str = "/synthetic/controlled-live-viki",
-    content_type: str = "application/json",
-) -> dict:
-    if method != EXPECTED_METHOD:
-        return {
-            "endpoint_mode": "synthetic_test_only",
-            "endpoint_enabled": True,
-            "http_status": 405,
-            "accepted_for_processing": False,
-            "response_source": "controlled_live_viki_synthetic_ingestion_endpoint_behavior_skeleton",
-            "receiver_result": None,
-            "reason_code": "CONTROLLED_LIVE_SYNTHETIC_ENDPOINT_METHOD_NOT_ALLOWED",
-            "final_commit_approved": False,
-        }
-    if path != EXPECTED_PATH:
-        return {
-            "endpoint_mode": "synthetic_test_only",
-            "endpoint_enabled": True,
-            "http_status": 404,
-            "accepted_for_processing": False,
-            "response_source": "controlled_live_viki_synthetic_ingestion_endpoint_behavior_skeleton",
-            "receiver_result": None,
-            "reason_code": "CONTROLLED_LIVE_SYNTHETIC_ENDPOINT_PATH_NOT_FOUND",
-            "final_commit_approved": False,
-        }
-    if content_type != EXPECTED_CONTENT_TYPE:
-        return {
-            "endpoint_mode": "synthetic_test_only",
-            "endpoint_enabled": True,
-            "http_status": 415,
-            "accepted_for_processing": False,
-            "response_source": "controlled_live_viki_synthetic_ingestion_endpoint_behavior_skeleton",
-            "receiver_result": None,
-            "reason_code": "CONTROLLED_LIVE_SYNTHETIC_ENDPOINT_UNSUPPORTED_MEDIA_TYPE",
-            "final_commit_approved": False,
-        }
-
-    receiver_result = receive_controlled_live_viki_payload(
-        payload,
-        feature_flag_value=feature_flag_value,
-    )
-    reason_code = _reason_code(receiver_result)
-    endpoint_enabled = str(feature_flag_value) == "true"
-
-    if not endpoint_enabled:
-        http_status = 503
-        accepted_for_processing = False
-    elif reason_code.startswith("CONTROLLED_LIVE_RSA_HANDOFF_"):
-        http_status = 202
-        accepted_for_processing = True
-    else:
-        http_status = 422
-        accepted_for_processing = False
-
-    return {
-        "endpoint_mode": "synthetic_test_only",
-        "endpoint_enabled": endpoint_enabled,
-        "http_status": http_status,
-        "accepted_for_processing": accepted_for_processing,
-        "response_source": "controlled_live_viki_synthetic_ingestion_endpoint_behavior_skeleton",
-        "receiver_result": receiver_result,
-        "reason_code": reason_code,
-        "final_commit_approved": False,
-    }
-
-
 def _assert_endpoint_fail_closed(response: dict) -> None:
     assert response["final_commit_approved"] is False
     receiver_result = response.get("receiver_result")
@@ -200,7 +142,7 @@ def test_synthetic_ingestion_endpoint_disabled_flag_is_fail_closed() -> None:
     ]
 
     for value in disabled_values:
-        response = _future_synthetic_ingestion_endpoint_response(
+        response = handle_controlled_live_viki_synthetic_ingestion_request(
             payload,
             feature_flag_value=value,
         )
@@ -233,7 +175,7 @@ def test_synthetic_ingestion_endpoint_rejects_wrong_method_path_and_content_type
     ]
 
     for kwargs, expected_reason, expected_status in cases:
-        response = _future_synthetic_ingestion_endpoint_response(
+        response = handle_controlled_live_viki_synthetic_ingestion_request(
             payload,
             feature_flag_value="true",
             **kwargs,
@@ -260,7 +202,7 @@ def test_synthetic_ingestion_endpoint_true_flag_invalid_schema_payloads_fail_clo
     ]
 
     for fixture_name in fixtures:
-        response = _future_synthetic_ingestion_endpoint_response(
+        response = handle_controlled_live_viki_synthetic_ingestion_request(
             _load_payload_fixture(fixture_name),
             feature_flag_value="true",
         )
@@ -277,7 +219,7 @@ def test_synthetic_ingestion_endpoint_true_flag_invalid_schema_payloads_fail_clo
 
 
 def test_synthetic_ingestion_endpoint_true_flag_valid_safe_proceed_reaches_rsa_handoff_without_final_approval() -> None:
-    response = _future_synthetic_ingestion_endpoint_response(
+    response = handle_controlled_live_viki_synthetic_ingestion_request(
         _load_payload_fixture("valid_safe_proceed_v1alpha1.json"),
         feature_flag_value="true",
     )
@@ -297,7 +239,7 @@ def test_synthetic_ingestion_endpoint_true_flag_valid_safe_proceed_reaches_rsa_h
 
 
 def test_synthetic_ingestion_endpoint_true_flag_valid_density_throttled_reaches_rsa_handoff() -> None:
-    response = _future_synthetic_ingestion_endpoint_response(
+    response = handle_controlled_live_viki_synthetic_ingestion_request(
         _load_payload_fixture("valid_density_throttled_v1alpha1.json"),
         feature_flag_value="true",
     )
@@ -309,7 +251,7 @@ def test_synthetic_ingestion_endpoint_true_flag_valid_density_throttled_reaches_
 
 
 def test_synthetic_ingestion_endpoint_true_flag_valid_algorithmic_humility_reaches_rsa_handoff() -> None:
-    response = _future_synthetic_ingestion_endpoint_response(
+    response = handle_controlled_live_viki_synthetic_ingestion_request(
         _load_payload_fixture("valid_algorithmic_humility_engaged_v1alpha1.json"),
         feature_flag_value="true",
     )
@@ -324,7 +266,7 @@ def test_synthetic_ingestion_endpoint_true_flag_valid_algorithmic_humility_reach
 
 
 def test_synthetic_ingestion_endpoint_true_flag_valid_deferral_reaches_rsa_handoff() -> None:
-    response = _future_synthetic_ingestion_endpoint_response(
+    response = handle_controlled_live_viki_synthetic_ingestion_request(
         _load_payload_fixture("valid_deferral_engaged_v1alpha1.json"),
         feature_flag_value="true",
     )
@@ -343,7 +285,7 @@ def test_synthetic_ingestion_endpoint_response_preserves_safe_identity_fields_on
         "valid_deferral_engaged_v1alpha1.json",
     ]
     for fixture_name in fixtures:
-        response = _future_synthetic_ingestion_endpoint_response(
+        response = handle_controlled_live_viki_synthetic_ingestion_request(
             _load_payload_fixture(fixture_name),
             feature_flag_value="true",
         )
@@ -363,7 +305,7 @@ def test_synthetic_ingestion_endpoint_response_preserves_safe_identity_fields_on
 
 
 def test_synthetic_ingestion_endpoint_does_not_introduce_viki_specific_downstream_contract() -> None:
-    response = _future_synthetic_ingestion_endpoint_response(
+    response = handle_controlled_live_viki_synthetic_ingestion_request(
         _load_payload_fixture("valid_safe_proceed_v1alpha1.json"),
         feature_flag_value="true",
     )
@@ -418,7 +360,7 @@ def test_synthetic_ingestion_endpoint_behavior_skeleton_does_not_modify_runtime_
     runtime_source = INTERFACE_PATH.read_text(encoding="utf-8")
     assert "receive_controlled_live_viki_payload" in runtime_source
 
-    response = _future_synthetic_ingestion_endpoint_response(
+    response = handle_controlled_live_viki_synthetic_ingestion_request(
         _load_payload_fixture("valid_safe_proceed_v1alpha1.json"),
         feature_flag_value="true",
     )
