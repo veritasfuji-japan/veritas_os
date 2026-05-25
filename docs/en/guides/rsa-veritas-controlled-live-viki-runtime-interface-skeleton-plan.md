@@ -425,3 +425,5 @@ A **test-only** receiver schema-adapter wiring behavior skeleton now exists at `
 It is intentionally offline and synthetic-fixture-only, does **not** wire runtime behavior yet, and does **not** add endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior.
 
 SAFE_PROCEED remains an upstream signal only, and `final_commit_approved` remains `false` in this skeleton.
+
+Test-only note: `tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_behavior.py` now defines an offline schema-valid RSA handoff behavior skeleton. It is test-only and does not implement runtime handoff, endpoints, network/synthetic network ingestion, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior. `SAFE_PROCEED` remains an upstream signal only and `final_commit_approved` remains `false`. A later explicit runtime PR may wire this handoff path under fail-closed constraints.
