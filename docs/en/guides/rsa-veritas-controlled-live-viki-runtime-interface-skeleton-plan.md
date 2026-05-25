@@ -37,6 +37,8 @@ Behavior summary:
 
 This runtime wiring remains local/offline and does not add endpoint behavior, network behavior, live V.I.K.I. integration, credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior.
 
+Test-only receiver RSA handoff wiring behavior skeleton now exists at `tests/governance/test_controlled_live_viki_receiver_rsa_handoff_wiring_behavior.py`. It is test-only and does not wire runtime behavior yet, does not open synthetic network ingestion or endpoint behavior, does not introduce network behavior or live V.I.K.I. integration, and does not introduce credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior. SAFE_PROCEED remains upstream-only and `final_commit_approved` remains `false`. A future explicit runtime PR may wire the receiver valid-payload path to the RSA handoff helper under fail-closed constraints.
+
 ## 2. Current baseline
 
 The following controlled live pre-live gates already exist:
