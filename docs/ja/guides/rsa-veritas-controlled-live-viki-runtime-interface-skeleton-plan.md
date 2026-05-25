@@ -429,3 +429,12 @@ test-only の schema adapter behavior skeleton は
 SAFE_PROCEED は upstream signal のままであり、この skeleton でも `final_commit_approved` は `false` のままです。
 
 テスト専用ノート: `tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_behavior.py` に、schema-valid payload の RSA-compatible handoff contract を定義する offline の behavior skeleton を追加済みです。これは test-only であり、runtime handoff 実装、endpoint 追加、network/synthetic network ingestion、live V.I.K.I. integration、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior は導入しません。`SAFE_PROCEED` は upstream signal のままで、`final_commit_approved` は `false` を維持します。将来の明示的な runtime PR でのみ、fail-closed 制約下の handoff wiring を検討します。
+
+## Runtime 更新メモ（schema-valid RSA handoff helper）
+
+local/offline の schema-valid RSA handoff helper が追加されました。
+
+- `veritas_os/governance/controlled_live_viki_rsa_handoff.py`
+- `tests/governance/test_controlled_live_viki_schema_valid_rsa_handoff_runtime.py`
+
+この helper は deterministic fail-closed を維持し、endpoint behavior・network behavior・synthetic network ingestion・live V.I.K.I. integration を導入しません。credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior も導入しません。`SAFE_PROCEED` は upstream signal のままで、`final_commit_approved` は常に `false` です。receiver behavior は後続の明示的 wiring PR まで not-ready のままです。
