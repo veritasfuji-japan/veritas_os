@@ -446,3 +446,11 @@ This helper is deterministic and fail-closed. It does not open endpoint behavior
 - `SAFE_PROCEED` remains upstream-only signal; `final_commit_approved` remains `false`; endpoint work remains a later explicit PR.
 
 Test-only synthetic ingestion endpoint behavior skeleton now exists at `tests/governance/test_controlled_live_viki_synthetic_ingestion_endpoint_behavior.py`. This is test-only contract modeling and does not implement an endpoint, open synthetic network ingestion, introduce endpoint/runtime network behavior, connect live V.I.K.I., add credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or production behavior. `SAFE_PROCEED` remains upstream-only and `final_commit_approved` remains `false`. A future runtime PR may implement a local synthetic endpoint only under fail-closed constraints.
+
+## Runtime update note (2026-05-25)
+
+A local/offline synthetic ingestion endpoint runtime skeleton now exists in `veritas_os/governance/controlled_live_viki_synthetic_ingestion_endpoint.py`, with runtime coverage in `tests/governance/test_controlled_live_viki_synthetic_ingestion_endpoint_runtime.py`.
+
+This remains local-only and offline-only: it is not a production endpoint, does not bind a port, does not add HTTP server behavior, does not add network behavior, does not connect live V.I.K.I., and does not introduce credentials, replay cache implementation, logging implementation, telemetry implementation, observability runtime, or other production behavior.
+
+`SAFE_PROCEED` remains an upstream signal only, and `final_commit_approved` remains `false`. External synthetic network ingestion remains a later explicit PR.

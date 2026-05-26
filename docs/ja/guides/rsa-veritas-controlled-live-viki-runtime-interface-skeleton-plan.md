@@ -446,3 +446,11 @@ local/offline の schema-valid RSA handoff helper が追加されました。
 - `SAFE_PROCEED` remains upstream-only signal; `final_commit_approved` remains `false`; endpoint work remains a later explicit PR.
 
 テスト専用の synthetic ingestion endpoint behavior skeleton は `tests/governance/test_controlled_live_viki_synthetic_ingestion_endpoint_behavior.py` に追加済みです。これは test-only の contract modeling であり、endpoint 実装、synthetic network ingestion の開放、endpoint/runtime network behavior、live V.I.K.I. integration、credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、production behavior は導入しません。`SAFE_PROCEED` は upstream-only のままで、`final_commit_approved` は `false` のままです。将来の runtime PR でのみ、fail-closed 制約下の local synthetic endpoint 実装を検討できます。
+
+## Runtime update note (2026-05-25)
+
+local/offline の synthetic ingestion endpoint runtime skeleton は `veritas_os/governance/controlled_live_viki_synthetic_ingestion_endpoint.py` に追加され、runtime テストは `tests/governance/test_controlled_live_viki_synthetic_ingestion_endpoint_runtime.py` に追加されました。
+
+本変更は local/offline 限定であり、production endpoint ではありません。port bind は行わず、HTTP server behavior は追加せず、network behavior は追加せず、live V.I.K.I. 連携も行いません。credentials、replay cache implementation、logging implementation、telemetry implementation、observability runtime、その他 production behavior も導入しません。
+
+`SAFE_PROCEED` は upstream signal のままであり、`final_commit_approved` は `false` のままです。external synthetic network ingestion は後続の明示的 PR で扱います。
