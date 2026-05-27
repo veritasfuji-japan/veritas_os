@@ -117,6 +117,28 @@ def test_missing_required_identity_or_action_fields_raise_value_error() -> None:
         raise AssertionError("expected ValueError for missing actor identity")
 
 
+def test_missing_authority_source_refs_raises_value_error() -> None:
+    invalid_payload = _payload(authority_source_refs=[])
+
+    try:
+        ingest_authority_evidence_payload(invalid_payload)
+    except ValueError as exc:
+        assert str(exc) == "authority_evidence_authority_source_refs_missing"
+    else:
+        raise AssertionError("expected ValueError for empty authority source refs")
+
+
+def test_missing_scope_grants_raises_value_error() -> None:
+    invalid_payload = _payload(scope_grants=[])
+
+    try:
+        ingest_authority_evidence_payload(invalid_payload)
+    except ValueError as exc:
+        assert str(exc) == "authority_evidence_scope_grants_missing"
+    else:
+        raise AssertionError("expected ValueError for empty scope grants")
+
+
 def test_unknown_verification_result_defaults_to_indeterminate() -> None:
     evidence = ingest_authority_evidence_payload(_payload(verification_result="not-a-state"))
 
@@ -172,6 +194,30 @@ def test_invalid_or_indeterminate_evidence_blocks_runtime_authority() -> None:
     validator_result = RuntimeAuthorityValidator().validate(
         action_contract=contract,
         authority_evidence=indeterminate,
+        requested_scope=["customer:risk_escalation"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-snapshot-001",
+        actor_identity="operator:alice",
+        human_approval_state={"approved": True},
+        bind_context_metadata={"session_id": "bind-001"},
+        now=FIXED_NOW,
+    )
+
+    assert validator_result.recommended_outcome == "block"
+
+
+def test_mismatched_scope_grants_block_runtime_authority() -> None:
+    contract = _contract()
+    mismatched = ingest_authority_evidence_payload(
+        _payload(
+            scope_grants=["customer:case_note"],
+            scope_limitations=["customer:risk_escalation"],
+        )
+    )
+
+    validator_result = RuntimeAuthorityValidator().validate(
+        action_contract=contract,
+        authority_evidence=mismatched,
         requested_scope=["customer:risk_escalation"],
         required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
         policy_snapshot_id="policy-snapshot-001",

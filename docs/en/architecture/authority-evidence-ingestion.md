@@ -16,6 +16,7 @@
 - Defaults unknown verification states to `indeterminate`.
 - Preserves source facts under `metadata`.
 - Computes `evidence_hash` via deterministic canonical digest.
+- Requires non-empty `authority_source_refs` and `scope_grants` for fail-closed ingestion.
 
 ## Safety model
 

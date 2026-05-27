@@ -37,15 +37,23 @@ def ingest_authority_evidence_payload(payload: dict[str, Any]) -> AuthorityEvide
     verification_result = _normalize_verification_result(normalized.get("verification_result"))
 
     metadata = _normalize_metadata(normalized)
+    authority_source_refs = _to_sorted_str_list(normalized.get("authority_source_refs", []))
+    if not authority_source_refs:
+        raise ValueError("authority_evidence_authority_source_refs_missing")
+
+    scope_grants = _to_sorted_str_list(normalized.get("scope_grants", []))
+    if not scope_grants:
+        raise ValueError("authority_evidence_scope_grants_missing")
+
     evidence = AuthorityEvidence(
         authority_evidence_id=normalized["authority_evidence_id"],
         action_contract_id=normalized["action_contract_id"],
         action_contract_version=normalized["action_contract_version"],
         actor_identity=normalized["actor_identity"],
         actor_role=normalized["actor_role"],
-        authority_source_refs=_to_sorted_str_list(normalized.get("authority_source_refs", [])),
+        authority_source_refs=authority_source_refs,
         role_or_policy_basis=_to_sorted_str_list(normalized.get("role_or_policy_basis", [])),
-        scope_grants=_to_sorted_str_list(normalized.get("scope_grants", [])),
+        scope_grants=scope_grants,
         scope_limitations=_to_sorted_str_list(normalized.get("scope_limitations", [])),
         validity_window={
             "issued_at": normalized["issued_at"],
