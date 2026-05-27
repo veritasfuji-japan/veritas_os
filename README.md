@@ -74,6 +74,10 @@ VERITAS now includes a local/offline Human Approval Receipt v1 artifact. It repr
 
 Boundary:
 
+- Local/offline deterministic artifact only
+- No live IdP, SSO, IAM, KMS/HSM, or e-signature integration
+- Not legal advice, regulatory approval, third-party certification, or production approval validation
+
 ## SaaS Permission-Change Governed Execution Demo
 
 VERITAS includes a local/offline SaaS permission-change governed execution demo where an AI agent attempts to grant admin access to an external contractor. The demo shows AuthorityEvidence and HumanApprovalReceipt checks before commit, with missing/expired/scope-mismatched evidence failing closed.
@@ -88,10 +92,6 @@ Boundary:
 - No live SaaS, IAM, IdP, SSO, customer directory, or production approval workflow integration
 - Not legal advice, regulatory approval, third-party certification, or production access-control validation
 
-
-- Local/offline deterministic artifact only
-- No live IdP, SSO, IAM, KMS/HSM, or e-signature integration
-- Not legal advice, regulatory approval, third-party certification, or production approval validation
 
 ## One-Day PoC Evidence Packet
 

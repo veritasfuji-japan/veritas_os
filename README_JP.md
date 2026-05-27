@@ -78,6 +78,10 @@ VERITAS には local/offline の Human Approval Receipt v1 artifact が追加さ
 
 境界条件:
 
+- local/offline の決定論的 artifact のみ
+- 実 IdP・SSO・IAM・KMS/HSM・電子署名連携はなし
+- 法的助言・規制承認・第三者認証・本番承認妥当性の主張ではない
+
 ## SaaS Permission-Change Governed Execution Demo
 
 VERITAS には、local/offline の SaaS permission-change governed execution demo が追加されています。このデモでは、AI agent が外部委託者に admin 権限を付与しようとする場面を想定し、commit 前に AuthorityEvidence と HumanApprovalReceipt を検証します。証拠不足・期限切れ・scope mismatch の場合は fail-closed で block されます。実 SaaS・IAM・IdP・顧客ディレクトリとは接続していません。
@@ -91,10 +95,6 @@ VERITAS には、local/offline の SaaS permission-change governed execution dem
 - 実 SaaS・実 IAM・実 IdP・実 SSO・実顧客ディレクトリ・本番承認ワークフローとの接続なし
 - 法的助言・規制承認・第三者認証・本番 access-control validation ではない
 
-
-- local/offline の決定論的 artifact のみ
-- 実 IdP・SSO・IAM・KMS/HSM・電子署名連携はなし
-- 法的助言・規制承認・第三者認証・本番承認妥当性の主張ではない
 
 ## AML/KYC レビュアー向けウォークスルー Quickstart
 
