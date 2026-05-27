@@ -10,6 +10,7 @@ from veritas_os.governance.human_approval_receipt import (
     HumanApprovalReceipt,
     build_human_approval_state,
     validate_human_approval_receipt,
+    with_receipt_hash,
 )
 from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
 
@@ -228,3 +229,52 @@ def test_high_irreversibility_blocks_with_invalid_human_approval_state() -> None
 
     assert result.status == "fail"
     assert result.recommended_outcome == "block"
+
+
+def test_with_receipt_hash_populates_non_empty_hash() -> None:
+    finalized = with_receipt_hash(_receipt())
+
+    assert finalized.receipt_hash
+
+
+def test_with_receipt_hash_populates_sha256_length() -> None:
+    finalized = with_receipt_hash(_receipt())
+
+    assert len(finalized.receipt_hash) == 64
+
+
+def test_with_receipt_hash_is_deterministic_for_same_content() -> None:
+    one = with_receipt_hash(_receipt(metadata={"x": "1"}))
+    two = with_receipt_hash(_receipt(metadata={"x": "1"}))
+
+    assert one.receipt_hash == two.receipt_hash
+
+
+def test_with_receipt_hash_changes_when_meaningful_field_changes() -> None:
+    one = with_receipt_hash(_receipt(approved_scope=["ledger:debit"]))
+    two = with_receipt_hash(_receipt(approved_scope=["ledger:credit"]))
+
+    assert one.receipt_hash != two.receipt_hash
+
+
+def test_receipt_hash_does_not_recursively_affect_own_hash() -> None:
+    first = with_receipt_hash(_receipt(receipt_hash=""))
+    second = with_receipt_hash(_receipt(receipt_hash="tampered"))
+
+    assert first.receipt_hash == second.receipt_hash
+
+
+def test_human_approval_state_uses_finalized_receipt_hash() -> None:
+    receipt = _receipt()
+    finalized = with_receipt_hash(receipt)
+
+    state = build_human_approval_state(
+        receipt,
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert state["approved"] is True
+    assert state["receipt_hash"] == finalized.receipt_hash

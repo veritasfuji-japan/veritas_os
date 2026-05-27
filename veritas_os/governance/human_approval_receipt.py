@@ -68,6 +68,14 @@ class HumanApprovalReceipt:
         return sha256_of_canonical_json(self.to_dict_for_hash())
 
 
+def with_receipt_hash(receipt: HumanApprovalReceipt) -> HumanApprovalReceipt:
+    """Return a new receipt finalized with a deterministic ``receipt_hash``."""
+    digest = receipt.deterministic_digest()
+    data = receipt.to_dict()
+    data["receipt_hash"] = digest
+    return HumanApprovalReceipt(**data)
+
+
 @dataclass(frozen=True)
 class HumanApprovalValidationResult:
     """Deterministic fail-closed validation result for human approval receipts."""
@@ -143,13 +151,15 @@ def build_human_approval_state(
             "failure_reasons": validation_result.failure_reasons,
         }
 
+    finalized_receipt = with_receipt_hash(receipt)
+
     return {
         "approved": True,
-        "approval_receipt_id": receipt.approval_receipt_id,
-        "approver_identity": receipt.approver_identity,
-        "approver_role": receipt.approver_role,
-        "approved_scope": sorted(str(scope) for scope in receipt.approved_scope),
-        "receipt_hash": receipt.deterministic_digest(),
+        "approval_receipt_id": finalized_receipt.approval_receipt_id,
+        "approver_identity": finalized_receipt.approver_identity,
+        "approver_role": finalized_receipt.approver_role,
+        "approved_scope": sorted(str(scope) for scope in finalized_receipt.approved_scope),
+        "receipt_hash": finalized_receipt.receipt_hash,
         "validated_at": evaluated_at.isoformat(),
     }
 
