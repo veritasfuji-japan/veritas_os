@@ -42,6 +42,7 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 5. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
 6. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
 7. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+8. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
 
 Boundary:
 
@@ -72,6 +73,21 @@ Boundary:
 VERITAS now includes a local/offline Human Approval Receipt v1 artifact. It represents human approval as a deterministic, hashable, scope-bound, expiry-aware governance artifact that can be converted into the existing runtime `human_approval_state` used by bind-time validation. This does not add live IdP, SSO, IAM, KMS/HSM, e-signature, or production approval workflow integration.
 
 Boundary:
+
+## SaaS Permission-Change Governed Execution Demo
+
+VERITAS includes a local/offline SaaS permission-change governed execution demo where an AI agent attempts to grant admin access to an external contractor. The demo shows AuthorityEvidence and HumanApprovalReceipt checks before commit, with missing/expired/scope-mismatched evidence failing closed.
+
+- Demo walkthrough: docs/en/demo/saas-permission-change-governed-demo.md
+- Script: scripts/demo/saas_permission_change_governed_demo.py
+- Test: tests/demo/test_saas_permission_change_governed_demo.py
+
+Boundary:
+
+- Local/offline fixture only
+- No live SaaS, IAM, IdP, SSO, customer directory, or production approval workflow integration
+- Not legal advice, regulatory approval, third-party certification, or production access-control validation
+
 
 - Local/offline deterministic artifact only
 - No live IdP, SSO, IAM, KMS/HSM, or e-signature integration
