@@ -42,9 +42,10 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
 3. Authority Evidence Ingestion（local/offline）: docs/en/architecture/authority-evidence-ingestion.md
-4. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-5. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-6. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
+4. Human Approval Receipt v1（local/offline）: docs/en/architecture/human-approval-receipt.md
+5. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+6. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+7. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
 
 境界条件:
 
@@ -68,6 +69,17 @@ VERITAS には、bind-time governance のための deterministic local/offline A
 - local/offline normalization のみ
 - 実 SaaS・実銀行・実制裁 API・実 IdP・実顧客システムとは接続していない
 - 法的助言・規制承認・第三者認証・本番 authority source validation ではない
+
+
+## Human Approval Receipt v1（人間承認レシート）
+
+VERITAS には local/offline の Human Approval Receipt v1 artifact が追加されています。これは、人間承認を「approved=true」の単純な状態ではなく、誰が・どのscopeを・いつまで承認したかを示す、決定論的で hashable、scope-bound、expiry-aware なガバナンス証跡として扱うためのものです。実 IdP・SSO・IAM・KMS/HSM・電子署名・本番承認ワークフローとの連携は含みません。
+
+境界条件:
+
+- local/offline の決定論的 artifact のみ
+- 実 IdP・SSO・IAM・KMS/HSM・電子署名連携はなし
+- 法的助言・規制承認・第三者認証・本番承認妥当性の主張ではない
 
 ## AML/KYC レビュアー向けウォークスルー Quickstart
 

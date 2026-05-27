@@ -38,9 +38,10 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
 3. Authority Evidence Ingestion (local/offline): docs/en/architecture/authority-evidence-ingestion.md
-4. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-5. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-6. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+4. Human Approval Receipt v1 (local/offline): docs/en/architecture/human-approval-receipt.md
+5. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+6. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+7. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
 
 Boundary:
 
@@ -64,6 +65,17 @@ Boundary:
 - Local/offline normalization only
 - No live SaaS, bank, sanctions, identity-provider, or customer-system integration
 - Not legal advice, regulatory approval, third-party certification, or production authority-source validation
+
+
+## Human Approval Receipt v1
+
+VERITAS now includes a local/offline Human Approval Receipt v1 artifact. It represents human approval as a deterministic, hashable, scope-bound, expiry-aware governance artifact that can be converted into the existing runtime `human_approval_state` used by bind-time validation. This does not add live IdP, SSO, IAM, KMS/HSM, e-signature, or production approval workflow integration.
+
+Boundary:
+
+- Local/offline deterministic artifact only
+- No live IdP, SSO, IAM, KMS/HSM, or e-signature integration
+- Not legal advice, regulatory approval, third-party certification, or production approval validation
 
 ## One-Day PoC Evidence Packet
 
