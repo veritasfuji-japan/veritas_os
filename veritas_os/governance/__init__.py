@@ -21,6 +21,13 @@ from veritas_os.governance.action_contracts import (
     load_action_class_contract,
     validate_action_class_contract,
 )
+from veritas_os.governance.human_approval_receipt import (
+    HumanApprovalReceipt,
+    HumanApprovalValidationResult,
+    build_human_approval_state,
+    validate_human_approval_receipt,
+)
+
 from veritas_os.governance.commit_boundary import (
     CommitBoundaryResult,
     CommitBoundaryEvaluator,
@@ -51,6 +58,10 @@ __all__ = [
     "VerificationResult",
     "ActionClassContract",
     "ActionClassContractValidationError",
+    "validate_human_approval_receipt",
+    "build_human_approval_state",
+    "HumanApprovalValidationResult",
+    "HumanApprovalReceipt",
     "create_governance_repository",
     "CommitBoundaryResult",
     "CommitBoundaryEvaluator",
