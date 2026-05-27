@@ -37,9 +37,10 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 
 1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
-3. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-4. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-5. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+3. Authority Evidence Ingestion (local/offline): docs/en/architecture/authority-evidence-ingestion.md
+4. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+5. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+6. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
 
 Boundary:
 
@@ -47,6 +48,22 @@ Boundary:
 - This is not regulatory approval.
 - This is not third-party certification.
 - Fixture-backed PoC evidence should not be presented as live bank-side integration.
+
+## Authority Evidence Ingestion
+
+VERITAS now includes a deterministic local/offline Authority Evidence ingestion adapter for bind-time governance. It normalizes external-style or mock authority facts into the existing AuthorityEvidence artifact model, computes a deterministic evidence hash, and preserves fail-closed behavior for missing, invalid, expired, stale, or indeterminate authority evidence.
+
+The adapter also validates that requested scopes are granted by AuthorityEvidence.scope_grants and not blocked by AuthorityEvidence.scope_limitations before runtime authority can pass. This helps demonstrate how external authority facts can enter VERITAS without treating fixture/mock evidence as live production integration.
+
+- Implementation: veritas_os/governance/authority_evidence_ingestion.py
+- Architecture note: docs/en/architecture/authority-evidence-ingestion.md
+- Focused tests: tests/governance/test_authority_evidence_ingestion.py
+
+Boundary:
+
+- Local/offline normalization only
+- No live SaaS, bank, sanctions, identity-provider, or customer-system integration
+- Not legal advice, regulatory approval, third-party certification, or production authority-source validation
 
 ## One-Day PoC Evidence Packet
 
@@ -146,6 +163,8 @@ What this demonstrates:
 - Required Authority Evidence is missing
 - VERITAS blocks before commit at the Bind Boundary
 - The path remains reviewable through deterministic audit trace
+
+Separately, the Authority Evidence ingestion adapter shows how external-style authority facts can be normalized into bind-time AuthorityEvidence artifacts for fail-closed validation.
 
 Boundary (important):
 

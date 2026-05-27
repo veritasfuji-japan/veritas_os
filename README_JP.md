@@ -41,9 +41,10 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
-3. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-4. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-5. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
+3. Authority Evidence Ingestion（local/offline）: docs/en/architecture/authority-evidence-ingestion.md
+4. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+5. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+6. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
 
 境界条件:
 
@@ -51,6 +52,22 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 - 規制当局の承認ではありません。
 - 第三者認証ではありません。
 - fixture ベースの PoC 証跡は、実銀行統合の証明として提示してはいけません。
+
+## Authority Evidence Ingestion（権限証拠の取り込み）
+
+VERITAS には、bind-time governance のための deterministic local/offline Authority Evidence ingestion adapter が実装されています。この adapter は、外部システム風または mock の権限証拠 payload を、既存の AuthorityEvidence artifact model に正規化し、決定論的な evidence_hash を付与します。
+
+また、requested scope が AuthorityEvidence.scope_grants に含まれており、AuthorityEvidence.scope_limitations に含まれていないことを検証します。これにより、外部権限情報を VERITAS の実行直前判定に取り込む入口を示しつつ、証拠不足・無効・期限切れ・stale・indeterminate な証拠は fail-closed で停止されます。
+
+- 実装: veritas_os/governance/authority_evidence_ingestion.py
+- 設計メモ: docs/en/architecture/authority-evidence-ingestion.md
+- Focused tests: tests/governance/test_authority_evidence_ingestion.py
+
+境界条件:
+
+- local/offline normalization のみ
+- 実 SaaS・実銀行・実制裁 API・実 IdP・実顧客システムとは接続していない
+- 法的助言・規制承認・第三者認証・本番 authority source validation ではない
 
 ## AML/KYC レビュアー向けウォークスルー Quickstart
 
@@ -74,6 +91,8 @@ VERITAS には、決定論的に確認できる AML/KYC reviewer walkthrough が
 - 必要な Authority Evidence が不足している
 - VERITAS が Bind Boundary で commit 前に block する
 - 決定論的な audit trace でレビュー可能性が維持される
+
+別途、Authority Evidence ingestion adapter により、外部システム風の権限情報を bind-time AuthorityEvidence artifact として正規化し、fail-closed に検証する入口も実装されています。
 
 境界条件（重要）:
 
