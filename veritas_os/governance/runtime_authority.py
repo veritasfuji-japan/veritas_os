@@ -113,6 +113,11 @@ class RuntimeAuthorityValidator:
                     and authority_evidence.action_contract_version == action_contract.version
                     and bool(authority_evidence.actor_role.strip())
                     and bool(authority_evidence.authority_source_refs)
+                    and all(
+                        scope in authority_evidence.scope_grants
+                        and scope not in authority_evidence.scope_limitations
+                        for scope in requested_scope
+                    )
                 )
             predicates.append(
                 self._predicate(
