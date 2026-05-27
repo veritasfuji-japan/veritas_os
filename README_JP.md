@@ -92,10 +92,6 @@ VERITAS には、local/offline の SaaS permission-change governed execution dem
 - 法的助言・規制承認・第三者認証・本番 access-control validation ではない
 
 
-- local/offline の決定論的 artifact のみ
-- 実 IdP・SSO・IAM・KMS/HSM・電子署名連携はなし
-- 法的助言・規制承認・第三者認証・本番承認妥当性の主張ではない
-
 ## AML/KYC レビュアー向けウォークスルー Quickstart
 
 VERITAS には、決定論的に確認できる AML/KYC reviewer walkthrough が実装されています。外部レビュアー・企業担当者・投資家は 10 分以内で価値確認できます。

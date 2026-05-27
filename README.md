@@ -89,10 +89,6 @@ Boundary:
 - Not legal advice, regulatory approval, third-party certification, or production access-control validation
 
 
-- Local/offline deterministic artifact only
-- No live IdP, SSO, IAM, KMS/HSM, or e-signature integration
-- Not legal advice, regulatory approval, third-party certification, or production approval validation
-
 ## One-Day PoC Evidence Packet
 
 For external reviewers, HPAN, enterprise stakeholders, and investor diligence, use the one-day PoC smoke script to generate a sanitized evidence packet from a running VERITAS API server.
