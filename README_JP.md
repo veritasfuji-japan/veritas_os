@@ -47,6 +47,7 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 6. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
 7. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
 8. [SaaS Permission-Change Governed Demo（local/offline）](docs/en/demo/saas-permission-change-governed-demo.md)
+9. Bind Coverage Registry v1（local/offline）: docs/en/architecture/bind-coverage-registry.md
 
 境界条件:
 
@@ -94,6 +95,11 @@ VERITAS には、local/offline の SaaS permission-change governed execution dem
 - local/offline fixture 限定
 - 実 SaaS・実 IAM・実 IdP・実 SSO・実顧客ディレクトリ・本番承認ワークフローとの接続なし
 - 法的助言・規制承認・第三者認証・本番 access-control validation ではない
+
+
+## Bind Coverage Registry v1
+
+VERITAS には local/offline の Bind Coverage Registry v1 が追加されています。これは、effect-bearing な操作が bind-time governance の対象になっているかを記録するための coverage artifact です。高影響アクションが Bind、AuthorityEvidence、HumanApprovalReceipt、policy snapshot、fail-closed を要求しているかを外部レビュアーが確認しやすくするためのものであり、live route scanner や本番導入証明ではありません。
 
 
 ## AML/KYC レビュアー向けウォークスルー Quickstart
