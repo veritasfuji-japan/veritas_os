@@ -127,3 +127,54 @@ def test_valid_case_observed_effects_include_local_offline_permission_grant_fixt
 def test_demo_has_no_network_or_environment_dependency() -> None:
     payload = run_saas_permission_change_governed_demo()
     assert payload["demo_id"] == "saas_permission_change_governed_execution_v1"
+
+
+def test_every_demo_case_includes_evidence_chain_manifest_summary() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case in payload["cases"]:  # type: ignore[index]
+        summary = case["evidence_chain_manifest_summary"]  # type: ignore[index]
+        assert isinstance(summary, dict)
+        assert summary["manifest_hash"]  # type: ignore[index]
+
+
+def test_blocked_cases_manifest_chain_status_is_blocked() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case_id in [
+        "missing_authority",
+        "missing_human_approval",
+        "expired_human_approval",
+        "scope_mismatch",
+    ]:
+        summary = _case_by_id(payload, case_id)["evidence_chain_manifest_summary"]
+        assert summary["chain_status"] == "blocked"  # type: ignore[index]
+
+
+def test_valid_case_manifest_chain_status_complete_and_no_missing_links() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    summary = _case_by_id(payload, "valid_authority_and_approval")["evidence_chain_manifest_summary"]
+    assert summary["chain_status"] == "complete"  # type: ignore[index]
+    assert summary["missing_links"] == []  # type: ignore[index]
+
+
+def test_valid_case_manifest_observed_effects_include_permission_grant_fixture() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    summary = _case_by_id(payload, "valid_authority_and_approval")["evidence_chain_manifest_summary"]
+    effects = summary["observed_effects_summary"]  # type: ignore[index]
+    assert {
+        "effect_type": "permission_grant",
+        "permission": "saas:grant_admin",
+        "target_resource": "contractor:external.user@example.test",
+        "fixture_only": True,
+    } in effects
+
+
+def test_missing_authority_manifest_has_missing_authority_link() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    summary = _case_by_id(payload, "missing_authority")["evidence_chain_manifest_summary"]
+    assert "authority_evidence_hash" in summary["missing_links"]  # type: ignore[index]
+
+
+def test_missing_human_approval_manifest_has_missing_human_approval_link() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    summary = _case_by_id(payload, "missing_human_approval")["evidence_chain_manifest_summary"]
+    assert "human_approval_receipt_hash" in summary["missing_links"]  # type: ignore[index]

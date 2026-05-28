@@ -44,6 +44,7 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 3. Authority Evidence Ingestion（local/offline）: docs/en/architecture/authority-evidence-ingestion.md
 4. Human Approval Receipt v1（local/offline）: docs/en/architecture/human-approval-receipt.md
 5. Outcome Receipt v1（local/offline）: docs/en/architecture/outcome-receipt.md
+6. Evidence Chain Manifest v1（local/offline）: docs/en/architecture/evidence-chain-manifest.md
 6. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
 7. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
 8. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
@@ -105,6 +106,10 @@ VERITAS には、local/offline の SaaS permission-change governed execution dem
 ## Bind Coverage Registry v1
 
 VERITAS には local/offline の Bind Coverage Registry v1 が追加されています。これは、effect-bearing な操作が bind-time governance の対象になっているかを記録するための coverage artifact です。高影響アクションが Bind、AuthorityEvidence、HumanApprovalReceipt、policy snapshot、fail-closed を要求しているかを外部レビュアーが確認しやすくするためのものであり、live route scanner や本番導入証明ではありません。
+
+## Evidence Chain Manifest v1
+
+VERITAS には local/offline の Evidence Chain Manifest v1 artifact が追加されています。これは、governed execution attempt について、AuthorityEvidence、HumanApprovalReceipt、bind-time decision evidence、OutcomeReceipt、operation coverage metadata をひとつの証跡チェーンとして結び付けるためのものです。実行前の権限・承認から、bind-time の判定、実行後の outcome evidence までを外部レビュアーが追跡しやすくします。本番環境での実行証明ではなく、local/offline の manifest です。
 
 
 ## AML/KYC レビュアー向けウォークスルー Quickstart

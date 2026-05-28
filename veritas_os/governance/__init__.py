@@ -37,6 +37,14 @@ from veritas_os.governance.outcome_receipt import (
     with_outcome_hash,
 )
 
+from veritas_os.governance.evidence_chain_manifest import (
+    EvidenceChainManifest,
+    EvidenceChainManifestValidationResult,
+    build_evidence_chain_manifest,
+    validate_evidence_chain_manifest,
+    with_manifest_hash,
+)
+
 from veritas_os.governance.commit_boundary import (
     CommitBoundaryResult,
     CommitBoundaryEvaluator,
@@ -73,6 +81,11 @@ __all__ = [
     "HumanApprovalReceipt",
     "with_receipt_hash",
     "OutcomeReceipt",
+    "EvidenceChainManifest",
+    "EvidenceChainManifestValidationResult",
+    "build_evidence_chain_manifest",
+    "validate_evidence_chain_manifest",
+    "with_manifest_hash",
     "OutcomeReceiptValidationResult",
     "build_outcome_receipt",
     "validate_outcome_receipt",

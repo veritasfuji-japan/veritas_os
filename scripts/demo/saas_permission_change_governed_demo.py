@@ -12,6 +12,7 @@ from veritas_os.governance import (
     CommitBoundaryEvaluator,
     HumanApprovalReceipt,
     RuntimeAuthorityValidator,
+    build_evidence_chain_manifest,
     build_outcome_receipt,
     build_human_approval_state,
 )
@@ -202,6 +203,37 @@ def _evaluate_case(
         evaluated_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
     )
+    authority_evidence_id = (
+        authority_evidence.authority_evidence_id if authority_evidence is not None else None
+    )
+    authority_evidence_hash = authority_evidence.evidence_hash if authority_evidence is not None else None
+    approval_receipt_id = (
+        human_approval_state.get("approval_receipt_id") if human_approval_state.get("approved") else None
+    )
+    approval_receipt_hash = (
+        human_approval_state.get("receipt_hash") if human_approval_state.get("approved") else None
+    )
+    evidence_chain_manifest = build_evidence_chain_manifest(
+        decision_id="decision-saas-001",
+        execution_intent_id="intent-saas-001",
+        operation_id=f"saas-permission-change-{case_id}",
+        action_class=contract.action_class,
+        target_system=TARGET_SYSTEM,
+        target_resource=TARGET_RESOURCE,
+        requested_scope=list(REQUESTED_SCOPE),
+        final_outcome=actual_outcome,
+        authority_evidence_id=authority_evidence_id,
+        authority_evidence_hash=authority_evidence_hash,
+        human_approval_receipt_id=str(approval_receipt_id) if approval_receipt_id else None,
+        human_approval_receipt_hash=str(approval_receipt_hash) if approval_receipt_hash else None,
+        outcome_receipt_id=outcome_receipt.outcome_receipt_id,
+        outcome_receipt_hash=outcome_receipt.outcome_hash,
+        bind_coverage_operation_id="saas_permission_change_demo",
+        refusal_basis=boundary_result.refusal_basis,
+        observed_effects_summary=observed_effects,
+        generated_at=FIXED_NOW.isoformat(),
+        metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
+    )
     return {
         "case_id": case_id,
         "expected_outcome": expected_outcome,
@@ -219,6 +251,7 @@ def _evaluate_case(
         "target_resource": TARGET_RESOURCE,
         "boundary_note": BOUNDARY_NOTE,
         "outcome_receipt_summary": outcome_receipt.to_dict(),
+        "evidence_chain_manifest_summary": evidence_chain_manifest.to_dict(),
     }
 
 
