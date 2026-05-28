@@ -35,15 +35,15 @@ For a 10-minute implementation snapshot, start here:
 For a concise business-facing overview, see [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md).
 日本語補助版: [企業向け価値説明ブリーフ](docs/ja/positioning/enterprise-value-brief.md)
 
-1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
+1. [External Validation Brief](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
 3. Authority Evidence Ingestion (local/offline): docs/en/architecture/authority-evidence-ingestion.md
 4. Human Approval Receipt v1 (local/offline): docs/en/architecture/human-approval-receipt.md
 5. Outcome Receipt v1 (local/offline): docs/en/architecture/outcome-receipt.md
 6. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-6. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-7. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
-8. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
+7. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+8. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+9. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
 10. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
 
 Boundary:

@@ -191,7 +191,13 @@ def _evaluate_case(
         final_outcome=actual_outcome,
         postcondition_status=postcondition_status,
         observed_effects=observed_effects,
-        failure_reasons=[boundary_result.refusal_basis] if boundary_result.refusal_basis else [],
+        failure_reasons=sorted(
+            {
+                item.reason
+                for item in boundary_result.failed_predicates
+                + boundary_result.missing_predicates
+            }
+        ),
         rollback_status=None,
         evaluated_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},

@@ -90,6 +90,21 @@ def test_blocked_cases_mark_committed_false_and_blocked_true() -> None:
         assert summary["blocked"] is True  # type: ignore[index]
 
 
+def test_blocked_cases_failure_reasons_are_flat_string_list() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case_id in [
+        "missing_authority",
+        "missing_human_approval",
+        "expired_human_approval",
+        "scope_mismatch",
+    ]:
+        summary = _case_by_id(payload, case_id)["outcome_receipt_summary"]
+        failure_reasons = summary["failure_reasons"]  # type: ignore[index]
+        assert isinstance(failure_reasons, list)
+        assert all(isinstance(reason, str) for reason in failure_reasons)
+        assert all(not isinstance(reason, list) for reason in failure_reasons)
+
+
 def test_valid_case_has_committed_true_and_postcondition_passed() -> None:
     payload = run_saas_permission_change_governed_demo()
     summary = _case_by_id(payload, "valid_authority_and_approval")["outcome_receipt_summary"]
