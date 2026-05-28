@@ -46,7 +46,8 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 9. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
 10. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
 11. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
-12. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
+12. [Reviewer Evidence Packet v1 (local/offline)](docs/en/demo/reviewer-evidence-packet.md)
+13. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
 
 Boundary:
 
@@ -100,6 +101,13 @@ Boundary:
 - No live SaaS, IAM, IdP, SSO, customer directory, or production approval workflow integration
 - Not legal advice, regulatory approval, third-party certification, or production access-control validation
 
+## Reviewer Evidence Packet v1
+
+VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS permission-change governed execution demo. It packages case outcomes, AuthorityEvidence/HumanApproval summaries, OutcomeReceipt summaries, EvidenceChainManifest summaries, EvidenceChainVerification summaries, aggregate counts, reviewer notes, and a deterministic packet hash into one JSON-friendly artifact. This is a local/offline review packet, not proof of live production deployment or audit certification.
+
+- Documentation: docs/en/demo/reviewer-evidence-packet.md
+- Script: scripts/demo/export_reviewer_evidence_packet.py
+- Test: tests/demo/test_reviewer_evidence_packet.py
 
 ## Bind Coverage Registry v1
 
