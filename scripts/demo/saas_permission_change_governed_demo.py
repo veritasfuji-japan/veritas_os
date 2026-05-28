@@ -12,6 +12,7 @@ from veritas_os.governance import (
     CommitBoundaryEvaluator,
     HumanApprovalReceipt,
     RuntimeAuthorityValidator,
+    build_outcome_receipt,
     build_human_approval_state,
 )
 from veritas_os.governance.authority_evidence_ingestion import (
@@ -164,6 +165,37 @@ def _evaluate_case(
     )
 
     actual_outcome = boundary_result.commit_boundary_result
+    observed_effects: list[dict[str, Any]] = []
+    postcondition_status = "skipped"
+    if case_id == "valid_authority_and_approval":
+        observed_effects = [
+            {
+                "effect_type": "permission_grant",
+                "permission": "saas:grant_admin",
+                "target_resource": TARGET_RESOURCE,
+                "fixture_only": True,
+            }
+        ]
+        postcondition_status = "passed"
+
+    outcome_receipt = build_outcome_receipt(
+        decision_id="decision-saas-001",
+        execution_intent_id="intent-saas-001",
+        bind_receipt_id=None,
+        operation_id=f"saas-permission-change-{case_id}",
+        action_class=contract.action_class,
+        target_system=TARGET_SYSTEM,
+        target_resource=TARGET_RESOURCE,
+        intended_action="grant_admin_permission",
+        requested_scope=list(REQUESTED_SCOPE),
+        final_outcome=actual_outcome,
+        postcondition_status=postcondition_status,
+        observed_effects=observed_effects,
+        failure_reasons=[boundary_result.refusal_basis] if boundary_result.refusal_basis else [],
+        rollback_status=None,
+        evaluated_at=FIXED_NOW.isoformat(),
+        metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
+    )
     return {
         "case_id": case_id,
         "expected_outcome": expected_outcome,
@@ -180,6 +212,7 @@ def _evaluate_case(
         "target_system": TARGET_SYSTEM,
         "target_resource": TARGET_RESOURCE,
         "boundary_note": BOUNDARY_NOTE,
+        "outcome_receipt_summary": outcome_receipt.to_dict(),
     }
 
 

@@ -29,6 +29,14 @@ from veritas_os.governance.human_approval_receipt import (
     with_receipt_hash,
 )
 
+from veritas_os.governance.outcome_receipt import (
+    OutcomeReceipt,
+    OutcomeReceiptValidationResult,
+    build_outcome_receipt,
+    validate_outcome_receipt,
+    with_outcome_hash,
+)
+
 from veritas_os.governance.commit_boundary import (
     CommitBoundaryResult,
     CommitBoundaryEvaluator,
@@ -64,6 +72,11 @@ __all__ = [
     "HumanApprovalValidationResult",
     "HumanApprovalReceipt",
     "with_receipt_hash",
+    "OutcomeReceipt",
+    "OutcomeReceiptValidationResult",
+    "build_outcome_receipt",
+    "validate_outcome_receipt",
+    "with_outcome_hash",
     "create_governance_repository",
     "CommitBoundaryResult",
     "CommitBoundaryEvaluator",
