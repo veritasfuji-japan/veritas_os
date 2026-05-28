@@ -41,11 +41,11 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 4. Human Approval Receipt v1 (local/offline): docs/en/architecture/human-approval-receipt.md
 5. Outcome Receipt v1 (local/offline): docs/en/architecture/outcome-receipt.md
 6. Evidence Chain Manifest v1 (local/offline): docs/en/architecture/evidence-chain-manifest.md
-6. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-7. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-8. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
-9. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
-10. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
+7. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+8. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+9. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+10. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
+11. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
 
 Boundary:
 
