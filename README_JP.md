@@ -39,15 +39,16 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 10 分で実装スナップショットを確認する場合は、次の順で参照してください。
 
-1. [Reviewer Entrypoint](docs/REVIEWER_ENTRYPOINT.md)
+1. [External Validation Brief](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
 3. Authority Evidence Ingestion（local/offline）: docs/en/architecture/authority-evidence-ingestion.md
 4. Human Approval Receipt v1（local/offline）: docs/en/architecture/human-approval-receipt.md
-5. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-6. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-7. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
-8. [SaaS Permission-Change Governed Demo（local/offline）](docs/en/demo/saas-permission-change-governed-demo.md)
-9. Bind Coverage Registry v1（local/offline）: docs/en/architecture/bind-coverage-registry.md
+5. Outcome Receipt v1（local/offline）: docs/en/architecture/outcome-receipt.md
+6. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+7. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+8. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
+9. [SaaS Permission-Change Governed Demo（local/offline）](docs/en/demo/saas-permission-change-governed-demo.md)
+10. Bind Coverage Registry v1（local/offline）: docs/en/architecture/bind-coverage-registry.md
 
 境界条件:
 
@@ -82,6 +83,10 @@ VERITAS には local/offline の Human Approval Receipt v1 artifact が追加さ
 - local/offline の決定論的 artifact のみ
 - 実 IdP・SSO・IAM・KMS/HSM・電子署名連携はなし
 - 法的助言・規制承認・第三者認証・本番承認妥当性の主張ではない
+
+## Outcome Receipt v1
+
+VERITAS には local/offline の Outcome Receipt v1 artifact が追加されています。これは、governed execution attempt の実行後結果を記録するための証跡であり、final outcome、commit/block/rollback 状態、postcondition status、state fingerprint、observed effects、決定論的 outcome hash を扱います。本番環境での実行証明ではなく、local/offline の evidence artifact です。
 
 ## SaaS Permission-Change Governed Execution Demo
 
