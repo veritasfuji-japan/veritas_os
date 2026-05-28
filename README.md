@@ -41,11 +41,12 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 4. Human Approval Receipt v1 (local/offline): docs/en/architecture/human-approval-receipt.md
 5. Outcome Receipt v1 (local/offline): docs/en/architecture/outcome-receipt.md
 6. Evidence Chain Manifest v1 (local/offline): docs/en/architecture/evidence-chain-manifest.md
-7. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-8. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-9. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
-10. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
-11. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
+7. Evidence Chain Verifier v1 (local/offline): docs/en/architecture/evidence-chain-verifier.md
+8. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+9. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+10. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+11. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
+12. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
 
 Boundary:
 
@@ -107,6 +108,8 @@ VERITAS includes a local/offline Bind Coverage Registry v1 that records which ef
 ## Evidence Chain Manifest v1
 
 VERITAS includes a local/offline Evidence Chain Manifest v1 artifact that links AuthorityEvidence, HumanApprovalReceipt, bind-time decision evidence, OutcomeReceipt, and operation coverage metadata for a governed execution attempt. It helps reviewers inspect a complete evidence chain from pre-execution authority and approval through bind-time decisioning to post-execution outcome evidence. This is a local/offline manifest, not proof of live production execution.
+
+VERITAS includes a local/offline Evidence Chain Verifier v1 that checks whether an EvidenceChainManifest matches the supplied governance artifacts. It recomputes or reads deterministic artifact hashes and reports verified, missing, mismatched, or indeterminate links. This is a local/offline verifier, not proof of live production audit certification.
 
 
 ## One-Day PoC Evidence Packet

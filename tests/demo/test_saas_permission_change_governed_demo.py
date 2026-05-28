@@ -178,3 +178,58 @@ def test_missing_human_approval_manifest_has_missing_human_approval_link() -> No
     payload = run_saas_permission_change_governed_demo()
     summary = _case_by_id(payload, "missing_human_approval")["evidence_chain_manifest_summary"]
     assert "human_approval_receipt_hash" in summary["missing_links"]  # type: ignore[index]
+
+
+def test_every_demo_case_includes_evidence_chain_verification_summary() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case in payload["cases"]:  # type: ignore[index]
+        summary = case["evidence_chain_verification_summary"]  # type: ignore[index]
+        assert isinstance(summary, dict)
+        assert summary["verification_status"] in {  # type: ignore[index]
+            "verified",
+            "failed",
+            "incomplete",
+            "indeterminate",
+        }
+        assert summary["verified_at"] == payload["generated_at"]  # type: ignore[index]
+
+
+def test_valid_authority_and_approval_verification_is_verified() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    summary = _case_by_id(payload, "valid_authority_and_approval")[
+        "evidence_chain_verification_summary"
+    ]
+    assert summary["verification_status"] == "verified"  # type: ignore[index]
+    assert summary["is_valid"] is True  # type: ignore[index]
+    assert summary["manifest_hash_matches"] is True  # type: ignore[index]
+
+
+def test_demo_does_not_simulate_tampering_in_verification_summary() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case in payload["cases"]:  # type: ignore[index]
+        summary = case["evidence_chain_verification_summary"]  # type: ignore[index]
+        assert summary["manifest_hash_matches"] is True  # type: ignore[index]
+        assert summary["mismatched_links"] == []  # type: ignore[index]
+
+
+def test_blocked_cases_include_deterministic_verification_status() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case_id in [
+        "missing_authority",
+        "missing_human_approval",
+        "expired_human_approval",
+        "scope_mismatch",
+    ]:
+        summary = _case_by_id(payload, case_id)["evidence_chain_verification_summary"]
+        assert summary["verification_status"] == "verified"  # type: ignore[index]
+        assert summary["is_valid"] is True  # type: ignore[index]
+        assert summary["failure_reasons"] == []  # type: ignore[index]
+
+
+def test_verification_summary_preserves_no_network_environment_dependency() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case in payload["cases"]:  # type: ignore[index]
+        summary = case["evidence_chain_verification_summary"]  # type: ignore[index]
+        metadata = summary["metadata"]  # type: ignore[index]
+        assert metadata["fixture_only"] is True  # type: ignore[index]
+        assert metadata["boundary_note"] == BOUNDARY_NOTE  # type: ignore[index]
