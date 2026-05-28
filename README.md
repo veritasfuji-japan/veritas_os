@@ -43,6 +43,7 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 6. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
 7. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
 8. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
+9. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
 
 Boundary:
 
@@ -91,6 +92,11 @@ Boundary:
 - Local/offline fixture only
 - No live SaaS, IAM, IdP, SSO, customer directory, or production approval workflow integration
 - Not legal advice, regulatory approval, third-party certification, or production access-control validation
+
+
+## Bind Coverage Registry v1
+
+VERITAS includes a local/offline Bind Coverage Registry v1 that records which effect-bearing operations are expected to be governed by bind-time controls. The registry helps reviewers inspect whether high-impact actions require bind governance, AuthorityEvidence, HumanApprovalReceipt, policy snapshots, and fail-closed behavior. It is a deterministic coverage artifact, not a live route scanner or proof of production deployment.
 
 
 ## One-Day PoC Evidence Packet
