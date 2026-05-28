@@ -40,11 +40,12 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 3. Authority Evidence Ingestion (local/offline): docs/en/architecture/authority-evidence-ingestion.md
 4. Human Approval Receipt v1 (local/offline): docs/en/architecture/human-approval-receipt.md
 5. Outcome Receipt v1 (local/offline): docs/en/architecture/outcome-receipt.md
-6. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-7. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-8. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
-9. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
-10. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
+6. Evidence Chain Manifest v1 (local/offline): docs/en/architecture/evidence-chain-manifest.md
+7. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
+8. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
+9. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+10. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
+11. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
 
 Boundary:
 
@@ -102,6 +103,10 @@ Boundary:
 ## Bind Coverage Registry v1
 
 VERITAS includes a local/offline Bind Coverage Registry v1 that records which effect-bearing operations are expected to be governed by bind-time controls. The registry helps reviewers inspect whether high-impact actions require bind governance, AuthorityEvidence, HumanApprovalReceipt, policy snapshots, and fail-closed behavior. It is a deterministic coverage artifact, not a live route scanner or proof of production deployment.
+
+## Evidence Chain Manifest v1
+
+VERITAS includes a local/offline Evidence Chain Manifest v1 artifact that links AuthorityEvidence, HumanApprovalReceipt, bind-time decision evidence, OutcomeReceipt, and operation coverage metadata for a governed execution attempt. It helps reviewers inspect a complete evidence chain from pre-execution authority and approval through bind-time decisioning to post-execution outcome evidence. This is a local/offline manifest, not proof of live production execution.
 
 
 ## One-Day PoC Evidence Packet
