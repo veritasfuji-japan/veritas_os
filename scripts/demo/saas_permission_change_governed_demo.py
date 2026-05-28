@@ -15,6 +15,8 @@ from veritas_os.governance import (
     build_evidence_chain_manifest,
     build_outcome_receipt,
     build_human_approval_state,
+    verify_evidence_chain_manifest,
+    with_receipt_hash,
 )
 from veritas_os.governance.authority_evidence_ingestion import (
     ingest_authority_evidence_payload,
@@ -234,6 +236,20 @@ def _evaluate_case(
         generated_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
     )
+
+    finalized_human_approval_receipt = None
+    if receipt is not None and human_approval_state.get("approved"):
+        finalized_human_approval_receipt = with_receipt_hash(receipt)
+
+    evidence_chain_verification = verify_evidence_chain_manifest(
+        manifest=evidence_chain_manifest,
+        authority_evidence=authority_evidence,
+        human_approval_receipt=finalized_human_approval_receipt,
+        outcome_receipt=outcome_receipt,
+        bind_coverage_operation_id="saas_permission_change_demo",
+        verified_at=FIXED_NOW.isoformat(),
+        metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
+    )
     return {
         "case_id": case_id,
         "expected_outcome": expected_outcome,
@@ -252,6 +268,7 @@ def _evaluate_case(
         "boundary_note": BOUNDARY_NOTE,
         "outcome_receipt_summary": outcome_receipt.to_dict(),
         "evidence_chain_manifest_summary": evidence_chain_manifest.to_dict(),
+        "evidence_chain_verification_summary": evidence_chain_verification.to_dict(),
     }
 
 
