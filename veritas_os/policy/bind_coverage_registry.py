@@ -7,6 +7,7 @@ from typing import Literal
 
 EffectLevel = Literal["low", "medium", "high", "critical"]
 OperationType = Literal["route", "script", "governance_action", "demo"]
+AuthorityControlType = Literal["authority_evidence", "bind_authority_signal", "none"]
 BlockBehavior = Literal["block", "not_required"]
 FailureMode = Literal["fail_closed"]
 
@@ -22,6 +23,7 @@ class BindCoverageEntry:
     action_class: str
     effect_level: EffectLevel
     requires_bind: bool
+    authority_control_type: AuthorityControlType
     requires_authority_evidence: bool
     requires_human_approval: bool
     requires_policy_snapshot: bool
@@ -49,6 +51,7 @@ _BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
         action_class="permission_change",
         effect_level="high",
         requires_bind=True,
+        authority_control_type="authority_evidence",
         requires_authority_evidence=True,
         requires_human_approval=True,
         requires_policy_snapshot=True,
@@ -70,6 +73,7 @@ _BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
         action_class="aml_kyc_customer_risk_escalation",
         effect_level="critical",
         requires_bind=True,
+        authority_control_type="authority_evidence",
         requires_authority_evidence=True,
         requires_human_approval=True,
         requires_policy_snapshot=True,
@@ -91,7 +95,8 @@ _BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
         action_class="governance_policy_update",
         effect_level="high",
         requires_bind=True,
-        requires_authority_evidence=True,
+        authority_control_type="bind_authority_signal",
+        requires_authority_evidence=False,
         requires_human_approval=True,
         requires_policy_snapshot=True,
         expected_without_authority="block",
@@ -137,6 +142,15 @@ def validate_bind_coverage_registry(
             errors.append(
                 f"invalid effect_level for {entry.operation_id}: {entry.effect_level}"
             )
+        if entry.authority_control_type not in {
+            "authority_evidence",
+            "bind_authority_signal",
+            "none",
+        }:
+            errors.append(
+                "invalid authority_control_type for "
+                f"{entry.operation_id}: {entry.authority_control_type}"
+            )
 
         if entry.effect_level in {"high", "critical"} and not entry.requires_bind:
             errors.append(
@@ -151,12 +165,33 @@ def validate_bind_coverage_registry(
                 f"high/critical operation must fail closed: {entry.operation_id}"
             )
 
+        if entry.authority_control_type == "authority_evidence":
+            if not entry.requires_authority_evidence:
+                errors.append(
+                    "authority_evidence control must require authority evidence: "
+                    f"{entry.operation_id}"
+                )
+            if entry.expected_without_authority != "block":
+                errors.append(
+                    "authority_evidence control must block without authority: "
+                    f"{entry.operation_id}"
+                )
+
         if (
             entry.requires_authority_evidence
+            and entry.authority_control_type != "authority_evidence"
+        ):
+            errors.append(
+                "requires_authority_evidence=true requires authority_control_type "
+                f"authority_evidence: {entry.operation_id}"
+            )
+
+        if (
+            entry.authority_control_type == "bind_authority_signal"
             and entry.expected_without_authority != "block"
         ):
             errors.append(
-                "authority-required operation must block without authority: "
+                "bind_authority_signal operation must block without authority: "
                 f"{entry.operation_id}"
             )
 

@@ -43,3 +43,17 @@ Registry validation checks include:
 - implementation refs are non-empty.
 - docs refs are non-empty for reviewer-facing entries.
 - entries do not claim live integration unless explicitly implemented elsewhere.
+
+## Authority control types
+
+Each registry entry declares `authority_control_type` to avoid overclaiming:
+
+- `authority_evidence`: operation is expected to use first-class
+  AuthorityEvidence artifact validation.
+- `bind_authority_signal`: operation is governed by bind-time authority checks
+  and approval signals, but not necessarily by first-class AuthorityEvidence
+  artifact ingestion.
+- `none`: no authority control is expected for that operation.
+
+This distinction is local/offline reviewer metadata. It is not a live route
+scanner, and it is not proof of production deployment.
