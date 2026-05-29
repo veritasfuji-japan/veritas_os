@@ -93,8 +93,15 @@ def test_blocked_cases_remain_blocked() -> None:
     fixture = _load_fixture()
     for case_id in BLOCKED_CASE_IDS:
         case = _case_by_id(fixture, case_id)
+        manifest = case["evidence_chain_manifest_summary"]
+        outcome = case["outcome_receipt_summary"]
         assert case["actual_outcome"] == "block"
-        assert case["outcome_receipt_summary"]["blocked"] is True
+        assert outcome["blocked"] is True
+        assert case["failure_reasons"]
+        assert manifest["refusal_basis"]
+        assert outcome["failure_reasons"]
+        assert case["failure_reasons"] == manifest["refusal_basis"]
+        assert case["failure_reasons"] == outcome["failure_reasons"]
 
 
 def test_golden_fixture_requires_no_network_or_environment_dependency(

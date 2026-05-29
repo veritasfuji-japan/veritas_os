@@ -105,16 +105,38 @@ def test_blocked_cases_failure_reasons_are_flat_string_list() -> None:
         assert all(not isinstance(reason, list) for reason in failure_reasons)
 
 
+def test_blocked_cases_expose_refusal_reasons_across_artifacts() -> None:
+    payload = run_saas_permission_change_governed_demo()
+    for case_id in [
+        "missing_authority",
+        "missing_human_approval",
+        "expired_human_approval",
+        "scope_mismatch",
+    ]:
+        case = _case_by_id(payload, case_id)
+        manifest = case["evidence_chain_manifest_summary"]
+        outcome = case["outcome_receipt_summary"]
+        assert case["failure_reasons"]
+        assert manifest["refusal_basis"]
+        assert outcome["failure_reasons"]
+        assert case["failure_reasons"] == manifest["refusal_basis"]
+        assert case["failure_reasons"] == outcome["failure_reasons"]
+
+
 def test_valid_case_has_committed_true_and_postcondition_passed() -> None:
     payload = run_saas_permission_change_governed_demo()
-    summary = _case_by_id(payload, "valid_authority_and_approval")["outcome_receipt_summary"]
+    summary = _case_by_id(payload, "valid_authority_and_approval")[
+        "outcome_receipt_summary"
+    ]
     assert summary["committed"] is True  # type: ignore[index]
     assert summary["postcondition_status"] == "passed"  # type: ignore[index]
 
 
-def test_valid_case_observed_effects_include_local_offline_permission_grant_fixture() -> None:
+def test_valid_case_observed_effects_include_permission_grant_fixture() -> None:
     payload = run_saas_permission_change_governed_demo()
-    summary = _case_by_id(payload, "valid_authority_and_approval")["outcome_receipt_summary"]
+    summary = _case_by_id(payload, "valid_authority_and_approval")[
+        "outcome_receipt_summary"
+    ]
     effects = summary["observed_effects"]  # type: ignore[index]
     assert {
         "effect_type": "permission_grant",
@@ -151,14 +173,18 @@ def test_blocked_cases_manifest_chain_status_is_blocked() -> None:
 
 def test_valid_case_manifest_chain_status_complete_and_no_missing_links() -> None:
     payload = run_saas_permission_change_governed_demo()
-    summary = _case_by_id(payload, "valid_authority_and_approval")["evidence_chain_manifest_summary"]
+    summary = _case_by_id(payload, "valid_authority_and_approval")[
+        "evidence_chain_manifest_summary"
+    ]
     assert summary["chain_status"] == "complete"  # type: ignore[index]
     assert summary["missing_links"] == []  # type: ignore[index]
 
 
-def test_valid_case_manifest_observed_effects_include_permission_grant_fixture() -> None:
+def test_valid_case_manifest_observed_effects_include_grant_fixture() -> None:
     payload = run_saas_permission_change_governed_demo()
-    summary = _case_by_id(payload, "valid_authority_and_approval")["evidence_chain_manifest_summary"]
+    summary = _case_by_id(payload, "valid_authority_and_approval")[
+        "evidence_chain_manifest_summary"
+    ]
     effects = summary["observed_effects_summary"]  # type: ignore[index]
     assert {
         "effect_type": "permission_grant",
@@ -170,14 +196,20 @@ def test_valid_case_manifest_observed_effects_include_permission_grant_fixture()
 
 def test_missing_authority_manifest_has_missing_authority_link() -> None:
     payload = run_saas_permission_change_governed_demo()
-    summary = _case_by_id(payload, "missing_authority")["evidence_chain_manifest_summary"]
+    summary = _case_by_id(payload, "missing_authority")[
+        "evidence_chain_manifest_summary"
+    ]
     assert "authority_evidence_hash" in summary["missing_links"]  # type: ignore[index]
 
 
 def test_missing_human_approval_manifest_has_missing_human_approval_link() -> None:
     payload = run_saas_permission_change_governed_demo()
-    summary = _case_by_id(payload, "missing_human_approval")["evidence_chain_manifest_summary"]
-    assert "human_approval_receipt_hash" in summary["missing_links"]  # type: ignore[index]
+    summary = _case_by_id(payload, "missing_human_approval")[
+        "evidence_chain_manifest_summary"
+    ]
+    assert (
+        "human_approval_receipt_hash" in summary["missing_links"]
+    )  # type: ignore[index]
 
 
 def test_every_demo_case_includes_evidence_chain_verification_summary() -> None:
