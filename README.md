@@ -117,6 +117,7 @@ VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS
 - Validator script: scripts/demo/validate_reviewer_evidence_packet.py
 - CI gate: .github/workflows/reviewer-evidence-packet-validation.yml
 - CI artifacts: reviewer-evidence-packet-validation-artifacts
+- CI artifact manifest: reviewer-evidence-artifact-manifest.json
 - Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
 - Schema: docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
 - Test: tests/demo/test_reviewer_evidence_packet.py
@@ -127,7 +128,7 @@ A local/offline validation report is also available. It verifies that the genera
 
 A dedicated CI gate runs the Reviewer Evidence Packet validation report so the reviewer-facing packet, fixture, schema/fallback validation, case expectations, and evidence-chain verification summaries are continuously checked.
 
-The Reviewer Evidence Packet Validation workflow also uploads reviewer evidence artifacts, including the generated validation report, generated packet, golden fixture, and schema, so reviewers can inspect the exact CI-produced outputs.
+The Reviewer Evidence Packet Validation workflow also uploads reviewer evidence artifacts, including the generated validation report, generated packet, golden fixture, and schema, so reviewers can inspect the exact CI-produced outputs. The uploaded CI artifact also includes `reviewer-evidence-artifact-manifest.json`, a deterministic manifest listing each uploaded reviewer artifact, its role, source, sha256 hash, and size.
 
 ## Bind Coverage Registry v1
 
