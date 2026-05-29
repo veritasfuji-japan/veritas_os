@@ -121,6 +121,30 @@ Known limitation: this is a deterministic representative demo lineage and is
 not production certification.
 
 
+## A/B/C/D Minimal Validation Case
+
+The Pre-Boundary Collapse demo also includes an additive
+`trajectory_shaping_lineage.abcd_minimal_validation_case` fixture. The case uses
+only four options (`A`, `B`, `C`, and `D`) so reviewers can inspect the smallest
+representative trajectory where option exposure, preservation, intervention
+viability, and bind admissibility can separate.
+
+The minimal A/B/C/D shape is useful because it reduces overgeneralization: the
+reviewer does not need to infer the pattern from a rich domain scenario or a
+large option set. Instead, the demo asks whether the same governance-relevant
+separations still appear under constrained conditions:
+
+- preservation degradation begins when A/B reinforcement first becomes detectable
+- divergence contraction becomes measurable while C/D still formally remain
+- intervention viability is lost before bind evaluates the final trajectory
+- formal bind admissibility can still be valid over an already narrowed space
+
+This helps VERITAS track what remained realistically preservable and enactable
+before bind, while keeping the bind layer focused on the space it actually
+evaluates. The result is a deterministic representative governance pattern, not
+certification or a production governability claim.
+
+
 ## Run and verification entrypoint
 
 Run the representative demo from Mission Control with:

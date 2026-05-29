@@ -237,6 +237,15 @@ describe("/api/veritas/v1/report/governance", () => {
           initial_option_space: { options: string[] };
           sequence: Array<Record<string, unknown>>;
           transition_points: Record<string, string>;
+          evidence_requirements: string[];
+          summary: Record<string, string>;
+          abcd_minimal_validation_case: {
+            case_id: string;
+            version: string;
+            options: string[];
+            phases: Array<Record<string, unknown>>;
+            separation_points: Record<string, string>;
+          };
         };
       };
     };
@@ -280,6 +289,18 @@ describe("/api/veritas/v1/report/governance", () => {
       intervention_viability_loss_phase: "phase_3_pre_boundary_collapse",
       bind_evaluation_phase: "phase_4_bind",
     });
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.abcd_minimal_validation_case).toMatchObject({
+      case_id: "abcd_minimal_trajectory_validation",
+      version: "v0",
+      options: ["A", "B", "C", "D"],
+      separation_points: {
+        intervention_viability_loss_phase: "phase_4_intervention_viability_loss",
+        formal_admissibility_phase: "phase_5_bind_over_narrowed_space",
+      },
+    });
+    expect(
+      payload.governance_layer_snapshot.trajectory_shaping_lineage.abcd_minimal_validation_case.phases,
+    ).toHaveLength(5);
   });
 
   it("returns pre-boundary collapse demo scenario payload from header seam", async () => {

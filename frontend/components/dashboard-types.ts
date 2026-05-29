@@ -95,6 +95,39 @@ export interface TrajectoryShapingLineagePhase {
   bind_outcome?: string;
 }
 
+export interface AbcdMinimalValidationPhase {
+  phase_id: string;
+  phase_label: string;
+  exposure_state: string;
+  reinforcement_state: string;
+  divergence_state: string;
+  preservation_state: string;
+  intervention_viability: string;
+  bind_admissibility: string;
+  structural_marker: string;
+  bind_outcome?: string;
+}
+
+export interface AbcdMinimalValidationCase {
+  case_id: string;
+  version: string;
+  purpose: string;
+  options: string[];
+  phases: AbcdMinimalValidationPhase[];
+  separation_points: {
+    first_detectable_asymmetry_phase: string;
+    divergence_contraction_phase: string;
+    preservation_degradation_phase: string;
+    intervention_viability_loss_phase: string;
+    formal_admissibility_phase: string;
+  };
+  validation_question: string;
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface TrajectoryShapingLineage {
   scenario_id: string;
   version: string;
@@ -116,6 +149,7 @@ export interface TrajectoryShapingLineage {
     concise: string;
     operator: string;
   };
+  abcd_minimal_validation_case?: AbcdMinimalValidationCase;
 }
 
 export interface PreBindGovernanceSnapshot {

@@ -253,6 +253,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
     ? governanceSnapshot.phase_snapshots
     : [];
   const hasPreBoundaryCollapseDemo = governanceSnapshot?.demo_scenario === "pre_boundary_collapse" && phaseSnapshots.length > 0;
+  const abcdMinimalValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.abcd_minimal_validation_case;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -410,6 +411,23 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                 <li>bind evaluation: <span className="font-mono">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.transition_points.bind_evaluation_phase)}</span></li>
                 <li>summary: <span className="text-muted-foreground">{stringifyValue(governanceSnapshot.trajectory_shaping_lineage.summary.concise)}</span></li>
               </ul>
+              {abcdMinimalValidationCase ? (
+                <div
+                  aria-label="A/B/C/D minimal validation case"
+                  className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3"
+                >
+                  <p className="font-semibold">A/B/C/D Minimal Validation Case</p>
+                  <p className="text-muted-foreground">Testing separation between preservation, intervention viability, and formal bind admissibility</p>
+                  <ul className="mt-2 space-y-1">
+                    <li>Options: <span className="font-mono">{abcdMinimalValidationCase.options.join("/")}</span></li>
+                    <li>first detectable asymmetry: <span className="font-mono">{stringifyValue(abcdMinimalValidationCase.separation_points.first_detectable_asymmetry_phase)}</span></li>
+                    <li>divergence contraction: <span className="font-mono">{stringifyValue(abcdMinimalValidationCase.separation_points.divergence_contraction_phase)}</span></li>
+                    <li>intervention viability loss: <span className="font-mono">{stringifyValue(abcdMinimalValidationCase.separation_points.intervention_viability_loss_phase)}</span></li>
+                    <li>formal admissibility: <span className="font-mono">{stringifyValue(abcdMinimalValidationCase.separation_points.formal_admissibility_phase)}</span></li>
+                    <li>summary: <span className="text-muted-foreground">{stringifyValue(abcdMinimalValidationCase.summary.concise)}</span></li>
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </section>
