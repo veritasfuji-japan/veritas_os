@@ -115,6 +115,7 @@ VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS
 - Validation report: docs/en/demo/reviewer-evidence-packet-validation-report.md
 - Script: scripts/demo/export_reviewer_evidence_packet.py
 - Validator script: scripts/demo/validate_reviewer_evidence_packet.py
+- CI gate: .github/workflows/reviewer-evidence-packet-validation.yml
 - Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
 - Schema: docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
 - Test: tests/demo/test_reviewer_evidence_packet.py
@@ -122,6 +123,8 @@ VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS
 A deterministic golden fixture is also checked in so reviewers can inspect the generated packet without running the exporter. A JSON Schema is checked in for Reviewer Evidence Packet v1 so reviewers can inspect the packet contract and CI can detect unintended shape changes. CI tests verify that the generated packet matches the fixture.
 
 A local/offline validation report is also available. It verifies that the generated packet matches the golden fixture, recomputes the packet hash, validates the packet shape against the JSON Schema when possible, checks deterministic case expectations, and emits a reviewer-facing pass/fail JSON report.
+
+A dedicated CI gate runs the Reviewer Evidence Packet validation report so the reviewer-facing packet, fixture, schema/fallback validation, case expectations, and evidence-chain verification summaries are continuously checked.
 
 ## Bind Coverage Registry v1
 
