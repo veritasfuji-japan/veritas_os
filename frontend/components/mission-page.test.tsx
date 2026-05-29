@@ -251,6 +251,25 @@ describe("MissionPage", () => {
                 concise: "Decision lineage records what was bound; trajectory shaping lineage records how reachable alternatives became structurally unavailable before bind.",
                 operator: "Formal admissibility can still hold at bind while effective intervention capacity has already been lost upstream.",
               },
+              abcd_minimal_validation_case: {
+                case_id: "abcd_minimal_trajectory_validation",
+                version: "v0",
+                purpose: "Validate whether preservation degradation, intervention viability loss, and formal bind admissibility separate under minimal A/B/C/D conditions.",
+                options: ["A", "B", "C", "D"],
+                phases: [],
+                separation_points: {
+                  first_detectable_asymmetry_phase: "phase_2_reinforcement_asymmetry",
+                  divergence_contraction_phase: "phase_3_divergence_contraction",
+                  preservation_degradation_phase: "phase_2_reinforcement_asymmetry",
+                  intervention_viability_loss_phase: "phase_4_intervention_viability_loss",
+                  formal_admissibility_phase: "phase_5_bind_over_narrowed_space",
+                },
+                validation_question: "Do preservation degradation, intervention viability loss, and formal bind admissibility separate even under minimal A/B/C/D conditions?",
+                summary: {
+                  concise: "The A/B/C/D minimal case tests whether formal bind admissibility can remain valid after effective intervention viability has already been structurally lost.",
+                  operator: "The system should show when intervention stopped being realistically preservable before bind evaluated the narrowed space.",
+                },
+              },
             },
           }}
         />
@@ -269,9 +288,12 @@ describe("MissionPage", () => {
     expect(screen.getByTestId("trajectory-shaping-lineage-panel")).toBeInTheDocument();
     expect(screen.getByText("Trajectory Shaping Lineage v0")).toBeInTheDocument();
     expect(screen.getByText("Decision-space transformation before bind")).toBeInTheDocument();
-    expect(screen.getByText(/first detectable asymmetry:/)).toBeInTheDocument();
-    expect(screen.getByText(/intervention viability loss:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/first detectable asymmetry:/).length).toBeGreaterThan(1);
+    expect(screen.getAllByText(/intervention viability loss:/).length).toBeGreaterThan(1);
     expect(screen.getByText(/bind evaluation:/)).toBeInTheDocument();
+    expect(screen.getByText("A/B/C/D Minimal Validation Case")).toBeInTheDocument();
+    expect(screen.getByText("Testing separation between preservation, intervention viability, and formal bind admissibility")).toBeInTheDocument();
+    expect(screen.getByText(/formal admissibility:/)).toBeInTheDocument();
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
