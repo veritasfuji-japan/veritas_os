@@ -34,3 +34,13 @@ python3 scripts/demo/export_reviewer_evidence_packet.py
 ```
 
 The command prints deterministic JSON to stdout with sorted keys and indentation. It performs no network calls and requires no credentials.
+
+## Golden fixture
+
+A deterministic golden fixture is checked in at:
+`docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json`
+
+This fixture is generated from the local/offline Reviewer Evidence Packet exporter and is tested against the current generated packet. It allows reviewers to inspect the packet without running the code first. The fixture is not proof of live production deployment, live SaaS execution, or audit certification.
+
+If the generated packet changes intentionally in the future, update the golden fixture in the same PR as the behavior change.
+

@@ -107,7 +107,10 @@ VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS
 
 - Documentation: docs/en/demo/reviewer-evidence-packet.md
 - Script: scripts/demo/export_reviewer_evidence_packet.py
+- Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
 - Test: tests/demo/test_reviewer_evidence_packet.py
+
+A deterministic golden fixture is also checked in so reviewers can inspect the generated packet without running the exporter. CI tests verify that the generated packet matches the fixture.
 
 ## Bind Coverage Registry v1
 

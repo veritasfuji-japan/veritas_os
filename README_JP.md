@@ -110,7 +110,10 @@ VERITAS には local/offline の Reviewer Evidence Packet v1 export が追加さ
 
 - ドキュメント: docs/en/demo/reviewer-evidence-packet.md
 - スクリプト: scripts/demo/export_reviewer_evidence_packet.py
+- Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
 - テスト: tests/demo/test_reviewer_evidence_packet.py
+
+生成済みの deterministic golden fixture もリポジトリに保存されているため、レビュアーは exporter を実行しなくても packet の内容を確認できます。CI テストでは、現在生成される packet が fixture と一致することを検証します。
 
 ## Bind Coverage Registry v1
 

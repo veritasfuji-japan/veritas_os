@@ -76,7 +76,9 @@ def _authority_payload(*, scope_grants: list[str] | None = None) -> dict[str, An
     }
 
 
-def _human_approval_receipt(*, approved_scope: list[str], expires_at: str) -> HumanApprovalReceipt:
+def _human_approval_receipt(
+    *, approved_scope: list[str], expires_at: str
+) -> HumanApprovalReceipt:
     """Return a deterministic local/offline HumanApprovalReceipt."""
     return HumanApprovalReceipt(
         approval_receipt_id="har-saas-001",
@@ -168,6 +170,18 @@ def _evaluate_case(
     )
 
     actual_outcome = boundary_result.commit_boundary_result
+    failure_reasons = sorted(
+        {
+            item.reason
+            for item in boundary_result.failed_predicates
+            + boundary_result.missing_predicates
+        }
+    )
+    manifest_refusal_basis = (
+        failure_reasons
+        if actual_outcome == "block"
+        else list(boundary_result.refusal_basis)
+    )
     observed_effects: list[dict[str, Any]] = []
     postcondition_status = "skipped"
     if case_id == "valid_authority_and_approval":
@@ -194,26 +208,28 @@ def _evaluate_case(
         final_outcome=actual_outcome,
         postcondition_status=postcondition_status,
         observed_effects=observed_effects,
-        failure_reasons=sorted(
-            {
-                item.reason
-                for item in boundary_result.failed_predicates
-                + boundary_result.missing_predicates
-            }
-        ),
+        failure_reasons=failure_reasons,
         rollback_status=None,
         evaluated_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
     )
     authority_evidence_id = (
-        authority_evidence.authority_evidence_id if authority_evidence is not None else None
+        authority_evidence.authority_evidence_id
+        if authority_evidence is not None
+        else None
     )
-    authority_evidence_hash = authority_evidence.evidence_hash if authority_evidence is not None else None
+    authority_evidence_hash = (
+        authority_evidence.evidence_hash if authority_evidence is not None else None
+    )
     approval_receipt_id = (
-        human_approval_state.get("approval_receipt_id") if human_approval_state.get("approved") else None
+        human_approval_state.get("approval_receipt_id")
+        if human_approval_state.get("approved")
+        else None
     )
     approval_receipt_hash = (
-        human_approval_state.get("receipt_hash") if human_approval_state.get("approved") else None
+        human_approval_state.get("receipt_hash")
+        if human_approval_state.get("approved")
+        else None
     )
     evidence_chain_manifest = build_evidence_chain_manifest(
         decision_id="decision-saas-001",
@@ -226,12 +242,16 @@ def _evaluate_case(
         final_outcome=actual_outcome,
         authority_evidence_id=authority_evidence_id,
         authority_evidence_hash=authority_evidence_hash,
-        human_approval_receipt_id=str(approval_receipt_id) if approval_receipt_id else None,
-        human_approval_receipt_hash=str(approval_receipt_hash) if approval_receipt_hash else None,
+        human_approval_receipt_id=(
+            str(approval_receipt_id) if approval_receipt_id else None
+        ),
+        human_approval_receipt_hash=(
+            str(approval_receipt_hash) if approval_receipt_hash else None
+        ),
         outcome_receipt_id=outcome_receipt.outcome_receipt_id,
         outcome_receipt_hash=outcome_receipt.outcome_hash,
         bind_coverage_operation_id="saas_permission_change_demo",
-        refusal_basis=boundary_result.refusal_basis,
+        refusal_basis=manifest_refusal_basis,
         observed_effects_summary=observed_effects,
         generated_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
@@ -258,10 +278,8 @@ def _evaluate_case(
         "authority_validation_status": runtime_result.status,
         "runtime_recommended_outcome": runtime_result.recommended_outcome,
         "human_approval_state": human_approval_state,
-        "refusal_basis": boundary_result.refusal_basis,
-        "failure_reasons": sorted(
-            {item.reason for item in boundary_result.failed_predicates + boundary_result.missing_predicates}
-        ),
+        "refusal_basis": manifest_refusal_basis,
+        "failure_reasons": failure_reasons,
         "requested_scope": list(REQUESTED_SCOPE),
         "target_system": TARGET_SYSTEM,
         "target_resource": TARGET_RESOURCE,
@@ -328,7 +346,13 @@ def run_saas_permission_change_governed_demo() -> dict[str, Any]:
 
 def main() -> int:
     """Run demo from CLI and print deterministic JSON output."""
-    print(json.dumps(run_saas_permission_change_governed_demo(), indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            run_saas_permission_change_governed_demo(),
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
