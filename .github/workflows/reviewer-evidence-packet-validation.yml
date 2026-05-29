@@ -26,8 +26,36 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements-core.txt
 
-      - name: Validate Reviewer Evidence Packet
-        run: python3 scripts/demo/validate_reviewer_evidence_packet.py
+      - name: Create Reviewer Evidence Packet artifact directory
+        run: mkdir -p artifacts/reviewer-evidence-packet
+
+      - name: Validate Reviewer Evidence Packet and write report
+        run: >
+          python3 scripts/demo/validate_reviewer_evidence_packet.py
+          > artifacts/reviewer-evidence-packet/reviewer-evidence-packet-validation-report.json
 
       - name: Check Reviewer Evidence Packet fixture
         run: python3 scripts/demo/check_reviewer_evidence_packet_fixture.py
+
+      - name: Export current Reviewer Evidence Packet
+        run: >
+          python3 scripts/demo/export_reviewer_evidence_packet.py
+          > artifacts/reviewer-evidence-packet/reviewer-evidence-packet-generated.json
+
+      - name: Copy reviewer evidence packet reference artifacts
+        run: |
+          cp docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json \
+            artifacts/reviewer-evidence-packet/reviewer-evidence-packet-golden-fixture.json
+          cp docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json \
+            artifacts/reviewer-evidence-packet/reviewer-evidence-packet-schema.json
+          cp docs/en/demo/external-reviewer-quickstart.md \
+            artifacts/reviewer-evidence-packet/external-reviewer-quickstart.md
+          cp docs/en/demo/external-reviewer-artifact-index.md \
+            artifacts/reviewer-evidence-packet/external-reviewer-artifact-index.md
+
+      - name: Upload Reviewer Evidence Packet validation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewer-evidence-packet-validation-artifacts
+          path: artifacts/reviewer-evidence-packet/
+          retention-days: 14

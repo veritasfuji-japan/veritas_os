@@ -67,6 +67,8 @@ This command:
 
 The same validation path is enforced in CI by the Reviewer Evidence Packet Validation workflow, so reviewers can see that the packet, fixture, schema/fallback validation, case expectations, and evidence-chain verification summaries are continuously checked.
 
+On GitHub Actions, the Reviewer Evidence Packet Validation workflow also uploads `reviewer-evidence-packet-validation-artifacts`, which contains the generated validation report, generated packet, checked-in golden fixture, and schema for inspection.
+
 ## Expected current results
 
 The current deterministic summary is expected to show:

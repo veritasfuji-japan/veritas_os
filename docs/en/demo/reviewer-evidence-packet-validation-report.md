@@ -60,6 +60,22 @@ This verifies that the generated packet matches the golden fixture, `packet_hash
 
 This CI gate is local/offline only and does not connect to live SaaS, IAM, IdP, SSO, customer systems, banks, sanctions systems, production approval workflows, or live audit stores.
 
+## CI artifacts
+
+The Reviewer Evidence Packet Validation workflow uploads CI artifacts under the artifact name:
+`reviewer-evidence-packet-validation-artifacts`
+
+The uploaded artifact includes:
+
+- `reviewer-evidence-packet-validation-report.json`
+- `reviewer-evidence-packet-generated.json`
+- `reviewer-evidence-packet-golden-fixture.json`
+- `reviewer-evidence-packet-schema.json`
+
+These files allow reviewers to inspect the exact validation report, generated packet, checked-in fixture, and schema used by CI.
+
+This artifact is local/offline only and does not represent live SaaS execution, production deployment, audit certification, regulatory approval, or third-party certification.
+
 ## Boundary
 
 This report validates a local/offline Reviewer Evidence Packet fixture only.
