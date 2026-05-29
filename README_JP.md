@@ -109,12 +109,16 @@ VERITAS には、local/offline の SaaS permission-change governed execution dem
 VERITAS には local/offline の Reviewer Evidence Packet v1 export が追加されています。これは、SaaS permission-change governed execution demo の結果を、case outcome、AuthorityEvidence / HumanApproval summary、OutcomeReceipt summary、EvidenceChainManifest summary、EvidenceChainVerification summary、aggregate counts、reviewer notes、決定論的 packet hash を含む JSON-friendly artifact としてまとめるものです。本番導入や監査認証の証明ではなく、local/offline の review packet です。
 
 - ドキュメント: docs/en/demo/reviewer-evidence-packet.md
+- Validation report: docs/en/demo/reviewer-evidence-packet-validation-report.md
 - スクリプト: scripts/demo/export_reviewer_evidence_packet.py
+- Validator script: scripts/demo/validate_reviewer_evidence_packet.py
 - Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
 - Schema: docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
 - テスト: tests/demo/test_reviewer_evidence_packet.py
 
 生成済みの deterministic golden fixture もリポジトリに保存されているため、レビュアーは exporter を実行しなくても packet の内容を確認できます。Reviewer Evidence Packet v1 の JSON Schema もリポジトリに保存されています。これにより、レビュアーは packet の構造契約を確認でき、CI で意図しない shape change を検出できます。CI テストでは、現在生成される packet が fixture と一致することを検証します。
+
+local/offline の validation report も用意されています。これは、生成された packet が golden fixture と一致すること、packet hash が再計算できること、可能な場合は JSON Schema に適合すること、deterministic case expectations を満たすことを検証し、レビュアー向けの pass/fail JSON report を出力します。
 
 ## Bind Coverage Registry v1
 

@@ -106,12 +106,16 @@ Boundary:
 VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS permission-change governed execution demo. It packages case outcomes, AuthorityEvidence/HumanApproval summaries, OutcomeReceipt summaries, EvidenceChainManifest summaries, EvidenceChainVerification summaries, aggregate counts, reviewer notes, and a deterministic packet hash into one JSON-friendly artifact. This is a local/offline review packet, not proof of live production deployment or audit certification.
 
 - Documentation: docs/en/demo/reviewer-evidence-packet.md
+- Validation report: docs/en/demo/reviewer-evidence-packet-validation-report.md
 - Script: scripts/demo/export_reviewer_evidence_packet.py
+- Validator script: scripts/demo/validate_reviewer_evidence_packet.py
 - Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
 - Schema: docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
 - Test: tests/demo/test_reviewer_evidence_packet.py
 
 A deterministic golden fixture is also checked in so reviewers can inspect the generated packet without running the exporter. A JSON Schema is checked in for Reviewer Evidence Packet v1 so reviewers can inspect the packet contract and CI can detect unintended shape changes. CI tests verify that the generated packet matches the fixture.
+
+A local/offline validation report is also available. It verifies that the generated packet matches the golden fixture, recomputes the packet hash, validates the packet shape against the JSON Schema when possible, checks deterministic case expectations, and emits a reviewer-facing pass/fail JSON report.
 
 ## Bind Coverage Registry v1
 
