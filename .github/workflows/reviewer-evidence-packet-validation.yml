@@ -53,6 +53,12 @@ jobs:
           cp docs/en/demo/external-reviewer-artifact-index.md \
             artifacts/reviewer-evidence-packet/external-reviewer-artifact-index.md
 
+      - name: Build Reviewer Evidence Packet artifact manifest
+        run: |
+          python3 scripts/demo/build_reviewer_evidence_artifact_manifest.py \
+            artifacts/reviewer-evidence-packet
+          test -f artifacts/reviewer-evidence-packet/reviewer-evidence-artifact-manifest.json
+
       - name: Upload Reviewer Evidence Packet validation artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -14,6 +14,9 @@ VALIDATION_REPORT_ARTIFACT = "reviewer-evidence-packet-validation-report.json"
 GENERATED_PACKET_ARTIFACT = "reviewer-evidence-packet-generated.json"
 GOLDEN_FIXTURE_ARTIFACT = "reviewer-evidence-packet-golden-fixture.json"
 SCHEMA_ARTIFACT = "reviewer-evidence-packet-schema.json"
+MANIFEST_BUILDER_REFERENCE = "scripts/demo/build_reviewer_evidence_artifact_manifest.py"
+MANIFEST_ARTIFACT = "reviewer-evidence-artifact-manifest.json"
+MANIFEST_ID = "reviewer-evidence-artifact-manifest-v1"
 
 
 def _read_repo_file(relative_path: str) -> str:
@@ -45,6 +48,15 @@ def test_reviewer_evidence_packet_workflow_writes_artifact_files() -> None:
     assert GENERATED_PACKET_ARTIFACT in workflow
     assert GOLDEN_FIXTURE_ARTIFACT in workflow
     assert SCHEMA_ARTIFACT in workflow
+
+
+def test_reviewer_evidence_packet_workflow_builds_artifact_manifest() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert MANIFEST_BUILDER_REFERENCE in workflow
+    assert MANIFEST_ARTIFACT in workflow
+    assert "artifact manifest" in workflow
+    assert "|| true" not in workflow
 
 
 def test_validation_report_docs_reference_workflow_path() -> None:
@@ -106,3 +118,40 @@ def test_readmes_reference_ci_artifacts() -> None:
     for readme_path in ["README.md", "README_JP.md"]:
         readme = _read_repo_file(readme_path)
         assert ARTIFACT_NAME in readme
+
+
+def test_workflow_or_manifest_builder_references_manifest_id() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    manifest_builder = _read_repo_file(MANIFEST_BUILDER_REFERENCE)
+
+    assert MANIFEST_ID in workflow or MANIFEST_ID in manifest_builder
+
+
+def test_validation_report_docs_reference_artifact_manifest() -> None:
+    docs = _read_repo_file(
+        "docs/en/demo/reviewer-evidence-packet-validation-report.md"
+    )
+
+    assert MANIFEST_ARTIFACT in docs
+
+
+def test_quickstart_references_artifact_manifest() -> None:
+    quickstart = _read_repo_file(
+        "docs/en/demo/external-reviewer-quickstart.md"
+    )
+
+    assert MANIFEST_ARTIFACT in quickstart
+
+
+def test_artifact_index_references_artifact_manifest() -> None:
+    artifact_index = _read_repo_file(
+        "docs/en/demo/external-reviewer-artifact-index.md"
+    )
+
+    assert MANIFEST_ARTIFACT in artifact_index
+
+
+def test_readmes_reference_artifact_manifest() -> None:
+    for readme_path in ["README.md", "README_JP.md"]:
+        readme = _read_repo_file(readme_path)
+        assert MANIFEST_ARTIFACT in readme

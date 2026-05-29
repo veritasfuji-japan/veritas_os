@@ -71,8 +71,9 @@ The uploaded artifact includes:
 - `reviewer-evidence-packet-generated.json`
 - `reviewer-evidence-packet-golden-fixture.json`
 - `reviewer-evidence-packet-schema.json`
+- `reviewer-evidence-artifact-manifest.json`
 
-These files allow reviewers to inspect the exact validation report, generated packet, checked-in fixture, and schema used by CI.
+These files allow reviewers to inspect the exact validation report, generated packet, checked-in fixture, and schema used by CI. The uploaded artifact also includes `reviewer-evidence-artifact-manifest.json`, a deterministic manifest that lists the uploaded reviewer evidence files, their roles, whether they are generated or checked-in, their sha256 hashes, and their byte sizes.
 
 This artifact is local/offline only and does not represent live SaaS execution, production deployment, audit certification, regulatory approval, or third-party certification.
 
