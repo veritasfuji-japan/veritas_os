@@ -1,0 +1,616 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/reviewer-evidence-packet-v1.schema.json",
+  "title": "Reviewer Evidence Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packet_id",
+    "packet_version",
+    "demo_id",
+    "generated_at",
+    "title",
+    "summary",
+    "boundary_note",
+    "local_offline_only",
+    "cases",
+    "aggregate_summary",
+    "reviewer_notes",
+    "packet_hash"
+  ],
+  "properties": {
+    "packet_id": {
+      "const": "reviewer-evidence-packet-saas-permission-change-v1"
+    },
+    "packet_version": {
+      "const": "v1"
+    },
+    "demo_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "boundary_note": {
+      "type": "string",
+      "minLength": 1
+    },
+    "local_offline_only": {
+      "const": true
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    },
+    "aggregate_summary": {
+      "$ref": "#/$defs/aggregate_summary"
+    },
+    "reviewer_notes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "packet_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullable_sha256_hex": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "expected_outcome",
+        "actual_outcome",
+        "passed",
+        "requested_scope",
+        "target_system",
+        "target_resource",
+        "authority_validation_status",
+        "runtime_recommended_outcome",
+        "human_approval_summary",
+        "refusal_basis",
+        "failure_reasons",
+        "outcome_receipt_summary",
+        "evidence_chain_manifest_summary",
+        "evidence_chain_verification_summary",
+        "reviewer_interpretation",
+        "boundary_note"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actual_outcome": {
+          "enum": [
+            "block",
+            "commit",
+            "commit_eligible",
+            "refuse",
+            "refused"
+          ]
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "requested_scope": {
+          "$ref": "#/$defs/string_array"
+        },
+        "target_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_resource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_validation_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtime_recommended_outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "human_approval_summary": {
+          "$ref": "#/$defs/human_approval_summary"
+        },
+        "refusal_basis": {
+          "$ref": "#/$defs/string_array"
+        },
+        "failure_reasons": {
+          "$ref": "#/$defs/string_array"
+        },
+        "outcome_receipt_summary": {
+          "$ref": "#/$defs/outcome_receipt_summary"
+        },
+        "evidence_chain_manifest_summary": {
+          "$ref": "#/$defs/evidence_chain_manifest_summary"
+        },
+        "evidence_chain_verification_summary": {
+          "$ref": "#/$defs/evidence_chain_verification_summary"
+        },
+        "reviewer_interpretation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "boundary_note": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "human_approval_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approved",
+        "approval_receipt_id",
+        "approver_identity",
+        "approver_role",
+        "approved_scope",
+        "receipt_hash_present",
+        "failure_reasons"
+      ],
+      "properties": {
+        "approved": {
+          "type": "boolean"
+        },
+        "approval_receipt_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approver_identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approver_role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approved_scope": {
+          "$ref": "#/$defs/string_array"
+        },
+        "receipt_hash_present": {
+          "type": "boolean"
+        },
+        "failure_reasons": {
+          "$ref": "#/$defs/string_array"
+        }
+      }
+    },
+    "outcome_receipt_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome_receipt_id",
+        "decision_id",
+        "execution_intent_id",
+        "operation_id",
+        "action_class",
+        "target_system",
+        "target_resource",
+        "intended_action",
+        "requested_scope",
+        "final_outcome",
+        "committed",
+        "blocked",
+        "escalated",
+        "rolled_back",
+        "postcondition_status",
+        "observed_effects",
+        "failure_reasons",
+        "evaluated_at",
+        "outcome_hash",
+        "metadata"
+      ],
+      "properties": {
+        "outcome_receipt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_intent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action_class": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_resource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intended_action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requested_scope": {
+          "$ref": "#/$defs/string_array"
+        },
+        "final_outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "committed": {
+          "type": "boolean"
+        },
+        "blocked": {
+          "type": "boolean"
+        },
+        "escalated": {
+          "type": "boolean"
+        },
+        "rolled_back": {
+          "type": "boolean"
+        },
+        "postcondition_status": {
+          "enum": [
+            "passed",
+            "failed",
+            "skipped",
+            "indeterminate"
+          ]
+        },
+        "observed_effects": {
+          "type": "array"
+        },
+        "failure_reasons": {
+          "$ref": "#/$defs/string_array"
+        },
+        "evaluated_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "bind_receipt_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_state_fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post_state_fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rollback_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "evidence_chain_manifest_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_id",
+        "decision_id",
+        "execution_intent_id",
+        "operation_id",
+        "action_class",
+        "target_system",
+        "target_resource",
+        "requested_scope",
+        "authority_evidence_id",
+        "authority_evidence_hash",
+        "human_approval_receipt_id",
+        "human_approval_receipt_hash",
+        "bind_receipt_id",
+        "bind_receipt_hash",
+        "outcome_receipt_id",
+        "outcome_receipt_hash",
+        "bind_coverage_operation_id",
+        "final_outcome",
+        "chain_status",
+        "missing_links",
+        "refusal_basis",
+        "observed_effects_summary",
+        "generated_at",
+        "manifest_hash",
+        "metadata"
+      ],
+      "properties": {
+        "manifest_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_intent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action_class": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_resource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requested_scope": {
+          "$ref": "#/$defs/string_array"
+        },
+        "authority_evidence_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authority_evidence_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "human_approval_receipt_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "human_approval_receipt_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "bind_receipt_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind_receipt_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "outcome_receipt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome_receipt_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "bind_coverage_operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "chain_status": {
+          "enum": [
+            "complete",
+            "incomplete",
+            "blocked",
+            "indeterminate"
+          ]
+        },
+        "missing_links": {
+          "$ref": "#/$defs/string_array"
+        },
+        "refusal_basis": {
+          "$ref": "#/$defs/string_array"
+        },
+        "observed_effects_summary": {
+          "type": "array"
+        },
+        "generated_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "evidence_chain_verification_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "is_valid",
+        "verification_status",
+        "manifest_id",
+        "decision_id",
+        "execution_intent_id",
+        "operation_id",
+        "verified_links",
+        "missing_links",
+        "mismatched_links",
+        "failure_reasons",
+        "recomputed_manifest_hash",
+        "manifest_hash_matches",
+        "verified_at",
+        "metadata"
+      ],
+      "properties": {
+        "is_valid": {
+          "type": "boolean"
+        },
+        "verification_status": {
+          "enum": [
+            "verified",
+            "failed",
+            "incomplete",
+            "indeterminate"
+          ]
+        },
+        "manifest_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_intent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified_links": {
+          "$ref": "#/$defs/string_array"
+        },
+        "missing_links": {
+          "$ref": "#/$defs/string_array"
+        },
+        "mismatched_links": {
+          "$ref": "#/$defs/string_array"
+        },
+        "failure_reasons": {
+          "$ref": "#/$defs/string_array"
+        },
+        "recomputed_manifest_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "manifest_hash_matches": {
+          "type": "boolean"
+        },
+        "verified_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "aggregate_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_cases",
+        "passed_cases",
+        "blocked_cases",
+        "committed_cases",
+        "verified_chains",
+        "failed_chains",
+        "incomplete_chains",
+        "indeterminate_chains",
+        "local_offline_only"
+      ],
+      "properties": {
+        "total_cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed_cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocked_cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "committed_cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verified_chains": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed_chains": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "incomplete_chains": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indeterminate_chains": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "local_offline_only": {
+          "const": true
+        }
+      }
+    }
+  }
+}
