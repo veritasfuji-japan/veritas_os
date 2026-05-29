@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
-import { type TrajectoryShapingLineage } from "../../../../../../components/dashboard-types";
+import { type AbcdMinimalValidationCase, type TrajectoryShapingLineage } from "../../../../../../components/dashboard-types";
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
 import { buildAmlKycReviewerWalkthroughPayload } from "../../../../../../lib/aml-kyc-reviewer-walkthrough";
 import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
@@ -103,6 +103,89 @@ function mapPreBoundaryCollapsePhaseToSnapshot(phase: Record<string, unknown>): 
   };
 }
 
+function buildAbcdMinimalValidationCase(): AbcdMinimalValidationCase {
+  return {
+    case_id: "abcd_minimal_trajectory_validation",
+    version: "v0",
+    purpose:
+      "Validate whether preservation degradation, intervention viability loss, and formal bind admissibility separate under minimal A/B/C/D conditions.",
+    options: ["A", "B", "C", "D"],
+    phases: [
+      {
+        phase_id: "phase_1_symmetric_exposure",
+        phase_label: "Phase 1 — Symmetric exposure",
+        exposure_state: "symmetric",
+        reinforcement_state: "none",
+        divergence_state: "open",
+        preservation_state: "open",
+        intervention_viability: "high",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "full_reachable_space",
+      },
+      {
+        phase_id: "phase_2_reinforcement_asymmetry",
+        phase_label: "Phase 2 — Gradual reinforcement asymmetry",
+        exposure_state: "asymmetric_emerging",
+        reinforcement_state: "a_b_reinforced",
+        divergence_state: "contracting",
+        preservation_state: "degrading",
+        intervention_viability: "medium",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "first_detectable_asymmetry",
+      },
+      {
+        phase_id: "phase_3_divergence_contraction",
+        phase_label: "Phase 3 — Measurable divergence contraction",
+        exposure_state: "asymmetric",
+        reinforcement_state: "a_b_dominant",
+        divergence_state: "contracted",
+        preservation_state: "degraded",
+        intervention_viability: "low",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "measurable_divergence_contraction",
+      },
+      {
+        phase_id: "phase_4_intervention_viability_loss",
+        phase_label: "Phase 4 — First detectable loss of intervention viability",
+        exposure_state: "asymmetric",
+        reinforcement_state: "trajectory_narrowed",
+        divergence_state: "effectively_closed",
+        preservation_state: "collapsed",
+        intervention_viability: "lost",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "intervention_viability_loss",
+      },
+      {
+        phase_id: "phase_5_bind_over_narrowed_space",
+        phase_label: "Phase 5 — Bind over narrowed space",
+        exposure_state: "already_narrowed",
+        reinforcement_state: "trajectory_committed",
+        divergence_state: "closed",
+        preservation_state: "collapsed",
+        intervention_viability: "lost",
+        bind_admissibility: "formally_valid",
+        bind_outcome: "FORMALLY_VALID_OVER_STRUCTURALLY_NARROWED_SPACE",
+        structural_marker: "formal_admissibility_after_intervention_loss",
+      },
+    ],
+    separation_points: {
+      first_detectable_asymmetry_phase: "phase_2_reinforcement_asymmetry",
+      divergence_contraction_phase: "phase_3_divergence_contraction",
+      preservation_degradation_phase: "phase_2_reinforcement_asymmetry",
+      intervention_viability_loss_phase: "phase_4_intervention_viability_loss",
+      formal_admissibility_phase: "phase_5_bind_over_narrowed_space",
+    },
+    validation_question:
+      "Do preservation degradation, intervention viability loss, and formal bind admissibility separate even under minimal A/B/C/D conditions?",
+    summary: {
+      concise:
+        "The A/B/C/D minimal case tests whether formal bind admissibility can remain valid after effective intervention viability has already been structurally lost.",
+      operator:
+        "The system should show when intervention stopped being realistically preservable before bind evaluated the narrowed space.",
+    },
+  };
+}
+
 function buildTrajectoryShapingLineageV0(): TrajectoryShapingLineage {
   return {
     scenario_id: PRE_BOUNDARY_COLLAPSE_SCENARIO,
@@ -181,6 +264,7 @@ function buildTrajectoryShapingLineageV0(): TrajectoryShapingLineage {
       operator:
         "Formal admissibility can still hold at bind while effective intervention capacity has already been lost upstream.",
     },
+    abcd_minimal_validation_case: buildAbcdMinimalValidationCase(),
   };
 }
 

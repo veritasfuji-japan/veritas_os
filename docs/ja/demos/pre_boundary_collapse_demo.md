@@ -23,3 +23,25 @@ additive snapshot field として公開されます。
 
 Known limitation: this is a deterministic representative demo lineage and is
 not production certification.
+
+
+## A/B/C/D Minimal Validation Case
+
+Pre-Boundary Collapse demo には、additive fixture として
+`trajectory_shaping_lineage.abcd_minimal_validation_case` も含まれます。この case は
+`A`、`B`、`C`、`D` の4 options だけを使い、option exposure、preservation、
+intervention viability、bind admissibility が分離し始める最小の representative
+trajectory を reviewer が確認できるようにします。
+
+最小 A/B/C/D shape が有用なのは、過度な一般化を避けられるためです。reviewer は、
+rich domain scenario や大きな option set から pattern を推論する必要がありません。
+代わりに、制約された条件でも以下の governance-relevant separation が現れるかを確認できます。
+
+- A/B reinforcement が初めて検出可能になった時点で preservation degradation が始まる
+- C/D が形式上残っている間に divergence contraction が measurable になる
+- bind が final trajectory を評価する前に intervention viability が失われる
+- formal bind admissibility は、すでに narrowed された space に対して valid になり得る
+
+これにより VERITAS は、bind 前に何が現実的に preservable / enactable として残っていたかを追跡できます。
+bind layer は実際に評価した space に集中しつつ、trajectory lineage はその space がいつ狭まったかを示します。
+この result は deterministic representative governance pattern であり、certification や production governability claim ではありません。

@@ -89,6 +89,11 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       },
     });
     expect(payload.governance_layer_snapshot.phase_snapshots).toHaveLength(4);
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.abcd_minimal_validation_case).toMatchObject({
+      case_id: "abcd_minimal_trajectory_validation",
+      version: "v0",
+      options: ["A", "B", "C", "D"],
+    });
 
     await page.goto("/?demo_scenario=pre_boundary_collapse");
 
@@ -117,6 +122,9 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("first detectable asymmetry");
     await expect(walkthrough).toContainText("intervention viability loss");
     await expect(walkthrough).toContainText("bind evaluation");
+    await expect(walkthrough).toContainText("A/B/C/D Minimal Validation Case");
+    await expect(walkthrough).toContainText("Testing separation between preservation, intervention viability, and formal bind admissibility");
+    await expect(walkthrough).toContainText("formal admissibility");
 
     const timeline = page.locator('section[aria-label="governance layer timeline"]');
     await expect(timeline).toBeVisible();
