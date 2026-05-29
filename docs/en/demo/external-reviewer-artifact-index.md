@@ -18,6 +18,8 @@ Key local/offline reviewer-facing artifacts:
   - validation report documentation
 - `.github/workflows/reviewer-evidence-packet-validation.yml`
   - CI gate for Reviewer Evidence Packet validation report
+- `reviewer-evidence-packet-validation-artifacts`
+  - GitHub Actions artifact containing validation report, generated packet, golden fixture, and schema
 - `docs/en/demo/saas-permission-change-governed-demo.md`
   - SaaS permission-change demo documentation
 - `docs/en/architecture/outcome-receipt.md`

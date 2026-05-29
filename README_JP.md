@@ -119,6 +119,7 @@ VERITAS には local/offline の Reviewer Evidence Packet v1 export が追加さ
 - スクリプト: scripts/demo/export_reviewer_evidence_packet.py
 - Validator script: scripts/demo/validate_reviewer_evidence_packet.py
 - CI gate: .github/workflows/reviewer-evidence-packet-validation.yml
+- CI artifacts: reviewer-evidence-packet-validation-artifacts
 - Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
 - Schema: docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
 - テスト: tests/demo/test_reviewer_evidence_packet.py
@@ -128,6 +129,8 @@ VERITAS には local/offline の Reviewer Evidence Packet v1 export が追加さ
 local/offline の validation report も用意されています。これは、生成された packet が golden fixture と一致すること、packet hash が再計算できること、可能な場合は JSON Schema に適合すること、deterministic case expectations を満たすことを検証し、レビュアー向けの pass/fail JSON report を出力します。
 
 Reviewer Evidence Packet validation report を実行する専用 CI gate も追加されています。これにより、reviewer-facing packet、golden fixture、schema / fallback validation、case expectations、evidence-chain verification summaries が継続的に検証されます。
+
+Reviewer Evidence Packet Validation workflow では、生成された validation report、generated packet、golden fixture、schema を GitHub Actions artifact としてアップロードします。これにより、レビュアーは CI 上で生成・検証された成果物を直接確認できます。
 
 ## Bind Coverage Registry v1
 
