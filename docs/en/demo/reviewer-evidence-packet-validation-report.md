@@ -45,6 +45,21 @@ When `jsonschema` is available in the local environment, the validator checks bo
 
 When `jsonschema` is unavailable, the validator does not add or require a dependency. Instead, it runs deterministic fallback structural checks for required top-level fields, `packet_id`, `packet_version`, `local_offline_only`, packet hash format, non-empty cases, aggregate summary, and nested case evidence summaries.
 
+## CI gate
+
+Reviewer Evidence Packet Validation is also enforced by a dedicated GitHub Actions workflow at:
+`.github/workflows/reviewer-evidence-packet-validation.yml`
+
+The workflow runs:
+
+```bash
+python3 scripts/demo/validate_reviewer_evidence_packet.py
+```
+
+This verifies that the generated packet matches the golden fixture, `packet_hash` recomputes correctly, schema or fallback validation passes, deterministic case expectations hold, and evidence-chain verification summaries remain valid.
+
+This CI gate is local/offline only and does not connect to live SaaS, IAM, IdP, SSO, customer systems, banks, sanctions systems, production approval workflows, or live audit stores.
+
 ## Boundary
 
 This report validates a local/offline Reviewer Evidence Packet fixture only.

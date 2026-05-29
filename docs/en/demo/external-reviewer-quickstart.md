@@ -65,6 +65,8 @@ This command:
 - requires no credentials
 - makes no network calls
 
+The same validation path is enforced in CI by the Reviewer Evidence Packet Validation workflow, so reviewers can see that the packet, fixture, schema/fallback validation, case expectations, and evidence-chain verification summaries are continuously checked.
+
 ## Expected current results
 
 The current deterministic summary is expected to show:

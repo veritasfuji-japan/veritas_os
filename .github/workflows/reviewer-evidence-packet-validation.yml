@@ -1,0 +1,33 @@
+name: Reviewer Evidence Packet Validation
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  reviewer-evidence-packet-validation:
+    name: reviewer-evidence-packet-validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install local validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements-core.txt
+
+      - name: Validate Reviewer Evidence Packet
+        run: python3 scripts/demo/validate_reviewer_evidence_packet.py
+
+      - name: Check Reviewer Evidence Packet fixture
+        run: python3 scripts/demo/check_reviewer_evidence_packet_fixture.py
