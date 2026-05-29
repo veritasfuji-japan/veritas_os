@@ -39,6 +39,8 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 10 分で実装スナップショットを確認する場合は、次の順で参照してください。
 
+外部レビュアーは [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md) から確認できます。このドキュメントでは、golden fixture の確認、validation report の実行、JSON Schema の確認、local/offline evidence chain の読み方を 10〜15 分で追えるように整理しています。あわせて [External Reviewer Artifact Index](docs/en/demo/external-reviewer-artifact-index.md) も参照してください。
+
 1. [External Validation Brief](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
 3. Authority Evidence Ingestion（local/offline）: docs/en/architecture/authority-evidence-ingestion.md
@@ -51,7 +53,9 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 10. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
 11. [SaaS Permission-Change Governed Demo（local/offline）](docs/en/demo/saas-permission-change-governed-demo.md)
 12. [Reviewer Evidence Packet v1（local/offline）](docs/en/demo/reviewer-evidence-packet.md)
-13. Bind Coverage Registry v1（local/offline）: docs/en/architecture/bind-coverage-registry.md
+13. [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
+14. [External Reviewer Artifact Index v1](docs/en/demo/external-reviewer-artifact-index.md)
+15. Bind Coverage Registry v1（local/offline）: docs/en/architecture/bind-coverage-registry.md
 
 境界条件:
 
@@ -109,6 +113,8 @@ VERITAS には、local/offline の SaaS permission-change governed execution dem
 VERITAS には local/offline の Reviewer Evidence Packet v1 export が追加されています。これは、SaaS permission-change governed execution demo の結果を、case outcome、AuthorityEvidence / HumanApproval summary、OutcomeReceipt summary、EvidenceChainManifest summary、EvidenceChainVerification summary、aggregate counts、reviewer notes、決定論的 packet hash を含む JSON-friendly artifact としてまとめるものです。本番導入や監査認証の証明ではなく、local/offline の review packet です。
 
 - ドキュメント: docs/en/demo/reviewer-evidence-packet.md
+- External Reviewer Quickstart: docs/en/demo/external-reviewer-quickstart.md
+- External Reviewer Artifact Index: docs/en/demo/external-reviewer-artifact-index.md
 - Validation report: docs/en/demo/reviewer-evidence-packet-validation-report.md
 - スクリプト: scripts/demo/export_reviewer_evidence_packet.py
 - Validator script: scripts/demo/validate_reviewer_evidence_packet.py

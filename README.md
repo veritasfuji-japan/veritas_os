@@ -32,6 +32,8 @@ For external reviewers, start with `docs/REVIEWER_ENTRYPOINT.md`.
 
 For a 10-minute implementation snapshot, start here:
 
+External reviewers can start with the [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md), which explains how to inspect the golden fixture, run the validation report, review the JSON Schema, and understand the local/offline evidence chain in 10–15 minutes. See also the [External Reviewer Artifact Index](docs/en/demo/external-reviewer-artifact-index.md).
+
 For a concise business-facing overview, see [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md).
 日本語補助版: [企業向け価値説明ブリーフ](docs/ja/positioning/enterprise-value-brief.md)
 
@@ -47,7 +49,9 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 10. [AML/KYC 1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
 11. [SaaS Permission-Change Governed Demo (local/offline)](docs/en/demo/saas-permission-change-governed-demo.md)
 12. [Reviewer Evidence Packet v1 (local/offline)](docs/en/demo/reviewer-evidence-packet.md)
-13. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
+13. [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
+14. [External Reviewer Artifact Index v1](docs/en/demo/external-reviewer-artifact-index.md)
+15. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
 
 Boundary:
 
@@ -106,6 +110,8 @@ Boundary:
 VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS permission-change governed execution demo. It packages case outcomes, AuthorityEvidence/HumanApproval summaries, OutcomeReceipt summaries, EvidenceChainManifest summaries, EvidenceChainVerification summaries, aggregate counts, reviewer notes, and a deterministic packet hash into one JSON-friendly artifact. This is a local/offline review packet, not proof of live production deployment or audit certification.
 
 - Documentation: docs/en/demo/reviewer-evidence-packet.md
+- External Reviewer Quickstart: docs/en/demo/external-reviewer-quickstart.md
+- External Reviewer Artifact Index: docs/en/demo/external-reviewer-artifact-index.md
 - Validation report: docs/en/demo/reviewer-evidence-packet-validation-report.md
 - Script: scripts/demo/export_reviewer_evidence_packet.py
 - Validator script: scripts/demo/validate_reviewer_evidence_packet.py
