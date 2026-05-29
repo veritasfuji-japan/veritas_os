@@ -44,3 +44,12 @@ This fixture is generated from the local/offline Reviewer Evidence Packet export
 
 If the generated packet changes intentionally in the future, update the golden fixture in the same PR as the behavior change.
 
+## Schema
+
+Reviewer Evidence Packet v1 has a checked-in schema at:
+`docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`
+
+The schema documents the required packet fields, case summaries, nested evidence summaries, aggregate summary, reviewer notes, and packet hash format. The golden fixture and generated packet are tested against this schema. Future intentional packet-shape changes should update the schema, exporter, tests, and golden fixture in the same PR.
+
+This schema is for a local/offline reviewer packet. It is not a production audit certification, regulatory approval, or proof of live deployment.
+
