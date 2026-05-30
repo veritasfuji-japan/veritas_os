@@ -145,6 +145,39 @@ evaluates. The result is a deterministic representative governance pattern, not
 certification or a production governability claim.
 
 
+## Dynamic Conditions Validation v0
+
+Dynamic Conditions Validation v0 is the next deterministic step after the
+A/B/C/D Minimal Validation Case. The minimal case shows that preservation
+degradation, intervention viability loss, and formal bind admissibility can be
+observed as separate structural states under constrained A/B/C/D conditions.
+The dynamic case asks whether that same separation remains visible when several
+trajectory-shaping pressures interact before bind.
+
+The additive fixture is exposed as
+`trajectory_shaping_lineage.dynamic_conditions_validation_case` and keeps the
+same base option set (`A`, `B`, `C`, and `D`). It introduces four interacting
+factors:
+
+- reinforcement
+- exposure asymmetry
+- time pressure
+- adaptive system behavior
+
+The five phases keep the pattern compact: balanced option space, reinforcement
+and exposure asymmetry, time-pressure compression of the intervention window,
+adaptive stabilization of a narrowed trajectory, and formal bind evaluation over
+the dynamically narrowed space. This makes the progressive degradation sequence
+visible: governability is not a binary condition; it can degrade over time while
+formal bind admissibility remains intact.
+
+The validation compares preservation degradation, intervention viability loss,
+and formal bind admissibility under dynamic pressure. It is a deterministic
+representative validation pattern for review and regression testing. It is not
+certification, a general dynamic trajectory engine, or a production
+governability claim.
+
+
 ## Run and verification entrypoint
 
 Run the representative demo from Mission Control with:

@@ -254,6 +254,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
     : [];
   const hasPreBoundaryCollapseDemo = governanceSnapshot?.demo_scenario === "pre_boundary_collapse" && phaseSnapshots.length > 0;
   const abcdMinimalValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.abcd_minimal_validation_case;
+  const dynamicConditionsValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.dynamic_conditions_validation_case;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -425,6 +426,29 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                     <li>intervention viability loss: <span className="font-mono">{stringifyValue(abcdMinimalValidationCase.separation_points.intervention_viability_loss_phase)}</span></li>
                     <li>formal admissibility: <span className="font-mono">{stringifyValue(abcdMinimalValidationCase.separation_points.formal_admissibility_phase)}</span></li>
                     <li>summary: <span className="text-muted-foreground">{stringifyValue(abcdMinimalValidationCase.summary.concise)}</span></li>
+                  </ul>
+                </div>
+              ) : null}
+              {dynamicConditionsValidationCase ? (
+                <div
+                  aria-label="Dynamic Conditions Validation v0"
+                  className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3"
+                >
+                  <p className="font-semibold">Dynamic Conditions Validation v0</p>
+                  <p className="text-muted-foreground">Testing separation stability under reinforcement, exposure asymmetry, time pressure, and adaptive behavior</p>
+                  <ul className="mt-2 space-y-1">
+                    <li>Base case: <span className="font-mono">A/B/C/D Minimal Validation Case</span></li>
+                    <li>dynamic factors:</li>
+                    <li className="ml-3">reinforcement</li>
+                    <li className="ml-3">exposure asymmetry</li>
+                    <li className="ml-3">time pressure</li>
+                    <li className="ml-3">adaptive behavior</li>
+                    <li>first dynamic asymmetry: <span className="font-mono">{stringifyValue(dynamicConditionsValidationCase.separation_points.first_dynamic_asymmetry_phase)}</span></li>
+                    <li>intervention window compression: <span className="font-mono">{stringifyValue(dynamicConditionsValidationCase.separation_points.intervention_window_compression_phase)}</span></li>
+                    <li>adaptive narrowing: <span className="font-mono">{stringifyValue(dynamicConditionsValidationCase.separation_points.adaptive_narrowing_phase)}</span></li>
+                    <li>intervention viability loss: <span className="font-mono">{stringifyValue(dynamicConditionsValidationCase.separation_points.intervention_viability_loss_phase)}</span></li>
+                    <li>formal admissibility: <span className="font-mono">{stringifyValue(dynamicConditionsValidationCase.separation_points.formal_admissibility_phase)}</span></li>
+                    <li>summary: <span className="text-muted-foreground">{stringifyValue(dynamicConditionsValidationCase.summary.concise)}</span></li>
                   </ul>
                 </div>
               ) : null}

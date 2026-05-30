@@ -128,6 +128,43 @@ export interface AbcdMinimalValidationCase {
   };
 }
 
+export interface DynamicConditionsValidationPhase {
+  phase_id: string;
+  phase_label: string;
+  exposure_state: string;
+  reinforcement_state: string;
+  time_pressure_state: string;
+  adaptive_behavior_state: string;
+  divergence_state: string;
+  preservation_state: string;
+  intervention_viability: string;
+  bind_admissibility: string;
+  structural_marker: string;
+  bind_outcome?: string;
+}
+
+export interface DynamicConditionsValidationCase {
+  case_id: string;
+  version: string;
+  purpose: string;
+  base_case: string;
+  options: string[];
+  dynamic_factors: string[];
+  phases: DynamicConditionsValidationPhase[];
+  separation_points: {
+    first_dynamic_asymmetry_phase: string;
+    intervention_window_compression_phase: string;
+    adaptive_narrowing_phase: string;
+    intervention_viability_loss_phase: string;
+    formal_admissibility_phase: string;
+  };
+  validation_question: string;
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface TrajectoryShapingLineage {
   scenario_id: string;
   version: string;
@@ -150,6 +187,7 @@ export interface TrajectoryShapingLineage {
     operator: string;
   };
   abcd_minimal_validation_case?: AbcdMinimalValidationCase;
+  dynamic_conditions_validation_case?: DynamicConditionsValidationCase;
 }
 
 export interface PreBindGovernanceSnapshot {

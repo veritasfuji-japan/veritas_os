@@ -270,6 +270,32 @@ describe("MissionPage", () => {
                   operator: "The system should show when intervention stopped being realistically preservable before bind evaluated the narrowed space.",
                 },
               },
+              dynamic_conditions_validation_case: {
+                case_id: "dynamic_conditions_trajectory_validation",
+                version: "v0",
+                purpose: "Validate whether preservation degradation, intervention viability loss, and formal bind admissibility remain structurally separable when reinforcement, exposure asymmetry, time pressure, and adaptive behavior interact.",
+                base_case: "abcd_minimal_trajectory_validation",
+                options: ["A", "B", "C", "D"],
+                dynamic_factors: [
+                  "reinforcement",
+                  "exposure_asymmetry",
+                  "time_pressure",
+                  "adaptive_system_behavior",
+                ],
+                phases: [],
+                separation_points: {
+                  first_dynamic_asymmetry_phase: "phase_2_reinforcement_exposure_asymmetry",
+                  intervention_window_compression_phase: "phase_3_time_pressure_compression",
+                  adaptive_narrowing_phase: "phase_4_adaptive_narrowing",
+                  intervention_viability_loss_phase: "phase_4_adaptive_narrowing",
+                  formal_admissibility_phase: "phase_5_bind_over_dynamically_narrowed_space",
+                },
+                validation_question: "Do preservation degradation, intervention viability loss, and formal bind admissibility remain structurally separable when reinforcement, exposure asymmetry, time pressure, and adaptive behavior interact?",
+                summary: {
+                  concise: "The dynamic conditions case tests whether governability degradation remains observable when multiple trajectory-shaping forces interact before bind.",
+                  operator: "The system should show whether formal admissibility can remain intact while meaningful intervention capacity has already degraded under dynamic pressure.",
+                },
+              },
             },
           }}
         />
@@ -291,9 +317,18 @@ describe("MissionPage", () => {
     expect(screen.getAllByText(/first detectable asymmetry:/).length).toBeGreaterThan(1);
     expect(screen.getAllByText(/intervention viability loss:/).length).toBeGreaterThan(1);
     expect(screen.getByText(/bind evaluation:/)).toBeInTheDocument();
-    expect(screen.getByText("A/B/C/D Minimal Validation Case")).toBeInTheDocument();
+    expect(screen.getAllByText("A/B/C/D Minimal Validation Case").length).toBeGreaterThan(0);
     expect(screen.getByText("Testing separation between preservation, intervention viability, and formal bind admissibility")).toBeInTheDocument();
-    expect(screen.getByText(/formal admissibility:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/formal admissibility:/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Dynamic Conditions Validation v0")).toBeInTheDocument();
+    expect(screen.getByText("Testing separation stability under reinforcement, exposure asymmetry, time pressure, and adaptive behavior")).toBeInTheDocument();
+    expect(screen.getByText("reinforcement")).toBeInTheDocument();
+    expect(screen.getByText("exposure asymmetry")).toBeInTheDocument();
+    expect(screen.getByText("time pressure")).toBeInTheDocument();
+    expect(screen.getByText("adaptive behavior")).toBeInTheDocument();
+    expect(screen.getByText(/intervention window compression:/)).toBeInTheDocument();
+    expect(screen.getByText(/adaptive narrowing:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/formal admissibility:/).length).toBeGreaterThan(1);
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
