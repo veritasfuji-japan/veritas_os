@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
-import { type AbcdMinimalValidationCase, type TrajectoryShapingLineage } from "../../../../../../components/dashboard-types";
+import { type AbcdMinimalValidationCase, type DynamicConditionsValidationCase, type TrajectoryShapingLineage } from "../../../../../../components/dashboard-types";
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
 import { buildAmlKycReviewerWalkthroughPayload } from "../../../../../../lib/aml-kyc-reviewer-walkthrough";
 import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
@@ -186,6 +186,106 @@ function buildAbcdMinimalValidationCase(): AbcdMinimalValidationCase {
   };
 }
 
+function buildDynamicConditionsValidationCase(): DynamicConditionsValidationCase {
+  return {
+    case_id: "dynamic_conditions_trajectory_validation",
+    version: "v0",
+    purpose:
+      "Validate whether preservation degradation, intervention viability loss, and formal bind admissibility remain structurally separable when reinforcement, exposure asymmetry, time pressure, and adaptive behavior interact.",
+    base_case: "abcd_minimal_trajectory_validation",
+    options: ["A", "B", "C", "D"],
+    dynamic_factors: [
+      "reinforcement",
+      "exposure_asymmetry",
+      "time_pressure",
+      "adaptive_system_behavior",
+    ],
+    phases: [
+      {
+        phase_id: "phase_1_balanced_option_space",
+        phase_label: "Phase 1 — Balanced option space",
+        exposure_state: "symmetric",
+        reinforcement_state: "none",
+        time_pressure_state: "none",
+        adaptive_behavior_state: "inactive",
+        divergence_state: "open",
+        preservation_state: "open",
+        intervention_viability: "high",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "full_reachable_space",
+      },
+      {
+        phase_id: "phase_2_reinforcement_exposure_asymmetry",
+        phase_label: "Phase 2 — Reinforcement and exposure asymmetry",
+        exposure_state: "asymmetric_emerging",
+        reinforcement_state: "a_b_reinforced",
+        time_pressure_state: "none",
+        adaptive_behavior_state: "inactive",
+        divergence_state: "contracting",
+        preservation_state: "degrading",
+        intervention_viability: "medium",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "first_dynamic_asymmetry",
+      },
+      {
+        phase_id: "phase_3_time_pressure_compression",
+        phase_label: "Phase 3 — Time pressure compresses intervention window",
+        exposure_state: "asymmetric",
+        reinforcement_state: "a_b_dominant",
+        time_pressure_state: "active",
+        adaptive_behavior_state: "weak",
+        divergence_state: "contracted",
+        preservation_state: "degraded",
+        intervention_viability: "low",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "intervention_window_compressed",
+      },
+      {
+        phase_id: "phase_4_adaptive_narrowing",
+        phase_label: "Phase 4 — Adaptive behavior stabilizes narrowed trajectory",
+        exposure_state: "asymmetric",
+        reinforcement_state: "trajectory_narrowed",
+        time_pressure_state: "active",
+        adaptive_behavior_state: "active",
+        divergence_state: "effectively_closed",
+        preservation_state: "collapsed",
+        intervention_viability: "lost",
+        bind_admissibility: "not_evaluated",
+        structural_marker: "adaptive_structural_narrowing",
+      },
+      {
+        phase_id: "phase_5_bind_over_dynamically_narrowed_space",
+        phase_label: "Phase 5 — Bind over dynamically narrowed space",
+        exposure_state: "already_narrowed",
+        reinforcement_state: "trajectory_committed",
+        time_pressure_state: "resolved_at_bind",
+        adaptive_behavior_state: "committed",
+        divergence_state: "closed",
+        preservation_state: "collapsed",
+        intervention_viability: "lost",
+        bind_admissibility: "formally_valid",
+        bind_outcome: "FORMALLY_VALID_OVER_DYNAMICALLY_NARROWED_SPACE",
+        structural_marker: "formal_admissibility_after_dynamic_governability_loss",
+      },
+    ],
+    separation_points: {
+      first_dynamic_asymmetry_phase: "phase_2_reinforcement_exposure_asymmetry",
+      intervention_window_compression_phase: "phase_3_time_pressure_compression",
+      adaptive_narrowing_phase: "phase_4_adaptive_narrowing",
+      intervention_viability_loss_phase: "phase_4_adaptive_narrowing",
+      formal_admissibility_phase: "phase_5_bind_over_dynamically_narrowed_space",
+    },
+    validation_question:
+      "Do preservation degradation, intervention viability loss, and formal bind admissibility remain structurally separable when reinforcement, exposure asymmetry, time pressure, and adaptive behavior interact?",
+    summary: {
+      concise:
+        "The dynamic conditions case tests whether governability degradation remains observable when multiple trajectory-shaping forces interact before bind.",
+      operator:
+        "The system should show whether formal admissibility can remain intact while meaningful intervention capacity has already degraded under dynamic pressure.",
+    },
+  };
+}
+
 function buildTrajectoryShapingLineageV0(): TrajectoryShapingLineage {
   return {
     scenario_id: PRE_BOUNDARY_COLLAPSE_SCENARIO,
@@ -265,6 +365,7 @@ function buildTrajectoryShapingLineageV0(): TrajectoryShapingLineage {
         "Formal admissibility can still hold at bind while effective intervention capacity has already been lost upstream.",
     },
     abcd_minimal_validation_case: buildAbcdMinimalValidationCase(),
+    dynamic_conditions_validation_case: buildDynamicConditionsValidationCase(),
   };
 }
 

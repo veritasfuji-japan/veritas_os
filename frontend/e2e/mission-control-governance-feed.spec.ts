@@ -94,6 +94,11 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       version: "v0",
       options: ["A", "B", "C", "D"],
     });
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case).toMatchObject({
+      case_id: "dynamic_conditions_trajectory_validation",
+      version: "v0",
+      base_case: "abcd_minimal_trajectory_validation",
+    });
 
     await page.goto("/?demo_scenario=pre_boundary_collapse");
 
@@ -124,6 +129,11 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("bind evaluation");
     await expect(walkthrough).toContainText("A/B/C/D Minimal Validation Case");
     await expect(walkthrough).toContainText("Testing separation between preservation, intervention viability, and formal bind admissibility");
+    await expect(walkthrough).toContainText("formal admissibility");
+    await expect(walkthrough).toContainText("Dynamic Conditions Validation v0");
+    await expect(walkthrough).toContainText("Testing separation stability under reinforcement, exposure asymmetry, time pressure, and adaptive behavior");
+    await expect(walkthrough).toContainText("intervention window compression");
+    await expect(walkthrough).toContainText("adaptive narrowing");
     await expect(walkthrough).toContainText("formal admissibility");
 
     const timeline = page.locator('section[aria-label="governance layer timeline"]');

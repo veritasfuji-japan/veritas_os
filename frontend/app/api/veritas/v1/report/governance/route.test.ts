@@ -246,6 +246,15 @@ describe("/api/veritas/v1/report/governance", () => {
             phases: Array<Record<string, unknown>>;
             separation_points: Record<string, string>;
           };
+          dynamic_conditions_validation_case: {
+            case_id: string;
+            version: string;
+            base_case: string;
+            options: string[];
+            dynamic_factors: string[];
+            phases: Array<Record<string, unknown>>;
+            separation_points: Record<string, string>;
+          };
         };
       };
     };
@@ -300,6 +309,27 @@ describe("/api/veritas/v1/report/governance", () => {
     });
     expect(
       payload.governance_layer_snapshot.trajectory_shaping_lineage.abcd_minimal_validation_case.phases,
+    ).toHaveLength(5);
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case).toMatchObject({
+      case_id: "dynamic_conditions_trajectory_validation",
+      version: "v0",
+      base_case: "abcd_minimal_trajectory_validation",
+      options: ["A", "B", "C", "D"],
+      separation_points: {
+        intervention_viability_loss_phase: "phase_4_adaptive_narrowing",
+        formal_admissibility_phase: "phase_5_bind_over_dynamically_narrowed_space",
+      },
+    });
+    expect(
+      payload.governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.dynamic_factors,
+    ).toEqual(expect.arrayContaining([
+      "reinforcement",
+      "exposure_asymmetry",
+      "time_pressure",
+      "adaptive_system_behavior",
+    ]));
+    expect(
+      payload.governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.phases,
     ).toHaveLength(5);
   });
 
