@@ -255,6 +255,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   const hasPreBoundaryCollapseDemo = governanceSnapshot?.demo_scenario === "pre_boundary_collapse" && phaseSnapshots.length > 0;
   const abcdMinimalValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.abcd_minimal_validation_case;
   const dynamicConditionsValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.dynamic_conditions_validation_case;
+  const irreversibilityHorizon = dynamicConditionsValidationCase?.irreversibility_horizon;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -450,6 +451,23 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                     <li>formal admissibility: <span className="font-mono">{stringifyValue(dynamicConditionsValidationCase.separation_points.formal_admissibility_phase)}</span></li>
                     <li>summary: <span className="text-muted-foreground">{stringifyValue(dynamicConditionsValidationCase.summary.concise)}</span></li>
                   </ul>
+                  {irreversibilityHorizon ? (
+                    <div
+                      aria-label="Irreversibility Horizon v0"
+                      className="mt-3 rounded-md border border-border/60 bg-background/60 p-3"
+                    >
+                      <p className="font-semibold">Irreversibility Horizon v0</p>
+                      <p className="text-muted-foreground">Marking the last meaningful intervention point before operational irreversibility stabilizes</p>
+                      <ul className="mt-2 space-y-1">
+                        <li>first structural degradation signal: <span className="font-mono">{stringifyValue(irreversibilityHorizon.markers.first_structural_degradation_signal_phase)}</span></li>
+                        <li>early warning: <span className="font-mono">{stringifyValue(irreversibilityHorizon.markers.early_warning_phase)}</span></li>
+                        <li>last meaningful intervention: <span className="font-mono">{stringifyValue(irreversibilityHorizon.markers.last_meaningful_intervention_phase)}</span></li>
+                        <li>irreversibility horizon: <span className="font-mono">{stringifyValue(irreversibilityHorizon.markers.irreversibility_horizon_phase)}</span></li>
+                        <li>bind after horizon: <span className="font-mono">{stringifyValue(irreversibilityHorizon.markers.bind_after_horizon_phase)}</span></li>
+                        <li>summary: <span className="text-muted-foreground">{stringifyValue(irreversibilityHorizon.summary.concise)}</span></li>
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

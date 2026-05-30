@@ -331,6 +331,19 @@ describe("/api/veritas/v1/report/governance", () => {
     expect(
       payload.governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.phases,
     ).toHaveLength(5);
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon).toMatchObject({
+      version: "v0",
+      base_case: "dynamic_conditions_trajectory_validation",
+      horizon_model: "deterministic_representative_marker",
+      markers: {
+        first_structural_degradation_signal_phase: "phase_2_reinforcement_exposure_asymmetry",
+        early_warning_phase: "phase_3_time_pressure_compression",
+        last_meaningful_intervention_phase: "phase_3_time_pressure_compression",
+        irreversibility_horizon_phase: "phase_4_adaptive_narrowing",
+        bind_after_horizon_phase: "phase_5_bind_over_dynamically_narrowed_space",
+      },
+    });
+
   });
 
   it("returns pre-boundary collapse demo scenario payload from header seam", async () => {

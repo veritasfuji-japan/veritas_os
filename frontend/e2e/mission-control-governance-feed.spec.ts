@@ -98,6 +98,18 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       case_id: "dynamic_conditions_trajectory_validation",
       version: "v0",
       base_case: "abcd_minimal_trajectory_validation",
+      irreversibility_horizon: {
+        version: "v0",
+        base_case: "dynamic_conditions_trajectory_validation",
+        horizon_model: "deterministic_representative_marker",
+        markers: {
+          first_structural_degradation_signal_phase: "phase_2_reinforcement_exposure_asymmetry",
+          early_warning_phase: "phase_3_time_pressure_compression",
+          last_meaningful_intervention_phase: "phase_3_time_pressure_compression",
+          irreversibility_horizon_phase: "phase_4_adaptive_narrowing",
+          bind_after_horizon_phase: "phase_5_bind_over_dynamically_narrowed_space",
+        },
+      },
     });
 
     await page.goto("/?demo_scenario=pre_boundary_collapse");
@@ -130,6 +142,12 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("A/B/C/D Minimal Validation Case");
     await expect(walkthrough).toContainText("Testing separation between preservation, intervention viability, and formal bind admissibility");
     await expect(walkthrough).toContainText("formal admissibility");
+    await expect(walkthrough).toContainText("Irreversibility Horizon v0");
+    await expect(walkthrough).toContainText("Marking the last meaningful intervention point before operational irreversibility stabilizes");
+    await expect(walkthrough).toContainText("first structural degradation signal");
+    await expect(walkthrough).toContainText("last meaningful intervention");
+    await expect(walkthrough).toContainText("irreversibility horizon");
+    await expect(walkthrough).toContainText("bind after horizon");
     await expect(walkthrough).toContainText("Dynamic Conditions Validation v0");
     await expect(walkthrough).toContainText("Testing separation stability under reinforcement, exposure asymmetry, time pressure, and adaptive behavior");
     await expect(walkthrough).toContainText("intervention window compression");
