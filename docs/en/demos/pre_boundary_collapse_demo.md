@@ -256,3 +256,42 @@ vocabulary unchanged. It does not make a production governability claim. Its
 purpose is to make the temporal relationship visible: a trajectory can remain
 formally admissible and inspectable at bind while meaningful intervention
 capacity has already become operationally hard to recover upstream.
+
+## Actor Recognition Gap v0
+
+Actor Recognition Gap v0 is the next compact marker layer after
+Irreversibility Horizon v0. Irreversibility Horizon v0 marks when structural
+intervention capacity becomes operationally hard to recover; Actor Recognition
+Gap v0 asks when the visibility of remaining intervention capacity begins
+degrading before actors fully recognize the loss.
+
+This layer does not infer actor psychology, predict actor beliefs, score actor
+awareness, or introduce automatic enforcement. It is an additive deterministic
+representative validation pattern under
+`trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon.actor_recognition_gap`.
+It marks a representative visibility gap between structural degradation and
+actor recognition of reduced intervention capacity, without changing OpenAPI,
+bind admissibility, state family, or pre-bind vocabulary.
+
+The marker distinguishes these representative points:
+
+- **actual degradation visible** — Phase 2, where reinforcement and exposure
+  asymmetry first make structural degradation visible.
+- **actor still perceives governable** — Phase 2, where the system may still
+  appear formally open and procedurally coherent to the actor.
+- **visibility degradation** — Phase 3, where time pressure compresses the
+  intervention window and the visibility of remaining intervention capacity
+  begins degrading.
+- **recognition gap** — Phase 3, where a representative lag emerges between
+  structural degradation and actor recognition of reduced intervention capacity.
+- **recognition alignment** — Phase 4, where actors may begin recognizing the
+  narrowed trajectory after adaptive behavior has made meaningful divergence
+  operationally hard to recover.
+- **bind after recognition gap** — Phase 5, where bind evaluates a formally
+  admissible trajectory after the representative recognition gap has already
+  occurred upstream.
+
+The purpose is visibility, not formal assurance, prediction, or a production
+governability claim. A system may remain formally open, procedurally admissible,
+and apparently governable while meaningful divergence capacity has already
+become progressively nonviable upstream.

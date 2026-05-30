@@ -107,3 +107,37 @@ gate ではありません。
 production governability claim も行いません。目的は、bind 時点で formal admissibility と
 inspectability が残っていても、その上流で meaningful intervention capacity の回復が
 operationally hard になっている可能性を、代表パターンとして可視化することです。
+
+## Actor Recognition Gap v0
+
+Actor Recognition Gap v0 は、Irreversibility Horizon v0 の次に置く小さな marker
+layer です。Irreversibility Horizon v0 が structural intervention capacity の回復が
+operationally hard になる地点を示すのに対し、Actor Recognition Gap v0 は「remaining
+intervention capacity の visibility が、当事者がその損失を十分に認識する前に、いつ劣化し始めたか」
+を問います。
+
+この layer は actor psychology を推定しません。actor の belief を予測せず、awareness を scoring
+せず、自動 enforcement も追加しません。
+`trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon.actor_recognition_gap`
+に追加される additive な deterministic representative validation pattern です。OpenAPI、bind
+admissibility、state family、pre-bind vocabulary は変更せず、structural degradation と reduced
+intervention capacity に対する actor recognition の間に生じ得る representative visibility gap を示します。
+
+この marker は、次の代表点を区別します。
+
+- **actual degradation visible** — Phase 2。reinforcement と exposure asymmetry により
+  structural degradation が最初に見え始める段階。
+- **actor still perceives governable** — Phase 2。system が actor にはまだ formally open かつ
+  procedurally coherent に見え得る段階。
+- **visibility degradation** — Phase 3。time pressure が intervention window を圧縮し、remaining
+  intervention capacity の visibility が劣化し始める段階。
+- **recognition gap** — Phase 3。structural degradation と reduced intervention capacity に対する
+  actor recognition の間に代表的な lag が生じる段階。
+- **recognition alignment** — Phase 4。adaptive behavior により narrowed trajectory が安定化し、
+  meaningful divergence の回復が operationally hard になった後で、actor がようやく認識し始め得る段階。
+- **bind after recognition gap** — Phase 5。representative recognition gap が上流ですでに発生した後、
+  formally admissible な trajectory を bind が評価する段階。
+
+目的は visibility であり、formal assurance、prediction、production governability claim ではありません。
+system は formally open、procedurally admissible、apparently governable に見え続ける一方で、meaningful
+divergence capacity は上流ですでに progressively nonviable になっている可能性があります。
