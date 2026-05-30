@@ -221,3 +221,38 @@ This walkthrough is a controlled representative demo for reviewer understanding.
 - Deterministic fixture-backed scenario
 - Not an exhaustive production trace
 - Does not imply legal or regulatory approval
+
+## Irreversibility Horizon v0
+
+Irreversibility Horizon v0 is the next compact marker layer after Dynamic
+Conditions Validation v0. Dynamic Conditions Validation v0 shows that
+preservation degradation, intervention viability loss, and formal bind
+admissibility can remain separate while reinforcement, exposure asymmetry, time
+pressure, and adaptive system behavior interact. Irreversibility Horizon v0 asks
+how early structurally meaningful degradation becomes visible before operational
+irreversibility stabilizes.
+
+This is not a production irreversibility detection engine, a scoring model, or
+a new enforcement gate. It is an additive deterministic representative
+validation pattern under
+`trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon`.
+It marks representative temporal points in the existing dynamic sequence:
+
+- **first structural degradation signal** — Phase 2, where reinforcement and
+  exposure asymmetry first make dynamic asymmetry detectable while intervention
+  remains realistic.
+- **early warning** — Phase 3, where time pressure begins compressing the
+  intervention window while meaningful intervention is still possible.
+- **last meaningful intervention** — Phase 3, the last representative phase
+  before adaptive stabilization where intervention remains meaningfully
+  available.
+- **irreversibility horizon** — Phase 4, where adaptive behavior stabilizes the
+  narrowed trajectory and recovery becomes operationally hard.
+- **bind after horizon** — Phase 5, where bind evaluates a formally admissible
+  trajectory after the representative horizon has already been crossed.
+
+The marker keeps the existing OpenAPI, bind contract, state family, and pre-bind
+vocabulary unchanged. It does not make a production governability claim. Its
+purpose is to make the temporal relationship visible: a trajectory can remain
+formally admissible and inspectable at bind while meaningful intervention
+capacity has already become operationally hard to recover upstream.

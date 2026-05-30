@@ -75,3 +75,35 @@ condition ではなく、formal bind admissibility が intact のままでも時
 この validation は dynamic pressure 下で preservation degradation、intervention viability
 loss、formal bind admissibility を比較するためのものです。certification、general dynamic
 trajectory engine、production governability claim ではありません。
+
+## Irreversibility Horizon v0
+
+Irreversibility Horizon v0 は、Dynamic Conditions Validation v0 の次に置く小さな
+marker layer です。Dynamic Conditions Validation v0 は、reinforcement、exposure
+asymmetry、time pressure、adaptive system behavior が相互作用しても、preservation
+degradation、intervention viability loss、formal bind admissibility を分離して観測
+できることを示します。Irreversibility Horizon v0 は、その上で「operational
+irreversibility が安定化する前に、structurally meaningful degradation がどれだけ早く
+見え始めるか」を問います。
+
+これは production 用の irreversibility 判定エンジン、score model、または新しい enforcement
+gate ではありません。
+`trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon`
+に追加される deterministic representative validation pattern です。既存の dynamic sequence
+に対して、次の代表的な temporal points を示します。
+
+- **first structural degradation signal** — Phase 2。reinforcement と exposure asymmetry
+  により最初の dynamic asymmetry が検出可能になるが、介入はまだ現実的に可能な段階。
+- **early warning** — Phase 3。time pressure により intervention window が短くなり始めるが、
+  meaningful intervention はまだ可能な段階。
+- **last meaningful intervention** — Phase 3。adaptive stabilization の前に、代表パターン上
+  meaningful intervention が可能な最後の段階。
+- **irreversibility horizon** — Phase 4。adaptive behavior が narrowed trajectory を安定化し、
+  recovery が operationally hard になる段階。
+- **bind after horizon** — Phase 5。representative horizon を越えた後の formally admissible
+  trajectory を bind が評価する段階。
+
+この marker は、OpenAPI、bind contract、state family、pre-bind vocabulary を変更しません。
+production governability claim も行いません。目的は、bind 時点で formal admissibility と
+inspectability が残っていても、その上流で meaningful intervention capacity の回復が
+operationally hard になっている可能性を、代表パターンとして可視化することです。

@@ -143,6 +143,42 @@ export interface DynamicConditionsValidationPhase {
   bind_outcome?: string;
 }
 
+export interface IrreversibilityHorizonMarkers {
+  first_structural_degradation_signal_phase: string;
+  early_warning_phase: string;
+  last_meaningful_intervention_phase: string;
+  irreversibility_horizon_phase: string;
+  bind_after_horizon_phase: string;
+}
+
+export interface IrreversibilityHorizonPhaseInterpretationPoint {
+  phase_id: string;
+  meaning: string;
+  intervention_status: string;
+}
+
+export interface IrreversibilityHorizonPhaseInterpretation {
+  first_structural_degradation_signal: IrreversibilityHorizonPhaseInterpretationPoint;
+  early_warning: IrreversibilityHorizonPhaseInterpretationPoint;
+  last_meaningful_intervention: IrreversibilityHorizonPhaseInterpretationPoint;
+  irreversibility_horizon: IrreversibilityHorizonPhaseInterpretationPoint;
+  bind_after_horizon: IrreversibilityHorizonPhaseInterpretationPoint;
+}
+
+export interface IrreversibilityHorizon {
+  version: string;
+  purpose: string;
+  base_case: string;
+  horizon_model: string;
+  markers: IrreversibilityHorizonMarkers;
+  phase_interpretation: IrreversibilityHorizonPhaseInterpretation;
+  validation_question: string;
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface DynamicConditionsValidationCase {
   case_id: string;
   version: string;
@@ -163,6 +199,7 @@ export interface DynamicConditionsValidationCase {
     concise: string;
     operator: string;
   };
+  irreversibility_horizon?: IrreversibilityHorizon;
 }
 
 export interface TrajectoryShapingLineage {

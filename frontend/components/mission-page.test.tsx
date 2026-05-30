@@ -295,6 +295,51 @@ describe("MissionPage", () => {
                   concise: "The dynamic conditions case tests whether governability degradation remains observable when multiple trajectory-shaping forces interact before bind.",
                   operator: "The system should show whether formal admissibility can remain intact while meaningful intervention capacity has already degraded under dynamic pressure.",
                 },
+                irreversibility_horizon: {
+                  version: "v0",
+                  purpose: "Mark when structurally meaningful governability degradation becomes visible before operational irreversibility stabilizes.",
+                  base_case: "dynamic_conditions_trajectory_validation",
+                  horizon_model: "deterministic_representative_marker",
+                  markers: {
+                    first_structural_degradation_signal_phase: "phase_2_reinforcement_exposure_asymmetry",
+                    early_warning_phase: "phase_3_time_pressure_compression",
+                    last_meaningful_intervention_phase: "phase_3_time_pressure_compression",
+                    irreversibility_horizon_phase: "phase_4_adaptive_narrowing",
+                    bind_after_horizon_phase: "phase_5_bind_over_dynamically_narrowed_space",
+                  },
+                  phase_interpretation: {
+                    first_structural_degradation_signal: {
+                      phase_id: "phase_2_reinforcement_exposure_asymmetry",
+                      meaning: "The first detectable dynamic asymmetry appears while intervention remains realistic.",
+                      intervention_status: "available",
+                    },
+                    early_warning: {
+                      phase_id: "phase_3_time_pressure_compression",
+                      meaning: "The intervention window begins compressing under time pressure while meaningful intervention remains possible.",
+                      intervention_status: "still_meaningful_but_compressing",
+                    },
+                    last_meaningful_intervention: {
+                      phase_id: "phase_3_time_pressure_compression",
+                      meaning: "The last representative phase where intervention remains meaningfully available before adaptive stabilization.",
+                      intervention_status: "last_meaningful",
+                    },
+                    irreversibility_horizon: {
+                      phase_id: "phase_4_adaptive_narrowing",
+                      meaning: "Adaptive behavior stabilizes the narrowed trajectory and recovery becomes operationally hard.",
+                      intervention_status: "operationally_hard_to_reverse",
+                    },
+                    bind_after_horizon: {
+                      phase_id: "phase_5_bind_over_dynamically_narrowed_space",
+                      meaning: "Bind evaluates a formally admissible trajectory after the irreversibility horizon has already been crossed.",
+                      intervention_status: "post_horizon",
+                    },
+                  },
+                  validation_question: "How early can structurally meaningful degradation become visible before operational irreversibility stabilizes?",
+                  summary: {
+                    concise: "Irreversibility Horizon v0 marks the representative point where intervention remains formally possible but becomes operationally hard to recover before bind.",
+                    operator: "The system should show the last meaningful intervention phase before adaptive narrowing stabilizes the trajectory.",
+                  },
+                },
               },
             },
           }}
@@ -329,6 +374,13 @@ describe("MissionPage", () => {
     expect(screen.getByText(/intervention window compression:/)).toBeInTheDocument();
     expect(screen.getByText(/adaptive narrowing:/)).toBeInTheDocument();
     expect(screen.getAllByText(/formal admissibility:/).length).toBeGreaterThan(1);
+    expect(screen.getByText("Irreversibility Horizon v0")).toBeInTheDocument();
+    expect(screen.getByText("Marking the last meaningful intervention point before operational irreversibility stabilizes")).toBeInTheDocument();
+    expect(screen.getByText(/first structural degradation signal:/)).toBeInTheDocument();
+    expect(screen.getByText(/early warning:/)).toBeInTheDocument();
+    expect(screen.getByText(/last meaningful intervention:/)).toBeInTheDocument();
+    expect(screen.getByText(/irreversibility horizon:/)).toBeInTheDocument();
+    expect(screen.getByText(/bind after horizon:/)).toBeInTheDocument();
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
