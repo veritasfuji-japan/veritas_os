@@ -58,6 +58,8 @@ python3 scripts/demo/validate_reviewer_evidence_packet.py
 
 This verifies that the generated packet matches the golden fixture, `packet_hash` recomputes correctly, schema or fallback validation passes, deterministic case expectations hold, and evidence-chain verification summaries remain valid.
 
+The workflow also verifies `reviewer-evidence-artifact-manifest.json` before uploading artifacts. The manifest verifier at `scripts/demo/verify_reviewer_evidence_artifact_manifest.py` recomputes the manifest hash, each listed file hash, and each listed file size to confirm that the manifest matches the actual artifact directory.
+
 This CI gate is local/offline only and does not connect to live SaaS, IAM, IdP, SSO, customer systems, banks, sanctions systems, production approval workflows, or live audit stores.
 
 ## CI artifacts
@@ -72,8 +74,9 @@ The uploaded artifact includes:
 - `reviewer-evidence-packet-golden-fixture.json`
 - `reviewer-evidence-packet-schema.json`
 - `reviewer-evidence-artifact-manifest.json`
+- `reviewer-evidence-artifact-manifest-verification-report.json`
 
-These files allow reviewers to inspect the exact validation report, generated packet, checked-in fixture, and schema used by CI. The uploaded artifact also includes `reviewer-evidence-artifact-manifest.json`, a deterministic manifest that lists the uploaded reviewer evidence files, their roles, whether they are generated or checked-in, their sha256 hashes, and their byte sizes.
+These files allow reviewers to inspect the exact validation report, generated packet, checked-in fixture, and schema used by CI. The uploaded artifact also includes `reviewer-evidence-artifact-manifest.json`, a deterministic manifest that lists the uploaded reviewer evidence files, their roles, whether they are generated or checked-in, their sha256 hashes, and their byte sizes. The CI-produced `reviewer-evidence-artifact-manifest-verification-report.json` records the local/offline manifest verification result.
 
 This artifact is local/offline only and does not represent live SaaS execution, production deployment, audit certification, regulatory approval, or third-party certification.
 
