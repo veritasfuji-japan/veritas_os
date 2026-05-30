@@ -67,7 +67,7 @@ This command:
 
 The same validation path is enforced in CI by the Reviewer Evidence Packet Validation workflow, so reviewers can see that the packet, fixture, schema/fallback validation, case expectations, and evidence-chain verification summaries are continuously checked.
 
-On GitHub Actions, the Reviewer Evidence Packet Validation workflow also uploads `reviewer-evidence-packet-validation-artifacts`, which contains the generated validation report, generated packet, checked-in golden fixture, and schema for inspection. The uploaded artifact includes `reviewer-evidence-artifact-manifest.json`, which lets reviewers inspect file roles, hashes, and sizes for the CI-produced reviewer evidence artifacts.
+On GitHub Actions, the Reviewer Evidence Packet Validation workflow also uploads `reviewer-evidence-packet-validation-artifacts`, which contains the generated validation report, generated packet, checked-in golden fixture, and schema for inspection. The uploaded artifact includes `reviewer-evidence-artifact-manifest.json`, and the CI workflow verifies this manifest against the actual artifact files before upload. The uploaded artifact also includes `reviewer-evidence-artifact-manifest-verification-report.json`, a deterministic local/offline report from `scripts/demo/verify_reviewer_evidence_artifact_manifest.py`.
 
 ## Expected current results
 

@@ -59,6 +59,13 @@ jobs:
             artifacts/reviewer-evidence-packet
           test -f artifacts/reviewer-evidence-packet/reviewer-evidence-artifact-manifest.json
 
+      - name: Verify Reviewer Evidence Packet artifact manifest
+        run: |
+          python3 scripts/demo/verify_reviewer_evidence_artifact_manifest.py \
+            artifacts/reviewer-evidence-packet \
+            > artifacts/reviewer-evidence-packet/reviewer-evidence-artifact-manifest-verification-report.json
+          test -f artifacts/reviewer-evidence-packet/reviewer-evidence-artifact-manifest-verification-report.json
+
       - name: Upload Reviewer Evidence Packet validation artifacts
         uses: actions/upload-artifact@v4
         with:
