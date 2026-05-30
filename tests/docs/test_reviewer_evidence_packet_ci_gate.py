@@ -16,6 +16,10 @@ GOLDEN_FIXTURE_ARTIFACT = "reviewer-evidence-packet-golden-fixture.json"
 SCHEMA_ARTIFACT = "reviewer-evidence-packet-schema.json"
 MANIFEST_BUILDER_REFERENCE = "scripts/demo/build_reviewer_evidence_artifact_manifest.py"
 MANIFEST_ARTIFACT = "reviewer-evidence-artifact-manifest.json"
+MANIFEST_VERIFIER_REFERENCE = "scripts/demo/verify_reviewer_evidence_artifact_manifest.py"
+MANIFEST_VERIFICATION_REPORT_ARTIFACT = (
+    "reviewer-evidence-artifact-manifest-verification-report.json"
+)
 MANIFEST_ID = "reviewer-evidence-artifact-manifest-v1"
 
 
@@ -155,3 +159,47 @@ def test_readmes_reference_artifact_manifest() -> None:
     for readme_path in ["README.md", "README_JP.md"]:
         readme = _read_repo_file(readme_path)
         assert MANIFEST_ARTIFACT in readme
+
+
+def test_reviewer_evidence_packet_workflow_verifies_artifact_manifest() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert MANIFEST_VERIFIER_REFERENCE in workflow
+    assert MANIFEST_VERIFICATION_REPORT_ARTIFACT in workflow
+    assert workflow.index(MANIFEST_VERIFIER_REFERENCE) < workflow.index(
+        "actions/upload-artifact"
+    )
+
+
+def test_validation_report_docs_reference_manifest_verifier() -> None:
+    docs = _read_repo_file(
+        "docs/en/demo/reviewer-evidence-packet-validation-report.md"
+    )
+
+    assert MANIFEST_VERIFIER_REFERENCE in docs
+    assert MANIFEST_VERIFICATION_REPORT_ARTIFACT in docs
+
+
+def test_quickstart_mentions_manifest_verifier() -> None:
+    quickstart = _read_repo_file(
+        "docs/en/demo/external-reviewer-quickstart.md"
+    )
+
+    assert "verifies this manifest" in quickstart
+    assert MANIFEST_ARTIFACT in quickstart
+
+
+def test_artifact_index_mentions_manifest_verifier_script() -> None:
+    artifact_index = _read_repo_file(
+        "docs/en/demo/external-reviewer-artifact-index.md"
+    )
+
+    assert MANIFEST_VERIFIER_REFERENCE in artifact_index
+    assert MANIFEST_VERIFICATION_REPORT_ARTIFACT in artifact_index
+
+
+def test_readmes_reference_manifest_verification() -> None:
+    for readme_path in ["README.md", "README_JP.md"]:
+        readme = _read_repo_file(readme_path)
+        assert MANIFEST_VERIFIER_REFERENCE in readme
+        assert "manifest" in readme.lower()
