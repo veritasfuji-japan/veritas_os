@@ -50,6 +50,16 @@ Use this 10–15 minute path for a reviewer-facing inspection:
 6. Inspect the original demo:
    `scripts/demo/saas_permission_change_governed_demo.py`
 
+## Local bundle generation
+
+Reviewers can reproduce the GitHub Actions reviewer evidence artifact locally by running:
+
+```text
+python3 scripts/demo/build_reviewer_evidence_bundle.py
+```
+
+This creates `artifacts/reviewer-evidence-packet/` with the validation report, generated packet, golden fixture copy, schema copy, artifact manifest, manifest verification report, and step summary. The bundle also includes copies of this quickstart and the external reviewer artifact index.
+
 ## One-command validation
 
 ```text
