@@ -113,8 +113,10 @@ VERITAS includes a local/offline Reviewer Evidence Packet v1 export for the SaaS
 - External Reviewer Quickstart: docs/en/demo/external-reviewer-quickstart.md
 - External Reviewer Artifact Index: docs/en/demo/external-reviewer-artifact-index.md
 - Validation report: docs/en/demo/reviewer-evidence-packet-validation-report.md
+- Bundle docs: docs/en/demo/reviewer-evidence-bundle.md
 - Script: scripts/demo/export_reviewer_evidence_packet.py
 - Validator script: scripts/demo/validate_reviewer_evidence_packet.py
+- Local bundle builder: scripts/demo/build_reviewer_evidence_bundle.py
 - CI gate: .github/workflows/reviewer-evidence-packet-validation.yml
 - CI artifacts: reviewer-evidence-packet-validation-artifacts
 - CI artifact manifest: reviewer-evidence-artifact-manifest.json
@@ -130,6 +132,8 @@ A local/offline validation report is also available. It verifies that the genera
 A dedicated CI gate runs the Reviewer Evidence Packet validation report so the reviewer-facing packet, fixture, schema/fallback validation, case expectations, and evidence-chain verification summaries are continuously checked.
 
 The Reviewer Evidence Packet Validation workflow also uploads reviewer evidence artifacts, including the generated validation report, generated packet, golden fixture, and schema, so reviewers can inspect the exact CI-produced outputs. The uploaded CI artifact also includes `reviewer-evidence-artifact-manifest.json`, a deterministic manifest listing each uploaded reviewer artifact, its role, source, sha256 hash, and size. The CI workflow also verifies `reviewer-evidence-artifact-manifest.json` before upload by recomputing the manifest hash, file hashes, and file sizes against the actual artifact directory.
+
+Reviewers can also reproduce the CI reviewer evidence artifact locally with the Reviewer Evidence Bundle builder. It generates the validation report, generated packet, fixture copy, schema copy, artifact manifest, manifest verification report, and step summary into one local directory.
 
 ## Bind Coverage Registry v1
 

@@ -8,6 +8,8 @@ Key local/offline reviewer-facing artifacts:
   - exports the Reviewer Evidence Packet JSON
 - `scripts/demo/validate_reviewer_evidence_packet.py`
   - builds pass/fail validation report
+- `scripts/demo/build_reviewer_evidence_bundle.py`
+  - builds the complete local Reviewer Evidence Bundle
 - `scripts/demo/verify_reviewer_evidence_artifact_manifest.py`
   - verifies reviewer-evidence-artifact-manifest.json against actual artifact files, hashes, and sizes
 - `docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json`
@@ -18,6 +20,8 @@ Key local/offline reviewer-facing artifacts:
   - Reviewer Evidence Packet documentation
 - `docs/en/demo/reviewer-evidence-packet-validation-report.md`
   - validation report documentation
+- `docs/en/demo/reviewer-evidence-bundle.md`
+  - documentation for local Reviewer Evidence Bundle generation
 - `.github/workflows/reviewer-evidence-packet-validation.yml`
   - CI gate for Reviewer Evidence Packet validation report
 - `reviewer-evidence-packet-validation-artifacts`
@@ -26,6 +30,8 @@ Key local/offline reviewer-facing artifacts:
   - deterministic manifest of uploaded reviewer evidence artifact files, hashes, roles, and sizes
 - `reviewer-evidence-artifact-manifest-verification-report.json`
   - CI-produced report verifying the artifact manifest against uploaded files
+- `reviewer-evidence-step-summary.md`
+  - Markdown step summary for reviewer evidence validation status
 - `docs/en/demo/saas-permission-change-governed-demo.md`
   - SaaS permission-change demo documentation
 - `docs/en/architecture/outcome-receipt.md`

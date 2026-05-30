@@ -75,8 +75,9 @@ The uploaded artifact includes:
 - `reviewer-evidence-packet-schema.json`
 - `reviewer-evidence-artifact-manifest.json`
 - `reviewer-evidence-artifact-manifest-verification-report.json`
+- `reviewer-evidence-step-summary.md`
 
-These files allow reviewers to inspect the exact validation report, generated packet, checked-in fixture, and schema used by CI. The uploaded artifact also includes `reviewer-evidence-artifact-manifest.json`, a deterministic manifest that lists the uploaded reviewer evidence files, their roles, whether they are generated or checked-in, their sha256 hashes, and their byte sizes. The CI-produced `reviewer-evidence-artifact-manifest-verification-report.json` records the local/offline manifest verification result.
+These files allow reviewers to inspect the exact validation report, generated packet, checked-in fixture, and schema used by CI. The uploaded artifact also includes `reviewer-evidence-artifact-manifest.json`, a deterministic manifest that lists the uploaded reviewer evidence files, their roles, whether they are generated or checked-in, their sha256 hashes, and their byte sizes. The CI-produced `reviewer-evidence-artifact-manifest-verification-report.json` records the local/offline manifest verification result. The CI-produced `reviewer-evidence-step-summary.md` provides a Markdown summary of the same reviewer evidence status.
 
 This artifact is local/offline only and does not represent live SaaS execution, production deployment, audit certification, regulatory approval, or third-party certification.
 

@@ -66,6 +66,14 @@ jobs:
             > artifacts/reviewer-evidence-packet/reviewer-evidence-artifact-manifest-verification-report.json
           test -f artifacts/reviewer-evidence-packet/reviewer-evidence-artifact-manifest-verification-report.json
 
+      - name: Build Reviewer Evidence Packet step summary
+        run: |
+          python3 scripts/demo/build_reviewer_evidence_step_summary.py \
+            artifacts/reviewer-evidence-packet \
+            --output-path artifacts/reviewer-evidence-packet/reviewer-evidence-step-summary.md \
+            >> "$GITHUB_STEP_SUMMARY"
+          test -f artifacts/reviewer-evidence-packet/reviewer-evidence-step-summary.md
+
       - name: Upload Reviewer Evidence Packet validation artifacts
         uses: actions/upload-artifact@v4
         with:
