@@ -143,6 +143,44 @@ export interface DynamicConditionsValidationPhase {
   bind_outcome?: string;
 }
 
+export interface ActorRecognitionGapMarkers {
+  actual_degradation_visible_phase: string;
+  actor_still_perceives_governable_phase: string;
+  visibility_degradation_phase: string;
+  recognition_gap_phase: string;
+  recognition_alignment_phase: string;
+  bind_after_recognition_gap_phase: string;
+}
+
+export interface ActorRecognitionGapPhaseInterpretationPoint {
+  phase_id: string;
+  meaning: string;
+  actor_visibility_status: string;
+}
+
+export interface ActorRecognitionGapPhaseInterpretation {
+  actual_degradation_visible: ActorRecognitionGapPhaseInterpretationPoint;
+  actor_still_perceives_governable: ActorRecognitionGapPhaseInterpretationPoint;
+  visibility_degradation: ActorRecognitionGapPhaseInterpretationPoint;
+  recognition_gap: ActorRecognitionGapPhaseInterpretationPoint;
+  recognition_alignment: ActorRecognitionGapPhaseInterpretationPoint;
+  bind_after_recognition_gap: ActorRecognitionGapPhaseInterpretationPoint;
+}
+
+export interface ActorRecognitionGap {
+  version: string;
+  purpose: string;
+  base_case: string;
+  recognition_model: string;
+  markers: ActorRecognitionGapMarkers;
+  phase_interpretation: ActorRecognitionGapPhaseInterpretation;
+  validation_question: string;
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface IrreversibilityHorizonMarkers {
   first_structural_degradation_signal_phase: string;
   early_warning_phase: string;
@@ -177,6 +215,7 @@ export interface IrreversibilityHorizon {
     concise: string;
     operator: string;
   };
+  actor_recognition_gap?: ActorRecognitionGap;
 }
 
 export interface DynamicConditionsValidationCase {

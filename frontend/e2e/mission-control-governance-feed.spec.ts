@@ -109,6 +109,19 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
           irreversibility_horizon_phase: "phase_4_adaptive_narrowing",
           bind_after_horizon_phase: "phase_5_bind_over_dynamically_narrowed_space",
         },
+        actor_recognition_gap: {
+          version: "v0",
+          base_case: "irreversibility_horizon_v0",
+          recognition_model: "deterministic_representative_marker",
+          markers: {
+            actual_degradation_visible_phase: "phase_2_reinforcement_exposure_asymmetry",
+            actor_still_perceives_governable_phase: "phase_2_reinforcement_exposure_asymmetry",
+            visibility_degradation_phase: "phase_3_time_pressure_compression",
+            recognition_gap_phase: "phase_3_time_pressure_compression",
+            recognition_alignment_phase: "phase_4_adaptive_narrowing",
+            bind_after_recognition_gap_phase: "phase_5_bind_over_dynamically_narrowed_space",
+          },
+        },
       },
     });
 
@@ -148,6 +161,13 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("last meaningful intervention");
     await expect(walkthrough).toContainText("irreversibility horizon");
     await expect(walkthrough).toContainText("bind after horizon");
+    await expect(walkthrough).toContainText("Actor Recognition Gap v0");
+    await expect(walkthrough).toContainText("Marking the gap between structural degradation and actor recognition of intervention capacity loss");
+    await expect(walkthrough).toContainText("actual degradation visible");
+    await expect(walkthrough).toContainText("actor still perceives governable");
+    await expect(walkthrough).toContainText("recognition gap");
+    await expect(walkthrough).toContainText("recognition alignment");
+    await expect(walkthrough).toContainText("bind after recognition gap");
     await expect(walkthrough).toContainText("Dynamic Conditions Validation v0");
     await expect(walkthrough).toContainText("Testing separation stability under reinforcement, exposure asymmetry, time pressure, and adaptive behavior");
     await expect(walkthrough).toContainText("intervention window compression");

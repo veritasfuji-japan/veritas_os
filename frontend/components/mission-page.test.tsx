@@ -339,6 +339,57 @@ describe("MissionPage", () => {
                     concise: "Irreversibility Horizon v0 marks the representative point where intervention remains formally possible but becomes operationally hard to recover before bind.",
                     operator: "The system should show the last meaningful intervention phase before adaptive narrowing stabilizes the trajectory.",
                   },
+                  actor_recognition_gap: {
+                    version: "v0",
+                    purpose: "Mark the representative gap between structurally visible degradation and actor recognition of intervention capacity loss.",
+                    base_case: "irreversibility_horizon_v0",
+                    recognition_model: "deterministic_representative_marker",
+                    markers: {
+                      actual_degradation_visible_phase: "phase_2_reinforcement_exposure_asymmetry",
+                      actor_still_perceives_governable_phase: "phase_2_reinforcement_exposure_asymmetry",
+                      visibility_degradation_phase: "phase_3_time_pressure_compression",
+                      recognition_gap_phase: "phase_3_time_pressure_compression",
+                      recognition_alignment_phase: "phase_4_adaptive_narrowing",
+                      bind_after_recognition_gap_phase: "phase_5_bind_over_dynamically_narrowed_space",
+                    },
+                    phase_interpretation: {
+                      actual_degradation_visible: {
+                        phase_id: "phase_2_reinforcement_exposure_asymmetry",
+                        meaning: "Structural degradation first becomes visible through reinforcement and exposure asymmetry.",
+                        actor_visibility_status: "may_appear_governable",
+                      },
+                      actor_still_perceives_governable: {
+                        phase_id: "phase_2_reinforcement_exposure_asymmetry",
+                        meaning: "The system may still appear formally open and procedurally coherent to the actor.",
+                        actor_visibility_status: "governable_apparent",
+                      },
+                      visibility_degradation: {
+                        phase_id: "phase_3_time_pressure_compression",
+                        meaning: "The visibility of remaining intervention capacity begins degrading as time pressure compresses the intervention window.",
+                        actor_visibility_status: "intervention_visibility_degrading",
+                      },
+                      recognition_gap: {
+                        phase_id: "phase_3_time_pressure_compression",
+                        meaning: "A representative gap emerges between structural degradation and actor recognition of reduced intervention capacity.",
+                        actor_visibility_status: "recognition_lag",
+                      },
+                      recognition_alignment: {
+                        phase_id: "phase_4_adaptive_narrowing",
+                        meaning: "The actor may begin recognizing the narrowed trajectory as adaptive behavior stabilizes it, but meaningful divergence is already operationally hard to recover.",
+                        actor_visibility_status: "late_alignment",
+                      },
+                      bind_after_recognition_gap: {
+                        phase_id: "phase_5_bind_over_dynamically_narrowed_space",
+                        meaning: "Bind evaluates a formally admissible trajectory after the recognition gap has already occurred upstream.",
+                        actor_visibility_status: "post_gap_bind",
+                      },
+                    },
+                    validation_question: "When did the visibility of remaining intervention capacity begin degrading before actors fully recognized the loss?",
+                    summary: {
+                      concise: "Actor Recognition Gap v0 marks the representative gap between structurally visible governability degradation and actor recognition of reduced intervention capacity.",
+                      operator: "The system should show when intervention capacity visibility began degrading before the actor fully recognized the loss.",
+                    },
+                  },
                 },
               },
             },
@@ -381,6 +432,14 @@ describe("MissionPage", () => {
     expect(screen.getByText(/last meaningful intervention:/)).toBeInTheDocument();
     expect(screen.getByText(/irreversibility horizon:/)).toBeInTheDocument();
     expect(screen.getByText(/bind after horizon:/)).toBeInTheDocument();
+    expect(screen.getByText("Actor Recognition Gap v0")).toBeInTheDocument();
+    expect(screen.getByText("Marking the gap between structural degradation and actor recognition of intervention capacity loss")).toBeInTheDocument();
+    expect(screen.getByText(/actual degradation visible:/)).toBeInTheDocument();
+    expect(screen.getByText(/actor still perceives governable:/)).toBeInTheDocument();
+    expect(screen.getByText(/intervention visibility degradation:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/recognition gap:/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/recognition alignment:/)).toBeInTheDocument();
+    expect(screen.getByText(/bind after recognition gap:/)).toBeInTheDocument();
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {

@@ -344,6 +344,20 @@ describe("/api/veritas/v1/report/governance", () => {
       },
     });
 
+    expect(payload.governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon.actor_recognition_gap).toMatchObject({
+      version: "v0",
+      base_case: "irreversibility_horizon_v0",
+      recognition_model: "deterministic_representative_marker",
+      markers: {
+        actual_degradation_visible_phase: "phase_2_reinforcement_exposure_asymmetry",
+        actor_still_perceives_governable_phase: "phase_2_reinforcement_exposure_asymmetry",
+        visibility_degradation_phase: "phase_3_time_pressure_compression",
+        recognition_gap_phase: "phase_3_time_pressure_compression",
+        recognition_alignment_phase: "phase_4_adaptive_narrowing",
+        bind_after_recognition_gap_phase: "phase_5_bind_over_dynamically_narrowed_space",
+      },
+    });
+
   });
 
   it("returns pre-boundary collapse demo scenario payload from header seam", async () => {

@@ -256,6 +256,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   const abcdMinimalValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.abcd_minimal_validation_case;
   const dynamicConditionsValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.dynamic_conditions_validation_case;
   const irreversibilityHorizon = dynamicConditionsValidationCase?.irreversibility_horizon;
+  const actorRecognitionGap = irreversibilityHorizon?.actor_recognition_gap;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -466,6 +467,24 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                         <li>bind after horizon: <span className="font-mono">{stringifyValue(irreversibilityHorizon.markers.bind_after_horizon_phase)}</span></li>
                         <li>summary: <span className="text-muted-foreground">{stringifyValue(irreversibilityHorizon.summary.concise)}</span></li>
                       </ul>
+                      {actorRecognitionGap ? (
+                        <div
+                          aria-label="Actor Recognition Gap v0"
+                          className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3"
+                        >
+                          <p className="font-semibold">Actor Recognition Gap v0</p>
+                          <p className="text-muted-foreground">Marking the gap between structural degradation and actor recognition of intervention capacity loss</p>
+                          <ul className="mt-2 space-y-1">
+                            <li>actual degradation visible: <span className="font-mono">{stringifyValue(actorRecognitionGap.markers.actual_degradation_visible_phase)}</span></li>
+                            <li>actor still perceives governable: <span className="font-mono">{stringifyValue(actorRecognitionGap.markers.actor_still_perceives_governable_phase)}</span></li>
+                            <li>intervention visibility degradation: <span className="font-mono">{stringifyValue(actorRecognitionGap.markers.visibility_degradation_phase)}</span></li>
+                            <li>recognition gap: <span className="font-mono">{stringifyValue(actorRecognitionGap.markers.recognition_gap_phase)}</span></li>
+                            <li>recognition alignment: <span className="font-mono">{stringifyValue(actorRecognitionGap.markers.recognition_alignment_phase)}</span></li>
+                            <li>bind after recognition gap: <span className="font-mono">{stringifyValue(actorRecognitionGap.markers.bind_after_recognition_gap_phase)}</span></li>
+                            <li>summary: <span className="text-muted-foreground">{stringifyValue(actorRecognitionGap.summary.concise)}</span></li>
+                          </ul>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
