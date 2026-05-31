@@ -481,6 +481,11 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
   - Intervention Actionability Map v0 now has a schema and golden fixture contract. The contract keeps marker-to-intervention guidance deterministic, inspectable, and explicitly non-enforcement.
   - Intervention Actionability Map schema: `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
   - Intervention Actionability Map fixture: `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
+  - Governance Evidence Packet v0 now has a reviewer-ready contract that keeps the deterministic representative reviewer packet structurally stable and explicitly limited to non-certifying review guidance.
+  - Governance Evidence Packet schema: `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
+  - Governance Evidence Packet fixture: `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
+  - Governance Evidence Packet contract test: `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
+  - Non-claims: not certification; not production security guarantee; not automatic enforcement; not scoring model; not legal conclusion.
 - **Mini proof: covered `/v1/decide` pre-bind formation refusal**: [`docs/en/validation/pre-bind-formation-refusal-mini-proof.md`](docs/en/validation/pre-bind-formation-refusal-mini-proof.md)
 - **Regulated Action Governance Kernel**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
 - **Authority Evidence vs Audit Log**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)

@@ -467,3 +467,11 @@ automatic enforcement, automatic attack detection, automatic blocking, a scoring
 model, a legal conclusion, formal verification, complete prevention, production
 security, or production security coverage. Its purpose is to help reviewers see
 what to inspect, not to have VERITAS automatically decide correctness.
+
+Governance Evidence Packet Contract v0 fixes this deterministic representative reviewer packet with a JSON Schema and golden fixture. The contract makes the packet structure reviewer-ready while preserving non-claim boundaries: it does not claim certification, is not automatic enforcement, and is not production security.
+
+Contract artifacts:
+
+- `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
+- `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
+- `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`

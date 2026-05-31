@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/governance-evidence-packet-v0.schema.json",
+  "title": "Governance Evidence Packet v0",
+  "description": "Deterministic, reviewer-ready, non-certifying contract for Governance Evidence Packet v0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "packet_id",
+    "packet_model",
+    "purpose",
+    "generated_from",
+    "decision_context_summary",
+    "packet_sections",
+    "reviewer_questions",
+    "preserved_evidence_refs",
+    "limitations",
+    "summary"
+  ],
+  "properties": {
+    "version": { "const": "v0" },
+    "packet_id": { "const": "pre_boundary_collapse_governance_evidence_packet_v0" },
+    "packet_model": { "const": "deterministic_representative_reviewer_packet" },
+    "purpose": { "type": "string", "minLength": 1 },
+    "generated_from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "source_payload"],
+      "properties": {
+        "scenario_id": { "const": "pre_boundary_collapse" },
+        "source_payload": { "const": "governance_layer_snapshot" }
+      }
+    },
+    "decision_context_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bind_outcome",
+        "participation_signal",
+        "preservation_state",
+        "intervention_viability",
+        "decision_space_state",
+        "summary"
+      ],
+      "properties": {
+        "bind_outcome": { "const": "FORMALLY_VALID_STRUCTURALLY_COLLAPSED" },
+        "participation_signal": { "const": "decision_shaping" },
+        "preservation_state": { "const": "collapsed" },
+        "intervention_viability": { "const": "lost" },
+        "decision_space_state": { "const": "structurally_narrowed_before_bind" },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "packet_sections": {
+      "type": "array",
+      "minItems": 7,
+      "items": { "$ref": "#/$defs/packetSection" },
+      "allOf": [
+        { "contains": { "type": "object", "required": ["id"], "properties": { "id": { "const": "trajectory_summary" } } } },
+        { "contains": { "type": "object", "required": ["id"], "properties": { "id": { "const": "dynamic_degradation_summary" } } } },
+        { "contains": { "type": "object", "required": ["id"], "properties": { "id": { "const": "irreversibility_summary" } } } },
+        { "contains": { "type": "object", "required": ["id"], "properties": { "id": { "const": "recognition_gap_summary" } } } },
+        { "contains": { "type": "object", "required": ["id"], "properties": { "id": { "const": "governance_attack_surface_summary" } } } },
+        { "contains": { "type": "object", "required": ["id"], "properties": { "id": { "const": "safeguard_coverage_summary" } } } },
+        { "contains": { "type": "object", "required": ["id"], "properties": { "id": { "const": "intervention_actionability_summary" } } } }
+      ]
+    },
+    "reviewer_questions": {
+      "type": "array",
+      "minItems": 9,
+      "items": { "type": "string", "minLength": 1 },
+      "allOf": [
+        { "contains": { "const": "What was the bind outcome?" } },
+        { "contains": { "const": "What decision-space narrowing occurred before bind?" } },
+        { "contains": { "const": "When did intervention viability begin degrading?" } },
+        { "contains": { "const": "Where was the last meaningful intervention point?" } },
+        { "contains": { "const": "Did actor recognition lag behind structural degradation?" } },
+        { "contains": { "const": "Which governance attack surfaces were relevant?" } },
+        { "contains": { "const": "Which safeguards made those surfaces visible?" } },
+        { "contains": { "const": "Which intervention categories were representative?" } },
+        { "contains": { "const": "What does this packet not claim?" } }
+      ]
+    },
+    "preserved_evidence_refs": {
+      "type": "array",
+      "minItems": 7,
+      "items": { "type": "string", "minLength": 1 },
+      "allOf": [
+        { "contains": { "const": "governance_layer_snapshot.trajectory_shaping_lineage" } },
+        { "contains": { "const": "governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case" } },
+        { "contains": { "const": "governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon" } },
+        { "contains": { "const": "governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon.actor_recognition_gap" } },
+        { "contains": { "const": "governance_layer_snapshot.governance_attack_surface_registry" } },
+        { "contains": { "const": "governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix" } },
+        { "contains": { "const": "governance_layer_snapshot.intervention_actionability_map" } }
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 7,
+      "items": { "type": "string", "minLength": 1 },
+      "allOf": [
+        { "contains": { "const": "not_certification" } },
+        { "contains": { "const": "not_production_security_guarantee" } },
+        { "contains": { "const": "not_automatic_enforcement" } },
+        { "contains": { "const": "not_automatic_attack_detection" } },
+        { "contains": { "const": "not_scoring_model" } },
+        { "contains": { "const": "not_legal_conclusion" } },
+        { "contains": { "const": "representative_demo_packet_only" } }
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concise", "operator"],
+      "properties": {
+        "concise": { "type": "string", "minLength": 1 },
+        "operator": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "packetSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source_layer", "title", "key_points", "evidence_refs"],
+      "properties": {
+        "id": {
+          "enum": [
+            "trajectory_summary",
+            "dynamic_degradation_summary",
+            "irreversibility_summary",
+            "recognition_gap_summary",
+            "governance_attack_surface_summary",
+            "safeguard_coverage_summary",
+            "intervention_actionability_summary"
+          ]
+        },
+        "source_layer": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "key_points": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
