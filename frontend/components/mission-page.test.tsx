@@ -563,6 +563,106 @@ describe("MissionPage", () => {
                 operator: "Show safeguards without enforcement claims.",
               },
             },
+            intervention_actionability_map: {
+              version: "v0",
+              purpose: "Map visible governance markers to representative intervention categories without claiming automatic enforcement.",
+              actionability_model: "deterministic_representative_intervention_guidance",
+              scope: {
+                included: ["marker_to_actionability_mapping"],
+                excluded: ["automatic_enforcement"],
+              },
+              intervention_categories: [
+                { id: "observe", label: "Observe", description: "Record the visible marker." },
+                { id: "annotate", label: "Annotate", description: "Add explanatory context." },
+                { id: "warn", label: "Warn", description: "Surface a warning." },
+                { id: "preserve_evidence", label: "Preserve evidence", description: "Preserve marker evidence." },
+                { id: "reframe", label: "Reframe", description: "Rebalance option framing." },
+                { id: "pause", label: "Pause", description: "Hold progression before bind." },
+                { id: "escalate", label: "Escalate", description: "Route to review." },
+                { id: "require_explicit_approval", label: "Require explicit approval", description: "Require scope-bound approval." },
+                { id: "freeze_bind_path", label: "Freeze bind path", description: "Preserve the current bind path." },
+                { id: "post_horizon_review", label: "Post-horizon review", description: "Flag post-horizon review." },
+              ],
+              mappings: [
+                {
+                  marker_id: "first_structural_degradation_signal",
+                  source_layer: "irreversibility_horizon_v0",
+                  representative_phase: "phase_2_reinforcement_exposure_asymmetry",
+                  recommended_action_ids: ["annotate", "preserve_evidence", "warn"],
+                  evidence_to_preserve: ["first_structural_degradation_signal_phase", "dynamic_asymmetry_marker"],
+                  limitation: "does_not_claim_automatic_intervention",
+                },
+                {
+                  marker_id: "early_warning",
+                  source_layer: "irreversibility_horizon_v0",
+                  representative_phase: "phase_3_time_pressure_compression",
+                  recommended_action_ids: ["warn", "pause", "reframe", "preserve_evidence"],
+                  evidence_to_preserve: ["early_warning_phase", "intervention_window_compression_marker"],
+                  limitation: "does_not_claim_automatic_pause_or_blocking",
+                },
+                {
+                  marker_id: "last_meaningful_intervention",
+                  source_layer: "irreversibility_horizon_v0",
+                  representative_phase: "phase_3_time_pressure_compression",
+                  recommended_action_ids: ["pause", "escalate", "require_explicit_approval"],
+                  evidence_to_preserve: ["last_meaningful_intervention_phase", "intervention_viability_state"],
+                  limitation: "does_not_claim_intervention_success",
+                },
+                {
+                  marker_id: "irreversibility_horizon",
+                  source_layer: "irreversibility_horizon_v0",
+                  representative_phase: "phase_4_adaptive_narrowing",
+                  recommended_action_ids: ["escalate", "require_explicit_approval", "post_horizon_review", "preserve_evidence"],
+                  evidence_to_preserve: ["irreversibility_horizon_phase", "adaptive_narrowing_marker"],
+                  limitation: "does_not_claim_reversibility_after_horizon",
+                },
+                {
+                  marker_id: "actor_recognition_gap",
+                  source_layer: "actor_recognition_gap_v0",
+                  representative_phase: "phase_3_time_pressure_compression",
+                  recommended_action_ids: ["warn", "annotate", "escalate", "preserve_evidence"],
+                  evidence_to_preserve: ["recognition_gap_phase", "visibility_degradation_phase"],
+                  limitation: "does_not_infer_actor_psychology_or_intent",
+                },
+                {
+                  marker_id: "self_authorization",
+                  source_layer: "governance_attack_surface_registry_v0",
+                  representative_failure_class: "self_authorization",
+                  recommended_action_ids: ["escalate", "freeze_bind_path", "require_explicit_approval", "preserve_evidence"],
+                  evidence_to_preserve: ["independent_governance_authority_marker", "append_only_governance_log"],
+                  limitation: "does_not_claim_complete_prevention_or_runtime_enforcement",
+                },
+                {
+                  marker_id: "evidence_chain_manipulation",
+                  source_layer: "governance_attack_surface_registry_v0",
+                  representative_failure_class: "evidence_chain_manipulation",
+                  recommended_action_ids: ["freeze_bind_path", "preserve_evidence", "escalate"],
+                  evidence_to_preserve: ["ordered_append_only_evidence_chain", "append_only_governance_log"],
+                  limitation: "does_not_claim_tamper_proof_storage_or_formal_verification",
+                },
+                {
+                  marker_id: "approval_receipt_spoofing",
+                  source_layer: "governance_attack_surface_registry_v0",
+                  representative_failure_class: "approval_receipt_spoofing",
+                  recommended_action_ids: ["require_explicit_approval", "escalate", "preserve_evidence"],
+                  evidence_to_preserve: ["actor_source_timestamp_scope_validity_context", "approval_receipt_provenance"],
+                  limitation: "does_not_claim_identity_proof_or_production_authentication",
+                },
+                {
+                  marker_id: "escalation_suppression",
+                  source_layer: "governance_attack_surface_registry_v0",
+                  representative_failure_class: "escalation_suppression",
+                  recommended_action_ids: ["escalate", "preserve_evidence", "post_horizon_review"],
+                  evidence_to_preserve: ["warning_pause_review_escalation_sequence", "replayable_escalation_trace"],
+                  limitation: "does_not_claim_automatic_escalation_or_blocking",
+                },
+              ],
+              validation_question: "When a governance marker becomes visible, what representative intervention category becomes actionable?",
+              summary: {
+                concise: "Intervention Actionability Map v0 connects visible governance markers to representative intervention categories and evidence preservation guidance.",
+                operator: "Show representative action category without automatic enforcement claims.",
+              },
+            },
           }}
         />
       </I18nProvider>,
@@ -616,7 +716,7 @@ describe("MissionPage", () => {
     expect(screen.getAllByText("evidence-chain manipulation").length).toBeGreaterThan(0);
     expect(screen.getAllByText("approval receipt spoofing").length).toBeGreaterThan(0);
     expect(screen.getAllByText("policy snapshot drift").length).toBeGreaterThan(0);
-    expect(screen.getByText("escalation suppression")).toBeInTheDocument();
+    expect(screen.getAllByText("escalation suppression").length).toBeGreaterThan(0);
     expect(screen.getByText("replay trace tampering")).toBeInTheDocument();
     expect(screen.getAllByText("recognition gap masking").length).toBeGreaterThan(0);
     expect(screen.getAllByText("separation of decision and governance authority").length).toBeGreaterThan(0);
@@ -635,6 +735,21 @@ describe("MissionPage", () => {
     expect(screen.getAllByText("policy snapshot hashing").length).toBeGreaterThan(0);
     expect(screen.getAllByText("recognition gap masking").length).toBeGreaterThan(0);
     expect(screen.getAllByText("recognition gap visibility marker").length).toBeGreaterThan(0);
+    expect(screen.getByText("Intervention Actionability Map v0")).toBeInTheDocument();
+    expect(screen.getByText("Mapping visible governance markers to representative intervention categories")).toBeInTheDocument();
+    expect(screen.getByText("first structural degradation signal")).toBeInTheDocument();
+    expect(screen.getByText("early warning")).toBeInTheDocument();
+    expect(screen.getByText("last meaningful intervention")).toBeInTheDocument();
+    expect(screen.getAllByText("irreversibility horizon").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("actor recognition gap").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("self-authorization").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("evidence-chain manipulation").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("approval receipt spoofing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("escalation suppression").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("freeze bind path").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("require explicit approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("post-horizon review").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("preserve evidence").length).toBeGreaterThan(0);
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {

@@ -237,6 +237,19 @@ describe("/api/veritas/v1/report/governance", () => {
           failure_classes: Array<{ id: string }>;
           structural_safeguards: Array<{ id: string }>;
           validation_question: string;
+          safeguard_coverage_matrix: {
+            version: string;
+            coverage_model: string;
+            validation_question: string;
+            rows: Array<{ failure_class_id: string }>;
+          };
+        };
+        intervention_actionability_map: {
+          version: string;
+          actionability_model: string;
+          intervention_categories: Array<{ id: string }>;
+          mappings: Array<{ marker_id: string; recommended_action_ids: string[] }>;
+          validation_question: string;
         };
         trajectory_shaping_lineage: {
           scenario_id: string;
@@ -421,6 +434,48 @@ describe("/api/veritas/v1/report/governance", () => {
       primary_safeguard_id: "recognition_gap_visibility_marker",
       evidence_requirement: "actor_recognition_gap_marker_sequence",
       limitation: "does_not_infer_actor_psychology_or_intent",
+    });
+
+    const actionabilityMap = payload.governance_layer_snapshot.intervention_actionability_map;
+    expect(actionabilityMap).toMatchObject({
+      version: "v0",
+      actionability_model: "deterministic_representative_intervention_guidance",
+      validation_question:
+        "When a governance marker becomes visible, what representative intervention category becomes actionable?",
+    });
+    expect(actionabilityMap.intervention_categories.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([
+        "observe",
+        "annotate",
+        "warn",
+        "preserve_evidence",
+        "reframe",
+        "pause",
+        "escalate",
+        "require_explicit_approval",
+        "freeze_bind_path",
+        "post_horizon_review",
+      ]),
+    );
+    expect(actionabilityMap.mappings.map(({ marker_id }) => marker_id)).toEqual(
+      expect.arrayContaining([
+        "first_structural_degradation_signal",
+        "early_warning",
+        "last_meaningful_intervention",
+        "irreversibility_horizon",
+        "actor_recognition_gap",
+        "bind_after_recognition_gap",
+        "self_authorization",
+        "evidence_chain_manipulation",
+        "approval_receipt_spoofing",
+        "escalation_suppression",
+      ]),
+    );
+    expect(actionabilityMap.mappings.find(({ marker_id }) => marker_id === "self_authorization")).toMatchObject({
+      recommended_action_ids: ["escalate", "freeze_bind_path", "require_explicit_approval", "preserve_evidence"],
+    });
+    expect(actionabilityMap.mappings.find(({ marker_id }) => marker_id === "early_warning")).toMatchObject({
+      recommended_action_ids: ["warn", "pause", "reframe", "preserve_evidence"],
     });
 
   });
