@@ -226,6 +226,13 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("freeze bind path");
     await expect(walkthrough).toContainText("require explicit approval");
     await expect(walkthrough).toContainText("preserve evidence");
+    await expect(walkthrough).toContainText("Governance Evidence Packet v0");
+    await expect(walkthrough).toContainText("Reviewer-ready summary of governance trace, evidence refs, safeguards, and representative interventions");
+    await expect(walkthrough).toContainText("Trajectory shaping summary");
+    await expect(walkthrough).toContainText("Governance attack surface summary");
+    await expect(walkthrough).toContainText("Intervention actionability summary");
+    await expect(walkthrough).toContainText("not certification");
+    await expect(walkthrough).toContainText("not automatic enforcement");
 
     const timeline = page.locator('section[aria-label="governance layer timeline"]');
     await expect(timeline).toBeVisible();

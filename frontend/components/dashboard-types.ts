@@ -366,6 +366,48 @@ export interface InterventionActionabilityMap {
   };
 }
 
+
+export interface GovernanceEvidencePacketGeneratedFrom {
+  scenario_id: string;
+  source_payload: string;
+}
+
+export interface GovernanceEvidencePacketDecisionContextSummary {
+  bind_outcome: string;
+  participation_signal: string;
+  preservation_state: string;
+  intervention_viability: string;
+  decision_space_state: string;
+  summary: string;
+}
+
+export interface GovernanceEvidencePacketSection {
+  id: string;
+  source_layer: string;
+  title: string;
+  key_points: string[];
+  evidence_refs: string[];
+}
+
+export interface GovernanceEvidencePacketSummary {
+  concise: string;
+  operator: string;
+}
+
+export interface GovernanceEvidencePacket {
+  version: string;
+  packet_id: string;
+  packet_model: string;
+  purpose: string;
+  generated_from: GovernanceEvidencePacketGeneratedFrom;
+  decision_context_summary: GovernanceEvidencePacketDecisionContextSummary;
+  packet_sections: GovernanceEvidencePacketSection[];
+  reviewer_questions: string[];
+  preserved_evidence_refs: string[];
+  limitations: string[];
+  summary: GovernanceEvidencePacketSummary;
+}
+
 export interface PreBindGovernanceSnapshot {
   demo_scenario?: string;
   source_state?: string | null;
@@ -386,6 +428,7 @@ export interface PreBindGovernanceSnapshot {
   trajectory_shaping_lineage?: TrajectoryShapingLineage;
   governance_attack_surface_registry?: GovernanceAttackSurfaceRegistry;
   intervention_actionability_map?: InterventionActionabilityMap;
+  governance_evidence_packet?: GovernanceEvidencePacket;
   participation_state?: string;
   preservation_state?: string;
   intervention_viability?: string;
