@@ -347,3 +347,41 @@ methodological restraint: the registry makes governance-process attack surfaces
 visible as representative classes and safeguard mappings; it does not turn those
 mappings into a scoring model, detection engine, blocking behavior, security
 guarantee, or certification claim.
+
+## Governance Safeguard Coverage Matrix v0
+
+Governance Safeguard Coverage Matrix v0 is the compact follow-on layer after
+Governance Attack Surface Registry v0. The registry identifies representative
+failure classes where the governance process itself can become an attack surface
+and lists structural safeguards that make those surfaces inspectable. The
+coverage matrix makes that relationship easier to review by mapping each
+failure class to a primary safeguard, supporting safeguards, and the visibility
+evidence required to inspect the coverage.
+
+The matrix asks: **Which structural safeguard covers which governance attack
+surface, and what evidence makes that coverage visible?** It is exposed
+additively under
+`governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix`
+so existing Trajectory Shaping Lineage v0, Dynamic Conditions Validation v0,
+Irreversibility Horizon v0, Actor Recognition Gap v0, and Governance Attack
+Surface Registry v0 consumers can continue to read their existing fields.
+
+The v0 matrix uses a deterministic representative visibility model. Each row
+keeps the relationship explicit:
+
+- `failure_class_id` — the representative governance attack surface from the
+  registry.
+- `primary_safeguard_id` — the main structural safeguard that makes the surface
+  visible.
+- `supporting_safeguard_ids` — additional safeguards that support review.
+- `evidence_requirement` — the evidence marker reviewers need in order to
+  inspect the coverage.
+- `visibility_question` — the review question the row is designed to answer.
+- `coverage_state` — `representative_visibility_only` for v0 rows.
+- `limitation` — an explicit non-claim attached to the row.
+
+This preserves methodological restraint. The matrix does **not** claim complete
+prevention, production security, scoring, automatic attack detection,
+automatic enforcement, formal verification, or certification. It makes the
+registry more inspectable without turning the registry into an enforcement
+engine.

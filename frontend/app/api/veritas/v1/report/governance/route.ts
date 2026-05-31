@@ -8,6 +8,7 @@ import {
   type ActorRecognitionGap,
   type DynamicConditionsValidationCase,
   type GovernanceAttackSurfaceRegistry,
+  type GovernanceSafeguardCoverageMatrix,
   type IrreversibilityHorizon,
   type TrajectoryShapingLineage,
 } from "../../../../../../components/dashboard-types";
@@ -410,6 +411,109 @@ function buildDynamicConditionsValidationCase(): DynamicConditionsValidationCase
   };
 }
 
+
+function buildGovernanceSafeguardCoverageMatrixV0(): GovernanceSafeguardCoverageMatrix {
+  return {
+    version: "v0",
+    purpose:
+      "Map representative governance attack surfaces to structural safeguards and the evidence required to make coverage visible.",
+    coverage_model: "deterministic_representative_visibility_matrix",
+    scope: {
+      included: [
+        "failure_class_to_safeguard_mapping",
+        "visibility_evidence_requirements",
+        "representative_coverage_state",
+        "coverage_limitations",
+      ],
+      excluded: [
+        "complete_prevention_claim",
+        "production_security_guarantee",
+        "automatic_attack_detection",
+        "scoring_model",
+        "certification_claim",
+        "formal_verification_claim",
+      ],
+    },
+    rows: [
+      {
+        failure_class_id: "self_authorization",
+        primary_safeguard_id: "separation_of_decision_and_governance_authority",
+        supporting_safeguard_ids: ["append_only_governance_log"],
+        evidence_requirement: "independent_governance_authority_marker",
+        visibility_question:
+          "Can reviewers see whether the decision-producing component was structurally separate from the governance-validating component?",
+        coverage_state: "representative_visibility_only",
+        limitation: "does_not_claim_complete_prevention_or_runtime_enforcement",
+      },
+      {
+        failure_class_id: "evidence_chain_manipulation",
+        primary_safeguard_id: "immutable_evidence_chain",
+        supporting_safeguard_ids: ["append_only_governance_log"],
+        evidence_requirement: "ordered_append_only_evidence_chain",
+        visibility_question: "Can reviewers replay the evidence sequence without relying on mutable post-hoc state?",
+        coverage_state: "representative_visibility_only",
+        limitation: "does_not_claim_tamper_proof_storage_or_formal_verification",
+      },
+      {
+        failure_class_id: "approval_receipt_spoofing",
+        primary_safeguard_id: "approval_receipt_provenance",
+        supporting_safeguard_ids: ["separation_of_decision_and_governance_authority"],
+        evidence_requirement: "actor_source_timestamp_scope_validity_context",
+        visibility_question: "Can reviewers distinguish valid approval provenance from spoofed or out-of-scope approval?",
+        coverage_state: "representative_visibility_only",
+        limitation: "does_not_claim_identity_proof_or_production_authentication",
+      },
+      {
+        failure_class_id: "policy_snapshot_drift",
+        primary_safeguard_id: "policy_snapshot_hashing",
+        supporting_safeguard_ids: ["immutable_evidence_chain"],
+        evidence_requirement: "bind_time_policy_hash_and_version",
+        visibility_question:
+          "Can reviewers reconstruct the policy state used at bind time rather than a later policy version?",
+        coverage_state: "representative_visibility_only",
+        limitation: "does_not_claim_policy_correctness_or_regulatory_certification",
+      },
+      {
+        failure_class_id: "escalation_suppression",
+        primary_safeguard_id: "replayable_escalation_trace",
+        supporting_safeguard_ids: ["append_only_governance_log"],
+        evidence_requirement: "warning_pause_review_escalation_sequence",
+        visibility_question: "Can reviewers see whether warning, pause, review, or escalation opportunities were preserved?",
+        coverage_state: "representative_visibility_only",
+        limitation: "does_not_claim_automatic_escalation_or_blocking",
+      },
+      {
+        failure_class_id: "replay_trace_tampering",
+        primary_safeguard_id: "append_only_governance_log",
+        supporting_safeguard_ids: ["immutable_evidence_chain", "replayable_escalation_trace"],
+        evidence_requirement: "append_only_replayable_governance_sequence",
+        visibility_question:
+          "Can reviewers reconstruct the governance sequence without hidden mutation or ordering ambiguity?",
+        coverage_state: "representative_visibility_only",
+        limitation: "does_not_claim_tamper_proof_infrastructure",
+      },
+      {
+        failure_class_id: "recognition_gap_masking",
+        primary_safeguard_id: "recognition_gap_visibility_marker",
+        supporting_safeguard_ids: ["replayable_escalation_trace"],
+        evidence_requirement: "actor_recognition_gap_marker_sequence",
+        visibility_question:
+          "Can reviewers compare perceived governability with structurally visible degradation over time?",
+        coverage_state: "representative_visibility_only",
+        limitation: "does_not_infer_actor_psychology_or_intent",
+      },
+    ],
+    validation_question:
+      "Which structural safeguard covers which governance attack surface, and what evidence makes that coverage visible?",
+    summary: {
+      concise:
+        "Governance Safeguard Coverage Matrix v0 maps each representative governance attack surface to structural safeguards and the evidence required to inspect coverage.",
+      operator:
+        "The system should show which safeguard makes each failure class visible without claiming complete prevention, certification, or production security.",
+    },
+  };
+}
+
 function buildGovernanceAttackSurfaceRegistryV0(): GovernanceAttackSurfaceRegistry {
   return {
     version: "v0",
@@ -551,6 +655,7 @@ function buildGovernanceAttackSurfaceRegistryV0(): GovernanceAttackSurfaceRegist
           "Shows whether perceived governability and structural degradation can be compared over time.",
       },
     ],
+    safeguard_coverage_matrix: buildGovernanceSafeguardCoverageMatrixV0(),
     validation_question: "What structural safeguards prevent the governance process itself from becoming the attack surface?",
     summary: {
       concise:

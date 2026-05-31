@@ -496,6 +496,67 @@ describe("MissionPage", () => {
                   visibility_role: "Shows perceived governability against structural degradation.",
                 },
               ],
+              safeguard_coverage_matrix: {
+                version: "v0",
+                purpose: "Map representative governance attack surfaces to structural safeguards and the evidence required to make coverage visible.",
+                coverage_model: "deterministic_representative_visibility_matrix",
+                scope: {
+                  included: ["failure_class_to_safeguard_mapping"],
+                  excluded: ["complete_prevention_claim"],
+                },
+                rows: [
+                  {
+                    failure_class_id: "self_authorization",
+                    primary_safeguard_id: "separation_of_decision_and_governance_authority",
+                    supporting_safeguard_ids: ["append_only_governance_log"],
+                    evidence_requirement: "independent_governance_authority_marker",
+                    visibility_question: "Can reviewers see whether authority is separate?",
+                    coverage_state: "representative_visibility_only",
+                    limitation: "does_not_claim_complete_prevention_or_runtime_enforcement",
+                  },
+                  {
+                    failure_class_id: "evidence_chain_manipulation",
+                    primary_safeguard_id: "immutable_evidence_chain",
+                    supporting_safeguard_ids: ["append_only_governance_log"],
+                    evidence_requirement: "ordered_append_only_evidence_chain",
+                    visibility_question: "Can reviewers replay evidence?",
+                    coverage_state: "representative_visibility_only",
+                    limitation: "does_not_claim_tamper_proof_storage_or_formal_verification",
+                  },
+                  {
+                    failure_class_id: "approval_receipt_spoofing",
+                    primary_safeguard_id: "approval_receipt_provenance",
+                    supporting_safeguard_ids: ["separation_of_decision_and_governance_authority"],
+                    evidence_requirement: "actor_source_timestamp_scope_validity_context",
+                    visibility_question: "Can reviewers distinguish approval provenance?",
+                    coverage_state: "representative_visibility_only",
+                    limitation: "does_not_claim_identity_proof_or_production_authentication",
+                  },
+                  {
+                    failure_class_id: "policy_snapshot_drift",
+                    primary_safeguard_id: "policy_snapshot_hashing",
+                    supporting_safeguard_ids: ["immutable_evidence_chain"],
+                    evidence_requirement: "bind_time_policy_hash_and_version",
+                    visibility_question: "Can reviewers reconstruct bind-time policy?",
+                    coverage_state: "representative_visibility_only",
+                    limitation: "does_not_claim_policy_correctness_or_regulatory_certification",
+                  },
+                  {
+                    failure_class_id: "recognition_gap_masking",
+                    primary_safeguard_id: "recognition_gap_visibility_marker",
+                    supporting_safeguard_ids: ["replayable_escalation_trace"],
+                    evidence_requirement: "actor_recognition_gap_marker_sequence",
+                    visibility_question: "Can reviewers compare perceived governability with degradation?",
+                    coverage_state: "representative_visibility_only",
+                    limitation: "does_not_infer_actor_psychology_or_intent",
+                  },
+                ],
+                validation_question: "Which structural safeguard covers which governance attack surface, and what evidence makes that coverage visible?",
+                summary: {
+                  concise: "Governance Safeguard Coverage Matrix v0 maps each representative governance attack surface to structural safeguards and the evidence required to inspect coverage.",
+                  operator: "Show coverage visibility without prevention claims.",
+                },
+              },
               validation_question: "What structural safeguards prevent the governance process itself from becoming the attack surface?",
               summary: {
                 concise: "Governance Attack Surface Registry v0 identifies representative governance-process attack surfaces.",
@@ -551,16 +612,29 @@ describe("MissionPage", () => {
     expect(screen.getByText(/bind after recognition gap:/)).toBeInTheDocument();
     expect(screen.getByText("Governance Attack Surface Registry v0")).toBeInTheDocument();
     expect(screen.getByText("Making representative governance-process attack surfaces and structural safeguards visible")).toBeInTheDocument();
-    expect(screen.getByText("self-authorization")).toBeInTheDocument();
-    expect(screen.getByText("evidence-chain manipulation")).toBeInTheDocument();
-    expect(screen.getByText("approval receipt spoofing")).toBeInTheDocument();
-    expect(screen.getByText("policy snapshot drift")).toBeInTheDocument();
+    expect(screen.getAllByText("self-authorization").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("evidence-chain manipulation").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("approval receipt spoofing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("policy snapshot drift").length).toBeGreaterThan(0);
     expect(screen.getByText("escalation suppression")).toBeInTheDocument();
     expect(screen.getByText("replay trace tampering")).toBeInTheDocument();
-    expect(screen.getByText("recognition gap masking")).toBeInTheDocument();
-    expect(screen.getByText("separation of decision and governance authority")).toBeInTheDocument();
-    expect(screen.getByText("immutable evidence chain")).toBeInTheDocument();
+    expect(screen.getAllByText("recognition gap masking").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("separation of decision and governance authority").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("immutable evidence chain").length).toBeGreaterThan(0);
     expect(screen.getByText("append-only governance log")).toBeInTheDocument();
+    expect(screen.getByText("Governance Safeguard Coverage Matrix v0")).toBeInTheDocument();
+    expect(screen.getByText("Mapping governance attack surfaces to structural safeguards and visibility evidence")).toBeInTheDocument();
+    expect(screen.getAllByText("self-authorization").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("separation of decision and governance authority").length).toBeGreaterThan(0);
+    expect(screen.getByText("independent governance authority marker")).toBeInTheDocument();
+    expect(screen.getAllByText("evidence-chain manipulation").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("immutable evidence chain").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("approval receipt spoofing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("approval receipt provenance").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("policy snapshot drift").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("policy snapshot hashing").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("recognition gap masking").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("recognition gap visibility marker").length).toBeGreaterThan(0);
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {

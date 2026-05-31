@@ -184,3 +184,36 @@ snapshot hashing、approval receipt provenance、replayable escalation trace、a
 recognition gap visibility marker などの structural safeguards に対応づけられます。これは methodological
 restraint を維持するための registry です。representative class と safeguard mapping を可視化しますが、
 scoring model、detection engine、blocking behavior、security guarantee、certification claim にはしません。
+
+## Governance Safeguard Coverage Matrix v0
+
+Governance Safeguard Coverage Matrix v0 は、Governance Attack Surface Registry
+v0 の次に置く compact な follow-on layer です。Registry は、governance process
+自体が attack surface になり得る representative failure classes と、それを可視化する
+structural safeguards を識別します。Coverage Matrix は、その関係をさらに読みやすくし、
+各 failure class を primary safeguard、supporting safeguards、そして coverage を点検するための
+visibility evidence に対応付けます。
+
+この matrix が問うのは、**どの structural safeguard がどの governance attack surface を
+cover し、その coverage をどの evidence が visible にするのか**です。既存 contract を壊さない
+additive field として、
+`governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix`
+に配置されます。そのため、Trajectory Shaping Lineage v0、Dynamic Conditions Validation v0、
+Irreversibility Horizon v0、Actor Recognition Gap v0、Governance Attack Surface Registry v0
+の既存 consumer は、従来の field をそのまま参照できます。
+
+v0 matrix は deterministic representative visibility model として扱います。各 row は次の関係を
+明示します。
+
+- `failure_class_id` — registry にある representative governance attack surface。
+- `primary_safeguard_id` — その surface を可視化する主たる structural safeguard。
+- `supporting_safeguard_ids` — review を補助する safeguard。
+- `evidence_requirement` — coverage を点検するために reviewer が必要とする evidence marker。
+- `visibility_question` — その row が答える review question。
+- `coverage_state` — v0 では `representative_visibility_only`。
+- `limitation` — row ごとに明示される non-claim。
+
+これは methodological restraint を保つための visibility matrix です。complete prevention、
+production security、scoring、automatic attack detection、automatic enforcement、formal verification、
+certification は主張しません。Registry をより inspectable にする一方で、enforcement engine には
+変えません。

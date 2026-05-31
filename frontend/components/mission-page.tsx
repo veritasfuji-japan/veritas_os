@@ -194,6 +194,30 @@ const HEALTH_SECURITY_POSTURE = {
   directFujiApi: "disabled",
 };
 
+const GOVERNANCE_COVERAGE_DISPLAY_LABELS: Readonly<Record<string, string>> = {
+  self_authorization: "self-authorization",
+  evidence_chain_manipulation: "evidence-chain manipulation",
+  approval_receipt_spoofing: "approval receipt spoofing",
+  policy_snapshot_drift: "policy snapshot drift",
+  escalation_suppression: "escalation suppression",
+  replay_trace_tampering: "replay trace tampering",
+  recognition_gap_masking: "recognition gap masking",
+  separation_of_decision_and_governance_authority: "separation of decision and governance authority",
+  immutable_evidence_chain: "immutable evidence chain",
+  approval_receipt_provenance: "approval receipt provenance",
+  policy_snapshot_hashing: "policy snapshot hashing",
+  replayable_escalation_trace: "replayable escalation trace",
+  append_only_governance_log: "append-only governance log",
+  recognition_gap_visibility_marker: "recognition gap visibility marker",
+  independent_governance_authority_marker: "independent governance authority marker",
+  ordered_append_only_evidence_chain: "ordered append-only evidence chain",
+  actor_source_timestamp_scope_validity_context: "actor / source / timestamp / scope / validity context",
+  bind_time_policy_hash_and_version: "bind-time policy hash and version",
+  warning_pause_review_escalation_sequence: "warning / pause / review / escalation sequence",
+  append_only_replayable_governance_sequence: "append-only replayable governance sequence",
+  actor_recognition_gap_marker_sequence: "actor recognition gap marker sequence",
+};
+
 /**
  * MissionPage renders the operational command-center view.
  *
@@ -217,6 +241,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
       return String(value);
     }
   };
+  const formatCoverageToken = (value: string): string => GOVERNANCE_COVERAGE_DISPLAY_LABELS[value] ?? value.replaceAll("_", " ");
   const resolvePreBindSourceTone = (source?: string): string => {
     if (source === "trustlog_matching_decision" || source === "trustlog_matching_request" || source === "trustlog_matching_execution_intent") {
       return "matched";
@@ -258,6 +283,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   const irreversibilityHorizon = dynamicConditionsValidationCase?.irreversibility_horizon;
   const actorRecognitionGap = irreversibilityHorizon?.actor_recognition_gap;
   const governanceAttackSurfaceRegistry = governanceSnapshot?.governance_attack_surface_registry;
+  const safeguardCoverageMatrix = governanceAttackSurfaceRegistry?.safeguard_coverage_matrix;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -459,6 +485,28 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                     </div>
                   </div>
                   <p className="mt-2 text-muted-foreground">summary: {governanceAttackSurfaceRegistry.summary.concise}</p>
+                  {safeguardCoverageMatrix ? (
+                    <div
+                      aria-label="Governance Safeguard Coverage Matrix v0"
+                      className="mt-3 rounded-md border border-border/60 bg-background/60 p-3"
+                    >
+                      <p className="font-semibold">Governance Safeguard Coverage Matrix v0</p>
+                      <p className="text-muted-foreground">Mapping governance attack surfaces to structural safeguards and visibility evidence</p>
+                      <p className="mt-2 text-muted-foreground">{safeguardCoverageMatrix.validation_question}</p>
+                      <ul className="mt-2 space-y-1">
+                        {safeguardCoverageMatrix.rows.map((row) => (
+                          <li key={row.failure_class_id}>
+                            <span>{formatCoverageToken(row.failure_class_id)}</span>
+                            <span className="text-muted-foreground"> → </span>
+                            <span>{formatCoverageToken(row.primary_safeguard_id)}</span>
+                            <span className="text-muted-foreground"> → </span>
+                            <span>{formatCoverageToken(row.evidence_requirement)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-muted-foreground">summary: {safeguardCoverageMatrix.summary.concise}</p>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {dynamicConditionsValidationCase ? (
