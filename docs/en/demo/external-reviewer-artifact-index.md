@@ -20,6 +20,12 @@ Key local/offline reviewer-facing artifacts:
   - JSON Schema contract for Intervention Actionability Map v0
 - `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
   - golden fixture for Intervention Actionability Map v0
+- `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
+  - JSON Schema contract for Governance Evidence Packet v0
+- `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
+  - golden fixture for Governance Evidence Packet v0
+- `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
+  - contract test that validates the API packet against the schema, fixture, required sections, reviewer questions, preserved evidence refs, and non-claims
 - `docs/en/demo/reviewer-evidence-packet.md`
   - Reviewer Evidence Packet documentation
 - `docs/en/demo/reviewer-evidence-packet-validation-report.md`

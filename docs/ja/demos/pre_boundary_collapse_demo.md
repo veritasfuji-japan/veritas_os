@@ -296,3 +296,11 @@ governability degradation、safeguard visibility、representative intervention c
 automatic attack detection、automatic blocking、scoring model、legal conclusion、formal
 verification、complete prevention、production security、production security coverage は主張しません。
 目的は VERITAS が自動で正否判定することではなく、reviewer が何を点検すべきかを示すことです。
+
+Governance Evidence Packet Contract v0 は、この deterministic representative reviewer packet を JSON Schema と golden fixture で固定します。contract は reviewer-ready な構造を維持しつつ、not certification、not automatic enforcement、not production security guarantee、not scoring model、not legal conclusion の境界を明示します。
+
+Contract artifacts:
+
+- `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
+- `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
+- `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`

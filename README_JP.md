@@ -250,6 +250,11 @@ VERITAS は、本番の enforce と開発時の observe を区別します。本
 - Intervention Actionability Map v0 には schema と golden fixture contract が追加されています。これにより、marker から intervention guidance への対応が deterministic / inspectable に保たれ、automatic enforcement ではないことも明確化されます。
   - Intervention Actionability Map schema: `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
   - Intervention Actionability Map fixture: `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
+- Governance Evidence Packet v0 には reviewer-ready contract が追加されています。deterministic representative reviewer packet の構造を安定させ、review guidance が certification ではないことを明示します。
+  - Governance Evidence Packet schema: `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
+  - Governance Evidence Packet fixture: `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
+  - Governance Evidence Packet contract test: `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
+  - Non-claims: not certification; not production security guarantee; not automatic enforcement; not scoring model; not legal conclusion.
 
 ## 何を解決するか
 
