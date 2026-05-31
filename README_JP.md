@@ -247,6 +247,9 @@ VERITAS は、本番の enforce と開発時の observe を区別します。本
 - 実行前に意思決定を評価し、`proceed / hold / block / human_review_required` を判定するガバナンス層
 - 意思決定を **reviewable / traceable / replayable / auditable / enforceable** にするための製品基盤
 - Mission Control を通じて運用者がガバナンス状態を把握・運用できる実装
+- Intervention Actionability Map v0 には schema と golden fixture contract が追加されています。これにより、marker から intervention guidance への対応が deterministic / inspectable に保たれ、automatic enforcement ではないことも明確化されます。
+  - Intervention Actionability Map schema: `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
+  - Intervention Actionability Map fixture: `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
 
 ## 何を解決するか
 

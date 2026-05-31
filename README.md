@@ -478,6 +478,9 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **Pre-Bind Participation Signals**: [`docs/en/architecture/pre-bind-participation-signals.md`](docs/en/architecture/pre-bind-participation-signals.md)
 - **Pre-Bind Canonical Proof Cases**: [`docs/en/proofs/pre_bind_canonical_cases_proof.md`](docs/en/proofs/pre_bind_canonical_cases_proof.md)
 - **Pre-Boundary Collapse Demo**: [`docs/en/demos/pre_boundary_collapse_demo.md`](docs/en/demos/pre_boundary_collapse_demo.md)
+  - Intervention Actionability Map v0 now has a schema and golden fixture contract. The contract keeps marker-to-intervention guidance deterministic, inspectable, and explicitly non-enforcement.
+  - Intervention Actionability Map schema: `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
+  - Intervention Actionability Map fixture: `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
 - **Mini proof: covered `/v1/decide` pre-bind formation refusal**: [`docs/en/validation/pre-bind-formation-refusal-mini-proof.md`](docs/en/validation/pre-bind-formation-refusal-mini-proof.md)
 - **Regulated Action Governance Kernel**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
 - **Authority Evidence vs Audit Log**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)

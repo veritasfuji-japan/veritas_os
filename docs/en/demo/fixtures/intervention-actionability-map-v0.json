@@ -1,0 +1,238 @@
+{
+  "version": "v0",
+  "purpose": "Map visible governance markers to representative intervention categories without claiming automatic enforcement.",
+  "actionability_model": "deterministic_representative_intervention_guidance",
+  "scope": {
+    "included": [
+      "marker_to_actionability_mapping",
+      "representative_intervention_categories",
+      "evidence_preservation_guidance",
+      "action_limitations"
+    ],
+    "excluded": [
+      "automatic_enforcement",
+      "automatic_blocking",
+      "automatic_escalation",
+      "scoring_model",
+      "production_decisioning",
+      "certification_claim"
+    ]
+  },
+  "intervention_categories": [
+    {
+      "id": "observe",
+      "label": "Observe",
+      "description": "Record the visible marker without changing the bind path."
+    },
+    {
+      "id": "annotate",
+      "label": "Annotate",
+      "description": "Add explanatory context to the governance trace."
+    },
+    {
+      "id": "warn",
+      "label": "Warn",
+      "description": "Surface a warning to operators or reviewers."
+    },
+    {
+      "id": "preserve_evidence",
+      "label": "Preserve evidence",
+      "description": "Ensure the relevant marker, evidence chain, and replay trace remain inspectable."
+    },
+    {
+      "id": "reframe",
+      "label": "Reframe",
+      "description": "Reopen or rebalance option framing before bind."
+    },
+    {
+      "id": "pause",
+      "label": "Pause",
+      "description": "Hold progression before bind while review remains meaningful."
+    },
+    {
+      "id": "escalate",
+      "label": "Escalate",
+      "description": "Route the marker to human or higher-authority governance review."
+    },
+    {
+      "id": "require_explicit_approval",
+      "label": "Require explicit approval",
+      "description": "Require scope-bound approval before continuing toward bind."
+    },
+    {
+      "id": "freeze_bind_path",
+      "label": "Freeze bind path",
+      "description": "Preserve the current bind path and prevent silent mutation while reviewing evidence."
+    },
+    {
+      "id": "post_horizon_review",
+      "label": "Post-horizon review",
+      "description": "Flag a bind or decision for review after the irreversibility horizon or recognition gap."
+    }
+  ],
+  "mappings": [
+    {
+      "marker_id": "first_structural_degradation_signal",
+      "source_layer": "irreversibility_horizon_v0",
+      "representative_phase": "phase_2_reinforcement_exposure_asymmetry",
+      "recommended_action_ids": [
+        "annotate",
+        "preserve_evidence",
+        "warn"
+      ],
+      "evidence_to_preserve": [
+        "first_structural_degradation_signal_phase",
+        "dynamic_asymmetry_marker"
+      ],
+      "limitation": "does_not_claim_automatic_intervention"
+    },
+    {
+      "marker_id": "early_warning",
+      "source_layer": "irreversibility_horizon_v0",
+      "representative_phase": "phase_3_time_pressure_compression",
+      "recommended_action_ids": [
+        "warn",
+        "pause",
+        "reframe",
+        "preserve_evidence"
+      ],
+      "evidence_to_preserve": [
+        "early_warning_phase",
+        "intervention_window_compression_marker"
+      ],
+      "limitation": "does_not_claim_automatic_pause_or_blocking"
+    },
+    {
+      "marker_id": "last_meaningful_intervention",
+      "source_layer": "irreversibility_horizon_v0",
+      "representative_phase": "phase_3_time_pressure_compression",
+      "recommended_action_ids": [
+        "pause",
+        "escalate",
+        "require_explicit_approval"
+      ],
+      "evidence_to_preserve": [
+        "last_meaningful_intervention_phase",
+        "intervention_viability_state"
+      ],
+      "limitation": "does_not_claim_automatic_intervention_success_or_enforcement"
+    },
+    {
+      "marker_id": "irreversibility_horizon",
+      "source_layer": "irreversibility_horizon_v0",
+      "representative_phase": "phase_4_adaptive_narrowing",
+      "recommended_action_ids": [
+        "escalate",
+        "require_explicit_approval",
+        "post_horizon_review",
+        "preserve_evidence"
+      ],
+      "evidence_to_preserve": [
+        "irreversibility_horizon_phase",
+        "adaptive_narrowing_marker"
+      ],
+      "limitation": "does_not_claim_automatic_reversibility_or_enforcement_after_horizon"
+    },
+    {
+      "marker_id": "actor_recognition_gap",
+      "source_layer": "actor_recognition_gap_v0",
+      "representative_phase": "phase_3_time_pressure_compression",
+      "recommended_action_ids": [
+        "warn",
+        "annotate",
+        "escalate",
+        "preserve_evidence"
+      ],
+      "evidence_to_preserve": [
+        "recognition_gap_phase",
+        "visibility_degradation_phase"
+      ],
+      "limitation": "does_not_claim_automatic_intervention_or_infer_actor_psychology_or_intent"
+    },
+    {
+      "marker_id": "bind_after_recognition_gap",
+      "source_layer": "actor_recognition_gap_v0",
+      "representative_phase": "phase_5_bind_over_dynamically_narrowed_space",
+      "recommended_action_ids": [
+        "post_horizon_review",
+        "preserve_evidence",
+        "require_explicit_approval"
+      ],
+      "evidence_to_preserve": [
+        "bind_after_recognition_gap_phase",
+        "post_gap_bind_marker"
+      ],
+      "limitation": "does_not_claim_automatic_bind_invalidity_or_enforcement"
+    },
+    {
+      "marker_id": "self_authorization",
+      "source_layer": "governance_attack_surface_registry_v0",
+      "representative_phase": "governance_attack_surface_review",
+      "representative_failure_class": "self_authorization",
+      "recommended_action_ids": [
+        "escalate",
+        "freeze_bind_path",
+        "require_explicit_approval",
+        "preserve_evidence"
+      ],
+      "evidence_to_preserve": [
+        "independent_governance_authority_marker",
+        "append_only_governance_log"
+      ],
+      "limitation": "does_not_claim_complete_prevention_or_runtime_enforcement"
+    },
+    {
+      "marker_id": "evidence_chain_manipulation",
+      "source_layer": "governance_attack_surface_registry_v0",
+      "representative_phase": "governance_attack_surface_review",
+      "representative_failure_class": "evidence_chain_manipulation",
+      "recommended_action_ids": [
+        "freeze_bind_path",
+        "preserve_evidence",
+        "escalate"
+      ],
+      "evidence_to_preserve": [
+        "ordered_append_only_evidence_chain",
+        "append_only_governance_log"
+      ],
+      "limitation": "does_not_claim_automatic_enforcement_tamper_proof_storage_or_formal_verification"
+    },
+    {
+      "marker_id": "approval_receipt_spoofing",
+      "source_layer": "governance_attack_surface_registry_v0",
+      "representative_phase": "governance_attack_surface_review",
+      "representative_failure_class": "approval_receipt_spoofing",
+      "recommended_action_ids": [
+        "require_explicit_approval",
+        "escalate",
+        "preserve_evidence"
+      ],
+      "evidence_to_preserve": [
+        "actor_source_timestamp_scope_validity_context",
+        "approval_receipt_provenance"
+      ],
+      "limitation": "does_not_claim_automatic_identity_proof_or_production_authentication"
+    },
+    {
+      "marker_id": "escalation_suppression",
+      "source_layer": "governance_attack_surface_registry_v0",
+      "representative_phase": "governance_attack_surface_review",
+      "representative_failure_class": "escalation_suppression",
+      "recommended_action_ids": [
+        "escalate",
+        "preserve_evidence",
+        "post_horizon_review"
+      ],
+      "evidence_to_preserve": [
+        "warning_pause_review_escalation_sequence",
+        "replayable_escalation_trace"
+      ],
+      "limitation": "does_not_claim_automatic_escalation_or_blocking"
+    }
+  ],
+  "validation_question": "When a governance marker becomes visible, what representative intervention category becomes actionable?",
+  "summary": {
+    "concise": "Intervention Actionability Map v0 connects visible governance markers to representative intervention categories and evidence preservation guidance.",
+    "operator": "The system should show what action category becomes representative when a marker is visible, without claiming automatic enforcement."
+  }
+}
