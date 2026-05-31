@@ -215,6 +215,22 @@ const GOVERNANCE_COVERAGE_DISPLAY_LABELS: Readonly<Record<string, string>> = {
   bind_time_policy_hash_and_version: "bind-time policy hash and version",
   warning_pause_review_escalation_sequence: "warning / pause / review / escalation sequence",
   append_only_replayable_governance_sequence: "append-only replayable governance sequence",
+  first_structural_degradation_signal: "first structural degradation signal",
+  early_warning: "early warning",
+  last_meaningful_intervention: "last meaningful intervention",
+  irreversibility_horizon: "irreversibility horizon",
+  actor_recognition_gap: "actor recognition gap",
+  bind_after_recognition_gap: "bind after recognition gap",
+  observe: "observe",
+  annotate: "annotate",
+  warn: "warn",
+  preserve_evidence: "preserve evidence",
+  reframe: "reframe",
+  pause: "pause",
+  escalate: "escalate",
+  require_explicit_approval: "require explicit approval",
+  freeze_bind_path: "freeze bind path",
+  post_horizon_review: "post-horizon review",
   actor_recognition_gap_marker_sequence: "actor recognition gap marker sequence",
 };
 
@@ -284,6 +300,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   const actorRecognitionGap = irreversibilityHorizon?.actor_recognition_gap;
   const governanceAttackSurfaceRegistry = governanceSnapshot?.governance_attack_surface_registry;
   const safeguardCoverageMatrix = governanceAttackSurfaceRegistry?.safeguard_coverage_matrix;
+  const interventionActionabilityMap = governanceSnapshot?.intervention_actionability_map;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -507,6 +524,39 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                       <p className="mt-2 text-muted-foreground">summary: {safeguardCoverageMatrix.summary.concise}</p>
                     </div>
                   ) : null}
+                </div>
+              ) : null}
+              {interventionActionabilityMap ? (
+                <div
+                  aria-label="Intervention Actionability Map v0"
+                  className="mt-3 rounded-md border border-border/60 bg-background/60 p-3"
+                >
+                  <p className="font-semibold">Intervention Actionability Map v0</p>
+                  <p className="text-muted-foreground">Mapping visible governance markers to representative intervention categories</p>
+                  <p className="mt-2 text-muted-foreground">{interventionActionabilityMap.validation_question}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {interventionActionabilityMap.intervention_categories.map((category) => (
+                      <span
+                        key={category.id}
+                        className="rounded-full border border-border/60 bg-muted/20 px-2 py-0.5 text-[11px]"
+                        title={category.description}
+                      >
+                        {formatCoverageToken(category.id)}
+                      </span>
+                    ))}
+                  </div>
+                  <ul className="mt-2 space-y-1">
+                    {interventionActionabilityMap.mappings.map((mapping) => (
+                      <li key={mapping.marker_id}>
+                        <span>{formatCoverageToken(mapping.marker_id)}</span>
+                        <span className="text-muted-foreground"> → </span>
+                        <span>{mapping.recommended_action_ids.map(formatCoverageToken).join(" / ")}</span>
+                        <span className="text-muted-foreground"> → evidence: </span>
+                        <span>{mapping.evidence_to_preserve.map(formatCoverageToken).join(" / ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-muted-foreground">summary: {interventionActionabilityMap.summary.concise}</p>
                 </div>
               ) : null}
               {dynamicConditionsValidationCase ? (

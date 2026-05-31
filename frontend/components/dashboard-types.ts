@@ -330,6 +330,42 @@ export interface GovernanceAttackSurfaceRegistry {
   };
 }
 
+
+export interface InterventionActionabilityScope {
+  included: string[];
+  excluded: string[];
+}
+
+export interface InterventionActionabilityCategory {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface InterventionActionabilityMapping {
+  marker_id: string;
+  source_layer: string;
+  representative_phase?: string;
+  representative_failure_class?: string;
+  recommended_action_ids: string[];
+  evidence_to_preserve: string[];
+  limitation: string;
+}
+
+export interface InterventionActionabilityMap {
+  version: string;
+  purpose: string;
+  actionability_model: string;
+  scope: InterventionActionabilityScope;
+  intervention_categories: InterventionActionabilityCategory[];
+  mappings: InterventionActionabilityMapping[];
+  validation_question: string;
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface PreBindGovernanceSnapshot {
   demo_scenario?: string;
   source_state?: string | null;
@@ -349,6 +385,7 @@ export interface PreBindGovernanceSnapshot {
   phase_snapshots?: Array<Record<string, unknown>>;
   trajectory_shaping_lineage?: TrajectoryShapingLineage;
   governance_attack_surface_registry?: GovernanceAttackSurfaceRegistry;
+  intervention_actionability_map?: InterventionActionabilityMap;
   participation_state?: string;
   preservation_state?: string;
   intervention_viability?: string;

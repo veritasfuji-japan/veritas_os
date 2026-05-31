@@ -385,3 +385,30 @@ prevention, production security, scoring, automatic attack detection,
 automatic enforcement, formal verification, or certification. It makes the
 registry more inspectable without turning the registry into an enforcement
 engine.
+
+## Intervention Actionability Map v0
+
+Intervention Actionability Map v0 is the compact next step after Governance
+Safeguard Coverage Matrix v0. The previous layers make trajectory degradation,
+irreversibility markers, actor recognition gaps, governance attack surfaces, and
+safeguard evidence visible. The actionability map keeps that visibility layer
+separate from automatic action, then asks: when a governance marker becomes
+visible, what representative intervention category becomes actionable?
+
+The demo exposes this as the additive field
+`governance_layer_snapshot.intervention_actionability_map`. It maps visible
+markers such as `first_structural_degradation_signal`, `early_warning`,
+`last_meaningful_intervention`, `irreversibility_horizon`,
+`actor_recognition_gap`, `bind_after_recognition_gap`, `self_authorization`,
+`evidence_chain_manipulation`, `approval_receipt_spoofing`, and
+`escalation_suppression` to representative categories such as `annotate`,
+`warn`, `preserve_evidence`, `reframe`, `pause`, `escalate`,
+`require_explicit_approval`, `freeze_bind_path`, and `post_horizon_review`.
+Each mapping also names the evidence that should remain inspectable for later
+review.
+
+This layer preserves methodological restraint. It does not claim automatic
+enforcement, automatic blocking, automatic escalation, scoring, certification,
+production decisioning, formal verification, or production security coverage.
+It shows representative intervention guidance only: visibility is connected to a
+human-reviewable action category, while automatic action remains out of scope.

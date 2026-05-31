@@ -142,6 +142,18 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       ),
     ).toEqual(expect.arrayContaining(["self_authorization", "recognition_gap_masking"]));
 
+    expect(payload.governance_layer_snapshot.intervention_actionability_map).toMatchObject({
+      version: "v0",
+      actionability_model: "deterministic_representative_intervention_guidance",
+      validation_question:
+        "When a governance marker becomes visible, what representative intervention category becomes actionable?",
+    });
+    expect(
+      payload.governance_layer_snapshot.intervention_actionability_map.mappings.map(
+        ({ marker_id }: { marker_id: string }) => marker_id,
+      ),
+    ).toEqual(expect.arrayContaining(["early_warning", "self_authorization", "escalation_suppression"]));
+
     await page.goto("/?demo_scenario=pre_boundary_collapse");
 
     await expect(
@@ -205,6 +217,15 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("immutable evidence chain");
     await expect(walkthrough).toContainText("recognition gap masking");
     await expect(walkthrough).toContainText("recognition gap visibility marker");
+
+    await expect(walkthrough).toContainText("Intervention Actionability Map v0");
+    await expect(walkthrough).toContainText("Mapping visible governance markers to representative intervention categories");
+    await expect(walkthrough).toContainText("first structural degradation signal");
+    await expect(walkthrough).toContainText("early warning");
+    await expect(walkthrough).toContainText("self-authorization");
+    await expect(walkthrough).toContainText("freeze bind path");
+    await expect(walkthrough).toContainText("require explicit approval");
+    await expect(walkthrough).toContainText("preserve evidence");
 
     const timeline = page.locator('section[aria-label="governance layer timeline"]');
     await expect(timeline).toBeVisible();
