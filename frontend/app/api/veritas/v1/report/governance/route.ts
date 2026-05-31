@@ -7,6 +7,7 @@ import {
   type AbcdMinimalValidationCase,
   type ActorRecognitionGap,
   type DynamicConditionsValidationCase,
+  type GovernanceAttackSurfaceRegistry,
   type IrreversibilityHorizon,
   type TrajectoryShapingLineage,
 } from "../../../../../../components/dashboard-types";
@@ -409,6 +410,157 @@ function buildDynamicConditionsValidationCase(): DynamicConditionsValidationCase
   };
 }
 
+function buildGovernanceAttackSurfaceRegistryV0(): GovernanceAttackSurfaceRegistry {
+  return {
+    version: "v0",
+    purpose:
+      "Identify representative failure classes where the governance process itself can become an attack surface and map them to structural safeguards.",
+    registry_model: "deterministic_representative_visibility_registry",
+    scope: {
+      included: [
+        "governance_self_authorization",
+        "evidence_integrity",
+        "approval_provenance",
+        "policy_snapshot_replayability",
+        "escalation_trace_visibility",
+        "actor_recognition_gap_visibility",
+      ],
+      excluded: [
+        "complete_security_proof",
+        "production_threat_model",
+        "automatic_attack_detection",
+        "certification_claim",
+        "formal_verification_claim",
+      ],
+    },
+    failure_classes: [
+      {
+        id: "self_authorization",
+        label: "Self-authorization",
+        description:
+          "The governance process or governed component appears to authorize its own action without independent governance authority.",
+        representative_risk: "A decision-producing component may make its own action appear admissible.",
+        safeguard_refs: [
+          "separation_of_decision_and_governance_authority",
+          "append_only_governance_log",
+        ],
+      },
+      {
+        id: "evidence_chain_manipulation",
+        label: "Evidence-chain manipulation",
+        description: "Evidence used to justify a decision is altered, reordered, omitted, or replaced after the fact.",
+        representative_risk: "The decision path may look safer or more justified than it was at bind time.",
+        safeguard_refs: ["immutable_evidence_chain", "append_only_governance_log"],
+      },
+      {
+        id: "approval_receipt_spoofing",
+        label: "Approval receipt spoofing",
+        description: "A human approval receipt or authorization proof appears valid without reliable provenance.",
+        representative_risk: "A bind path may appear human-approved even when the approval scope or source is invalid.",
+        safeguard_refs: [
+          "approval_receipt_provenance",
+          "separation_of_decision_and_governance_authority",
+        ],
+      },
+      {
+        id: "policy_snapshot_drift",
+        label: "Policy snapshot drift",
+        description:
+          "The policy used at decision time cannot be reproduced because later policy state differs from the bind-time snapshot.",
+        representative_risk: "A later review may evaluate the decision against the wrong policy version.",
+        safeguard_refs: ["policy_snapshot_hashing", "immutable_evidence_chain"],
+      },
+      {
+        id: "escalation_suppression",
+        label: "Escalation suppression",
+        description: "A condition requiring warning, pause, review, or escalation is not preserved in the governance trace.",
+        representative_risk:
+          "The governance process may appear orderly while suppressing evidence that intervention was needed.",
+        safeguard_refs: ["replayable_escalation_trace", "append_only_governance_log"],
+      },
+      {
+        id: "replay_trace_tampering",
+        label: "Replay trace tampering",
+        description:
+          "Replayable audit traces are missing, reordered, overwritten, or no longer reproduce the observed governance sequence.",
+        representative_risk: "Reviewers cannot reliably reconstruct the sequence that led to bind.",
+        safeguard_refs: [
+          "immutable_evidence_chain",
+          "replayable_escalation_trace",
+          "append_only_governance_log",
+        ],
+      },
+      {
+        id: "recognition_gap_masking",
+        label: "Recognition gap masking",
+        description:
+          "The visibility gap between structural degradation and actor recognition is not preserved as governance evidence.",
+        representative_risk:
+          "The system may look governable even while meaningful intervention capacity was already becoming nonviable upstream.",
+        safeguard_refs: [
+          "recognition_gap_visibility_marker",
+          "replayable_escalation_trace",
+        ],
+      },
+    ],
+    structural_safeguards: [
+      {
+        id: "separation_of_decision_and_governance_authority",
+        label: "Separation of decision and governance authority",
+        description:
+          "Decision-producing components should not be able to independently validate their own authority or admissibility.",
+        visibility_role:
+          "Shows whether governance authority is structurally independent from the governed decision path.",
+      },
+      {
+        id: "immutable_evidence_chain",
+        label: "Immutable evidence chain",
+        description: "Evidence should be preserved as an ordered, append-only chain that cannot be silently rewritten.",
+        visibility_role: "Shows whether bind-time evidence can be replayed without relying on mutable post-hoc state.",
+      },
+      {
+        id: "policy_snapshot_hashing",
+        label: "Policy snapshot hashing",
+        description: "Policy state used at decision or bind time should be versioned and hashable.",
+        visibility_role: "Shows whether the exact policy context can be reconstructed later.",
+      },
+      {
+        id: "approval_receipt_provenance",
+        label: "Approval receipt provenance",
+        description: "Approval receipts should preserve actor, source, timestamp, scope, and validity context.",
+        visibility_role:
+          "Shows whether human approval evidence can be distinguished from spoofed or out-of-scope approval.",
+      },
+      {
+        id: "replayable_escalation_trace",
+        label: "Replayable escalation trace",
+        description: "Warnings, pauses, reviews, and escalations should be preserved in replayable order.",
+        visibility_role: "Shows whether intervention opportunities and escalation decisions remain inspectable.",
+      },
+      {
+        id: "append_only_governance_log",
+        label: "Append-only governance log",
+        description: "Governance validation, exceptions, and marker outputs should be appended rather than overwritten.",
+        visibility_role: "Shows whether governance outcomes can be audited without hidden mutation.",
+      },
+      {
+        id: "recognition_gap_visibility_marker",
+        label: "Recognition gap visibility marker",
+        description: "Actor Recognition Gap v0 markers should remain visible as part of the governance evidence record.",
+        visibility_role:
+          "Shows whether perceived governability and structural degradation can be compared over time.",
+      },
+    ],
+    validation_question: "What structural safeguards prevent the governance process itself from becoming the attack surface?",
+    summary: {
+      concise:
+        "Governance Attack Surface Registry v0 identifies representative failure classes where governance evidence, approval, policy, escalation, or replay traces could be manipulated or made self-authorizing.",
+      operator:
+        "The system should show which structural safeguard makes each governance attack surface visible without claiming complete security or certification.",
+    },
+  };
+}
+
 function buildTrajectoryShapingLineageV0(): TrajectoryShapingLineage {
   return {
     scenario_id: PRE_BOUNDARY_COLLAPSE_SCENARIO,
@@ -522,6 +674,7 @@ async function resolveDemoScenarioPayload(request: Request): Promise<Record<stri
       concise_rationale: finalPhaseSnapshot.concise_rationale,
       phase_snapshots: phaseSnapshots,
       trajectory_shaping_lineage: buildTrajectoryShapingLineageV0(),
+      governance_attack_surface_registry: buildGovernanceAttackSurfaceRegistryV0(),
     },
   };
 }

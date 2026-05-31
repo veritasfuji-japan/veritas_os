@@ -266,6 +266,41 @@ export interface TrajectoryShapingLineage {
   dynamic_conditions_validation_case?: DynamicConditionsValidationCase;
 }
 
+
+export interface GovernanceAttackSurfaceScope {
+  included: string[];
+  excluded: string[];
+}
+
+export interface GovernanceAttackSurfaceFailureClass {
+  id: string;
+  label: string;
+  description: string;
+  representative_risk: string;
+  safeguard_refs: string[];
+}
+
+export interface GovernanceAttackSurfaceSafeguard {
+  id: string;
+  label: string;
+  description: string;
+  visibility_role: string;
+}
+
+export interface GovernanceAttackSurfaceRegistry {
+  version: string;
+  purpose: string;
+  registry_model: string;
+  scope: GovernanceAttackSurfaceScope;
+  failure_classes: GovernanceAttackSurfaceFailureClass[];
+  structural_safeguards: GovernanceAttackSurfaceSafeguard[];
+  validation_question: string;
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface PreBindGovernanceSnapshot {
   demo_scenario?: string;
   source_state?: string | null;
@@ -284,6 +319,7 @@ export interface PreBindGovernanceSnapshot {
   reviewer_expected_steps?: Array<string | Record<string, unknown>> | null;
   phase_snapshots?: Array<Record<string, unknown>>;
   trajectory_shaping_lineage?: TrajectoryShapingLineage;
+  governance_attack_surface_registry?: GovernanceAttackSurfaceRegistry;
   participation_state?: string;
   preservation_state?: string;
   intervention_viability?: string;

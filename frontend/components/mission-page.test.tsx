@@ -393,6 +393,115 @@ describe("MissionPage", () => {
                 },
               },
             },
+            governance_attack_surface_registry: {
+              version: "v0",
+              purpose: "Identify representative governance attack surfaces and map them to structural safeguards.",
+              registry_model: "deterministic_representative_visibility_registry",
+              scope: {
+                included: ["governance_self_authorization"],
+                excluded: ["complete_security_proof"],
+              },
+              failure_classes: [
+                {
+                  id: "self_authorization",
+                  label: "Self-authorization",
+                  description: "The governed component appears to authorize itself.",
+                  representative_risk: "A component may make its own action appear admissible.",
+                  safeguard_refs: ["separation_of_decision_and_governance_authority"],
+                },
+                {
+                  id: "evidence_chain_manipulation",
+                  label: "Evidence-chain manipulation",
+                  description: "Evidence is altered after the fact.",
+                  representative_risk: "The decision path may look safer than it was at bind time.",
+                  safeguard_refs: ["immutable_evidence_chain"],
+                },
+                {
+                  id: "approval_receipt_spoofing",
+                  label: "Approval receipt spoofing",
+                  description: "Approval proof appears valid without provenance.",
+                  representative_risk: "A bind path may appear human-approved without valid scope.",
+                  safeguard_refs: ["approval_receipt_provenance"],
+                },
+                {
+                  id: "policy_snapshot_drift",
+                  label: "Policy snapshot drift",
+                  description: "Bind-time policy cannot be reproduced later.",
+                  representative_risk: "Review may use the wrong policy version.",
+                  safeguard_refs: ["policy_snapshot_hashing"],
+                },
+                {
+                  id: "escalation_suppression",
+                  label: "Escalation suppression",
+                  description: "Required escalation is not preserved.",
+                  representative_risk: "Intervention evidence may be suppressed.",
+                  safeguard_refs: ["replayable_escalation_trace"],
+                },
+                {
+                  id: "replay_trace_tampering",
+                  label: "Replay trace tampering",
+                  description: "Replayable audit traces are missing or reordered.",
+                  representative_risk: "Reviewers cannot reconstruct the sequence to bind.",
+                  safeguard_refs: ["append_only_governance_log"],
+                },
+                {
+                  id: "recognition_gap_masking",
+                  label: "Recognition gap masking",
+                  description: "Actor recognition gap visibility is not preserved.",
+                  representative_risk: "The system may look governable after intervention capacity degraded.",
+                  safeguard_refs: ["recognition_gap_visibility_marker"],
+                },
+              ],
+              structural_safeguards: [
+                {
+                  id: "separation_of_decision_and_governance_authority",
+                  label: "Separation of decision and governance authority",
+                  description: "Decision producers should not validate their own authority.",
+                  visibility_role: "Shows independent governance authority.",
+                },
+                {
+                  id: "immutable_evidence_chain",
+                  label: "Immutable evidence chain",
+                  description: "Evidence should remain ordered and append-only.",
+                  visibility_role: "Shows bind-time replayability.",
+                },
+                {
+                  id: "policy_snapshot_hashing",
+                  label: "Policy snapshot hashing",
+                  description: "Policy state should be versioned and hashable.",
+                  visibility_role: "Shows exact policy reconstruction.",
+                },
+                {
+                  id: "approval_receipt_provenance",
+                  label: "Approval receipt provenance",
+                  description: "Approval receipts should preserve actor, source, timestamp, and scope.",
+                  visibility_role: "Shows whether approval evidence is in scope.",
+                },
+                {
+                  id: "replayable_escalation_trace",
+                  label: "Replayable escalation trace",
+                  description: "Escalations should remain replayable.",
+                  visibility_role: "Shows intervention opportunities.",
+                },
+                {
+                  id: "append_only_governance_log",
+                  label: "Append-only governance log",
+                  description: "Governance outcomes should be appended rather than overwritten.",
+                  visibility_role: "Shows governance auditability.",
+                },
+                {
+                  id: "recognition_gap_visibility_marker",
+                  label: "Recognition gap visibility marker",
+                  description: "Actor Recognition Gap v0 markers should remain visible.",
+                  visibility_role: "Shows perceived governability against structural degradation.",
+                },
+              ],
+              validation_question: "What structural safeguards prevent the governance process itself from becoming the attack surface?",
+              summary: {
+                concise: "Governance Attack Surface Registry v0 identifies representative governance-process attack surfaces.",
+                operator: "Show safeguards without enforcement claims.",
+              },
+            },
           }}
         />
       </I18nProvider>,
@@ -440,6 +549,18 @@ describe("MissionPage", () => {
     expect(screen.getAllByText(/recognition gap:/).length).toBeGreaterThan(0);
     expect(screen.getByText(/recognition alignment:/)).toBeInTheDocument();
     expect(screen.getByText(/bind after recognition gap:/)).toBeInTheDocument();
+    expect(screen.getByText("Governance Attack Surface Registry v0")).toBeInTheDocument();
+    expect(screen.getByText("Making representative governance-process attack surfaces and structural safeguards visible")).toBeInTheDocument();
+    expect(screen.getByText("self-authorization")).toBeInTheDocument();
+    expect(screen.getByText("evidence-chain manipulation")).toBeInTheDocument();
+    expect(screen.getByText("approval receipt spoofing")).toBeInTheDocument();
+    expect(screen.getByText("policy snapshot drift")).toBeInTheDocument();
+    expect(screen.getByText("escalation suppression")).toBeInTheDocument();
+    expect(screen.getByText("replay trace tampering")).toBeInTheDocument();
+    expect(screen.getByText("recognition gap masking")).toBeInTheDocument();
+    expect(screen.getByText("separation of decision and governance authority")).toBeInTheDocument();
+    expect(screen.getByText("immutable evidence chain")).toBeInTheDocument();
+    expect(screen.getByText("append-only governance log")).toBeInTheDocument();
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {
