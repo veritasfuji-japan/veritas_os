@@ -244,3 +244,19 @@ blocking、automatic escalation、scoring、certification、production decisioni
 verification、production security coverage は主張しません。可視化された marker を
 human-reviewable な representative intervention guidance に接続するだけであり、自動介入は
 scope 外です。
+## Intervention Actionability Map contract v0
+
+Intervention Actionability Map v0 には、schema と golden fixture が保存されています。
+
+- `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
+- `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
+
+この contract により、visible governance marker が既知の representative intervention
+category にのみ接続されること、preserve すべき evidence が欠落しないこと、そしてこの layer
+が automatic enforcement / automatic blocking / automatic escalation / scoring /
+production decisioning / certification を主張しないことを検証します。
+
+この contract は、map を automatic enforcement engine、blocking engine、escalation
+system、scoring model、production decisioning layer、certification、production
+security guarantee に変えるものではありません。
+

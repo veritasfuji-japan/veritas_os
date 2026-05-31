@@ -412,3 +412,19 @@ enforcement, automatic blocking, automatic escalation, scoring, certification,
 production decisioning, formal verification, or production security coverage.
 It shows representative intervention guidance only: visibility is connected to a
 human-reviewable action category, while automatic action remains out of scope.
+## Intervention Actionability Map contract v0
+
+Intervention Actionability Map v0 has a checked-in schema and golden fixture:
+
+- `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
+- `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
+
+The contract keeps the layer deterministic and reviewable. It verifies that
+visible governance markers map only to known representative intervention
+categories, that evidence-to-preserve guidance remains present, and that the
+layer remains non-enforcement and non-certification.
+
+This contract does not make the map an automatic enforcement engine, blocking
+engine, escalation system, scoring model, production decisioning layer,
+certification, or production security guarantee.
+

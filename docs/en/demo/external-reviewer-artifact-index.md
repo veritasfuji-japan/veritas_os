@@ -16,6 +16,10 @@ Key local/offline reviewer-facing artifacts:
   - checked-in golden fixture
 - `docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`
   - JSON Schema contract
+- `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
+  - JSON Schema contract for Intervention Actionability Map v0
+- `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
+  - golden fixture for Intervention Actionability Map v0
 - `docs/en/demo/reviewer-evidence-packet.md`
   - Reviewer Evidence Packet documentation
 - `docs/en/demo/reviewer-evidence-packet-validation-report.md`

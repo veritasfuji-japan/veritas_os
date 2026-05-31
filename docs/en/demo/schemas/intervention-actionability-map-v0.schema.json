@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/intervention-actionability-map-v0.schema.json",
+  "title": "Intervention Actionability Map v0",
+  "description": "Deterministic, human-reviewable, non-enforcement contract for representative intervention guidance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "purpose",
+    "actionability_model",
+    "scope",
+    "intervention_categories",
+    "mappings",
+    "validation_question",
+    "summary"
+  ],
+  "properties": {
+    "version": { "const": "v0" },
+    "purpose": { "type": "string", "minLength": 1 },
+    "actionability_model": {
+      "const": "deterministic_representative_intervention_guidance"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["included", "excluded"],
+      "properties": {
+        "included": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "excluded": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "allOf": [
+            { "contains": { "const": "automatic_enforcement" } },
+            { "contains": { "const": "automatic_blocking" } },
+            { "contains": { "const": "automatic_escalation" } },
+            { "contains": { "const": "scoring_model" } },
+            { "contains": { "const": "production_decisioning" } },
+            { "contains": { "const": "certification_claim" } }
+          ]
+        }
+      }
+    },
+    "intervention_categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/interventionCategory" }
+    },
+    "mappings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/mapping" }
+    },
+    "validation_question": { "type": "string", "minLength": 1 },
+    "summary": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "interventionCategoryId": {
+      "enum": [
+        "observe",
+        "annotate",
+        "warn",
+        "preserve_evidence",
+        "reframe",
+        "pause",
+        "escalate",
+        "require_explicit_approval",
+        "freeze_bind_path",
+        "post_horizon_review"
+      ]
+    },
+    "interventionCategory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/interventionCategoryId" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "marker_id",
+        "source_layer",
+        "representative_phase",
+        "recommended_action_ids",
+        "evidence_to_preserve",
+        "limitation"
+      ],
+      "properties": {
+        "marker_id": { "type": "string", "minLength": 1 },
+        "source_layer": { "type": "string", "minLength": 1 },
+        "representative_phase": { "type": "string", "minLength": 1 },
+        "representative_failure_class": { "type": "string", "minLength": 1 },
+        "recommended_action_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/interventionCategoryId" }
+        },
+        "evidence_to_preserve": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "limitation": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "does_not_claim"
+        }
+      }
+    }
+  }
+}
