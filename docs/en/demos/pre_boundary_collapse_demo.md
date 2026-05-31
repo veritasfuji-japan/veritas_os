@@ -295,3 +295,55 @@ The purpose is visibility, not formal assurance, prediction, or a production
 governability claim. A system may remain formally open, procedurally admissible,
 and apparently governable while meaningful divergence capacity has already
 become progressively nonviable upstream.
+
+## Governance Attack Surface Registry v0
+
+Governance Attack Surface Registry v0 is the next compact visibility layer after
+Actor Recognition Gap v0. Actor Recognition Gap v0 shows that actors may still
+perceive a trajectory as governable after intervention capacity visibility has
+started to degrade. The registry asks the meta-governance question that follows:
+what structural safeguards prevent the governance process itself from becoming
+the attack surface?
+
+This layer does not claim complete security, certification, formal verification,
+production threat coverage, automatic attack detection, or automatic
+enforcement. It is an additive deterministic representative visibility registry
+under `governance_layer_snapshot.governance_attack_surface_registry`. It keeps
+the existing OpenAPI, bind contract, state family, pre-bind vocabulary,
+Trajectory Shaping Lineage v0, Irreversibility Horizon v0, and Actor Recognition
+Gap v0 behavior unchanged.
+
+The registry focuses on representative governance-process failure classes where
+governance evidence, approval, policy, escalation, or replay traces could be
+manipulated, spoofed, bypassed, or made self-authorizing. Its first critical
+emphasis is governance self-authorization / evidence-chain manipulation: the
+risk is not only that a risky decision occurs, but that the evidence or approval
+path can be shaped to make the decision look safe, admissible, or reviewed after
+the fact.
+
+Governance Attack Surface Registry v0 includes these representative failure
+classes:
+
+- **self_authorization** — governance or a governed component appears to
+authorize its own action without independent governance authority.
+- **evidence_chain_manipulation** — evidence used to justify a decision is
+altered, reordered, omitted, or replaced after the fact.
+- **approval_receipt_spoofing** — a human approval receipt or authorization proof
+appears valid without reliable provenance.
+- **policy_snapshot_drift** — bind-time policy cannot be reproduced because later
+policy state differs from the decision-time snapshot.
+- **escalation_suppression** — warning, pause, review, or escalation conditions
+are not preserved in the governance trace.
+- **replay_trace_tampering** — replayable audit traces are missing, reordered,
+overwritten, or no longer reproduce the observed governance sequence.
+- **recognition_gap_masking** — Actor Recognition Gap v0 / intervention capacity
+visibility markers are not preserved as governance evidence.
+
+It maps those failure classes to structural safeguards such as separation of
+decision and governance authority, immutable evidence chains, policy snapshot
+hashing, approval receipt provenance, replayable escalation traces, append-only
+governance logs, and recognition gap visibility markers. This preserves
+methodological restraint: the registry makes governance-process attack surfaces
+visible as representative classes and safeguard mappings; it does not turn those
+mappings into a scoring model, detection engine, blocking behavior, security
+guarantee, or certification claim.

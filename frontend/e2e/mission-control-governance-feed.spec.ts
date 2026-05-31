@@ -125,6 +125,11 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       },
     });
 
+    expect(payload.governance_layer_snapshot.governance_attack_surface_registry).toMatchObject({
+      version: "v0",
+      registry_model: "deterministic_representative_visibility_registry",
+    });
+
     await page.goto("/?demo_scenario=pre_boundary_collapse");
 
     await expect(
@@ -173,6 +178,13 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("intervention window compression");
     await expect(walkthrough).toContainText("adaptive narrowing");
     await expect(walkthrough).toContainText("formal admissibility");
+
+    await expect(walkthrough).toContainText("Governance Attack Surface Registry v0");
+    await expect(walkthrough).toContainText("Making representative governance-process attack surfaces and structural safeguards visible");
+    await expect(walkthrough).toContainText("self-authorization");
+    await expect(walkthrough).toContainText("evidence-chain manipulation");
+    await expect(walkthrough).toContainText("approval receipt spoofing");
+    await expect(walkthrough).toContainText("append-only governance log");
 
     const timeline = page.locator('section[aria-label="governance layer timeline"]');
     await expect(timeline).toBeVisible();

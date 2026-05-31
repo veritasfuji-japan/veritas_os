@@ -257,6 +257,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   const dynamicConditionsValidationCase = governanceSnapshot?.trajectory_shaping_lineage?.dynamic_conditions_validation_case;
   const irreversibilityHorizon = dynamicConditionsValidationCase?.irreversibility_horizon;
   const actorRecognitionGap = irreversibilityHorizon?.actor_recognition_gap;
+  const governanceAttackSurfaceRegistry = governanceSnapshot?.governance_attack_surface_registry;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -429,6 +430,35 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                     <li>formal admissibility: <span className="font-mono">{stringifyValue(abcdMinimalValidationCase.separation_points.formal_admissibility_phase)}</span></li>
                     <li>summary: <span className="text-muted-foreground">{stringifyValue(abcdMinimalValidationCase.summary.concise)}</span></li>
                   </ul>
+                </div>
+              ) : null}
+              {governanceAttackSurfaceRegistry ? (
+                <div
+                  aria-label="Governance Attack Surface Registry v0"
+                  className="mt-3 rounded-md border border-border/60 bg-muted/10 p-3"
+                >
+                  <p className="font-semibold">Governance Attack Surface Registry v0</p>
+                  <p className="text-muted-foreground">Making representative governance-process attack surfaces and structural safeguards visible</p>
+                  <p className="mt-2 text-muted-foreground">{governanceAttackSurfaceRegistry.validation_question}</p>
+                  <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="font-semibold">Failure classes</p>
+                      <ul className="mt-1 space-y-1">
+                        {governanceAttackSurfaceRegistry.failure_classes.map((failureClass) => (
+                          <li key={failureClass.id}>{failureClass.label.toLowerCase()}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Structural safeguards</p>
+                      <ul className="mt-1 space-y-1">
+                        {governanceAttackSurfaceRegistry.structural_safeguards.map((safeguard) => (
+                          <li key={safeguard.id}>{safeguard.label.toLowerCase()}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-muted-foreground">summary: {governanceAttackSurfaceRegistry.summary.concise}</p>
                 </div>
               ) : null}
               {dynamicConditionsValidationCase ? (

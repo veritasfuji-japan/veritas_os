@@ -231,6 +231,13 @@ describe("/api/veritas/v1/report/governance", () => {
         intervention_viability: string;
         bind_outcome: string;
         phase_snapshots: Array<Record<string, unknown>>;
+        governance_attack_surface_registry: {
+          version: string;
+          registry_model: string;
+          failure_classes: Array<{ id: string }>;
+          structural_safeguards: Array<{ id: string }>;
+          validation_question: string;
+        };
         trajectory_shaping_lineage: {
           scenario_id: string;
           version: string;
@@ -357,6 +364,34 @@ describe("/api/veritas/v1/report/governance", () => {
         bind_after_recognition_gap_phase: "phase_5_bind_over_dynamically_narrowed_space",
       },
     });
+
+    expect(payload.governance_layer_snapshot.governance_attack_surface_registry).toMatchObject({
+      version: "v0",
+      registry_model: "deterministic_representative_visibility_registry",
+      validation_question: "What structural safeguards prevent the governance process itself from becoming the attack surface?",
+    });
+    expect(payload.governance_layer_snapshot.governance_attack_surface_registry.failure_classes.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([
+        "self_authorization",
+        "evidence_chain_manipulation",
+        "approval_receipt_spoofing",
+        "policy_snapshot_drift",
+        "escalation_suppression",
+        "replay_trace_tampering",
+        "recognition_gap_masking",
+      ]),
+    );
+    expect(payload.governance_layer_snapshot.governance_attack_surface_registry.structural_safeguards.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([
+        "separation_of_decision_and_governance_authority",
+        "immutable_evidence_chain",
+        "policy_snapshot_hashing",
+        "approval_receipt_provenance",
+        "replayable_escalation_trace",
+        "append_only_governance_log",
+        "recognition_gap_visibility_marker",
+      ]),
+    );
 
   });
 

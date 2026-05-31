@@ -141,3 +141,46 @@ intervention capacity に対する actor recognition の間に生じ得る repre
 目的は visibility であり、formal assurance、prediction、production governability claim ではありません。
 system は formally open、procedurally admissible、apparently governable に見え続ける一方で、meaningful
 divergence capacity は上流ですでに progressively nonviable になっている可能性があります。
+
+## Governance Attack Surface Registry v0
+
+Governance Attack Surface Registry v0 は、Actor Recognition Gap v0 の次に置く compact
+visibility layer です。Actor Recognition Gap v0 は、intervention capacity の visibility が
+劣化し始めた後でも、actor には trajectory がまだ governable に見え得ることを示しました。
+この registry は、その次の meta-governance の問い、つまり「governance process 自体が
+attack surface にならないために、どの structural safeguard が必要か」を扱います。
+
+この layer は complete security、certification、formal verification、production threat coverage、
+automatic attack detection、automatic enforcement を主張しません。
+`governance_layer_snapshot.governance_attack_surface_registry` に追加される additive な
+deterministic representative visibility registry です。OpenAPI、bind contract、state family、
+pre-bind vocabulary、Trajectory Shaping Lineage v0、Irreversibility Horizon v0、Actor Recognition
+Gap v0 の挙動は変更しません。
+
+registry の焦点は、governance evidence、approval、policy、escalation、replay trace が操作・偽装・
+bypass・self-authorizing 化され得る代表的な governance-process failure classes を見えるようにすることです。
+最初に重視する critical failure class は governance self-authorization / evidence-chain manipulation です。
+問題は危険な decision が起きることだけではなく、その decision が後から safe、admissible、reviewed に
+見えるよう evidence や approval path が shaping され得る点にあります。
+
+Governance Attack Surface Registry v0 は、次の representative failure classes を含みます。
+
+- **self_authorization** — governance または governed component が、independent governance authority
+なしに自身の action を承認したように見える failure。
+- **evidence_chain_manipulation** — decision を正当化する evidence が後から変更、並べ替え、欠落、
+差し替えされる failure。
+- **approval_receipt_spoofing** — human approval receipt / authorization proof が、reliable provenance
+なしに valid に見える failure。
+- **policy_snapshot_drift** — decision / bind 時点の policy snapshot が後から再現できなくなる failure。
+- **escalation_suppression** — warning、pause、review、escalation が必要な条件が governance trace に
+残らない failure。
+- **replay_trace_tampering** — replayable audit trace が欠落、順序変更、上書きされ、observed governance
+sequence を再現できなくなる failure。
+- **recognition_gap_masking** — Actor Recognition Gap v0 / intervention capacity visibility markers が
+governance evidence として残らない failure。
+
+各 failure class は、separation of decision and governance authority、immutable evidence chain、policy
+snapshot hashing、approval receipt provenance、replayable escalation trace、append-only governance log、
+recognition gap visibility marker などの structural safeguards に対応づけられます。これは methodological
+restraint を維持するための registry です。representative class と safeguard mapping を可視化しますが、
+scoring model、detection engine、blocking behavior、security guarantee、certification claim にはしません。
