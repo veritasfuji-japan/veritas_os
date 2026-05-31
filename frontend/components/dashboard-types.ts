@@ -287,6 +287,34 @@ export interface GovernanceAttackSurfaceSafeguard {
   visibility_role: string;
 }
 
+export interface GovernanceSafeguardCoverageScope {
+  included: string[];
+  excluded: string[];
+}
+
+export interface GovernanceSafeguardCoverageRow {
+  failure_class_id: string;
+  primary_safeguard_id: string;
+  supporting_safeguard_ids: string[];
+  evidence_requirement: string;
+  visibility_question: string;
+  coverage_state: string;
+  limitation: string;
+}
+
+export interface GovernanceSafeguardCoverageMatrix {
+  version: string;
+  purpose: string;
+  coverage_model: string;
+  scope: GovernanceSafeguardCoverageScope;
+  rows: GovernanceSafeguardCoverageRow[];
+  validation_question: string;
+  summary: {
+    concise: string;
+    operator: string;
+  };
+}
+
 export interface GovernanceAttackSurfaceRegistry {
   version: string;
   purpose: string;
@@ -294,6 +322,7 @@ export interface GovernanceAttackSurfaceRegistry {
   scope: GovernanceAttackSurfaceScope;
   failure_classes: GovernanceAttackSurfaceFailureClass[];
   structural_safeguards: GovernanceAttackSurfaceSafeguard[];
+  safeguard_coverage_matrix?: GovernanceSafeguardCoverageMatrix;
   validation_question: string;
   summary: {
     concise: string;

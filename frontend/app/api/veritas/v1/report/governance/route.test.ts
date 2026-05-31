@@ -393,6 +393,36 @@ describe("/api/veritas/v1/report/governance", () => {
       ]),
     );
 
+    const coverageMatrix = payload.governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix;
+    expect(coverageMatrix).toMatchObject({
+      version: "v0",
+      coverage_model: "deterministic_representative_visibility_matrix",
+      validation_question:
+        "Which structural safeguard covers which governance attack surface, and what evidence makes that coverage visible?",
+    });
+    expect(coverageMatrix.rows.length).toBeGreaterThanOrEqual(7);
+    expect(coverageMatrix.rows.map(({ failure_class_id }) => failure_class_id)).toEqual(
+      expect.arrayContaining([
+        "self_authorization",
+        "evidence_chain_manipulation",
+        "approval_receipt_spoofing",
+        "policy_snapshot_drift",
+        "escalation_suppression",
+        "replay_trace_tampering",
+        "recognition_gap_masking",
+      ]),
+    );
+    expect(coverageMatrix.rows.find(({ failure_class_id }) => failure_class_id === "self_authorization")).toMatchObject({
+      primary_safeguard_id: "separation_of_decision_and_governance_authority",
+      evidence_requirement: "independent_governance_authority_marker",
+      coverage_state: "representative_visibility_only",
+    });
+    expect(coverageMatrix.rows.find(({ failure_class_id }) => failure_class_id === "recognition_gap_masking")).toMatchObject({
+      primary_safeguard_id: "recognition_gap_visibility_marker",
+      evidence_requirement: "actor_recognition_gap_marker_sequence",
+      limitation: "does_not_infer_actor_psychology_or_intent",
+    });
+
   });
 
   it("returns pre-boundary collapse demo scenario payload from header seam", async () => {

@@ -130,6 +130,18 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
       registry_model: "deterministic_representative_visibility_registry",
     });
 
+    expect(payload.governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix).toMatchObject({
+      version: "v0",
+      coverage_model: "deterministic_representative_visibility_matrix",
+      validation_question:
+        "Which structural safeguard covers which governance attack surface, and what evidence makes that coverage visible?",
+    });
+    expect(
+      payload.governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix.rows.map(
+        ({ failure_class_id }: { failure_class_id: string }) => failure_class_id,
+      ),
+    ).toEqual(expect.arrayContaining(["self_authorization", "recognition_gap_masking"]));
+
     await page.goto("/?demo_scenario=pre_boundary_collapse");
 
     await expect(
@@ -185,6 +197,14 @@ test.describe("Mission Control: governance feed frontend E2E", () => {
     await expect(walkthrough).toContainText("evidence-chain manipulation");
     await expect(walkthrough).toContainText("approval receipt spoofing");
     await expect(walkthrough).toContainText("append-only governance log");
+    await expect(walkthrough).toContainText("Governance Safeguard Coverage Matrix v0");
+    await expect(walkthrough).toContainText("Mapping governance attack surfaces to structural safeguards and visibility evidence");
+    await expect(walkthrough).toContainText("self-authorization");
+    await expect(walkthrough).toContainText("independent governance authority marker");
+    await expect(walkthrough).toContainText("evidence-chain manipulation");
+    await expect(walkthrough).toContainText("immutable evidence chain");
+    await expect(walkthrough).toContainText("recognition gap masking");
+    await expect(walkthrough).toContainText("recognition gap visibility marker");
 
     const timeline = page.locator('section[aria-label="governance layer timeline"]');
     await expect(timeline).toBeVisible();
