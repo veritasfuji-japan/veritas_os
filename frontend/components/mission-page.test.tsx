@@ -663,6 +663,97 @@ describe("MissionPage", () => {
                 operator: "Show representative action category without automatic enforcement claims.",
               },
             },
+            governance_evidence_packet: {
+              version: "v0",
+              packet_id: "pre_boundary_collapse_governance_evidence_packet_v0",
+              packet_model: "deterministic_representative_reviewer_packet",
+              purpose: "Summarize the governance trace, evidence refs, safeguards, and representative intervention categories for reviewer inspection.",
+              generated_from: {
+                scenario_id: "pre_boundary_collapse",
+                source_payload: "governance_layer_snapshot",
+              },
+              decision_context_summary: {
+                bind_outcome: "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
+                participation_signal: "decision_shaping",
+                preservation_state: "collapsed",
+                intervention_viability: "lost",
+                decision_space_state: "structurally_narrowed_before_bind",
+                summary: "The bind outcome remains formally valid while governance evidence indicates decision-space narrowing and intervention viability loss occurred upstream.",
+              },
+              packet_sections: [
+                {
+                  id: "trajectory_summary",
+                  source_layer: "trajectory_shaping_lineage_v0",
+                  title: "Trajectory shaping summary",
+                  key_points: ["Decision-space transformation occurred before bind."],
+                  evidence_refs: ["governance_layer_snapshot.trajectory_shaping_lineage"],
+                },
+                {
+                  id: "dynamic_degradation_summary",
+                  source_layer: "dynamic_conditions_validation_v0",
+                  title: "Dynamic degradation summary",
+                  key_points: ["The intervention window compresses before bind."],
+                  evidence_refs: ["governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case"],
+                },
+                {
+                  id: "irreversibility_summary",
+                  source_layer: "irreversibility_horizon_v0",
+                  title: "Irreversibility horizon summary",
+                  key_points: ["Bind occurs after the representative horizon."],
+                  evidence_refs: ["governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon"],
+                },
+                {
+                  id: "recognition_gap_summary",
+                  source_layer: "actor_recognition_gap_v0",
+                  title: "Actor recognition gap summary",
+                  key_points: ["Bind occurs after the recognition gap."],
+                  evidence_refs: ["governance_layer_snapshot.trajectory_shaping_lineage.dynamic_conditions_validation_case.irreversibility_horizon.actor_recognition_gap"],
+                },
+                {
+                  id: "governance_attack_surface_summary",
+                  source_layer: "governance_attack_surface_registry_v0",
+                  title: "Governance attack surface summary",
+                  key_points: ["The governance process itself can become an attack surface."],
+                  evidence_refs: ["governance_layer_snapshot.governance_attack_surface_registry"],
+                },
+                {
+                  id: "safeguard_coverage_summary",
+                  source_layer: "governance_safeguard_coverage_matrix_v0",
+                  title: "Safeguard coverage summary",
+                  key_points: ["Coverage remains representative visibility only."],
+                  evidence_refs: ["governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix"],
+                },
+                {
+                  id: "intervention_actionability_summary",
+                  source_layer: "intervention_actionability_map_v0",
+                  title: "Intervention actionability summary",
+                  key_points: ["The map provides guidance without automatic enforcement."],
+                  evidence_refs: ["governance_layer_snapshot.intervention_actionability_map"],
+                },
+              ],
+              reviewer_questions: [
+                "What was the bind outcome?",
+                "What decision-space narrowing occurred before bind?",
+                "Which intervention categories were representative?",
+                "What does this packet not claim?",
+              ],
+              preserved_evidence_refs: [
+                "governance_layer_snapshot.trajectory_shaping_lineage",
+                "governance_layer_snapshot.governance_attack_surface_registry",
+                "governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix",
+                "governance_layer_snapshot.intervention_actionability_map",
+              ],
+              limitations: [
+                "not_certification",
+                "not_production_security_guarantee",
+                "not_automatic_enforcement",
+                "not_scoring_model",
+              ],
+              summary: {
+                concise: "Governance Evidence Packet v0 gives reviewers a compact, deterministic summary of the governance trace, evidence refs, safeguards, and representative intervention categories.",
+                operator: "Show what evidence a reviewer should inspect without enforcement claims.",
+              },
+            },
           }}
         />
       </I18nProvider>,
@@ -750,6 +841,18 @@ describe("MissionPage", () => {
     expect(screen.getAllByText("require explicit approval").length).toBeGreaterThan(0);
     expect(screen.getAllByText("post-horizon review").length).toBeGreaterThan(0);
     expect(screen.getAllByText("preserve evidence").length).toBeGreaterThan(0);
+    expect(screen.getByText("Governance Evidence Packet v0")).toBeInTheDocument();
+    expect(screen.getByText("Reviewer-ready summary of governance trace, evidence refs, safeguards, and representative interventions")).toBeInTheDocument();
+    expect(screen.getByText("Trajectory shaping summary")).toBeInTheDocument();
+    expect(screen.getByText("Dynamic degradation summary")).toBeInTheDocument();
+    expect(screen.getByText("Irreversibility horizon summary")).toBeInTheDocument();
+    expect(screen.getByText("Actor recognition gap summary")).toBeInTheDocument();
+    expect(screen.getByText("Governance attack surface summary")).toBeInTheDocument();
+    expect(screen.getByText("Safeguard coverage summary")).toBeInTheDocument();
+    expect(screen.getByText("Intervention actionability summary")).toBeInTheDocument();
+    expect(screen.getByText("not certification")).toBeInTheDocument();
+    expect(screen.getByText("not production security guarantee")).toBeInTheDocument();
+    expect(screen.getByText("not automatic enforcement")).toBeInTheDocument();
   });
 
   it.each(["/governance", "/governance/receipts/br_123", "/audit?receipt=br_123"])("renders safe relevant_ui_href as link: %s", (href) => {

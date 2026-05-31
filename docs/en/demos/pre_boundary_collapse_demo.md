@@ -428,3 +428,42 @@ This contract does not make the map an automatic enforcement engine, blocking
 engine, escalation system, scoring model, production decisioning layer,
 certification, or production security guarantee.
 
+
+## Governance Evidence Packet v0
+
+Governance Evidence Packet v0 is the compact reviewer packet added after
+Intervention Actionability Map v0. The previous layers emit markers, registries,
+matrices, and representative actionability guidance; the packet groups those
+existing layers into one reviewer-ready summary of what evidence should be
+inspected.
+
+The packet is exposed additively at
+`governance_layer_snapshot.governance_evidence_packet` for the
+`pre_boundary_collapse` demo. It does not change runtime bind behavior, OpenAPI,
+state family, pre-bind vocabulary, Trajectory Shaping Lineage v0, Governance
+Attack Surface Registry v0, Governance Safeguard Coverage Matrix v0, or
+Intervention Actionability Map v0.
+
+The v0 packet summarizes:
+
+- decision context and bind outcome
+- trajectory shaping lineage
+- dynamic degradation signals
+- irreversibility horizon markers
+- actor recognition gap markers
+- governance attack surface registry references
+- safeguard coverage matrix references
+- intervention actionability map references
+- preserved evidence refs that reviewers should inspect
+- reviewer questions and explicit limitations
+
+This is a deterministic representative reviewer packet. It improves reviewer
+readability by showing how decision-space narrowing, governability degradation,
+safeguard visibility, and representative intervention categories connect across
+existing evidence layers.
+
+The packet preserves methodological restraint. It does not claim certification,
+automatic enforcement, automatic attack detection, automatic blocking, a scoring
+model, a legal conclusion, formal verification, complete prevention, production
+security, or production security coverage. Its purpose is to help reviewers see
+what to inspect, not to have VERITAS automatically decide correctness.

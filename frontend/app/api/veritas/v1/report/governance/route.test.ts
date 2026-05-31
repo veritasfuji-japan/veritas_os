@@ -251,6 +251,21 @@ describe("/api/veritas/v1/report/governance", () => {
           mappings: Array<{ marker_id: string; recommended_action_ids: string[] }>;
           validation_question: string;
         };
+        governance_evidence_packet: {
+          version: string;
+          packet_id: string;
+          packet_model: string;
+          generated_from: { scenario_id: string };
+          decision_context_summary: {
+            bind_outcome: string;
+            participation_signal: string;
+            preservation_state: string;
+            intervention_viability: string;
+          };
+          packet_sections: Array<{ id: string }>;
+          preserved_evidence_refs: string[];
+          limitations: string[];
+        };
         trajectory_shaping_lineage: {
           scenario_id: string;
           version: string;
@@ -477,6 +492,48 @@ describe("/api/veritas/v1/report/governance", () => {
     expect(actionabilityMap.mappings.find(({ marker_id }) => marker_id === "early_warning")).toMatchObject({
       recommended_action_ids: ["warn", "pause", "reframe", "preserve_evidence"],
     });
+
+    const evidencePacket = payload.governance_layer_snapshot.governance_evidence_packet;
+    expect(evidencePacket).toMatchObject({
+      version: "v0",
+      packet_model: "deterministic_representative_reviewer_packet",
+      packet_id: "pre_boundary_collapse_governance_evidence_packet_v0",
+      generated_from: { scenario_id: "pre_boundary_collapse" },
+      decision_context_summary: {
+        bind_outcome: "FORMALLY_VALID_STRUCTURALLY_COLLAPSED",
+        participation_signal: "decision_shaping",
+        preservation_state: "collapsed",
+        intervention_viability: "lost",
+      },
+    });
+    expect(evidencePacket.packet_sections.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([
+        "trajectory_summary",
+        "dynamic_degradation_summary",
+        "irreversibility_summary",
+        "recognition_gap_summary",
+        "governance_attack_surface_summary",
+        "safeguard_coverage_summary",
+        "intervention_actionability_summary",
+      ]),
+    );
+    expect(evidencePacket.preserved_evidence_refs).toEqual(
+      expect.arrayContaining([
+        "governance_layer_snapshot.trajectory_shaping_lineage",
+        "governance_layer_snapshot.governance_attack_surface_registry",
+        "governance_layer_snapshot.governance_attack_surface_registry.safeguard_coverage_matrix",
+        "governance_layer_snapshot.intervention_actionability_map",
+      ]),
+    );
+    expect(evidencePacket.limitations).toEqual(
+      expect.arrayContaining([
+        "not_certification",
+        "not_production_security_guarantee",
+        "not_automatic_enforcement",
+        "not_scoring_model",
+        "representative_demo_packet_only",
+      ]),
+    );
 
   });
 

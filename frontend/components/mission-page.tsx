@@ -301,6 +301,7 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
   const governanceAttackSurfaceRegistry = governanceSnapshot?.governance_attack_surface_registry;
   const safeguardCoverageMatrix = governanceAttackSurfaceRegistry?.safeguard_coverage_matrix;
   const interventionActionabilityMap = governanceSnapshot?.intervention_actionability_map;
+  const governanceEvidencePacket = governanceSnapshot?.governance_evidence_packet;
   const hasAmlKycReviewerWalkthrough = governanceSnapshot?.demo_scenario === "aml_kyc_reviewer_walkthrough";
 
   const governanceObservation = governanceSnapshot?.governance_observation;
@@ -557,6 +558,61 @@ export function MissionPage({ title, subtitle, chips, governanceLayerSnapshot }:
                     ))}
                   </ul>
                   <p className="mt-2 text-muted-foreground">summary: {interventionActionabilityMap.summary.concise}</p>
+                </div>
+              ) : null}
+              {governanceEvidencePacket ? (
+                <div
+                  aria-label="Governance Evidence Packet v0"
+                  className="mt-3 rounded-md border border-border/60 bg-background/60 p-3"
+                >
+                  <p className="font-semibold">Governance Evidence Packet v0</p>
+                  <p className="text-muted-foreground">Reviewer-ready summary of governance trace, evidence refs, safeguards, and representative interventions</p>
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    <div>
+                      <p className="font-semibold">Decision context summary</p>
+                      <ul className="mt-1 space-y-1">
+                        <li>Bind outcome: <span className="font-mono">{governanceEvidencePacket.decision_context_summary.bind_outcome}</span></li>
+                        <li>Participation signal: <span className="font-mono">{governanceEvidencePacket.decision_context_summary.participation_signal}</span></li>
+                        <li>Preservation state: <span className="font-mono">{governanceEvidencePacket.decision_context_summary.preservation_state}</span></li>
+                        <li>Intervention viability: <span className="font-mono">{governanceEvidencePacket.decision_context_summary.intervention_viability}</span></li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Limitations</p>
+                      <ul className="mt-1 space-y-1">
+                        {governanceEvidencePacket.limitations.map((limitation) => (
+                          <li key={limitation}>{formatCoverageToken(limitation)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-muted-foreground">summary: {governanceEvidencePacket.summary.concise}</p>
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    <div>
+                      <p className="font-semibold">Sections</p>
+                      <ul className="mt-1 space-y-1">
+                        {governanceEvidencePacket.packet_sections.map((section) => (
+                          <li key={section.id}>{section.title}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Reviewer questions</p>
+                      <ul className="mt-1 space-y-1">
+                        {governanceEvidencePacket.reviewer_questions.map((question) => (
+                          <li key={question}>{question}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Preserved evidence refs</p>
+                      <ul className="mt-1 space-y-1">
+                        {governanceEvidencePacket.preserved_evidence_refs.map((evidenceRef) => (
+                          <li key={evidenceRef} className="font-mono">{evidenceRef}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               ) : null}
               {dynamicConditionsValidationCase ? (
