@@ -3384,11 +3384,29 @@ import math
 
 from veritas_os.core.fuji import _DEFAULT_POLICY
 from veritas_os.core.fuji_policy_rollout import (
+    DEFAULT_FALSE_NEGATIVE_PROMOTION_THRESHOLD,
+    PROMOTION_BLOCKED_METRICS_UNAVAILABLE,
     PolicyReplaySample,
     _evaluate_sample,
     canary_bucket,
+    canary_promotion_allowed,
+    evaluate_canary_promotion_gate,
     replay_policy_diff,
 )
+
+
+def _allow_all_policy() -> dict:
+    policy = dict(_DEFAULT_POLICY)
+    policy["categories"] = {}
+    policy["actions"] = {"allow": {"risk_upper": 1.0}}
+    return policy
+
+
+def _deny_all_policy() -> dict:
+    policy = dict(_DEFAULT_POLICY)
+    policy["categories"] = {}
+    policy["actions"] = {"deny": {"risk_upper": 1.0}}
+    return policy
 
 
 def _strict_policy() -> dict:
@@ -3420,7 +3438,7 @@ def test_replay_policy_diff_returns_transition_metrics() -> None:
     assert len(result["outcomes"]) == 3
 
 
-def test_replay_policy_diff_calculates_fp_fn_when_labels_exist() -> None:
+def test_replay_policy_diff_calculates_fp_fn_rates() -> None:
     stable = dict(_DEFAULT_POLICY)
     canary = _strict_policy()
 
@@ -3437,6 +3455,149 @@ def test_replay_policy_diff_calculates_fp_fn_when_labels_exist() -> None:
     assert result["false_negative"] >= 0
     assert 0.0 <= result["false_positive_rate"] <= 1.0
     assert 0.0 <= result["false_negative_rate"] <= 1.0
+
+
+def test_canary_promotion_gate_allows_zero_false_negatives() -> None:
+    result = evaluate_canary_promotion_gate(
+        {
+            "false_negative_rate": 0.0,
+            "false_negative": 0,
+            "samples_checked": 3,
+            "change_rate": 0.0,
+        }
+    )
+
+    assert result.allowed is True
+    assert result.reason == "promotion_allowed"
+    assert result.false_negative_threshold == DEFAULT_FALSE_NEGATIVE_PROMOTION_THRESHOLD
+    assert canary_promotion_allowed(
+        {
+            "false_negative_rate": 0.0,
+            "false_negative": 0,
+            "samples_checked": 1,
+        }
+    )
+
+
+def test_canary_promotion_gate_allows_rate_equal_to_threshold() -> None:
+    result = evaluate_canary_promotion_gate(
+        {
+            "false_negative_rate": 0.05,
+            "false_negative": 1,
+            "samples_checked": 20,
+            "change_rate": 0.05,
+        },
+        false_negative_threshold=0.05,
+    )
+
+    assert result.allowed is True
+    assert result.false_negative_rate == 0.05
+    assert result.false_negative_threshold == 0.05
+
+
+def test_canary_promotion_gate_blocks_rate_above_threshold() -> None:
+    result = evaluate_canary_promotion_gate(
+        {
+            "false_negative_rate": 0.1,
+            "false_negative": 1,
+            "samples_checked": 10,
+            "change_rate": 0.2,
+        },
+        false_negative_threshold=0.05,
+    )
+
+    assert result.allowed is False
+    assert result.reason == "promotion_blocked_false_negative_rate_exceeded"
+    assert result.false_negatives == 1
+    assert result.samples_checked == 10
+    assert canary_promotion_allowed(
+        {
+            "false_negative_rate": 0.1,
+            "false_negative": 1,
+            "samples_checked": 10,
+        },
+        false_negative_threshold=0.05,
+    ) is False
+
+
+def test_canary_promotion_gate_blocks_missing_metrics_fail_closed() -> None:
+    result = evaluate_canary_promotion_gate(
+        {"false_negative": 0, "samples_checked": 2}
+    )
+
+    assert result.allowed is False
+    assert result.reason == PROMOTION_BLOCKED_METRICS_UNAVAILABLE
+
+
+def test_canary_promotion_gate_blocks_zero_samples_fail_closed() -> None:
+    result = evaluate_canary_promotion_gate(
+        {
+            "false_negative_rate": 0.0,
+            "false_negative": 0,
+            "samples_checked": 0,
+        }
+    )
+
+    assert result.allowed is False
+    assert result.reason == PROMOTION_BLOCKED_METRICS_UNAVAILABLE
+
+
+def test_canary_promotion_gate_blocks_inconsistent_metrics_fail_closed() -> None:
+    result = evaluate_canary_promotion_gate(
+        {
+            "false_negative_rate": 0.0,
+            "false_negative": 1,
+            "samples_checked": 10,
+        }
+    )
+
+    assert result.allowed is False
+    assert result.reason == PROMOTION_BLOCKED_METRICS_UNAVAILABLE
+
+
+def test_replay_policy_diff_counts_stable_hold_canary_allow_as_false_negative() -> None:
+    result = replay_policy_diff(
+        samples=[
+            PolicyReplaySample(sample_id="hold-to-allow", risk=0.5, categories=[])
+        ],
+        stable_policy=dict(_DEFAULT_POLICY),
+        canary_policy=_allow_all_policy(),
+    )
+
+    assert result["false_negative"] == 1
+    assert result["false_negative_rate"] == 1.0
+    assert result["false_positive"] == 0
+    assert result["transitions"] == {"hold->allow": 1}
+
+
+def test_replay_policy_diff_counts_stable_deny_canary_allow_as_false_negative() -> None:
+    result = replay_policy_diff(
+        samples=[
+            PolicyReplaySample(sample_id="deny-to-allow", risk=0.95, categories=[])
+        ],
+        stable_policy=dict(_DEFAULT_POLICY),
+        canary_policy=_allow_all_policy(),
+    )
+
+    assert result["false_negative"] == 1
+    assert result["false_negative_rate"] == 1.0
+    assert result["false_positive"] == 0
+    assert result["transitions"] == {"deny->allow": 1}
+
+
+def test_replay_policy_diff_counts_stable_allow_canary_deny_as_false_positive() -> None:
+    result = replay_policy_diff(
+        samples=[
+            PolicyReplaySample(sample_id="allow-to-deny", risk=0.25, categories=[])
+        ],
+        stable_policy=dict(_DEFAULT_POLICY),
+        canary_policy=_deny_all_policy(),
+    )
+
+    assert result["false_positive"] == 1
+    assert result["false_positive_rate"] == 1.0
+    assert result["false_negative"] == 0
+    assert result["transitions"] == {"allow->deny": 1}
 
 
 def test_canary_bucket_is_deterministic_and_respects_ratio() -> None:

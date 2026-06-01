@@ -3,7 +3,7 @@
 This module provides P0-3 controls described in the code review:
 - deterministic A/B replay against old/new policies
 - allow/hold/deny transition metrics
-- false-positive / false-negative estimates when expected labels exist
+- false-positive / false-negative policy-regression estimates
 - deterministic canary assignment by request id
 
 The implementation is scoped to FUJI policy evaluation only.
@@ -14,11 +14,34 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import hashlib
+import math
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from veritas_os.core import fuji
 
 _ALLOWED_DECISIONS = {"allow", "hold", "deny"}
+DEFAULT_FALSE_NEGATIVE_PROMOTION_THRESHOLD = 0.0
+PROMOTION_BLOCKED_METRICS_UNAVAILABLE = "promotion_blocked_metrics_unavailable"
+_FALSE_NEGATIVE_RATE_TOLERANCE = 1e-6
+
+
+@dataclass(frozen=True)
+class CanaryPromotionGateResult:
+    """Promotion decision derived from canary replay safety metrics.
+
+    False negatives are safety-critical because they mean the stable policy
+    would HOLD or DENY while the canary policy would ALLOW. High-risk
+    migrations, including negation/refusal-context category moves, should
+    treat this gate as a promotion blocker rather than advisory telemetry.
+    """
+
+    allowed: bool
+    reason: str
+    false_negative_rate: float
+    false_negative_threshold: float
+    change_rate: float | None
+    false_negatives: int
+    samples_checked: int
 
 
 @dataclass(frozen=True)
@@ -33,13 +56,11 @@ class PolicyReplaySample:
     expected_decision: Optional[str] = None
 
 
-
 def _normalize_expected_decision(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     norm = str(value).strip().lower()
     return norm if norm in _ALLOWED_DECISIONS else None
-
 
 
 def _evaluate_sample(sample: PolicyReplaySample, policy: Mapping[str, Any]) -> str:
@@ -64,7 +85,6 @@ def _evaluate_sample(sample: PolicyReplaySample, policy: Mapping[str, Any]) -> s
     if decision not in _ALLOWED_DECISIONS:
         return "hold"
     return decision
-
 
 
 def replay_policy_diff(
@@ -103,14 +123,15 @@ def replay_policy_diff(
 
         is_fp = False
         is_fn = False
+        if before == "allow" and after in {"hold", "deny"}:
+            fp += 1
+            is_fp = True
+        elif before in {"hold", "deny"} and after == "allow":
+            fn += 1
+            is_fn = True
+
         if expected is not None:
             labeled += 1
-            if after in {"hold", "deny"} and expected == "allow":
-                fp += 1
-                is_fp = True
-            elif after == "allow" and expected in {"hold", "deny"}:
-                fn += 1
-                is_fn = True
 
         outcomes.append(
             {
@@ -125,11 +146,12 @@ def replay_policy_diff(
         )
 
     change_rate = (changed / total) if total else 0.0
-    fp_rate = (fp / labeled) if labeled else 0.0
-    fn_rate = (fn / labeled) if labeled else 0.0
+    fp_rate = (fp / total) if total else 0.0
+    fn_rate = (fn / total) if total else 0.0
 
     return {
         "total": total,
+        "samples_checked": total,
         "changed": changed,
         "change_rate": round(change_rate, 6),
         "false_positive": fp,
@@ -141,6 +163,119 @@ def replay_policy_diff(
         "outcomes": outcomes,
     }
 
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _nonnegative_int(value: Any) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0:
+        return None
+    return number
+
+
+def evaluate_canary_promotion_gate(
+    diff_result: Any,
+    *,
+    false_negative_threshold: float = DEFAULT_FALSE_NEGATIVE_PROMOTION_THRESHOLD,
+) -> CanaryPromotionGateResult:
+    """Evaluate whether canary policy replay metrics permit promotion.
+
+    Promotion fails closed when metrics are unavailable or malformed. A false
+    negative is a permissive regression where the stable policy would HOLD or
+    DENY but the canary policy would ALLOW.
+
+    Args:
+        diff_result: Result produced by :func:`replay_policy_diff`.
+        false_negative_threshold: Maximum tolerated false-negative rate.
+
+    Returns:
+        Explicit canary promotion decision and the safety metrics used.
+    """
+    threshold = _finite_float(false_negative_threshold)
+    if threshold is None or threshold < 0.0:
+        threshold = DEFAULT_FALSE_NEGATIVE_PROMOTION_THRESHOLD
+
+    blocked_result = CanaryPromotionGateResult(
+        allowed=False,
+        reason=PROMOTION_BLOCKED_METRICS_UNAVAILABLE,
+        false_negative_rate=0.0,
+        false_negative_threshold=threshold,
+        change_rate=None,
+        false_negatives=0,
+        samples_checked=0,
+    )
+
+    if not isinstance(diff_result, Mapping):
+        return blocked_result
+
+    false_negative_rate = _finite_float(diff_result.get("false_negative_rate"))
+    raw_change_rate = diff_result.get("change_rate")
+    change_rate = _finite_float(raw_change_rate)
+    false_negatives = _nonnegative_int(diff_result.get("false_negative"))
+    samples_checked = _nonnegative_int(
+        diff_result.get("samples_checked", diff_result.get("total"))
+    )
+
+    if (
+        false_negative_rate is None
+        or false_negative_rate < 0.0
+        or false_negative_rate > 1.0
+        or false_negatives is None
+        or samples_checked is None
+        or samples_checked == 0
+        or false_negatives > samples_checked
+        or (raw_change_rate is not None and change_rate is None)
+    ):
+        return blocked_result
+
+    expected_false_negative_rate = false_negatives / samples_checked
+    if (
+        abs(false_negative_rate - expected_false_negative_rate)
+        > _FALSE_NEGATIVE_RATE_TOLERANCE
+    ):
+        return blocked_result
+
+    if false_negative_rate > threshold:
+        return CanaryPromotionGateResult(
+            allowed=False,
+            reason="promotion_blocked_false_negative_rate_exceeded",
+            false_negative_rate=false_negative_rate,
+            false_negative_threshold=threshold,
+            change_rate=change_rate,
+            false_negatives=false_negatives,
+            samples_checked=samples_checked,
+        )
+
+    return CanaryPromotionGateResult(
+        allowed=True,
+        reason="promotion_allowed",
+        false_negative_rate=false_negative_rate,
+        false_negative_threshold=threshold,
+        change_rate=change_rate,
+        false_negatives=false_negatives,
+        samples_checked=samples_checked,
+    )
+
+
+def canary_promotion_allowed(
+    diff_result: Any,
+    *,
+    false_negative_threshold: float = DEFAULT_FALSE_NEGATIVE_PROMOTION_THRESHOLD,
+) -> bool:
+    """Return whether canary replay metrics pass the promotion gate."""
+    return evaluate_canary_promotion_gate(
+        diff_result,
+        false_negative_threshold=false_negative_threshold,
+    ).allowed
 
 
 def canary_bucket(request_id: str, canary_ratio: float) -> str:
