@@ -13,7 +13,6 @@ from veritas_os.core.continuation_runtime.bind_admissibility import (
     evaluate_bind_admissibility,
 )
 from veritas_os.core.decision_semantics import (
-    decision_severity,
     normalize_decision,
     resolve_decision_precedence,
 )
@@ -313,12 +312,12 @@ def execute_bind_adjudication(
     )
     if final_bind_decision != "eligible_to_commit":
         blocked_outcome = FinalOutcome.BLOCKED
-        recommended_outcome = "block"
+        recommended_outcome = AdmissibilityOutcome.BLOCK.value
         reason_code = "BIND_DECISION_PRECEDENCE_BLOCKED"
         escalation_reason = None
         if final_bind_decision == "escalate":
             blocked_outcome = FinalOutcome.ESCALATED
-            recommended_outcome = "escalate"
+            recommended_outcome = AdmissibilityOutcome.ESCALATE.value
             reason_code = "BIND_DECISION_PRECEDENCE_ESCALATED"
             escalation_reason = reason_code
 
@@ -592,11 +591,6 @@ def _collect_decision_values(container: dict[str, Any], values: list[str]) -> No
         if normalized in {"none", "null"}:
             continue
         values.append(normalized)
-
-
-def _has_restrictive_bind_decision(execution_intent: ExecutionIntent) -> bool:
-    """Return whether decision lineage contains hold/review/block severity."""
-    return any(decision_severity(value) > 1 for value in _extract_bind_decision_values(execution_intent))
 
 
 def _resolve_regulated_action_context(execution_intent: ExecutionIntent) -> dict[str, Any]:
