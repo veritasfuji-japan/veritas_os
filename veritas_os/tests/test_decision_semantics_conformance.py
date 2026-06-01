@@ -157,3 +157,166 @@ def test_compare_helper_and_runtime_alias_maps_stay_consistent() -> None:
             "human_review_required": False,
         }
         assert compare_expected_semantics(expected_payload, actual_payload) == {}
+
+
+def test_restrictive_decision_precedence_pure_contract() -> None:
+    """Decision precedence is machine-readable and fail-closed."""
+    from veritas_os.core.decision_semantics import (
+        decision_severity,
+        resolve_decision_precedence,
+    )
+
+    assert decision_severity("deny") > decision_severity("hold")
+    assert decision_severity("hold") > decision_severity("allow")
+    assert resolve_decision_precedence("allow", "allow") == "allow"
+    assert resolve_decision_precedence("allow", "hold") == "hold"
+    assert resolve_decision_precedence("hold", "deny") == "deny"
+    assert resolve_decision_precedence("approved", "rejected") == "rejected"
+    assert resolve_decision_precedence("malformed_decision") == "block"
+    assert resolve_decision_precedence("malformed_decision", output="gate") == "block"
+
+
+def test_normalize_decision_handles_falsy_non_none_values() -> None:
+    """Falsy non-None values are malformed inputs, not absent decisions."""
+    from veritas_os.core.decision_semantics import (
+        normalize_decision,
+        resolve_decision_precedence,
+    )
+
+    assert normalize_decision(None) == "unknown"
+    assert normalize_decision("") == "unknown"
+    assert normalize_decision(0) == "0"
+    assert normalize_decision(False) == "false"
+    assert resolve_decision_precedence(0, output="gate") == "block"
+    assert resolve_decision_precedence(False, output="gate") == "block"
+
+
+@pytest.mark.parametrize(
+    "fuji_decision, business_decision, expected_gate, expected_business",
+    [
+        ("allow", "HOLD", "hold", "HOLD"),
+        ("deny", "APPROVE", "block", "DENY"),
+        ("rejected", "APPROVED", "block", "DENY"),
+        ("hold", "APPROVE", "hold", "HOLD"),
+        ("malformed_decision", "APPROVE", "block", "DENY"),
+    ],
+)
+def test_decision_path_conflicts_resolve_to_stricter_outcome(
+    fuji_decision: str,
+    business_decision: str,
+    expected_gate: str,
+    expected_business: str,
+) -> None:
+    """Gate/business/FUJI conflicts must converge on the stricter outcome."""
+    ctx = PipelineContext(
+        request_id=f"req-precedence-{fuji_decision}-{business_decision}",
+        query="conformance",
+        fuji_dict={"decision_status": fuji_decision, "status": fuji_decision},
+        decision_status=fuji_decision,
+        context={"business_decision": business_decision},
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == expected_gate
+    assert payload["business_decision"] == expected_business
+
+
+@pytest.mark.parametrize("fuji_status", ["needs_human_review", "allow_with_warning"])
+def test_known_fuji_review_statuses_are_not_fail_closed_blocks(fuji_status: str) -> None:
+    """Known FUJI review/advisory statuses resolve to hold/review class."""
+    from veritas_os.core.decision_semantics import (
+        decision_severity,
+        resolve_decision_precedence,
+    )
+
+    assert decision_severity(fuji_status) == decision_severity("hold")
+    assert resolve_decision_precedence(fuji_status, output="gate") == "hold"
+    assert resolve_decision_precedence(fuji_status, output="bind") == "escalate"
+
+
+@pytest.mark.parametrize("raw_status", ["maybe", "unknown"])
+def test_unknown_decision_statuses_still_fail_closed(raw_status: str) -> None:
+    """Unknown or malformed decision strings remain fail-closed blocks."""
+    from veritas_os.core.decision_semantics import resolve_decision_precedence
+
+    assert resolve_decision_precedence(raw_status, output="gate") == "block"
+    assert resolve_decision_precedence(raw_status, output="bind") == "block"
+
+
+def test_review_required_with_missing_evidence_keeps_valid_review_pairing() -> None:
+    """Manual review decisions must not emit invalid evidence-required pairing."""
+    ctx = PipelineContext(
+        request_id="req-review-required-with-missing-evidence",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "business_decision": "REVIEW_REQUIRED",
+            "required_evidence": ["approval_ticket"],
+            "satisfied_evidence": [],
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    DecideResponse.model_validate(payload)
+
+    assert payload["gate_decision"] == "human_review_required"
+    assert payload["business_decision"] == "REVIEW_REQUIRED"
+    assert payload["human_review_required"] is True
+    assert payload["missing_evidence"] == ["approval_ticket"]
+    assert payload["business_decision"] != "APPROVE"
+
+
+def test_block_with_missing_evidence_surfaces_evidence_required() -> None:
+    """Block gate still keeps evidence gaps visible as business state."""
+    ctx = PipelineContext(
+        request_id="req-block-missing-evidence",
+        query="conformance",
+        fuji_dict={"decision_status": "deny", "status": "deny"},
+        decision_status="rejected",
+        context={
+            "required_evidence": ["approval_ticket"],
+            "satisfied_evidence": [],
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    DecideResponse.model_validate(payload)
+
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "EVIDENCE_REQUIRED"
+    assert payload["next_action"] == "COLLECT_REQUIRED_EVIDENCE"
+
+
+def test_block_with_explicit_review_required_uses_valid_deny_pairing() -> None:
+    """Block plus explicit review cannot emit invalid review-required coupling."""
+    ctx = PipelineContext(
+        request_id="req-block-review-required",
+        query="conformance",
+        fuji_dict={"decision_status": "deny", "status": "deny"},
+        decision_status="rejected",
+        context={"business_decision": "REVIEW_REQUIRED"},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    DecideResponse.model_validate(payload)
+
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "DENY"
+    assert payload["next_action"] == "DO_NOT_EXECUTE"

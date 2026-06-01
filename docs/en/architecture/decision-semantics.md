@@ -25,6 +25,8 @@ finalization.
 - `COMPATIBLE_GATE_DECISION_VALUES` (ingestion surface)
 - `GATE_DECISION_ALIAS_TO_CANONICAL` (single canonicalization mapping)
 - `FORBIDDEN_GATE_BUSINESS_COMBINATIONS` (single forbidden pair table)
+- `DECISION_SEVERITY_ALIASES` (machine-readable restrictive precedence)
+- `resolve_decision_precedence` / `most_restrictive_decision` (shared resolver)
 
 Other modules must reference these helpers/constants rather than redefining
 their own alias tables or forbidden-combination logic.
@@ -43,7 +45,7 @@ labels and are not recommended for new public payload contracts.
 - Canonical public values are prioritized: `proceed|hold|block|human_review_required`.
 - Legacy values (`allow|deny|modify|rejected|abstain`) are normalized before validation.
 - Forbidden combination checks are enforced on canonicalized values.
-- `unknown` remains fallback-compatible, but normal runtime derivation converges to canonical values.
+- `unknown` remains accepted on compatibility ingestion surfaces, but enforcement derivation fails closed to canonical `block`.
 - Mission Control adapters now canonicalize legacy gate aliases before UI rendering.
 - PoC compare helper normalizes gate decisions to canonical public values before diffing.
 - Evidence Bundle `decision_record.gate_decision` is canonicalized for external-facing audit payloads.
@@ -68,7 +70,7 @@ labels and are not recommended for new public payload contracts.
 | `modify` | Legacy “allowed with modification” | Compatibility | Gate hold | Yes | Limited | Often mapped into `hold` path | Medium |
 | `rejected` | Legacy deny alias | Compatibility | Blocked by gate | Yes | Limited | Treated same as `block` | High |
 | `abstain` | Legacy deferred/abstain signal | Compatibility | Gate hold | Yes | Limited | Treated as `hold` in public semantics | Medium |
-| `unknown` | Fallback when decision is absent | Defensive default | Gate status | Yes | No (except fallback) | Eventually resolved through stop reasons and defaults | Lowest |
+| `unknown` | Fallback when decision is absent | Defensive fail-closed default | Gate status | Yes | No (except fallback) | Enforcement derivation resolves malformed/unknown values to `block` | Highest (fail-closed) |
 
 ### Clarifications
 
@@ -118,6 +120,27 @@ Contract hardening policy:
 - Legacy gate aliases remain compatibility-only inputs and are canonicalized
   before public output.
 
+
+## C1. Cross-source restrictive precedence
+
+Decision sources are resolved by restrictive precedence. A permissive decision
+from one component cannot override a restrictive decision from another component.
+In particular, downstream bind/commit systems must not treat a rejected or deny
+FUJI decision as advisory. The effective decision is the most restrictive
+decision across gate, policy, business, FUJI, and bind-time checks.
+
+| Severity | Canonical meaning | Example terms | Canonical gate output | Bind effect |
+|---|---|---|---|---|
+| 3 | Reject / block execution | `deny`, `rejected`, `block`, `refuse` | `block` | block commit |
+| 2 | Hold / human review required | `hold`, `review`, `escalate`, `human_review_required`, `needs_human_review`, `allow_with_warning` | `hold` or `human_review_required` | escalate / no silent commit |
+| 1 | Allow execution | `allow`, `approved`, `approve`, `proceed` | `proceed` | eligible only if all bind checks pass |
+
+The resolver preserves surface-specific vocabulary instead of flattening all
+outputs: FUJI compatibility paths may still ingest `rejected`, public gate output
+uses `block`, business output uses `DENY`/`HOLD`/`APPROVE`, and bind output uses
+`block`/`escalate`/`eligible_to_commit`. Unknown or malformed decision strings
+fail closed to severity 3 for enforcement surfaces.
+
 ## D. stop_reasons priority (current implementation order)
 
 Current order is implemented in
@@ -127,7 +150,7 @@ and consumed from `_derive_business_fields`:
 1. `rollback_not_supported` → `block`
 2. `irreversible_action` + `audit_trail_incomplete` → `block`
 3. `secure_prod_controls_missing` → `block`
-4. deny-family input (`deny/rejected/block`) → `block`
+4. deny-family input (`deny/rejected/block`) or malformed decision input → `block`
 5. `required_evidence_missing` → `hold`
 6. `high_risk_ambiguity` (with `risk_score >= 0.8`) → `human_review_required`
 7. `approval_boundary_unknown` OR `human_review_required=true` → `human_review_required`
