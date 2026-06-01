@@ -231,8 +231,10 @@ def resolve_decision_precedence(
 
     A permissive source cannot override a restrictive source. Unknown or
     malformed values fail closed to the reject/block severity. When ``output``
-    names a VERITAS surface, the returned term is canonical for that surface;
-    otherwise the first most-restrictive input term is preserved.
+    names a VERITAS surface, the returned term is canonical for that surface.
+    With ``output="preserve"``, recognized most-restrictive input terms are
+    preserved where possible; unknown/unrecognized values fail closed to
+    ``"block"``.
     """
     if not values:
         severity = 3

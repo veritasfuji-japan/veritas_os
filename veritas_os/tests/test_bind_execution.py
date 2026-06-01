@@ -581,3 +581,35 @@ def test_bind_decision_malformed_strings_fail_closed(malformed_decision: str) ->
     assert receipt.final_outcome is FinalOutcome.BLOCKED
     assert adapter.state["version"] == 1
     assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_decision_precedence_block_surfaces_reason_fields() -> None:
+    """Precedence block exposes canonical receipt reason fields."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={"decision_semantics": {"fuji_decision": "rejected"}},
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert receipt.bind_reason_code == BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value
+    assert receipt.bind_failure_reason == "bind blocked by restrictive decision precedence"
+    assert receipt.admissibility_result["reason"] == receipt.bind_failure_reason
+
+
+def test_bind_decision_precedence_escalation_surfaces_reason_fields() -> None:
+    """Precedence escalation exposes canonical receipt reason fields."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={"decision_semantics": {"business_decision": "HOLD"}},
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert receipt.bind_reason_code == BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value
+    assert receipt.bind_failure_reason == "bind escalated by restrictive decision precedence"
+    assert receipt.admissibility_result["reason"] == receipt.bind_failure_reason

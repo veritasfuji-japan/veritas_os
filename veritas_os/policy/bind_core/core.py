@@ -314,11 +314,13 @@ def execute_bind_adjudication(
         blocked_outcome = FinalOutcome.BLOCKED
         recommended_outcome = AdmissibilityOutcome.BLOCK.value
         reason_code = BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value
+        reason = "bind blocked by restrictive decision precedence"
         escalation_reason = None
         if final_bind_decision == "escalate":
             blocked_outcome = FinalOutcome.ESCALATED
             recommended_outcome = AdmissibilityOutcome.ESCALATE.value
             reason_code = BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value
+            reason = "bind escalated by restrictive decision precedence"
             escalation_reason = reason_code
 
         return _finalize_receipt(
@@ -337,6 +339,7 @@ def execute_bind_adjudication(
                     "effective_decision": final_bind_decision,
                     "decision_sources": bind_decision_values,
                     "reason_codes": [reason_code],
+                    "reason": reason,
                     "target": adapter.describe_target(),
                 },
                 final_outcome=blocked_outcome,
@@ -590,11 +593,11 @@ def _collect_decision_values(container: dict[str, Any], values: list[str]) -> No
         raw_value = container.get(key)
         if raw_value is None:
             continue
+        if isinstance(raw_value, str):
+            stripped = raw_value.strip()
+            if not stripped or stripped.lower() in {"none", "null"}:
+                continue
         normalized = normalize_decision(raw_value)
-        if normalized in {"unknown", "none", "null"} and not str(raw_value).strip():
-            continue
-        if normalized in {"none", "null"}:
-            continue
         values.append(normalized)
 
 

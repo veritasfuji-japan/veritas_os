@@ -13,6 +13,21 @@
 - TrustLog と `governance_identity` / ガバナンス識別子 を合わせることで、意思決定から副作用までの系譜を監査可能にします。
 - Mission Control は `bind_summary` / bind概要 と `BindReceipt` を併用して、運用 triage と証跡確認を分離します。
 
+
+## 判断優先順位（実装済み）
+
+VERITAS の decision path / bind path では、複数の判断ソースが矛盾した場合、**より制限的な判断が優先**されます。許可系の判断は、拒否・保留・レビュー要求などの制限的判断を上書きできません。
+
+| 優先度 | 意味 | 例 |
+|---|---|---|
+| 3 | 実行拒否 / block | `deny`, `rejected`, `block` |
+| 2 | hold / 人手レビュー・エスカレーション required | `hold`, `review`, `escalate`, `human_review_required` |
+| 1 | 実行許可 | `allow`, `approved`, `proceed` |
+
+`unknown` や malformed な decision value（未対応・不正な文字列）は、enforcement surface では fail-closed として扱われ、block 側に倒れます。一方、実際の `null` / 未指定値は「判断なし」として扱う実装箇所があります。
+
+特に bind / commit 下流システムは、FUJI の `deny` / `rejected` を advisory（参考情報）として扱ってはいけません。FUJI が拒否した場合、その制限的判断は bind/commit 時点でも実行を止める判断として扱われます。
+
 ## 実装上の確認ポイント
 - `/v1/decide` とガバナンス mutation API の bind 公開フィールドが整合しているか。
 - `/v1/governance/bind-receipts`（list/export/detail）で `BindReceipt` を再取得できるか。

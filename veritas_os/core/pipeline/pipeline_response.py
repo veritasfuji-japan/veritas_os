@@ -714,20 +714,30 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         risk_score=risk_score,
         human_review_required=human_review_required,
     )
-    explicit_business_decision = ctx.context.get("business_decision")
+    raw_explicit_business_decision = ctx.context.get("business_decision")
+    explicit_business_decision = None
+    if raw_explicit_business_decision is not None:
+        candidate = str(raw_explicit_business_decision).strip()
+        if candidate and candidate.lower() not in {"none", "null"}:
+            explicit_business_decision = candidate
     explicit_business_requires_review = str(explicit_business_decision or "").upper() in {
         "REVIEW",
         "REVIEW_REQUIRED",
         "ESCALATE",
     }
+    derived_gate_requires_review = gate_decision == "human_review_required"
+    precedence_inputs = [gate_decision]
+    if explicit_business_decision is not None:
+        precedence_inputs.append(explicit_business_decision)
     gate_decision = canonicalize_public_gate_decision(
         resolve_decision_precedence(
-            gate_decision,
-            explicit_business_decision,
+            *precedence_inputs,
             output="gate",
         )
     )
-    if gate_decision == "hold" and explicit_business_requires_review:
+    if gate_decision == "hold" and (
+        derived_gate_requires_review or explicit_business_requires_review
+    ):
         gate_decision = "human_review_required"
         human_review_required = True
 
