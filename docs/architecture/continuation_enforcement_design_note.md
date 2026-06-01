@@ -138,6 +138,18 @@ operators and governance reviewers, not to halt the chain.
 | `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Enable Continuation Runtime |
 | `VERITAS_CONTINUATION_ENFORCEMENT_MODE` | `observe` | `observe` / `advisory` / `enforce` |
 
+### Observed Posture vs Enforced Posture
+
+Setting `VERITAS_POSTURE=prod` does not by itself make continuation governance enforcement blocking. If `VERITAS_CONTINUATION_ENFORCEMENT_MODE=advisory`, VERITAS emits governance events but does not block execution. This is an observed posture, not an enforced governance posture. Regulated deployments should use `VERITAS_CONTINUATION_ENFORCEMENT_MODE=enforce`, or explicitly document advisory mode as a temporary evaluation posture.
+
+| VERITAS_POSTURE | VERITAS_CONTINUATION_ENFORCEMENT_MODE | Meaning |
+|---|---|---|
+| dev/local | advisory | Development observation mode |
+| prod/secure | advisory | Production observation mode; non-blocking |
+| prod/secure | enforce | Production enforcement mode; blocking governance active |
+
+Changelog note: clarified that production posture with advisory continuation mode is observation-only and not blocking enforcement. Added explicit documentation and tests for observed vs enforced continuation governance posture.
+
 ### Enforcement Config Defaults
 
 | Parameter | Default | Description |

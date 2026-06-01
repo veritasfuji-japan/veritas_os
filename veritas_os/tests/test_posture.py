@@ -23,6 +23,7 @@ from veritas_os.core.posture import (
     PostureLevel,
     PostureStartupError,
     _validate_backend_config,
+    classify_continuation_posture,
     derive_defaults,
     get_active_posture,
     init_posture,
@@ -47,6 +48,7 @@ def _clean_env(monkeypatch):
         "VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED",
         "VERITAS_TRUSTLOG_WORM_HARD_FAIL",
         "VERITAS_REPLAY_STRICT",
+        "VERITAS_CONTINUATION_ENFORCEMENT_MODE",
         "VERITAS_POSTURE_OVERRIDE_POLICY_ENFORCE",
         "VERITAS_POSTURE_OVERRIDE_EXTERNAL_SECRET_MGR",
         "VERITAS_POSTURE_OVERRIDE_TRUSTLOG_TRANSPARENCY",
@@ -599,6 +601,48 @@ class TestLogPostureBanner:
         caplog.set_level(logging.INFO)
         log_posture_banner(d)
         assert "[POSTURE]" in caplog.text
+
+
+# ============================================================
+# continuation posture classification
+# ============================================================
+
+class TestContinuationPostureClassification:
+    """Continuation posture classification distinguishes modes."""
+
+    def test_prod_advisory_is_observed_not_enforced(self):
+        result = classify_continuation_posture(PostureLevel.PROD, "advisory")
+
+        assert result.status == "observed_not_enforced"
+        assert "does not block execution" in result.message
+
+    def test_secure_advisory_is_observed_not_enforced(self):
+        result = classify_continuation_posture(PostureLevel.SECURE, "advisory")
+
+        assert result.status == "observed_not_enforced"
+        assert "governance events" in result.message
+
+    def test_prod_enforce_is_enforced(self):
+        result = classify_continuation_posture(PostureLevel.PROD, "enforce")
+
+        assert result.status == "enforced"
+        assert "blocks execution" in result.message
+
+    def test_dev_advisory_is_advisory_without_regulated_warning(self):
+        result = classify_continuation_posture(PostureLevel.DEV, "advisory")
+
+        assert result.status == "advisory"
+        assert "acceptable for development" in result.message
+
+    def test_banner_records_prod_advisory_warning(self, monkeypatch, caplog):
+        _clean_env(monkeypatch)
+        d = derive_defaults(PostureLevel.PROD)
+
+        caplog.set_level(logging.WARNING)
+        banner = log_posture_banner(d)
+
+        assert "Continuation posture status: observed_not_enforced" in banner
+        assert "continuation_posture_status=observed_not_enforced" in caplog.text
 
 
 # ============================================================

@@ -1585,6 +1585,16 @@ Posture-based defaults:
 - **secure/prod**: `advisory` (emit events, no blocking)
 - Set `VERITAS_CONTINUATION_ENFORCEMENT_MODE=enforce` to enable limited enforcement in any posture.
 
+### Observed Posture vs Enforced Posture
+
+Setting `VERITAS_POSTURE=prod` does not by itself make continuation governance enforcement blocking. If `VERITAS_CONTINUATION_ENFORCEMENT_MODE=advisory`, VERITAS emits governance events but does not block execution. This is an observed posture, not an enforced governance posture. Regulated deployments should use `VERITAS_CONTINUATION_ENFORCEMENT_MODE=enforce`, or explicitly document advisory mode as a temporary evaluation posture.
+
+| VERITAS_POSTURE | VERITAS_CONTINUATION_ENFORCEMENT_MODE | Meaning |
+|---|---|---|
+| dev/local | advisory | Development observation mode |
+| prod/secure | advisory | Production observation mode; non-blocking |
+| prod/secure | enforce | Production enforcement mode; blocking governance active |
+
 ### Key Concepts
 
 - **Snapshot** (state): minimal governable facts — support basis, scope, burden, headroom, law version

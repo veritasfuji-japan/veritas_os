@@ -13,8 +13,10 @@ Posture levels
 - **staging** – pre-production; warnings for missing integrations, no hard fail.
 - **secure**  – hardened non-production; same defaults as *prod* but allows
                 documented escape hatches via ``VERITAS_POSTURE_OVERRIDE_*``.
-- **prod**    – production; all governance controls are on, startup refuses
-                to proceed when required integrations are missing.
+- **prod**    – production; posture defaults are strict, startup refuses
+                to proceed when required integrations are missing. Continuation
+                governance is blocking only when its enforcement mode is
+                ``enforce``.
 """
 from __future__ import annotations
 
@@ -138,6 +140,81 @@ class PostureDefaults:
     def is_strict(self) -> bool:
         """Return True when the posture is secure or prod."""
         return self.posture in {PostureLevel.SECURE, PostureLevel.PROD}
+
+
+@dataclass(frozen=True)
+class ContinuationPostureClassification:
+    """Machine-readable continuation governance posture classification.
+
+    The runtime posture (``dev``/``staging``/``secure``/``prod``) and the
+    continuation enforcement mode are related but independent. In particular,
+    ``prod`` or ``secure`` with ``advisory`` mode is a production observation
+    posture, not blocking continuation governance.
+    """
+
+    status: str
+    message: str
+
+
+def classify_continuation_posture(
+    posture: PostureLevel | str,
+    enforcement_mode: str,
+) -> ContinuationPostureClassification:
+    """Classify continuation posture as observed, advisory, or enforced.
+
+    Args:
+        posture: Runtime posture level or posture string.
+        enforcement_mode: Continuation enforcement mode string.
+
+    Returns:
+        A machine-readable status and operator-facing message clarifying
+        whether continuation governance is blocking.
+    """
+    posture_value = posture.value if isinstance(posture, PostureLevel) else posture
+    normalized_posture = (posture_value or "").strip().lower()
+    normalized_mode = (enforcement_mode or "").strip().lower()
+    production_postures = {PostureLevel.PROD.value, PostureLevel.SECURE.value}
+
+    if normalized_posture in production_postures and normalized_mode == "advisory":
+        return ContinuationPostureClassification(
+            status="observed_not_enforced",
+            message=(
+                "Production posture with advisory continuation mode emits "
+                "governance events but does not block execution."
+            ),
+        )
+
+    if normalized_posture in production_postures and normalized_mode == "enforce":
+        return ContinuationPostureClassification(
+            status="enforced",
+            message=(
+                "Production posture with enforce mode blocks execution "
+                "according to continuation governance."
+            ),
+        )
+
+    if normalized_mode == "advisory":
+        return ContinuationPostureClassification(
+            status="advisory",
+            message=(
+                "Advisory mode is acceptable for development, evaluation, "
+                "and observation."
+            ),
+        )
+
+    if normalized_mode == "enforce":
+        return ContinuationPostureClassification(
+            status="enforced",
+            message=(
+                "Continuation enforce mode blocks execution according to "
+                "continuation governance."
+            ),
+        )
+
+    return ContinuationPostureClassification(
+        status="observe",
+        message="Continuation governance is observation-only and non-blocking.",
+    )
 
 
 # Escape-hatch env vars accepted only in *secure* posture.
@@ -678,22 +755,43 @@ def log_posture_banner(defaults: PostureDefaults) -> str:
 
     posture_name = defaults.posture.value
     cont_mode = defaults.continuation_enforcement_mode
+    continuation_posture = classify_continuation_posture(
+        defaults.posture,
+        cont_mode,
+    )
     on_text = ", ".join(on_flags) if on_flags else "(none)"
     off_text = ", ".join(off_flags) if off_flags else "(none)"
     _logger.info(
         "[POSTURE] Active posture: %s | ON: %s | OFF: %s "
-        "| continuation_enforcement: %s",
+        "| continuation_enforcement: %s "
+        "| continuation_posture_status: %s",
         posture_name,
         on_text,
         off_text,
         cont_mode,
+        continuation_posture.status,
     )
+    if continuation_posture.status == "observed_not_enforced":
+        _logger.warning(
+            "[POSTURE] continuation_posture_status=%s message=%s",
+            continuation_posture.status,
+            continuation_posture.message,
+        )
     return (
         "[POSTURE] Active posture: %s\n"
         "[POSTURE] Guarantees ON : %s\n"
         "[POSTURE] Guarantees OFF: %s\n"
-        "[POSTURE] Continuation enforcement: %s"
-    ) % (posture_name, on_text, off_text, cont_mode)
+        "[POSTURE] Continuation enforcement: %s\n"
+        "[POSTURE] Continuation posture status: %s\n"
+        "[POSTURE] Continuation posture message: %s"
+    ) % (
+        posture_name,
+        on_text,
+        off_text,
+        cont_mode,
+        continuation_posture.status,
+        continuation_posture.message,
+    )
 
 
 # ── Convenience: resolve + derive + validate in one call ────────────────
