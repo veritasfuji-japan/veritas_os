@@ -601,6 +601,18 @@ def _resolve_required_evidence_mode(context: Dict[str, Any], decision_domain: st
     return mode
 
 
+def _is_supplied_decision_value(value: Any) -> bool:
+    """Return whether an optional decision value should affect precedence.
+
+    Missing/null/blank placeholders are treated as absent. Present malformed
+    strings remain supplied so shared precedence resolution can fail closed.
+    """
+    if value is None:
+        return False
+    normalized = str(value).strip().lower()
+    return bool(normalized) and normalized not in {"none", "null"}
+
+
 def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     """Derive public decision semantics from internal gate outputs.
 
@@ -714,20 +726,30 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         risk_score=risk_score,
         human_review_required=human_review_required,
     )
-    explicit_business_decision = ctx.context.get("business_decision")
+    raw_explicit_business_decision = ctx.context.get("business_decision")
+    explicit_business_decision = (
+        str(raw_explicit_business_decision).strip()
+        if _is_supplied_decision_value(raw_explicit_business_decision)
+        else None
+    )
     explicit_business_requires_review = str(explicit_business_decision or "").upper() in {
         "REVIEW",
         "REVIEW_REQUIRED",
         "ESCALATE",
     }
+    derived_gate_requires_review = gate_decision == "human_review_required"
+    precedence_inputs = [gate_decision]
+    if explicit_business_decision is not None:
+        precedence_inputs.append(explicit_business_decision)
     gate_decision = canonicalize_public_gate_decision(
         resolve_decision_precedence(
-            gate_decision,
-            explicit_business_decision,
+            *precedence_inputs,
             output="gate",
         )
     )
-    if gate_decision == "hold" and explicit_business_requires_review:
+    if gate_decision == "hold" and (
+        derived_gate_requires_review or explicit_business_requires_review
+    ):
         gate_decision = "human_review_required"
         human_review_required = True
 

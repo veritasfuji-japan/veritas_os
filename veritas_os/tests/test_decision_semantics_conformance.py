@@ -320,3 +320,73 @@ def test_block_with_explicit_review_required_uses_valid_deny_pairing() -> None:
     assert payload["gate_decision"] == "block"
     assert payload["business_decision"] == "DENY"
     assert payload["next_action"] == "DO_NOT_EXECUTE"
+
+
+@pytest.mark.parametrize("business_value", [None, "", "   ", "none", "null"])
+def test_absent_or_nullish_business_decision_does_not_force_block(
+    business_value: object,
+) -> None:
+    """Nullish explicit business decisions are omitted from precedence inputs."""
+    context = {}
+    if business_value is not None:
+        context["business_decision"] = business_value
+    ctx = PipelineContext(
+        request_id="req-nullish-business-decision",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context=context,
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "proceed"
+    assert payload["business_decision"] == "APPROVE"
+
+
+def test_explicit_review_required_still_promotes_review_gate() -> None:
+    """Supplied review decisions still participate in restrictive precedence."""
+    ctx = PipelineContext(
+        request_id="req-review-required-business-decision",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={"business_decision": "REVIEW_REQUIRED"},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "human_review_required"
+    assert payload["business_decision"] == "REVIEW_REQUIRED"
+    assert payload["human_review_required"] is True
+
+
+@pytest.mark.parametrize("business_value", ["maybe", "unknown"])
+def test_malformed_business_decision_still_fails_closed(
+    business_value: str,
+) -> None:
+    """Supplied malformed business decisions still fail closed."""
+    ctx = PipelineContext(
+        request_id="req-malformed-business-decision",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={"business_decision": business_value},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "DENY"
