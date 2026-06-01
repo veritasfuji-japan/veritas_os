@@ -310,16 +310,63 @@ def execute_bind_adjudication(
         if bind_decision_values
         else "eligible_to_commit"
     )
-    if final_bind_decision != "eligible_to_commit":
+    decision_precedence_reason_code = None
+    if final_bind_decision == "block":
+        decision_precedence_reason_code = BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value
+    elif final_bind_decision == "escalate":
+        decision_precedence_reason_code = BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value
+
+    if not admissibility.admissibility_result:
         blocked_outcome = FinalOutcome.BLOCKED
         recommended_outcome = AdmissibilityOutcome.BLOCK.value
-        reason_code = BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value
+        escalation_reason = None
+        if (
+            admissibility.recommended_outcome is AdmissibilityOutcome.ESCALATE
+            and final_bind_decision != "block"
+        ):
+            blocked_outcome = FinalOutcome.ESCALATED
+            recommended_outcome = AdmissibilityOutcome.ESCALATE.value
+            escalation_reason = BindReasonCode.ADMISSIBILITY_ESCALATION_REQUIRED.value
+
+        reason_codes = list(admissibility.reason_codes)
+        if decision_precedence_reason_code:
+            reason_codes.append(decision_precedence_reason_code)
+
+        admissibility_result = {
+            "admissible": False,
+            "recommended_outcome": recommended_outcome,
+            "reason_codes": reason_codes,
+            "target": adapter.describe_target(),
+        }
+        if decision_precedence_reason_code:
+            admissibility_result["effective_decision"] = final_bind_decision
+            admissibility_result["decision_sources"] = bind_decision_values
+
+        return _finalize_receipt(
+            execution_intent=normalized_intent,
+            append_trustlog=append_trustlog,
+            receipt=_with_receipt(
+                base_receipt,
+                live_state_fingerprint_before=pre_fingerprint,
+                authority_check_result=authority_result,
+                constraint_check_result=constraint_result,
+                drift_check_result=drift_result,
+                risk_check_result=risk_result,
+                admissibility_result=admissibility_result,
+                final_outcome=blocked_outcome,
+                escalation_reason=escalation_reason,
+                **_regulated_receipt_updates(regulated_context, None),
+            ),
+        )
+
+    if decision_precedence_reason_code:
+        blocked_outcome = FinalOutcome.BLOCKED
+        recommended_outcome = AdmissibilityOutcome.BLOCK.value
         escalation_reason = None
         if final_bind_decision == "escalate":
             blocked_outcome = FinalOutcome.ESCALATED
             recommended_outcome = AdmissibilityOutcome.ESCALATE.value
-            reason_code = BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value
-            escalation_reason = reason_code
+            escalation_reason = decision_precedence_reason_code
 
         return _finalize_receipt(
             execution_intent=normalized_intent,
@@ -336,36 +383,7 @@ def execute_bind_adjudication(
                     "recommended_outcome": recommended_outcome,
                     "effective_decision": final_bind_decision,
                     "decision_sources": bind_decision_values,
-                    "reason_codes": [reason_code],
-                    "target": adapter.describe_target(),
-                },
-                final_outcome=blocked_outcome,
-                escalation_reason=escalation_reason,
-                **_regulated_receipt_updates(regulated_context, None),
-            ),
-        )
-
-    if not admissibility.admissibility_result:
-        blocked_outcome = FinalOutcome.BLOCKED
-        escalation_reason = None
-        if admissibility.recommended_outcome is AdmissibilityOutcome.ESCALATE:
-            blocked_outcome = FinalOutcome.ESCALATED
-            escalation_reason = BindReasonCode.ADMISSIBILITY_ESCALATION_REQUIRED.value
-
-        return _finalize_receipt(
-            execution_intent=normalized_intent,
-            append_trustlog=append_trustlog,
-            receipt=_with_receipt(
-                base_receipt,
-                live_state_fingerprint_before=pre_fingerprint,
-                authority_check_result=authority_result,
-                constraint_check_result=constraint_result,
-                drift_check_result=drift_result,
-                risk_check_result=risk_result,
-                admissibility_result={
-                    "admissible": False,
-                    "recommended_outcome": admissibility.recommended_outcome.value,
-                    "reason_codes": list(admissibility.reason_codes),
+                    "reason_codes": [decision_precedence_reason_code],
                     "target": adapter.describe_target(),
                 },
                 final_outcome=blocked_outcome,

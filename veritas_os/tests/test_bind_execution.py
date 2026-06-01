@@ -477,6 +477,66 @@ def test_bind_execution_failure_taxonomy_minimum_mapping() -> None:
     assert precondition.failure_category == "PRECONDITION"
 
 
+def test_bind_admissibility_block_wins_over_precedence_escalation() -> None:
+    """A failing bind admissibility check must not be downgraded to escalation."""
+    adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        authority_signal=False,
+    )
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "HOLD",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert adapter.state["version"] == 1
+    assert receipt.admissibility_result["recommended_outcome"] == "block"
+    assert "BIND_AUTHORITY_INVALID" in receipt.admissibility_result["reason_codes"]
+    assert (
+        BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value
+        in receipt.admissibility_result["reason_codes"]
+    )
+    assert receipt.admissibility_result["effective_decision"] == "escalate"
+
+
+def test_bind_admissibility_block_wins_with_precedence_block() -> None:
+    """A blocking lineage decision stays blocked and records both reason sources."""
+    adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        authority_signal=False,
+    )
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "fuji_decision": "rejected",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert adapter.state["version"] == 1
+    assert receipt.admissibility_result["recommended_outcome"] == "block"
+    assert "BIND_AUTHORITY_INVALID" in receipt.admissibility_result["reason_codes"]
+    assert (
+        BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value
+        in receipt.admissibility_result["reason_codes"]
+    )
+    assert receipt.admissibility_result["effective_decision"] == "block"
+
+
 def test_bind_execution_fuji_rejected_decision_is_not_advisory() -> None:
     """FUJI reject/deny lineage must block before bind apply."""
     adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
