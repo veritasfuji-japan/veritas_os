@@ -474,3 +474,67 @@ def test_bind_execution_failure_taxonomy_minimum_mapping() -> None:
         append_trustlog=False,
     )
     assert precondition.failure_category == "PRECONDITION"
+
+
+def test_bind_execution_fuji_rejected_decision_is_not_advisory() -> None:
+    """FUJI reject/deny lineage must block before bind apply."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "APPROVE",
+                "fuji_decision": "rejected",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert adapter.state["version"] == 1
+    assert receipt.admissibility_result["effective_decision"] == "block"
+    assert "BIND_DECISION_PRECEDENCE_BLOCKED" in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_execution_hold_decision_requires_review_not_commit() -> None:
+    """Hold/review lineage must escalate instead of silently becoming allow."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        policy_lineage={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "HOLD",
+                "fuji_decision": "allow",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert adapter.state["version"] == 1
+    assert receipt.admissibility_result["effective_decision"] == "escalate"
+    assert "BIND_DECISION_PRECEDENCE_ESCALATED" in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_execution_allow_commits_when_no_stricter_decision_exists() -> None:
+    """Allow/proceed/approved lineage may bind when all other checks pass."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "APPROVED",
+                "fuji_decision": "allow",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.COMMITTED
+    assert adapter.state["version"] == 2

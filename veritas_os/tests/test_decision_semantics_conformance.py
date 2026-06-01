@@ -157,3 +157,54 @@ def test_compare_helper_and_runtime_alias_maps_stay_consistent() -> None:
             "human_review_required": False,
         }
         assert compare_expected_semantics(expected_payload, actual_payload) == {}
+
+
+def test_restrictive_decision_precedence_pure_contract() -> None:
+    """Decision precedence is machine-readable and fail-closed."""
+    from veritas_os.core.decision_semantics import (
+        decision_severity,
+        resolve_decision_precedence,
+    )
+
+    assert decision_severity("deny") > decision_severity("hold")
+    assert decision_severity("hold") > decision_severity("allow")
+    assert resolve_decision_precedence("allow", "allow") == "allow"
+    assert resolve_decision_precedence("allow", "hold") == "hold"
+    assert resolve_decision_precedence("hold", "deny") == "deny"
+    assert resolve_decision_precedence("approved", "rejected") == "rejected"
+    assert resolve_decision_precedence("malformed_decision") == "block"
+    assert resolve_decision_precedence("malformed_decision", output="gate") == "block"
+
+
+@pytest.mark.parametrize(
+    "fuji_decision, business_decision, expected_gate, expected_business",
+    [
+        ("allow", "HOLD", "hold", "HOLD"),
+        ("deny", "APPROVE", "block", "DENY"),
+        ("rejected", "APPROVED", "block", "DENY"),
+        ("hold", "APPROVE", "hold", "HOLD"),
+        ("malformed_decision", "APPROVE", "block", "DENY"),
+    ],
+)
+def test_decision_path_conflicts_resolve_to_stricter_outcome(
+    fuji_decision: str,
+    business_decision: str,
+    expected_gate: str,
+    expected_business: str,
+) -> None:
+    """Gate/business/FUJI conflicts must converge on the stricter outcome."""
+    ctx = PipelineContext(
+        request_id=f"req-precedence-{fuji_decision}-{business_decision}",
+        query="conformance",
+        fuji_dict={"decision_status": fuji_decision, "status": fuji_decision},
+        decision_status=fuji_decision,
+        context={"business_decision": business_decision},
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == expected_gate
+    assert payload["business_decision"] == expected_business

@@ -27,6 +27,7 @@ from veritas_os.core.decision_semantics import (
     get_required_evidence_profiles,
     normalize_required_evidence_keys_with_diagnostics,
     normalize_required_evidence_keys,
+    resolve_decision_precedence,
     unique_preserve_order,
     validate_gate_business_combination,
 )
@@ -713,7 +714,21 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         risk_score=risk_score,
         human_review_required=human_review_required,
     )
-    gate_decision = canonicalize_public_gate_decision(gate_decision)
+    explicit_business_decision = ctx.context.get("business_decision")
+    gate_decision = canonicalize_public_gate_decision(
+        resolve_decision_precedence(
+            gate_decision,
+            explicit_business_decision,
+            output="gate",
+        )
+    )
+    if gate_decision == "hold" and str(explicit_business_decision or "").upper() in {
+        "REVIEW",
+        "REVIEW_REQUIRED",
+        "ESCALATE",
+    }:
+        gate_decision = "human_review_required"
+        human_review_required = True
 
     if missing_evidence:
         business_decision = "EVIDENCE_REQUIRED"

@@ -12,6 +12,11 @@ from veritas_os.core.continuation_runtime.bind_admissibility import (
     CheckStatus,
     evaluate_bind_admissibility,
 )
+from veritas_os.core.decision_semantics import (
+    decision_severity,
+    normalize_decision,
+    resolve_decision_precedence,
+)
 from veritas_os.governance.action_contracts import (
     ActionClassContract,
     validate_action_class_contract,
@@ -300,6 +305,46 @@ def execute_bind_adjudication(
     drift_result = _check_from_runtime(admissibility.drift_check_result)
     risk_result = _check_from_runtime(admissibility.risk_check_result)
     regulated_context = _resolve_regulated_action_context(normalized_intent)
+    bind_decision_values = _extract_bind_decision_values(normalized_intent)
+    final_bind_decision = (
+        resolve_decision_precedence(*bind_decision_values, output="bind")
+        if bind_decision_values
+        else "eligible_to_commit"
+    )
+    if final_bind_decision != "eligible_to_commit":
+        blocked_outcome = FinalOutcome.BLOCKED
+        recommended_outcome = "block"
+        reason_code = "BIND_DECISION_PRECEDENCE_BLOCKED"
+        escalation_reason = None
+        if final_bind_decision == "escalate":
+            blocked_outcome = FinalOutcome.ESCALATED
+            recommended_outcome = "escalate"
+            reason_code = "BIND_DECISION_PRECEDENCE_ESCALATED"
+            escalation_reason = reason_code
+
+        return _finalize_receipt(
+            execution_intent=normalized_intent,
+            append_trustlog=append_trustlog,
+            receipt=_with_receipt(
+                base_receipt,
+                live_state_fingerprint_before=pre_fingerprint,
+                authority_check_result=authority_result,
+                constraint_check_result=constraint_result,
+                drift_check_result=drift_result,
+                risk_check_result=risk_result,
+                admissibility_result={
+                    "admissible": False,
+                    "recommended_outcome": recommended_outcome,
+                    "effective_decision": final_bind_decision,
+                    "decision_sources": bind_decision_values,
+                    "reason_codes": [reason_code],
+                    "target": adapter.describe_target(),
+                },
+                final_outcome=blocked_outcome,
+                escalation_reason=escalation_reason,
+                **_regulated_receipt_updates(regulated_context, None),
+            ),
+        )
 
     if not admissibility.admissibility_result:
         blocked_outcome = FinalOutcome.BLOCKED
@@ -511,6 +556,47 @@ def execute_bind_adjudication(
             **regulated_receipt_updates,
         ),
     )
+
+
+
+def _extract_bind_decision_values(execution_intent: ExecutionIntent) -> list[str]:
+    """Extract decision-like lineage values that constrain bind authority.
+
+    Bind/commit is allowed only when no stricter decision source exists. FUJI
+    deny/rejected, business hold/review, malformed decision strings, and other
+    restrictive values are carried into the shared precedence resolver before
+    any side effect is applied.
+    """
+    values: list[str] = []
+    for container in (execution_intent.approval_context, execution_intent.policy_lineage):
+        if not isinstance(container, dict):
+            continue
+        _collect_decision_values(container, values)
+        decision_semantics = container.get("decision_semantics")
+        if isinstance(decision_semantics, dict):
+            _collect_decision_values(decision_semantics, values)
+    return values
+
+
+def _collect_decision_values(container: dict[str, Any], values: list[str]) -> None:
+    for key in (
+        "gate_decision",
+        "business_decision",
+        "fuji_decision",
+        "bind_decision",
+        "decision_status",
+    ):
+        if key not in container:
+            continue
+        normalized = normalize_decision(container.get(key))
+        if normalized == "unknown" or normalized in {"none", "null"}:
+            continue
+        values.append(normalized)
+
+
+def _has_restrictive_bind_decision(execution_intent: ExecutionIntent) -> bool:
+    """Return whether decision lineage contains hold/review/block severity."""
+    return any(decision_severity(value) > 1 for value in _extract_bind_decision_values(execution_intent))
 
 
 def _resolve_regulated_action_context(execution_intent: ExecutionIntent) -> dict[str, Any]:
