@@ -313,12 +313,12 @@ def execute_bind_adjudication(
     if final_bind_decision != "eligible_to_commit":
         blocked_outcome = FinalOutcome.BLOCKED
         recommended_outcome = AdmissibilityOutcome.BLOCK.value
-        reason_code = "BIND_DECISION_PRECEDENCE_BLOCKED"
+        reason_code = BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value
         escalation_reason = None
         if final_bind_decision == "escalate":
             blocked_outcome = FinalOutcome.ESCALATED
             recommended_outcome = AdmissibilityOutcome.ESCALATE.value
-            reason_code = "BIND_DECISION_PRECEDENCE_ESCALATED"
+            reason_code = BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value
             escalation_reason = reason_code
 
         return _finalize_receipt(
@@ -587,7 +587,12 @@ def _collect_decision_values(container: dict[str, Any], values: list[str]) -> No
     ):
         if key not in container:
             continue
-        normalized = normalize_decision(container.get(key))
+        raw_value = container.get(key)
+        if raw_value is None:
+            continue
+        normalized = normalize_decision(raw_value)
+        if normalized in {"unknown", "none", "null"} and not str(raw_value).strip():
+            continue
         if normalized in {"none", "null"}:
             continue
         values.append(normalized)

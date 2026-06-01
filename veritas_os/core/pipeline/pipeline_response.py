@@ -731,7 +731,11 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         gate_decision = "human_review_required"
         human_review_required = True
 
-    if gate_decision == "block":
+    if gate_decision == "block" and explicit_business_requires_review:
+        business_decision = "DENY"
+    elif gate_decision == "block" and missing_evidence:
+        business_decision = "EVIDENCE_REQUIRED"
+    elif gate_decision == "block":
         business_decision = "DENY"
     elif explicit_business_requires_review or gate_decision == "human_review_required":
         business_decision = "REVIEW_REQUIRED"

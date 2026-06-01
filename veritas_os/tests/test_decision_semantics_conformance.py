@@ -258,3 +258,50 @@ def test_review_required_with_missing_evidence_keeps_valid_review_pairing() -> N
     assert payload["human_review_required"] is True
     assert payload["missing_evidence"] == ["approval_ticket"]
     assert payload["business_decision"] != "APPROVE"
+
+
+def test_block_with_missing_evidence_surfaces_evidence_required() -> None:
+    """Block gate still keeps evidence gaps visible as business state."""
+    ctx = PipelineContext(
+        request_id="req-block-missing-evidence",
+        query="conformance",
+        fuji_dict={"decision_status": "deny", "status": "deny"},
+        decision_status="rejected",
+        context={
+            "required_evidence": ["approval_ticket"],
+            "satisfied_evidence": [],
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    DecideResponse.model_validate(payload)
+
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "EVIDENCE_REQUIRED"
+    assert payload["next_action"] == "COLLECT_REQUIRED_EVIDENCE"
+
+
+def test_block_with_explicit_review_required_uses_valid_deny_pairing() -> None:
+    """Block plus explicit review cannot emit invalid review-required coupling."""
+    ctx = PipelineContext(
+        request_id="req-block-review-required",
+        query="conformance",
+        fuji_dict={"decision_status": "deny", "status": "deny"},
+        decision_status="rejected",
+        context={"business_decision": "REVIEW_REQUIRED"},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    DecideResponse.model_validate(payload)
+
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "DENY"
+    assert payload["next_action"] == "DO_NOT_EXECUTE"
