@@ -22,6 +22,7 @@ from veritas_os.core import fuji
 _ALLOWED_DECISIONS = {"allow", "hold", "deny"}
 DEFAULT_FALSE_NEGATIVE_PROMOTION_THRESHOLD = 0.0
 PROMOTION_BLOCKED_METRICS_UNAVAILABLE = "promotion_blocked_metrics_unavailable"
+_FALSE_NEGATIVE_RATE_TOLERANCE = 1e-6
 
 
 @dataclass(frozen=True)
@@ -233,6 +234,13 @@ def evaluate_canary_promotion_gate(
         or samples_checked == 0
         or false_negatives > samples_checked
         or (raw_change_rate is not None and change_rate is None)
+    ):
+        return blocked_result
+
+    expected_false_negative_rate = false_negatives / samples_checked
+    if (
+        abs(false_negative_rate - expected_false_negative_rate)
+        > _FALSE_NEGATIVE_RATE_TOLERANCE
     ):
         return blocked_result
 

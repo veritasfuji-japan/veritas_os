@@ -3542,6 +3542,19 @@ def test_canary_promotion_gate_blocks_zero_samples_fail_closed() -> None:
     assert result.reason == PROMOTION_BLOCKED_METRICS_UNAVAILABLE
 
 
+def test_canary_promotion_gate_blocks_inconsistent_metrics_fail_closed() -> None:
+    result = evaluate_canary_promotion_gate(
+        {
+            "false_negative_rate": 0.0,
+            "false_negative": 1,
+            "samples_checked": 10,
+        }
+    )
+
+    assert result.allowed is False
+    assert result.reason == PROMOTION_BLOCKED_METRICS_UNAVAILABLE
+
+
 def test_replay_policy_diff_counts_stable_hold_canary_allow_as_false_negative() -> None:
     result = replay_policy_diff(
         samples=[
