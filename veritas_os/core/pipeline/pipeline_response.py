@@ -601,6 +601,15 @@ def _resolve_required_evidence_mode(context: Dict[str, Any], decision_domain: st
     return mode
 
 
+def _is_supplied_decision_value(value: object) -> bool:
+    """Return whether a decision-like value was explicitly supplied."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() not in {"", "none", "null"}
+    return True
+
+
 def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     """Derive public decision semantics from internal gate outputs.
 
@@ -715,16 +724,19 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         human_review_required=human_review_required,
     )
     explicit_business_decision = ctx.context.get("business_decision")
-    explicit_business_requires_review = str(explicit_business_decision or "").upper() in {
-        "REVIEW",
-        "REVIEW_REQUIRED",
-        "ESCALATE",
-    }
+    explicit_business_supplied = _is_supplied_decision_value(explicit_business_decision)
+    explicit_business_requires_review = (
+        explicit_business_supplied
+        and str(explicit_business_decision).strip().upper()
+        in {"REVIEW", "REVIEW_REQUIRED", "ESCALATE"}
+    )
     derived_gate_requires_review = gate_decision == "human_review_required"
+    decision_values = [gate_decision]
+    if explicit_business_supplied:
+        decision_values.append(explicit_business_decision)
     gate_decision = canonicalize_public_gate_decision(
         resolve_decision_precedence(
-            gate_decision,
-            explicit_business_decision,
+            *decision_values,
             output="gate",
         )
     )

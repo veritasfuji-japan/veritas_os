@@ -365,3 +365,52 @@ def test_ordinary_hold_remains_hold_without_review_flag() -> None:
     assert payload["gate_decision"] == "hold"
     assert payload["business_decision"] == "HOLD"
     assert payload["human_review_required"] is False
+
+
+@pytest.mark.parametrize("business_value", [None, "", "   ", "none", "null"])
+def test_nullish_business_decision_is_not_precedence_input(
+    business_value: object,
+) -> None:
+    """Missing/nullish business decisions do not turn proceed into block."""
+    context = {}
+    if business_value is not None:
+        context["business_decision"] = business_value
+    ctx = PipelineContext(
+        request_id="req-nullish-business-precedence-input",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context=context,
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "proceed"
+    assert payload["business_decision"] == "APPROVE"
+
+
+@pytest.mark.parametrize("business_value", ["unknown", "maybe", "bad_value"])
+def test_malformed_business_decision_remains_precedence_input(
+    business_value: str,
+) -> None:
+    """Present malformed business decisions still fail closed to block."""
+    ctx = PipelineContext(
+        request_id="req-malformed-business-precedence-input",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={"business_decision": business_value},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "DENY"
