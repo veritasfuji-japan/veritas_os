@@ -112,7 +112,13 @@ Phase 3 remains blocked until all criteria below are satisfied:
 
 This migration area is safety-sensitive. Any mapping change that can alter
 runtime behavior must be reviewed as a security-relevant change before
-feature-flagged enforcement is considered.
+feature-flagged enforcement is considered. Canary rollout metrics are not
+advisory-only. Promotion is blocked when the canary policy produces a
+false-negative rate above the configured threshold. A false negative occurs
+when the stable policy would HOLD or DENY but the canary policy would ALLOW.
+This prevents a more permissive canary policy from being promoted in
+safety-critical gates, and is especially important for high-risk categories
+such as `risk_negation_terms` and `refusal_context_patterns`.
 
 
 ## Phase 2.7 artifact status
