@@ -274,35 +274,66 @@ def _rank_action_candidates(
     - Value Core aggregate score (`value_total`).
     """
     if gate_decision == "block":
-        candidates = [
-            _make_action_candidate(
-                action="DO_NOT_EXECUTE",
-                expected_value=0.78,
-                risk_reduction=0.98,
-                cost=0.05,
-                dependency=0.02,
-                urgency=0.97,
-                reason="FUJI gate is BLOCK; safest high-value action is to halt execution.",
-            ),
-            _make_action_candidate(
-                action="ESCALATE_POLICY_EXCEPTION_REVIEW",
-                expected_value=0.52,
-                risk_reduction=0.75,
-                cost=0.34,
-                dependency=0.65,
-                urgency=0.84,
-                reason="Policy exception path may recover value but needs human/process dependencies.",
-            ),
-            _make_action_candidate(
-                action="COLLECT_REQUIRED_EVIDENCE",
-                expected_value=0.40,
-                risk_reduction=0.62,
-                cost=0.46,
-                dependency=0.48,
-                urgency=0.70,
-                reason="Additional evidence can support later re-assessment without executing now.",
-            ),
-        ]
+        if business_decision == "EVIDENCE_REQUIRED" and missing_evidence:
+            candidates = [
+                _make_action_candidate(
+                    action="COLLECT_REQUIRED_EVIDENCE",
+                    expected_value=0.79,
+                    risk_reduction=0.86,
+                    cost=0.24,
+                    dependency=0.30,
+                    urgency=0.84,
+                    reason="Collect missing evidence before any later blocked-path re-assessment.",
+                ),
+                _make_action_candidate(
+                    action="DO_NOT_EXECUTE",
+                    expected_value=0.78,
+                    risk_reduction=0.98,
+                    cost=0.05,
+                    dependency=0.02,
+                    urgency=0.97,
+                    reason="FUJI gate is BLOCK; execution remains halted while evidence is collected.",
+                ),
+                _make_action_candidate(
+                    action="ESCALATE_POLICY_EXCEPTION_REVIEW",
+                    expected_value=0.52,
+                    risk_reduction=0.75,
+                    cost=0.34,
+                    dependency=0.65,
+                    urgency=0.84,
+                    reason="Policy exception path may recover value but needs human/process dependencies.",
+                ),
+            ]
+        else:
+            candidates = [
+                _make_action_candidate(
+                    action="DO_NOT_EXECUTE",
+                    expected_value=0.78,
+                    risk_reduction=0.98,
+                    cost=0.05,
+                    dependency=0.02,
+                    urgency=0.97,
+                    reason="FUJI gate is BLOCK; safest high-value action is to halt execution.",
+                ),
+                _make_action_candidate(
+                    action="ESCALATE_POLICY_EXCEPTION_REVIEW",
+                    expected_value=0.52,
+                    risk_reduction=0.75,
+                    cost=0.34,
+                    dependency=0.65,
+                    urgency=0.84,
+                    reason="Policy exception path may recover value but needs human/process dependencies.",
+                ),
+                _make_action_candidate(
+                    action="COLLECT_REQUIRED_EVIDENCE",
+                    expected_value=0.40,
+                    risk_reduction=0.62,
+                    cost=0.46,
+                    dependency=0.48,
+                    urgency=0.70,
+                    reason="Additional evidence can support later re-assessment without executing now.",
+                ),
+            ]
     elif business_decision == "REVIEW_REQUIRED":
         candidates = [
             _make_action_candidate(
@@ -610,6 +641,13 @@ def _is_supplied_decision_value(value: object) -> bool:
     return True
 
 
+def _business_decision_requires_review(value: object) -> bool:
+    """Return whether an explicit business decision requests review."""
+    if not _is_supplied_decision_value(value):
+        return False
+    return str(value).strip().upper() in {"REVIEW", "REVIEW_REQUIRED", "ESCALATE"}
+
+
 def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     """Derive public decision semantics from internal gate outputs.
 
@@ -725,28 +763,29 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     )
     explicit_business_decision = ctx.context.get("business_decision")
     explicit_business_supplied = _is_supplied_decision_value(explicit_business_decision)
-    explicit_business_requires_review = (
-        explicit_business_supplied
-        and str(explicit_business_decision).strip().upper()
-        in {"REVIEW", "REVIEW_REQUIRED", "ESCALATE"}
+    explicit_business_requires_review = _business_decision_requires_review(
+        explicit_business_decision
     )
     derived_gate_requires_review = gate_decision == "human_review_required"
     decision_values = [gate_decision]
     if explicit_business_supplied:
         decision_values.append(explicit_business_decision)
-    gate_decision = canonicalize_public_gate_decision(
+    resolved_gate_decision = canonicalize_public_gate_decision(
         resolve_decision_precedence(
             *decision_values,
             output="gate",
         )
     )
-    if gate_decision == "hold" and (
-        human_review_required
-        or derived_gate_requires_review
-        or explicit_business_requires_review
-    ):
-        gate_decision = "human_review_required"
-        human_review_required = True
+    if resolved_gate_decision == "block":
+        gate_decision = "block"
+    elif resolved_gate_decision == "hold":
+        if explicit_business_requires_review:
+            gate_decision = "human_review_required"
+            human_review_required = True
+        else:
+            gate_decision = "human_review_required" if derived_gate_requires_review else "hold"
+    else:
+        gate_decision = resolved_gate_decision
 
     if gate_decision == "block" and explicit_business_requires_review:
         business_decision = "DENY"
@@ -754,10 +793,12 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         business_decision = "EVIDENCE_REQUIRED"
     elif gate_decision == "block":
         business_decision = "DENY"
-    elif explicit_business_requires_review or gate_decision == "human_review_required":
+    elif explicit_business_requires_review:
         business_decision = "REVIEW_REQUIRED"
     elif missing_evidence:
         business_decision = "EVIDENCE_REQUIRED"
+    elif gate_decision == "human_review_required":
+        business_decision = "REVIEW_REQUIRED"
     elif gate_decision == "hold":
         business_decision = "HOLD"
     elif "policy_definition_required" in gate_reason.lower():
