@@ -339,7 +339,12 @@ def execute_bind_adjudication(
             "target": adapter.describe_target(),
         }
         if decision_precedence_reason_code:
-            admissibility_result["effective_decision"] = final_bind_decision
+            final_effective_decision = (
+                "block" if blocked_outcome is FinalOutcome.BLOCKED else "escalate"
+            )
+            admissibility_result["effective_decision"] = final_effective_decision
+            admissibility_result["final_effective_decision"] = final_effective_decision
+            admissibility_result["precedence_decision"] = final_bind_decision
             admissibility_result["decision_sources"] = bind_decision_values
 
         return _finalize_receipt(
@@ -382,6 +387,8 @@ def execute_bind_adjudication(
                     "admissible": False,
                     "recommended_outcome": recommended_outcome,
                     "effective_decision": final_bind_decision,
+                    "final_effective_decision": final_bind_decision,
+                    "precedence_decision": final_bind_decision,
                     "decision_sources": bind_decision_values,
                     "reason_codes": [decision_precedence_reason_code],
                     "target": adapter.describe_target(),

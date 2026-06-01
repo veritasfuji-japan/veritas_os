@@ -21,6 +21,8 @@ from .pipeline_types import PipelineContext
 from .pipeline_evidence import _norm_evidence_item, _dedupe_evidence
 from .pipeline_helpers import _warn
 from veritas_os.core.decision_semantics import (
+    STOP_REASON_GATE_PRIORITY,
+    STOP_REASONS_REQUIRING_HUMAN_REVIEW,
     build_required_evidence_profile,
     canonicalize_public_gate_decision,
     derive_gate_decision_from_stop_reasons,
@@ -41,6 +43,22 @@ from veritas_os.core.lineage_transition_refusal import (
 from veritas_os.observability.metrics import record_required_evidence_telemetry
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_CONTEXT_STOP_REASONS = frozenset(
+    {
+        reason
+        for reason_group, _gate_decision in STOP_REASON_GATE_PRIORITY
+        for reason in reason_group
+    }
+    | set(STOP_REASONS_REQUIRING_HUMAN_REVIEW)
+    | {
+        "sanctions_partial_match",
+        "unknown_required_evidence_key",
+        "required_evidence_profile_miss",
+        "escalation_sensitive_evidence_missing",
+    }
+)
+MAX_CONTEXT_STOP_REASON_LENGTH = 80
 
 # Top-level /v1/decide response groups.
 # These constants document the payload layering without changing runtime behavior.
@@ -521,6 +539,18 @@ def _is_falsey_flag(value: Any) -> bool:
     return False
 
 
+def _is_allowed_context_stop_reason(value: object) -> bool:
+    """Return whether a user-supplied stop reason is safe to echo.
+
+    Context stop reasons can originate from request normalization, so only known
+    bounded tokens may be promoted into rationale or ranking traces.
+    """
+    token = str(value).strip().lower()
+    if not token or len(token) > MAX_CONTEXT_STOP_REASON_LENGTH:
+        return False
+    return token in ALLOWED_CONTEXT_STOP_REASONS
+
+
 def _extract_stop_reasons(
     *,
     gate_reason: str,
@@ -560,7 +590,8 @@ def _extract_stop_reasons(
     if bool(context.get("sanctions_partial_match")):
         reasons.append("sanctions_partial_match")
     for reason in _as_string_list(context.get("stop_reasons")):
-        reasons.append(reason)
+        if _is_allowed_context_stop_reason(reason):
+            reasons.append(reason)
 
     return reasons
 
@@ -738,7 +769,15 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         risk_score = 0.0
     human_review_required = bool(
         ctx.context.get("human_review_required")
-        or _decision_value_requires_review(raw_gate_decision)
+        or any(
+            _decision_value_requires_review(value)
+            for value in (
+                raw_gate_decision,
+                ctx.fuji_dict.get("status"),
+                ctx.fuji_dict.get("decision_status"),
+                ctx.decision_status,
+            )
+        )
     )
     stop_reasons = _extract_stop_reasons(
         gate_reason=gate_reason,

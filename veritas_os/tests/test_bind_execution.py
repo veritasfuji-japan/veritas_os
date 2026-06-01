@@ -504,7 +504,9 @@ def test_bind_admissibility_block_wins_over_precedence_escalation() -> None:
         BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value
         in receipt.admissibility_result["reason_codes"]
     )
-    assert receipt.admissibility_result["effective_decision"] == "escalate"
+    assert receipt.admissibility_result["effective_decision"] == "block"
+    assert receipt.admissibility_result["final_effective_decision"] == "block"
+    assert receipt.admissibility_result["precedence_decision"] == "escalate"
 
 
 def test_bind_admissibility_block_wins_with_precedence_block() -> None:
@@ -535,6 +537,8 @@ def test_bind_admissibility_block_wins_with_precedence_block() -> None:
         in receipt.admissibility_result["reason_codes"]
     )
     assert receipt.admissibility_result["effective_decision"] == "block"
+    assert receipt.admissibility_result["final_effective_decision"] == "block"
+    assert receipt.admissibility_result["precedence_decision"] == "block"
 
 
 def test_bind_execution_fuji_rejected_decision_is_not_advisory() -> None:
