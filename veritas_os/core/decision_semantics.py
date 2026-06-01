@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Literal, Mapping
 
 CANONICAL_GATE_DECISION_VALUES: tuple[str, ...] = (
     "proceed",
@@ -45,14 +45,62 @@ GATE_DECISION_ALIAS_TO_CANONICAL = {
     "rejected": "block",
     "modify": "hold",
     "abstain": "hold",
+    "allow_with_warning": "hold",
+    "needs_human_review": "human_review_required",
     # Keep unknown as-is for schema default/backward compatibility.
-    # Runtime derivation later resolves fallback to proceed when needed.
+    # Runtime enforcement resolves unknown/malformed values fail-closed.
     "unknown": "unknown",
     "proceed": "proceed",
     "hold": "hold",
     "block": "block",
     "human_review_required": "human_review_required",
 }
+
+
+# Machine-readable restrictive precedence for all decision-like surfaces.
+# Severity 3 blocks execution, severity 2 requires hold/review/escalation,
+# and severity 1 allows/proceeds. Unknown values fail closed to severity 3.
+DECISION_SEVERITY_ALIASES: dict[int, tuple[str, ...]] = {
+    3: ("block", "deny", "denied", "rejected", "reject", "refuse", "refused"),
+    2: (
+        "hold",
+        "review",
+        "review_required",
+        "human_review_required",
+        "needs_human_review",
+        "allow_with_warning",
+        "escalate",
+        "escalated",
+        "modify",
+        "abstain",
+        "evidence_required",
+        "policy_definition_required",
+    ),
+    1: (
+        "proceed",
+        "allow",
+        "allowed",
+        "approve",
+        "approved",
+        "eligible_to_commit",
+        "committed",
+    ),
+}
+
+DECISION_TERM_SEVERITY: dict[str, int] = {
+    term: severity
+    for severity, terms in DECISION_SEVERITY_ALIASES.items()
+    for term in terms
+}
+
+DECISION_OUTPUT_TERMS: dict[str, dict[int, str]] = {
+    "gate": {3: "block", 2: "hold", 1: "proceed"},
+    "business": {3: "DENY", 2: "HOLD", 1: "APPROVE"},
+    "fuji": {3: "rejected", 2: "abstain", 1: "allow"},
+    "bind": {3: "block", 2: "escalate", 1: "eligible_to_commit"},
+}
+
+DecisionOutputSurface = Literal["preserve", "gate", "business", "fuji", "bind"]
 
 FORBIDDEN_GATE_BUSINESS_COMBINATIONS: frozenset[tuple[str, str]] = frozenset(
     {
@@ -152,6 +200,67 @@ def canonicalize_public_gate_decision(
     return fallback
 
 
+
+def normalize_decision(value: object) -> str:
+    """Normalize a decision-like value for precedence comparisons.
+
+    The normal form is lower-case snake-case. Empty, ``None``, and malformed
+    values are returned as ``"unknown"`` so callers can fail closed via
+    :func:`decision_severity` or :func:`resolve_decision_precedence`.
+    """
+    normalized = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return normalized or "unknown"
+
+
+def decision_severity(value: object) -> int:
+    """Return restrictive severity for a decision-like value.
+
+    Severity order is machine-readable and fail-closed:
+    ``3`` = reject/block execution, ``2`` = hold/review/escalate,
+    ``1`` = allow/proceed. Unknown or malformed values return ``3``.
+    """
+    normalized = normalize_decision(value)
+    return DECISION_TERM_SEVERITY.get(normalized, 3)
+
+
+def resolve_decision_precedence(
+    *values: object,
+    output: DecisionOutputSurface = "preserve",
+) -> str:
+    """Return the most restrictive decision across decision-like values.
+
+    A permissive source cannot override a restrictive source. Unknown or
+    malformed values fail closed to the reject/block severity. When ``output``
+    names a VERITAS surface, the returned term is canonical for that surface;
+    otherwise the first most-restrictive input term is preserved.
+    """
+    if not values:
+        severity = 3
+        selected = "unknown"
+    else:
+        normalized_values = [normalize_decision(value) for value in values]
+        severity = max(decision_severity(value) for value in normalized_values)
+        selected = next(
+            value
+            for value in normalized_values
+            if decision_severity(value) == severity
+        )
+
+    if output == "preserve":
+        if selected not in DECISION_TERM_SEVERITY:
+            return "block"
+        return selected
+    return DECISION_OUTPUT_TERMS[output][severity]
+
+
+def most_restrictive_decision(
+    *values: object,
+    output: DecisionOutputSurface = "preserve",
+) -> str:
+    """Alias for :func:`resolve_decision_precedence` using VERITAS wording."""
+    return resolve_decision_precedence(*values, output=output)
+
+
 def normalize_required_evidence_keys(values: Iterable[object] | None) -> list[str]:
     """Normalize evidence keys via taxonomy aliases while keeping free strings."""
     if values is None:
@@ -164,6 +273,7 @@ def normalize_required_evidence_keys(values: Iterable[object] | None) -> list[st
             continue
         out.append(alias_map.get(key, key))
     return out
+
 
 
 def normalize_required_evidence_keys_with_diagnostics(
@@ -355,8 +465,8 @@ def derive_gate_decision_from_stop_reasons(
 ) -> tuple[str, bool]:
     """Classify canonical gate decision using a single priority definition."""
     reasons = set(stop_reasons)
-    normalized_raw_gate = canonicalize_gate_decision(raw_gate_decision)
-    normalized_decision_status = canonicalize_gate_decision(decision_status)
+    normalized_raw_gate = resolve_decision_precedence(raw_gate_decision, output="gate")
+    normalized_decision_status = resolve_decision_precedence(decision_status, output="gate")
     # Decision-semantics.md section D priority order.
     if "rollback_not_supported" in reasons:
         return "block", human_review_required
@@ -377,6 +487,7 @@ def derive_gate_decision_from_stop_reasons(
     if (
         {"rule_undefined", "audit_trail_incomplete", "secure_controls_missing"} & reasons
         or normalized_raw_gate == "hold"
+        or normalized_decision_status == "hold"
     ):
         return "hold", human_review_required
     return "proceed", human_review_required
