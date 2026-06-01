@@ -7,6 +7,7 @@ import pytest
 from veritas_os.logging.encryption import generate_key
 from veritas_os.policy.bind_artifacts import find_bind_receipts
 from veritas_os.policy.bind_artifacts import ExecutionIntent, FinalOutcome
+from veritas_os.policy.bind_core import BindReasonCode
 from veritas_os.policy.bind_execution import ReferenceBindAdapter, execute_bind_boundary
 
 
@@ -474,3 +475,109 @@ def test_bind_execution_failure_taxonomy_minimum_mapping() -> None:
         append_trustlog=False,
     )
     assert precondition.failure_category == "PRECONDITION"
+
+
+def test_bind_execution_fuji_rejected_decision_is_not_advisory() -> None:
+    """FUJI reject/deny lineage must block before bind apply."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "APPROVE",
+                "fuji_decision": "rejected",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert adapter.state["version"] == 1
+    assert receipt.admissibility_result["effective_decision"] == "block"
+    assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_execution_hold_decision_requires_review_not_commit() -> None:
+    """Hold/review lineage must escalate instead of silently becoming allow."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        policy_lineage={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "HOLD",
+                "fuji_decision": "allow",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert adapter.state["version"] == 1
+    assert receipt.admissibility_result["effective_decision"] == "escalate"
+    assert BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_execution_allow_commits_when_no_stricter_decision_exists() -> None:
+    """Allow/proceed/approved lineage may bind when all other checks pass."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "APPROVED",
+                "fuji_decision": "allow",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.COMMITTED
+    assert adapter.state["version"] == 2
+
+
+def test_bind_decision_nullish_values_are_absent_not_blocks() -> None:
+    """Null/empty decision lineage is absent; unsupported strings still fail closed."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": None,
+                "business_decision": "",
+                "fuji_decision": "none",
+                "bind_decision": "null",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.COMMITTED
+    assert adapter.state["version"] == 2
+
+
+@pytest.mark.parametrize("malformed_decision", ["unknown", "maybe"])
+def test_bind_decision_malformed_strings_fail_closed(malformed_decision: str) -> None:
+    """Present unsupported decision strings are enforced as fail-closed blocks."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "fuji_decision": malformed_decision,
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert adapter.state["version"] == 1
+    assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in receipt.admissibility_result["reason_codes"]
