@@ -320,3 +320,48 @@ def test_block_with_explicit_review_required_uses_valid_deny_pairing() -> None:
     assert payload["gate_decision"] == "block"
     assert payload["business_decision"] == "DENY"
     assert payload["next_action"] == "DO_NOT_EXECUTE"
+
+
+def test_human_review_required_flag_preserves_review_gate() -> None:
+    """A derived human-review flag must not collapse to a plain hold gate."""
+    ctx = PipelineContext(
+        request_id="req-human-review-flag-preserved",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow", "risk": 0.91},
+        decision_status="allow",
+        context={
+            "stop_reasons": ["high_risk_ambiguity"],
+            "risk_score": 0.91,
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "human_review_required"
+    assert payload["business_decision"] == "REVIEW_REQUIRED"
+    assert payload["human_review_required"] is True
+
+
+def test_ordinary_hold_remains_hold_without_review_flag() -> None:
+    """Hold-class gates stay hold when no review flag or review request exists."""
+    ctx = PipelineContext(
+        request_id="req-ordinary-hold-remains-hold",
+        query="conformance",
+        fuji_dict={"decision_status": "modify", "status": "modify"},
+        decision_status="modify",
+        context={},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "hold"
+    assert payload["business_decision"] == "HOLD"
+    assert payload["human_review_required"] is False

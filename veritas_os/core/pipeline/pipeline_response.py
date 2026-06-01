@@ -720,6 +720,7 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         "REVIEW_REQUIRED",
         "ESCALATE",
     }
+    derived_gate_requires_review = gate_decision == "human_review_required"
     gate_decision = canonicalize_public_gate_decision(
         resolve_decision_precedence(
             gate_decision,
@@ -727,7 +728,11 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
             output="gate",
         )
     )
-    if gate_decision == "hold" and explicit_business_requires_review:
+    if gate_decision == "hold" and (
+        human_review_required
+        or derived_gate_requires_review
+        or explicit_business_requires_review
+    ):
         gate_decision = "human_review_required"
         human_review_required = True
 
