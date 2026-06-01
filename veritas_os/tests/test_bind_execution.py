@@ -538,3 +538,26 @@ def test_bind_execution_allow_commits_when_no_stricter_decision_exists() -> None
 
     assert receipt.final_outcome is FinalOutcome.COMMITTED
     assert adapter.state["version"] == 2
+
+
+@pytest.mark.parametrize("raw_decision", ["unknown", "maybe"])
+def test_bind_execution_unknown_or_malformed_decision_fails_closed(
+    raw_decision: str,
+) -> None:
+    """Explicit unknown/malformed decision lineage must block bind apply."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": raw_decision,
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert adapter.state["version"] == 1
+    assert receipt.admissibility_result["effective_decision"] == "block"
+    assert "BIND_DECISION_PRECEDENCE_BLOCKED" in receipt.admissibility_result["reason_codes"]

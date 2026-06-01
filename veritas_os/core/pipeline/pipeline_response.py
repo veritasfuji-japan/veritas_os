@@ -715,14 +715,19 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         human_review_required=human_review_required,
     )
     explicit_business_decision = ctx.context.get("business_decision")
+    business_decision_supplied = bool(str(explicit_business_decision or "").strip())
+    precedence_inputs: list[object] = [gate_decision]
+    if business_decision_supplied:
+        precedence_inputs.append(explicit_business_decision)
     gate_decision = canonicalize_public_gate_decision(
         resolve_decision_precedence(
-            gate_decision,
-            explicit_business_decision,
+            *precedence_inputs,
             output="gate",
         )
     )
-    if gate_decision == "hold" and str(explicit_business_decision or "").upper() in {
+    if gate_decision == "hold" and business_decision_supplied and str(
+        explicit_business_decision
+    ).upper() in {
         "REVIEW",
         "REVIEW_REQUIRED",
         "ESCALATE",

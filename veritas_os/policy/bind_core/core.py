@@ -588,10 +588,7 @@ def _collect_decision_values(container: dict[str, Any], values: list[str]) -> No
     ):
         if key not in container:
             continue
-        normalized = normalize_decision(container.get(key))
-        if normalized == "unknown" or normalized in {"none", "null"}:
-            continue
-        values.append(normalized)
+        values.append(normalize_decision(container.get(key)))
 
 
 def _has_restrictive_bind_decision(execution_intent: ExecutionIntent) -> bool:

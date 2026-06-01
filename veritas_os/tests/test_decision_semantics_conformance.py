@@ -208,3 +208,22 @@ def test_decision_path_conflicts_resolve_to_stricter_outcome(
 
     assert payload["gate_decision"] == expected_gate
     assert payload["business_decision"] == expected_business
+
+
+def test_absent_business_decision_does_not_fail_closed_allow_path() -> None:
+    """Absent business_decision must not be treated as unknown/block."""
+    ctx = PipelineContext(
+        request_id="req-precedence-absent-business-decision",
+        query="conformance",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={},
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "proceed"
+    assert payload["business_decision"] == "APPROVE"

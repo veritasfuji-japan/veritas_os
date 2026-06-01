@@ -13,6 +13,23 @@
 - TrustLog と `governance_identity` / ガバナンス識別子 を合わせることで、意思決定から副作用までの系譜を監査可能にします。
 - Mission Control は `bind_summary` / bind概要 と `BindReceipt` を併用して、運用 triage と証跡確認を分離します。
 
+
+## 判断ソース間の制限的優先順位
+
+VERITAS では、複数の判断ソースが食い違う場合、**より制限的な判断が優先されます**。
+あるコンポーネントの permissive decision（許可的判断）は、別コンポーネントの restrictive decision（制限的判断）を上書きできません。
+特に、FUJI が `deny` / `rejected` / `block` 相当の判断を返した場合、downstream bind/commit systems はそれを advisory（参考情報）として扱ってはなりません。
+
+| 優先度 | 意味 | 代表的な語彙 | bind/commit での扱い |
+|---|---|---|---|
+| 3 | 拒否 / 実行ブロック | `deny`, `rejected`, `block` | commit 不可（block） |
+| 2 | 保留 / 人間レビュー・エスカレーション必須 | `hold`, `review`, `escalate`, `human_review_required` | silent allow 禁止（escalate / review） |
+| 1 | 許可 / 実行可能候補 | `allow`, `approved`, `approve`, `proceed` | 他に制限的判断がない場合のみ bind 候補 |
+
+実効判断は、gate、policy、business、FUJI、bind-time checks の全体から最も制限的な判断として解決されます。
+そのため、`gate_decision=allow` や `business_decision=APPROVE` が存在しても、FUJI 側に `rejected` / `deny` があれば、bind/commit は fail-closed で停止します。
+未知または malformed な判断文字列も、実行境界では安全側（block）に倒す必要があります。
+
 ## 実装上の確認ポイント
 - `/v1/decide` とガバナンス mutation API の bind 公開フィールドが整合しているか。
 - `/v1/governance/bind-receipts`（list/export/detail）で `BindReceipt` を再取得できるか。
