@@ -360,6 +360,11 @@ _MIRROR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
     "local": frozenset(),
 }
 
+REQUIRED_STRICT_MIRROR_CAPABILITIES = frozenset({
+    BackendCapability.IMMUTABLE_RETENTION,
+    BackendCapability.FAIL_CLOSED,
+})
+
 _ANCHOR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
     "local": frozenset({
         BackendCapability.TRANSPARENCY_ANCHORING,
@@ -422,32 +427,49 @@ def _trustlog_anchor_backend() -> str:
     )
 
 
+def _format_capabilities(capabilities: frozenset[BackendCapability]) -> str:
+    """Return a stable, non-secret capability list for diagnostics."""
+    return ", ".join(
+        capability.value
+        for capability in sorted(capabilities, key=lambda item: item.value)
+    )
+
+
 def _trustlog_immutable_retention_required_message(
     *,
     posture: PostureLevel,
     mirror_backend: str,
+    missing_capabilities: frozenset[BackendCapability],
+    required_capabilities: frozenset[BackendCapability],
 ) -> str:
-    """Build the strict-posture TrustLog immutable-retention refusal message.
+    """Build the strict-posture TrustLog mirror capability refusal message.
 
     The message intentionally includes only non-secret backend metadata and
     environment variable names so operators receive actionable remediation
     without leaking bucket names, paths, credentials, or raw connection strings.
     """
+    missing_text = _format_capabilities(missing_capabilities)
+    required_text = _format_capabilities(required_capabilities)
+    missing_label = (
+        "missing capability"
+        if len(missing_capabilities) == 1
+        else "missing capabilities"
+    )
     details = (
         f"{TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING}: Startup refused "
         f"fail-closed: posture={posture.value} requires TrustLog "
-        "immutable retention. "
+        "immutable retention and fail-closed mirror behavior. "
         f"Selected TrustLog mirror backend={mirror_backend!r} does not "
-        "advertise required capability 'immutable_retention' "
-        "(missing capability: immutable_retention; required capability: "
-        "immutable_retention). "
+        "advertise required strict-posture mirror capabilities "
+        f"({missing_label}: {missing_text}; required capabilities: "
+        f"{required_text}). "
     )
     if mirror_backend == "local":
         details += (
             "Local WORM mirror does not satisfy secure/prod immutable "
             "retention requirements unless the existing backend contract "
             "explicitly registers it as compliant by advertising "
-            "'immutable_retention'. "
+            "'immutable_retention' and 'fail_closed'. "
         )
     elif mirror_backend not in _MIRROR_CAPABILITIES:
         known_backends = ", ".join(sorted(_MIRROR_CAPABILITIES))
@@ -607,11 +629,14 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     mirror_caps = mirror_capabilities(mirror_backend)
 
     if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
-        if BackendCapability.IMMUTABLE_RETENTION not in mirror_caps:
+        missing_mirror_caps = REQUIRED_STRICT_MIRROR_CAPABILITIES - mirror_caps
+        if missing_mirror_caps:
             errors.append(
                 _trustlog_immutable_retention_required_message(
                     posture=defaults.posture,
                     mirror_backend=mirror_backend,
+                    missing_capabilities=missing_mirror_caps,
+                    required_capabilities=REQUIRED_STRICT_MIRROR_CAPABILITIES,
                 )
             )
     elif mirror_backend not in _MIRROR_CAPABILITIES:

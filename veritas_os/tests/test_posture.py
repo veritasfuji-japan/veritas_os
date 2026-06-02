@@ -1227,8 +1227,8 @@ class TestCapabilityAwareRefusalMessages:
         assert "posture=prod" in mirror_error
         assert "backend='local'" in mirror_error
         assert "does not advertise" in mirror_error
-        assert "missing capability: immutable_retention" in mirror_error
-        assert "required capability: immutable_retention" in mirror_error
+        assert "missing capabilities: fail_closed, immutable_retention" in mirror_error
+        assert "required capabilities: fail_closed, immutable_retention" in mirror_error
         assert "Local WORM mirror does not satisfy secure/prod" in mirror_error
         assert "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock" in mirror_error
         assert "VERITAS_TRUSTLOG_S3_BUCKET" in mirror_error
@@ -1253,10 +1253,35 @@ class TestCapabilityAwareRefusalMessages:
         mirror_error = next(e for e in errors if "immutable_retention" in e)
 
         assert "Selected TrustLog mirror backend='custom_worm'" in mirror_error
-        assert "missing capability: immutable_retention" in mirror_error
+        assert "missing capabilities: fail_closed, immutable_retention" in mirror_error
         assert "Known TrustLog mirror backends: local, s3_object_lock" in mirror_error
         assert "Local WORM mirror does not satisfy secure/prod" not in mirror_error
         assert "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock" in mirror_error
+
+    def test_immutable_only_mirror_backend_fails_without_fail_closed(
+        self,
+        monkeypatch,
+    ):
+        """Strict mirror validation requires fail_closed separately."""
+        from veritas_os.core.posture import BackendCapability, _MIRROR_CAPABILITIES
+
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setitem(_MIRROR_CAPABILITIES, "immutable_only", frozenset({
+            BackendCapability.IMMUTABLE_RETENTION,
+        }))
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "immutable_only")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:key")
+
+        errors = validate_posture_startup(derive_defaults(PostureLevel.PROD))
+        mirror_error = next(e for e in errors if "Selected TrustLog mirror" in e)
+
+        assert "Selected TrustLog mirror backend='immutable_only'" in mirror_error
+        assert "missing capability: fail_closed" in mirror_error
+        assert "required capabilities: fail_closed, immutable_retention" in mirror_error
+        assert "missing capability: immutable_retention" not in mirror_error
+        assert "Local WORM mirror does not satisfy secure/prod" not in mirror_error
 
     def test_unknown_mirror_backend_hint_does_not_echo_sensitive_values(
         self,
@@ -1373,6 +1398,7 @@ class TestCapabilityAwareRefusalMessages:
         # No capability errors for signer or mirror
         assert not any("managed_signing" in e for e in errors)
         assert not any("immutable_retention" in e for e in errors)
+        assert not any("fail_closed" in e for e in errors)
 
 
 class TestBindAdjudicationProductionPosture:
