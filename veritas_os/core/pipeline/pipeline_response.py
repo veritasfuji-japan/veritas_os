@@ -21,12 +21,15 @@ from .pipeline_types import PipelineContext
 from .pipeline_evidence import _norm_evidence_item, _dedupe_evidence
 from .pipeline_helpers import _warn
 from veritas_os.core.decision_semantics import (
+    STOP_REASON_GATE_PRIORITY,
+    STOP_REASONS_REQUIRING_HUMAN_REVIEW,
     build_required_evidence_profile,
     canonicalize_public_gate_decision,
     derive_gate_decision_from_stop_reasons,
     get_required_evidence_profiles,
     normalize_required_evidence_keys_with_diagnostics,
     normalize_required_evidence_keys,
+    resolve_decision_precedence,
     unique_preserve_order,
     validate_gate_business_combination,
 )
@@ -40,6 +43,22 @@ from veritas_os.core.lineage_transition_refusal import (
 from veritas_os.observability.metrics import record_required_evidence_telemetry
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_CONTEXT_STOP_REASONS = frozenset(
+    {
+        reason
+        for reason_group, _gate_decision in STOP_REASON_GATE_PRIORITY
+        for reason in reason_group
+    }
+    | set(STOP_REASONS_REQUIRING_HUMAN_REVIEW)
+    | {
+        "sanctions_partial_match",
+        "unknown_required_evidence_key",
+        "required_evidence_profile_miss",
+        "escalation_sensitive_evidence_missing",
+    }
+)
+MAX_CONTEXT_STOP_REASON_LENGTH = 80
 
 # Top-level /v1/decide response groups.
 # These constants document the payload layering without changing runtime behavior.
@@ -273,35 +292,66 @@ def _rank_action_candidates(
     - Value Core aggregate score (`value_total`).
     """
     if gate_decision == "block":
-        candidates = [
-            _make_action_candidate(
-                action="DO_NOT_EXECUTE",
-                expected_value=0.78,
-                risk_reduction=0.98,
-                cost=0.05,
-                dependency=0.02,
-                urgency=0.97,
-                reason="FUJI gate is BLOCK; safest high-value action is to halt execution.",
-            ),
-            _make_action_candidate(
-                action="ESCALATE_POLICY_EXCEPTION_REVIEW",
-                expected_value=0.52,
-                risk_reduction=0.75,
-                cost=0.34,
-                dependency=0.65,
-                urgency=0.84,
-                reason="Policy exception path may recover value but needs human/process dependencies.",
-            ),
-            _make_action_candidate(
-                action="COLLECT_REQUIRED_EVIDENCE",
-                expected_value=0.40,
-                risk_reduction=0.62,
-                cost=0.46,
-                dependency=0.48,
-                urgency=0.70,
-                reason="Additional evidence can support later re-assessment without executing now.",
-            ),
-        ]
+        if business_decision == "EVIDENCE_REQUIRED" and missing_evidence:
+            candidates = [
+                _make_action_candidate(
+                    action="COLLECT_REQUIRED_EVIDENCE",
+                    expected_value=0.96,
+                    risk_reduction=0.99,
+                    cost=0.02,
+                    dependency=0.02,
+                    urgency=0.98,
+                    reason="Collect missing evidence before any later blocked-path re-assessment.",
+                ),
+                _make_action_candidate(
+                    action="DO_NOT_EXECUTE",
+                    expected_value=0.78,
+                    risk_reduction=0.98,
+                    cost=0.05,
+                    dependency=0.02,
+                    urgency=0.97,
+                    reason="FUJI gate is BLOCK; execution remains halted while evidence is collected.",
+                ),
+                _make_action_candidate(
+                    action="ESCALATE_POLICY_EXCEPTION_REVIEW",
+                    expected_value=0.52,
+                    risk_reduction=0.75,
+                    cost=0.34,
+                    dependency=0.65,
+                    urgency=0.84,
+                    reason="Policy exception path may recover value but needs human/process dependencies.",
+                ),
+            ]
+        else:
+            candidates = [
+                _make_action_candidate(
+                    action="DO_NOT_EXECUTE",
+                    expected_value=0.78,
+                    risk_reduction=0.98,
+                    cost=0.05,
+                    dependency=0.02,
+                    urgency=0.97,
+                    reason="FUJI gate is BLOCK; safest high-value action is to halt execution.",
+                ),
+                _make_action_candidate(
+                    action="ESCALATE_POLICY_EXCEPTION_REVIEW",
+                    expected_value=0.52,
+                    risk_reduction=0.75,
+                    cost=0.34,
+                    dependency=0.65,
+                    urgency=0.84,
+                    reason="Policy exception path may recover value but needs human/process dependencies.",
+                ),
+                _make_action_candidate(
+                    action="COLLECT_REQUIRED_EVIDENCE",
+                    expected_value=0.40,
+                    risk_reduction=0.62,
+                    cost=0.46,
+                    dependency=0.48,
+                    urgency=0.70,
+                    reason="Additional evidence can support later re-assessment without executing now.",
+                ),
+            ]
     elif business_decision == "REVIEW_REQUIRED":
         candidates = [
             _make_action_candidate(
@@ -489,6 +539,18 @@ def _is_falsey_flag(value: Any) -> bool:
     return False
 
 
+def _is_allowed_context_stop_reason(value: object) -> bool:
+    """Return whether a user-supplied stop reason is safe to echo.
+
+    Context stop reasons can originate from request normalization, so only known
+    bounded tokens may be promoted into rationale or ranking traces.
+    """
+    token = str(value).strip().lower()
+    if not token or len(token) > MAX_CONTEXT_STOP_REASON_LENGTH:
+        return False
+    return token in ALLOWED_CONTEXT_STOP_REASONS
+
+
 def _extract_stop_reasons(
     *,
     gate_reason: str,
@@ -527,6 +589,9 @@ def _extract_stop_reasons(
         reasons.append("high_risk_ambiguity")
     if bool(context.get("sanctions_partial_match")):
         reasons.append("sanctions_partial_match")
+    for reason in _as_string_list(context.get("stop_reasons")):
+        if _is_allowed_context_stop_reason(reason):
+            reasons.append(reason)
 
     return reasons
 
@@ -600,6 +665,35 @@ def _resolve_required_evidence_mode(context: Dict[str, Any], decision_domain: st
     return mode
 
 
+def _is_supplied_decision_value(value: object) -> bool:
+    """Return whether a decision-like value was explicitly supplied."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() not in {"", "none", "null"}
+    return True
+
+
+def _business_decision_requires_review(value: object) -> bool:
+    """Return whether an explicit business decision requests review."""
+    if not _is_supplied_decision_value(value):
+        return False
+    return str(value).strip().upper() in {"REVIEW", "REVIEW_REQUIRED", "ESCALATE"}
+
+
+def _decision_value_requires_review(value: object) -> bool:
+    """Return whether a supplied decision-like value explicitly requires review."""
+    if not _is_supplied_decision_value(value):
+        return False
+    return str(value).strip().lower() in {
+        "human_review_required",
+        "needs_human_review",
+        "review_required",
+        "review",
+        "escalate",
+    }
+
+
 def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     """Derive public decision semantics from internal gate outputs.
 
@@ -669,14 +763,21 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     satisfied_canonical = set(satisfied_evidence)
     missing_evidence = [item for item in required_evidence if item not in satisfied_canonical]
 
-    fuji_status = str(ctx.fuji_dict.get("status") or "").lower()
     try:
         risk_score = float(ctx.context.get("risk_score", ctx.fuji_dict.get("risk", 0.0)) or 0.0)
     except (TypeError, ValueError):
         risk_score = 0.0
     human_review_required = bool(
         ctx.context.get("human_review_required")
-        or fuji_status == "needs_human_review"
+        or any(
+            _decision_value_requires_review(value)
+            for value in (
+                raw_gate_decision,
+                ctx.fuji_dict.get("status"),
+                ctx.fuji_dict.get("decision_status"),
+                ctx.decision_status,
+            )
+        )
     )
     stop_reasons = _extract_stop_reasons(
         gate_reason=gate_reason,
@@ -713,12 +814,44 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         risk_score=risk_score,
         human_review_required=human_review_required,
     )
-    gate_decision = canonicalize_public_gate_decision(gate_decision)
+    explicit_business_decision = ctx.context.get("business_decision")
+    explicit_business_supplied = _is_supplied_decision_value(explicit_business_decision)
+    explicit_business_requires_review = _business_decision_requires_review(
+        explicit_business_decision
+    )
+    derived_gate_requires_review = gate_decision == "human_review_required"
+    decision_values = [gate_decision]
+    if explicit_business_supplied:
+        decision_values.append(explicit_business_decision)
+    resolved_gate_decision = canonicalize_public_gate_decision(
+        resolve_decision_precedence(
+            *decision_values,
+            output="gate",
+        )
+    )
+    if resolved_gate_decision == "block":
+        gate_decision = "block"
+    elif resolved_gate_decision == "hold":
+        if explicit_business_requires_review:
+            gate_decision = "human_review_required"
+            human_review_required = True
+        else:
+            gate_decision = "human_review_required" if derived_gate_requires_review else "hold"
+    elif human_review_required or derived_gate_requires_review:
+        gate_decision = "human_review_required"
+    else:
+        gate_decision = resolved_gate_decision
 
-    if missing_evidence:
+    if gate_decision == "block" and explicit_business_requires_review:
+        business_decision = "DENY"
+    elif gate_decision == "block" and missing_evidence:
         business_decision = "EVIDENCE_REQUIRED"
     elif gate_decision == "block":
         business_decision = "DENY"
+    elif explicit_business_requires_review:
+        business_decision = "REVIEW_REQUIRED"
+    elif missing_evidence:
+        business_decision = "EVIDENCE_REQUIRED"
     elif gate_decision == "human_review_required":
         business_decision = "REVIEW_REQUIRED"
     elif gate_decision == "hold":

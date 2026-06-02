@@ -223,8 +223,8 @@ def test_public_response_prefers_canonical_gate_decision() -> None:
     assert payload["gate_decision"] == "proceed"
 
 
-def test_public_response_avoids_unknown_in_normal_runtime_path() -> None:
-    """Unknown FUJI status should still resolve into canonical public gate decision."""
+def test_public_response_fails_closed_on_unknown_decision() -> None:
+    """Unknown FUJI status should fail closed to canonical block."""
     ctx = PipelineContext(
         request_id="req-gate-unknown-normalized",
         query="test unknown gate",
@@ -237,7 +237,7 @@ def test_public_response_avoids_unknown_in_normal_runtime_path() -> None:
         load_persona_fn=lambda: {},
         plan={"steps": [], "source": "test"},
     )
-    assert payload["gate_decision"] == "proceed"
+    assert payload["gate_decision"] == "block"
 
 
 def test_backward_compat_decision_status_stays_legacy_field() -> None:

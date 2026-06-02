@@ -412,3 +412,48 @@ def test_source_of_funds_missing_never_approves() -> None:
     assert payload["required_evidence"] == ["kyc_profile", "source_of_funds_record"]
     assert payload["missing_evidence"] == ["source_of_funds_record"]
     assert payload["business_decision"] != "APPROVE"
+
+
+def test_context_stop_reasons_are_allowlisted_before_echo() -> None:
+    """User-supplied stop reasons must be known bounded tokens before echo."""
+    malicious_reason = "<script>alert('stop')</script>"
+    long_reason = "x" * 200
+    ctx = PipelineContext(
+        request_id="req-stop-reason-allowlist",
+        query="boundary conditions for this case",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "stop_reasons": [
+                "approval_boundary_unknown",
+                malicious_reason,
+                long_reason,
+                "unsupported_custom_reason",
+            ],
+            "dev_mode": True,
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    ranking_reasons = payload["action_selection"]["ranking_trace"]["stop_reasons"]
+    structured_reasons = payload["structured_answer"]["boundary_conditions"][
+        "stop_reasons"
+    ]
+    assert "approval_boundary_unknown" in payload["rationale"]
+    assert "approval_boundary_unknown" in ranking_reasons
+    assert "approval_boundary_unknown" in structured_reasons
+    assert malicious_reason not in payload["rationale"]
+    assert long_reason not in payload["rationale"]
+    assert "unsupported_custom_reason" not in payload["rationale"]
+    assert malicious_reason not in ranking_reasons
+    assert long_reason not in ranking_reasons
+    assert "unsupported_custom_reason" not in ranking_reasons
+    assert malicious_reason not in structured_reasons
+    assert long_reason not in structured_reasons
+    assert "unsupported_custom_reason" not in structured_reasons
