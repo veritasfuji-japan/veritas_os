@@ -45,6 +45,20 @@ PostgreSQL を本番で運用する際の確認観点を、日本語で短く整
   - `VERITAS_TRUSTLOG_MIRROR_BACKEND` が未知値（warning には正規化された backend 値を含む）
 - 注: `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` は、この production posture checker では考慮されません。本番姿勢チェックでは `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms` を要求し、`file` / `local` / `noop` / 未設定の signer は、break-glass フラグがあっても failure になります。
 
+## TrustLog immutable retention の startup 拒否
+
+`secure`/`prod` 姿勢では、選択された TrustLog mirror backend が
+`immutable_retention` capability を宣言していない場合、startup は
+fail-closed で拒否されます。S3 Object Lock 対応 mirror を使うには、
+`VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock`、
+`VERITAS_TRUSTLOG_S3_BUCKET`、`VERITAS_TRUSTLOG_S3_PREFIX` を設定し、
+保持ポリシーに応じて `VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` と
+`VERITAS_TRUSTLOG_S3_RETENTION_DAYS` を設定してください。local WORM mirror
+は local/dev または二次 mirror 用であり、既存の backend contract が
+`immutable_retention` を明示的に登録していない限り、本番 immutable
+retention の代替にはなりません。`VERITAS_POSTURE` を下げるのは、既存
+ポリシーで許可された非本番/local 開発に限定してください。
+
 ## 現時点の制限
 - ここで示す内容は一般指針で、各環境のHA/DR要件を代替しません。
 - 本番適用前に監査設計・鍵管理・アクセス統制を追加してください。
