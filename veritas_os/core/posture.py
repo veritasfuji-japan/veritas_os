@@ -360,6 +360,15 @@ _MIRROR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
     "local": frozenset(),
 }
 
+_STRICT_MIRROR_CAPABILITIES = frozenset({
+    BackendCapability.IMMUTABLE_RETENTION,
+    BackendCapability.FAIL_CLOSED,
+})
+_STRICT_MIRROR_CAPABILITY_ORDER = (
+    BackendCapability.IMMUTABLE_RETENTION,
+    BackendCapability.FAIL_CLOSED,
+)
+
 _ANCHOR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
     "local": frozenset({
         BackendCapability.TRANSPARENCY_ANCHORING,
@@ -391,6 +400,7 @@ def anchor_capabilities(backend_name: str) -> frozenset[BackendCapability]:
 # ── Startup validation ──────────────────────────────────────────────────
 
 TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING = "TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING"
+TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING = "TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING"
 
 
 class PostureStartupError(RuntimeError):
@@ -422,32 +432,53 @@ def _trustlog_anchor_backend() -> str:
     )
 
 
-def _trustlog_immutable_retention_required_message(
+def _format_mirror_capabilities(
+    capabilities: frozenset[BackendCapability],
+) -> str:
+    """Return TrustLog mirror capabilities in stable operator-facing order."""
+    ordered = [
+        capability.value
+        for capability in _STRICT_MIRROR_CAPABILITY_ORDER
+        if capability in capabilities
+    ]
+    extras = sorted(
+        capability.value
+        for capability in capabilities
+        if capability not in _STRICT_MIRROR_CAPABILITY_ORDER
+    )
+    return ", ".join(ordered + extras)
+
+
+def _trustlog_strict_mirror_capabilities_required_message(
     *,
     posture: PostureLevel,
     mirror_backend: str,
+    missing_capabilities: frozenset[BackendCapability],
 ) -> str:
-    """Build the strict-posture TrustLog immutable-retention refusal message.
+    """Build the strict-posture TrustLog mirror capability refusal message.
 
-    The message intentionally includes only non-secret backend metadata and
-    environment variable names so operators receive actionable remediation
-    without leaking bucket names, paths, credentials, or raw connection strings.
+    The message intentionally includes only non-secret backend metadata,
+    capability names, and environment variable names so operators receive
+    actionable remediation without leaking bucket names, paths, credentials,
+    or raw connection strings.
     """
+    missing = _format_mirror_capabilities(missing_capabilities)
+    required = _format_mirror_capabilities(_STRICT_MIRROR_CAPABILITIES)
     details = (
-        f"{TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING}: Startup refused "
-        f"fail-closed: posture={posture.value} requires TrustLog "
-        "immutable retention. "
+        f"{TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING}: Startup refused "
+        f"fail-closed: posture={posture.value} requires TrustLog strict "
+        "mirror capabilities. "
         f"Selected TrustLog mirror backend={mirror_backend!r} does not "
-        "advertise required capability 'immutable_retention' "
-        "(missing capability: immutable_retention; required capability: "
-        "immutable_retention). "
+        "advertise the required strict capability set "
+        f"(missing capabilities: {missing}; required capabilities: "
+        f"{required}). "
     )
     if mirror_backend == "local":
         details += (
             "Local WORM mirror does not satisfy secure/prod immutable "
             "retention requirements unless the existing backend contract "
-            "explicitly registers it as compliant by advertising "
-            "'immutable_retention'. "
+            "explicitly registers it as compliant by advertising the full "
+            "strict capability set. "
         )
     elif mirror_backend not in _MIRROR_CAPABILITIES:
         known_backends = ", ".join(sorted(_MIRROR_CAPABILITIES))
@@ -607,11 +638,13 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     mirror_caps = mirror_capabilities(mirror_backend)
 
     if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
-        if BackendCapability.IMMUTABLE_RETENTION not in mirror_caps:
+        missing_mirror_caps = _STRICT_MIRROR_CAPABILITIES - mirror_caps
+        if missing_mirror_caps:
             errors.append(
-                _trustlog_immutable_retention_required_message(
+                _trustlog_strict_mirror_capabilities_required_message(
                     posture=defaults.posture,
                     mirror_backend=mirror_backend,
+                    missing_capabilities=missing_mirror_caps,
                 )
             )
     elif mirror_backend not in _MIRROR_CAPABILITIES:
