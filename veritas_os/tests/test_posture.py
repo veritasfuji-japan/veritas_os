@@ -1237,6 +1237,31 @@ class TestCapabilityAwareRefusalMessages:
         assert "local WORM mirror satisfies" not in mirror_error.lower()
         assert "local WORM mirror is sufficient" not in mirror_error.lower()
 
+    def test_custom_mirror_error_does_not_include_local_worm_warning(
+        self,
+        monkeypatch,
+    ):
+        """Custom incapable mirror refusal names selected backend accurately."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "custom_worm")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:key")
+
+        errors = validate_posture_startup(derive_defaults(PostureLevel.PROD))
+        mirror_error = next(e for e in errors if "immutable_retention" in e)
+
+        assert TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING in mirror_error
+        assert "backend='custom_worm'" in mirror_error
+        assert "Selected backend 'custom_worm' does not satisfy" in mirror_error
+        assert "missing capability: immutable_retention" in mirror_error
+        assert "Local WORM mirror does not satisfy" not in mirror_error
+        assert "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock" in mirror_error
+        assert "VERITAS_TRUSTLOG_S3_BUCKET" in mirror_error
+        assert "VERITAS_TRUSTLOG_S3_PREFIX" in mirror_error
+        assert "VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE" in mirror_error
+        assert "VERITAS_TRUSTLOG_S3_RETENTION_DAYS" in mirror_error
+
     def test_secure_missing_immutable_retention_startup_error_is_fail_closed(
         self,
         monkeypatch,

@@ -435,6 +435,20 @@ def _trustlog_immutable_retention_required_message(
     environment variable names so operators receive actionable remediation
     without leaking bucket names, paths, credentials, or raw connection strings.
     """
+    if mirror_backend == "local":
+        backend_warning = (
+            "Local WORM mirror does not satisfy secure/prod immutable "
+            "retention requirements unless the existing backend contract "
+            "explicitly registers it as compliant by advertising "
+            "'immutable_retention'."
+        )
+    else:
+        backend_warning = (
+            f"Selected backend {mirror_backend!r} does not satisfy "
+            "secure/prod immutable retention requirements because it does "
+            "not advertise 'immutable_retention'."
+        )
+
     return (
         f"{TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING}: Startup refused "
         f"fail-closed: posture={posture.value} requires TrustLog "
@@ -442,11 +456,8 @@ def _trustlog_immutable_retention_required_message(
         f"Selected TrustLog mirror backend={mirror_backend!r} does not "
         "advertise required capability 'immutable_retention' "
         "(missing capability: immutable_retention; required capability: "
-        "immutable_retention). Local WORM mirror does not satisfy secure/prod "
-        "immutable retention requirements unless the existing backend contract "
-        "explicitly registers it as compliant by advertising "
-        "'immutable_retention'. Remediation: configure the S3 Object Lock "
-        "capable TrustLog mirror with "
+        f"immutable_retention). {backend_warning} Remediation: configure "
+        "the S3 Object Lock capable TrustLog mirror with "
         "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock and set "
         "VERITAS_TRUSTLOG_S3_BUCKET and VERITAS_TRUSTLOG_S3_PREFIX; set "
         "VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE and "
