@@ -568,6 +568,21 @@ VERITAS OS は単一の**ランタイムポスチャ**（`VERITAS_POSTURE`）で
 - `VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop` かつ `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1`
 - `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` 未設定（アンカーバックエンドが `local` かつTransparency必須時）
 
+### TrustLog strict mirror capabilities（secure/prod）
+
+`secure` / `prod` posture では、TrustLog mirror backend が
+`immutable_retention` と `fail_closed` の両方を宣言する必要があります。
+現時点でこの strict capability set を満たす本番サポート backend は
+`s3_object_lock` です。設定する場合は
+`VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock`、
+`VERITAS_TRUSTLOG_S3_BUCKET`、`VERITAS_TRUSTLOG_S3_PREFIX`、
+`VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE`、
+`VERITAS_TRUSTLOG_S3_RETENTION_DAYS` を使用してください。local WORM mirror
+は local/dev または二次 mirror 用であり、完全な strict capability set
+を明示的に宣言しない限り本番代替にはなりません。`VERITAS_POSTURE`
+を下げるのは、既存ポリシーで許可された非本番/local 開発に限定して
+ください。
+
 ### エスケープハッチ（secureポスチャのみ）
 
 `secure`ポスチャでは、本番前テスト用に個別制御を無効化できます:
@@ -1679,7 +1694,7 @@ make validate
 - 既存デプロイは変更なしで動作します。`VERITAS_TRUSTLOG_MIRROR_BACKEND` はデフォルト `local` で、`VERITAS_TRUSTLOG_WORM_MIRROR_PATH` の動作を維持します。
 - S3 Object Lockに移行するには、`VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` を設定し、最低限 `VERITAS_TRUSTLOG_S3_BUCKET`（任意でprefix/region/retention設定）を指定してください。
 - `VERITAS_TRUSTLOG_WORM_HARD_FAIL` のセマンティクスは変更なく、両バックエンドに適用されます。
-- `secure`/`prod` では、起動時バリデーションが `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` と `VERITAS_TRUSTLOG_S3_BUCKET` / `VERITAS_TRUSTLOG_S3_PREFIX` の両方を要求します。
+- `secure`/`prod` では、起動時バリデーションが `immutable_retention` と `fail_closed` の両方を持つ mirror backend を要求します。現在の実装では `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` と `VERITAS_TRUSTLOG_S3_BUCKET` / `VERITAS_TRUSTLOG_S3_PREFIX` の設定が必要です。
 
 #### TrustLogミラー検証モード
 

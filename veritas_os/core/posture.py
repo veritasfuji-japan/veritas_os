@@ -390,6 +390,9 @@ def anchor_capabilities(backend_name: str) -> frozenset[BackendCapability]:
 
 # ── Startup validation ──────────────────────────────────────────────────
 
+TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING = "TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING"
+
+
 class PostureStartupError(RuntimeError):
     """Raised when the active posture detects a fatal misconfiguration."""
 
@@ -416,6 +419,49 @@ def _trustlog_anchor_backend() -> str:
     """Return normalized TrustLog anchor backend name."""
     return normalize_trustlog_anchor_backend(
         os.getenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND")
+    )
+
+
+def _trustlog_immutable_retention_required_message(
+    *,
+    posture: PostureLevel,
+    mirror_backend: str,
+) -> str:
+    """Build the strict-posture TrustLog immutable-retention refusal message.
+
+    The message intentionally includes only non-secret backend metadata and
+    environment variable names so operators receive actionable remediation
+    without leaking bucket names, paths, credentials, or raw connection strings.
+    """
+    details = (
+        f"{TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING}: Startup refused "
+        f"fail-closed: posture={posture.value} requires TrustLog "
+        "immutable retention. "
+        f"Selected TrustLog mirror backend={mirror_backend!r} does not "
+        "advertise required capability 'immutable_retention' "
+        "(missing capability: immutable_retention; required capability: "
+        "immutable_retention). "
+    )
+    if mirror_backend == "local":
+        details += (
+            "Local WORM mirror does not satisfy secure/prod immutable "
+            "retention requirements unless the existing backend contract "
+            "explicitly registers it as compliant by advertising "
+            "'immutable_retention'. "
+        )
+    elif mirror_backend not in _MIRROR_CAPABILITIES:
+        known_backends = ", ".join(sorted(_MIRROR_CAPABILITIES))
+        details += f"Known TrustLog mirror backends: {known_backends}. "
+
+    return (
+        details
+        + "Remediation: configure the S3 Object Lock capable TrustLog mirror "
+        "with VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock and set "
+        "VERITAS_TRUSTLOG_S3_BUCKET and VERITAS_TRUSTLOG_S3_PREFIX; set "
+        "VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE and "
+        "VERITAS_TRUSTLOG_S3_RETENTION_DAYS as required by your retention "
+        "policy; or lower VERITAS_POSTURE only for non-production/local "
+        "development if existing policy allows it."
     )
 
 
@@ -563,11 +609,10 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
         if BackendCapability.IMMUTABLE_RETENTION not in mirror_caps:
             errors.append(
-                f"TrustLog mirror backend {mirror_backend!r} does not provide "
-                "the 'immutable_retention' capability required in "
-                f"{defaults.posture.value} posture. "
-                "Configure a mirror with immutable retention support "
-                "(e.g. VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock)."
+                _trustlog_immutable_retention_required_message(
+                    posture=defaults.posture,
+                    mirror_backend=mirror_backend,
+                )
             )
     elif mirror_backend not in _MIRROR_CAPABILITIES:
         errors.append(
