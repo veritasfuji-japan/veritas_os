@@ -399,7 +399,6 @@ def anchor_capabilities(backend_name: str) -> frozenset[BackendCapability]:
 
 # ── Startup validation ──────────────────────────────────────────────────
 
-TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING = "TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING"
 TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING = "TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING"
 
 

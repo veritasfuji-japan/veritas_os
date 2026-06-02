@@ -20,7 +20,6 @@ import pytest
 
 from veritas_os.core.posture import (
     TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING,
-    TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING,
     PostureDefaults,
     PostureLevel,
     PostureStartupError,
@@ -1289,7 +1288,6 @@ class TestCapabilityAwareRefusalMessages:
         mirror_error = next(e for e in errors if "strict mirror" in e)
 
         assert TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING in mirror_error
-        assert TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING not in mirror_error
         assert "Selected TrustLog mirror backend='immutable_only'" in mirror_error
         assert "missing capabilities: fail_closed" in mirror_error
         assert "missing capabilities: immutable_retention" not in mirror_error
@@ -1371,7 +1369,6 @@ class TestCapabilityAwareRefusalMessages:
         errors = validate_posture_startup(derive_defaults(PostureLevel.DEV))
 
         assert not any(TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING in e for e in errors)
-        assert not any(TRUSTLOG_WORM_IMMUTABLE_RETENTION_MISSING in e for e in errors)
         assert not any("Startup refused fail-closed" in e for e in errors)
         assert not any("immutable_retention" in e for e in errors)
 
