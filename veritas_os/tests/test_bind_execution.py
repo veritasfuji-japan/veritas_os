@@ -560,7 +560,9 @@ def test_bind_execution_fuji_rejected_decision_is_not_advisory() -> None:
     assert receipt.final_outcome is FinalOutcome.BLOCKED
     assert adapter.state["version"] == 1
     assert receipt.admissibility_result["effective_decision"] == "block"
-    assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in receipt.admissibility_result["reason_codes"]
+    assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in (
+        receipt.admissibility_result["reason_codes"]
+    )
 
 
 def test_bind_execution_hold_decision_requires_review_not_commit() -> None:
@@ -582,7 +584,9 @@ def test_bind_execution_hold_decision_requires_review_not_commit() -> None:
     assert receipt.final_outcome is FinalOutcome.ESCALATED
     assert adapter.state["version"] == 1
     assert receipt.admissibility_result["effective_decision"] == "escalate"
-    assert BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value in receipt.admissibility_result["reason_codes"]
+    assert BindReasonCode.DECISION_PRECEDENCE_ESCALATED.value in (
+        receipt.admissibility_result["reason_codes"]
+    )
 
 
 def test_bind_execution_allow_commits_when_no_stricter_decision_exists() -> None:
@@ -626,6 +630,61 @@ def test_bind_decision_nullish_values_are_absent_not_blocks() -> None:
     assert adapter.state["version"] == 2
 
 
+def test_bind_decision_sources_are_sanitized_and_bounded() -> None:
+    """Receipt decision sources store bounded normalized tokens, not raw input."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    malicious_decision = "maybe\n\r\t" + ("x" * 200)
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "fuji_decision": malicious_decision,
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    decision_sources = receipt.admissibility_result["decision_sources"]
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert adapter.state["version"] == 1
+    assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in (
+        receipt.admissibility_result["reason_codes"]
+    )
+    assert all(len(source) <= 80 for source in decision_sources)
+    assert not any(
+        "\n" in source or "\r" in source or "\t" in source
+        for source in decision_sources
+    )
+    assert malicious_decision not in decision_sources
+
+
+def test_bind_decision_sources_keep_known_sanitized_values() -> None:
+    """Known decision source tokens remain usable after receipt sanitization."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={
+            "decision_semantics": {
+                "gate_decision": "allow",
+                "business_decision": "hold",
+                "fuji_decision": "needs_human_review",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    decision_sources = receipt.admissibility_result["decision_sources"]
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert adapter.state["version"] == 1
+    assert "allow" in decision_sources
+    assert "hold" in decision_sources
+    assert "needs_human_review" in decision_sources
+    assert receipt.admissibility_result["precedence_decision"] == "escalate"
+
+
 @pytest.mark.parametrize("malformed_decision", ["unknown", "maybe"])
 def test_bind_decision_malformed_strings_fail_closed(malformed_decision: str) -> None:
     """Present unsupported decision strings are enforced as fail-closed blocks."""
@@ -644,4 +703,6 @@ def test_bind_decision_malformed_strings_fail_closed(malformed_decision: str) ->
 
     assert receipt.final_outcome is FinalOutcome.BLOCKED
     assert adapter.state["version"] == 1
-    assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in receipt.admissibility_result["reason_codes"]
+    assert BindReasonCode.DECISION_PRECEDENCE_BLOCKED.value in (
+        receipt.admissibility_result["reason_codes"]
+    )

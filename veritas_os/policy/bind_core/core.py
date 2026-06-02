@@ -36,6 +36,9 @@ from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.policy.bind_core.normalizers import normalize_execution_intent
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
+MAX_BIND_DECISION_SOURCE_LENGTH = 80
+_BIND_DECISION_SOURCE_REPLACEMENT = "_"
+
 
 @dataclass(frozen=True)
 class BindExecutionCheckResult:
@@ -602,6 +605,25 @@ def _extract_bind_decision_values(execution_intent: ExecutionIntent) -> list[str
     return values
 
 
+def _sanitize_bind_decision_source(value: object) -> str:
+    """Normalize and bound decision lineage before receipt/audit storage.
+
+    The sanitized token is also used for precedence resolution, so unsupported
+    non-empty values remain unsupported and continue to fail closed.
+    """
+    normalized = normalize_decision(value)
+    sanitized_chars = [
+        char
+        if char.isascii() and (char.isalnum() or char == "_")
+        else _BIND_DECISION_SOURCE_REPLACEMENT
+        for char in normalized
+    ]
+    sanitized = "".join(sanitized_chars).strip("_")
+    while "__" in sanitized:
+        sanitized = sanitized.replace("__", "_")
+    return (sanitized or "unknown")[:MAX_BIND_DECISION_SOURCE_LENGTH]
+
+
 def _collect_decision_values(container: dict[str, Any], values: list[str]) -> None:
     for key in (
         "gate_decision",
@@ -617,7 +639,7 @@ def _collect_decision_values(container: dict[str, Any], values: list[str]) -> No
             continue
         if isinstance(raw_value, str) and raw_value.strip().lower() in {"", "none", "null"}:
             continue
-        values.append(normalize_decision(raw_value))
+        values.append(_sanitize_bind_decision_source(raw_value))
 
 
 def _resolve_regulated_action_context(execution_intent: ExecutionIntent) -> dict[str, Any]:
