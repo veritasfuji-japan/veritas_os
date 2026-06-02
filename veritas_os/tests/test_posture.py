@@ -1235,8 +1235,8 @@ class TestCapabilityAwareRefusalMessages:
         assert "VERITAS_TRUSTLOG_S3_PREFIX" in mirror_error
         assert "VERITAS_POSTURE" in mirror_error
         assert "Known TrustLog mirror backends" not in mirror_error
-        assert "local WORM mirror satisfies" not in mirror_error.lower()
-        assert "local WORM mirror is sufficient" not in mirror_error.lower()
+        assert "local worm mirror satisfies" not in mirror_error.lower()
+        assert "local worm mirror is sufficient" not in mirror_error.lower()
 
     def test_mirror_backend_missing_only_immutable_retention_fails(
         self,
