@@ -668,6 +668,23 @@ Additionally, startup refuses when:
 - `VERITAS_API_SECRET_REF` is not set (external secret manager enforcement)
 - Backend-specific configuration is incomplete (e.g. missing `VERITAS_TRUSTLOG_KMS_KEY_ID` for `aws_kms`, missing S3 bucket/prefix for `s3_object_lock`)
 
+#### TrustLog strict mirror capabilities in secure/prod
+
+In `secure`/`prod` posture, TrustLog startup validation fails closed unless
+the selected mirror backend advertises both `immutable_retention` and
+`fail_closed`. The current backend that advertises this full strict capability
+set is `s3_object_lock`, configured with
+`VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock`,
+`VERITAS_TRUSTLOG_S3_BUCKET`, and `VERITAS_TRUSTLOG_S3_PREFIX` (plus
+`VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` and
+`VERITAS_TRUSTLOG_S3_RETENTION_DAYS` according to the deployment retention
+policy). A local WORM mirror is useful for local/dev or secondary mirror
+workflows, but it is not a substitute for production strict mirror requirements
+unless the existing backend contract explicitly registers it as compliant by
+advertising the full strict capability set: `immutable_retention` and
+`fail_closed`. Lower `VERITAS_POSTURE` only for non-production/local
+development when existing policy allows it.
+
 > **Note:** In `prod` posture, `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD`
 > is unconditionally ignored — there is no break-glass for insecure signers in
 > production.  In `secure` posture this override remains available as an
@@ -1855,7 +1872,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - Existing deployments continue to work with no change because `VERITAS_TRUSTLOG_MIRROR_BACKEND` defaults to `local` and keeps `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` behavior.
 - To migrate to S3 Object Lock, set `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` and provide at minimum `VERITAS_TRUSTLOG_S3_BUCKET` (plus optional prefix/region/retention settings).
 - `VERITAS_TRUSTLOG_WORM_HARD_FAIL` semantics are unchanged and apply to both backends.
-- In `secure`/`prod`, the startup validator requires backends with the `immutable_retention` capability. The current implementation satisfying this is `s3_object_lock`; both `VERITAS_TRUSTLOG_S3_BUCKET` and `VERITAS_TRUSTLOG_S3_PREFIX` must be set.
+- In `secure`/`prod`, the startup validator requires mirror backends with both `immutable_retention` and `fail_closed`. The current implementation satisfying this full strict capability set is `s3_object_lock`; both `VERITAS_TRUSTLOG_S3_BUCKET` and `VERITAS_TRUSTLOG_S3_PREFIX` must be set. If the selected backend is `local`, startup is refused fail-closed because a local WORM mirror does not advertise the full strict capability set and is not a production immutable-retention substitute.
 
 #### TrustLog mirror verification modes
 

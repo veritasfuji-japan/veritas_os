@@ -589,6 +589,21 @@ The core validation logic (`validate_posture_startup`) does **not** need to chan
 | Anchor | `tsa` | `transparency_anchoring`, `fail_closed` |
 | Anchor | `noop` | *(none — dev/staging only)* |
 
+### TrustLog strict mirror capability startup refusal
+
+In `secure`/`prod` posture, startup fails closed when the selected TrustLog
+mirror backend does not advertise both `immutable_retention` and `fail_closed`.
+The actionable remediation is to configure the S3 Object Lock capable mirror
+with `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock`,
+`VERITAS_TRUSTLOG_S3_BUCKET`, and `VERITAS_TRUSTLOG_S3_PREFIX`; set
+`VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` and
+`VERITAS_TRUSTLOG_S3_RETENTION_DAYS` according to the deployment retention
+policy. Lower `VERITAS_POSTURE` only for non-production/local development when
+existing policy allows it. The local WORM mirror remains appropriate for
+local/dev or secondary mirror use, but it is not a substitute for production
+strict mirror requirements unless the backend contract explicitly registers the
+full strict capability set: `immutable_retention` and `fail_closed`.
+
 > **Note:** The current production-supported implementation uses **AWS KMS** for
 > signing and **S3 Object Lock** for mirroring. No new backend implementations
 > were added in this release — only the validation framework was restructured
