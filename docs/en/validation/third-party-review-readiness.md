@@ -41,6 +41,7 @@ Related documentation map:
 
 - [Technical Proof Pack](technical-proof-pack.md)
 - [Validation Evidence Map](validation-evidence-map.md)
+- [Lara / PromptLedger Static Review Response Matrix](lara-promptledger-static-review-response.md)
 
 ---
 
