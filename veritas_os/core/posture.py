@@ -474,10 +474,11 @@ def _trustlog_strict_mirror_capabilities_required_message(
     )
     if mirror_backend == "local":
         details += (
-            "Local WORM mirror does not satisfy secure/prod immutable "
-            "retention requirements unless the existing backend contract "
-            "explicitly registers it as compliant by advertising the full "
-            "strict capability set. "
+            "Local WORM mirror is not secure/prod compliant in this release. "
+            "Secure/prod requires a backend that actually provides and "
+            "advertises the full strict capability set: immutable_retention "
+            "and fail_closed. The current production-supported backend is "
+            "s3_object_lock. "
         )
     elif mirror_backend not in _MIRROR_CAPABILITIES:
         known_backends = ", ".join(sorted(_MIRROR_CAPABILITIES))

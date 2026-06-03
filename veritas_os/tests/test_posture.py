@@ -1229,7 +1229,9 @@ class TestCapabilityAwareRefusalMessages:
         assert "does not advertise" in mirror_error
         assert "missing capabilities: immutable_retention, fail_closed" in mirror_error
         assert "required capabilities: immutable_retention, fail_closed" in mirror_error
-        assert "Local WORM mirror does not satisfy secure/prod" in mirror_error
+        assert "Local WORM mirror is not secure/prod compliant in this release" in mirror_error
+        assert "actually provides and advertises the full strict capability set" in mirror_error
+        assert "current production-supported backend is s3_object_lock" in mirror_error
         assert "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock" in mirror_error
         assert "VERITAS_TRUSTLOG_S3_BUCKET" in mirror_error
         assert "VERITAS_TRUSTLOG_S3_PREFIX" in mirror_error
@@ -1311,7 +1313,7 @@ class TestCapabilityAwareRefusalMessages:
         assert "Known TrustLog mirror backends:" in mirror_error
         assert "local" in mirror_error
         assert "s3_object_lock" in mirror_error
-        assert "Local WORM mirror does not satisfy secure/prod" not in mirror_error
+        assert "Local WORM mirror is not secure/prod compliant" not in mirror_error
         assert "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock" in mirror_error
 
     def test_unknown_mirror_backend_hint_does_not_echo_sensitive_values(

@@ -54,10 +54,11 @@ startup は fail-closed で拒否されます。S3 Object Lock 対応 mirror を
 `VERITAS_TRUSTLOG_S3_BUCKET`、`VERITAS_TRUSTLOG_S3_PREFIX` を設定し、
 保持ポリシーに応じて `VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` と
 `VERITAS_TRUSTLOG_S3_RETENTION_DAYS` を設定してください。local WORM mirror
-は local/dev または二次 mirror 用であり、既存の backend contract が
-完全な strict capability set を明示的に登録していない限り、本番
-immutable retention の代替にはなりません。`VERITAS_POSTURE` を下げる
-のは、既存ポリシーで許可された非本番/local 開発に限定してください。
+はこのリリースでは secure/prod 要件を満たしません。本番相当の posture
+では、`immutable_retention` と `fail_closed` の両方を実際に提供し、かつ
+宣言する backend が必要です。現時点で本番サポートされる backend は
+`s3_object_lock` です。`VERITAS_POSTURE` を下げるのは、既存ポリシーで
+許可された非本番/local 開発に限定してください。
 
 ## 現時点の制限
 - ここで示す内容は一般指針で、各環境のHA/DR要件を代替しません。

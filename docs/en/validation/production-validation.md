@@ -599,10 +599,10 @@ with `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock`,
 `VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` and
 `VERITAS_TRUSTLOG_S3_RETENTION_DAYS` according to the deployment retention
 policy. Lower `VERITAS_POSTURE` only for non-production/local development when
-existing policy allows it. The local WORM mirror remains appropriate for
-local/dev or secondary mirror use, but it is not a substitute for production
-immutable retention unless the backend contract explicitly registers it with
-the full strict capability set.
+existing policy allows it. Local WORM mirror is not secure/prod compliant in
+this release. Production-like postures require a backend that actually provides
+and advertises the full strict capability set (`immutable_retention` and
+`fail_closed`). The current production-supported backend is `s3_object_lock`.
 
 > **Note:** The current production-supported implementation uses **AWS KMS** for
 > signing and **S3 Object Lock** for mirroring. No new backend implementations
