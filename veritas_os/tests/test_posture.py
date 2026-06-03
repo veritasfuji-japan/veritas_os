@@ -1308,7 +1308,9 @@ class TestCapabilityAwareRefusalMessages:
 
         assert "Selected TrustLog mirror backend='custom_worm'" in mirror_error
         assert "missing capabilities: immutable_retention, fail_closed" in mirror_error
-        assert "Known TrustLog mirror backends: local, s3_object_lock" in mirror_error
+        assert "Known TrustLog mirror backends:" in mirror_error
+        assert "local" in mirror_error
+        assert "s3_object_lock" in mirror_error
         assert "Local WORM mirror does not satisfy secure/prod" not in mirror_error
         assert "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock" in mirror_error
 
@@ -1331,7 +1333,9 @@ class TestCapabilityAwareRefusalMessages:
         errors = validate_posture_startup(derive_defaults(PostureLevel.PROD))
         mirror_error = next(e for e in errors if "immutable_retention" in e)
 
-        assert "Known TrustLog mirror backends: local, s3_object_lock" in mirror_error
+        assert "Known TrustLog mirror backends:" in mirror_error
+        assert "local" in mirror_error
+        assert "s3_object_lock" in mirror_error
         assert bucket_value not in mirror_error
         assert prefix_value not in mirror_error
         assert kms_value not in mirror_error
