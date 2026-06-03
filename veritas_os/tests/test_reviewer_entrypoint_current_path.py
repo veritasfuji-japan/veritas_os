@@ -199,4 +199,20 @@ def test_reviewer_entrypoint_includes_release_evidence_path() -> None:
 
 def test_reviewer_entrypoint_numbers_public_positioning_in_10_minute_path() -> None:
     text = _entrypoint_text()
-    assert "10. [Public Positioning]" in text
+    assert "11. [Public Positioning]" in text
+
+
+def test_reviewer_entrypoint_links_lara_promptledger_matrix() -> None:
+    text = _entrypoint_text()
+    matrix_link = (
+        "[Lara / PromptLedger Static Review Response Matrix]"
+        "(en/validation/lara-promptledger-static-review-response.md)"
+    )
+    ten_minute_path = text.split("## 30-minute technical review path", 1)[0]
+    thirty_minute_path = text.split("## 30-minute technical review path", 1)[1]
+
+    assert f"4. {matrix_link} — reviewer-facing map" in ten_minute_path
+    assert f"4. {matrix_link}" in thirty_minute_path
+
+    targets = set(_markdown_link_targets())
+    assert "en/validation/lara-promptledger-static-review-response.md" in targets

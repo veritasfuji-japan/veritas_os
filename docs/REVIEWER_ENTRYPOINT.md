@@ -13,32 +13,34 @@ This entry point is organized around the current enterprise review path: busines
 1. [Enterprise Value Brief](en/positioning/enterprise-value-brief.md) — one-page business/investor overview.
 2. [README](../README.md) — core product definition and repository entry map.
 3. [Current Implementation Matrix](en/validation/current-implementation-matrix.md) — current implementation facts vs roadmap.
-4. [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md) — release evidence commands, staged readiness report interpretation, and what compose/live subreports do and do not prove.
-5. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
-6. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) — how operators prepare, collect, package, and hand off PoC evidence.
-7. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) — submit-ready handoff format for PoC results.
-8. [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md) — submit-ready format for release evidence, staged readiness interpretation, subreport presence/absence, and reviewer acknowledgement.
-9. [Provider Support Matrix](en/operations/provider-support-matrix.md) — provider tiers, support boundaries, and non-claims.
-10. [Public Positioning](en/positioning/public-positioning.md) — conservative positioning and legal/compliance boundary statements.
+4. [Lara / PromptLedger Static Review Response Matrix](en/validation/lara-promptledger-static-review-response.md) — reviewer-facing map from static review findings to implemented repository responses, with audit/certification caveats.
+5. [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md) — release evidence commands, staged readiness report interpretation, and what compose/live subreports do and do not prove.
+6. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md) — what reviewers should inspect, collect, and treat as success/failure evidence in a One-Day PoC.
+7. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md) — how operators prepare, collect, package, and hand off PoC evidence.
+8. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md) — submit-ready handoff format for PoC results.
+9. [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md) — submit-ready format for release evidence, staged readiness interpretation, subreport presence/absence, and reviewer acknowledgement.
+10. [Provider Support Matrix](en/operations/provider-support-matrix.md) — provider tiers, support boundaries, and non-claims.
+11. [Public Positioning](en/positioning/public-positioning.md) — conservative positioning and legal/compliance boundary statements.
 
 ## 30-minute technical review path
 
 1. [Enterprise Value Brief](en/positioning/enterprise-value-brief.md)
 2. [Current Implementation Matrix](en/validation/current-implementation-matrix.md)
 3. [Operational Readiness Runbook](en/operations/operational-readiness-runbook.md)
-4. [Production Validation](en/validation/production-validation.md)
-5. [Regulated Action Governance Proof Pack](en/validation/regulated-action-governance-proof-pack.md)
-6. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md)
-7. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md)
-8. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md)
-9. [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
-10. [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
-11. [Type Safety Baseline](en/operations/type-safety-baseline.md)
-12. [Maintainer Handoff](en/operations/maintainer-handoff.md)
-13. [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md)
-14. [Provider Support Matrix](en/operations/provider-support-matrix.md)
-15. [Regulated Action Governance Kernel](en/architecture/regulated-action-governance-kernel.md)
-16. [Bind Boundary Governance Artifacts](en/architecture/bind-boundary-governance-artifacts.md)
+4. [Lara / PromptLedger Static Review Response Matrix](en/validation/lara-promptledger-static-review-response.md)
+5. [Production Validation](en/validation/production-validation.md)
+6. [Regulated Action Governance Proof Pack](en/validation/regulated-action-governance-proof-pack.md)
+7. [One-Day PoC Evidence Pack](en/poc/one-day-poc-evidence-pack.md)
+8. [One-Day PoC Operator Runbook](en/poc/one-day-poc-operator-runbook.md)
+9. [One-Day PoC Reviewer Handoff Template](en/poc/one-day-poc-reviewer-handoff-template.md)
+10. [One-Day PoC Reviewer Pack](en/poc/one-day-poc-reviewer-pack.md)
+11. [One-Day PoC Performance Report](en/poc/one-day-poc-performance-report.md)
+12. [Type Safety Baseline](en/operations/type-safety-baseline.md)
+13. [Maintainer Handoff](en/operations/maintainer-handoff.md)
+14. [Release Evidence Reviewer Handoff Template](en/validation/release-evidence-reviewer-handoff-template.md)
+15. [Provider Support Matrix](en/operations/provider-support-matrix.md)
+16. [Regulated Action Governance Kernel](en/architecture/regulated-action-governance-kernel.md)
+17. [Bind Boundary Governance Artifacts](en/architecture/bind-boundary-governance-artifacts.md)
 
 ## What VERITAS OS is
 
