@@ -360,6 +360,15 @@ _MIRROR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
     "local": frozenset(),
 }
 
+_STRICT_MIRROR_CAPABILITIES = frozenset({
+    BackendCapability.IMMUTABLE_RETENTION,
+    BackendCapability.FAIL_CLOSED,
+})
+_STRICT_MIRROR_CAPABILITY_ORDER = (
+    BackendCapability.IMMUTABLE_RETENTION,
+    BackendCapability.FAIL_CLOSED,
+)
+
 _ANCHOR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
     "local": frozenset({
         BackendCapability.TRANSPARENCY_ANCHORING,
@@ -390,6 +399,9 @@ def anchor_capabilities(backend_name: str) -> frozenset[BackendCapability]:
 
 # ── Startup validation ──────────────────────────────────────────────────
 
+TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING = "TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING"
+
+
 class PostureStartupError(RuntimeError):
     """Raised when the active posture detects a fatal misconfiguration."""
 
@@ -416,6 +428,71 @@ def _trustlog_anchor_backend() -> str:
     """Return normalized TrustLog anchor backend name."""
     return normalize_trustlog_anchor_backend(
         os.getenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND")
+    )
+
+
+def _format_mirror_capabilities(
+    capabilities: frozenset[BackendCapability],
+) -> str:
+    """Return TrustLog mirror capabilities in stable operator-facing order."""
+    ordered = [
+        capability.value
+        for capability in _STRICT_MIRROR_CAPABILITY_ORDER
+        if capability in capabilities
+    ]
+    extras = sorted(
+        capability.value
+        for capability in capabilities
+        if capability not in _STRICT_MIRROR_CAPABILITY_ORDER
+    )
+    return ", ".join(ordered + extras)
+
+
+def _trustlog_strict_mirror_capabilities_required_message(
+    *,
+    posture: PostureLevel,
+    mirror_backend: str,
+    missing_capabilities: frozenset[BackendCapability],
+) -> str:
+    """Build the strict-posture TrustLog mirror capability refusal message.
+
+    The message intentionally includes only non-secret backend metadata,
+    capability names, and environment variable names so operators receive
+    actionable remediation without leaking bucket names, paths, credentials,
+    or raw connection strings.
+    """
+    missing = _format_mirror_capabilities(missing_capabilities)
+    required = _format_mirror_capabilities(_STRICT_MIRROR_CAPABILITIES)
+    details = (
+        f"{TRUSTLOG_STRICT_MIRROR_CAPABILITIES_MISSING}: Startup refused "
+        f"fail-closed: posture={posture.value} requires TrustLog strict "
+        "mirror capabilities. "
+        f"Selected TrustLog mirror backend={mirror_backend!r} does not "
+        "advertise the required strict capability set "
+        f"(missing capabilities: {missing}; required capabilities: "
+        f"{required}). "
+    )
+    if mirror_backend == "local":
+        details += (
+            "Local WORM mirror is not secure/prod compliant in this release. "
+            "Secure/prod requires a backend that actually provides and "
+            "advertises the full strict capability set: immutable_retention "
+            "and fail_closed. The current production-supported backend is "
+            "s3_object_lock. "
+        )
+    elif mirror_backend not in _MIRROR_CAPABILITIES:
+        known_backends = ", ".join(sorted(_MIRROR_CAPABILITIES))
+        details += f"Known TrustLog mirror backends: {known_backends}. "
+
+    return (
+        details
+        + "Remediation: configure the S3 Object Lock capable TrustLog mirror "
+        "with VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock and set "
+        "VERITAS_TRUSTLOG_S3_BUCKET and VERITAS_TRUSTLOG_S3_PREFIX; set "
+        "VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE and "
+        "VERITAS_TRUSTLOG_S3_RETENTION_DAYS as required by your retention "
+        "policy; or lower VERITAS_POSTURE only for non-production/local "
+        "development if existing policy allows it."
     )
 
 
@@ -561,13 +638,14 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     mirror_caps = mirror_capabilities(mirror_backend)
 
     if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
-        if BackendCapability.IMMUTABLE_RETENTION not in mirror_caps:
+        missing_mirror_caps = _STRICT_MIRROR_CAPABILITIES - mirror_caps
+        if missing_mirror_caps:
             errors.append(
-                f"TrustLog mirror backend {mirror_backend!r} does not provide "
-                "the 'immutable_retention' capability required in "
-                f"{defaults.posture.value} posture. "
-                "Configure a mirror with immutable retention support "
-                "(e.g. VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock)."
+                _trustlog_strict_mirror_capabilities_required_message(
+                    posture=defaults.posture,
+                    mirror_backend=mirror_backend,
+                    missing_capabilities=missing_mirror_caps,
+                )
             )
     elif mirror_backend not in _MIRROR_CAPABILITIES:
         errors.append(
