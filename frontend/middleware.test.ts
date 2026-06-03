@@ -17,6 +17,7 @@ import {
 
 describe("middleware CSP", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
   it("generates a nonce string", () => {
