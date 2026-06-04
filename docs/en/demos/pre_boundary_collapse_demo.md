@@ -475,3 +475,39 @@ Contract artifacts:
 - `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
 - `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
 - `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
+
+## Procedural Admissibility vs. Maneuverability Observables v0
+
+Procedural admissibility and maneuverability are treated here as partially
+independent observables. Procedural admissibility asks whether a process remains
+formally allowable, documented, inspectable, and procedurally coherent.
+Maneuverability asks whether effective intervention, redirection, correction,
+or reframing remains practically available.
+
+A process can remain admissible, documented, inspectable, and procedurally
+coherent while the viable intervention space continues to contract. That does
+not mean governance has failed in a binary sense. It means the reviewer question
+is not only, "Was the process admissible?" The companion question is, "Did the
+process preserve enough evidence for reviewers to recognize the contraction of
+maneuverability itself?"
+
+This distinction connects existing VERITAS layers without adding runtime
+behavior. Trajectory Shaping Lineage v0 preserves the visible sequence of
+framing and option-narrowing steps. Irreversibility Horizon v0 names points
+where intervention capacity becomes operationally hard to recover. Actor
+Recognition Gap v0 marks reviewer-visible recognition gaps around remaining
+intervention capacity without inferring actor beliefs, intent, or subjective
+experience. Governance
+Evidence Packet v0 collects these reviewer-facing signals, while Governance
+Evidence Packet Contract v0 fixes the packet shape for deterministic review.
+Together, these layers help reviewers inspect whether evidence of maneuverability
+contraction was preserved even when procedural admissibility remained intact.
+
+Visibility may become a governance function in its own right, rather than merely
+a property of documentation.
+
+This note is not certification, not production security, not a production
+security guarantee, not automatic enforcement, not automatic blocking, not
+automatic attack detection, not a scoring model, not a prediction claim, not a
+psychological inference about actor beliefs, intent, or subjective experience,
+and not a legal conclusion.

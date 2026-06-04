@@ -304,3 +304,32 @@ Contract artifacts:
 - `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
 - `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
 - `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
+
+## Procedural Admissibility vs. Maneuverability Observables v0
+
+この note では、procedural admissibility（手続き上の許容可能性）と
+maneuverability（実質的な介入・方向転換の余地）を partially independent
+observables として扱います。procedural admissibility は、process が formal に許容可能で、
+documented、inspectable、procedurally coherent であるかを見ます。maneuverability は、
+effective な intervention、方向転換、修正、reframing がまだ実質的に可能かを見ます。
+
+process が admissible / documented / inspectable / procedurally coherent であっても、
+実際に有効な intervention space は収縮している可能性があります。これは governance が
+binary に失敗したという意味ではありません。問いは「その process は admissible だったか？」
+だけではなく、「maneuverability の収縮を reviewer が後から認識できるだけの evidence を保存していたか？」
+になります。
+
+この区別は、既存の VERITAS layer と接続されます。Trajectory Shaping Lineage v0 は、
+framing と option narrowing の visible sequence を保存します。Irreversibility Horizon v0 は、
+intervention capacity の回復が operationally hard になる地点を示します。Actor Recognition
+Gap v0 は、remaining intervention capacity をめぐる reviewer-visible な recognition gap を、
+actor の beliefs、intent、subjective experience を推測せずに扱います。Governance Evidence Packet v0 は、これらの reviewer-facing
+signals をまとめ、Governance Evidence Packet Contract v0 は deterministic review のために
+packet shape を固定します。これにより、procedural admissibility が保たれている場合でも、
+maneuverability contraction の evidence が保存されていたかを reviewer が点検しやすくなります。
+
+visibility は単なる documentation の性質ではなく、それ自体が governance function になり得ます。
+
+この note は、certification、production security、production security guarantee、automatic
+enforcement、automatic blocking、automatic attack detection、scoring model、prediction claim、
+actor psychology inference、legal conclusion ではありません。
