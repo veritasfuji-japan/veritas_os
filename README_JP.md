@@ -255,6 +255,7 @@ VERITAS は、本番の enforce と開発時の observe を区別します。本
   - Governance Evidence Packet fixture: `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
   - Governance Evidence Packet contract test: `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
   - Non-claims: not certification; not production security guarantee; not automatic enforcement; not scoring model; not legal conclusion.
+- VERITAS は Governance Recognizability Conditions v0 も文書化し、手続き上の許容可能性が保たれている場合でも、reviewer が maneuverability の収縮を後から認識するための visibility conditions が governance function になり得ることを整理しています。
 
 ## 何を解決するか
 
