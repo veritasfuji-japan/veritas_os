@@ -2,6 +2,8 @@
 
 Key local/offline reviewer-facing artifacts:
 
+- `docs/en/demos/pre_boundary_collapse_demo.md#procedural-admissibility-vs-maneuverability-observables-v0`
+  - Procedural Admissibility vs. Maneuverability Observables v0: a reviewer-facing note clarifying that a process can remain admissible, documented, inspectable, and procedurally coherent while practical maneuverability contracts upstream. The note frames visibility of that contraction as a governance function, without adding production claims or runtime behavior.
 - `scripts/demo/saas_permission_change_governed_demo.py`
   - deterministic local/offline SaaS permission-change governed execution demo
 - `scripts/demo/export_reviewer_evidence_packet.py`
