@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/evaluation-receipt-v1.schema.json",
+  "title": "Evaluation Receipt v1",
+  "description": "Schema-only receipt that records a specific admissibility evaluation. It is non-enforcing in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "issued_at",
+    "evaluation_id",
+    "evaluation_function_manifest_ref",
+    "evaluation_function_manifest_hash",
+    "root_authority_manifest_ref",
+    "evaluator_id",
+    "evaluator_version",
+    "policy_identity",
+    "rule_set_version",
+    "authority_evidence_refs",
+    "qualifier_state",
+    "authorized_determiners_used",
+    "admissibility_inputs",
+    "consequence_class",
+    "material_context",
+    "outcome",
+    "rationale_codes",
+    "input_state_hash",
+    "evaluation_state_hash",
+    "receipt_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "evaluation-receipt-v1"
+    },
+    "receipt_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluation_function_manifest_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluation_function_manifest_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "root_authority_manifest_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluator_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluator_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policy_identity": {
+      "$ref": "#/$defs/policy_identity"
+    },
+    "rule_set_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "qualifier_state": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/qualifier_state_item"
+      }
+    },
+    "authorized_determiners_used": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/determiner_used"
+      }
+    },
+    "admissibility_inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/admissibility_input"
+      }
+    },
+    "consequence_class": {
+      "$ref": "#/$defs/consequence_class"
+    },
+    "material_context": {
+      "$ref": "#/$defs/material_context"
+    },
+    "outcome": {
+      "enum": [
+        "allow",
+        "escalate",
+        "refuse",
+        "error",
+        "undetermined"
+      ]
+    },
+    "rationale_codes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "input_state_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "evaluation_state_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "receipt_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "policy_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "policy_version",
+        "policy_source_ref"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "qualifier_state_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualifier_name",
+        "source_ref",
+        "freshness_state",
+        "required_at_bind",
+        "qualifier_hash"
+      ],
+      "properties": {
+        "qualifier_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "freshness_state": {
+          "enum": [
+            "fresh",
+            "stale",
+            "expired",
+            "unknown",
+            "not_required"
+          ]
+        },
+        "required_at_bind": {
+          "type": "boolean"
+        },
+        "qualifier_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        }
+      }
+    },
+    "determiner_used": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "determiner_id",
+        "determiner_type",
+        "authority_scope",
+        "influenced_outcome"
+      ],
+      "properties": {
+        "determiner_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "determiner_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "influenced_outcome": {
+          "type": "boolean"
+        }
+      }
+    },
+    "admissibility_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_name",
+        "input_type",
+        "input_ref",
+        "required",
+        "input_hash"
+      ],
+      "properties": {
+        "input_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "input_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        }
+      }
+    },
+    "consequence_class": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class_id",
+        "class_label",
+        "classifier_id",
+        "classifier_version"
+      ],
+      "properties": {
+        "class_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "class_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classifier_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classifier_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "material_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_ref",
+        "context_hash",
+        "context_freshness_state",
+        "stale_context_allowed"
+      ],
+      "properties": {
+        "context_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "context_freshness_state": {
+          "enum": [
+            "fresh",
+            "stale",
+            "expired",
+            "unknown"
+          ]
+        },
+        "stale_context_allowed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
