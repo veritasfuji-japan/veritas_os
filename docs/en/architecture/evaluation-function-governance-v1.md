@@ -65,6 +65,9 @@ The v1 manifests do not perform this attribution at runtime. They provide the
 schema foundation needed for future receipts and monitors to compare governed
 evaluation state and explain why outcomes differ.
 
+Evaluation Receipt v1 builds on this foundation by recording specific
+evaluation instances for later replay, comparison, and drift analysis.
+
 ## 5. Trust anchor
 
 The governance chain should terminate in an explicit constitutional trust anchor,
