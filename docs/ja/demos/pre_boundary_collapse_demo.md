@@ -333,3 +333,33 @@ visibility は単なる documentation の性質ではなく、それ自体が go
 この note は、certification、production security、production security guarantee、automatic
 enforcement、automatic blocking、automatic attack detection、scoring model、prediction claim、
 actor psychology inference、legal conclusion ではありません。
+
+## Governance Recognizability Conditions v0
+
+governance recognizability conditions とは、後から reviewer が governance state を
+認識できるための visibility conditions です。この note は、governance process を
+文書化するだけでなく、governance が後から認識可能であり続ける条件を文書化します。
+
+process が admissible / documented / inspectable / procedurally coherent であっても、
+実際の intervention space は収縮している可能性があります。その場合、maneuverability
+contraction の evidence を保存することは、procedural admissibility（手続き上の許容可能性）
+の evidence を保存することと同じくらい重要になり得ます。
+
+問いは「その process は admissible だったか？」だけではありません。
+
+- 「maneuverability の収縮そのものを reviewer が後から認識できるだけの evidence が
+  保存されていたか？」も問います。
+
+この整理は、Procedural Admissibility vs. Maneuverability Observables v0 の上に置かれます。
+Trajectory Shaping Lineage v0 は framing と option narrowing の visible sequence を保存し、
+Irreversibility Horizon v0 は intervention capacity の回復が operationally hard になる地点を示し、
+Actor Recognition Gap v0 は actor の心理、intent、beliefs、subjective experience を推測せずに
+reviewer-visible な recognition gap を扱います。Governance Evidence Packet v0 はこれらの
+evidence を reviewer-facing に束ね、Governance Evidence Packet Contract v0 は deterministic review
+のための packet shape を保ちます。この note はその contract を変更しません。
+
+visibility は単なる documentation の性質ではなく、それ自体が governance function になり得ます。
+
+これは certification / production security / production security guarantee / automatic enforcement /
+automatic blocking / automatic attack detection / scoring model / prediction claim / inevitability claim /
+actor psychology inference / legal conclusion ではありません。
