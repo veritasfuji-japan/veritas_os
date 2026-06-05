@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/evaluation-function-manifest-v1.schema.json",
+  "title": "Evaluation Function Manifest v1",
+  "description": "Schema-only governance artifact that describes the admissibility evaluation function as a governed artifact. It is non-enforcing in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "issued_at",
+    "evaluator_id",
+    "evaluator_version",
+    "policy_identity",
+    "rule_set_version",
+    "authorized_determiners",
+    "admissibility_inputs",
+    "qualifier_sources",
+    "consequence_classifier",
+    "threshold_resolver",
+    "refusal_boundaries",
+    "escalation_resolver",
+    "baseline_hash",
+    "root_authority_manifest_ref",
+    "manifest_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "evaluation-function-manifest-v1"
+    },
+    "manifest_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evaluator_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluator_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policy_identity": {
+      "$ref": "#/$defs/policy_identity"
+    },
+    "rule_set_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authorized_determiners": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/authorized_determiner"
+      }
+    },
+    "admissibility_inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/admissibility_input"
+      }
+    },
+    "qualifier_sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/qualifier_source"
+      }
+    },
+    "consequence_classifier": {
+      "$ref": "#/$defs/consequence_classifier"
+    },
+    "threshold_resolver": {
+      "$ref": "#/$defs/threshold_resolver"
+    },
+    "refusal_boundaries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/refusal_boundary"
+      }
+    },
+    "escalation_resolver": {
+      "$ref": "#/$defs/escalation_resolver"
+    },
+    "baseline_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "root_authority_manifest_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifest_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "policy_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "policy_version",
+        "policy_source_ref"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "authorized_determiner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "determiner_id",
+        "determiner_type",
+        "authority_scope",
+        "may_influence_outcome"
+      ],
+      "properties": {
+        "determiner_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "determiner_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "may_influence_outcome": {
+          "type": "boolean"
+        }
+      }
+    },
+    "admissibility_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_name",
+        "input_type",
+        "required",
+        "freshness_required"
+      ],
+      "properties": {
+        "input_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "freshness_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "qualifier_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualifier_name",
+        "source_ref",
+        "freshness_ttl_seconds",
+        "required_at_bind"
+      ],
+      "properties": {
+        "qualifier_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "freshness_ttl_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required_at_bind": {
+          "type": "boolean"
+        }
+      }
+    },
+    "consequence_classifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classifier_id",
+        "classifier_version"
+      ],
+      "properties": {
+        "classifier_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classifier_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "threshold_resolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resolver_id",
+        "resolver_version"
+      ],
+      "properties": {
+        "resolver_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolver_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "refusal_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boundary_id",
+        "condition",
+        "action"
+      ],
+      "properties": {
+        "boundary_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "escalation_resolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resolver_id",
+        "resolver_version",
+        "authority_validation_required"
+      ],
+      "properties": {
+        "resolver_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolver_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_validation_required": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
