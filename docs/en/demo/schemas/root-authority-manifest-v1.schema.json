@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/root-authority-manifest-v1.schema.json",
+  "title": "Root Authority Manifest v1",
+  "description": "Schema-only governance artifact that defines the constitutional trust anchor for VERITAS governance manifests. It is non-enforcing in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "issued_at",
+    "root_authority_id",
+    "trusted_authority_sources",
+    "authorized_manifest_modifiers",
+    "authoritative_policy_sources",
+    "approval_requirements",
+    "fail_closed_conditions",
+    "challenge_process",
+    "manifest_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "root-authority-manifest-v1"
+    },
+    "manifest_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "root_authority_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trusted_authority_sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/trusted_authority_source"
+      }
+    },
+    "authorized_manifest_modifiers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/authorized_manifest_modifier"
+      }
+    },
+    "authoritative_policy_sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/authoritative_policy_source"
+      }
+    },
+    "approval_requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/approval_requirement"
+      }
+    },
+    "fail_closed_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "challenge_process": {
+      "$ref": "#/$defs/challenge_process"
+    },
+    "manifest_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "trusted_authority_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_type",
+        "validity_status",
+        "evidence_ref"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "validity_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "authorized_manifest_modifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "role",
+        "scope",
+        "approval_required"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approval_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "authoritative_policy_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_source_id",
+        "policy_domain",
+        "version",
+        "evidence_ref"
+      ],
+      "properties": {
+        "policy_source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_domain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "approval_requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_type",
+        "required_approvals",
+        "human_review_required"
+      ],
+      "properties": {
+        "change_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_approvals": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "human_review_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "challenge_process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "challenge_allowed",
+        "review_authority",
+        "evidence_required"
+      ],
+      "properties": {
+        "challenge_allowed": {
+          "type": "boolean"
+        },
+        "review_authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_required": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
