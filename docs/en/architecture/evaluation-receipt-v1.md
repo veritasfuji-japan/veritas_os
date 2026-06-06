@@ -66,7 +66,9 @@ whether outcome changes are attributable to explicit governed causes, including:
 - unexplained evaluation drift
 
 Evaluation Receipt v1 does not perform this attribution at runtime. It only
-provides the schema foundation needed for later comparison and review.
+provides the schema foundation needed for later comparison and review. Outcome
+Delta Attribution v1 is the companion schema-only artifact that records that
+comparison between two Evaluation Receipts.
 
 ## 5. v1 scope
 
