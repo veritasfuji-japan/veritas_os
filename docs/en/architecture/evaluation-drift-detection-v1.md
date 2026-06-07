@@ -101,3 +101,4 @@ Future work can build on Evaluation Drift Detection v1 with:
 - Trajectory-Level Admissibility Monitor v1 for sequence-level admissibility scope review
 - Legitimacy Impact Review
 - reviewer evidence packet integration
+- [Adversarial Architecture Test Matrix v1](adversarial-architecture-test-matrix-v1.md)

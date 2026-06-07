@@ -95,3 +95,4 @@ Future work can build on Outcome Delta Attribution v1 with:
 - Legitimacy Impact Review
 - Runtime fail-closed integration
 - Automated comparison from live Evaluation Receipts
+- [Adversarial Architecture Test Matrix v1](adversarial-architecture-test-matrix-v1.md)

@@ -103,3 +103,4 @@ Future hardening can build on these schema foundations with:
 - Trajectory-Level Admissibility Monitor
 - Legitimacy Impact Review
 - Runtime fail-closed integration
+- [Adversarial Architecture Test Matrix v1](adversarial-architecture-test-matrix-v1.md)

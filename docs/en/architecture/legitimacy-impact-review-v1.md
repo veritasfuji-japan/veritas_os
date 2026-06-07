@@ -80,3 +80,4 @@ Future work can build on Legitimacy Impact Review v1 with:
 - reviewer evidence packet integration
 - policy bundle integration
 - legitimacy impact dashboards
+- [Adversarial Architecture Test Matrix v1](adversarial-architecture-test-matrix-v1.md)

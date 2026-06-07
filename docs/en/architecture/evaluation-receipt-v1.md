@@ -94,3 +94,4 @@ Future work can build on Evaluation Receipt v1 with:
 - Legitimacy Impact Review
 - Runtime fail-closed integration
 - Receipt generation from live bind/admissibility paths
+- [Adversarial Architecture Test Matrix v1](adversarial-architecture-test-matrix-v1.md)

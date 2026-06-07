@@ -87,3 +87,4 @@ Future work can build on Trajectory-Level Admissibility Monitor v1 with:
 - governance exhaustion safeguards
 - runtime fail-closed integration
 - reviewer evidence packet integration
+- [Adversarial Architecture Test Matrix v1](adversarial-architecture-test-matrix-v1.md)
