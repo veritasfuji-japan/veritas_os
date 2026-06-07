@@ -1,0 +1,26 @@
+{
+  "current_evaluation_receipt_ref": "evaluation-governance-offline-chain-receipt-003",
+  "detection_hash": "8f41b1da1892d642e7aef809ee3ec8e36694bf03fb5396595d0e0805e29812bd",
+  "detection_id": "evaluation-governance-offline-chain-drift-detection-002",
+  "detection_summary": "Draft detection did not detect evaluator drift from escalate to escalate.",
+  "drift_causes": [
+    {
+      "cause_type": "material_context_ambiguous",
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-003"
+      ],
+      "explanation": "The material context state changed between receipts.",
+      "severity": "medium"
+    }
+  ],
+  "drift_detected": false,
+  "drift_status": "not_detected",
+  "evaluator_consistency_status": "not_comparable",
+  "explanation_status": "fully_explained",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "outcome_delta_attribution_hash": "59fac37138155946793fd958cdf2e8c96a842671fa1f64829e6c1f99b3dd531e",
+  "outcome_delta_attribution_ref": "evaluation-governance-offline-chain-attribution-002",
+  "prior_evaluation_receipt_ref": "evaluation-governance-offline-chain-receipt-002",
+  "recommended_governance_action": "none",
+  "schema_version": "evaluation-drift-detection-v1"
+}

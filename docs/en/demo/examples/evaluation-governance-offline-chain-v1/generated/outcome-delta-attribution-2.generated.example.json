@@ -1,0 +1,33 @@
+{
+  "attribution_confidence": "medium",
+  "attribution_hash": "f2ecc5814675be88bed77cca104a904d2af2e262b4e2afd8d42b9033c37d63dc",
+  "attribution_id": "evaluation-governance-offline-chain-attribution-002",
+  "attribution_summary": "Outcome changed from escalate to escalate; detected causes: material_context_changed.",
+  "current_evaluation_receipt_hash": "9e029c8f3a1df6f1b368def1d6cc7a665ffd6efe1b5c05c1d198d18f5105efb4",
+  "current_evaluation_receipt_ref": "evaluation-governance-offline-chain-receipt-003",
+  "current_outcome": "escalate",
+  "delta_causes": [
+    {
+      "cause_type": "material_context_changed",
+      "current_value_ref": "{\"context_freshness_state\": \"fresh\", \"context_hash\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\", \"stale_context_allowed\": false}",
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-003"
+      ],
+      "explanation": "The material context state changed between receipts.",
+      "prior_value_ref": "{\"context_freshness_state\": \"fresh\", \"context_hash\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"stale_context_allowed\": false}",
+      "severity": "medium"
+    }
+  ],
+  "issued_at": "2026-01-01T00:00:00Z",
+  "outcome_changed": false,
+  "prior_evaluation_receipt_hash": "81c64573c36975ccf755f53718d1b759d00f612832aee47c35081117824a9cfa",
+  "prior_evaluation_receipt_ref": "evaluation-governance-offline-chain-receipt-002",
+  "prior_outcome": "escalate",
+  "recommended_governance_action": "review",
+  "schema_version": "outcome-delta-attribution-v1",
+  "unresolved_delta": {
+    "present": false,
+    "reason": "No unexplained evaluation drift was detected.",
+    "requires_review": false
+  }
+}
