@@ -64,6 +64,23 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 - 第三者認証ではありません。
 - fixture ベースの PoC 証跡は、実銀行統合の証明として提示してはいけません。
 
+## Evaluation Governance レビュアー向け成果物
+
+VERITASには、authority、評価関数の定義、Evaluation Receipt、outcome delta、評価drift、trajectory movement、legitimacyに影響し得る変更を外部レビュー可能にするための Evaluation Governance artifact chain が含まれています。
+
+これらは v1 では非強制のレビュアー向け成果物です。`/v1/decide` の挙動を変更せず、legitimacyを自動的に保証せず、規制適合を認証するものでもありません。目的は、architecture hardening のための証跡を明示的・version管理可能・異議申し立て可能・監査可能にすることです。
+
+- [Evaluation Function Governance v1](docs/en/architecture/evaluation-function-governance-v1.md)
+- [Evaluation Receipt v1](docs/en/architecture/evaluation-receipt-v1.md)
+- [Outcome Delta Attribution v1](docs/en/architecture/outcome-delta-attribution-v1.md)
+- [Evaluation Drift Detection v1](docs/en/architecture/evaluation-drift-detection-v1.md)
+- [Trajectory-Level Admissibility Monitor v1](docs/en/architecture/trajectory-admissibility-monitor-v1.md)
+- [Legitimacy Impact Review v1](docs/en/architecture/legitimacy-impact-review-v1.md)
+- [Adversarial Architecture Test Matrix v1](docs/en/architecture/adversarial-architecture-test-matrix-v1.md)
+- [Adversarial Scenario Fixtures v1](docs/en/architecture/adversarial-scenario-fixtures-v1.md)
+- [Reviewer Evidence Packet v1](docs/en/demo/reviewer-evidence-packet.md)
+- [Reviewer Evidence Packet example with Evaluation Governance attachments](docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json)
+
 ## Authority Evidence Ingestion（権限証拠の取り込み）
 
 VERITAS には、bind-time governance のための deterministic local/offline Authority Evidence ingestion adapter が実装されています。この adapter は、外部システム風または mock の権限証拠 payload を、既存の AuthorityEvidence artifact model に正規化し、決定論的な evidence_hash を付与します。
