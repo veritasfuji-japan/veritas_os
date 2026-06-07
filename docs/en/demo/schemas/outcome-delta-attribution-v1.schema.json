@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/outcome-delta-attribution-v1.schema.json",
+  "title": "Outcome Delta Attribution v1",
+  "description": "Schema-only attribution artifact that compares two Evaluation Receipts and records why an admissibility outcome changed. It is non-enforcing in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attribution_id",
+    "issued_at",
+    "prior_evaluation_receipt_ref",
+    "current_evaluation_receipt_ref",
+    "prior_evaluation_receipt_hash",
+    "current_evaluation_receipt_hash",
+    "prior_outcome",
+    "current_outcome",
+    "outcome_changed",
+    "delta_causes",
+    "attribution_summary",
+    "attribution_confidence",
+    "unresolved_delta",
+    "recommended_governance_action",
+    "attribution_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "outcome-delta-attribution-v1"
+    },
+    "attribution_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "prior_evaluation_receipt_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "current_evaluation_receipt_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prior_evaluation_receipt_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "current_evaluation_receipt_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "prior_outcome": {
+      "$ref": "#/$defs/admissibility_outcome"
+    },
+    "current_outcome": {
+      "$ref": "#/$defs/admissibility_outcome"
+    },
+    "outcome_changed": {
+      "type": "boolean"
+    },
+    "delta_causes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/delta_cause"
+      }
+    },
+    "attribution_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attribution_confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "unresolved_delta": {
+      "$ref": "#/$defs/unresolved_delta"
+    },
+    "recommended_governance_action": {
+      "$ref": "#/$defs/governance_action"
+    },
+    "attribution_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "admissibility_outcome": {
+      "enum": [
+        "allow",
+        "escalate",
+        "refuse",
+        "error",
+        "undetermined"
+      ]
+    },
+    "delta_cause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cause_type",
+        "severity",
+        "prior_value_ref",
+        "current_value_ref",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "cause_type": {
+          "enum": [
+            "governed_state_changed",
+            "policy_identity_changed",
+            "rule_version_changed",
+            "authority_state_changed",
+            "qualifier_freshness_changed",
+            "consequence_class_changed",
+            "material_context_changed",
+            "evaluator_version_changed",
+            "authorized_determiner_changed",
+            "unauthorized_determiner_influence",
+            "threshold_state_changed",
+            "refusal_boundary_changed",
+            "escalation_resolver_changed",
+            "unexplained_evaluation_drift"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "prior_value_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_value_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "unresolved_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "reason",
+        "requires_review"
+      ],
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "requires_review": {
+          "type": "boolean"
+        }
+      }
+    },
+    "governance_action": {
+      "enum": [
+        "none",
+        "review",
+        "requalify",
+        "escalate",
+        "refuse",
+        "mark_evaluation_drift",
+        "mark_non_deterministically_governed"
+      ]
+    }
+  }
+}
