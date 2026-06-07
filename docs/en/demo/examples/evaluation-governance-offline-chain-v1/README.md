@@ -20,6 +20,24 @@ python scripts/demo/run_evaluation_governance_offline_chain.py \
   --output-dir /tmp/evaluation-governance-offline-chain-output
 ```
 
+## Generate a Reviewer Evidence Packet from the chain
+
+The generated chain manifest can also be converted into a synthetic,
+local/offline Reviewer Evidence Packet with Evaluation Governance artifact
+attachments:
+
+```bash
+python scripts/demo/generate_reviewer_evidence_packet_from_evaluation_governance_chain.py \
+  --chain-manifest docs/en/demo/examples/evaluation-governance-offline-chain-v1/generated/chain-manifest.generated.example.json \
+  --artifact-base-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --output /tmp/reviewer-evidence-packet.json
+```
+
+The checked-in packet example is available at
+`docs/en/demo/examples/evaluation-governance-chain-reviewer-packet-v1/`.
+It remains non-runtime, non-enforcing, and does not establish legitimacy or
+certify compliance.
+
 ## Regenerate checked-in example outputs intentionally
 
 ```bash

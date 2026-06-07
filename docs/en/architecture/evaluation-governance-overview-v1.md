@@ -80,6 +80,7 @@ See:
 - [Reviewer Evidence Packet v1](../demo/reviewer-evidence-packet.md)
 - [Reviewer Evidence Packet example with Evaluation Governance attachments](../demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json)
 - [Evaluation Governance sample bundle v1](../demo/examples/evaluation-governance-sample-bundle-v1/)
+- [Evaluation Governance offline-chain Reviewer Evidence Packet example](../demo/examples/evaluation-governance-chain-reviewer-packet-v1/)
 
 The synthetic sample bundle can be validated locally with `scripts/demo/validate_evaluation_governance_sample_bundle.py`.
 
