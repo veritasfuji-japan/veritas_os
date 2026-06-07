@@ -1,0 +1,27 @@
+{
+  "schema_version": "evaluation-drift-detection-v1",
+  "detection_id": "egov-sample-drift-detection-001",
+  "issued_at": "2026-05-01T00:30:00Z",
+  "outcome_delta_attribution_ref": "egov-sample-outcome-delta-001",
+  "outcome_delta_attribution_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+  "prior_evaluation_receipt_ref": "sample://evaluation-receipts/egov-sample-evaluation-receipt-prior-001",
+  "current_evaluation_receipt_ref": "egov-sample-evaluation-receipt-current-001",
+  "drift_detected": true,
+  "drift_status": "suspected",
+  "drift_causes": [
+    {
+      "cause_type": "evaluator_version_changed",
+      "severity": "medium",
+      "evidence_refs": [
+        "egov-sample-outcome-delta-001",
+        "egov-sample-manifest-change-001"
+      ],
+      "explanation": "The evaluator version changed in the synthetic chain."
+    }
+  ],
+  "evaluator_consistency_status": "inconsistent",
+  "explanation_status": "partially_explained",
+  "recommended_governance_action": "mark_evaluation_drift",
+  "detection_summary": "Synthetic drift detection marks the changed evaluator behavior as suspected drift for reviewer inspection.",
+  "detection_hash": "5555555555555555555555555555555555555555555555555555555555555555"
+}

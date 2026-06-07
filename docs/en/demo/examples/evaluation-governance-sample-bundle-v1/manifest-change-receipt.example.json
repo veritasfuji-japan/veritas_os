@@ -1,0 +1,31 @@
+{
+  "schema_version": "manifest-change-receipt-v1",
+  "receipt_id": "egov-sample-manifest-change-001",
+  "issued_at": "2026-05-01T00:12:00Z",
+  "changed_manifest_type": "evaluation_function_manifest",
+  "changed_manifest_id": "egov-sample-evaluation-function-v2",
+  "previous_manifest_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "new_manifest_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "change_reason": "Synthetic delegated authority scope and evaluator version changed for reviewer demonstration.",
+  "changed_by": {
+    "actor_id": "synthetic-governance-maintainer",
+    "role": "demo_governance_maintainer"
+  },
+  "authority_evidence_ref": "sample://authority/synthetic-board-charter-v1",
+  "approval_evidence_refs": [
+    "sample://approval/synthetic-reviewer-approval-a",
+    "sample://approval/synthetic-reviewer-approval-b"
+  ],
+  "impact_scope": [
+    "synthetic_internal_approval_high_risk",
+    "delegated_authority_scope"
+  ],
+  "legitimacy_impact_flags": [
+    "authority_scope_expanded",
+    "evaluator_behavior_changed"
+  ],
+  "rollback_conditions": [
+    "synthetic approval evidence is withdrawn",
+    "scope expansion cannot be requalified"
+  ]
+}

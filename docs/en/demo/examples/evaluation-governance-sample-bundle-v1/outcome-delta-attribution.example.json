@@ -1,0 +1,43 @@
+{
+  "schema_version": "outcome-delta-attribution-v1",
+  "attribution_id": "egov-sample-outcome-delta-001",
+  "issued_at": "2026-05-01T00:25:00Z",
+  "prior_evaluation_receipt_ref": "sample://evaluation-receipts/egov-sample-evaluation-receipt-prior-001",
+  "current_evaluation_receipt_ref": "egov-sample-evaluation-receipt-current-001",
+  "prior_evaluation_receipt_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+  "current_evaluation_receipt_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+  "prior_outcome": "refuse",
+  "current_outcome": "escalate",
+  "outcome_changed": true,
+  "delta_causes": [
+    {
+      "cause_type": "evaluator_version_changed",
+      "severity": "medium",
+      "prior_value_ref": "synthetic-high-risk-approval-evaluator@1.0.0-demo",
+      "current_value_ref": "synthetic-high-risk-approval-evaluator@2.0.0-demo",
+      "evidence_refs": [
+        "egov-sample-manifest-change-001"
+      ],
+      "explanation": "The synthetic evaluator version changed between the prior and current receipt."
+    },
+    {
+      "cause_type": "authority_state_changed",
+      "severity": "high",
+      "prior_value_ref": "internal_approval_high_risk_limited_demo",
+      "current_value_ref": "internal_approval_high_risk_expanded_demo",
+      "evidence_refs": [
+        "egov-sample-evaluation-receipt-current-001"
+      ],
+      "explanation": "The current evaluation used an expanded delegated authority scope."
+    }
+  ],
+  "attribution_summary": "Synthetic outcome changed from refuse to escalate after evaluator and delegated authority scope changes.",
+  "attribution_confidence": "medium",
+  "unresolved_delta": {
+    "present": false,
+    "reason": "Synthetic references provide a reviewer-facing explanation only.",
+    "requires_review": true
+  },
+  "recommended_governance_action": "review",
+  "attribution_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+}

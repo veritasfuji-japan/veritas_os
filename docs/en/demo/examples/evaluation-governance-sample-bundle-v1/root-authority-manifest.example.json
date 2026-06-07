@@ -1,0 +1,55 @@
+{
+  "schema_version": "root-authority-manifest-v1",
+  "manifest_id": "egov-sample-root-authority-v1",
+  "issued_at": "2026-05-01T00:00:00Z",
+  "root_authority_id": "synthetic-root-authority-internal-approval-v1",
+  "trusted_authority_sources": [
+    {
+      "source_id": "synthetic-board-charter-v1",
+      "source_type": "synthetic_internal_charter",
+      "validity_status": "active_demo_only",
+      "evidence_ref": "sample://authority/synthetic-board-charter-v1"
+    }
+  ],
+  "authorized_manifest_modifiers": [
+    {
+      "actor_id": "synthetic-governance-maintainer",
+      "role": "demo_governance_maintainer",
+      "scope": "synthetic_evaluation_governance_examples",
+      "approval_required": true
+    }
+  ],
+  "authoritative_policy_sources": [
+    {
+      "policy_source_id": "synthetic-high-risk-approval-policy",
+      "policy_domain": "synthetic_internal_approval",
+      "version": "2026.05-demo",
+      "evidence_ref": "sample://policy/synthetic-high-risk-approval-policy"
+    }
+  ],
+  "approval_requirements": [
+    {
+      "change_type": "delegated_authority_scope_change",
+      "required_approvals": 2,
+      "human_review_required": true
+    },
+    {
+      "change_type": "evaluation_function_manifest_update",
+      "required_approvals": 2,
+      "human_review_required": true
+    }
+  ],
+  "fail_closed_conditions": [
+    "synthetic authority evidence is missing",
+    "synthetic delegated scope is not reviewable"
+  ],
+  "challenge_process": {
+    "challenge_allowed": true,
+    "review_authority": "synthetic-review-board",
+    "evidence_required": [
+      "sample authority evidence",
+      "sample approval receipts"
+    ]
+  },
+  "manifest_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
