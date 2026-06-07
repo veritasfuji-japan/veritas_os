@@ -28,6 +28,11 @@ In short:
 - **Outcome Delta Attribution** records why the result changed between two
   evaluations.
 
+Evaluation Drift Detection v1 builds on this comparison by recording whether an
+attributed or unattributed outcome delta suggests evaluator drift, unauthorized
+determiner influence, unexplained evaluation behavior, or non-deterministically
+governed evaluation. It remains non-enforcing in v1.
+
 ## 3. What the attribution captures
 
 An Outcome Delta Attribution captures:

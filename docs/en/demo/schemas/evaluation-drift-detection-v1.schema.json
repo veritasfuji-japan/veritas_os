@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/evaluation-drift-detection-v1.schema.json",
+  "title": "Evaluation Drift Detection v1",
+  "description": "Schema-only detection artifact that records whether an Outcome Delta Attribution indicates possible evaluator drift, unauthorized determiner influence, unexplained evaluation behavior, or non-deterministically governed evaluation. It is non-enforcing in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "detection_id",
+    "issued_at",
+    "outcome_delta_attribution_ref",
+    "outcome_delta_attribution_hash",
+    "prior_evaluation_receipt_ref",
+    "current_evaluation_receipt_ref",
+    "drift_detected",
+    "drift_status",
+    "drift_causes",
+    "evaluator_consistency_status",
+    "explanation_status",
+    "recommended_governance_action",
+    "detection_summary",
+    "detection_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "evaluation-drift-detection-v1"
+    },
+    "detection_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "outcome_delta_attribution_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcome_delta_attribution_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "prior_evaluation_receipt_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "current_evaluation_receipt_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "drift_detected": {
+      "type": "boolean"
+    },
+    "drift_status": {
+      "$ref": "#/$defs/drift_status"
+    },
+    "drift_causes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/drift_cause"
+      }
+    },
+    "evaluator_consistency_status": {
+      "$ref": "#/$defs/evaluator_consistency_status"
+    },
+    "explanation_status": {
+      "$ref": "#/$defs/explanation_status"
+    },
+    "recommended_governance_action": {
+      "$ref": "#/$defs/governance_action"
+    },
+    "detection_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "detection_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "drift_status": {
+      "enum": [
+        "not_detected",
+        "suspected",
+        "confirmed",
+        "unexplained",
+        "non_deterministically_governed"
+      ]
+    },
+    "drift_cause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cause_type",
+        "severity",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "cause_type": {
+          "enum": [
+            "unexplained_evaluation_drift",
+            "unauthorized_determiner_influence",
+            "evaluator_version_changed",
+            "rule_version_changed",
+            "policy_identity_changed",
+            "threshold_state_changed",
+            "refusal_boundary_changed",
+            "escalation_resolver_changed",
+            "material_context_ambiguous",
+            "qualifier_state_ambiguous",
+            "attribution_inconclusive"
+          ]
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "evaluator_consistency_status": {
+      "enum": [
+        "consistent",
+        "inconsistent",
+        "unknown",
+        "not_comparable"
+      ]
+    },
+    "explanation_status": {
+      "enum": [
+        "fully_explained",
+        "partially_explained",
+        "unexplained",
+        "requires_review"
+      ]
+    },
+    "governance_action": {
+      "enum": [
+        "none",
+        "review",
+        "requalify_evaluator",
+        "reconcile_qualifiers",
+        "escalate",
+        "refuse",
+        "mark_evaluation_drift",
+        "mark_non_deterministically_governed"
+      ]
+    }
+  }
+}
