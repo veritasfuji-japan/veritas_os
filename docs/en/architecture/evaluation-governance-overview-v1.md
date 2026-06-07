@@ -81,6 +81,8 @@ See:
 - [Reviewer Evidence Packet example with Evaluation Governance attachments](../demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json)
 - [Evaluation Governance sample bundle v1](../demo/examples/evaluation-governance-sample-bundle-v1/)
 
+The synthetic sample bundle can be validated locally with `scripts/demo/validate_evaluation_governance_sample_bundle.py`.
+
 In v1, this packet integration is optional, non-enforcing, and reference-only.
 It does not require live runtime generation yet and does not change `/v1/decide`
 behavior.
