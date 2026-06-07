@@ -1,0 +1,66 @@
+{
+  "schema_version": "evaluation-receipt-v1",
+  "receipt_id": "outcome-delta-helper-current-receipt-001",
+  "issued_at": "2026-01-01T00:05:00Z",
+  "evaluation_id": "outcome-delta-helper-current-evaluation-001",
+  "evaluation_function_manifest_ref": "sample://evaluation-function/outcome-delta-helper-v1",
+  "evaluation_function_manifest_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "root_authority_manifest_ref": "sample://root-authority/outcome-delta-helper-v1",
+  "evaluator_id": "synthetic-outcome-delta-evaluator",
+  "evaluator_version": "eval-v1.1.0",
+  "policy_identity": {
+    "policy_id": "synthetic-outcome-delta-policy",
+    "policy_version": "policy-v1",
+    "policy_source_ref": "sample://policy/synthetic-outcome-delta-policy"
+  },
+  "rule_set_version": "rules-v2",
+  "authority_evidence_refs": [
+    "authority-evidence-example-v2"
+  ],
+  "qualifier_state": [
+    {
+      "qualifier_name": "authority_evidence_freshness",
+      "source_ref": "sample://qualifier/authority-evidence-freshness",
+      "freshness_state": "stale",
+      "required_at_bind": true,
+      "qualifier_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "authorized_determiners_used": [
+    {
+      "determiner_id": "synthetic-authority-scope-check",
+      "determiner_type": "authority_scope_validation",
+      "authority_scope": "synthetic_outcome_delta_scope",
+      "influenced_outcome": true
+    }
+  ],
+  "admissibility_inputs": [
+    {
+      "input_name": "synthetic_decision_context",
+      "input_type": "synthetic_context_ref",
+      "input_ref": "sample://input/outcome-delta-helper-current-context",
+      "required": true,
+      "input_hash": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ],
+  "consequence_class": {
+    "class_id": "synthetic-high-consequence",
+    "class_label": "high",
+    "classifier_id": "synthetic-consequence-classifier",
+    "classifier_version": "classifier-v2"
+  },
+  "material_context": {
+    "context_ref": "sample://context/outcome-delta-helper",
+    "context_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "context_freshness_state": "fresh",
+    "stale_context_allowed": false
+  },
+  "outcome": "escalate",
+  "rationale_codes": [
+    "synthetic_current_escalate",
+    "synthetic_review_required"
+  ],
+  "input_state_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+  "evaluation_state_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+  "receipt_hash": "6666666666666666666666666666666666666666666666666666666666666666"
+}

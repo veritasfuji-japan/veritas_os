@@ -1,0 +1,65 @@
+{
+  "schema_version": "evaluation-receipt-v1",
+  "receipt_id": "outcome-delta-helper-prior-receipt-001",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "evaluation_id": "outcome-delta-helper-prior-evaluation-001",
+  "evaluation_function_manifest_ref": "sample://evaluation-function/outcome-delta-helper-v1",
+  "evaluation_function_manifest_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "root_authority_manifest_ref": "sample://root-authority/outcome-delta-helper-v1",
+  "evaluator_id": "synthetic-outcome-delta-evaluator",
+  "evaluator_version": "eval-v1.0.0",
+  "policy_identity": {
+    "policy_id": "synthetic-outcome-delta-policy",
+    "policy_version": "policy-v1",
+    "policy_source_ref": "sample://policy/synthetic-outcome-delta-policy"
+  },
+  "rule_set_version": "rules-v1",
+  "authority_evidence_refs": [
+    "authority-evidence-example-v1"
+  ],
+  "qualifier_state": [
+    {
+      "qualifier_name": "authority_evidence_freshness",
+      "source_ref": "sample://qualifier/authority-evidence-freshness",
+      "freshness_state": "fresh",
+      "required_at_bind": true,
+      "qualifier_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "authorized_determiners_used": [
+    {
+      "determiner_id": "synthetic-authority-scope-check",
+      "determiner_type": "authority_scope_validation",
+      "authority_scope": "synthetic_outcome_delta_scope",
+      "influenced_outcome": true
+    }
+  ],
+  "admissibility_inputs": [
+    {
+      "input_name": "synthetic_decision_context",
+      "input_type": "synthetic_context_ref",
+      "input_ref": "sample://input/outcome-delta-helper-prior-context",
+      "required": true,
+      "input_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "consequence_class": {
+    "class_id": "synthetic-medium-consequence",
+    "class_label": "medium",
+    "classifier_id": "synthetic-consequence-classifier",
+    "classifier_version": "classifier-v1"
+  },
+  "material_context": {
+    "context_ref": "sample://context/outcome-delta-helper",
+    "context_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "context_freshness_state": "fresh",
+    "stale_context_allowed": false
+  },
+  "outcome": "allow",
+  "rationale_codes": [
+    "synthetic_prior_allow"
+  ],
+  "input_state_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "evaluation_state_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "receipt_hash": "1111111111111111111111111111111111111111111111111111111111111111"
+}
