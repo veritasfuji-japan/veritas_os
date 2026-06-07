@@ -16,6 +16,10 @@ SCHEMA_PATH = Path("docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
 FIXTURE_PATH = Path(
     "docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json"
 )
+EVALUATION_GOVERNANCE_EXAMPLE_PATH = Path(
+    "docs/en/demo/examples/"
+    "reviewer-evidence-packet-with-evaluation-governance-v1.json"
+)
 SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 REQUIRED_TOP_LEVEL_FIELDS = [
     "packet_id",
@@ -425,6 +429,46 @@ def test_schema_validation_requires_no_network_or_environment_dependency(
     monkeypatch.delenv("VERITAS_API_KEY", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     _validate_or_fallback(_build_reviewer_evidence_packet(), _load_json(SCHEMA_PATH))
+
+
+def test_evaluation_governance_example_validates_against_schema() -> None:
+    packet = _load_json(EVALUATION_GOVERNANCE_EXAMPLE_PATH)
+
+    _validate_or_fallback(packet, _load_json(SCHEMA_PATH))
+
+
+def test_evaluation_governance_example_declares_optional_artifact_refs() -> None:
+    packet = _load_json(EVALUATION_GOVERNANCE_EXAMPLE_PATH)
+    artifacts = packet["evaluation_governance_artifacts"]
+
+    assert [artifact["artifact_type"] for artifact in artifacts] == [
+        "root_authority_manifest",
+        "evaluation_function_manifest",
+        "manifest_change_receipt",
+        "evaluation_receipt",
+        "outcome_delta_attribution",
+        "evaluation_drift_detection",
+        "trajectory_admissibility_monitor",
+        "legitimacy_impact_review",
+        "adversarial_architecture_test_matrix",
+        "adversarial_scenario_fixtures",
+    ]
+    assert all(
+        set(artifact)
+        == {
+            "artifact_type",
+            "artifact_ref",
+            "artifact_hash",
+            "schema_ref",
+            "required_for_review",
+        }
+        for artifact in artifacts
+    )
+    assert all(
+        SHA256_HEX_PATTERN.fullmatch(artifact["artifact_hash"])
+        for artifact in artifacts
+    )
+    assert all(artifact["required_for_review"] is False for artifact in artifacts)
 
 
 def test_schema_accepts_optional_evaluation_governance_artifacts() -> None:

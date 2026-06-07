@@ -36,6 +36,8 @@ Optional Evaluation Governance artifact references may include:
 
 These attachments are optional reviewer evidence attachments in v1. Reviewer packets do not require them, and schema validation only checks the attachment reference shape, hash format, and declared schema reference; it does not dereference files or validate the target artifact itself.
 
+A non-enforcing example packet with optional Evaluation Governance attachment references is checked in at `docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json`.
+
 Evaluation Governance artifacts are non-enforcing in v1 unless future runtime integration is added. Their presence supports external review, but does not automatically establish legitimacy, does not change runtime admissibility, does not introduce fail-closed behavior, and does not require live receipt generation.
 
 ## Local/offline boundary
