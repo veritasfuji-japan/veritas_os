@@ -1,0 +1,74 @@
+{
+  "schema_version": "trajectory-admissibility-monitor-v1",
+  "monitor_id": "legitimacy-helper-trajectory-monitor-001",
+  "issued_at": "2026-01-01T00:10:00Z",
+  "trajectory_id": "legitimacy-helper-high-risk-internal-approval-trajectory",
+  "evaluation_receipt_refs": [
+    "evaluation-receipt-example-001",
+    "evaluation-receipt-example-002"
+  ],
+  "outcome_delta_attribution_refs": [
+    "outcome-delta-attribution-example-001"
+  ],
+  "evaluation_drift_detection_refs": [
+    "evaluation-drift-detection-example-001"
+  ],
+  "trajectory_window": {
+    "started_at": "2026-01-01T00:00:00Z",
+    "ended_at": "2026-01-01T00:10:00Z",
+    "evaluation_count": 2
+  },
+  "baseline_authority_scope": {
+    "scope_id": "high-risk-internal-approval-limited-demo",
+    "scope_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+    "authority_evidence_ref": "sample://authority/scope-limited"
+  },
+  "current_authority_scope": {
+    "scope_id": "high-risk-internal-approval-expanded-demo",
+    "scope_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "authority_evidence_ref": "sample://authority/scope-expanded"
+  },
+  "admissibility_scope_change": {
+    "scope_expanded": true,
+    "expansion_type": "delegated_authority_expansion",
+    "explicit_reauthorization_present": false,
+    "reauthorization_evidence_refs": []
+  },
+  "continuity_event_summary": {
+    "continuity_events_observed": 2,
+    "low_risk_events_count": 0,
+    "material_change_events_count": 1,
+    "requalification_events_count": 1,
+    "escalation_events_count": 1
+  },
+  "trajectory_risk_signals": [
+    {
+      "signal_type": "admissibility_envelope_expansion",
+      "severity": "high",
+      "evidence_refs": [
+        "high-risk-evaluation-receipt-example-002"
+      ],
+      "explanation": "Synthetic high-risk trajectory shows a wider delegated authority envelope."
+    },
+    {
+      "signal_type": "delegated_scope_widening",
+      "severity": "high",
+      "evidence_refs": [
+        "outcome-delta-attribution-example-001"
+      ],
+      "explanation": "Synthetic delegated scope widened for reviewer demonstration."
+    },
+    {
+      "signal_type": "strategic_admissibility_drift",
+      "severity": "high",
+      "evidence_refs": [
+        "evaluation-drift-detection-example-001"
+      ],
+      "explanation": "Synthetic trajectory may be strategically shaped."
+    }
+  ],
+  "trajectory_status": "strategically_shaped",
+  "recommended_governance_action": "mark_strategic_admissibility_drift",
+  "monitor_summary": "Synthetic monitor flags potential admissibility expansion for reviewer inspection only.",
+  "monitor_hash": "3333333333333333333333333333333333333333333333333333333333333333"
+}

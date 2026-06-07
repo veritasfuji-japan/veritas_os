@@ -1,0 +1,29 @@
+{
+  "schema_version": "manifest-change-receipt-v1",
+  "receipt_id": "legitimacy-helper-manifest-change-001",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "changed_manifest_type": "evaluation_function_manifest",
+  "changed_manifest_id": "evaluation-function-manifest-example-001",
+  "previous_manifest_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "new_manifest_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+  "change_reason": "Synthetic evaluator change expands delegated authority scope for high-risk internal approval and reduces escalation requirements for reviewer demonstration.",
+  "changed_by": {
+    "actor_id": "synthetic-governance-maintainer",
+    "role": "demo_governance_maintainer"
+  },
+  "authority_evidence_ref": "sample://authority/synthetic-board-charter-v1",
+  "approval_evidence_refs": [
+    "approval-evidence-example-001"
+  ],
+  "impact_scope": [
+    "high_risk_internal_approval"
+  ],
+  "legitimacy_impact_flags": [
+    "authority_scope_expanded",
+    "human_oversight_weakened",
+    "escalation_requirement_reduced"
+  ],
+  "rollback_conditions": [
+    "rollback-if-external-review-rejects-change"
+  ]
+}
