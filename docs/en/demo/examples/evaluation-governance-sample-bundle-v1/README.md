@@ -21,6 +21,16 @@ The bundle demonstrates a complete artifact chain for a fictional scenario: a hi
 - It does not modify production governance configuration.
 - It does not contain secrets or personally identifiable information (PII).
 
+## Validate the sample bundle
+
+Run:
+
+```bash
+python scripts/demo/validate_evaluation_governance_sample_bundle.py
+```
+
+This helper validates schema shape only. It does not prove runtime enforcement, establish legitimacy, certify regulatory compliance, verify cryptographic hash correctness in v1 beyond schema shape, dereference artifact references, or require network access.
+
 ## Compact artifact flow
 
 ```text
