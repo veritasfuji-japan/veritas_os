@@ -17,6 +17,27 @@ The packet is built from `run_saas_permission_change_governed_demo()` and includ
 - deterministic reviewer notes
 - a deterministic packet hash that excludes `packet_hash` itself from the hash payload
 
+## Evaluation Governance Artifact Attachments
+
+Reviewer Evidence Packet v1 may include optional reviewer evidence attachments for Evaluation Governance artifacts. These references are intended to help external reviewers inspect the authority basis, evaluator definition, evaluation receipt, drift signals, trajectory movement, and legitimacy-impacting changes that may be relevant to an architecture-hardening review.
+
+Optional Evaluation Governance artifact references may include:
+
+- Root Authority Manifest
+- Evaluation Function Manifest
+- Manifest Change Receipt
+- Evaluation Receipt
+- Outcome Delta Attribution
+- Evaluation Drift Detection
+- Trajectory-Level Admissibility Monitor
+- Legitimacy Impact Review
+- Adversarial Architecture Test Matrix
+- Adversarial Scenario Fixtures
+
+These attachments are optional reviewer evidence attachments in v1. Reviewer packets do not require them, and schema validation only checks the attachment reference shape, hash format, and declared schema reference; it does not dereference files or validate the target artifact itself.
+
+Evaluation Governance artifacts are non-enforcing in v1 unless future runtime integration is added. Their presence supports external review, but does not automatically establish legitimacy, does not change runtime admissibility, does not introduce fail-closed behavior, and does not require live receipt generation.
+
 ## Local/offline boundary
 
 Reviewer Evidence Packet v1 is a local/offline fixture export only.
@@ -49,7 +70,7 @@ If the generated packet changes intentionally in the future, update the golden f
 Reviewer Evidence Packet v1 has a checked-in schema at:
 `docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`
 
-The schema documents the required packet fields, case summaries, nested evidence summaries, aggregate summary, reviewer notes, and packet hash format. The golden fixture and generated packet are tested against this schema. Future intentional packet-shape changes should update the schema, exporter, tests, and golden fixture in the same PR.
+The schema documents the required packet fields, case summaries, nested evidence summaries, aggregate summary, reviewer notes, packet hash format, and optional `evaluation_governance_artifacts` reference shape. The golden fixture and generated packet are tested against this schema. Future intentional packet-shape changes should update the schema, exporter, tests, and golden fixture in the same PR.
 
 This schema is for a local/offline reviewer packet. It is not a production audit certification, regulatory approval, or proof of live deployment.
 

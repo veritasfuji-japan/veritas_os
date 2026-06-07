@@ -136,6 +136,14 @@ REQUIRED_AGGREGATE_FIELDS = [
     "local_offline_only",
 ]
 
+EVALUATION_GOVERNANCE_ARTIFACT = {
+    "artifact_type": "root_authority_manifest",
+    "artifact_ref": "docs/en/demo/fixtures/root-authority-manifest-v1.json",
+    "artifact_hash": "0" * 64,
+    "schema_ref": "docs/en/demo/schemas/root-authority-manifest-v1.schema.json",
+    "required_for_review": False,
+}
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -417,3 +425,47 @@ def test_schema_validation_requires_no_network_or_environment_dependency(
     monkeypatch.delenv("VERITAS_API_KEY", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     _validate_or_fallback(_build_reviewer_evidence_packet(), _load_json(SCHEMA_PATH))
+
+
+def test_schema_accepts_optional_evaluation_governance_artifacts() -> None:
+    packet = copy.deepcopy(_load_json(FIXTURE_PATH))
+    packet["evaluation_governance_artifacts"] = [
+        EVALUATION_GOVERNANCE_ARTIFACT.copy()
+    ]
+
+    _validate_or_fallback(packet, _load_json(SCHEMA_PATH))
+
+
+def test_evaluation_governance_artifacts_remain_optional() -> None:
+    packet = _load_json(FIXTURE_PATH)
+
+    assert "evaluation_governance_artifacts" not in packet
+    _validate_or_fallback(packet, _load_json(SCHEMA_PATH))
+
+
+def test_schema_rejects_invalid_evaluation_governance_artifact_type() -> None:
+    jsonschema = _jsonschema_module()
+    if jsonschema is None:
+        pytest.skip("jsonschema is unavailable")
+    packet = copy.deepcopy(_load_json(FIXTURE_PATH))
+    artifact = EVALUATION_GOVERNANCE_ARTIFACT.copy()
+    artifact["artifact_type"] = "required_runtime_artifact"
+    packet["evaluation_governance_artifacts"] = [artifact]
+
+    validator = jsonschema.Draft202012Validator(_load_json(SCHEMA_PATH))
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(packet)
+
+
+def test_schema_rejects_invalid_evaluation_governance_artifact_hash() -> None:
+    jsonschema = _jsonschema_module()
+    if jsonschema is None:
+        pytest.skip("jsonschema is unavailable")
+    packet = copy.deepcopy(_load_json(FIXTURE_PATH))
+    artifact = EVALUATION_GOVERNANCE_ARTIFACT.copy()
+    artifact["artifact_hash"] = "not-a-sha256-hex"
+    packet["evaluation_governance_artifacts"] = [artifact]
+
+    validator = jsonschema.Draft202012Validator(_load_json(SCHEMA_PATH))
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(packet)
