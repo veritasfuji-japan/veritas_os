@@ -66,6 +66,7 @@ VERITAS includes a reviewer-facing Evaluation Governance artifact chain for insp
 
 These artifacts are non-enforcing in v1. They do not change `/v1/decide`, do not automatically establish legitimacy, and do not certify regulatory compliance. They are intended to make architecture-hardening evidence explicit, versioned, challengeable, and auditable.
 
+- Evaluation Governance overview: [docs/en/architecture/evaluation-governance-overview-v1.md](docs/en/architecture/evaluation-governance-overview-v1.md)
 - [Evaluation Function Governance v1](docs/en/architecture/evaluation-function-governance-v1.md)
 - [Evaluation Receipt v1](docs/en/architecture/evaluation-receipt-v1.md)
 - [Outcome Delta Attribution v1](docs/en/architecture/outcome-delta-attribution-v1.md)
