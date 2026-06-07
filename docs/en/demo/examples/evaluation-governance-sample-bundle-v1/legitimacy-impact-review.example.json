@@ -1,0 +1,77 @@
+{
+  "schema_version": "legitimacy-impact-review-v1",
+  "review_id": "egov-sample-legitimacy-impact-review-001",
+  "issued_at": "2026-05-01T00:40:00Z",
+  "reviewed_artifact_type": "trajectory_admissibility_monitor",
+  "reviewed_artifact_ref": "egov-sample-trajectory-monitor-001",
+  "reviewed_artifact_hash": "6666666666666666666666666666666666666666666666666666666666666666",
+  "triggering_change_ref": "egov-sample-manifest-change-001",
+  "triggering_change_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "legitimacy_impact_detected": true,
+  "impact_categories": [
+    "authority_scope_expansion",
+    "high_risk_admissibility_expanded",
+    "evaluation_behavior_changed"
+  ],
+  "authority_impact": {
+    "authority_scope_expanded": true,
+    "trusted_authority_source_changed": false,
+    "root_authority_changed": false,
+    "evidence_refs": [
+      "egov-sample-manifest-change-001"
+    ],
+    "explanation": "Synthetic delegated authority scope expanded."
+  },
+  "oversight_impact": {
+    "human_oversight_weakened": false,
+    "approval_requirement_reduced": false,
+    "reviewer_authority_changed": false,
+    "evidence_refs": [
+      "sample://approval/synthetic-reviewer-approval-a",
+      "sample://approval/synthetic-reviewer-approval-b"
+    ],
+    "explanation": "Synthetic approval references remain present."
+  },
+  "refusal_boundary_impact": {
+    "refusal_boundary_relaxed": false,
+    "refusal_condition_removed": false,
+    "refusal_condition_changed": false,
+    "evidence_refs": [
+      "egov-sample-evaluation-function-v2"
+    ],
+    "explanation": "No synthetic refusal boundary relaxation is claimed."
+  },
+  "escalation_impact": {
+    "escalation_requirement_reduced": false,
+    "escalation_path_changed": true,
+    "escalation_authority_changed": false,
+    "evidence_refs": [
+      "egov-sample-evaluation-receipt-current-001"
+    ],
+    "explanation": "The synthetic outcome now escalates instead of refusing."
+  },
+  "auditability_impact": {
+    "auditability_reduced": false,
+    "replayability_reduced": false,
+    "evidence_chain_weakened": false,
+    "receipt_requirements_reduced": false,
+    "evidence_refs": [
+      "egov-sample-outcome-delta-001",
+      "egov-sample-drift-detection-001"
+    ],
+    "explanation": "The sample keeps explicit artifact references for reviewer inspection."
+  },
+  "high_risk_admissibility_impact": {
+    "high_risk_scope_expanded": true,
+    "high_risk_controls_weakened": false,
+    "high_risk_review_requirement_reduced": false,
+    "evidence_refs": [
+      "egov-sample-trajectory-monitor-001"
+    ],
+    "explanation": "The synthetic trajectory monitor flags a high-risk delegated scope expansion."
+  },
+  "review_status": "required",
+  "recommended_governance_action": "mark_legitimacy_impact",
+  "review_summary": "Synthetic legitimacy review marks possible impact from evaluator and delegated authority scope changes; it is not a compliance certification.",
+  "review_hash": "7777777777777777777777777777777777777777777777777777777777777777"
+}

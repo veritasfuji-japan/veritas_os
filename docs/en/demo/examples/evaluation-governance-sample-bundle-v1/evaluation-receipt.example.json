@@ -1,0 +1,67 @@
+{
+  "schema_version": "evaluation-receipt-v1",
+  "receipt_id": "egov-sample-evaluation-receipt-current-001",
+  "issued_at": "2026-05-01T00:20:00Z",
+  "evaluation_id": "egov-sample-evaluation-current-001",
+  "evaluation_function_manifest_ref": "egov-sample-evaluation-function-v2",
+  "evaluation_function_manifest_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "root_authority_manifest_ref": "egov-sample-root-authority-v1",
+  "evaluator_id": "synthetic-high-risk-approval-evaluator",
+  "evaluator_version": "2.0.0-demo",
+  "policy_identity": {
+    "policy_id": "synthetic-high-risk-approval-policy",
+    "policy_version": "2026.05-demo",
+    "policy_source_ref": "sample://policy/synthetic-high-risk-approval-policy"
+  },
+  "rule_set_version": "synthetic-ruleset-2026.05-expanded-scope",
+  "authority_evidence_refs": [
+    "sample://authority/synthetic-board-charter-v1",
+    "sample://approval/synthetic-reviewer-approval-a"
+  ],
+  "qualifier_state": [
+    {
+      "qualifier_name": "delegated_scope_validity",
+      "source_ref": "egov-sample-root-authority-v1",
+      "freshness_state": "fresh",
+      "required_at_bind": true,
+      "qualifier_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ],
+  "authorized_determiners_used": [
+    {
+      "determiner_id": "synthetic-delegated-authority-check",
+      "determiner_type": "authority_scope_validation",
+      "authority_scope": "internal_approval_high_risk_expanded_demo",
+      "influenced_outcome": true
+    }
+  ],
+  "admissibility_inputs": [
+    {
+      "input_name": "delegated_authority_scope",
+      "input_type": "synthetic_scope_ref",
+      "input_ref": "sample://input/delegated-authority-expanded",
+      "required": true,
+      "input_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  ],
+  "consequence_class": {
+    "class_id": "synthetic-high-risk-internal-approval",
+    "class_label": "high_risk_internal_approval",
+    "classifier_id": "synthetic-high-risk-consequence-classifier",
+    "classifier_version": "2.0.0-demo"
+  },
+  "material_context": {
+    "context_ref": "sample://context/internal-approval-workflow-001",
+    "context_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "context_freshness_state": "fresh",
+    "stale_context_allowed": false
+  },
+  "outcome": "escalate",
+  "rationale_codes": [
+    "delegated_scope_expanded",
+    "human_review_required"
+  ],
+  "input_state_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "evaluation_state_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "receipt_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+}

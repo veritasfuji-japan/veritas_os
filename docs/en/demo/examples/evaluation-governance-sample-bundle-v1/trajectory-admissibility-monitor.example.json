@@ -1,0 +1,62 @@
+{
+  "schema_version": "trajectory-admissibility-monitor-v1",
+  "monitor_id": "egov-sample-trajectory-monitor-001",
+  "issued_at": "2026-05-01T00:35:00Z",
+  "trajectory_id": "egov-sample-high-risk-internal-approval-trajectory",
+  "evaluation_receipt_refs": [
+    "sample://evaluation-receipts/egov-sample-evaluation-receipt-prior-001",
+    "egov-sample-evaluation-receipt-current-001"
+  ],
+  "outcome_delta_attribution_refs": [
+    "egov-sample-outcome-delta-001"
+  ],
+  "evaluation_drift_detection_refs": [
+    "egov-sample-drift-detection-001"
+  ],
+  "trajectory_window": {
+    "started_at": "2026-05-01T00:00:00Z",
+    "ended_at": "2026-05-01T00:35:00Z",
+    "evaluation_count": 2
+  },
+  "baseline_authority_scope": {
+    "scope_id": "internal_approval_high_risk_limited_demo",
+    "scope_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authority_evidence_ref": "sample://authority/scope-limited"
+  },
+  "current_authority_scope": {
+    "scope_id": "internal_approval_high_risk_expanded_demo",
+    "scope_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authority_evidence_ref": "sample://authority/scope-expanded"
+  },
+  "admissibility_scope_change": {
+    "scope_expanded": true,
+    "expansion_type": "delegated_authority_expansion",
+    "explicit_reauthorization_present": true,
+    "reauthorization_evidence_refs": [
+      "egov-sample-manifest-change-001"
+    ]
+  },
+  "continuity_event_summary": {
+    "continuity_events_observed": 2,
+    "low_risk_events_count": 0,
+    "material_change_events_count": 1,
+    "requalification_events_count": 1,
+    "escalation_events_count": 1
+  },
+  "trajectory_risk_signals": [
+    {
+      "signal_type": "admissibility_envelope_expansion",
+      "severity": "high",
+      "evidence_refs": [
+        "egov-sample-evaluation-receipt-current-001",
+        "egov-sample-outcome-delta-001",
+        "egov-sample-drift-detection-001"
+      ],
+      "explanation": "The synthetic trajectory indicates a wider delegated authority envelope than the baseline."
+    }
+  ],
+  "trajectory_status": "watch",
+  "recommended_governance_action": "reconcile_authority_scope",
+  "monitor_summary": "Synthetic monitor flags potential admissibility expansion for reviewer inspection only.",
+  "monitor_hash": "6666666666666666666666666666666666666666666666666666666666666666"
+}

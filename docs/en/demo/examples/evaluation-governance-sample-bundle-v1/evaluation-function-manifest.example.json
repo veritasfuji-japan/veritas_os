@@ -1,0 +1,66 @@
+{
+  "schema_version": "evaluation-function-manifest-v1",
+  "manifest_id": "egov-sample-evaluation-function-v2",
+  "issued_at": "2026-05-01T00:10:00Z",
+  "evaluator_id": "synthetic-high-risk-approval-evaluator",
+  "evaluator_version": "2.0.0-demo",
+  "policy_identity": {
+    "policy_id": "synthetic-high-risk-approval-policy",
+    "policy_version": "2026.05-demo",
+    "policy_source_ref": "sample://policy/synthetic-high-risk-approval-policy"
+  },
+  "rule_set_version": "synthetic-ruleset-2026.05-expanded-scope",
+  "authorized_determiners": [
+    {
+      "determiner_id": "synthetic-delegated-authority-check",
+      "determiner_type": "authority_scope_validation",
+      "authority_scope": "internal_approval_high_risk_expanded_demo",
+      "may_influence_outcome": true
+    }
+  ],
+  "admissibility_inputs": [
+    {
+      "input_name": "delegated_authority_scope",
+      "input_type": "synthetic_scope_ref",
+      "required": true,
+      "freshness_required": true
+    },
+    {
+      "input_name": "approval_request_context",
+      "input_type": "synthetic_context_ref",
+      "required": true,
+      "freshness_required": true
+    }
+  ],
+  "qualifier_sources": [
+    {
+      "qualifier_name": "delegated_scope_validity",
+      "source_ref": "egov-sample-root-authority-v1",
+      "freshness_ttl_seconds": 3600,
+      "required_at_bind": true
+    }
+  ],
+  "consequence_classifier": {
+    "classifier_id": "synthetic-high-risk-consequence-classifier",
+    "classifier_version": "2.0.0-demo"
+  },
+  "threshold_resolver": {
+    "resolver_id": "synthetic-expanded-threshold-resolver",
+    "resolver_version": "2.0.0-demo"
+  },
+  "refusal_boundaries": [
+    {
+      "boundary_id": "missing-delegated-authority",
+      "condition": "delegated authority scope evidence is missing",
+      "action": "escalate_or_refuse"
+    }
+  ],
+  "escalation_resolver": {
+    "resolver_id": "synthetic-human-review-escalation-resolver",
+    "resolver_version": "2.0.0-demo",
+    "authority_validation_required": true
+  },
+  "baseline_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "root_authority_manifest_ref": "egov-sample-root-authority-v1",
+  "manifest_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}
