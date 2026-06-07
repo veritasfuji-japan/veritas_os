@@ -1,0 +1,34 @@
+{
+  "current_evaluation_receipt_ref": "evaluation-governance-offline-chain-receipt-002",
+  "detection_hash": "f53cab1310a7fccd8efa8815d50685be5a4fff42f14ac575cbbdc9e490c82c66",
+  "detection_id": "evaluation-governance-offline-chain-drift-detection-001",
+  "detection_summary": "Draft detection marked suspected drift from allow to escalate.",
+  "drift_causes": [
+    {
+      "cause_type": "evaluator_version_changed",
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-002"
+      ],
+      "explanation": "The evaluator version changed between receipts.",
+      "severity": "medium"
+    },
+    {
+      "cause_type": "rule_version_changed",
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-002"
+      ],
+      "explanation": "The rule set version changed between receipts.",
+      "severity": "medium"
+    }
+  ],
+  "drift_detected": true,
+  "drift_status": "suspected",
+  "evaluator_consistency_status": "unknown",
+  "explanation_status": "partially_explained",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "outcome_delta_attribution_hash": "17029f187996728b120db5bbf7bb92f26d6a16f833bdc3b7c66bd05077d62d33",
+  "outcome_delta_attribution_ref": "evaluation-governance-offline-chain-attribution-001",
+  "prior_evaluation_receipt_ref": "evaluation-governance-offline-chain-receipt-001",
+  "recommended_governance_action": "requalify_evaluator",
+  "schema_version": "evaluation-drift-detection-v1"
+}
