@@ -50,6 +50,7 @@ Use this 10–15 minute path for a reviewer-facing inspection:
 6. Inspect the original demo:
    `scripts/demo/saas_permission_change_governed_demo.py`
 7. Optionally review Evaluation Governance artifacts, if present. These attachments are optional in v1, non-enforcing, and useful for architecture-hardening review without changing runtime admissibility.
+   A synthetic example packet is available at `docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json`; schema validation does not require the referenced artifact files to exist.
 
 ## Local bundle generation
 
