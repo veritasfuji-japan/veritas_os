@@ -94,6 +94,9 @@ The current Evaluation Governance artifact chain is:
 
 ## 6. Future implementation path
 
+See [Adversarial Scenario Fixtures v1](adversarial-scenario-fixtures-v1.md)
+for reviewer-facing examples that instantiate these failure classes.
+
 Suggested future PRs include:
 
 1. Reviewer Evidence Packet integration for Evaluation Governance artifacts
