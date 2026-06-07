@@ -1,0 +1,43 @@
+{
+  "schema_version": "outcome-delta-attribution-v1",
+  "attribution_id": "tam-helper-outcome-delta-attribution-002",
+  "issued_at": "2026-01-03T00:10:00Z",
+  "prior_evaluation_receipt_ref": "tam-helper-evaluation-receipt-002",
+  "current_evaluation_receipt_ref": "tam-helper-evaluation-receipt-003",
+  "prior_evaluation_receipt_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+  "current_evaluation_receipt_hash": "6666666666666666666666666666666666666666666666666666666666666666",
+  "prior_outcome": "escalate",
+  "current_outcome": "escalate",
+  "outcome_changed": false,
+  "delta_causes": [
+    {
+      "cause_type": "evaluator_version_changed",
+      "severity": "medium",
+      "prior_value_ref": "1.0.0-demo",
+      "current_value_ref": "1.1.0-demo",
+      "evidence_refs": [
+        "tam-helper-evaluation-function-v1"
+      ],
+      "explanation": "Evaluator version changed in the synthetic trajectory."
+    },
+    {
+      "cause_type": "rule_version_changed",
+      "severity": "medium",
+      "prior_value_ref": "synthetic-ruleset-v1",
+      "current_value_ref": "synthetic-ruleset-v2",
+      "evidence_refs": [
+        "sample://policy/synthetic-trajectory-policy"
+      ],
+      "explanation": "Rule version changed while the outcome stayed escalate."
+    }
+  ],
+  "attribution_summary": "Synthetic attribution records evaluator and rule version changes with unchanged outcome.",
+  "attribution_confidence": "medium",
+  "unresolved_delta": {
+    "present": false,
+    "reason": "Synthetic causes explain the compared receipt delta.",
+    "requires_review": false
+  },
+  "recommended_governance_action": "review",
+  "attribution_hash": "7777777777777777777777777777777777777777777777777777777777777777"
+}

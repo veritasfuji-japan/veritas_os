@@ -1,0 +1,54 @@
+{
+  "schema_version": "outcome-delta-attribution-v1",
+  "attribution_id": "tam-helper-outcome-delta-attribution-001",
+  "issued_at": "2026-01-02T00:10:00Z",
+  "prior_evaluation_receipt_ref": "tam-helper-evaluation-receipt-001",
+  "current_evaluation_receipt_ref": "tam-helper-evaluation-receipt-002",
+  "prior_evaluation_receipt_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+  "current_evaluation_receipt_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+  "prior_outcome": "allow",
+  "current_outcome": "escalate",
+  "outcome_changed": true,
+  "delta_causes": [
+    {
+      "cause_type": "authority_state_changed",
+      "severity": "high",
+      "prior_value_ref": "authority-evidence-example-v1",
+      "current_value_ref": "authority-evidence-example-v2",
+      "evidence_refs": [
+        "authority-evidence-example-v1",
+        "authority-evidence-example-v2"
+      ],
+      "explanation": "Authority evidence changed between the first two synthetic receipts."
+    },
+    {
+      "cause_type": "qualifier_freshness_changed",
+      "severity": "medium",
+      "prior_value_ref": "fresh",
+      "current_value_ref": "fresh",
+      "evidence_refs": [
+        "tam-helper-root-authority-v1"
+      ],
+      "explanation": "Qualifier state was reviewed as part of the synthetic comparison."
+    },
+    {
+      "cause_type": "consequence_class_changed",
+      "severity": "high",
+      "prior_value_ref": "medium",
+      "current_value_ref": "high",
+      "evidence_refs": [
+        "sample://context/trajectory-monitor-helper-001"
+      ],
+      "explanation": "The consequence class changed in the synthetic trajectory."
+    }
+  ],
+  "attribution_summary": "Synthetic attribution from allow to escalate with delegated authority evidence change.",
+  "attribution_confidence": "high",
+  "unresolved_delta": {
+    "present": false,
+    "reason": "Synthetic causes explain the compared receipt delta.",
+    "requires_review": false
+  },
+  "recommended_governance_action": "requalify",
+  "attribution_hash": "6666666666666666666666666666666666666666666666666666666666666666"
+}

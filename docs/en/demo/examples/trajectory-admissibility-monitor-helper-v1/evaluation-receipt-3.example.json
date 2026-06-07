@@ -1,0 +1,65 @@
+{
+  "schema_version": "evaluation-receipt-v1",
+  "receipt_id": "tam-helper-evaluation-receipt-003",
+  "issued_at": "2026-01-03T00:00:00Z",
+  "evaluation_id": "tam-helper-evaluation-003",
+  "evaluation_function_manifest_ref": "tam-helper-evaluation-function-v1",
+  "evaluation_function_manifest_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "root_authority_manifest_ref": "tam-helper-root-authority-v1",
+  "evaluator_id": "synthetic-trajectory-evaluator",
+  "evaluator_version": "1.1.0-demo",
+  "policy_identity": {
+    "policy_id": "synthetic-trajectory-policy",
+    "policy_version": "2026.01-demo",
+    "policy_source_ref": "sample://policy/synthetic-trajectory-policy"
+  },
+  "rule_set_version": "synthetic-ruleset-v2",
+  "authority_evidence_refs": [
+    "authority-evidence-example-v2"
+  ],
+  "qualifier_state": [
+    {
+      "qualifier_name": "delegated_scope_validity",
+      "source_ref": "tam-helper-root-authority-v1",
+      "freshness_state": "fresh",
+      "required_at_bind": true,
+      "qualifier_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "authorized_determiners_used": [
+    {
+      "determiner_id": "synthetic-delegated-authority-check",
+      "determiner_type": "authority_scope_validation",
+      "authority_scope": "synthetic_trajectory_scope",
+      "influenced_outcome": true
+    }
+  ],
+  "admissibility_inputs": [
+    {
+      "input_name": "delegated_authority_scope",
+      "input_type": "synthetic_scope_ref",
+      "input_ref": "sample://input/delegated-authority-scope",
+      "required": true,
+      "input_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "consequence_class": {
+    "class_id": "synthetic-high-trajectory-event",
+    "class_label": "high",
+    "classifier_id": "synthetic-trajectory-classifier",
+    "classifier_version": "1.0.0-demo"
+  },
+  "material_context": {
+    "context_ref": "sample://context/trajectory-monitor-helper-001",
+    "context_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "context_freshness_state": "fresh",
+    "stale_context_allowed": false
+  },
+  "outcome": "escalate",
+  "rationale_codes": [
+    "synthetic_trajectory_example"
+  ],
+  "input_state_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "evaluation_state_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+  "receipt_hash": "6666666666666666666666666666666666666666666666666666666666666666"
+}

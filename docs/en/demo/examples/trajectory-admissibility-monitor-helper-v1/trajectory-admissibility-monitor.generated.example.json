@@ -1,0 +1,112 @@
+{
+  "schema_version": "trajectory-admissibility-monitor-v1",
+  "monitor_id": "trajectory-admissibility-monitor-example-001",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "trajectory_id": "trajectory-admissibility-monitor-example-001",
+  "evaluation_receipt_refs": [
+    "tam-helper-evaluation-receipt-001",
+    "tam-helper-evaluation-receipt-002",
+    "tam-helper-evaluation-receipt-003"
+  ],
+  "outcome_delta_attribution_refs": [
+    "tam-helper-outcome-delta-attribution-001",
+    "tam-helper-outcome-delta-attribution-002"
+  ],
+  "evaluation_drift_detection_refs": [
+    "tam-helper-evaluation-drift-detection-001",
+    "tam-helper-evaluation-drift-detection-002"
+  ],
+  "trajectory_window": {
+    "started_at": "2026-01-01T00:00:00Z",
+    "ended_at": "2026-01-03T00:00:00Z",
+    "evaluation_count": 3
+  },
+  "baseline_authority_scope": {
+    "scope_id": "baseline-authority-scope",
+    "scope_hash": "cd394c49479686f78fafa76d3c430017143b0cf186d705744d5c792d0c6f1a21",
+    "authority_evidence_ref": "authority-evidence-example-v1"
+  },
+  "current_authority_scope": {
+    "scope_id": "current-authority-scope",
+    "scope_hash": "a1d920789a49e251e52fe44e6a90e0f473eff97d69964e40b5ff9e5f1d501176",
+    "authority_evidence_ref": "authority-evidence-example-v2"
+  },
+  "admissibility_scope_change": {
+    "scope_expanded": true,
+    "expansion_type": "delegated_authority_expansion",
+    "explicit_reauthorization_present": false,
+    "reauthorization_evidence_refs": []
+  },
+  "continuity_event_summary": {
+    "continuity_events_observed": 3,
+    "low_risk_events_count": 1,
+    "material_change_events_count": 1,
+    "requalification_events_count": 1,
+    "escalation_events_count": 2
+  },
+  "trajectory_risk_signals": [
+    {
+      "signal_type": "admissibility_envelope_expansion",
+      "severity": "high",
+      "evidence_refs": [
+        "tam-helper-evaluation-receipt-001",
+        "tam-helper-evaluation-receipt-002",
+        "tam-helper-evaluation-receipt-003",
+        "tam-helper-outcome-delta-attribution-001",
+        "tam-helper-outcome-delta-attribution-002",
+        "tam-helper-evaluation-drift-detection-001",
+        "tam-helper-evaluation-drift-detection-002"
+      ],
+      "explanation": "The v1 helper observed trajectory-level scope expansion."
+    },
+    {
+      "signal_type": "delegated_scope_widening",
+      "severity": "high",
+      "evidence_refs": [
+        "tam-helper-evaluation-receipt-001",
+        "tam-helper-evaluation-receipt-002",
+        "tam-helper-evaluation-receipt-003",
+        "tam-helper-outcome-delta-attribution-001",
+        "tam-helper-outcome-delta-attribution-002"
+      ],
+      "explanation": "Authority evidence or authority state changed over time."
+    },
+    {
+      "signal_type": "continuity_as_authorization_risk",
+      "severity": "medium",
+      "evidence_refs": [
+        "tam-helper-evaluation-receipt-001",
+        "tam-helper-evaluation-receipt-002",
+        "tam-helper-evaluation-receipt-003"
+      ],
+      "explanation": "Repeated continuity events lacked explicit reauthorization evidence."
+    },
+    {
+      "signal_type": "strategic_admissibility_drift",
+      "severity": "high",
+      "evidence_refs": [
+        "tam-helper-outcome-delta-attribution-001",
+        "tam-helper-outcome-delta-attribution-002",
+        "tam-helper-evaluation-drift-detection-001",
+        "tam-helper-evaluation-drift-detection-002"
+      ],
+      "explanation": "Scope expansion appeared across repeated attribution or drift artifacts."
+    },
+    {
+      "signal_type": "governance_exhaustion_signal",
+      "severity": "medium",
+      "evidence_refs": [
+        "tam-helper-evaluation-receipt-001",
+        "tam-helper-evaluation-receipt-002",
+        "tam-helper-evaluation-receipt-003",
+        "tam-helper-evaluation-drift-detection-001",
+        "tam-helper-evaluation-drift-detection-002"
+      ],
+      "explanation": "Repeated escalation or requalification events were observed."
+    }
+  ],
+  "trajectory_status": "strategically_shaped",
+  "recommended_governance_action": "mark_strategic_admissibility_drift",
+  "monitor_summary": "Trajectory monitor observed 3 evaluation receipts, 2 outcome delta attributions, and 2 drift detections. Authority scope changed across the trajectory and repeated continuity events may indicate admissibility envelope expansion.",
+  "monitor_hash": "63be7efda71c799ea0348a053812368cec51af0d71d56dcbff6b29e3312560c7"
+}

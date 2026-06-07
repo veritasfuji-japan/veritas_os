@@ -96,7 +96,7 @@ including:
    artifacts
 2. Automated Outcome Delta Attribution
 3. Automated Evaluation Drift Detection
-4. Automated Trajectory-Level Admissibility analysis
+4. Automated Trajectory-Level Admissibility analysis with the synthetic [helper example](../demo/examples/trajectory-admissibility-monitor-helper-v1/README.md)
 5. Legitimacy Impact Review workflow
 6. Runtime fail-closed integration after reviewer validation matures
 
