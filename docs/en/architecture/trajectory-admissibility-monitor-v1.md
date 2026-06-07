@@ -77,7 +77,15 @@ This v1 foundation does not modify bind/admissibility logic, production
 governance configuration, policy loading, TrustLog persistence, FUJI Gate
 behavior, continuity handling, or any runtime resolver.
 
-## 6. Future work
+## 6. Offline helper example
+
+A synthetic non-enforcing helper example is available at
+[`trajectory-admissibility-monitor-helper-v1`](../demo/examples/trajectory-admissibility-monitor-helper-v1/README.md).
+It reads local Evaluation Receipts, Outcome Delta Attributions, and Evaluation
+Drift Detections without dereferencing artifact refs or changing runtime
+admissibility behavior.
+
+## 7. Future work
 
 Future work can build on Trajectory-Level Admissibility Monitor v1 with:
 

@@ -1,0 +1,26 @@
+{
+  "schema_version": "evaluation-drift-detection-v1",
+  "detection_id": "tam-helper-evaluation-drift-detection-002",
+  "issued_at": "2026-01-03T00:20:00Z",
+  "outcome_delta_attribution_ref": "tam-helper-outcome-delta-attribution-002",
+  "outcome_delta_attribution_hash": "8888888888888888888888888888888888888888888888888888888888888888",
+  "prior_evaluation_receipt_ref": "tam-helper-evaluation-receipt-002",
+  "current_evaluation_receipt_ref": "tam-helper-evaluation-receipt-003",
+  "drift_detected": true,
+  "drift_status": "suspected",
+  "drift_causes": [
+    {
+      "cause_type": "rule_version_changed",
+      "severity": "medium",
+      "evidence_refs": [
+        "tam-helper-outcome-delta-attribution-002"
+      ],
+      "explanation": "Synthetic suspected drift signal for offline helper chaining."
+    }
+  ],
+  "evaluator_consistency_status": "unknown",
+  "explanation_status": "partially_explained",
+  "recommended_governance_action": "review",
+  "detection_summary": "Synthetic suspected drift detection for trajectory helper example.",
+  "detection_hash": "9999999999999999999999999999999999999999999999999999999999999999"
+}
