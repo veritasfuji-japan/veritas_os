@@ -49,6 +49,7 @@ Use this 10–15 minute path for a reviewer-facing inspection:
    `scripts/demo/export_reviewer_evidence_packet.py`
 6. Inspect the original demo:
    `scripts/demo/saas_permission_change_governed_demo.py`
+7. Optionally review Evaluation Governance artifacts, if present. These attachments are optional in v1, non-enforcing, and useful for architecture-hardening review without changing runtime admissibility.
 
 ## Local bundle generation
 
@@ -119,6 +120,10 @@ A pass/fail report that verifies generated packet equality with the fixture, pac
 ### Evidence Chain
 
 Authority, approval, bind-time decision, outcome, and verification are linked into a traceable local/offline evidence chain.
+
+### Evaluation Governance artifacts
+
+If present, Evaluation Governance artifact references are optional reviewer evidence attachments for architecture-hardening review. They may help reviewers inspect authority anchors, evaluator definitions, evaluation receipts, drift signals, trajectory-level admissibility movement, legitimacy-impacting changes, and adversarial scenarios. They are non-enforcing in v1 and do not automatically establish legitimacy or change runtime admissibility.
 
 ## Boundary and non-claims
 

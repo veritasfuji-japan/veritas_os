@@ -68,6 +68,12 @@
     },
     "packet_hash": {
       "$ref": "#/$defs/sha256_hex"
+    },
+    "evaluation_governance_artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evaluation_governance_artifact"
+      }
     }
   },
   "$defs": {
@@ -609,6 +615,47 @@
         },
         "local_offline_only": {
           "const": true
+        }
+      }
+    },
+    "evaluation_governance_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_type",
+        "artifact_ref",
+        "artifact_hash",
+        "schema_ref",
+        "required_for_review"
+      ],
+      "properties": {
+        "artifact_type": {
+          "enum": [
+            "root_authority_manifest",
+            "evaluation_function_manifest",
+            "manifest_change_receipt",
+            "evaluation_receipt",
+            "outcome_delta_attribution",
+            "evaluation_drift_detection",
+            "trajectory_admissibility_monitor",
+            "legitimacy_impact_review",
+            "adversarial_architecture_test_matrix",
+            "adversarial_scenario_fixtures"
+          ]
+        },
+        "artifact_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "schema_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_for_review": {
+          "type": "boolean"
         }
       }
     }

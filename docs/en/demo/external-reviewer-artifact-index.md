@@ -56,3 +56,18 @@ Key local/offline reviewer-facing artifacts:
   - EvidenceChainVerifier documentation
 - `docs/en/architecture/bind-coverage-registry.md`
   - Bind Coverage Registry documentation
+
+## Evaluation Governance reviewer artifacts
+
+Evaluation Governance artifacts may be referenced as optional reviewer evidence attachments in Reviewer Evidence Packet v1. These references are non-enforcing in v1 and support external review without changing runtime admissibility.
+
+- Root Authority Manifest — asserted authority/trust anchor
+- Evaluation Function Manifest — governed evaluator definition
+- Manifest Change Receipt — governance manifest change record
+- Evaluation Receipt — specific evaluation instance record
+- Outcome Delta Attribution — outcome change explanation
+- Evaluation Drift Detection — evaluator drift signal
+- Trajectory-Level Admissibility Monitor — admissibility trajectory movement
+- Legitimacy Impact Review — reviewable legitimacy-impacting change
+- Adversarial Architecture Test Matrix — failure class map
+- Adversarial Scenario Fixtures — concrete reviewer scenarios
