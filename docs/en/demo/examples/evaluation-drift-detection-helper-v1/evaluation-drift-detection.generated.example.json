@@ -1,0 +1,42 @@
+{
+  "schema_version": "evaluation-drift-detection-v1",
+  "detection_id": "evaluation-drift-detection-example-001",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "outcome_delta_attribution_ref": "outcome-delta-attribution-example-001",
+  "outcome_delta_attribution_hash": "ca26d00e3d02eac68cf10cfc41b880628c03bb86d8d07b96041adc6b8c647589",
+  "prior_evaluation_receipt_ref": "outcome-delta-helper-prior-receipt-001",
+  "current_evaluation_receipt_ref": "outcome-delta-helper-current-receipt-001",
+  "drift_detected": true,
+  "drift_status": "suspected",
+  "drift_causes": [
+    {
+      "cause_type": "evaluator_version_changed",
+      "severity": "medium",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "The evaluator version changed between receipts."
+    },
+    {
+      "cause_type": "rule_version_changed",
+      "severity": "medium",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "The rule set version changed between receipts."
+    },
+    {
+      "cause_type": "qualifier_state_ambiguous",
+      "severity": "medium",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "Qualifier 'authority_evidence_freshness' freshness or hash changed."
+    }
+  ],
+  "evaluator_consistency_status": "unknown",
+  "explanation_status": "partially_explained",
+  "recommended_governance_action": "requalify_evaluator",
+  "detection_summary": "Draft detection marked suspected drift from allow to escalate.",
+  "detection_hash": "68fdd6932bd4fc0d2271b10406f8bd9ce367b1c17233e73c5873a70a95c4f452"
+}

@@ -1,0 +1,73 @@
+{
+  "schema_version": "outcome-delta-attribution-v1",
+  "attribution_id": "outcome-delta-attribution-example-001",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "prior_evaluation_receipt_ref": "outcome-delta-helper-prior-receipt-001",
+  "current_evaluation_receipt_ref": "outcome-delta-helper-current-receipt-001",
+  "prior_evaluation_receipt_hash": "fab594a592537c03b94ed0558261fb9ec808fb96a0a646f8f407689a90aa9548",
+  "current_evaluation_receipt_hash": "02a39fff28479bca7eb046dad0176c96dfc66c36fb4011228b03f207ea219cea",
+  "prior_outcome": "allow",
+  "current_outcome": "escalate",
+  "outcome_changed": true,
+  "delta_causes": [
+    {
+      "cause_type": "evaluator_version_changed",
+      "severity": "medium",
+      "prior_value_ref": "eval-v1.0.0",
+      "current_value_ref": "eval-v1.1.0",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "The evaluator version changed between receipts."
+    },
+    {
+      "cause_type": "rule_version_changed",
+      "severity": "medium",
+      "prior_value_ref": "rules-v1",
+      "current_value_ref": "rules-v2",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "The rule set version changed between receipts."
+    },
+    {
+      "cause_type": "authority_state_changed",
+      "severity": "high",
+      "prior_value_ref": "[\"authority-evidence-example-v1\"]",
+      "current_value_ref": "[\"authority-evidence-example-v2\"]",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "The authority evidence references changed between receipts."
+    },
+    {
+      "cause_type": "qualifier_freshness_changed",
+      "severity": "medium",
+      "prior_value_ref": "{\"freshness_state\": \"fresh\", \"qualifier_hash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"qualifier_name\": \"authority_evidence_freshness\"}",
+      "current_value_ref": "{\"freshness_state\": \"stale\", \"qualifier_hash\": \"2222222222222222222222222222222222222222222222222222222222222222\", \"qualifier_name\": \"authority_evidence_freshness\"}",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "Qualifier 'authority_evidence_freshness' freshness or hash changed."
+    },
+    {
+      "cause_type": "consequence_class_changed",
+      "severity": "high",
+      "prior_value_ref": "{\"class_id\": \"synthetic-medium-consequence\", \"class_label\": \"medium\", \"classifier_id\": \"synthetic-consequence-classifier\", \"classifier_version\": \"classifier-v1\"}",
+      "current_value_ref": "{\"class_id\": \"synthetic-high-consequence\", \"class_label\": \"high\", \"classifier_id\": \"synthetic-consequence-classifier\", \"classifier_version\": \"classifier-v2\"}",
+      "evidence_refs": [
+        "outcome-delta-helper-current-receipt-001"
+      ],
+      "explanation": "The consequence classification changed between receipts."
+    }
+  ],
+  "attribution_summary": "Outcome changed from allow to escalate; detected causes: evaluator_version_changed, rule_version_changed, authority_state_changed, qualifier_freshness_changed, consequence_class_changed.",
+  "attribution_confidence": "high",
+  "unresolved_delta": {
+    "present": false,
+    "reason": "No unexplained evaluation drift was detected.",
+    "requires_review": false
+  },
+  "recommended_governance_action": "review",
+  "attribution_hash": "a5a6647a4d84c887b00f0460e42f33fd8445bda5264c292308a899b5583fc48f"
+}
