@@ -1,0 +1,67 @@
+{
+  "artifacts": [
+    {
+      "artifact_hash": "5cae168299c60becc997dde84fc143fa059edc2b5fca81dde1997f5916f4500f",
+      "artifact_ref": "evaluation-receipt-1.example.json",
+      "artifact_type": "evaluation_receipt"
+    },
+    {
+      "artifact_hash": "81c64573c36975ccf755f53718d1b759d00f612832aee47c35081117824a9cfa",
+      "artifact_ref": "evaluation-receipt-2.example.json",
+      "artifact_type": "evaluation_receipt"
+    },
+    {
+      "artifact_hash": "9e029c8f3a1df6f1b368def1d6cc7a665ffd6efe1b5c05c1d198d18f5105efb4",
+      "artifact_ref": "evaluation-receipt-3.example.json",
+      "artifact_type": "evaluation_receipt"
+    },
+    {
+      "artifact_hash": "4ce275c69363b76007a280e2ffcfb384efa2bc795532745f88dfc4da10ae6421",
+      "artifact_ref": "manifest-change-receipt.example.json",
+      "artifact_type": "manifest_change_receipt"
+    },
+    {
+      "artifact_hash": "17029f187996728b120db5bbf7bb92f26d6a16f833bdc3b7c66bd05077d62d33",
+      "artifact_ref": "outcome-delta-attribution-1.generated.example.json",
+      "artifact_type": "outcome_delta_attribution"
+    },
+    {
+      "artifact_hash": "59fac37138155946793fd958cdf2e8c96a842671fa1f64829e6c1f99b3dd531e",
+      "artifact_ref": "outcome-delta-attribution-2.generated.example.json",
+      "artifact_type": "outcome_delta_attribution"
+    },
+    {
+      "artifact_hash": "9e6390164ff4d51dcc66d19b58dc9ca08f915ad07637ef580228aca4a39d3c6e",
+      "artifact_ref": "evaluation-drift-detection-1.generated.example.json",
+      "artifact_type": "evaluation_drift_detection"
+    },
+    {
+      "artifact_hash": "16b7d149551c7a415ee931a10d83c5e4d486fab59b0adda649d65b1e81d08b40",
+      "artifact_ref": "evaluation-drift-detection-2.generated.example.json",
+      "artifact_type": "evaluation_drift_detection"
+    },
+    {
+      "artifact_hash": "900ca433a0128a9f4e9308f9da783c6ae11dc7ae68af5fdd61add67d30f67c89",
+      "artifact_ref": "trajectory-admissibility-monitor.generated.example.json",
+      "artifact_type": "trajectory_admissibility_monitor"
+    },
+    {
+      "artifact_hash": "2af7ec64add0c6e1919216fb79c47d56ad3f60653a009503646cc108d61efda0",
+      "artifact_ref": "legitimacy-impact-review.generated.example.json",
+      "artifact_type": "legitimacy_impact_review"
+    }
+  ],
+  "chain_id": "evaluation-governance-offline-chain-example-001",
+  "chain_summary": "Synthetic offline Evaluation Governance chain generated for reviewer-facing architecture review.",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "non_enforcing": true,
+  "non_goals": [
+    "does_not_change_runtime_behavior",
+    "does_not_establish_legitimacy",
+    "does_not_certify_compliance",
+    "does_not_call_v1_decide",
+    "does_not_dereference_artifact_refs"
+  ],
+  "non_runtime": true,
+  "schema_version": "evaluation-governance-offline-chain-manifest-v1"
+}

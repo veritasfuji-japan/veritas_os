@@ -1,0 +1,112 @@
+{
+  "admissibility_scope_change": {
+    "expansion_type": "delegated_authority_expansion",
+    "explicit_reauthorization_present": false,
+    "reauthorization_evidence_refs": [],
+    "scope_expanded": true
+  },
+  "baseline_authority_scope": {
+    "authority_evidence_ref": "authority-evidence-example-v1",
+    "scope_hash": "cd394c49479686f78fafa76d3c430017143b0cf186d705744d5c792d0c6f1a21",
+    "scope_id": "baseline-authority-scope"
+  },
+  "continuity_event_summary": {
+    "continuity_events_observed": 3,
+    "escalation_events_count": 2,
+    "low_risk_events_count": 1,
+    "material_change_events_count": 2,
+    "requalification_events_count": 1
+  },
+  "current_authority_scope": {
+    "authority_evidence_ref": "authority-evidence-example-v2",
+    "scope_hash": "a1d920789a49e251e52fe44e6a90e0f473eff97d69964e40b5ff9e5f1d501176",
+    "scope_id": "current-authority-scope"
+  },
+  "evaluation_drift_detection_refs": [
+    "evaluation-governance-offline-chain-drift-detection-001",
+    "evaluation-governance-offline-chain-drift-detection-002"
+  ],
+  "evaluation_receipt_refs": [
+    "evaluation-governance-offline-chain-receipt-001",
+    "evaluation-governance-offline-chain-receipt-002",
+    "evaluation-governance-offline-chain-receipt-003"
+  ],
+  "issued_at": "2026-01-01T00:00:00Z",
+  "monitor_hash": "3c1ca1fd304f9dc5d6a55916487cb427dea2fe3d8027aadf70d804ba81b8dede",
+  "monitor_id": "trajectory-admissibility-monitor-example-001",
+  "monitor_summary": "Trajectory monitor observed 3 evaluation receipts, 2 outcome delta attributions, and 2 drift detections. Authority scope changed across the trajectory and repeated continuity events may indicate admissibility envelope expansion.",
+  "outcome_delta_attribution_refs": [
+    "evaluation-governance-offline-chain-attribution-001",
+    "evaluation-governance-offline-chain-attribution-002"
+  ],
+  "recommended_governance_action": "mark_strategic_admissibility_drift",
+  "schema_version": "trajectory-admissibility-monitor-v1",
+  "trajectory_id": "trajectory-admissibility-monitor-example-001",
+  "trajectory_risk_signals": [
+    {
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-001",
+        "evaluation-governance-offline-chain-receipt-002",
+        "evaluation-governance-offline-chain-receipt-003",
+        "evaluation-governance-offline-chain-attribution-001",
+        "evaluation-governance-offline-chain-attribution-002",
+        "evaluation-governance-offline-chain-drift-detection-001",
+        "evaluation-governance-offline-chain-drift-detection-002"
+      ],
+      "explanation": "The v1 helper observed trajectory-level scope expansion.",
+      "severity": "high",
+      "signal_type": "admissibility_envelope_expansion"
+    },
+    {
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-001",
+        "evaluation-governance-offline-chain-receipt-002",
+        "evaluation-governance-offline-chain-receipt-003",
+        "evaluation-governance-offline-chain-attribution-001",
+        "evaluation-governance-offline-chain-attribution-002"
+      ],
+      "explanation": "Authority evidence or authority state changed over time.",
+      "severity": "high",
+      "signal_type": "delegated_scope_widening"
+    },
+    {
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-001",
+        "evaluation-governance-offline-chain-receipt-002",
+        "evaluation-governance-offline-chain-receipt-003"
+      ],
+      "explanation": "Repeated continuity events lacked explicit reauthorization evidence.",
+      "severity": "medium",
+      "signal_type": "continuity_as_authorization_risk"
+    },
+    {
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-attribution-001",
+        "evaluation-governance-offline-chain-attribution-002",
+        "evaluation-governance-offline-chain-drift-detection-001",
+        "evaluation-governance-offline-chain-drift-detection-002"
+      ],
+      "explanation": "Scope expansion appeared across repeated attribution or drift artifacts.",
+      "severity": "high",
+      "signal_type": "strategic_admissibility_drift"
+    },
+    {
+      "evidence_refs": [
+        "evaluation-governance-offline-chain-receipt-001",
+        "evaluation-governance-offline-chain-receipt-002",
+        "evaluation-governance-offline-chain-receipt-003",
+        "evaluation-governance-offline-chain-drift-detection-001",
+        "evaluation-governance-offline-chain-drift-detection-002"
+      ],
+      "explanation": "Repeated escalation or requalification events were observed.",
+      "severity": "medium",
+      "signal_type": "governance_exhaustion_signal"
+    }
+  ],
+  "trajectory_status": "strategically_shaped",
+  "trajectory_window": {
+    "ended_at": "2026-01-03T00:00:00Z",
+    "evaluation_count": 3,
+    "started_at": "2026-01-01T00:00:00Z"
+  }
+}

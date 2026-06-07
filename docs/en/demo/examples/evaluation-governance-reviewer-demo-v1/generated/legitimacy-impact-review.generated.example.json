@@ -1,0 +1,83 @@
+{
+  "auditability_impact": {
+    "auditability_reduced": false,
+    "evidence_chain_weakened": false,
+    "evidence_refs": [
+      "legitimacy-helper-manifest-change-001"
+    ],
+    "explanation": "No auditability reduction was detected.",
+    "receipt_requirements_reduced": false,
+    "replayability_reduced": false
+  },
+  "authority_impact": {
+    "authority_scope_expanded": true,
+    "evidence_refs": [
+      "sample://authority/synthetic-board-charter-v1",
+      "legitimacy-helper-manifest-change-001",
+      "trajectory-admissibility-monitor-example-001"
+    ],
+    "explanation": "Authority-impacting signals were detected for reviewer assessment.",
+    "root_authority_changed": false,
+    "trusted_authority_source_changed": false
+  },
+  "escalation_impact": {
+    "escalation_authority_changed": true,
+    "escalation_path_changed": true,
+    "escalation_requirement_reduced": true,
+    "evidence_refs": [
+      "legitimacy-helper-manifest-change-001",
+      "approval-evidence-example-001"
+    ],
+    "explanation": "Escalation requirements or authority may have changed."
+  },
+  "high_risk_admissibility_impact": {
+    "evidence_refs": [
+      "legitimacy-helper-manifest-change-001",
+      "trajectory-admissibility-monitor-example-001"
+    ],
+    "explanation": "High-risk admissibility scope expansion signals require review.",
+    "high_risk_controls_weakened": true,
+    "high_risk_review_requirement_reduced": true,
+    "high_risk_scope_expanded": true
+  },
+  "impact_categories": [
+    "authority_scope_expansion",
+    "human_oversight_weakened",
+    "escalation_requirement_reduced",
+    "high_risk_admissibility_expanded",
+    "evaluation_behavior_changed"
+  ],
+  "issued_at": "2026-01-01T00:00:00Z",
+  "legitimacy_impact_detected": true,
+  "oversight_impact": {
+    "approval_requirement_reduced": true,
+    "evidence_refs": [
+      "approval-evidence-example-001",
+      "legitimacy-helper-manifest-change-001"
+    ],
+    "explanation": "Human oversight or approval requirements may be weakened.",
+    "human_oversight_weakened": true,
+    "reviewer_authority_changed": false
+  },
+  "recommended_governance_action": "multi_party_review",
+  "refusal_boundary_impact": {
+    "evidence_refs": [
+      "legitimacy-helper-manifest-change-001",
+      "trajectory-admissibility-monitor-example-001"
+    ],
+    "explanation": "No refusal boundary relaxation was detected.",
+    "refusal_boundary_relaxed": false,
+    "refusal_condition_changed": false,
+    "refusal_condition_removed": false
+  },
+  "review_hash": "795e3d6d9d5968f9c058dfb99dd77d7b545bd6c5fbd10b9a3f793a54d24b4619",
+  "review_id": "legitimacy-impact-review-example-001",
+  "review_status": "pending",
+  "review_summary": "Draft offline review surfaced legitimacy-impacting signals (authority_scope_expansion, human_oversight_weakened, escalation_requirement_reduced, high_risk_admissibility_expanded, evaluation_behavior_changed); status=pending, recommended_action=multi_party_review. This is reviewable evidence only, not an automatic legitimacy or compliance determination.",
+  "reviewed_artifact_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+  "reviewed_artifact_ref": "evaluation-function-manifest-example-001",
+  "reviewed_artifact_type": "evaluation_function_manifest",
+  "schema_version": "legitimacy-impact-review-v1",
+  "triggering_change_hash": "4ce275c69363b76007a280e2ffcfb384efa2bc795532745f88dfc4da10ae6421",
+  "triggering_change_ref": "legitimacy-helper-manifest-change-001"
+}
