@@ -60,6 +60,23 @@ Boundary:
 - This is not third-party certification.
 - Fixture-backed PoC evidence should not be presented as live bank-side integration.
 
+## Evaluation Governance reviewer artifacts
+
+VERITAS includes a reviewer-facing Evaluation Governance artifact chain for inspecting how authority, evaluator definition, evaluation receipts, outcome deltas, evaluator drift, trajectory movement, and legitimacy-impacting changes can be represented for external review.
+
+These artifacts are non-enforcing in v1. They do not change `/v1/decide`, do not automatically establish legitimacy, and do not certify regulatory compliance. They are intended to make architecture-hardening evidence explicit, versioned, challengeable, and auditable.
+
+- [Evaluation Function Governance v1](docs/en/architecture/evaluation-function-governance-v1.md)
+- [Evaluation Receipt v1](docs/en/architecture/evaluation-receipt-v1.md)
+- [Outcome Delta Attribution v1](docs/en/architecture/outcome-delta-attribution-v1.md)
+- [Evaluation Drift Detection v1](docs/en/architecture/evaluation-drift-detection-v1.md)
+- [Trajectory-Level Admissibility Monitor v1](docs/en/architecture/trajectory-admissibility-monitor-v1.md)
+- [Legitimacy Impact Review v1](docs/en/architecture/legitimacy-impact-review-v1.md)
+- [Adversarial Architecture Test Matrix v1](docs/en/architecture/adversarial-architecture-test-matrix-v1.md)
+- [Adversarial Scenario Fixtures v1](docs/en/architecture/adversarial-scenario-fixtures-v1.md)
+- [Reviewer Evidence Packet v1](docs/en/demo/reviewer-evidence-packet.md)
+- [Reviewer Evidence Packet example with Evaluation Governance attachments](docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json)
+
 ## Authority Evidence Ingestion
 
 VERITAS now includes a deterministic local/offline Authority Evidence ingestion adapter for bind-time governance. It normalizes external-style or mock authority facts into the existing AuthorityEvidence artifact model, computes a deterministic evidence hash, and preserves fail-closed behavior for missing, invalid, expired, stale, or indeterminate authority evidence.
