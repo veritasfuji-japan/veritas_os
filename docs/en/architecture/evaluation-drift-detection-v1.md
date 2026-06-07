@@ -98,6 +98,6 @@ Future work can build on Evaluation Drift Detection v1 with:
 - automated drift detection from Outcome Delta Attribution
 - runtime fail-closed integration
 - evaluator requalification workflow
-- Trajectory-Level Admissibility Monitor
+- Trajectory-Level Admissibility Monitor v1 for sequence-level admissibility scope review
 - Legitimacy Impact Review
 - reviewer evidence packet integration

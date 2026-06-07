@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/trajectory-admissibility-monitor-v1.schema.json",
+  "title": "Trajectory-Level Admissibility Monitor v1",
+  "description": "Schema-only monitor artifact that records whether a sequence of Evaluation Receipts, Outcome Delta Attributions, and Evaluation Drift Detections suggests admissibility scope expansion over time. It is non-enforcing in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "monitor_id",
+    "issued_at",
+    "trajectory_id",
+    "evaluation_receipt_refs",
+    "outcome_delta_attribution_refs",
+    "evaluation_drift_detection_refs",
+    "trajectory_window",
+    "baseline_authority_scope",
+    "current_authority_scope",
+    "admissibility_scope_change",
+    "continuity_event_summary",
+    "trajectory_risk_signals",
+    "trajectory_status",
+    "recommended_governance_action",
+    "monitor_summary",
+    "monitor_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "trajectory-admissibility-monitor-v1"
+    },
+    "monitor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trajectory_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluation_receipt_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outcome_delta_attribution_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evaluation_drift_detection_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "trajectory_window": {
+      "$ref": "#/$defs/trajectory_window"
+    },
+    "baseline_authority_scope": {
+      "$ref": "#/$defs/authority_scope"
+    },
+    "current_authority_scope": {
+      "$ref": "#/$defs/authority_scope"
+    },
+    "admissibility_scope_change": {
+      "$ref": "#/$defs/admissibility_scope_change"
+    },
+    "continuity_event_summary": {
+      "$ref": "#/$defs/continuity_event_summary"
+    },
+    "trajectory_risk_signals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/trajectory_risk_signal"
+      }
+    },
+    "trajectory_status": {
+      "$ref": "#/$defs/trajectory_status"
+    },
+    "recommended_governance_action": {
+      "$ref": "#/$defs/governance_action"
+    },
+    "monitor_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "monitor_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "trajectory_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "started_at",
+        "ended_at",
+        "evaluation_count"
+      ],
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evaluation_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "authority_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope_id",
+        "scope_hash",
+        "authority_evidence_ref"
+      ],
+      "properties": {
+        "scope_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "authority_evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "admissibility_scope_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope_expanded",
+        "expansion_type",
+        "explicit_reauthorization_present",
+        "reauthorization_evidence_refs"
+      ],
+      "properties": {
+        "scope_expanded": {
+          "type": "boolean"
+        },
+        "expansion_type": {
+          "enum": [
+            "none",
+            "delegated_authority_expansion",
+            "threshold_expansion",
+            "policy_scope_expansion",
+            "refusal_boundary_relaxation",
+            "escalation_requirement_reduction",
+            "contextual_scope_expansion",
+            "unknown"
+          ]
+        },
+        "explicit_reauthorization_present": {
+          "type": "boolean"
+        },
+        "reauthorization_evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "continuity_event_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "continuity_events_observed",
+        "low_risk_events_count",
+        "material_change_events_count",
+        "requalification_events_count",
+        "escalation_events_count"
+      ],
+      "properties": {
+        "continuity_events_observed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "low_risk_events_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "material_change_events_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requalification_events_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "escalation_events_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "trajectory_risk_signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signal_type",
+        "severity",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "signal_type": {
+          "enum": [
+            "admissibility_envelope_expansion",
+            "delegated_scope_widening",
+            "permissive_requalification_trend",
+            "low_risk_event_accumulation",
+            "continuity_as_authorization_risk",
+            "strategic_admissibility_drift",
+            "governance_exhaustion_signal",
+            "unexplained_trajectory_shift"
+          ]
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "trajectory_status": {
+      "enum": [
+        "stable",
+        "watch",
+        "suspicious",
+        "drift_detected",
+        "strategically_shaped",
+        "non_deterministically_governed"
+      ]
+    },
+    "governance_action": {
+      "enum": [
+        "none",
+        "review",
+        "requalify_trajectory",
+        "reconcile_authority_scope",
+        "escalate",
+        "refuse",
+        "mark_strategic_admissibility_drift",
+        "mark_non_deterministically_governed"
+      ]
+    }
+  }
+}
