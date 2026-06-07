@@ -11,6 +11,8 @@ evaluation function explicit, versioned, challengeable, and auditable. The v1
 artifacts identify the authority basis for governance changes, the governed
 evaluation inputs and determiners, and the receipts that record manifest changes.
 
+For a concise reviewer-facing map of the full artifact chain, see [Evaluation Governance Overview v1](evaluation-governance-overview-v1.md).
+
 ## 2. Problem
 
 Admissibility governance has a recursion problem:
