@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/legitimacy-impact-review-v1.schema.json",
+  "title": "Legitimacy Impact Review v1",
+  "description": "Schema-only review artifact that records when governance changes may affect legitimacy-relevant properties such as authority scope, human oversight, refusal boundaries, escalation requirements, auditability, or high-risk admissibility posture. It is non-enforcing in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "review_id",
+    "issued_at",
+    "reviewed_artifact_type",
+    "reviewed_artifact_ref",
+    "reviewed_artifact_hash",
+    "triggering_change_ref",
+    "triggering_change_hash",
+    "legitimacy_impact_detected",
+    "impact_categories",
+    "authority_impact",
+    "oversight_impact",
+    "refusal_boundary_impact",
+    "escalation_impact",
+    "auditability_impact",
+    "high_risk_admissibility_impact",
+    "review_status",
+    "recommended_governance_action",
+    "review_summary",
+    "review_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "legitimacy-impact-review-v1"
+    },
+    "review_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewed_artifact_type": {
+      "$ref": "#/$defs/artifact_type"
+    },
+    "reviewed_artifact_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewed_artifact_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "triggering_change_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "triggering_change_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    },
+    "legitimacy_impact_detected": {
+      "type": "boolean"
+    },
+    "impact_categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/impact_category"
+      }
+    },
+    "authority_impact": {
+      "$ref": "#/$defs/authority_impact"
+    },
+    "oversight_impact": {
+      "$ref": "#/$defs/oversight_impact"
+    },
+    "refusal_boundary_impact": {
+      "$ref": "#/$defs/refusal_boundary_impact"
+    },
+    "escalation_impact": {
+      "$ref": "#/$defs/escalation_impact"
+    },
+    "auditability_impact": {
+      "$ref": "#/$defs/auditability_impact"
+    },
+    "high_risk_admissibility_impact": {
+      "$ref": "#/$defs/high_risk_admissibility_impact"
+    },
+    "review_status": {
+      "$ref": "#/$defs/review_status"
+    },
+    "recommended_governance_action": {
+      "$ref": "#/$defs/governance_action"
+    },
+    "review_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_hash": {
+      "$ref": "#/$defs/sha256_hex"
+    }
+  },
+  "$defs": {
+    "sha256_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifact_type": {
+      "enum": [
+        "root_authority_manifest",
+        "evaluation_function_manifest",
+        "manifest_change_receipt",
+        "evaluation_receipt",
+        "outcome_delta_attribution",
+        "evaluation_drift_detection",
+        "trajectory_admissibility_monitor",
+        "other_governance_artifact"
+      ]
+    },
+    "impact_category": {
+      "enum": [
+        "authority_scope_expansion",
+        "trusted_authority_source_changed",
+        "policy_source_changed",
+        "human_oversight_weakened",
+        "refusal_boundary_relaxed",
+        "escalation_requirement_reduced",
+        "auditability_reduced",
+        "replayability_reduced",
+        "high_risk_admissibility_expanded",
+        "evaluation_behavior_changed",
+        "root_authority_changed",
+        "constitutional_trust_anchor_changed",
+        "unknown_legitimacy_impact"
+      ]
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "authority_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_scope_expanded",
+        "trusted_authority_source_changed",
+        "root_authority_changed",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "authority_scope_expanded": {
+          "type": "boolean"
+        },
+        "trusted_authority_source_changed": {
+          "type": "boolean"
+        },
+        "root_authority_changed": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    },
+    "oversight_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_oversight_weakened",
+        "approval_requirement_reduced",
+        "reviewer_authority_changed",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "human_oversight_weakened": {
+          "type": "boolean"
+        },
+        "approval_requirement_reduced": {
+          "type": "boolean"
+        },
+        "reviewer_authority_changed": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    },
+    "refusal_boundary_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "refusal_boundary_relaxed",
+        "refusal_condition_removed",
+        "refusal_condition_changed",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "refusal_boundary_relaxed": {
+          "type": "boolean"
+        },
+        "refusal_condition_removed": {
+          "type": "boolean"
+        },
+        "refusal_condition_changed": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    },
+    "escalation_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "escalation_requirement_reduced",
+        "escalation_path_changed",
+        "escalation_authority_changed",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "escalation_requirement_reduced": {
+          "type": "boolean"
+        },
+        "escalation_path_changed": {
+          "type": "boolean"
+        },
+        "escalation_authority_changed": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    },
+    "auditability_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "auditability_reduced",
+        "replayability_reduced",
+        "evidence_chain_weakened",
+        "receipt_requirements_reduced",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "auditability_reduced": {
+          "type": "boolean"
+        },
+        "replayability_reduced": {
+          "type": "boolean"
+        },
+        "evidence_chain_weakened": {
+          "type": "boolean"
+        },
+        "receipt_requirements_reduced": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    },
+    "high_risk_admissibility_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "high_risk_scope_expanded",
+        "high_risk_controls_weakened",
+        "high_risk_review_requirement_reduced",
+        "evidence_refs",
+        "explanation"
+      ],
+      "properties": {
+        "high_risk_scope_expanded": {
+          "type": "boolean"
+        },
+        "high_risk_controls_weakened": {
+          "type": "boolean"
+        },
+        "high_risk_review_requirement_reduced": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/evidence_refs"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    },
+    "review_status": {
+      "enum": [
+        "not_required",
+        "required",
+        "pending",
+        "approved",
+        "rejected",
+        "requires_external_review",
+        "unresolved"
+      ]
+    },
+    "governance_action": {
+      "enum": [
+        "none",
+        "review",
+        "multi_party_review",
+        "external_audit_flag",
+        "requalify_authority",
+        "requalify_evaluator",
+        "rollback",
+        "escalate",
+        "refuse",
+        "mark_legitimacy_impact"
+      ]
+    }
+  }
+}

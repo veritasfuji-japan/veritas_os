@@ -83,7 +83,7 @@ Future work can build on Trajectory-Level Admissibility Monitor v1 with:
 
 - automated trajectory analysis from Evaluation Receipts
 - strategic admissibility drift detection
-- legitimacy impact review
+- legitimacy impact review using [Legitimacy Impact Review v1](legitimacy-impact-review-v1.md)
 - governance exhaustion safeguards
 - runtime fail-closed integration
 - reviewer evidence packet integration
