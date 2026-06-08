@@ -129,6 +129,23 @@ python scripts/demo/run_evaluation_governance_reviewer_demo_suite.py \
 `--write-example-output` intentionally updates checked-in generated examples.
 Normal reviewers should prefer `--output-dir`.
 
+## Run the full demo suite with local hash verification
+
+```bash
+python scripts/demo/run_evaluation_governance_reviewer_demo_suite.py \
+  --input-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --output-dir /tmp/evaluation-governance-reviewer-demo \
+  --artifact-base-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --verify-local-hashes
+```
+
+This runs generation, validation, local hash consistency checks, and Markdown
+report generation in one local command. Local hash verification only checks
+files that can be resolved locally from the generated demo directory or the
+provided `--artifact-base-dir`. It does not follow external refs, does not
+require network access, does not establish legitimacy, does not certify
+compliance, and does not call `/v1/decide`.
+
 ## 8. Expected outputs
 
 The output directory should contain:

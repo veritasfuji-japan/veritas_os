@@ -33,6 +33,7 @@ from scripts.demo.run_evaluation_governance_reviewer_demo import (
     run_reviewer_demo,
 )
 from scripts.demo.validate_evaluation_governance_reviewer_demo import (
+    ReviewerDemoValidationError,
     ReviewerDemoValidationResult,
     validate_reviewer_demo,
 )
@@ -95,6 +96,8 @@ def run_reviewer_demo_suite(
     input_dir: Path,
     output_dir: Path | None = None,
     write_example_output: bool = False,
+    verify_local_hashes: bool = False,
+    artifact_base_dir: Path | None = None,
 ) -> ReviewerDemoSuiteResult:
     """Run generation, validation, and report creation for the reviewer demo.
 
@@ -104,6 +107,10 @@ def run_reviewer_demo_suite(
             ``write_example_output`` is true.
         write_example_output: Intentionally write the checked-in generated
             example output directory and generated example report.
+        verify_local_hashes: When true, validate local artifact hash
+            consistency for resolvable files before report generation.
+        artifact_base_dir: Optional local base directory for resolving
+            artifact references during local hash verification.
 
     Returns:
         Paths and validation metadata for the completed suite run.
@@ -115,8 +122,17 @@ def run_reviewer_demo_suite(
     """
     resolved_output_dir = resolve_output_dir(output_dir, write_example_output)
     run_result = run_reviewer_demo(input_dir, resolved_output_dir)
-    validation_result = validate_reviewer_demo(run_result.output_dir)
-    report = generate_reviewer_demo_report(run_result.output_dir, validate=True)
+    validation_result = validate_reviewer_demo(
+        run_result.output_dir,
+        verify_local_hashes=verify_local_hashes,
+        artifact_base_dir=artifact_base_dir,
+    )
+    report = generate_reviewer_demo_report(
+        run_result.output_dir,
+        validate=True,
+        verify_local_hashes=verify_local_hashes,
+        artifact_base_dir=artifact_base_dir,
+    )
     report_path = select_report_output_path(
         run_result.output_dir,
         write_example_output,
@@ -161,6 +177,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "examples and the generated example report."
         ),
     )
+    parser.add_argument(
+        "--artifact-base-dir",
+        type=Path,
+        help=(
+            "Optional local base directory used only for resolving artifact "
+            "references during --verify-local-hashes."
+        ),
+    )
+    parser.add_argument(
+        "--verify-local-hashes",
+        action="store_true",
+        help=(
+            "Optionally verify artifact_hash values for local files that can "
+            "be resolved without dereferencing external refs."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -172,7 +204,15 @@ def main(argv: list[str] | None = None) -> int:
             input_dir=args.input_dir,
             output_dir=args.output_dir,
             write_example_output=args.write_example_output,
+            verify_local_hashes=args.verify_local_hashes,
+            artifact_base_dir=args.artifact_base_dir,
         )
+    except ReviewerDemoValidationError as exc:
+        print("Evaluation Governance Reviewer Demo Suite", file=sys.stderr)
+        print(f"FAIL {exc.check}", file=sys.stderr)
+        print(f"File: {exc.path}", file=sys.stderr)
+        print(f"Error: {exc.message}", file=sys.stderr)
+        return 1
     except Exception as exc:  # noqa: BLE001 - CLI presents concise errors.
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -181,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
     print("")
     print("PASS generated reviewer demo outputs")
     print("PASS validated reviewer demo outputs")
+    if args.verify_local_hashes:
+        print("PASS local hash consistency")
     print("PASS generated reviewer demo report")
     print("")
     print(f"Output directory: {result.output_dir}")

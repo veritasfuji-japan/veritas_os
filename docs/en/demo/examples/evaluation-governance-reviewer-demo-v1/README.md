@@ -33,14 +33,21 @@ python scripts/demo/run_evaluation_governance_reviewer_demo.py \
 
 ## Run the full demo suite
 
+Maintainer command for intentionally regenerating checked-in examples with
+local hash verification:
+
 ```bash
 python scripts/demo/run_evaluation_governance_reviewer_demo_suite.py \
   --input-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --artifact-base-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --verify-local-hashes \
   --write-example-output
 ```
 
-This regenerates the checked-in generated examples, validates them, and writes
-`generated/reviewer-demo-report.generated.example.md`.
+This intentionally regenerates the checked-in generated examples, validates
+local hash consistency before producing the report, and writes
+`generated/reviewer-demo-report.generated.example.md`. Normal reviewers should
+prefer `--output-dir` so repository files are not modified.
 
 ## Validate checked-in generated examples
 
