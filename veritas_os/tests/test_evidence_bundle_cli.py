@@ -63,6 +63,49 @@ def test_evidence_bundle_cli_generate_and_verify(tmp_path, monkeypatch) -> None:
     assert verify_exit == 0
 
 
+def test_generated_ui_delivery_hook_requires_manifest_signature(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Generated reviewer handoff uses strict Ed25519 manifest verification."""
+    from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+    trustlog_signed.append_signed_decision(
+        {"request_id": "ui-hook-bundle", "decision": "allow"}
+    )
+
+    result = generate_evidence_bundle(
+        bundle_type="decision",
+        witness_ledger_path=log_path,
+        output_dir=tmp_path / "bundles",
+        request_ids=["ui-hook-bundle"],
+    )
+    bundle_dir = Path(result["bundle_dir"])
+    hook = json.loads(
+        (bundle_dir / "ui_delivery_hook.json").read_text(encoding="utf-8")
+    )
+
+    assert "--public-key" in hook["verify_command"]
+    assert "--require-signature" in hook["verify_command"]
+    assert hook["requires_trusted_public_key"] is True
+    assert {"secure", "prod"}.issubset(hook["signature_required_in_postures"])
+    assert hook["verification_scope"] == [
+        "file_hash_integrity",
+        "manifest_signature_authenticity",
+    ]
+
+    readme = (bundle_dir / "README.txt").read_text(encoding="utf-8")
+    assert "reviewer/operator trust channel" in readme
+    assert "do not trust a public key only because it is included" in readme
+
+
 def test_financial_bundle_sample_fixture_exists() -> None:
     """Repository includes a representative financial decision bundle sample."""
     fixture_path = Path(
