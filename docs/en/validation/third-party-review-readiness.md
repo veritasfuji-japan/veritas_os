@@ -36,6 +36,14 @@ Use these as the shortest implementation entrypoints:
    - `veritas_os/api/routes_system.py`
 4. **Scope boundary statement**
    - [Implemented vs Pending Boundary](implemented-vs-pending-boundary.md)
+5. **Evidence Bundle reviewer verification**
+   - Evidence Bundle verification separates file/hash integrity from manifest
+     authenticity and supports strict Ed25519 manifest verification using a
+     trusted public key.
+   - [Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md)
+   - [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
+   - [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
+   - [External Audit Readiness Pack](external-audit-readiness.md)
 
 Related documentation map:
 
@@ -70,8 +78,14 @@ Representative bind/governance test surfaces:
 Treat the following as explicitly out-of-scope for repository-only assurance:
 
 - Independent third-party certification completion.
+- Regulatory certification.
+- Completed third-party audit approval.
 - Tenant-specific production controls (IdP, key custody, retention, HA/DR, ops execution quality).
 - Universal guarantee across all deployment environments.
+
+Evidence Bundle verification is reviewer-facing verification support, not a
+certification or audit approval claim. Trusted public keys must come from an
+out-of-band reviewer/operator trust channel, not from the Evidence Bundle alone.
 
 Primary boundary sources:
 
@@ -90,5 +104,7 @@ Primary boundary sources:
 4. Read [Recent Hardening Notes](../development/recent-hardening.md) for recent auditability, observability, CI gate, API compatibility, and dependency-risk visibility updates.
 5. Spot-check API contract in `openapi.yaml` and one bind mutation path.
 6. Confirm validation gates in [Production Validation Strategy](production-validation.md).
+7. For Evidence Bundle verification, run through the
+   [Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md).
 
 If deeper verification is needed, continue with [External Reviewer Checklist](external-reviewer-checklist.md).

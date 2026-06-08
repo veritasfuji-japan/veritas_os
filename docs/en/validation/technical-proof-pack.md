@@ -48,7 +48,32 @@ Primary references:
 
 ---
 
-## 4) Explicit non-guarantees (important)
+## 4) Evidence Bundle verification path
+
+Evidence Bundle verification separates file/hash integrity from manifest
+authenticity and supports strict Ed25519 manifest verification using a trusted
+public key. This is reviewer-facing verification support: it helps external
+reviewers confirm that hash-covered files match the manifest and that the
+manifest signature verifies under a reviewer-supplied trusted public key.
+
+Start here for the completed reviewer path:
+
+- [Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md)
+- [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
+- [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
+- [External Audit Readiness Pack](external-audit-readiness.md)
+
+Boundaries:
+
+- This is reviewer-facing verification support.
+- It is not regulatory certification.
+- It is not completed third-party audit approval.
+- Trusted public keys must come from an out-of-band reviewer/operator trust
+  channel.
+
+---
+
+## 5) Explicit non-guarantees (important)
 
 This pack does **not** claim any of the following:
 
@@ -62,10 +87,11 @@ For concrete boundaries, see:
 
 ---
 
-## 5) Reviewer handoff note
+## 6) Reviewer handoff note
 
 If you are an external reviewer, start with:
 
 1. `short-dd-summary.md` (5–10 minutes)
 2. `implemented-vs-pending-boundary.md` (boundary control)
 3. `external-reviewer-checklist.md` (evidence verification flow)
+4. `evidence-bundle-reviewer-checklist.md` (Evidence Bundle verification)

@@ -34,6 +34,8 @@ For a 10-minute implementation snapshot, start here:
 
 External reviewers can start with the [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md), which explains how to inspect the golden fixture, run the validation report, review the JSON Schema, and understand the local/offline evidence chain in 10–15 minutes. See also the [External Reviewer Artifact Index](docs/en/demo/external-reviewer-artifact-index.md).
 
+Evidence Bundle verification separates file/hash integrity from manifest authenticity and supports strict Ed25519 manifest verification using a trusted public key; start from the [Technical Proof Pack](docs/en/validation/technical-proof-pack.md) for the reviewer checklist, signature verification demo, sample outputs, and external audit readiness. This is reviewer-facing verification support, not regulatory certification or completed third-party audit approval; trusted public keys must come from an out-of-band reviewer/operator trust channel.
+
 For a concise business-facing overview, see [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md).
 日本語補助版: [企業向け価値説明ブリーフ](docs/ja/positioning/enterprise-value-brief.md)
 
