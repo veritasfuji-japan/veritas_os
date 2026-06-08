@@ -11,6 +11,7 @@ modifying files.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import re
@@ -97,6 +98,32 @@ class ReviewerDemoValidationResult:
     expected_files_count: int
     schema_validated_count: int
     reviewer_attachment_count: int
+    local_hash_checks_total: int = 0
+    local_hash_checks_passed: int = 0
+    local_hash_checks_skipped: int = 0
+    local_hash_failures: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class LocalHashCheckResult:
+    """Local artifact hash verification counters for optional checks."""
+
+    passed: int = 0
+    skipped: int = 0
+    failures: tuple[str, ...] = ()
+
+    @property
+    def total(self) -> int:
+        """Return the number of resolved or skipped local hash checks."""
+        return self.passed + self.skipped + len(self.failures)
+
+    def merged(self, other: "LocalHashCheckResult") -> "LocalHashCheckResult":
+        """Return a combined immutable local hash check result."""
+        return LocalHashCheckResult(
+            passed=self.passed + other.passed,
+            skipped=self.skipped + other.skipped,
+            failures=(*self.failures, *other.failures),
+        )
 
 
 class ReviewerDemoValidationError(ValueError):
@@ -140,6 +167,122 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise TypeError(f"expected JSON object in {_display_path(path)}")
     return payload
+
+
+def sha256_file(path: Path) -> str:
+    """Return the SHA-256 digest for the exact local file bytes at ``path``."""
+    digest = hashlib.sha256()
+    with path.open("rb") as file_handle:
+        for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _canonical_json_file_hash(path: Path) -> str | None:
+    """Return canonical JSON hash for legacy generated JSON artifacts if valid."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _is_external_artifact_ref(artifact_ref: str) -> bool:
+    """Return true for refs the validator must not dereference locally."""
+    lowered = artifact_ref.lower()
+    return "://" in lowered or lowered.startswith(("urn:", "mailto:"))
+
+
+def _safe_join(base_dir: Path, artifact_ref: str) -> Path | None:
+    """Resolve a relative artifact ref under ``base_dir`` without escaping it."""
+    if _is_external_artifact_ref(artifact_ref):
+        return None
+    ref_path = Path(artifact_ref)
+    if ref_path.is_absolute():
+        return ref_path if ref_path.is_file() else None
+    candidate = (base_dir / ref_path).resolve()
+    try:
+        candidate.relative_to(base_dir.resolve())
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+def resolve_local_artifact_ref(
+    artifact_ref: str,
+    demo_dir: Path,
+    artifact_base_dir: Path | None = None,
+) -> Path | None:
+    """Resolve a demo artifact reference using local-only lookup order.
+
+    The resolver never follows URLs or dereferences external artifact refs. It
+    checks ``demo_dir / artifact_ref``, then ``artifact_base_dir / artifact_ref``,
+    then ``artifact_base_dir / generated / artifact_ref`` when a base directory
+    is provided.
+    """
+    candidate = _safe_join(demo_dir, artifact_ref)
+    if candidate is not None:
+        return candidate
+
+    if artifact_base_dir is None:
+        return None
+
+    base_dir = artifact_base_dir.resolve()
+    candidate = _safe_join(base_dir, artifact_ref)
+    if candidate is not None:
+        return candidate
+    return _safe_join(base_dir / "generated", artifact_ref)
+
+
+def _hash_matches(local_path: Path, expected_hash: str) -> tuple[bool, str]:
+    """Compare expected hash with local file bytes, with legacy JSON support."""
+    actual_hash = sha256_file(local_path)
+    if actual_hash == expected_hash:
+        return True, actual_hash
+
+    canonical_hash = _canonical_json_file_hash(local_path)
+    if canonical_hash == expected_hash:
+        return True, actual_hash
+    return False, actual_hash
+
+
+def _hash_mismatch_message(
+    source_path: Path,
+    field_path: str,
+    local_path: Path,
+    expected_hash: str,
+    actual_hash: str,
+) -> str:
+    """Build a clear hash mismatch message for CLI and tests."""
+    return (
+        "hash mismatch; "
+        f"source={_display_path(source_path)} {field_path}; "
+        f"file={_display_path(local_path)}; "
+        f"expected hash={expected_hash}; actual hash={actual_hash}"
+    )
+
+
+def _required_artifact_string(
+    artifact: dict[str, Any],
+    field: str,
+    source_path: Path,
+    field_path: str,
+) -> str:
+    """Return a required string from a local hash-check artifact entry."""
+    value = artifact.get(field)
+    if not isinstance(value, str) or not value:
+        raise ReviewerDemoValidationError(
+            "local hash consistency",
+            source_path,
+            f"{field_path}.{field} must be a non-empty string",
+        )
+    return value
 
 
 def _resolve_ref(ref: str, root_schema: dict[str, Any]) -> dict[str, Any]:
@@ -539,11 +682,212 @@ def _validate_schemas(demo_dir: Path) -> int:
     return len(SCHEMA_FILE_NAMES_BY_ARTIFACT)
 
 
-def validate_reviewer_demo(demo_dir: Path) -> ReviewerDemoValidationResult:
+def _verify_artifact_hash_entry(
+    source_path: Path,
+    artifact_ref: str,
+    expected_hash: str,
+    field_path: str,
+    demo_dir: Path,
+    artifact_base_dir: Path | None,
+    fail_if_missing: bool,
+) -> LocalHashCheckResult:
+    """Verify one artifact hash entry when it resolves to a local file."""
+    local_path = resolve_local_artifact_ref(
+        artifact_ref,
+        demo_dir,
+        artifact_base_dir,
+    )
+    if local_path is None:
+        if fail_if_missing:
+            return LocalHashCheckResult(
+                failures=(
+                    (
+                        "missing local artifact for hash check; "
+                        f"source={_display_path(source_path)} {field_path}; "
+                        f"artifact_ref={artifact_ref}"
+                    ),
+                )
+            )
+        return LocalHashCheckResult(skipped=1)
+
+    matches, actual_hash = _hash_matches(local_path, expected_hash)
+    if matches:
+        return LocalHashCheckResult(passed=1)
+
+    return LocalHashCheckResult(
+        failures=(
+            _hash_mismatch_message(
+                source_path,
+                f"{field_path}.artifact_hash",
+                local_path,
+                expected_hash,
+                actual_hash,
+            ),
+        )
+    )
+
+
+def verify_chain_manifest_hashes(
+    path: Path,
+    demo_dir: Path,
+    artifact_base_dir: Path | None = None,
+) -> LocalHashCheckResult:
+    """Optionally verify chain-manifest artifact hashes against local files."""
+    manifest = load_json(path)
+    artifacts = manifest.get("artifacts", [])
+    result = LocalHashCheckResult()
+    for index, artifact in enumerate(artifacts):
+        if not isinstance(artifact, dict):
+            continue
+        field_path = f"artifacts[{index}]"
+        artifact_ref = _required_artifact_string(
+            artifact,
+            "artifact_ref",
+            path,
+            field_path,
+        )
+        expected_hash = _required_artifact_string(
+            artifact,
+            "artifact_hash",
+            path,
+            field_path,
+        )
+        fail_if_missing = artifact_ref in EXPECTED_FILE_NAMES
+        result = result.merged(
+            _verify_artifact_hash_entry(
+                path,
+                artifact_ref,
+                expected_hash,
+                field_path,
+                demo_dir,
+                artifact_base_dir,
+                fail_if_missing,
+            )
+        )
+    return result
+
+
+def verify_demo_summary_hashes(path: Path, demo_dir: Path) -> LocalHashCheckResult:
+    """Verify demo-summary generated artifact hashes under ``demo_dir``."""
+    summary = load_json(path)
+    artifacts = summary.get("generated_artifacts", [])
+    result = LocalHashCheckResult()
+    for index, artifact in enumerate(artifacts):
+        if not isinstance(artifact, dict):
+            continue
+        field_path = f"generated_artifacts[{index}]"
+        artifact_ref = _required_artifact_string(
+            artifact,
+            "artifact_ref",
+            path,
+            field_path,
+        )
+        expected_hash = _required_artifact_string(
+            artifact,
+            "artifact_hash",
+            path,
+            field_path,
+        )
+        result = result.merged(
+            _verify_artifact_hash_entry(
+                path,
+                artifact_ref,
+                expected_hash,
+                field_path,
+                demo_dir,
+                None,
+                True,
+            )
+        )
+    return result
+
+
+def verify_reviewer_packet_attachment_hashes(
+    path: Path,
+    demo_dir: Path,
+    artifact_base_dir: Path | None = None,
+) -> LocalHashCheckResult:
+    """Verify reviewer-packet attachment hashes when refs resolve locally."""
+    packet = load_json(path)
+    artifacts = packet.get("evaluation_governance_artifacts", [])
+    result = LocalHashCheckResult()
+    for index, artifact in enumerate(artifacts):
+        if not isinstance(artifact, dict):
+            continue
+        field_path = f"evaluation_governance_artifacts[{index}]"
+        artifact_ref = _required_artifact_string(
+            artifact,
+            "artifact_ref",
+            path,
+            field_path,
+        )
+        expected_hash = _required_artifact_string(
+            artifact,
+            "artifact_hash",
+            path,
+            field_path,
+        )
+        result = result.merged(
+            _verify_artifact_hash_entry(
+                path,
+                artifact_ref,
+                expected_hash,
+                field_path,
+                demo_dir,
+                artifact_base_dir,
+                False,
+            )
+        )
+    return result
+
+
+def verify_local_hash_consistency(
+    demo_dir: Path,
+    artifact_base_dir: Path | None = None,
+) -> LocalHashCheckResult:
+    """Verify local hash consistency for resolvable reviewer demo artifacts."""
+    checks = [
+        verify_chain_manifest_hashes(
+            demo_dir / "chain-manifest.generated.example.json",
+            demo_dir,
+            artifact_base_dir,
+        ),
+        verify_demo_summary_hashes(
+            demo_dir / "demo-summary.generated.example.json",
+            demo_dir,
+        ),
+        verify_reviewer_packet_attachment_hashes(
+            demo_dir / "reviewer-evidence-packet.generated.example.json",
+            demo_dir,
+            artifact_base_dir,
+        ),
+    ]
+    result = LocalHashCheckResult()
+    for check in checks:
+        result = result.merged(check)
+
+    if result.failures:
+        raise ReviewerDemoValidationError(
+            "local hash consistency",
+            demo_dir,
+            "\n".join(result.failures),
+        )
+    return result
+
+
+def validate_reviewer_demo(
+    demo_dir: Path,
+    verify_local_hashes: bool = False,
+    artifact_base_dir: Path | None = None,
+) -> ReviewerDemoValidationResult:
     """Validate a generated Evaluation Governance reviewer demo directory.
 
     Args:
         demo_dir: Directory containing generated reviewer-facing demo artifacts.
+        verify_local_hashes: When true, compare artifact_hash values with
+            local artifacts that can be resolved without network access.
+        artifact_base_dir: Optional local base directory for resolving chain or
+            reviewer packet artifact references outside ``demo_dir``.
 
     Returns:
         Counts for the validated expected files, schemas, and reviewer packet
@@ -571,15 +915,33 @@ def validate_reviewer_demo(demo_dir: Path) -> ReviewerDemoValidationResult:
         resolved_demo_dir / "reviewer-evidence-packet.generated.example.json"
     )
     validate_demo_summary(resolved_demo_dir / "demo-summary.generated.example.json")
+
+    hash_result = LocalHashCheckResult()
+    if verify_local_hashes:
+        resolved_artifact_base_dir = (
+            artifact_base_dir.resolve() if artifact_base_dir is not None else None
+        )
+        hash_result = verify_local_hash_consistency(
+            resolved_demo_dir,
+            resolved_artifact_base_dir,
+        )
+
     return ReviewerDemoValidationResult(
         demo_dir=resolved_demo_dir,
         expected_files_count=expected_count,
         schema_validated_count=schema_count,
         reviewer_attachment_count=attachment_count,
+        local_hash_checks_total=hash_result.total,
+        local_hash_checks_passed=hash_result.passed,
+        local_hash_checks_skipped=hash_result.skipped,
+        local_hash_failures=hash_result.failures,
     )
 
 
-def _print_success_report(result: ReviewerDemoValidationResult) -> None:
+def _print_success_report(
+    result: ReviewerDemoValidationResult,
+    verify_local_hashes: bool = False,
+) -> None:
     """Print a concise reviewer-friendly success report."""
     print("Evaluation Governance Reviewer Demo Validation")
     print()
@@ -588,6 +950,14 @@ def _print_success_report(result: ReviewerDemoValidationResult) -> None:
     print("PASS chain manifest safety boundaries")
     print("PASS reviewer evidence packet attachments")
     print("PASS demo summary safety boundaries")
+    if verify_local_hashes:
+        print("PASS local hash consistency")
+        if result.local_hash_checks_skipped:
+            print(
+                "Local hash checks: "
+                f"{result.local_hash_checks_passed} passed, "
+                f"{result.local_hash_checks_skipped} skipped."
+            )
     print()
     print(f"Validated reviewer demo output: {result.demo_dir}")
 
@@ -614,6 +984,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Directory containing generated reviewer demo artifacts.",
     )
+    parser.add_argument(
+        "--artifact-base-dir",
+        type=Path,
+        help=(
+            "Optional local base directory used only for resolving artifact "
+            "references during --verify-local-hashes."
+        ),
+    )
+    parser.add_argument(
+        "--verify-local-hashes",
+        action="store_true",
+        help=(
+            "Optionally verify artifact_hash values for local files that can "
+            "be resolved without dereferencing external refs."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -621,7 +1007,11 @@ def main(argv: list[str] | None = None) -> int:
     """Run the reviewer demo validator CLI."""
     args = _parse_args(argv)
     try:
-        result = validate_reviewer_demo(args.demo_dir)
+        result = validate_reviewer_demo(
+            args.demo_dir,
+            verify_local_hashes=args.verify_local_hashes,
+            artifact_base_dir=args.artifact_base_dir,
+        )
     except ReviewerDemoValidationError as exc:
         _print_failure_report(exc)
         return 1
@@ -631,7 +1021,7 @@ def main(argv: list[str] | None = None) -> int:
         _print_failure_report(error)
         return 1
 
-    _print_success_report(result)
+    _print_success_report(result, verify_local_hashes=args.verify_local_hashes)
     return 0
 
 
