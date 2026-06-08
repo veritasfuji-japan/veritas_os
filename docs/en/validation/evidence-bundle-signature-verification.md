@@ -5,6 +5,9 @@ external auditors and design partners. It is intentionally minimal: generate a
 signed bundle, obtain the trusted Ed25519 public key from a separate trust
 channel, then verify both file/hash integrity and manifest authenticity.
 
+For a reviewer-facing sample transcript covering success, missing-key failure,
+and wrong-key failure, see [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md).
+
 ## Security boundary
 
 - Do not treat hash integrity as authenticity.
