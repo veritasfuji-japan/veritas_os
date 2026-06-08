@@ -88,6 +88,7 @@ class ReportInputs:
     trajectory_monitor: TrajectoryMonitorSummary
     legitimacy_review: LegitimacyReviewSummary
     validation_result: ReviewerDemoValidationResult | None
+    local_hash_verification_enabled: bool = False
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -450,6 +451,19 @@ def render_markdown_report(report_inputs: ReportInputs) -> str:
                 "- reviewer packet attachments checked",
             ]
         )
+        if report_inputs.local_hash_verification_enabled:
+            lines.extend(
+                [
+                    "- Local hash consistency: PASS",
+                    (
+                        "- Local hash checks: "
+                        f"{report_inputs.validation_result.local_hash_checks_passed} "
+                        "passed, "
+                        f"{report_inputs.validation_result.local_hash_checks_skipped} "
+                        "skipped"
+                    ),
+                ]
+            )
 
     lines.extend(
         [
@@ -481,12 +495,19 @@ def render_markdown_report(report_inputs: ReportInputs) -> str:
 def generate_reviewer_demo_report(
     demo_dir: Path | str,
     validate: bool = True,
+    verify_local_hashes: bool = False,
+    artifact_base_dir: Path | str | None = None,
 ) -> str:
     """Generate a Markdown report from a local reviewer demo output directory.
 
     Args:
         demo_dir: Directory containing generated reviewer demo artifacts.
         validate: Whether to run the local reviewer demo validator first.
+        verify_local_hashes: When true and validation is enabled, compare
+            artifact_hash values with local files that can be resolved without
+            network access.
+        artifact_base_dir: Optional local base directory for resolving artifact
+            references during local hash verification.
 
     Returns:
         Human-readable Markdown report content.
@@ -497,7 +518,20 @@ def generate_reviewer_demo_report(
         FileNotFoundError: If required report input files are missing.
     """
     resolved_demo_dir = Path(demo_dir).resolve()
-    validation_result = validate_reviewer_demo(resolved_demo_dir) if validate else None
+    resolved_artifact_base_dir = (
+        Path(artifact_base_dir).resolve()
+        if artifact_base_dir is not None
+        else None
+    )
+    validation_result = (
+        validate_reviewer_demo(
+            resolved_demo_dir,
+            verify_local_hashes=verify_local_hashes,
+            artifact_base_dir=resolved_artifact_base_dir,
+        )
+        if validate
+        else None
+    )
 
     demo_summary = load_json(resolved_demo_dir / DEMO_SUMMARY_FILE_NAME)
     _require_demo_boundaries(demo_summary)
@@ -513,6 +547,7 @@ def generate_reviewer_demo_report(
         trajectory_monitor=summarize_trajectory_monitor(trajectory_monitor),
         legitimacy_review=summarize_legitimacy_review(legitimacy_review),
         validation_result=validation_result,
+        local_hash_verification_enabled=verify_local_hashes,
     )
     return render_markdown_report(report_inputs)
 
@@ -548,6 +583,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="validate",
         help="Skip validation and render only from local JSON inputs.",
     )
+    parser.add_argument(
+        "--artifact-base-dir",
+        type=Path,
+        help=(
+            "Optional local base directory used only for resolving artifact "
+            "references during --verify-local-hashes."
+        ),
+    )
+    parser.add_argument(
+        "--verify-local-hashes",
+        action="store_true",
+        help=(
+            "Optionally verify artifact_hash values for local files that can "
+            "be resolved without dereferencing external refs."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -566,7 +617,12 @@ def main(argv: list[str] | None = None) -> int:
     """Run the reviewer demo report generator CLI."""
     args = _parse_args(argv)
     try:
-        report = generate_reviewer_demo_report(args.demo_dir, args.validate)
+        report = generate_reviewer_demo_report(
+            args.demo_dir,
+            args.validate,
+            verify_local_hashes=args.verify_local_hashes,
+            artifact_base_dir=args.artifact_base_dir,
+        )
         if args.output is not None:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(report, encoding="utf-8")
