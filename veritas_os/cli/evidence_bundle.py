@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from veritas_os.audit.evidence_bundle import generate_evidence_bundle
 from veritas_os.audit.verify_bundle import verify_evidence_bundle
+from veritas_os.security.signing import verify_payload_signature
 
 
 def _parse_key_value_pairs(values: Optional[list[str]]) -> Dict[str, str]:
@@ -22,6 +24,37 @@ def _parse_key_value_pairs(values: Optional[list[str]]) -> Dict[str, str]:
         key, value = item.split("=", 1)
         result[key.strip()] = value.strip()
     return result
+
+
+SECURE_POSTURES = {"secure", "prod"}
+
+
+def _is_fail_closed_posture() -> bool:
+    """Return whether evidence-bundle verification must fail closed."""
+    return os.getenv("VERITAS_POSTURE", "dev").strip().lower() in SECURE_POSTURES
+
+
+def _signature_status_label(status: str) -> str:
+    """Render a reviewer-facing manifest signature status label."""
+    return {
+        "pass": "PASS",
+        "fail": "FAIL",
+        "missing": "FAIL",
+        "not_verified": "NOT VERIFIED",
+    }.get(status, "NOT VERIFIED")
+
+
+def _build_signature_verifier(
+    public_key_path: Optional[Path],
+) -> Optional[Callable[[str, str], bool]]:
+    """Build the Ed25519 verifier used for manifest authenticity checks."""
+    if public_key_path is None:
+        return None
+
+    def _verify(payload_hash: str, signature_b64: str) -> bool:
+        return verify_payload_signature(payload_hash, signature_b64, public_key_path)
+
+    return _verify
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,6 +82,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify = sub.add_parser("verify", help="Verify evidence bundle")
     verify.add_argument("--bundle-dir", required=True, type=Path)
+    verify.add_argument(
+        "--public-key",
+        type=Path,
+        help="Trusted Ed25519 public key for manifest signature verification",
+    )
+    verify.add_argument(
+        "--require-signature",
+        action="store_true",
+        help="Fail when the manifest signature is missing or cannot be verified",
+    )
     verify.add_argument("--json", action="store_true")
 
     return parser
@@ -89,12 +132,36 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"entry_count={result['entry_count']}")
         return 0
 
-    verify_result: Dict[str, Any] = verify_evidence_bundle(args.bundle_dir)
+    require_signature = args.require_signature or _is_fail_closed_posture()
+    verify_signature_fn = _build_signature_verifier(args.public_key)
+    verify_result: Dict[str, Any] = verify_evidence_bundle(
+        args.bundle_dir,
+        verify_signature_fn=verify_signature_fn,
+        require_signature=require_signature,
+    )
+    if args.public_key is None:
+        key_warning = (
+            "No trusted public key supplied; manifest signature authenticity "
+            "cannot be verified"
+        )
+        if require_signature:
+            if key_warning not in verify_result["errors"]:
+                verify_result["errors"].append(key_warning)
+            verify_result["ok"] = False
+        elif key_warning not in verify_result["warnings"]:
+            verify_result["warnings"].append(key_warning)
+
     if args.json:
         print(json.dumps(verify_result, indent=2, sort_keys=True, ensure_ascii=False))
     else:
         status = "PASS" if verify_result.get("ok") else "FAIL"
+        hash_status = "PASS" if verify_result.get("hash_integrity_ok") else "FAIL"
+        signature_status = _signature_status_label(
+            str(verify_result.get("signature_status", "not_verified"))
+        )
         print(f"Evidence bundle verification: {status}")
+        print(f"File/hash integrity: {hash_status}")
+        print(f"Manifest signature: {signature_status}")
         for err in verify_result.get("errors", []):
             print(f"  error: {err}")
         for warning in verify_result.get("warnings", []):
