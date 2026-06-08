@@ -71,6 +71,7 @@ VERITASには、authority、評価関数の定義、Evaluation Receipt、outcome
 これらは v1 では非強制のレビュアー向け成果物です。`/v1/decide` の挙動を変更せず、legitimacyを自動的に保証せず、規制適合を認証するものでもありません。目的は、architecture hardening のための証跡を明示的・version管理可能・異議申し立て可能・監査可能にすることです。
 
 - Evaluation Governance overview: [docs/en/architecture/evaluation-governance-overview-v1.md](docs/en/architecture/evaluation-governance-overview-v1.md)
+- Evaluation Governance reviewer demo quickstart: [docs/en/demo/evaluation-governance-reviewer-demo-quickstart-v1.md](docs/en/demo/evaluation-governance-reviewer-demo-quickstart-v1.md)
 - [Evaluation Function Governance v1](docs/en/architecture/evaluation-function-governance-v1.md)
 - [Evaluation Receipt v1](docs/en/architecture/evaluation-receipt-v1.md)
 - [Outcome Delta Attribution v1](docs/en/architecture/outcome-delta-attribution-v1.md)

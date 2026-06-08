@@ -84,6 +84,8 @@ See:
 
 The synthetic sample bundle can be validated locally with `scripts/demo/validate_evaluation_governance_sample_bundle.py`.
 
+For a one-command synthetic reviewer demo, see [Evaluation Governance Reviewer Demo Quickstart v1](../demo/evaluation-governance-reviewer-demo-quickstart-v1.md).
+
 In v1, this packet integration is optional, non-enforcing, and reference-only.
 It does not require live runtime generation yet and does not change `/v1/decide`
 behavior.
