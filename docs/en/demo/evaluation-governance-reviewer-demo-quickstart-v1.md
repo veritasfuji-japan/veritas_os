@@ -129,6 +129,13 @@ python scripts/demo/run_evaluation_governance_reviewer_demo_suite.py \
 `--write-example-output` intentionally updates checked-in generated examples.
 Normal reviewers should prefer `--output-dir`.
 
+## CI smoke coverage
+
+The reviewer demo suite has a focused smoke test that runs the full synthetic
+offline path into a temporary directory. The smoke test verifies generation,
+validation, local hash consistency, and report creation. It remains
+non-runtime and does not call `/v1/decide`.
+
 ## Run the full demo suite with local hash verification
 
 ```bash
