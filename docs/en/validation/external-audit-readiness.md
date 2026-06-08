@@ -329,7 +329,9 @@ veritas-evidence-bundle generate \
   --decision-record-profile full
 
 veritas-evidence-bundle verify \
-  --bundle-dir ./bundles/veritas_bundle_decision_<uuid>
+  --bundle-dir ./bundles/veritas_bundle_decision_<uuid> \
+  --public-key /path/to/trusted_ed25519_public.key \
+  --require-signature
 ```
 
 ### Financial template sample bundle
@@ -350,14 +352,19 @@ archive = create_bundle_archive(Path("veritas_bundle_decision_<uuid>"))
 ### External delivery policy (auditor/customer/legal)
 
 1. Generate bundle with explicit decision_record profile (`minimum` or `full`).
-2. Verify with `veritas-evidence-bundle verify`.
+2. Verify with `veritas-evidence-bundle verify --public-key <trusted-ed25519-public-key>`.
+   Use a trusted public key from the reviewer/operator trust channel; in
+   `secure` and `prod` posture, missing or unverifiable manifest signatures
+   fail closed.
 3. Confirm all `acceptance_checklist.json` items are PASS.
 4. Include `README.txt` unchanged in handoff package.
 5. Deliver as read-only `.tar.gz` plus detached transfer checksum.
 
 Security note: Any tampering with `manifest.json`, `witness_entries.jsonl`,
 or hash-referenced files invalidates the delivery contract and requires
-regeneration from TrustLog source data.
+regeneration from TrustLog source data. Hash checks prove file integrity only;
+reviewers must provide the trusted Ed25519 public key at verify time to prove
+manifest authenticity and non-repudiation.
 
 ---
 
