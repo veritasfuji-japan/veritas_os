@@ -551,3 +551,49 @@ not production security, not automatic enforcement, not automatic blocking, not
 automatic attack detection, not a scoring model, not a prediction claim, not an
 inevitability claim, not a psychological inference, not actor psychology
 inference, and not a legal conclusion.
+
+## Reviewer-Facing Visibility Roadmap v0
+
+Reviewer-Facing Visibility Roadmap v0 is a docs-only roadmap note for the
+reviewer-facing evidence architecture before any future Governance Evidence
+Packet v1 expansion. It does not implement Governance Evidence Packet v1,
+change packet semantics, or add new runtime markers. Instead, it identifies
+visibility distinctions that may need to remain stable before a future packet
+version can be considered.
+
+Reviewer-facing visibility should distinguish procedural admissibility evidence, maneuverability contraction evidence, and recognizability evidence before any future packet expansion.
+
+For this roadmap, reviewer-facing visibility means the later reviewer can
+separately inspect:
+
+1. evidence that the process remained procedurally admissible
+2. evidence that maneuverability contracted
+3. evidence that later reviewers could recognize that contraction
+
+This builds on the existing VERITAS layers rather than replacing them.
+Governance Evidence Packet v0 groups the current reviewer-facing evidence, and
+Governance Evidence Packet Contract v0 fixes the current packet structure.
+Procedural Admissibility vs. Maneuverability Observables v0 separates formal
+process admissibility from practical maneuverability. Governance Recognizability
+Conditions v0 describes visibility conditions under which later reviewers can
+recognize governance state and maneuverability contraction. Trajectory Shaping
+Lineage v0, Irreversibility Horizon v0, and Actor Recognition Gap v0 provide the
+underlying reviewer-visible sequence, horizon, and recognition-gap vocabulary
+without inferring actor beliefs, intent, or subjective experience.
+
+Future representative scenarios may test whether these distinctions remain
+visible under more dynamic conditions. Those scenarios would be used to examine
+whether reviewers can still distinguish process admissibility evidence,
+maneuverability contraction evidence, and recognizability evidence when the
+conditions around a decision change over time.
+
+This roadmap does not change the Governance Evidence Packet v0 contract.
+
+This roadmap is not a Governance Evidence Packet v1 implementation, not a
+schema change, not a runtime behavior change, not a Mission Control UI change,
+not certification, not production security, not a production security guarantee,
+not automatic enforcement, not automatic blocking, not automatic attack
+detection, not a scoring model, not a prediction claim, not an inevitability
+claim, not a psychological inference, not actor psychology inference, and not a
+legal conclusion.
+
