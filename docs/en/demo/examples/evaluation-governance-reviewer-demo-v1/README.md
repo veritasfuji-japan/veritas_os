@@ -31,6 +31,18 @@ python scripts/demo/run_evaluation_governance_reviewer_demo.py \
   --write-example-output
 ```
 
+## Validate checked-in generated examples
+
+```bash
+python scripts/demo/validate_evaluation_governance_reviewer_demo.py \
+  --demo-dir docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated
+```
+
+The validator checks expected files, schema shape where schemas exist,
+non-runtime / non-enforcing boundaries, and Reviewer Evidence Packet
+attachments. It does not establish legitimacy, certify compliance, or call
+`/v1/decide`.
+
 ## Checked-in generated examples
 
 The files under [`generated/`](generated/) are checked in for reviewer
