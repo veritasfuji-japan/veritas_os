@@ -3,7 +3,8 @@
 This page is a reviewer-facing sample transcript for Evidence Bundle strict
 verification. All command output below is **illustrative output** for external
 auditors and design partners to preview the expected CLI shape before handling a
-real bundle.
+real bundle. Use it with the one-page
+[Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md).
 
 ## Safety boundary
 

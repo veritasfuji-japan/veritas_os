@@ -248,6 +248,7 @@ external auditors/customers/legal.
 
 Use the fixed reviewer-facing demo for Ed25519 manifest verification:
 
+- [Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md)
 - [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
 
 Security notes for every external handoff:

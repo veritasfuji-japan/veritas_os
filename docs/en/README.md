@@ -48,6 +48,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Regulated Action Governance External Reviewer Feedback Template](validation/external-reviewer-feedback-template-regulated-action-governance.md)
 - [Third-Party Review Readiness (compact index)](validation/third-party-review-readiness.md)
 - [Current Implementation Matrix (10-minute reviewer view)](validation/current-implementation-matrix.md)
+- [Evidence Bundle Reviewer Checklist](validation/evidence-bundle-reviewer-checklist.md)
 - [Sample Evidence Bundle Verification Output](validation/sample-evidence-bundle-verification-output.md)
 
 ### Governance & Compliance
