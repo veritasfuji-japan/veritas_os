@@ -91,7 +91,32 @@ Reviewer Evidence Packet, trajectory monitor, and legitimacy impact review.
 It does not establish legitimacy, does not certify compliance, and does not
 call `/v1/decide`.
 
-## 7. Expected outputs
+## 7. Run the full demo suite
+
+Recommended reviewer command:
+
+```bash
+python scripts/demo/run_evaluation_governance_reviewer_demo_suite.py \
+  --input-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --output-dir /tmp/evaluation-governance-reviewer-demo
+```
+
+This runs generation, validation, and Markdown report generation in one
+synthetic offline workflow. It is non-runtime and non-enforcing, does not call
+`/v1/decide`, does not establish legitimacy, and does not certify compliance.
+
+Maintainers can intentionally refresh checked-in generated examples with:
+
+```bash
+python scripts/demo/run_evaluation_governance_reviewer_demo_suite.py \
+  --input-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --write-example-output
+```
+
+`--write-example-output` intentionally updates checked-in generated examples.
+Normal reviewers should prefer `--output-dir`.
+
+## 8. Expected outputs
 
 The output directory should contain:
 
@@ -107,7 +132,7 @@ reviewer-evidence-packet.generated.example.json
 demo-summary.generated.example.json
 ```
 
-## 8. What reviewers should inspect first
+## 9. What reviewers should inspect first
 
 Recommended inspection order:
 
@@ -122,7 +147,7 @@ Recommended inspection order:
 5. `legitimacy-impact-review.generated.example.json`
    - shows legitimacy-impacting change signals
 
-## 9. Regenerate checked-in examples intentionally
+## 10. Regenerate checked-in examples intentionally
 
 Maintainers can intentionally regenerate checked-in example outputs with:
 
@@ -136,7 +161,7 @@ This intentionally updates checked-in example outputs.
 Normal reviewers should prefer `--output-dir`.
 This mode exists for maintainers.
 
-## 10. Relationship to Reviewer Evidence Packet
+## 11. Relationship to Reviewer Evidence Packet
 
 The Reviewer Evidence Packet can include optional `evaluation_governance_artifacts`.
 The generated packet attaches the Evaluation Governance chain artifacts for review.
@@ -148,7 +173,7 @@ See:
 - [Reviewer Evidence Packet v1](reviewer-evidence-packet.md)
 - [Evaluation Governance offline-chain Reviewer Evidence Packet example](examples/evaluation-governance-chain-reviewer-packet-v1/README.md)
 
-## 11. Relationship to Evaluation Governance overview
+## 12. Relationship to Evaluation Governance overview
 
 The Evaluation Governance overview explains the artifact chain.
 This quickstart explains how to run the synthetic reviewer demo.
@@ -157,14 +182,14 @@ See:
 
 - [Evaluation Governance Overview v1](../architecture/evaluation-governance-overview-v1.md)
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 - If Python cannot import dependencies, run the repository's normal development setup first.
 - If output files are not created, confirm `--output-dir` is provided.
 - If trying to write checked-in examples, use `--write-example-output`.
 - The demo should not require network access.
 
-## 13. Non-goals
+## 14. Non-goals
 
 - This quickstart does not claim regulatory compliance.
 - This quickstart does not claim automatic legitimacy determination.
