@@ -39,6 +39,7 @@ def verify_evidence_bundle(
     bundle_dir: Path,
     *,
     verify_signature_fn: Optional[Callable[[str, str], bool]] = None,
+    require_signature: bool = False,
     verify_witness_signatures: bool = False,
     witness_signature_fn: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ) -> Dict[str, Any]:
@@ -48,6 +49,8 @@ def verify_evidence_bundle(
         bundle_dir: Path to the evidence bundle directory.
         verify_signature_fn: Optional callable (payload_hash, signature) -> bool
             for verifying the manifest signature.
+        require_signature: Fail verification when a manifest signature is missing
+            or cannot be cryptographically verified.
         verify_witness_signatures: Whether to verify witness entry signatures.
         witness_signature_fn: Optional callable for witness signature verification.
 
@@ -58,6 +61,9 @@ def verify_evidence_bundle(
         - errors: list of error descriptions
         - manifest: the manifest contents
         - file_hash_results: per-file hash comparison
+        - hash_integrity_ok: bool for file/hash integrity only
+        - signature_status: pass/fail/missing/not_verified
+        - signature_verified: bool
     """
     result: Dict[str, Any] = {
         "ok": True,
@@ -66,6 +72,9 @@ def verify_evidence_bundle(
         "warnings": [],
         "manifest": None,
         "file_hash_results": {},
+        "hash_integrity_ok": True,
+        "signature_status": "not_verified",
+        "signature_verified": False,
     }
     errors: List[str] = result["errors"]
     warnings: List[str] = result["warnings"]
@@ -76,6 +85,8 @@ def verify_evidence_bundle(
         errors.append("manifest.json not found in bundle")
         result["ok"] = False
         result["tampered"] = True
+        result["hash_integrity_ok"] = False
+        result["signature_status"] = "missing"
         return result
 
     try:
@@ -84,6 +95,8 @@ def verify_evidence_bundle(
         errors.append(f"Failed to read manifest.json: {exc}")
         result["ok"] = False
         result["tampered"] = True
+        result["hash_integrity_ok"] = False
+        result["signature_status"] = "missing"
         return result
 
     result["manifest"] = manifest
@@ -157,6 +170,7 @@ def verify_evidence_bundle(
             }
             errors.append(f"File missing: {rel_path}")
             result["tampered"] = True
+            result["hash_integrity_ok"] = False
             continue
 
         actual_hash = _sha256_file(file_path)
@@ -169,6 +183,7 @@ def verify_evidence_bundle(
             }
             errors.append(f"Hash mismatch: {rel_path}")
             result["tampered"] = True
+            result["hash_integrity_ok"] = False
         else:
             hash_results[rel_path] = {"ok": True}
 
@@ -196,16 +211,50 @@ def verify_evidence_bundle(
         if recomputed != stored_manifest_hash:
             errors.append("Manifest hash integrity check failed")
             result["tampered"] = True
+            result["hash_integrity_ok"] = False
 
     # Verify manifest signature
     manifest_signature = manifest.get("manifest_signature")
-    if manifest_signature and verify_signature_fn:
-        try:
-            if not verify_signature_fn(stored_manifest_hash or "", manifest_signature):
-                errors.append("Manifest signature verification failed")
+    if manifest_signature:
+        if verify_signature_fn is None:
+            message = (
+                "Manifest signature present but no signature verifier was provided; "
+                "manifest authenticity was not verified"
+            )
+            result["signature_status"] = "not_verified"
+            if require_signature:
+                errors.append(message)
                 result["tampered"] = True
-        except Exception as exc:  # noqa: BLE001
-            warnings.append(f"Manifest signature verification error: {exc}")
+            else:
+                warnings.append(message)
+        else:
+            try:
+                signature_ok = verify_signature_fn(
+                    stored_manifest_hash or "",
+                    manifest_signature,
+                )
+            except Exception as exc:  # noqa: BLE001
+                result["signature_status"] = "fail"
+                errors.append(f"Manifest signature verification error: {exc}")
+                result["tampered"] = True
+            else:
+                if signature_ok:
+                    result["signature_status"] = "pass"
+                    result["signature_verified"] = True
+                else:
+                    result["signature_status"] = "fail"
+                    errors.append("Manifest signature verification failed")
+                    result["tampered"] = True
+    else:
+        result["signature_status"] = "missing"
+        message = "Manifest signature missing"
+        if require_signature:
+            errors.append(message)
+            result["tampered"] = True
+        else:
+            warnings.append(
+                f"{message}; manifest authenticity was not verified"
+            )
 
     # Verify witness entries
     witness_path = bundle_dir / "witness_entries.jsonl"
