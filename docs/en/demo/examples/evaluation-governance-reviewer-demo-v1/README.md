@@ -54,6 +54,18 @@ non-runtime / non-enforcing boundaries, and Reviewer Evidence Packet
 attachments. It does not establish legitimacy, certify compliance, or call
 `/v1/decide`.
 
+Optional local hash verification for checked-in examples:
+
+```bash
+python scripts/demo/validate_evaluation_governance_reviewer_demo.py \
+  --demo-dir docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated \
+  --artifact-base-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --verify-local-hashes
+```
+
+This optional check verifies local artifact hashes where files can be resolved;
+it does not follow external refs or require network access.
+
 ## Generate the checked-in reviewer report example
 
 ```bash
