@@ -31,6 +31,17 @@ python scripts/demo/run_evaluation_governance_reviewer_demo.py \
   --write-example-output
 ```
 
+## Run the full demo suite
+
+```bash
+python scripts/demo/run_evaluation_governance_reviewer_demo_suite.py \
+  --input-dir docs/en/demo/examples/evaluation-governance-offline-chain-v1 \
+  --write-example-output
+```
+
+This regenerates the checked-in generated examples, validates them, and writes
+`generated/reviewer-demo-report.generated.example.md`.
+
 ## Validate checked-in generated examples
 
 ```bash

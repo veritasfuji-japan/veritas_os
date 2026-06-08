@@ -54,7 +54,7 @@ Use this 10–15 minute path for a reviewer-facing inspection:
 
 ## Evaluation Governance offline reviewer demo
 
-For a one-command synthetic offline demo, see [Evaluation Governance Reviewer Demo Quickstart v1](evaluation-governance-reviewer-demo-quickstart-v1.md). The demo is reviewer-facing, non-runtime, and non-enforcing in v1, and it produces a Reviewer Evidence Packet with optional Evaluation Governance attachments.
+For a one-command synthetic offline demo, see [Evaluation Governance Reviewer Demo Quickstart v1](evaluation-governance-reviewer-demo-quickstart-v1.md). The demo is reviewer-facing, non-runtime, and non-enforcing in v1, and it produces a Reviewer Evidence Packet with optional Evaluation Governance attachments. For the full Evaluation Governance offline reviewer demo, run the suite command documented in `docs/en/demo/evaluation-governance-reviewer-demo-quickstart-v1.md`.
 
 ## Local bundle generation
 
