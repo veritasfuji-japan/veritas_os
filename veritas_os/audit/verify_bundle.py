@@ -64,6 +64,8 @@ def verify_evidence_bundle(
         - hash_integrity_ok: bool for file/hash integrity only
         - signature_status: pass/fail/missing/not_verified
         - signature_verified: bool
+        - authenticity_ok: bool for verified manifest authenticity
+        - authenticity_failure: optional signature-authenticity failure reason
     """
     result: Dict[str, Any] = {
         "ok": True,
@@ -75,6 +77,8 @@ def verify_evidence_bundle(
         "hash_integrity_ok": True,
         "signature_status": "not_verified",
         "signature_verified": False,
+        "authenticity_ok": False,
+        "authenticity_failure": None,
     }
     errors: List[str] = result["errors"]
     warnings: List[str] = result["warnings"]
@@ -87,6 +91,8 @@ def verify_evidence_bundle(
         result["tampered"] = True
         result["hash_integrity_ok"] = False
         result["signature_status"] = "missing"
+        if require_signature:
+            result["authenticity_failure"] = "manifest_missing"
         return result
 
     try:
@@ -97,6 +103,8 @@ def verify_evidence_bundle(
         result["tampered"] = True
         result["hash_integrity_ok"] = False
         result["signature_status"] = "missing"
+        if require_signature:
+            result["authenticity_failure"] = "manifest_unreadable"
         return result
 
     result["manifest"] = manifest
@@ -225,6 +233,7 @@ def verify_evidence_bundle(
             if require_signature:
                 errors.append(message)
                 result["tampered"] = True
+                result["authenticity_failure"] = "signature_verifier_missing"
             else:
                 warnings.append(message)
         else:
@@ -235,14 +244,17 @@ def verify_evidence_bundle(
                 )
             except Exception as exc:  # noqa: BLE001
                 result["signature_status"] = "fail"
+                result["authenticity_failure"] = "signature_verification_error"
                 errors.append(f"Manifest signature verification error: {exc}")
                 result["tampered"] = True
             else:
                 if signature_ok:
                     result["signature_status"] = "pass"
                     result["signature_verified"] = True
+                    result["authenticity_ok"] = True
                 else:
                     result["signature_status"] = "fail"
+                    result["authenticity_failure"] = "signature_verification_failed"
                     errors.append("Manifest signature verification failed")
                     result["tampered"] = True
     else:
@@ -251,6 +263,7 @@ def verify_evidence_bundle(
         if require_signature:
             errors.append(message)
             result["tampered"] = True
+            result["authenticity_failure"] = "signature_missing"
         else:
             warnings.append(
                 f"{message}; manifest authenticity was not verified"

@@ -57,6 +57,9 @@ def test_evidence_bundle_cli_generate_and_verify(tmp_path, monkeypatch) -> None:
     generated_dirs = list(out_dir.glob("veritas_bundle_decision_*"))
     assert generated_dirs
     bundle_dir = generated_dirs[0]
+    ui_hook = json.loads((bundle_dir / "ui_delivery_hook.json").read_text())
+    assert "--public-key" in ui_hook["verify_command"]
+    assert "--require-signature" in ui_hook["verify_command"]
 
     verify_exit = main(["verify", "--bundle-dir", str(bundle_dir), "--json"])
     assert verify_exit == 0
@@ -330,7 +333,43 @@ def test_evidence_bundle_cli_dev_without_public_key_warns_and_reports_json(
     assert exit_code == 0
     assert output["signature_verified"] is False
     assert output["signature_status"] == "not_verified"
+    assert output["authenticity_ok"] is False
+    assert output["authenticity_failure"] is None
     assert any("authenticity was not verified" in w for w in output["warnings"])
+
+
+def test_verify_bundle_signature_failure_reports_authenticity_failure(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Signature failures are explicit without conflating hash tampering."""
+    from veritas_os.audit.verify_bundle import verify_evidence_bundle
+    from veritas_os.security.signing import verify_payload_signature
+
+    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
+    manifest_path = bundle_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["manifest_signature"] = manifest["manifest_signature"][::-1]
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    result = verify_evidence_bundle(
+        bundle_dir,
+        verify_signature_fn=lambda payload_hash, signature: verify_payload_signature(
+            payload_hash,
+            signature,
+            public_key,
+        ),
+        require_signature=True,
+    )
+
+    assert result["ok"] is False
+    assert result["tampered"] is True
+    assert result["hash_integrity_ok"] is True
+    assert result["authenticity_ok"] is False
+    assert result["authenticity_failure"] == "signature_verification_failed"
 
 
 def test_verify_bundle_signed_manifest_without_verifier_warns(
@@ -347,4 +386,6 @@ def test_verify_bundle_signed_manifest_without_verifier_warns(
     assert result["ok"] is True
     assert result["signature_verified"] is False
     assert result["signature_status"] == "not_verified"
+    assert result["authenticity_ok"] is False
+    assert result["authenticity_failure"] is None
     assert any("no signature verifier" in w for w in result["warnings"])

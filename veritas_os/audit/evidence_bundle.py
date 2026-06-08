@@ -543,7 +543,10 @@ def generate_evidence_bundle(
             "decision_record_profile": decision_record_profile,
             "acceptance_checklist_path": "acceptance_checklist.json",
             "readme_path": "README.txt",
-            "verify_command": "veritas-evidence-bundle verify --bundle-dir <bundle_dir>",
+            "verify_command": (
+                "veritas-evidence-bundle verify --bundle-dir <bundle_dir> "
+                "--public-key <trusted_ed25519_public_key> --require-signature"
+            ),
         },
     )
     written_files.append("ui_delivery_hook.json")
