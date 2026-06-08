@@ -363,3 +363,38 @@ visibility は単なる documentation の性質ではなく、それ自体が go
 これは certification / production security / production security guarantee / automatic enforcement /
 automatic blocking / automatic attack detection / scoring model / prediction claim / inevitability claim /
 actor psychology inference / legal conclusion ではありません。
+
+## Reviewer-Facing Visibility Roadmap v0
+
+Reviewer-Facing Visibility Roadmap v0 は docs-only の roadmap note です。これは
+Governance Evidence Packet v1 を実装するものではなく、将来の packet v1 expansion
+の前に安定させるべき visibility distinction を整理します。新しい runtime marker、
+runtime behavior、schema、fixture、Mission Control UI、または packet contract は追加しません。
+
+reviewer-facing visibility は、後から reviewer が次の evidence を区別して確認できる状態を指します。
+
+1. process が procedural admissibility を保っていた evidence
+2. maneuverability が contraction していた evidence
+3. その contraction を後から reviewer が認識できる evidence
+
+この roadmap は、既存の VERITAS layer を置き換えるものではなく、それらに接続します。
+Governance Evidence Packet v0 は現在の reviewer-facing evidence を束ね、Governance Evidence
+Packet Contract v0 は現在の packet structure を固定します。Procedural Admissibility vs.
+Maneuverability Observables v0 は process の admissibility と practical maneuverability を
+区別し、Governance Recognizability Conditions v0 は later reviewer が governance state と
+maneuverability contraction を認識するための visibility conditions を整理します。Trajectory
+Shaping Lineage v0、Irreversibility Horizon v0、Actor Recognition Gap v0 は、actor の心理、
+intent、beliefs、subjective experience を推測せず、reviewer-visible な sequence、horizon、
+recognition gap の vocabulary を提供します。
+
+future representative scenarios では、より dynamic な conditions の下でも、procedural
+admissibility evidence、maneuverability contraction evidence、recognizability evidence の
+区別が visible に残るかを検証する可能性があります。
+
+この roadmap は Governance Evidence Packet v0 contract を変更しません。
+
+これは Governance Evidence Packet v1 implementation / schema change / runtime change /
+Mission Control UI change / certification / production security / production security guarantee /
+automatic enforcement / automatic blocking / automatic attack detection / scoring model /
+prediction claim / inevitability claim / actor psychology inference / legal conclusion ではありません。
+

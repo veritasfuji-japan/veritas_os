@@ -506,6 +506,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
   - Governance Evidence Packet contract test: `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
   - Non-claims: not certification; not production security guarantee; not automatic enforcement; not scoring model; not legal conclusion.
   - VERITAS also documents Governance Recognizability Conditions v0, clarifying that visibility conditions can become a governance function when reviewers must later recognize maneuverability contraction despite procedural admissibility.
+  - VERITAS also documents Reviewer-Facing Visibility Roadmap v0, a docs-only roadmap for distinguishing procedural admissibility evidence, maneuverability contraction evidence, and recognizability evidence before any future packet expansion.
 - **Mini proof: covered `/v1/decide` pre-bind formation refusal**: [`docs/en/validation/pre-bind-formation-refusal-mini-proof.md`](docs/en/validation/pre-bind-formation-refusal-mini-proof.md)
 - **Regulated Action Governance Kernel**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
 - **Authority Evidence vs Audit Log**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)
