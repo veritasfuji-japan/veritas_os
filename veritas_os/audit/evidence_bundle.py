@@ -63,6 +63,16 @@ _NEXT_ACTION_ALIASES = {
     "REJECT_REQUEST": "DO_NOT_EXECUTE",
 }
 
+_REVIEWER_VERIFY_COMMAND = (
+    "veritas-evidence-bundle verify --bundle-dir <bundle_dir> "
+    "--public-key <trusted_ed25519_public_key> --require-signature"
+)
+_SIGNATURE_REQUIRED_POSTURES = ["secure", "prod"]
+_VERIFICATION_SCOPE = [
+    "file_hash_integrity",
+    "manifest_signature_authenticity",
+]
+
 
 def _uuid7() -> str:
     """Generate a UUIDv7-compatible identifier."""
@@ -174,11 +184,34 @@ def _build_bundle_readme(
         "",
         "Verification",
         "------------",
-        "- Run: veritas-evidence-bundle verify --bundle-dir <this-directory>",
+        f"- Run: {_REVIEWER_VERIFY_COMMAND}",
+        "- Obtain the trusted public key from the reviewer/operator trust channel;",
+        "  do not trust a public key only because it is included in this bundle.",
         "- Inspect verification_report.json for chain and signature status.",
         "",
     ]
     return "\n".join(lines)
+
+
+def _build_ui_delivery_hook(
+    *,
+    bundle_id: str,
+    bundle_type: str,
+    decision_record_profile: str,
+) -> Dict[str, Any]:
+    """Build reviewer-facing UI handoff metadata for bundle verification."""
+    return {
+        "hook_version": "1.0",
+        "bundle_id": bundle_id,
+        "bundle_type": bundle_type,
+        "decision_record_profile": decision_record_profile,
+        "acceptance_checklist_path": "acceptance_checklist.json",
+        "readme_path": "README.txt",
+        "verify_command": _REVIEWER_VERIFY_COMMAND,
+        "requires_trusted_public_key": True,
+        "signature_required_in_postures": _SIGNATURE_REQUIRED_POSTURES,
+        "verification_scope": _VERIFICATION_SCOPE,
+    }
 
 
 def _sha256_file(path: Path) -> str:
@@ -536,15 +569,11 @@ def generate_evidence_bundle(
     _write_json_file(
         bundle_dir,
         "ui_delivery_hook.json",
-        {
-            "hook_version": "1.0",
-            "bundle_id": bundle_id,
-            "bundle_type": bundle_type,
-            "decision_record_profile": decision_record_profile,
-            "acceptance_checklist_path": "acceptance_checklist.json",
-            "readme_path": "README.txt",
-            "verify_command": "veritas-evidence-bundle verify --bundle-dir <bundle_dir>",
-        },
+        _build_ui_delivery_hook(
+            bundle_id=bundle_id,
+            bundle_type=bundle_type,
+            decision_record_profile=decision_record_profile,
+        ),
     )
     written_files.append("ui_delivery_hook.json")
 
