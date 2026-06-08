@@ -325,6 +325,33 @@ def test_verify_bundle_malformed_signature_reports_authenticity_error(
     assert result["authenticity_failure"] == "signature_verification_error"
 
 
+def test_evidence_bundle_cli_require_signature_without_public_key_fails(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict reviewer verification fails when no trusted key is supplied."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--require-signature",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "File/hash integrity: PASS" in output
+    assert "Manifest signature: NOT VERIFIED" in output
+    assert "No trusted public key supplied" in output
+
+
 def test_evidence_bundle_cli_verify_manifest_signed_by_wrong_key_fails(
     tmp_path,
     monkeypatch,
