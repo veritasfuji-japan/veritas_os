@@ -49,6 +49,9 @@ local hash consistency before producing the report, and writes
 `generated/reviewer-demo-report.generated.example.md`. Normal reviewers should
 prefer `--output-dir` so repository files are not modified.
 
+The suite is covered by a focused CI-safe smoke test using temporary
+output directories.
+
 ## Validate checked-in generated examples
 
 ```bash
