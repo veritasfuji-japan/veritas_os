@@ -52,6 +52,10 @@ Use this 10–15 minute path for a reviewer-facing inspection:
 7. Optionally review Evaluation Governance artifacts, if present. These attachments are optional in v1, non-enforcing, and useful for architecture-hardening review without changing runtime admissibility.
    A synthetic example packet is available at `docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json`; schema validation does not require the referenced artifact files to exist.
 
+## Evaluation Governance offline reviewer demo
+
+For a one-command synthetic offline demo, see [Evaluation Governance Reviewer Demo Quickstart v1](evaluation-governance-reviewer-demo-quickstart-v1.md). The demo is reviewer-facing, non-runtime, and non-enforcing in v1, and it produces a Reviewer Evidence Packet with optional Evaluation Governance attachments.
+
 ## Local bundle generation
 
 Reviewers can reproduce the GitHub Actions reviewer evidence artifact locally by running:

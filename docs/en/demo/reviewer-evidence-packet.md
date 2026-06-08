@@ -38,6 +38,8 @@ These attachments are optional reviewer evidence attachments in v1. Reviewer pac
 
 A non-enforcing example packet with optional Evaluation Governance attachment references is checked in at `docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json`. A synthetic end-to-end Evaluation Governance sample bundle is also available at `docs/en/demo/examples/evaluation-governance-sample-bundle-v1/`. A synthetic packet generated from the Evaluation Governance offline chain manifest is checked in at `docs/en/demo/examples/evaluation-governance-chain-reviewer-packet-v1/`.
 
+Evaluation Governance reviewer packet examples can be generated from the offline demo chain. See [Evaluation Governance Reviewer Demo Quickstart v1](evaluation-governance-reviewer-demo-quickstart-v1.md).
+
 Evaluation Governance artifacts are non-enforcing in v1 unless future runtime integration is added. Their presence supports external review, but does not automatically establish legitimacy, does not change runtime admissibility, does not introduce fail-closed behavior, and does not require live receipt generation.
 
 ## Local/offline boundary
