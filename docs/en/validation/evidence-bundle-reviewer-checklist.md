@@ -1,0 +1,96 @@
+# Evidence Bundle Reviewer Checklist
+
+This checklist is the reviewer-facing entry point for evaluating a VERITAS OS
+Evidence Bundle. It gives external auditors and design partners a single-page
+verification order, acceptance criteria, and reference map before they inspect
+bundle contents in detail.
+
+Use it with the strict CLI path in
+[Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
+and the example transcripts in
+[Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md).
+
+## Scope and non-certification boundary
+
+This checklist supports reviewer verification of one delivered Evidence Bundle.
+It is not regulatory certification, legal approval, or completion of a
+third-party audit. Reviewers remain responsible for their own audit scope,
+evidence sampling, legal/regulatory conclusions, and sign-off process.
+
+Security boundaries:
+
+- Hash integrity is not authenticity.
+- A public key included only inside the bundle is not trusted by itself.
+- The trusted Ed25519 public key must be obtained outside the bundle through an
+  approved reviewer/operator trust channel.
+- Do not add private keys, real signing keys, production secrets, or unsanitized
+  customer data to review notes or shared examples.
+
+## Verification order
+
+| Step | Reviewer action | PASS criterion | FAIL / follow-up criterion |
+|---|---|---|---|
+| 1 | Confirm bundle origin and expected handoff channel. | The bundle source, transfer channel, bundle type, and review objective match the expected handoff. | The source or channel is unexpected, undocumented, or inconsistent with the review request. |
+| 2 | Obtain the trusted Ed25519 public key out-of-band. | The reviewer obtains the public key from a trusted registry, signed operator note, KMS/certificate process, or other approved channel outside the bundle. | The public key is missing, comes only from inside the bundle, or its provenance cannot be established. |
+| 3 | Run the strict verification command. | The reviewer runs `veritas-evidence-bundle verify --bundle-dir <bundle_dir> --public-key <trusted_ed25519_public_key> --require-signature`. | The command is not run, omits `--require-signature`, omits the trusted public key, or uses an untrusted key path. |
+| 4 | Confirm `File/hash integrity: PASS`. | The CLI prints `File/hash integrity: PASS` in the strict verification run. | The CLI reports hash failure, manifest hash mismatch, missing files, malformed manifest data, or any file/hash error. |
+| 5 | Confirm `Manifest signature: PASS`. | The CLI prints `Manifest signature: PASS` under the trusted Ed25519 public key obtained in Step 2. | The CLI reports missing public key, wrong key, malformed signature, unsigned secure/prod bundle, or signature verification failure. |
+| 6 | Inspect `acceptance_checklist.json`. | The checklist exists and has no blocking failures for the submitted bundle profile. | The checklist is missing, malformed, incomplete, or contains any blocking failure. |
+| 7 | Inspect `verification_report.json`. | The report exists and is consistent with the strict verification result and expected bundle scope. | The report is missing, malformed, stale, inconsistent with CLI output, or reports unresolved errors. |
+| 8 | Confirm no missing expected artifacts. | Required artifacts for the bundle type and review objective are present, including expected manifest, witness, report, acceptance, and profile-specific files. | Expected artifacts are absent, empty, renamed without explanation, or inconsistent with the handoff metadata. |
+| 9 | Record reviewer result: `ACCEPT`, `REJECT`, or `NEEDS FOLLOW-UP`. | The final result records evidence reviewed, command output, key provenance, blockers, and reviewer rationale. | The result is ambiguous, lacks key provenance, lacks CLI evidence, or does not explain unresolved exceptions. |
+
+## Required ACCEPT criteria
+
+Record `ACCEPT` only when all of the following are true:
+
+- `File/hash integrity: PASS` is present in the strict verification output.
+- `Manifest signature: PASS` is present in the same strict verification output.
+- The trusted Ed25519 public key was obtained outside the bundle and its
+  provenance is documented by the reviewer.
+- `acceptance_checklist.json` has no blocking failures.
+- Expected artifacts for the bundle type and review objective are present.
+- Any non-blocking notes in `verification_report.json` have been reviewed and
+  do not change the review conclusion.
+
+## Required REJECT criteria
+
+Record `REJECT` when any of the following conditions occur and cannot be
+resolved by a corrected handoff:
+
+- The public key is missing.
+- The supplied public key is the wrong key for the manifest signature.
+- The signature is malformed or cannot be parsed.
+- The bundle is unsigned under `secure` or `prod` posture.
+- The CLI reports a hash mismatch.
+- The CLI reports a manifest hash mismatch.
+- The reviewer cannot establish trusted key provenance.
+- `acceptance_checklist.json` contains a blocking failure.
+- Expected required artifacts are missing for the declared bundle type or review
+  objective.
+
+## NEEDS FOLLOW-UP criteria
+
+Record `NEEDS FOLLOW-UP` when the reviewer cannot yet accept or reject the
+bundle because clarification or replacement evidence is required. Typical cases:
+
+- The handoff channel is unclear but may be confirmed by the operator.
+- The public key is available but its provenance documentation is incomplete.
+- `verification_report.json` contains notes requiring operator explanation.
+- Expected artifacts are present but naming, scope, or profile metadata needs
+  clarification.
+- The reviewer needs a regenerated bundle to separate a procedural issue from a
+  true integrity or authenticity failure.
+
+Do not use `NEEDS FOLLOW-UP` to bypass a cryptographic failure. If strict
+verification cannot produce both required PASS lines under a trusted out-of-band
+key, the bundle is not reviewer-facing verified evidence.
+
+## Reference map
+
+- Signature semantics and strict command:
+  [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
+- Sample success and failure transcripts:
+  [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
+- Bundle contents and delivery policy:
+  [External Audit Readiness Pack](external-audit-readiness.md)
