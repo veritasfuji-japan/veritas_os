@@ -463,6 +463,7 @@ External reviewers can use the Regulated Action Governance External Reviewer Fee
 - **AML/KYC Beachhead (1-day PoC quickstart)**: [`docs/en/guides/poc-pack-financial-quickstart.md`](docs/en/guides/poc-pack-financial-quickstart.md)
 - **AML/KYC Governance Template Contract**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
 - **External Audit / Evidence Bundle Readiness**: [`docs/en/validation/external-audit-readiness.md`](docs/en/validation/external-audit-readiness.md)
+- **Evidence Bundle Signature Verification Demo**: [`docs/en/validation/evidence-bundle-signature-verification.md`](docs/en/validation/evidence-bundle-signature-verification.md)
 - **External Technical Proof Pack (review/pilot/DD/audit)**: [`docs/en/validation/technical-proof-pack.md`](docs/en/validation/technical-proof-pack.md)
 - **Third-Party Review Readiness (compact index)**: [`docs/en/validation/third-party-review-readiness.md`](docs/en/validation/third-party-review-readiness.md)
 - **Current Implementation Matrix (external reviewer snapshot)**: [`docs/en/validation/current-implementation-matrix.md`](docs/en/validation/current-implementation-matrix.md)

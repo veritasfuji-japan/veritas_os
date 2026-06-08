@@ -244,6 +244,18 @@ Each bundle now ships `acceptance_checklist.json` with machine-readable checks:
 This checklist is intended to be the explicit pre-submission gate for
 external auditors/customers/legal.
 
+### Reviewer-facing signature verification demo
+
+Use the fixed reviewer-facing demo for Ed25519 manifest verification:
+
+- [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
+
+Security notes for every external handoff:
+
+- Do not treat hash integrity as authenticity.
+- Do not trust a public key solely because it is included in the bundle.
+- Trusted public keys must come from a reviewer/operator trust channel.
+
 ### Evidence-bundle readiness path for AML/KYC PoC
 
 Use this sequence after completing the 1-day AML/KYC quickstart:
@@ -317,6 +329,31 @@ else:
     for error in result["errors"]:
         print(f"  - {error}")
 ```
+
+### Reviewer verification semantics
+
+The strict reviewer command is:
+
+```bash
+veritas-evidence-bundle verify \
+  --bundle-dir <bundle_dir> \
+  --public-key <trusted_ed25519_public_key> \
+  --require-signature
+```
+
+Read the output as two independent checks:
+
+- `File/hash integrity: PASS` means the bundle files match the hashes recorded
+  in `manifest.json`; it detects file tampering but does not establish
+  authenticity.
+- `Manifest signature: PASS` means the manifest signature verifies under the
+  trusted Ed25519 public key supplied by the reviewer.
+- Treat the bundle as reviewer-facing verified evidence only when both lines are
+  `PASS` in the strict verification run.
+
+Expected strict failures include a missing public key, the wrong public key, a
+malformed `manifest_signature`, or an unsigned bundle under `secure`/`prod`
+posture.
 
 ### CLI (recommended for ops runbooks)
 
