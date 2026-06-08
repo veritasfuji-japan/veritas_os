@@ -43,6 +43,17 @@ non-runtime / non-enforcing boundaries, and Reviewer Evidence Packet
 attachments. It does not establish legitimacy, certify compliance, or call
 `/v1/decide`.
 
+## Generate the checked-in reviewer report example
+
+```bash
+python scripts/demo/generate_evaluation_governance_reviewer_demo_report.py \
+  --demo-dir docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated \
+  --output docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated/reviewer-demo-report.generated.example.md
+```
+
+This report is a human-readable Markdown summary for reviewers. It does not
+establish legitimacy, certify compliance, or call `/v1/decide`.
+
 ## Checked-in generated examples
 
 The files under [`generated/`](generated/) are checked in for reviewer
