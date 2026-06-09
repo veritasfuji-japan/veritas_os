@@ -10,6 +10,9 @@ Use it with the strict CLI path in
 and the example transcripts in
 [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
 and the [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md).
+Use the [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
+to preserve the reviewer/operator trust basis for the public key used in
+strict verification.
 
 ## Scope and non-certification boundary
 
@@ -24,10 +27,13 @@ Security boundaries:
 - A public key included only inside the bundle is not trusted by itself.
 - The `public_key_fingerprint_sha256` JSON field records which public key
   material was used for verification; it is key-provenance evidence, not a trust
-  proof.
+  proof. Strict verification requires trusted public key provenance before a
+  reviewer relies on authenticity.
 - The trusted Ed25519 public key must be obtained outside the bundle through an
   approved out-of-band reviewer/operator trust channel, and reviewers should
-  record and compare that out-of-band key fingerprint in their review notes.
+  preserve a Trusted Public Key Provenance Receipt for that key. Matching
+  `public_key_fingerprint_sha256` values support correlation between the
+  verification result and the provenance receipt; they are not certification.
 - The `--json` result contract supports reviewer-facing verification and UI
   integration, but it does not certify regulatory compliance or audit approval.
 - Do not add private keys, real signing keys, production secrets, or unsanitized
@@ -101,9 +107,9 @@ Record `ACCEPT` only when all of the following are true:
 - `File/hash integrity: PASS` is present in the strict verification output.
 - `Manifest signature: PASS` is present in the same strict verification output.
 - The trusted Ed25519 public key was obtained outside the bundle, its
-  provenance is documented by the reviewer, and its out-of-band SHA-256
-  fingerprint matches `public_key_fingerprint_sha256` in the strict `--json`
-  result.
+  provenance is documented by the reviewer in a Trusted Public Key
+  Provenance Receipt, and its out-of-band SHA-256 fingerprint matches
+  `public_key_fingerprint_sha256` in the strict `--json` result.
 - `acceptance_checklist.json` has no blocking failures.
 - Expected artifacts for the bundle type and review objective are present.
 - Any non-blocking notes in `verification_report.json` have been reviewed and
@@ -150,5 +156,7 @@ key, the bundle is not reviewer-facing verified evidence.
   [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
 - Stable `--json` field semantics for reviewer/UI consumers:
   [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md)
+- Trusted public key provenance receipt and fingerprint correlation:
+  [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
 - Bundle contents and delivery policy:
   [External Audit Readiness Pack](external-audit-readiness.md)

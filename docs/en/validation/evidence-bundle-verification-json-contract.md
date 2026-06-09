@@ -1,5 +1,13 @@
 # Evidence Bundle Verification JSON Contract
 
+For reviewer/operator key trust records, pair this contract with the
+[Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md).
+Strict verification requires trusted public key provenance before reviewers
+rely on authenticity. The `public_key_fingerprint_sha256` field records key
+material evidence; it is not trust proof. Matching fingerprints support
+correlation between `verification-result.json` and the provenance receipt,
+not regulatory certification or completed third-party audit approval.
+
 This page documents the reviewer-facing JSON result contract emitted by:
 
 ```bash
@@ -342,10 +350,11 @@ reviewer-facing verified evidence.
 - Treat `authenticity_ok: false` as “authenticity not established,” even when
   `hash_integrity_ok: true`.
 - Display `errors` as blocking reviewer actions and `warnings` as review notes.
-- Record `public_key_fingerprint_sha256` with the reviewer/operator key handoff
-  notes as key-provenance evidence.
+- Record `public_key_fingerprint_sha256` with the reviewer/operator Trusted
+  Public Key Provenance Receipt as key-material evidence.
 - Never trust a key because its fingerprint matches a value copied from the
   bundle or its adjacent artifacts; fingerprint matching is only useful after the
   reviewer obtained the key through an out-of-band trust channel.
 - Record trusted public key provenance outside the bundle before relying on
-  `signature_verified: true`.
+  `signature_verified: true`, preferably using the
+  [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md).
