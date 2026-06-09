@@ -154,6 +154,28 @@ run. Reviewers must still preserve out-of-band trusted public key provenance for
 the key represented by `public_key_fingerprint_sha256` before relying on any
 saved strict verification result.
 
+Use `validate-key-provenance` when tooling needs one command to validate the
+Trusted Public Key Provenance Receipt shape and correlate it with this saved
+verification-result contract:
+
+```bash
+veritas-evidence-bundle validate-key-provenance \
+  --receipt trusted-public-key-provenance.json \
+  --verification-result verification-result.json \
+  --json
+```
+
+The JSON report includes stable booleans for receipt schema validity,
+verification-result schema validity, fingerprint correlation,
+`bundle_internal_key_used: false`, and strict authenticity success.
+`--output <path>` is allowed only with `--json`; the saved JSON is byte-for-byte
+the same as stdout JSON, and failure reports are saved as audit evidence. This
+correlation report has no dedicated schema yet and is intentionally structured
+for future extension. It does not create trust by itself, does not re-run
+cryptographic verification, does not prove regulatory certification, and does
+not complete third-party audit approval. Matching fingerprints support
+correlation, not standalone trust.
+
 ## Contract scope
 
 The contract separates two reviewer decisions that external UI and audit tooling

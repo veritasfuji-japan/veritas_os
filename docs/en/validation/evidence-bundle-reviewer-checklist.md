@@ -86,6 +86,25 @@ key provenance, or provide regulatory certification or completed third-party
 audit approval. Preserve the out-of-band trusted-key provenance record even
 when saved-result schema validation passes.
 
+After preserving a Trusted Public Key Provenance Receipt, validate the receipt
+and correlate it with the saved strict verification result:
+
+```bash
+veritas-evidence-bundle validate-key-provenance \
+  --receipt trusted-public-key-provenance.json \
+  --verification-result verification-result.json
+```
+
+This command validates the receipt schema, validates the saved verification
+result schema, checks exact fingerprint correlation, rejects
+`bundle_internal_key_used: true`, and confirms strict authenticity success
+(`signature_status: "pass"`, `signature_verified: true`, and
+`authenticity_ok: true`). Add `--json --output <path>` to emit and save the
+exact same machine-readable report, including failure reports. The command does
+not create trust by itself, does not re-run cryptographic verification, does
+not prove regulatory certification, and does not complete third-party audit
+approval. Matching fingerprints support correlation, not standalone trust.
+
 ## Verification order
 
 | Step | Reviewer action | PASS criterion | FAIL / follow-up criterion |

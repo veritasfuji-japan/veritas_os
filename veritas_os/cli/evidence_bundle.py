@@ -38,11 +38,20 @@ VERIFICATION_RESULT_SCHEMA_ID = (
 VALIDATION_REPORT_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/evidence_bundle_validation_report.schema.json"
 )
+TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/trusted_public_key_provenance_receipt.schema.json"
+)
 VALIDATE_RESULT_VALIDATOR = "veritas-evidence-bundle validate-result"
+VALIDATE_KEY_PROVENANCE_VALIDATOR = "veritas-evidence-bundle validate-key-provenance"
 VERIFICATION_RESULT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
     / "evidence_bundle_verification_result.schema.json"
+)
+TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "trusted_public_key_provenance_receipt.schema.json"
 )
 
 
@@ -124,16 +133,13 @@ def _validate_verification_result_schema(
             {
                 "path": "$",
                 "message": (
-                    "malformed JSON: "
-                    f"line {exc.lineno}, column {exc.colno}: {exc.msg}"
+                    f"malformed JSON: line {exc.lineno}, column {exc.colno}: {exc.msg}"
                 ),
             }
         ]
 
     try:
-        schema = json.loads(
-            VERIFICATION_RESULT_SCHEMA_PATH.read_text(encoding="utf-8")
-        )
+        schema = json.loads(VERIFICATION_RESULT_SCHEMA_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [
             {
@@ -151,6 +157,269 @@ def _validate_verification_result_schema(
         {"path": _json_schema_error_path(error), "message": error.message}
         for error in errors
     ]
+
+
+def _load_json_document(
+    document_path: Path,
+    label: str,
+) -> tuple[Any, list[dict[str, str]]]:
+    """Load a JSON document and return structured CLI validation errors."""
+    try:
+        raw_document = document_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, [
+            {
+                "path": "$",
+                "message": f"failed to read {label} file {document_path}: {exc}",
+            }
+        ]
+
+    try:
+        return json.loads(raw_document), []
+    except json.JSONDecodeError as exc:
+        return None, [
+            {
+                "path": "$",
+                "message": (
+                    f"malformed JSON: line {exc.lineno}, column {exc.colno}: {exc.msg}"
+                ),
+            }
+        ]
+
+
+def _load_schema(schema_path: Path, label: str) -> tuple[Any, list[dict[str, str]]]:
+    """Load a JSON Schema and return structured CLI validation errors."""
+    try:
+        return json.loads(schema_path.read_text(encoding="utf-8")), []
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, [
+            {
+                "path": "$",
+                "message": f"failed to load {label} schema: {exc}",
+            }
+        ]
+
+
+def _validate_json_schema(
+    instance: Any,
+    schema_path: Path,
+    label: str,
+) -> list[dict[str, str]]:
+    """Validate a loaded JSON instance against a repository JSON Schema."""
+    schema, schema_errors = _load_schema(schema_path, label)
+    if schema_errors:
+        return schema_errors
+
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = sorted(
+        validator.iter_errors(instance),
+        key=lambda error: (list(error.absolute_path), error.message),
+    )
+    return [
+        {"path": _json_schema_error_path(error), "message": error.message}
+        for error in errors
+    ]
+
+
+def _load_and_validate_json_schema(
+    document_path: Path,
+    schema_path: Path,
+    label: str,
+) -> tuple[Any, list[dict[str, str]]]:
+    """Load a JSON document and validate it against a JSON Schema."""
+    document, document_errors = _load_json_document(document_path, label)
+    if document_errors:
+        return document, document_errors
+    return document, _validate_json_schema(document, schema_path, label)
+
+
+def _strict_authenticity_ok(verification_result: Any) -> bool:
+    """Return whether a verification result reports strict authenticity success."""
+    if not isinstance(verification_result, dict):
+        return False
+    return (
+        verification_result.get("signature_status") == "pass"
+        and verification_result.get("signature_verified") is True
+        and verification_result.get("authenticity_ok") is True
+    )
+
+
+def _key_provenance_errors(
+    *,
+    receipt_errors: list[dict[str, str]],
+    verification_errors: list[dict[str, str]],
+    fingerprint_correlation_ok: bool,
+    bundle_internal_key_used_ok: bool,
+    strict_authenticity_ok: bool,
+) -> list[dict[str, str]]:
+    """Build stable validate-key-provenance JSON report errors."""
+    errors: list[dict[str, str]] = []
+    errors.extend(
+        {
+            "check": "receipt_schema_valid",
+            "path": error["path"],
+            "message": error["message"],
+        }
+        for error in receipt_errors
+    )
+    errors.extend(
+        {
+            "check": "verification_result_schema_valid",
+            "path": error["path"],
+            "message": error["message"],
+        }
+        for error in verification_errors
+    )
+    if not fingerprint_correlation_ok:
+        errors.append(
+            {
+                "check": "fingerprint_correlation_ok",
+                "path": "$['public_key_fingerprint_sha256']",
+                "message": (
+                    "receipt and verification result public key fingerprints "
+                    "do not match"
+                ),
+            }
+        )
+    if not bundle_internal_key_used_ok:
+        errors.append(
+            {
+                "check": "bundle_internal_key_used_ok",
+                "path": "$['bundle_internal_key_used']",
+                "message": "receipt bundle_internal_key_used must be false",
+            }
+        )
+    if not strict_authenticity_ok:
+        errors.append(
+            {
+                "check": "strict_authenticity_ok",
+                "path": "$",
+                "message": (
+                    "verification result must report signature_status pass, "
+                    "signature_verified true, and authenticity_ok true"
+                ),
+            }
+        )
+    return errors
+
+
+def _build_key_provenance_report(
+    receipt_path: Path,
+    verification_result_path: Path,
+) -> dict[str, Any]:
+    """Validate trusted public key provenance and fingerprint correlation.
+
+    This command validates saved JSON shapes and correlates the trusted-key
+    receipt fingerprint with an existing strict Evidence Bundle verification
+    result. It does not create trust, re-run cryptographic verification, prove
+    regulatory certification, or complete third-party audit approval.
+    """
+    receipt, receipt_errors = _load_and_validate_json_schema(
+        receipt_path,
+        TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_PATH,
+        "receipt",
+    )
+    verification_result, verification_errors = _load_and_validate_json_schema(
+        verification_result_path,
+        VERIFICATION_RESULT_SCHEMA_PATH,
+        "verification result",
+    )
+
+    receipt_fingerprint = None
+    if isinstance(receipt, dict):
+        receipt_fingerprint = receipt.get("public_key_fingerprint_sha256")
+    verification_fingerprint = None
+    if isinstance(verification_result, dict):
+        verification_fingerprint = verification_result.get(
+            "public_key_fingerprint_sha256"
+        )
+
+    fingerprint_correlation_ok = (
+        isinstance(receipt_fingerprint, str)
+        and isinstance(verification_fingerprint, str)
+        and receipt_fingerprint == verification_fingerprint
+    )
+    bundle_internal_key_used_ok = (
+        isinstance(receipt, dict) and receipt.get("bundle_internal_key_used") is False
+    )
+    strict_authenticity = _strict_authenticity_ok(verification_result)
+    receipt_schema_valid = not receipt_errors
+    verification_result_schema_valid = not verification_errors
+    ok = (
+        receipt_schema_valid
+        and verification_result_schema_valid
+        and fingerprint_correlation_ok
+        and bundle_internal_key_used_ok
+        and strict_authenticity
+    )
+
+    verification_fingerprint_key = "verification_result_public_key_fingerprint_sha256"
+    report = {
+        "ok": ok,
+        "receipt_schema_valid": receipt_schema_valid,
+        "verification_result_schema_valid": verification_result_schema_valid,
+        "fingerprint_correlation_ok": fingerprint_correlation_ok,
+        "bundle_internal_key_used_ok": bundle_internal_key_used_ok,
+        "strict_authenticity_ok": strict_authenticity,
+        "receipt_path": str(receipt_path),
+        "verification_result_path": str(verification_result_path),
+        "receipt_public_key_fingerprint_sha256": receipt_fingerprint,
+        verification_fingerprint_key: verification_fingerprint,
+        "report_schema_id": None,
+        "receipt_schema_id": TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID,
+        "verification_result_schema_id": VERIFICATION_RESULT_SCHEMA_ID,
+        "validator": VALIDATE_KEY_PROVENANCE_VALIDATOR,
+        "errors": _key_provenance_errors(
+            receipt_errors=receipt_errors,
+            verification_errors=verification_errors,
+            fingerprint_correlation_ok=fingerprint_correlation_ok,
+            bundle_internal_key_used_ok=bundle_internal_key_used_ok,
+            strict_authenticity_ok=strict_authenticity,
+        ),
+    }
+    return report
+
+
+def _run_validate_key_provenance(
+    receipt_path: Path,
+    verification_result_path: Path,
+    *,
+    json_output: bool = False,
+    output_path: Optional[Path] = None,
+) -> int:
+    """Run trusted public key provenance receipt validation."""
+    report = _build_key_provenance_report(receipt_path, verification_result_path)
+    if json_output:
+        output_json = json.dumps(report, indent=2, ensure_ascii=False)
+        if output_path is not None:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output_json + "\n", encoding="utf-8")
+            except OSError as exc:
+                print(
+                    "error: failed to write key provenance validation report "
+                    f"to {output_path}: {exc}",
+                    file=sys.stderr,
+                )
+                return 2
+        print(output_json)
+        return 0 if report["ok"] else 1
+
+    status = "PASS" if report["ok"] else "FAIL"
+    print(f"Trusted public key provenance validation: {status}")
+    labels = [
+        ("Receipt schema", "receipt_schema_valid"),
+        ("Verification result schema", "verification_result_schema_valid"),
+        ("Fingerprint correlation", "fingerprint_correlation_ok"),
+        ("Bundle-internal key used", "bundle_internal_key_used_ok"),
+        ("Strict authenticity result", "strict_authenticity_ok"),
+    ]
+    for label, key in labels:
+        check_status = "PASS" if report[key] else "FAIL"
+        print(f"{label}: {check_status}")
+    for error in report["errors"]:
+        print(f"  error [{error['check']}] at {error['path']}: {error['message']}")
+    return 0 if report["ok"] else 1
 
 
 def _run_validate_result(
@@ -187,8 +456,7 @@ def _run_validate_result(
                 output_path.write_text(output_json + "\n", encoding="utf-8")
             except OSError as exc:
                 print(
-                    "error: failed to write validation report "
-                    f"to {output_path}: {exc}",
+                    f"error: failed to write validation report to {output_path}: {exc}",
                     file=sys.stderr,
                 )
                 return 2
@@ -223,11 +491,15 @@ def _write_verification_result(output_path: Path, result: Dict[str, Any]) -> Non
 
 def build_parser() -> argparse.ArgumentParser:
     """Build argparse parser for evidence bundle CLI."""
-    parser = argparse.ArgumentParser(description="Generate/verify VERITAS evidence bundles")
+    parser = argparse.ArgumentParser(
+        description="Generate/verify VERITAS evidence bundles"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     gen = sub.add_parser("generate", help="Generate evidence bundle")
-    gen.add_argument("--bundle-type", required=True, choices=["decision", "incident", "release"])
+    gen.add_argument(
+        "--bundle-type", required=True, choices=["decision", "incident", "release"]
+    )
     gen.add_argument("--witness-ledger", required=True, type=Path)
     gen.add_argument("--output-dir", required=True, type=Path)
     gen.add_argument("--request-id", action="append", dest="request_ids")
@@ -290,6 +562,39 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    key_provenance = sub.add_parser(
+        "validate-key-provenance",
+        help=(
+            "Validate trusted public key provenance and correlate it with a "
+            "saved strict verification result"
+        ),
+    )
+    key_provenance.add_argument(
+        "--receipt",
+        required=True,
+        type=Path,
+        help="Trusted Public Key Provenance Receipt JSON file",
+    )
+    key_provenance.add_argument(
+        "--verification-result",
+        required=True,
+        type=Path,
+        help="Saved JSON result file from verify --json --output",
+    )
+    key_provenance.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable key provenance validation report as JSON",
+    )
+    key_provenance.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Write the JSON key provenance validation report to this UTF-8 "
+            "file. Requires --json and does not suppress stdout JSON."
+        ),
+    )
+
     return parser
 
 
@@ -334,6 +639,17 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 2
         return _run_validate_result(
             args.result,
+            json_output=args.json,
+            output_path=args.output,
+        )
+
+    if args.command == "validate-key-provenance":
+        if args.output is not None and not args.json:
+            parser.error("validate-key-provenance --output requires --json")
+            return 2
+        return _run_validate_key_provenance(
+            args.receipt,
+            args.verification_result,
             json_output=args.json,
             output_path=args.output,
         )
