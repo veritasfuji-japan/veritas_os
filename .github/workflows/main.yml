@@ -74,6 +74,9 @@ jobs:
       - name: Review improvements consistency check
         run: python scripts/quality/check_review_improvements_consistency.py
 
+      - name: Evidence Bundle reviewer docs consistency check
+        run: python scripts/quality/check_evidence_bundle_reviewer_docs.py
+
       - name: requirements.txt sync check
         run: python scripts/quality/check_requirements_sync.py
 
