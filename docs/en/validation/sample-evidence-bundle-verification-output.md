@@ -89,6 +89,21 @@ veritas-evidence-bundle validate-result \
   --json
 ```
 
+To preserve that validation report as audit evidence, add `--output <path>` with
+`--json`:
+
+```bash
+veritas-evidence-bundle validate-result \
+  --result evidence-bundle-verification-result.json \
+  --json \
+  --output evidence-bundle-verification-result-validation.json
+```
+
+The stdout JSON and saved UTF-8 JSON file are byte-for-byte identical. Failure
+reports for schema-invalid or malformed saved results are also written so CI,
+UI, and external audit tools can retain the failed validation outcome.
+`validate-result --output` without `--json` fails clearly.
+
 Illustrative `validate-result --json` success output:
 
 ```json
@@ -122,7 +137,9 @@ message beginning with `malformed JSON:`.
 This schema validation confirms saved result shape only. It does not re-run
 cryptographic verification, does not establish out-of-band trusted key
 provenance, and is not regulatory certification or completed third-party audit
-approval.
+approval. A saved `validate-result --json --output` report is evidence of the
+schema-validation report for an existing result file, not evidence of a new
+Evidence Bundle verification run.
 
 ## Successful strict verification
 

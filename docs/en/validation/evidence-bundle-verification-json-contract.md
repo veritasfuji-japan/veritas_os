@@ -82,6 +82,22 @@ veritas-evidence-bundle validate-result \
   --json
 ```
 
+Add `--output <path>` with `--json` to save the exact same Schema validation
+report as UTF-8 audit evidence while still emitting the JSON to stdout:
+
+```bash
+veritas-evidence-bundle validate-result \
+  --result evidence-bundle-verification-result.json \
+  --json \
+  --output evidence-bundle-verification-result-validation.json
+```
+
+`validate-result --output` requires `--json`. Parent directories are created
+when needed. Schema-invalid and malformed-result failure reports are also saved,
+because failure reports are part of the audit trail. If the report cannot be
+written, the CLI exits non-zero and prints a clear write-failure diagnostic on
+stderr.
+
 A schema-valid saved result emits only JSON on stdout and exits `0`:
 
 ```json
@@ -101,10 +117,12 @@ schema validation.
 Schema validation confirms the saved result document shape only. It does not
 re-run Evidence Bundle file/hash checks, does not re-run Ed25519 manifest
 signature verification, does not establish trusted key provenance, and is not
-regulatory certification or completed third-party audit approval. Reviewers must
-still preserve out-of-band trusted public key provenance for the key represented
-by `public_key_fingerprint_sha256` before relying on any saved strict
-verification result.
+regulatory certification or completed third-party audit approval. Saving a
+`validate-result --json --output` report records the schema-validation outcome
+for the already-saved result file; it is not a new cryptographic verification
+run. Reviewers must still preserve out-of-band trusted public key provenance for
+the key represented by `public_key_fingerprint_sha256` before relying on any
+saved strict verification result.
 
 ## Contract scope
 

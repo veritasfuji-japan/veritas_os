@@ -145,11 +145,18 @@ def _validate_verification_result_schema(
     ]
 
 
-def _run_validate_result(result_path: Path, *, json_output: bool = False) -> int:
+def _run_validate_result(
+    result_path: Path,
+    *,
+    json_output: bool = False,
+    output_path: Optional[Path] = None,
+) -> int:
     """Run saved verification result JSON Schema validation and print status.
 
     When ``json_output`` is true, stdout is limited to a machine-readable
-    validation report for CI, UI, and external audit-tool integrations.
+    validation report for CI, UI, and external audit-tool integrations. When
+    ``output_path`` is supplied, the exact stdout JSON report is also written
+    as UTF-8 audit evidence, including schema validation failure reports.
     """
     errors = _validate_verification_result_schema(result_path)
     output = {
@@ -159,7 +166,19 @@ def _run_validate_result(result_path: Path, *, json_output: bool = False) -> int
         "errors": errors,
     }
     if json_output:
-        print(json.dumps(output, indent=2, ensure_ascii=False))
+        output_json = json.dumps(output, indent=2, ensure_ascii=False)
+        if output_path is not None:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output_json + "\n", encoding="utf-8")
+            except OSError as exc:
+                print(
+                    "error: failed to write validation report "
+                    f"to {output_path}: {exc}",
+                    file=sys.stderr,
+                )
+                return 2
+        print(output_json)
         return 0 if output["ok"] else 1
 
     if not errors:
@@ -248,6 +267,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit a machine-readable validation report as JSON",
     )
+    validate.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Write the JSON validation report to this UTF-8 file. "
+            "Requires --json and does not suppress stdout JSON."
+        ),
+    )
 
     return parser
 
@@ -288,7 +315,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.command == "validate-result":
-        return _run_validate_result(args.result, json_output=args.json)
+        if args.output is not None and not args.json:
+            parser.error("validate-result --output requires --json")
+            return 2
+        return _run_validate_result(
+            args.result,
+            json_output=args.json,
+            output_path=args.output,
+        )
 
     if args.output is not None and not args.json:
         parser.error("verify --output requires --json")
