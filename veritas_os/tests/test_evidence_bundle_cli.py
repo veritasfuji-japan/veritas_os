@@ -123,10 +123,9 @@ def test_evidence_bundle_validation_report_schema_contract() -> None:
     assert error_schema["properties"]["path"]["type"] == "string"
     assert error_schema["properties"]["message"]["type"] == "string"
     description = schema["description"]
-    assert (
-        "machine-readable report emitted by "
-        "veritas-evidence-bundle validate-result --json"
-    ) in description
+    assert "machine-readable" in description
+    assert "self-describing report emitted by" in description
+    assert "veritas-evidence-bundle validate-result --json" in description
     assert "validates the validation report shape only" in description
     assert "report_schema_id identifies the schema" in description
     assert (
@@ -134,9 +133,9 @@ def test_evidence_bundle_validation_report_schema_contract() -> None:
         in description
     )
     assert "metadata for interpretation" in description
-    assert "does not re-run cryptographic verification" in description
-    assert "does not re-run file/hash integrity checks" in description
-    assert "does not establish trusted key provenance" in description
+    assert "not re-run cryptographic verification" in description
+    assert "not re-run file/hash integrity checks" in description
+    assert "not establish trusted key provenance" in description
     assert "not regulatory certification" in description
 
     _assert_validation_report_schema(
