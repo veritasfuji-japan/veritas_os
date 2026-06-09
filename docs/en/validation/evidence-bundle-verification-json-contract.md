@@ -18,9 +18,16 @@ itself.
 
 Machine-readable verification result validation is pinned in the JSON Schema at
 [`schemas/evidence_bundle_verification_result.schema.json`](../../../schemas/evidence_bundle_verification_result.schema.json).
-`validate-result --json` validation reports have their own machine-readable
-JSON Schema at
+`validate-result --json` validation reports are self-describing and have
+their own machine-readable JSON Schema at
 [`schemas/evidence_bundle_validation_report.schema.json`](../../../schemas/evidence_bundle_validation_report.schema.json).
+The `report_schema_id` field identifies the validation report schema,
+`validated_schema_id` identifies the saved verification result schema used for
+saved result validation, and `validator` identifies the CLI command that
+emitted the report. These metadata fields help CI, UI, and external audit
+tools interpret the report later; they do not prove authenticity, establish
+trusted key provenance, re-run cryptographic verification, or provide
+certification.
 
 ## Saving reviewer evidence to a file
 
@@ -108,6 +115,9 @@ A schema-valid saved result emits only JSON on stdout and exits `0`:
   "ok": true,
   "schema_valid": true,
   "result_path": "evidence-bundle-verification-result.json",
+  "report_schema_id": "https://veritas-os.example/schemas/evidence_bundle_validation_report.schema.json",
+  "validated_schema_id": "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+  "validator": "veritas-evidence-bundle validate-result",
   "errors": []
 }
 ```
@@ -118,13 +128,18 @@ For malformed JSON, the path is `$` because the document cannot be parsed before
 schema validation.
 
 The validation report schema validates only the shape of the
-`validate-result --json` report (`ok`, `schema_valid`, `result_path`, and
-`errors[]` diagnostics with `path` and `message`). It does not validate the
-original Evidence Bundle, does not validate the saved verification result
-beyond recording this command outcome, does not re-run Evidence Bundle
-file/hash checks, does not re-run Ed25519 manifest signature verification,
-does not establish trusted key provenance, and is not regulatory certification
-or completed third-party audit approval. Saving a
+`validate-result --json` report (`ok`, `schema_valid`, `result_path`,
+`report_schema_id`, `validated_schema_id`, `validator`, and `errors[]`
+diagnostics with `path` and `message`). The report is self-describing:
+`report_schema_id` identifies the validation report schema,
+`validated_schema_id` identifies the verification result schema used by
+`validate-result`, and `validator` identifies the emitting CLI command. These
+fields are metadata for interpretation only. They do not validate the original
+Evidence Bundle, do not validate the saved verification result beyond recording
+this command outcome, do not prove authenticity, do not re-run Evidence Bundle
+file/hash checks, do not re-run Ed25519 manifest signature verification, do
+not establish trusted key provenance, and are not regulatory certification or
+completed third-party audit approval. Saving a
 `validate-result --json --output` report records the schema-validation outcome
 for the already-saved result file; it is not a new cryptographic verification
 run. Reviewers must still preserve out-of-band trusted public key provenance for

@@ -18,6 +18,20 @@ SCHEMA_PATH = Path("schemas/evidence_bundle_verification_result.schema.json")
 VALIDATION_REPORT_SCHEMA_PATH = Path(
     "schemas/evidence_bundle_validation_report.schema.json"
 )
+REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "evidence_bundle_validation_report.schema.json"
+)
+VALIDATED_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "evidence_bundle_verification_result.schema.json"
+)
+VALIDATOR = "veritas-evidence-bundle validate-result"
+VALIDATION_REPORT_METADATA = {
+    "report_schema_id": REPORT_SCHEMA_ID,
+    "validated_schema_id": VALIDATED_SCHEMA_ID,
+    "validator": VALIDATOR,
+}
 CONTRACT_JSON_FIELDS = {
     "ok",
     "tampered",
@@ -49,6 +63,13 @@ def _assert_validation_report_schema(output: dict[str, Any]) -> None:
     schema = _load_validation_report_schema()
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.Draft202012Validator(schema).validate(output)
+
+
+def _assert_validation_report_metadata(output: dict[str, Any]) -> None:
+    """Assert validate-result reports include self-describing metadata."""
+    assert output["report_schema_id"] == REPORT_SCHEMA_ID
+    assert output["validated_schema_id"] == VALIDATED_SCHEMA_ID
+    assert output["validator"] == VALIDATOR
 
 
 def _assert_contract_fields(output: dict[str, Any]) -> None:
@@ -86,25 +107,35 @@ def test_evidence_bundle_validation_report_schema_contract() -> None:
         "ok",
         "schema_valid",
         "result_path",
+        "report_schema_id",
+        "validated_schema_id",
+        "validator",
         "errors",
     }
     assert schema["properties"]["ok"]["type"] == "boolean"
     assert schema["properties"]["schema_valid"]["type"] == "boolean"
     assert schema["properties"]["result_path"]["type"] == "string"
+    assert schema["properties"]["report_schema_id"]["type"] == "string"
+    assert schema["properties"]["validated_schema_id"]["type"] == "string"
+    assert schema["properties"]["validator"]["type"] == "string"
     error_schema = schema["properties"]["errors"]["items"]
     assert set(error_schema["required"]) == {"path", "message"}
     assert error_schema["properties"]["path"]["type"] == "string"
     assert error_schema["properties"]["message"]["type"] == "string"
     description = schema["description"]
-    assert (
-        "machine-readable report emitted by "
-        "veritas-evidence-bundle validate-result --json"
-    ) in description
+    assert "machine-readable" in description
+    assert "self-describing report emitted by" in description
+    assert "veritas-evidence-bundle validate-result --json" in description
     assert "validates the validation report shape only" in description
-    assert "does not validate the original Evidence Bundle" in description
-    assert "does not re-run file/hash integrity checks" in description
-    assert "does not re-run Ed25519 signature verification" in description
-    assert "does not establish trusted key provenance" in description
+    assert "report_schema_id identifies the schema" in description
+    assert (
+        "validated_schema_id identifies the saved verification result schema"
+        in description
+    )
+    assert "metadata for interpretation" in description
+    assert "not re-run cryptographic verification" in description
+    assert "not re-run file/hash integrity checks" in description
+    assert "not establish trusted key provenance" in description
     assert "not regulatory certification" in description
 
     _assert_validation_report_schema(
@@ -112,6 +143,7 @@ def test_evidence_bundle_validation_report_schema_contract() -> None:
             "ok": False,
             "schema_valid": False,
             "result_path": "verification-result.json",
+            **VALIDATION_REPORT_METADATA,
             "errors": [
                 {
                     "path": "$['signature_status']",
@@ -645,25 +677,22 @@ def test_verify_bundle_signature_failure_reports_authenticity_failure(
     tmp_path,
     monkeypatch,
 ) -> None:
-    """A validly encoded wrong Ed25519 signature is classified as verification failure."""
+    """Wrong-key Ed25519 verification returns failure, not verifier error."""
     from veritas_os.audit.verify_bundle import verify_evidence_bundle
-    from veritas_os.security.signing import verify_payload_signature
-
-    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
-    manifest_path = bundle_dir / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["manifest_signature"] = base64.urlsafe_b64encode(
-        b"\x00" * 64
-    ).decode("ascii")
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    from veritas_os.security.signing import (
+        store_keypair,
+        verify_payload_signature,
     )
+
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+    wrong_private_key = tmp_path / "wrong_verify_keys" / "priv.key"
+    wrong_public_key = tmp_path / "wrong_verify_keys" / "pub.key"
+    store_keypair(wrong_private_key, wrong_public_key)
 
     result = verify_evidence_bundle(
         bundle_dir,
         verify_signature_fn=lambda payload_hash, signature_b64: (
-            verify_payload_signature(payload_hash, signature_b64, public_key)
+            verify_payload_signature(payload_hash, signature_b64, wrong_public_key)
         ),
         require_signature=True,
     )
@@ -674,11 +703,39 @@ def test_verify_bundle_signature_failure_reports_authenticity_failure(
     assert result["authenticity_failure"] == "signature_verification_failed"
 
 
+def test_verify_bundle_signature_verifier_error_reports_authenticity_error(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Verifier exceptions are classified separately from signature mismatch."""
+    from veritas_os.audit.verify_bundle import verify_evidence_bundle
+
+    def raise_verifier_error(_payload_hash: str, _signature_b64: str) -> bool:
+        raise RuntimeError("verifier backend unavailable")
+
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+
+    result = verify_evidence_bundle(
+        bundle_dir,
+        verify_signature_fn=raise_verifier_error,
+        require_signature=True,
+    )
+
+    assert result["ok"] is False
+    assert result["hash_integrity_ok"] is True
+    assert result["authenticity_ok"] is False
+    assert result["authenticity_failure"] == "signature_verification_error"
+    assert any(
+        error.startswith("Manifest signature verification error")
+        for error in result["errors"]
+    )
+
+
 def test_verify_bundle_malformed_signature_reports_authenticity_error(
     tmp_path,
     monkeypatch,
 ) -> None:
-    """Malformed manifest_signature is classified separately from signature mismatch."""
+    """Malformed manifest_signature is classified separately from mismatch."""
     from veritas_os.audit.verify_bundle import verify_evidence_bundle
     from veritas_os.security.signing import verify_payload_signature
 
@@ -1163,11 +1220,13 @@ def test_evidence_bundle_cli_validate_result_valid_saved_result_json_passes(
     output = json.loads(capsys.readouterr().out)
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 0
     assert output == {
         "ok": True,
         "schema_valid": True,
         "result_path": str(result_path),
+        **VALIDATION_REPORT_METADATA,
         "errors": [],
     }
 
@@ -1188,6 +1247,7 @@ def test_evidence_bundle_cli_validate_result_missing_required_field_json_fails(
     output = json.loads(capsys.readouterr().out)
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1216,6 +1276,7 @@ def test_evidence_bundle_cli_validate_result_invalid_signature_status_json_fails
     output = json.loads(capsys.readouterr().out)
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1239,6 +1300,7 @@ def test_evidence_bundle_cli_validate_result_invalid_fingerprint_json_fails(
     output = json.loads(capsys.readouterr().out)
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1260,11 +1322,13 @@ def test_evidence_bundle_cli_validate_result_malformed_json_json_fails(
     output = json.loads(capsys.readouterr().out)
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 1
     assert output == {
         "ok": False,
         "schema_valid": False,
         "result_path": str(result_path),
+        **VALIDATION_REPORT_METADATA,
         "errors": [
             {
                 "path": "$",
@@ -1314,11 +1378,13 @@ def test_evidence_bundle_cli_validate_result_json_output_valid_matches_stdout(
     )
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 0
     assert output == {
         "ok": True,
         "schema_valid": True,
         "result_path": str(result_path),
+        **VALIDATION_REPORT_METADATA,
         "errors": [],
     }
 
@@ -1352,6 +1418,7 @@ def test_evidence_bundle_cli_validate_result_json_output_invalid_matches_stdout(
     )
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1386,6 +1453,7 @@ def test_evidence_bundle_cli_validate_result_json_output_malformed_matches_stdou
     )
 
     _assert_validation_report_schema(output)
+    _assert_validation_report_metadata(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False

@@ -2,13 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://veritas-os.example/schemas/evidence_bundle_validation_report.schema.json",
   "title": "Evidence Bundle Validation Report",
-  "description": "This schema describes the machine-readable report emitted by veritas-evidence-bundle validate-result --json. It validates the validation report shape only. It does not validate the original Evidence Bundle. It does not re-run file/hash integrity checks. It does not re-run Ed25519 signature verification. It does not establish trusted key provenance. It is not regulatory certification or completed third-party audit approval.",
+  "description": "This schema describes the machine-readable, self-describing report emitted by veritas-evidence-bundle validate-result --json. It validates the validation report shape only. report_schema_id identifies the schema for the validation report shape. validated_schema_id identifies the saved verification result schema used by validate-result. These fields are metadata for interpretation. They do not re-run cryptographic verification. They do not re-run file/hash integrity checks. They do not establish trusted key provenance. They are not regulatory certification or completed third-party audit approval.",
   "type": "object",
   "additionalProperties": true,
   "required": [
     "ok",
     "schema_valid",
     "result_path",
+    "report_schema_id",
+    "validated_schema_id",
+    "validator",
     "errors"
   ],
   "properties": {
@@ -23,6 +26,18 @@
     "result_path": {
       "type": "string",
       "description": "Path to the saved Evidence Bundle verification result JSON file that validate-result checked."
+    },
+    "report_schema_id": {
+      "type": "string",
+      "description": "Identifies the schema for the validation report shape. This field is metadata for interpretation only; it does not re-run cryptographic verification, establish trusted key provenance, or represent regulatory certification or completed third-party audit approval."
+    },
+    "validated_schema_id": {
+      "type": "string",
+      "description": "Identifies the saved verification result schema used by validate-result. This field is metadata for interpretation only; it does not re-run cryptographic verification, establish trusted key provenance, or represent regulatory certification or completed third-party audit approval."
+    },
+    "validator": {
+      "type": "string",
+      "description": "Identifies the validator command that emitted this validation report. This field is metadata for interpretation only; it does not establish trusted key provenance or completed third-party audit approval."
     },
     "errors": {
       "type": "array",
