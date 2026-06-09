@@ -101,7 +101,9 @@ veritas-evidence-bundle validate-result \
 
 The stdout JSON and saved UTF-8 JSON file are byte-for-byte identical. Failure
 reports for schema-invalid or malformed saved results are also written so CI,
-UI, and external audit tools can retain the failed validation outcome.
+UI, and external audit tools can retain the failed validation outcome. The
+validation report shape is documented by
+[`schemas/evidence_bundle_validation_report.schema.json`](../../../schemas/evidence_bundle_validation_report.schema.json).
 `validate-result --output` without `--json` fails clearly.
 
 Illustrative `validate-result --json` success output:
@@ -134,12 +136,15 @@ Illustrative `validate-result --json` failure output:
 Malformed JSON is also returned as structured JSON with `path` set to `$` and a
 message beginning with `malformed JSON:`.
 
-This schema validation confirms saved result shape only. It does not re-run
-cryptographic verification, does not establish out-of-band trusted key
-provenance, and is not regulatory certification or completed third-party audit
-approval. A saved `validate-result --json --output` report is evidence of the
-schema-validation report for an existing result file, not evidence of a new
-Evidence Bundle verification run.
+The saved-result schema validation confirms saved verification result shape
+only. The separate validation report schema validates only the
+`validate-result --json` report shape. Neither schema validates the original
+Evidence Bundle, re-runs file/hash integrity checks, re-runs Ed25519 signature
+verification, establishes out-of-band trusted key provenance, or provides
+regulatory certification or completed third-party audit approval. A saved
+`validate-result --json --output` report is evidence of the schema-validation
+report for an existing result file, not evidence of a new Evidence Bundle
+verification run.
 
 ## Successful strict verification
 

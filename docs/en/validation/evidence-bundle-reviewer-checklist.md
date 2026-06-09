@@ -64,13 +64,17 @@ veritas-evidence-bundle validate-result \
 required fields, `signature_status` enum values, and
 `public_key_fingerprint_sha256` null-or-lowercase-hex shape. Add `--json` when
 CI, UI, or external audit tooling must consume a machine-readable validation
-report for the saved result file. Add `--output <path>` together with `--json`
-to save the exact stdout validation report as UTF-8 audit evidence, including
-failure reports for schema-invalid or malformed saved results. It does not re-run
-file/hash integrity checks or Ed25519 signature verification, does not establish
-trusted key provenance, and is not regulatory certification or completed
-third-party audit approval. Preserve the out-of-band trusted-key provenance
-record even when saved-result schema validation passes.
+report for the saved result file; that validation report has its own
+machine-readable schema at
+[`schemas/evidence_bundle_validation_report.schema.json`](../../../schemas/evidence_bundle_validation_report.schema.json).
+Add `--output <path>` together with `--json` to save the exact stdout
+validation report as UTF-8 audit evidence, including failure reports for
+schema-invalid or malformed saved results. The validation report schema only
+validates the report shape. It does not validate the original bundle, re-run
+file/hash integrity checks or Ed25519 signature verification, establish trusted
+key provenance, or provide regulatory certification or completed third-party
+audit approval. Preserve the out-of-band trusted-key provenance record even
+when saved-result schema validation passes.
 
 ## Verification order
 

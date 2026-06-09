@@ -16,8 +16,11 @@ Trusted public keys must come from an out-of-band reviewer/operator trust
 channel; a public key copied only from the Evidence Bundle is not trusted by
 itself.
 
-Machine-readable validation is pinned in the JSON Schema at
+Machine-readable verification result validation is pinned in the JSON Schema at
 [`schemas/evidence_bundle_verification_result.schema.json`](../../../schemas/evidence_bundle_verification_result.schema.json).
+`validate-result --json` validation reports have their own machine-readable
+JSON Schema at
+[`schemas/evidence_bundle_validation_report.schema.json`](../../../schemas/evidence_bundle_validation_report.schema.json).
 
 ## Saving reviewer evidence to a file
 
@@ -114,10 +117,14 @@ Each error contains a JSONPath-like `path` and reviewer/tooling-safe `message`.
 For malformed JSON, the path is `$` because the document cannot be parsed before
 schema validation.
 
-Schema validation confirms the saved result document shape only. It does not
-re-run Evidence Bundle file/hash checks, does not re-run Ed25519 manifest
-signature verification, does not establish trusted key provenance, and is not
-regulatory certification or completed third-party audit approval. Saving a
+The validation report schema validates only the shape of the
+`validate-result --json` report (`ok`, `schema_valid`, `result_path`, and
+`errors[]` diagnostics with `path` and `message`). It does not validate the
+original Evidence Bundle, does not validate the saved verification result
+beyond recording this command outcome, does not re-run Evidence Bundle
+file/hash checks, does not re-run Ed25519 manifest signature verification,
+does not establish trusted key provenance, and is not regulatory certification
+or completed third-party audit approval. Saving a
 `validate-result --json --output` report records the schema-validation outcome
 for the already-saved result file; it is not a new cryptographic verification
 run. Reviewers must still preserve out-of-band trusted public key provenance for
