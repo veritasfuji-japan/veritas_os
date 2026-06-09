@@ -678,25 +678,22 @@ def test_verify_bundle_signature_failure_reports_authenticity_failure(
     tmp_path,
     monkeypatch,
 ) -> None:
-    """A validly encoded wrong Ed25519 signature is classified as verification failure."""
+    """Wrong-key Ed25519 verification returns failure, not verifier error."""
     from veritas_os.audit.verify_bundle import verify_evidence_bundle
-    from veritas_os.security.signing import verify_payload_signature
-
-    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
-    manifest_path = bundle_dir / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["manifest_signature"] = base64.urlsafe_b64encode(
-        b"\x00" * 64
-    ).decode("ascii")
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    from veritas_os.security.signing import (
+        store_keypair,
+        verify_payload_signature,
     )
+
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+    wrong_private_key = tmp_path / "wrong_verify_keys" / "priv.key"
+    wrong_public_key = tmp_path / "wrong_verify_keys" / "pub.key"
+    store_keypair(wrong_private_key, wrong_public_key)
 
     result = verify_evidence_bundle(
         bundle_dir,
         verify_signature_fn=lambda payload_hash, signature_b64: (
-            verify_payload_signature(payload_hash, signature_b64, public_key)
+            verify_payload_signature(payload_hash, signature_b64, wrong_public_key)
         ),
         require_signature=True,
     )
@@ -707,11 +704,39 @@ def test_verify_bundle_signature_failure_reports_authenticity_failure(
     assert result["authenticity_failure"] == "signature_verification_failed"
 
 
+def test_verify_bundle_signature_verifier_error_reports_authenticity_error(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Verifier exceptions are classified separately from signature mismatch."""
+    from veritas_os.audit.verify_bundle import verify_evidence_bundle
+
+    def raise_verifier_error(_payload_hash: str, _signature_b64: str) -> bool:
+        raise RuntimeError("verifier backend unavailable")
+
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+
+    result = verify_evidence_bundle(
+        bundle_dir,
+        verify_signature_fn=raise_verifier_error,
+        require_signature=True,
+    )
+
+    assert result["ok"] is False
+    assert result["hash_integrity_ok"] is True
+    assert result["authenticity_ok"] is False
+    assert result["authenticity_failure"] == "signature_verification_error"
+    assert any(
+        error.startswith("Manifest signature verification error")
+        for error in result["errors"]
+    )
+
+
 def test_verify_bundle_malformed_signature_reports_authenticity_error(
     tmp_path,
     monkeypatch,
 ) -> None:
-    """Malformed manifest_signature is classified separately from signature mismatch."""
+    """Malformed manifest_signature is classified separately from mismatch."""
     from veritas_os.audit.verify_bundle import verify_evidence_bundle
     from veritas_os.security.signing import verify_payload_signature
 
