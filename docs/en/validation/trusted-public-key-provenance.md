@@ -83,10 +83,12 @@ For CI, UI, or audit-tool ingestion, add `--json`. Add `--output <path>` with
 `--json` to save the exact same JSON report that is emitted to stdout; failure
 reports are saved too, and parent directories are created when needed.
 `--output` without `--json` is rejected. To avoid echoing externally supplied
-key material in logs, the CLI report does not print raw fingerprint values; it
-only reports whether receipt and verification-result fingerprints are present
-and whether correlation passed. The raw fingerprints remain preserved in the
-source receipt and verification-result artifacts.
+key material or reviewer-controlled locations in logs, the CLI report does not
+print raw fingerprint values or user-provided file paths; it only reports
+whether receipt and verification-result paths were provided, whether
+fingerprints are present, and whether correlation passed. The raw fingerprints
+and paths remain preserved in the source receipt and verification-result
+artifacts and reviewer-controlled command history.
 
 ```bash
 veritas-evidence-bundle validate-key-provenance \
@@ -108,13 +110,14 @@ The command checks that:
   "pass"`, `signature_verified: true`, and `authenticity_ok: true`.
 
 This command validates receipt shape and fingerprint correlation only. The CLI
-report intentionally does not echo raw fingerprint values; use the original
-receipt and verification-result artifacts when a reviewer must inspect exact
-fingerprints. It does not create trust by itself, does not re-run cryptographic
-verification, does not prove regulatory certification, and does not complete
-third-party audit approval. Matching fingerprints support correlation between a
-saved strict verification result and a reviewer/operator provenance record;
-they are not standalone trust.
+report intentionally does not echo raw fingerprint values or user-provided file
+paths; use the original receipt and verification-result artifacts when a
+reviewer must inspect exact fingerprints and source locations. It does not
+create trust by itself, does not re-run cryptographic verification, does not
+prove regulatory certification, and does not complete third-party audit
+approval. Matching fingerprints support correlation between a saved strict
+verification result and a reviewer/operator provenance record; they are not
+standalone trust.
 
 ## Fingerprint comparison
 

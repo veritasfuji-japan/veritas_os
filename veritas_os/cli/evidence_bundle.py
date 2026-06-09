@@ -54,6 +54,37 @@ TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_PATH = (
     / "trusted_public_key_provenance_receipt.schema.json"
 )
 
+KEY_PROVENANCE_ERROR_CHECKS = {
+    "receipt_schema_valid",
+    "verification_result_schema_valid",
+    "fingerprint_correlation_ok",
+    "bundle_internal_key_used_ok",
+    "strict_authenticity_ok",
+    "validation",
+}
+KEY_PROVENANCE_ERROR_PATHS = {
+    "$",
+    "$['public_key_fingerprint_sha256']",
+    "$['bundle_internal_key_used']",
+    "$['authenticity_ok']",
+    "$['signature_status']",
+    "$['signature_verified']",
+}
+KEY_PROVENANCE_ERROR_MESSAGES = {
+    "failed to read receipt file",
+    "failed to read verification result file",
+    "failed to load receipt schema",
+    "failed to load verification result schema",
+    "malformed JSON",
+    "value does not satisfy schema at this path",
+    "receipt and verification result public key fingerprints do not match",
+    "receipt bundle_internal_key_used must be false",
+    (
+        "verification result must report signature_status pass, "
+        "signature_verified true, and authenticity_ok true"
+    ),
+}
+
 
 def _is_fail_closed_posture() -> bool:
     """Return whether evidence-bundle verification must fail closed."""
@@ -171,23 +202,21 @@ def _load_json_document(
     """Load a JSON document and return structured CLI validation errors."""
     try:
         raw_document = document_path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except OSError:
         return None, [
             {
                 "path": "$",
-                "message": f"failed to read {label} file {document_path}: {exc}",
+                "message": f"failed to read {label} file",
             }
         ]
 
     try:
         return json.loads(raw_document), []
-    except json.JSONDecodeError as exc:
+    except json.JSONDecodeError:
         return None, [
             {
                 "path": "$",
-                "message": (
-                    f"malformed JSON: line {exc.lineno}, column {exc.colno}: {exc.msg}"
-                ),
+                "message": "malformed JSON",
             }
         ]
 
@@ -196,11 +225,11 @@ def _load_schema(schema_path: Path, label: str) -> tuple[Any, list[dict[str, str
     """Load a JSON Schema and return structured CLI validation errors."""
     try:
         return json.loads(schema_path.read_text(encoding="utf-8")), []
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, json.JSONDecodeError):
         return None, [
             {
                 "path": "$",
-                "message": f"failed to load {label} schema: {exc}",
+                "message": f"failed to load {label} schema",
             }
         ]
 
@@ -368,8 +397,8 @@ def _build_key_provenance_report(
         "fingerprint_correlation_ok": fingerprint_correlation_ok,
         "bundle_internal_key_used_ok": bundle_internal_key_used_ok,
         "strict_authenticity_ok": strict_authenticity,
-        "receipt_path": str(receipt_path),
-        "verification_result_path": str(verification_result_path),
+        "receipt_path_provided": True,
+        "verification_result_path_provided": True,
         "receipt_public_key_fingerprint_present": isinstance(
             receipt_fingerprint,
             str,
@@ -393,6 +422,69 @@ def _build_key_provenance_report(
     return report
 
 
+def _safe_key_provenance_error_for_output(
+    error: dict[str, str],
+) -> dict[str, str]:
+    """Return a validate-key-provenance error with only allowlisted text."""
+    check = error.get("check")
+    if check not in KEY_PROVENANCE_ERROR_CHECKS:
+        check = "validation"
+
+    path = error.get("path")
+    if path not in KEY_PROVENANCE_ERROR_PATHS:
+        path = "$"
+
+    message = error.get("message")
+    if message not in KEY_PROVENANCE_ERROR_MESSAGES:
+        message = _safe_validation_message(message or "")
+
+    return {
+        "check": check,
+        "path": path,
+        "message": message,
+    }
+
+
+def _safe_key_provenance_report_for_output(
+    report: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a non-tainted validate-key-provenance report for output sinks.
+
+    The source report is derived from reviewer-controlled JSON files and CLI
+    paths. This helper explicitly rebuilds the output contract from booleans,
+    fixed schema identifiers, and sanitized error fields so stdout, saved JSON,
+    and human-readable messages do not echo raw paths, fingerprints, exception
+    text, or JSON values.
+    """
+    return {
+        "ok": bool(report["ok"]),
+        "receipt_schema_valid": bool(report["receipt_schema_valid"]),
+        "verification_result_schema_valid": bool(
+            report["verification_result_schema_valid"]
+        ),
+        "fingerprint_correlation_ok": bool(report["fingerprint_correlation_ok"]),
+        "bundle_internal_key_used_ok": bool(report["bundle_internal_key_used_ok"]),
+        "strict_authenticity_ok": bool(report["strict_authenticity_ok"]),
+        "receipt_path_provided": bool(report["receipt_path_provided"]),
+        "verification_result_path_provided": bool(
+            report["verification_result_path_provided"]
+        ),
+        "receipt_public_key_fingerprint_present": bool(
+            report["receipt_public_key_fingerprint_present"]
+        ),
+        "verification_result_public_key_fingerprint_present": bool(
+            report["verification_result_public_key_fingerprint_present"]
+        ),
+        "report_schema_id": None,
+        "receipt_schema_id": TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID,
+        "verification_result_schema_id": VERIFICATION_RESULT_SCHEMA_ID,
+        "validator": VALIDATE_KEY_PROVENANCE_VALIDATOR,
+        "errors": [
+            _safe_key_provenance_error_for_output(error) for error in report["errors"]
+        ],
+    }
+
+
 def _run_validate_key_provenance(
     receipt_path: Path,
     verification_result_path: Path,
@@ -401,17 +493,17 @@ def _run_validate_key_provenance(
     output_path: Optional[Path] = None,
 ) -> int:
     """Run trusted public key provenance receipt validation."""
-    report = _build_key_provenance_report(receipt_path, verification_result_path)
+    raw_report = _build_key_provenance_report(receipt_path, verification_result_path)
+    report = _safe_key_provenance_report_for_output(raw_report)
     if json_output:
         output_json = json.dumps(report, indent=2, ensure_ascii=False)
         if output_path is not None:
             try:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_text(output_json + "\n", encoding="utf-8")
-            except OSError as exc:
+            except OSError:
                 print(
-                    "error: failed to write key provenance validation report "
-                    f"to {output_path}: {exc}",
+                    "error: failed to write key provenance validation report",
                     file=sys.stderr,
                 )
                 return 2

@@ -82,6 +82,8 @@ def test_validate_key_provenance_valid_inputs_pass(tmp_path, capsys) -> None:
     assert "Fingerprint correlation: PASS" in output
     assert "Bundle-internal key used: PASS" in output
     assert "Strict authenticity result: PASS" in output
+    assert str(receipt_path) not in output
+    assert str(verification_result_path) not in output
     assert FINGERPRINT not in output
 
 
@@ -110,6 +112,8 @@ def test_validate_key_provenance_fingerprint_mismatch_fails(tmp_path, capsys) ->
     assert "Receipt schema: PASS" in output
     assert "Verification result schema: PASS" in output
     assert "Fingerprint correlation: FAIL" in output
+    assert str(receipt_path) not in output
+    assert str(verification_result_path) not in output
     assert FINGERPRINT not in output
     assert MISMATCHED_FINGERPRINT not in output
 
@@ -248,13 +252,18 @@ def test_validate_key_provenance_json_output_stable_fields(tmp_path, capsys) -> 
     assert output["fingerprint_correlation_ok"] is True
     assert output["bundle_internal_key_used_ok"] is True
     assert output["strict_authenticity_ok"] is True
-    assert output["receipt_path"] == str(receipt_path)
-    assert output["verification_result_path"] == str(verification_result_path)
+    assert output["receipt_path_provided"] is True
+    assert output["verification_result_path_provided"] is True
+    assert "receipt_path" not in output
+    assert "verification_result_path" not in output
     assert output["receipt_public_key_fingerprint_present"] is True
     assert output["verification_result_public_key_fingerprint_present"] is True
     assert "receipt_public_key_fingerprint_sha256" not in output
     assert "verification_result_public_key_fingerprint_sha256" not in output
-    assert FINGERPRINT not in json.dumps(output)
+    output_json = json.dumps(output)
+    assert str(receipt_path) not in output_json
+    assert str(verification_result_path) not in output_json
+    assert FINGERPRINT not in output_json
     assert output["errors"] == []
 
 
@@ -283,8 +292,13 @@ def test_validate_key_provenance_json_output_file_matches_stdout(
     stdout = capsys.readouterr().out
 
     assert exit_code == 0
-    assert output_path.read_text(encoding="utf-8") == stdout
+    saved = output_path.read_text(encoding="utf-8")
+    assert saved == stdout
     assert json.loads(stdout)["ok"] is True
+    assert str(receipt_path) not in stdout
+    assert str(verification_result_path) not in stdout
+    assert str(output_path) not in stdout
+    assert str(output_path) not in saved
 
 
 def test_validate_key_provenance_output_without_json_fails_clearly(
@@ -342,3 +356,4 @@ def test_validate_key_provenance_output_write_failure_is_clear(
     assert exit_code == 2
     assert captured.out == ""
     assert "failed to write key provenance validation report" in captured.err
+    assert str(output_path) not in captured.err
