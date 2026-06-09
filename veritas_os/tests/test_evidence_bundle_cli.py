@@ -5,12 +5,14 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from veritas_os.audit import trustlog_signed
 
 
+SCHEMA_PATH = Path("schemas/evidence_bundle_verification_result.schema.json")
 CONTRACT_JSON_FIELDS = {
     "ok",
     "tampered",
@@ -24,8 +26,15 @@ CONTRACT_JSON_FIELDS = {
 }
 
 
-def _assert_contract_fields(output: dict) -> None:
-    """Assert reviewer-facing JSON contract fields are present."""
+def _load_verification_result_schema() -> dict[str, Any]:
+    """Load the Evidence Bundle verification result JSON Schema."""
+    return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
+def _assert_contract_fields(output: dict[str, Any]) -> None:
+    """Assert reviewer-facing JSON contract fields are present and schema-valid."""
+    import jsonschema
+
     assert CONTRACT_JSON_FIELDS.issubset(output.keys())
     assert isinstance(output["ok"], bool)
     assert isinstance(output["tampered"], bool)
@@ -39,6 +48,37 @@ def _assert_contract_fields(output: dict) -> None:
     )
     assert isinstance(output["errors"], list)
     assert isinstance(output["warnings"], list)
+
+    schema = _load_verification_result_schema()
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.Draft202012Validator(schema).validate(output)
+
+
+def test_evidence_bundle_verification_result_schema_contract() -> None:
+    """JSON Schema pins required reviewer-facing verification fields."""
+    schema = _load_verification_result_schema()
+
+    assert set(schema["required"]) == CONTRACT_JSON_FIELDS
+    assert schema["properties"]["signature_status"]["enum"] == [
+        "pass",
+        "fail",
+        "missing",
+        "not_verified",
+    ]
+    assert schema["properties"]["authenticity_failure"]["enum"] == [
+        None,
+        "signature_not_verified",
+        "signature_verification_failed",
+        "signature_verification_error",
+        "signature_missing",
+    ]
+    assert "Hash integrity is not authenticity" in (
+        schema["properties"]["hash_integrity_ok"]["description"]
+    )
+    assert "trusted Ed25519 public key" in (
+        schema["properties"]["signature_verified"]["description"]
+    )
+    assert "not regulatory certification" in schema["description"]
 
 
 def test_evidence_bundle_cli_generate_and_verify(tmp_path, monkeypatch) -> None:
