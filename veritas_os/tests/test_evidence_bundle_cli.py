@@ -1209,3 +1209,170 @@ def test_evidence_bundle_cli_validate_result_malformed_json_json_fails(
             }
         ],
     }
+
+
+def _assert_validation_report_matches_stdout(
+    output_path: Path,
+    stdout: str,
+) -> dict[str, Any]:
+    """Assert saved validate-result report bytes match stdout exactly."""
+    saved = output_path.read_text(encoding="utf-8")
+    assert saved == stdout
+    return json.loads(stdout)
+
+
+def test_evidence_bundle_cli_validate_result_json_output_valid_matches_stdout(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json --output saves the success report exactly."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "valid-result.json"
+    output_path = tmp_path / "reports" / "validation.json"
+    _write_result_payload(result_path, _valid_verification_result_payload())
+
+    exit_code = main(
+        [
+            "validate-result",
+            "--result",
+            str(result_path),
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    output = _assert_validation_report_matches_stdout(
+        output_path,
+        capsys.readouterr().out,
+    )
+
+    assert exit_code == 0
+    assert output == {
+        "ok": True,
+        "schema_valid": True,
+        "result_path": str(result_path),
+        "errors": [],
+    }
+
+
+def test_evidence_bundle_cli_validate_result_json_output_invalid_matches_stdout(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json --output saves signature_status failures."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "invalid-status-result.json"
+    output_path = tmp_path / "validation" / "invalid-status.json"
+    payload = _valid_verification_result_payload()
+    payload["signature_status"] = "verified"
+    _write_result_payload(result_path, payload)
+
+    exit_code = main(
+        [
+            "validate-result",
+            "--result",
+            str(result_path),
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    output = _assert_validation_report_matches_stdout(
+        output_path,
+        capsys.readouterr().out,
+    )
+
+    assert exit_code == 1
+    assert output["ok"] is False
+    assert output["schema_valid"] is False
+    assert output["errors"][0]["path"] == "$['signature_status']"
+    assert "'verified' is not one of" in output["errors"][0]["message"]
+
+
+def test_evidence_bundle_cli_validate_result_json_output_malformed_matches_stdout(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json --output saves malformed JSON reports."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "malformed-result.json"
+    output_path = tmp_path / "validation" / "malformed.json"
+    result_path.write_text('{"ok": true,', encoding="utf-8")
+
+    exit_code = main(
+        [
+            "validate-result",
+            "--result",
+            str(result_path),
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    output = _assert_validation_report_matches_stdout(
+        output_path,
+        capsys.readouterr().out,
+    )
+
+    assert exit_code == 1
+    assert output["ok"] is False
+    assert output["schema_valid"] is False
+    assert output["errors"][0]["path"] == "$"
+    assert "malformed JSON: line 1" in output["errors"][0]["message"]
+
+
+def test_evidence_bundle_cli_validate_result_output_requires_json(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --output without --json fails clearly."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "valid-result.json"
+    _write_result_payload(result_path, _valid_verification_result_payload())
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(
+            [
+                "validate-result",
+                "--result",
+                str(result_path),
+                "--output",
+                str(tmp_path / "validation.json"),
+            ]
+        )
+
+    assert excinfo.value.code == 2
+    assert "validate-result --output requires --json" in capsys.readouterr().err
+
+
+def test_evidence_bundle_cli_validate_result_output_write_failure_is_clear(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result write failures exit non-zero with clear stderr."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "valid-result.json"
+    output_path = tmp_path / "existing-directory"
+    _write_result_payload(result_path, _valid_verification_result_payload())
+    output_path.mkdir()
+
+    exit_code = main(
+        [
+            "validate-result",
+            "--result",
+            str(result_path),
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "failed to write validation report" in captured.err
