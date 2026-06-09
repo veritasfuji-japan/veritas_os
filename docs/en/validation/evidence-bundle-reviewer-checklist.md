@@ -8,13 +8,14 @@ bundle contents in detail.
 Use it with the strict CLI path in
 [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
 and the example transcripts in
-[Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md).
+[Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
+and the [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md).
 
 ## Scope and non-certification boundary
 
 This checklist supports reviewer verification of one delivered Evidence Bundle.
-It is not regulatory certification, legal approval, or completion of a
-third-party audit. Reviewers remain responsible for their own audit scope,
+It is not regulatory certification, legal approval, or completed
+third-party audit approval. Reviewers remain responsible for their own audit scope,
 evidence sampling, legal/regulatory conclusions, and sign-off process.
 
 Security boundaries:
@@ -22,7 +23,9 @@ Security boundaries:
 - Hash integrity is not authenticity.
 - A public key included only inside the bundle is not trusted by itself.
 - The trusted Ed25519 public key must be obtained outside the bundle through an
-  approved reviewer/operator trust channel.
+  approved out-of-band reviewer/operator trust channel.
+- The `--json` result contract supports reviewer-facing verification and UI
+  integration, but it does not certify regulatory compliance or audit approval.
 - Do not add private keys, real signing keys, production secrets, or unsanitized
   customer data to review notes or shared examples.
 
@@ -34,7 +37,7 @@ Security boundaries:
 | 2 | Obtain the trusted Ed25519 public key out-of-band. | The reviewer obtains the public key from a trusted registry, signed operator note, KMS/certificate process, or other approved channel outside the bundle. | The public key is missing, comes only from inside the bundle, or its provenance cannot be established. |
 | 3 | Run the strict verification command. | The reviewer runs `veritas-evidence-bundle verify --bundle-dir <bundle_dir> --public-key <trusted_ed25519_public_key> --require-signature`. | The command is not run, omits `--require-signature`, omits the trusted public key, or uses an untrusted key path. |
 | 4 | Confirm `File/hash integrity: PASS`. | The CLI prints `File/hash integrity: PASS` in the strict verification run. | The CLI reports hash failure, manifest hash mismatch, missing files, malformed manifest data, or any file/hash error. |
-| 5 | Confirm `Manifest signature: PASS`. | The CLI prints `Manifest signature: PASS` under the trusted Ed25519 public key obtained in Step 2. | The CLI reports missing public key, wrong key, malformed signature, unsigned secure/prod bundle, or signature verification failure. |
+| 5 | Confirm `Manifest signature: PASS`. | The CLI prints `Manifest signature: PASS` under the trusted Ed25519 public key obtained in Step 2. For `--json`, `authenticity_ok` is `true`, `signature_status` is `pass`, and `signature_verified` is `true`. | The CLI reports missing public key, wrong key, malformed signature, unsigned secure/prod bundle, or signature verification failure. For `--json`, `authenticity_ok` is `false`. |
 | 6 | Inspect `acceptance_checklist.json`. | The checklist exists and has no blocking failures for the submitted bundle profile. | The checklist is missing, malformed, incomplete, or contains any blocking failure. |
 | 7 | Inspect `verification_report.json`. | The report exists and is consistent with the strict verification result and expected bundle scope. | The report is missing, malformed, stale, inconsistent with CLI output, or reports unresolved errors. |
 | 8 | Confirm no missing expected artifacts. | Required artifacts for the bundle type and review objective are present, including expected manifest, witness, report, acceptance, and profile-specific files. | Expected artifacts are absent, empty, renamed without explanation, or inconsistent with the handoff metadata. |
@@ -92,5 +95,7 @@ key, the bundle is not reviewer-facing verified evidence.
   [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
 - Sample success and failure transcripts:
   [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
+- Stable `--json` field semantics for reviewer/UI consumers:
+  [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md)
 - Bundle contents and delivery policy:
   [External Audit Readiness Pack](external-audit-readiness.md)

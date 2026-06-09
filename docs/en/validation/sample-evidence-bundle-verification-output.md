@@ -4,7 +4,8 @@ This page is a reviewer-facing sample transcript for Evidence Bundle strict
 verification. All command output below is **illustrative output** for external
 auditors and design partners to preview the expected CLI shape before handling a
 real bundle. Use it with the one-page
-[Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md).
+[Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md) and the
+[Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md).
 
 ## Safety boundary
 
@@ -13,8 +14,9 @@ real bundle. Use it with the one-page
 - Placeholder paths such as `<bundle_dir>` and
   `<trusted_ed25519_public_key>` must be replaced by reviewer-specific handoff
   paths.
-- A trusted Ed25519 public key must come from a reviewer/operator trust channel,
-  not from a key copied only from the Evidence Bundle.
+- A trusted Ed25519 public key must come from an out-of-band
+  reviewer/operator trust channel, not from a key copied only from the Evidence
+  Bundle.
 
 ## Strict verification command
 
@@ -28,7 +30,9 @@ veritas-evidence-bundle verify \
 ```
 
 Strict verification is complete only when the CLI reports both file/hash
-integrity and manifest signature success.
+integrity and manifest signature success. JSON consumers should use the stable
+contract fields documented in
+[Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md).
 
 ## Successful strict verification
 
@@ -38,6 +42,22 @@ Illustrative output:
 Evidence bundle verification: PASS
 File/hash integrity: PASS
 Manifest signature: PASS
+```
+
+Illustrative `--json` summary fields:
+
+```json
+{
+  "ok": true,
+  "tampered": false,
+  "hash_integrity_ok": true,
+  "signature_status": "pass",
+  "signature_verified": true,
+  "authenticity_ok": true,
+  "authenticity_failure": null,
+  "errors": [],
+  "warnings": []
+}
 ```
 
 Reviewer interpretation:
@@ -69,6 +89,20 @@ Manifest signature: NOT VERIFIED
   error: No trusted public key supplied; manifest signature authenticity cannot be verified
 ```
 
+Illustrative `--json` summary fields:
+
+```json
+{
+  "ok": false,
+  "tampered": true,
+  "hash_integrity_ok": true,
+  "signature_status": "not_verified",
+  "signature_verified": false,
+  "authenticity_ok": false,
+  "authenticity_failure": "signature_not_verified"
+}
+```
+
 Reviewer interpretation:
 
 - The files may still match the manifest, so file/hash integrity can report
@@ -96,6 +130,20 @@ Manifest signature: FAIL
   error: Manifest signature verification failed
 ```
 
+Illustrative `--json` summary fields:
+
+```json
+{
+  "ok": false,
+  "tampered": true,
+  "hash_integrity_ok": true,
+  "signature_status": "fail",
+  "signature_verified": false,
+  "authenticity_ok": false,
+  "authenticity_failure": "signature_verification_failed"
+}
+```
+
 Reviewer interpretation:
 
 - Hash-covered files still match `manifest.json`, so file/hash integrity can
@@ -117,3 +165,53 @@ Ed25519 public key that the reviewer received out-of-band through the approved
 trust channel. A bundle with only `File/hash integrity: PASS` must remain
 unaccepted for external reviewer purposes until manifest authenticity is also
 verified.
+
+
+## Malformed signature failure
+
+Illustrative `--json` summary fields:
+
+```json
+{
+  "ok": false,
+  "tampered": true,
+  "hash_integrity_ok": true,
+  "signature_status": "fail",
+  "signature_verified": false,
+  "authenticity_ok": false,
+  "authenticity_failure": "signature_verification_error"
+}
+```
+
+Reviewer interpretation:
+
+- The signature input could not be parsed or processed as a successful Ed25519
+  manifest signature verification.
+- Treat this as a failed authenticity result even when file/hash integrity is
+  still `PASS`.
+
+## Unsigned secure/prod bundle failure
+
+Under `VERITAS_POSTURE=secure` or `VERITAS_POSTURE=prod`, unsigned bundles fail
+closed because manifest authenticity is required.
+
+Illustrative `--json` summary fields:
+
+```json
+{
+  "ok": false,
+  "tampered": true,
+  "hash_integrity_ok": true,
+  "signature_status": "missing",
+  "signature_verified": false,
+  "authenticity_ok": false,
+  "authenticity_failure": "signature_missing"
+}
+```
+
+Reviewer interpretation:
+
+- The bundle is not reviewer-facing verified evidence because required manifest
+  authenticity is absent.
+- Do not accept unsigned secure/prod bundles even if `hash_integrity_ok` is
+  `true`.

@@ -51,6 +51,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Evidence Bundle Reviewer Checklist](validation/evidence-bundle-reviewer-checklist.md)
 - [Evidence Bundle Signature Verification Demo](validation/evidence-bundle-signature-verification.md)
 - [Sample Evidence Bundle Verification Output](validation/sample-evidence-bundle-verification-output.md)
+- [Evidence Bundle Verification JSON Contract](validation/evidence-bundle-verification-json-contract.md)
 
 ### Governance & Compliance
 - [Decision Semantics Contract](architecture/decision-semantics.md)

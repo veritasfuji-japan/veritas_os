@@ -8,13 +8,17 @@ channel, then verify both file/hash integrity and manifest authenticity.
 For the one-page reviewer verification order and PASS/FAIL criteria, see
 [Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md).
 For a reviewer-facing sample transcript covering success, missing-key failure,
-and wrong-key failure, see [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md).
+wrong-key failure, and JSON examples, see [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md). For stable `--json` field semantics, see [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md).
 
 ## Security boundary
 
 - Do not treat hash integrity as authenticity.
 - Do not trust a public key solely because it is included in the bundle.
-- Trusted public keys must come from a reviewer/operator trust channel.
+- Trusted public keys must come from an out-of-band reviewer/operator trust
+  channel.
+- The `--json` result contract supports reviewer-facing verification and UI
+  integration; it is not regulatory certification and is not completed
+  third-party audit approval.
 
 Hash integrity proves that files match the hashes recorded in `manifest.json`.
 It does not prove who created that manifest. Manifest signature verification is
