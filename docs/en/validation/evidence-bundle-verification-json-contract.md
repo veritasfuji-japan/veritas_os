@@ -16,6 +16,9 @@ Trusted public keys must come from an out-of-band reviewer/operator trust
 channel; a public key copied only from the Evidence Bundle is not trusted by
 itself.
 
+Machine-readable validation is pinned in the JSON Schema at
+[`schemas/evidence_bundle_verification_result.schema.json`](../../../schemas/evidence_bundle_verification_result.schema.json).
+
 ## Contract scope
 
 The contract separates two reviewer decisions that external UI and audit tooling

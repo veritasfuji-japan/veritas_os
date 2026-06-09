@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+  "title": "Evidence Bundle Verification Result",
+  "description": "Machine-readable reviewer-facing result contract emitted by `veritas-evidence-bundle verify --json`. This schema supports reviewer/UI integration and CI/external audit tooling validation; it is not regulatory certification or completed third-party audit approval.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "ok",
+    "tampered",
+    "hash_integrity_ok",
+    "signature_status",
+    "signature_verified",
+    "authenticity_ok",
+    "authenticity_failure",
+    "errors",
+    "warnings"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "Overall CLI verification result. In strict reviewer verification, true requires file/hash integrity and required manifest signature authenticity checks to pass."
+    },
+    "tampered": {
+      "type": "boolean",
+      "description": "True when the verifier detected a condition that invalidates the bundle verification result, such as hash mismatch, missing required content, manifest hash failure, required signature failure, or missing required signature."
+    },
+    "hash_integrity_ok": {
+      "type": "boolean",
+      "description": "True means all hash-covered files match manifest.json and the manifest hash check did not fail. Hash integrity is not authenticity; this field does not prove who authored, approved, or signed the manifest."
+    },
+    "signature_status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "missing",
+        "not_verified"
+      ],
+      "description": "Reviewer-facing manifest signature state. `pass` is only valid when the signature cryptographically verifies; `missing` means no manifest signature was present; `not_verified` means authenticity was not checked under a trusted key."
+    },
+    "signature_verified": {
+      "type": "boolean",
+      "description": "True requires manifest signature verification under a trusted Ed25519 public key supplied through the reviewer/operator trust channel. A public key copied only from the bundle is not trusted by itself."
+    },
+    "authenticity_ok": {
+      "type": "boolean",
+      "description": "Reviewer-facing manifest authenticity result. True means authenticity was established by signature verification under the trusted Ed25519 public key; false means authenticity is not established, even when hash_integrity_ok is true."
+    },
+    "authenticity_failure": {
+      "enum": [
+        null,
+        "signature_not_verified",
+        "signature_verification_failed",
+        "signature_verification_error",
+        "signature_missing"
+      ],
+      "description": "Machine-readable authenticity failure reason. Null is expected only when authenticity_ok is true; otherwise use one of the signature-related failure values."
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Blocking diagnostics for reviewer/UI display. If this array is non-empty, ok is false."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Non-blocking diagnostics for the current posture/mode. Warnings may require reviewer attention but do not by themselves make ok false."
+    }
+  }
+}
