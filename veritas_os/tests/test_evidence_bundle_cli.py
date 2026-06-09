@@ -15,6 +15,9 @@ from veritas_os.audit import trustlog_signed
 
 
 SCHEMA_PATH = Path("schemas/evidence_bundle_verification_result.schema.json")
+VALIDATION_REPORT_SCHEMA_PATH = Path(
+    "schemas/evidence_bundle_validation_report.schema.json"
+)
 CONTRACT_JSON_FIELDS = {
     "ok",
     "tampered",
@@ -32,6 +35,20 @@ CONTRACT_JSON_FIELDS = {
 def _load_verification_result_schema() -> dict[str, Any]:
     """Load the Evidence Bundle verification result JSON Schema."""
     return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
+def _load_validation_report_schema() -> dict[str, Any]:
+    """Load the validate-result JSON validation report Schema."""
+    return json.loads(VALIDATION_REPORT_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
+def _assert_validation_report_schema(output: dict[str, Any]) -> None:
+    """Assert validate-result --json output matches its report Schema."""
+    import jsonschema
+
+    schema = _load_validation_report_schema()
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.Draft202012Validator(schema).validate(output)
 
 
 def _assert_contract_fields(output: dict[str, Any]) -> None:
@@ -59,6 +76,50 @@ def _assert_contract_fields(output: dict[str, Any]) -> None:
     schema = _load_verification_result_schema()
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.Draft202012Validator(schema).validate(output)
+
+
+def test_evidence_bundle_validation_report_schema_contract() -> None:
+    """JSON Schema pins validate-result --json validation report fields."""
+    schema = _load_validation_report_schema()
+
+    assert set(schema["required"]) == {
+        "ok",
+        "schema_valid",
+        "result_path",
+        "errors",
+    }
+    assert schema["properties"]["ok"]["type"] == "boolean"
+    assert schema["properties"]["schema_valid"]["type"] == "boolean"
+    assert schema["properties"]["result_path"]["type"] == "string"
+    error_schema = schema["properties"]["errors"]["items"]
+    assert set(error_schema["required"]) == {"path", "message"}
+    assert error_schema["properties"]["path"]["type"] == "string"
+    assert error_schema["properties"]["message"]["type"] == "string"
+    description = schema["description"]
+    assert (
+        "machine-readable report emitted by "
+        "veritas-evidence-bundle validate-result --json"
+    ) in description
+    assert "validates the validation report shape only" in description
+    assert "does not validate the original Evidence Bundle" in description
+    assert "does not re-run file/hash integrity checks" in description
+    assert "does not re-run Ed25519 signature verification" in description
+    assert "does not establish trusted key provenance" in description
+    assert "not regulatory certification" in description
+
+    _assert_validation_report_schema(
+        {
+            "ok": False,
+            "schema_valid": False,
+            "result_path": "verification-result.json",
+            "errors": [
+                {
+                    "path": "$['signature_status']",
+                    "message": "'verified' is not one of allowed values",
+                }
+            ],
+        }
+    )
 
 
 def test_evidence_bundle_verification_result_schema_contract() -> None:
@@ -1101,6 +1162,7 @@ def test_evidence_bundle_cli_validate_result_valid_saved_result_json_passes(
     exit_code = main(["validate-result", "--result", str(result_path), "--json"])
     output = json.loads(capsys.readouterr().out)
 
+    _assert_validation_report_schema(output)
     assert exit_code == 0
     assert output == {
         "ok": True,
@@ -1125,6 +1187,7 @@ def test_evidence_bundle_cli_validate_result_missing_required_field_json_fails(
     exit_code = main(["validate-result", "--result", str(result_path), "--json"])
     output = json.loads(capsys.readouterr().out)
 
+    _assert_validation_report_schema(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1152,6 +1215,7 @@ def test_evidence_bundle_cli_validate_result_invalid_signature_status_json_fails
     exit_code = main(["validate-result", "--result", str(result_path), "--json"])
     output = json.loads(capsys.readouterr().out)
 
+    _assert_validation_report_schema(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1174,6 +1238,7 @@ def test_evidence_bundle_cli_validate_result_invalid_fingerprint_json_fails(
     exit_code = main(["validate-result", "--result", str(result_path), "--json"])
     output = json.loads(capsys.readouterr().out)
 
+    _assert_validation_report_schema(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1194,6 +1259,7 @@ def test_evidence_bundle_cli_validate_result_malformed_json_json_fails(
     exit_code = main(["validate-result", "--result", str(result_path), "--json"])
     output = json.loads(capsys.readouterr().out)
 
+    _assert_validation_report_schema(output)
     assert exit_code == 1
     assert output == {
         "ok": False,
@@ -1247,6 +1313,7 @@ def test_evidence_bundle_cli_validate_result_json_output_valid_matches_stdout(
         capsys.readouterr().out,
     )
 
+    _assert_validation_report_schema(output)
     assert exit_code == 0
     assert output == {
         "ok": True,
@@ -1284,6 +1351,7 @@ def test_evidence_bundle_cli_validate_result_json_output_invalid_matches_stdout(
         capsys.readouterr().out,
     )
 
+    _assert_validation_report_schema(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
@@ -1317,6 +1385,7 @@ def test_evidence_bundle_cli_validate_result_json_output_malformed_matches_stdou
         capsys.readouterr().out,
     )
 
+    _assert_validation_report_schema(output)
     assert exit_code == 1
     assert output["ok"] is False
     assert output["schema_valid"] is False
