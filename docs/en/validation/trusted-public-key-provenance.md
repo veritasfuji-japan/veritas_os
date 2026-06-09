@@ -53,8 +53,8 @@ strict verification artifacts when relying on Evidence Bundle authenticity:
 
 A matching fingerprint supports correlation between the cryptographic
 verification run and the out-of-band trust record. It is not regulatory
-certification, completed third-party audit approval, or standalone proof that
-the original Evidence Bundle is authentic.
+certification and is not completed third-party audit approval. It is not
+standalone proof that the original Evidence Bundle is authentic.
 
 ## Fingerprint comparison
 
@@ -110,5 +110,6 @@ Reject or request a corrected handoff when any of the following occur:
 
 The receipt records reviewer/operator provenance for trusted Ed25519 public key
 material. It does not re-run cryptographic verification, does not prove that the
-original Evidence Bundle is authentic by itself, and is not regulatory
-certification or completed third-party audit approval.
+original Evidence Bundle is authentic by itself. This receipt is not
+regulatory certification. This receipt is not completed third-party audit
+approval.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
   "title": "Trusted Public Key Provenance Receipt",
-  "description": "This receipt records reviewer/operator provenance for a trusted Ed25519 public key. It helps reviewers correlate public_key_fingerprint_sha256 in verification results with an out-of-band trust record. It is not generated from the Evidence Bundle alone. A public key copied only from the Evidence Bundle is not trusted by itself; Evidence Bundle alone is not enough. This receipt does not re-run cryptographic verification. This receipt does not prove that the original Evidence Bundle is authentic by itself. This receipt is not regulatory certification or completed third-party audit approval.",
+  "description": "This receipt records reviewer/operator provenance for a trusted Ed25519 public key. It helps reviewers correlate public_key_fingerprint_sha256 in verification results with an out-of-band trust record. It is not generated from the Evidence Bundle alone. A public key copied only from the Evidence Bundle is not trusted by itself; Evidence Bundle alone is not enough. This receipt does not re-run cryptographic verification. This receipt does not prove that the original Evidence Bundle is authentic by itself. This receipt is not regulatory certification. This receipt is not completed third-party audit approval.",
   "type": "object",
   "additionalProperties": false,
   "required": [
