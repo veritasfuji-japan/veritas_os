@@ -33,13 +33,33 @@ Security boundaries:
 - Do not add private keys, real signing keys, production secrets, or unsanitized
   customer data to review notes or shared examples.
 
+## Saving JSON reviewer evidence
+
+Reviewers can preserve a machine-readable audit trail by adding
+`--json --output <path>` to strict verification:
+
+```bash
+veritas-evidence-bundle verify \
+  --bundle-dir <bundle_dir> \
+  --public-key <trusted_ed25519_public_key> \
+  --require-signature \
+  --json \
+  --output evidence-bundle-verification-result.json
+```
+
+The saved verification result is reviewer evidence, including when verification
+fails. It is not regulatory certification and is not completed third-party audit
+approval. Interpret the saved JSON with the out-of-band trusted public key
+handoff record; `public_key_fingerprint_sha256` helps correlate the saved result
+with that key provenance record, but does not itself establish trust.
+
 ## Verification order
 
 | Step | Reviewer action | PASS criterion | FAIL / follow-up criterion |
 |---|---|---|---|
 | 1 | Confirm bundle origin and expected handoff channel. | The bundle source, transfer channel, bundle type, and review objective match the expected handoff. | The source or channel is unexpected, undocumented, or inconsistent with the review request. |
 | 2 | Obtain the trusted Ed25519 public key out-of-band. | The reviewer obtains the public key from a trusted registry, signed operator note, KMS/certificate process, or other approved channel outside the bundle, and records the expected SHA-256 fingerprint. | The public key is missing, comes only from inside the bundle, its fingerprint is copied only from bundle-adjacent material, or its provenance cannot be established. |
-| 3 | Run the strict verification command. | The reviewer runs `veritas-evidence-bundle verify --bundle-dir <bundle_dir> --public-key <trusted_ed25519_public_key> --require-signature`. | The command is not run, omits `--require-signature`, omits the trusted public key, or uses an untrusted key path. |
+| 3 | Run the strict verification command. | The reviewer runs `veritas-evidence-bundle verify --bundle-dir <bundle_dir> --public-key <trusted_ed25519_public_key> --require-signature`; add `--json --output <path>` when a saved JSON evidence file is required. | The command is not run, omits `--require-signature`, omits the trusted public key, or uses an untrusted key path. |
 | 4 | Confirm `File/hash integrity: PASS`. | The CLI prints `File/hash integrity: PASS` in the strict verification run. | The CLI reports hash failure, manifest hash mismatch, missing files, malformed manifest data, or any file/hash error. |
 | 5 | Confirm `Manifest signature: PASS`. | The CLI prints `Manifest signature: PASS` under the trusted Ed25519 public key obtained in Step 2. For `--json`, `authenticity_ok` is `true`, `signature_status` is `pass`, `signature_verified` is `true`, and `public_key_fingerprint_sha256` matches the out-of-band key fingerprint recorded by the reviewer. | The CLI reports missing public key, wrong key, malformed signature, unsigned secure/prod bundle, signature verification failure, or a fingerprint mismatch against the out-of-band reviewer record. For `--json`, `authenticity_ok` is `false`. |
 | 6 | Inspect `acceptance_checklist.json`. | The checklist exists and has no blocking failures for the submitted bundle profile. | The checklist is missing, malformed, incomplete, or contains any blocking failure. |
