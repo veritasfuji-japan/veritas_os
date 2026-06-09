@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -55,6 +56,22 @@ def _build_signature_verifier(
         return verify_payload_signature(payload_hash, signature_b64, public_key_path)
 
     return _verify
+
+
+def _public_key_fingerprint_sha256(public_key_path: Optional[Path]) -> Optional[str]:
+    """Return the SHA-256 hex fingerprint of supplied public key bytes.
+
+    The fingerprint records which public key material was supplied for
+    verification. It does not establish trust; reviewers must still obtain and
+    validate the public key through an out-of-band trust channel.
+    """
+    if public_key_path is None:
+        return None
+    try:
+        public_key_bytes = public_key_path.read_bytes()
+    except OSError:
+        return None
+    return hashlib.sha256(public_key_bytes).hexdigest()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -133,12 +150,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     require_signature = args.require_signature or _is_fail_closed_posture()
+    public_key_fingerprint_sha256 = _public_key_fingerprint_sha256(args.public_key)
     verify_signature_fn = _build_signature_verifier(args.public_key)
     verify_result: Dict[str, Any] = verify_evidence_bundle(
         args.bundle_dir,
         verify_signature_fn=verify_signature_fn,
         require_signature=require_signature,
     )
+    verify_result["public_key_fingerprint_sha256"] = public_key_fingerprint_sha256
     if args.public_key is None:
         key_warning = (
             "No trusted public key supplied; manifest signature authenticity "

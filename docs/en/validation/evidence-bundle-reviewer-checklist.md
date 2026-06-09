@@ -22,8 +22,12 @@ Security boundaries:
 
 - Hash integrity is not authenticity.
 - A public key included only inside the bundle is not trusted by itself.
+- The `public_key_fingerprint_sha256` JSON field records which public key
+  material was used for verification; it is key-provenance evidence, not a trust
+  proof.
 - The trusted Ed25519 public key must be obtained outside the bundle through an
-  approved out-of-band reviewer/operator trust channel.
+  approved out-of-band reviewer/operator trust channel, and reviewers should
+  record and compare that out-of-band key fingerprint in their review notes.
 - The `--json` result contract supports reviewer-facing verification and UI
   integration, but it does not certify regulatory compliance or audit approval.
 - Do not add private keys, real signing keys, production secrets, or unsanitized
@@ -34,10 +38,10 @@ Security boundaries:
 | Step | Reviewer action | PASS criterion | FAIL / follow-up criterion |
 |---|---|---|---|
 | 1 | Confirm bundle origin and expected handoff channel. | The bundle source, transfer channel, bundle type, and review objective match the expected handoff. | The source or channel is unexpected, undocumented, or inconsistent with the review request. |
-| 2 | Obtain the trusted Ed25519 public key out-of-band. | The reviewer obtains the public key from a trusted registry, signed operator note, KMS/certificate process, or other approved channel outside the bundle. | The public key is missing, comes only from inside the bundle, or its provenance cannot be established. |
+| 2 | Obtain the trusted Ed25519 public key out-of-band. | The reviewer obtains the public key from a trusted registry, signed operator note, KMS/certificate process, or other approved channel outside the bundle, and records the expected SHA-256 fingerprint. | The public key is missing, comes only from inside the bundle, its fingerprint is copied only from bundle-adjacent material, or its provenance cannot be established. |
 | 3 | Run the strict verification command. | The reviewer runs `veritas-evidence-bundle verify --bundle-dir <bundle_dir> --public-key <trusted_ed25519_public_key> --require-signature`. | The command is not run, omits `--require-signature`, omits the trusted public key, or uses an untrusted key path. |
 | 4 | Confirm `File/hash integrity: PASS`. | The CLI prints `File/hash integrity: PASS` in the strict verification run. | The CLI reports hash failure, manifest hash mismatch, missing files, malformed manifest data, or any file/hash error. |
-| 5 | Confirm `Manifest signature: PASS`. | The CLI prints `Manifest signature: PASS` under the trusted Ed25519 public key obtained in Step 2. For `--json`, `authenticity_ok` is `true`, `signature_status` is `pass`, and `signature_verified` is `true`. | The CLI reports missing public key, wrong key, malformed signature, unsigned secure/prod bundle, or signature verification failure. For `--json`, `authenticity_ok` is `false`. |
+| 5 | Confirm `Manifest signature: PASS`. | The CLI prints `Manifest signature: PASS` under the trusted Ed25519 public key obtained in Step 2. For `--json`, `authenticity_ok` is `true`, `signature_status` is `pass`, `signature_verified` is `true`, and `public_key_fingerprint_sha256` matches the out-of-band key fingerprint recorded by the reviewer. | The CLI reports missing public key, wrong key, malformed signature, unsigned secure/prod bundle, signature verification failure, or a fingerprint mismatch against the out-of-band reviewer record. For `--json`, `authenticity_ok` is `false`. |
 | 6 | Inspect `acceptance_checklist.json`. | The checklist exists and has no blocking failures for the submitted bundle profile. | The checklist is missing, malformed, incomplete, or contains any blocking failure. |
 | 7 | Inspect `verification_report.json`. | The report exists and is consistent with the strict verification result and expected bundle scope. | The report is missing, malformed, stale, inconsistent with CLI output, or reports unresolved errors. |
 | 8 | Confirm no missing expected artifacts. | Required artifacts for the bundle type and review objective are present, including expected manifest, witness, report, acceptance, and profile-specific files. | Expected artifacts are absent, empty, renamed without explanation, or inconsistent with the handoff metadata. |
@@ -49,8 +53,10 @@ Record `ACCEPT` only when all of the following are true:
 
 - `File/hash integrity: PASS` is present in the strict verification output.
 - `Manifest signature: PASS` is present in the same strict verification output.
-- The trusted Ed25519 public key was obtained outside the bundle and its
-  provenance is documented by the reviewer.
+- The trusted Ed25519 public key was obtained outside the bundle, its
+  provenance is documented by the reviewer, and its out-of-band SHA-256
+  fingerprint matches `public_key_fingerprint_sha256` in the strict `--json`
+  result.
 - `acceptance_checklist.json` has no blocking failures.
 - Expected artifacts for the bundle type and review objective are present.
 - Any non-blocking notes in `verification_report.json` have been reviewed and
