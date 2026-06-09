@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,7 @@ CONTRACT_JSON_FIELDS = {
     "signature_verified",
     "authenticity_ok",
     "authenticity_failure",
+    "public_key_fingerprint_sha256",
     "errors",
     "warnings",
 }
@@ -44,6 +47,10 @@ def _assert_contract_fields(output: dict[str, Any]) -> None:
     assert isinstance(output["authenticity_ok"], bool)
     assert output["authenticity_failure"] is None or isinstance(
         output["authenticity_failure"],
+        str,
+    )
+    assert output["public_key_fingerprint_sha256"] is None or isinstance(
+        output["public_key_fingerprint_sha256"],
         str,
     )
     assert isinstance(output["errors"], list)
@@ -77,6 +84,15 @@ def test_evidence_bundle_verification_result_schema_contract() -> None:
     )
     assert "trusted Ed25519 public key" in (
         schema["properties"]["signature_verified"]["description"]
+    )
+    fingerprint_description = (
+        schema["properties"]["public_key_fingerprint_sha256"]["description"]
+    )
+    assert "public key material used for verification" in fingerprint_description
+    assert "does not by itself establish trust" in fingerprint_description
+    assert "out-of-band reviewer/operator trust channel" in fingerprint_description
+    assert schema["properties"]["public_key_fingerprint_sha256"]["pattern"] == (
+        "^[0-9a-f]{64}$"
     )
     assert "not regulatory certification" in schema["description"]
 
@@ -331,6 +347,13 @@ def test_evidence_bundle_cli_strict_success_json_contract(
     assert output["signature_verified"] is True
     assert output["authenticity_ok"] is True
     assert output["authenticity_failure"] is None
+    assert re.fullmatch(
+        r"[0-9a-f]{64}",
+        output["public_key_fingerprint_sha256"],
+    )
+    assert output["public_key_fingerprint_sha256"] == hashlib.sha256(
+        public_key.read_bytes()
+    ).hexdigest()
     assert output["errors"] == []
 
 
@@ -462,6 +485,7 @@ def test_evidence_bundle_cli_missing_public_key_json_contract(
     assert output["signature_verified"] is False
     assert output["authenticity_ok"] is False
     assert output["authenticity_failure"] == "signature_not_verified"
+    assert output["public_key_fingerprint_sha256"] is None
     assert any("No trusted public key supplied" in e for e in output["errors"])
 
 
@@ -557,6 +581,9 @@ def test_evidence_bundle_cli_wrong_key_json_contract(
     assert output["signature_verified"] is False
     assert output["authenticity_ok"] is False
     assert output["authenticity_failure"] == "signature_verification_failed"
+    assert output["public_key_fingerprint_sha256"] == hashlib.sha256(
+        wrong_public_key.read_bytes()
+    ).hexdigest()
     assert "Manifest signature verification failed" in output["errors"]
 
 
@@ -704,6 +731,7 @@ def test_evidence_bundle_cli_secure_unsigned_json_contract(
     assert output["signature_verified"] is False
     assert output["authenticity_ok"] is False
     assert output["authenticity_failure"] == "signature_missing"
+    assert output["public_key_fingerprint_sha256"] is None
     assert "Manifest signature missing" in output["errors"]
 
 
@@ -731,6 +759,7 @@ def test_evidence_bundle_cli_dev_without_public_key_warns_and_reports_json(
     assert exit_code == 0
     assert output["signature_verified"] is False
     assert output["signature_status"] == "not_verified"
+    assert output["public_key_fingerprint_sha256"] is None
     assert any("authenticity was not verified" in w for w in output["warnings"])
 
 

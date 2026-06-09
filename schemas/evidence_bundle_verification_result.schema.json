@@ -13,6 +13,7 @@
     "signature_verified",
     "authenticity_ok",
     "authenticity_failure",
+    "public_key_fingerprint_sha256",
     "errors",
     "warnings"
   ],
@@ -70,6 +71,14 @@
         "type": "string"
       },
       "description": "Non-blocking diagnostics for the current posture/mode. Warnings may require reviewer attention but do not by themselves make ok false."
+    },
+    "public_key_fingerprint_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 hex fingerprint of the public key file bytes supplied with `--public-key`, or null when no public key was supplied. This records the public key material used for verification. It does not by itself establish trust. Trust still requires an out-of-band reviewer/operator trust channel."
     }
   }
 }

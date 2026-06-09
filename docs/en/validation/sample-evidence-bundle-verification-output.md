@@ -17,6 +17,10 @@ real bundle. Use it with the one-page
 - A trusted Ed25519 public key must come from an out-of-band
   reviewer/operator trust channel, not from a key copied only from the Evidence
   Bundle.
+- `public_key_fingerprint_sha256` records which public key file bytes were used
+  for verification. It is key-provenance evidence, not a trust proof; matching a
+  fingerprint copied from the bundle must never replace the out-of-band trust
+  channel.
 
 ## Strict verification command
 
@@ -55,6 +59,7 @@ Illustrative `--json` summary fields:
   "signature_verified": true,
   "authenticity_ok": true,
   "authenticity_failure": null,
+  "public_key_fingerprint_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "errors": [],
   "warnings": []
 }
@@ -66,6 +71,8 @@ Reviewer interpretation:
   hashes recorded in `manifest.json`.
 - `Manifest signature: PASS` means the manifest signature verifies under the
   trusted Ed25519 public key supplied by the reviewer.
+- `public_key_fingerprint_sha256` should match the fingerprint the reviewer
+  recorded from the out-of-band trusted-key handoff.
 - The bundle is reviewer-facing verified only when both lines are `PASS` in the
   same strict verification run.
 
@@ -99,7 +106,8 @@ Illustrative `--json` summary fields:
   "signature_status": "not_verified",
   "signature_verified": false,
   "authenticity_ok": false,
-  "authenticity_failure": "signature_not_verified"
+  "authenticity_failure": "signature_not_verified",
+  "public_key_fingerprint_sha256": null
 }
 ```
 
@@ -140,7 +148,8 @@ Illustrative `--json` summary fields:
   "signature_status": "fail",
   "signature_verified": false,
   "authenticity_ok": false,
-  "authenticity_failure": "signature_verification_failed"
+  "authenticity_failure": "signature_verification_failed",
+  "public_key_fingerprint_sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
 }
 ```
 
@@ -149,7 +158,8 @@ Reviewer interpretation:
 - Hash-covered files still match `manifest.json`, so file/hash integrity can
   pass.
 - The supplied public key did not verify the manifest signature, so manifest
-  authenticity failed.
+  authenticity failed. The fingerprint records the supplied wrong key for later
+  evidence review; it does not make that key trustworthy.
 - Treat this as a failed reviewer verification even if the bundle content has
   not been hash-tampered.
 
@@ -162,9 +172,11 @@ alongside the files.
 
 Manifest authenticity requires `Manifest signature: PASS` under a trusted
 Ed25519 public key that the reviewer received out-of-band through the approved
-trust channel. A bundle with only `File/hash integrity: PASS` must remain
-unaccepted for external reviewer purposes until manifest authenticity is also
-verified.
+trust channel. The reviewer should record that trusted key fingerprint and
+compare it with `public_key_fingerprint_sha256`; a bundle-internal key or
+fingerprint is not sufficient. A bundle with only `File/hash integrity: PASS`
+must remain unaccepted for external reviewer purposes until manifest
+authenticity is also verified.
 
 
 ## Malformed signature failure
@@ -179,7 +191,8 @@ Illustrative `--json` summary fields:
   "signature_status": "fail",
   "signature_verified": false,
   "authenticity_ok": false,
-  "authenticity_failure": "signature_verification_error"
+  "authenticity_failure": "signature_verification_error",
+  "public_key_fingerprint_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 }
 ```
 
@@ -205,7 +218,8 @@ Illustrative `--json` summary fields:
   "signature_status": "missing",
   "signature_verified": false,
   "authenticity_ok": false,
-  "authenticity_failure": "signature_missing"
+  "authenticity_failure": "signature_missing",
+  "public_key_fingerprint_sha256": null
 }
 ```
 

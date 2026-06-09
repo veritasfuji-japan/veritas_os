@@ -43,6 +43,7 @@ authenticity decision.
 | `signature_verified` | boolean | `true` means the manifest signature cryptographically verified under the trusted Ed25519 public key supplied to `--public-key`. |
 | `authenticity_ok` | boolean | `true` means reviewer-facing manifest authenticity was established by signature verification under the trusted public key. `false` means reviewer-facing authenticity was not established. |
 | `authenticity_failure` | string or null | Machine-readable authenticity failure reason. `null` is expected only when `authenticity_ok` is `true`. Current failure values include `signature_not_verified`, `signature_verification_failed`, `signature_verification_error`, and `signature_missing`. |
+| `public_key_fingerprint_sha256` | string or null | SHA-256 hex fingerprint of the public key file bytes supplied with `--public-key`, or `null` when no public key was supplied. This records which key material was used for verification; it does not by itself establish trust. Reviewers must still use an out-of-band reviewer/operator trust channel. |
 | `errors` | array of strings | Blocking diagnostics. If this array is non-empty, `ok` is `false`. UI consumers may display these as rejection/blocker reasons. |
 | `warnings` | array of strings | Non-blocking diagnostics for the current posture/mode. Warnings can still require reviewer attention, but they do not by themselves make `ok` false. |
 
@@ -70,14 +71,17 @@ Illustrative JSON shape:
   "signature_verified": true,
   "authenticity_ok": true,
   "authenticity_failure": null,
+  "public_key_fingerprint_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "errors": [],
   "warnings": []
 }
 ```
 
 Reviewer/UI interpretation: the bundle passed strict reviewer-facing
-verification for file/hash integrity and manifest authenticity. This is still
-not regulatory certification or completed third-party audit approval.
+verification for file/hash integrity and manifest authenticity. The
+`public_key_fingerprint_sha256` value is supporting key-provenance evidence for
+which out-of-band key material was used; it is not a trust proof. This result is
+still not regulatory certification or completed third-party audit approval.
 
 ## Failure JSON shapes
 
@@ -100,6 +104,7 @@ Illustrative JSON shape:
   "signature_verified": false,
   "authenticity_ok": false,
   "authenticity_failure": "signature_not_verified",
+  "public_key_fingerprint_sha256": null,
   "errors": [
     "Manifest signature present but no signature verifier was provided; manifest authenticity was not verified",
     "No trusted public key supplied; manifest signature authenticity cannot be verified"
@@ -129,6 +134,7 @@ Illustrative JSON shape:
   "signature_verified": false,
   "authenticity_ok": false,
   "authenticity_failure": "signature_verification_failed",
+  "public_key_fingerprint_sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
   "errors": [
     "Manifest signature verification failed"
   ],
@@ -137,7 +143,9 @@ Illustrative JSON shape:
 ```
 
 Reviewer/UI interpretation: the hash-covered files can still match the manifest,
-but the supplied public key did not verify the manifest signature. Authenticity
+but the supplied public key did not verify the manifest signature. The
+fingerprint records the wrong supplied key material for later review; matching a
+fingerprint alone must not make a bundle-trusted key trustworthy. Authenticity
 failed.
 
 ### Malformed signature
@@ -158,6 +166,7 @@ Illustrative JSON shape:
   "signature_verified": false,
   "authenticity_ok": false,
   "authenticity_failure": "signature_verification_error",
+  "public_key_fingerprint_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "errors": [
     "Manifest signature verification error: <parse-or-verifier-error>"
   ],
@@ -187,6 +196,7 @@ Illustrative JSON shape:
   "signature_verified": false,
   "authenticity_ok": false,
   "authenticity_failure": "signature_missing",
+  "public_key_fingerprint_sha256": null,
   "errors": [
     "Manifest signature missing"
   ],
@@ -205,5 +215,10 @@ reviewer-facing verified evidence.
 - Treat `authenticity_ok: false` as “authenticity not established,” even when
   `hash_integrity_ok: true`.
 - Display `errors` as blocking reviewer actions and `warnings` as review notes.
+- Record `public_key_fingerprint_sha256` with the reviewer/operator key handoff
+  notes as key-provenance evidence.
+- Never trust a key because its fingerprint matches a value copied from the
+  bundle or its adjacent artifacts; fingerprint matching is only useful after the
+  reviewer obtained the key through an out-of-band trust channel.
 - Record trusted public key provenance outside the bundle before relying on
   `signature_verified: true`.
