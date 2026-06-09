@@ -212,13 +212,15 @@ veritas-evidence-bundle validate-key-provenance \
 ```
 
 The stdout JSON and saved UTF-8 JSON file are byte-for-byte identical, including
-failure reports. `--output` without `--json` fails clearly. This command
-validates receipt shape, validates saved verification-result shape, checks exact
-fingerprint correlation, rejects `bundle_internal_key_used: true`, and confirms
-strict authenticity success. It does not create trust by itself, does not re-run
-cryptographic verification, does not prove regulatory certification, and does
-not complete third-party audit approval. Matching fingerprints support
-correlation, not standalone trust.
+failure reports. `--output` without `--json` fails clearly. The report does not
+echo raw fingerprint values; raw fingerprints remain in the source receipt and
+verification-result artifacts. This command validates receipt shape, validates
+saved verification-result shape, checks exact fingerprint correlation, rejects
+`bundle_internal_key_used: true`, and confirms strict authenticity success. It
+does not create trust by itself, does not re-run cryptographic verification,
+does not prove regulatory certification, and does not complete third-party
+audit approval. Matching fingerprints support correlation, not standalone
+trust.
 
 ## Successful strict verification
 

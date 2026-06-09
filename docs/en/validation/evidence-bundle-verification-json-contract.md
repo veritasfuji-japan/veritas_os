@@ -166,15 +166,17 @@ veritas-evidence-bundle validate-key-provenance \
 ```
 
 The JSON report includes stable booleans for receipt schema validity,
-verification-result schema validity, fingerprint correlation,
-`bundle_internal_key_used: false`, and strict authenticity success.
-`--output <path>` is allowed only with `--json`; the saved JSON is byte-for-byte
-the same as stdout JSON, and failure reports are saved as audit evidence. This
-correlation report has no dedicated schema yet and is intentionally structured
-for future extension. It does not create trust by itself, does not re-run
-cryptographic verification, does not prove regulatory certification, and does
-not complete third-party audit approval. Matching fingerprints support
-correlation, not standalone trust.
+verification-result schema validity, fingerprint presence, fingerprint
+correlation, `bundle_internal_key_used: false`, and strict authenticity success.
+It does not echo raw fingerprint values; those values remain in the source
+receipt and verification-result artifacts. `--output <path>` is allowed only
+with `--json`; the saved JSON is byte-for-byte the same as stdout JSON, and
+failure reports are saved as audit evidence. This correlation report has no
+dedicated schema yet and is intentionally structured for future extension. It
+does not create trust by itself, does not re-run cryptographic verification,
+does not prove regulatory certification, and does not complete third-party
+audit approval. Matching fingerprints support correlation, not standalone
+trust.
 
 ## Contract scope
 

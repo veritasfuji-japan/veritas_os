@@ -107,6 +107,11 @@ def _json_schema_error_path(error: jsonschema.ValidationError) -> str:
     return path
 
 
+def _safe_validation_message(_message: str) -> str:
+    """Return a schema validation message that never echoes input values."""
+    return "value does not satisfy schema at this path"
+
+
 def _validate_verification_result_schema(
     result_path: Path,
 ) -> list[dict[str, str]]:
@@ -216,7 +221,10 @@ def _validate_json_schema(
         key=lambda error: (list(error.absolute_path), error.message),
     )
     return [
-        {"path": _json_schema_error_path(error), "message": error.message}
+        {
+            "path": _json_schema_error_path(error),
+            "message": _safe_validation_message(error.message),
+        }
         for error in errors
     ]
 
@@ -353,7 +361,6 @@ def _build_key_provenance_report(
         and strict_authenticity
     )
 
-    verification_fingerprint_key = "verification_result_public_key_fingerprint_sha256"
     report = {
         "ok": ok,
         "receipt_schema_valid": receipt_schema_valid,
@@ -363,8 +370,14 @@ def _build_key_provenance_report(
         "strict_authenticity_ok": strict_authenticity,
         "receipt_path": str(receipt_path),
         "verification_result_path": str(verification_result_path),
-        "receipt_public_key_fingerprint_sha256": receipt_fingerprint,
-        verification_fingerprint_key: verification_fingerprint,
+        "receipt_public_key_fingerprint_present": isinstance(
+            receipt_fingerprint,
+            str,
+        ),
+        "verification_result_public_key_fingerprint_present": isinstance(
+            verification_fingerprint,
+            str,
+        ),
         "report_schema_id": None,
         "receipt_schema_id": TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID,
         "verification_result_schema_id": VERIFICATION_RESULT_SCHEMA_ID,

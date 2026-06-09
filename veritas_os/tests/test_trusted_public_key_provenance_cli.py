@@ -82,6 +82,7 @@ def test_validate_key_provenance_valid_inputs_pass(tmp_path, capsys) -> None:
     assert "Fingerprint correlation: PASS" in output
     assert "Bundle-internal key used: PASS" in output
     assert "Strict authenticity result: PASS" in output
+    assert FINGERPRINT not in output
 
 
 def test_validate_key_provenance_fingerprint_mismatch_fails(tmp_path, capsys) -> None:
@@ -109,6 +110,8 @@ def test_validate_key_provenance_fingerprint_mismatch_fails(tmp_path, capsys) ->
     assert "Receipt schema: PASS" in output
     assert "Verification result schema: PASS" in output
     assert "Fingerprint correlation: FAIL" in output
+    assert FINGERPRINT not in output
+    assert MISMATCHED_FINGERPRINT not in output
 
 
 def test_validate_key_provenance_receipt_schema_invalid_fails(tmp_path, capsys) -> None:
@@ -133,7 +136,8 @@ def test_validate_key_provenance_receipt_schema_invalid_fails(tmp_path, capsys) 
 
     assert exit_code == 1
     assert "Receipt schema: FAIL" in output
-    assert "'approved_by' is a required property" in output
+    assert "value does not satisfy schema at this path" in output
+    assert "'approved_by' is a required property" not in output
 
 
 def test_validate_key_provenance_verification_result_schema_invalid_fails(
@@ -161,7 +165,8 @@ def test_validate_key_provenance_verification_result_schema_invalid_fails(
 
     assert exit_code == 1
     assert "Verification result schema: FAIL" in output
-    assert "'verified' is not one of" in output
+    assert "value does not satisfy schema at this path" in output
+    assert "'verified' is not one of" not in output
 
 
 def test_validate_key_provenance_bundle_internal_key_used_true_fails(
@@ -245,8 +250,11 @@ def test_validate_key_provenance_json_output_stable_fields(tmp_path, capsys) -> 
     assert output["strict_authenticity_ok"] is True
     assert output["receipt_path"] == str(receipt_path)
     assert output["verification_result_path"] == str(verification_result_path)
-    assert output["receipt_public_key_fingerprint_sha256"] == FINGERPRINT
-    assert output["verification_result_public_key_fingerprint_sha256"] == FINGERPRINT
+    assert output["receipt_public_key_fingerprint_present"] is True
+    assert output["verification_result_public_key_fingerprint_present"] is True
+    assert "receipt_public_key_fingerprint_sha256" not in output
+    assert "verification_result_public_key_fingerprint_sha256" not in output
+    assert FINGERPRINT not in json.dumps(output)
     assert output["errors"] == []
 
 
