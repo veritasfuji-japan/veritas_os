@@ -67,10 +67,14 @@ CI, UI, or external audit tooling must consume a machine-readable validation
 report for the saved result file; that validation report has its own
 machine-readable schema at
 [`schemas/evidence_bundle_validation_report.schema.json`](../../../schemas/evidence_bundle_validation_report.schema.json).
-Add `--output <path>` together with `--json` to save the exact stdout
-validation report as UTF-8 audit evidence, including failure reports for
-schema-invalid or malformed saved results. The validation report schema only
-validates the report shape. It does not validate the original bundle, re-run
+The JSON validation report is self-describing: `report_schema_id` identifies
+the validation report schema, `validated_schema_id` identifies the verification
+result schema used for saved result validation, and `validator` identifies the
+emitting CLI command. Add `--output <path>` together with `--json` to save the
+exact stdout validation report as UTF-8 audit evidence, including failure
+reports for schema-invalid or malformed saved results. The validation report
+schema only validates the report shape, and its metadata fields do not prove
+authenticity or trust. It does not validate the original bundle, re-run
 file/hash integrity checks or Ed25519 signature verification, establish trusted
 key provenance, or provide regulatory certification or completed third-party
 audit approval. Preserve the out-of-band trusted-key provenance record even

@@ -31,6 +31,14 @@ def _parse_key_value_pairs(values: Optional[list[str]]) -> Dict[str, str]:
 
 
 SECURE_POSTURES = {"secure", "prod"}
+SCHEMA_BASE_URL = "https://veritas-os.example/schemas"
+VERIFICATION_RESULT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/evidence_bundle_verification_result.schema.json"
+)
+VALIDATION_REPORT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/evidence_bundle_validation_report.schema.json"
+)
+VALIDATE_RESULT_VALIDATOR = "veritas-evidence-bundle validate-result"
 VERIFICATION_RESULT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
@@ -156,13 +164,19 @@ def _run_validate_result(
     When ``json_output`` is true, stdout is limited to a machine-readable
     validation report for CI, UI, and external audit-tool integrations. When
     ``output_path`` is supplied, the exact stdout JSON report is also written
-    as UTF-8 audit evidence, including schema validation failure reports.
+    as UTF-8 audit evidence, including schema validation failure reports. The
+    JSON report includes schema metadata fields for later interpretation; those
+    fields do not re-run cryptographic verification or establish trusted key
+    provenance.
     """
     errors = _validate_verification_result_schema(result_path)
     output = {
         "ok": not errors,
         "schema_valid": not errors,
         "result_path": str(result_path),
+        "report_schema_id": VALIDATION_REPORT_SCHEMA_ID,
+        "validated_schema_id": VERIFICATION_RESULT_SCHEMA_ID,
+        "validator": VALIDATE_RESULT_VALIDATOR,
         "errors": errors,
     }
     if json_output:
