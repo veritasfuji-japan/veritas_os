@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+  "title": "Trusted Public Key Provenance Receipt",
+  "description": "This receipt records reviewer/operator provenance for a trusted Ed25519 public key. It helps reviewers correlate public_key_fingerprint_sha256 in verification results with an out-of-band trust record. It is not generated from the Evidence Bundle alone. A public key copied only from the Evidence Bundle is not trusted by itself; Evidence Bundle alone is not enough. This receipt does not re-run cryptographic verification. This receipt does not prove that the original Evidence Bundle is authentic by itself. This receipt is not regulatory certification. This receipt is not completed third-party audit approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receipt_type",
+    "algorithm",
+    "public_key_fingerprint_sha256",
+    "trust_channel",
+    "received_at",
+    "approved_by",
+    "approval_reference",
+    "notes",
+    "bundle_internal_key_used"
+  ],
+  "properties": {
+    "receipt_type": {
+      "type": "string",
+      "const": "trusted_public_key_provenance",
+      "description": "Receipt discriminator for trusted public key provenance records."
+    },
+    "algorithm": {
+      "type": "string",
+      "const": "Ed25519",
+      "description": "Public key algorithm. Evidence Bundle strict signature verification currently expects a trusted Ed25519 public key."
+    },
+    "public_key_fingerprint_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 lowercase hexadecimal fingerprint of the trusted public key bytes as recorded through the reviewer/operator trust channel. This supports correlation with verification-result.json public_key_fingerprint_sha256; it is not trust proof by itself."
+    },
+    "trust_channel": {
+      "type": "string",
+      "enum": [
+        "operator_handoff",
+        "reviewer_vault",
+        "signed_release",
+        "kms_or_certificate_process",
+        "offline_key_ceremony",
+        "other"
+      ],
+      "description": "Reviewer/operator channel used to establish why this public key material was trusted. Use other only when notes and approval_reference identify the actual trust process."
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the reviewer/operator received or confirmed the trusted public key material."
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reviewer, operator, or approving identity that accepted this public key as trusted for the Evidence Bundle review."
+    },
+    "approval_reference": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Ticket, vault entry, signed release note, KMS/certificate record, ceremony record, or equivalent reference for the trust decision."
+    },
+    "notes": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable provenance notes. Do not include private keys, secrets, or unsanitized customer data."
+    },
+    "bundle_internal_key_used": {
+      "type": "boolean",
+      "const": false,
+      "description": "Must be false. Public key material copied only from inside the Evidence Bundle is not trusted by itself and must not be used as the provenance basis for this receipt."
+    }
+  }
+}

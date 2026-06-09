@@ -1,5 +1,12 @@
 # Sample Evidence Bundle Verification Output
 
+These examples should be read with the
+[Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md).
+Strict verification requires reviewer/operator provenance for the public key;
+`public_key_fingerprint_sha256` records key material evidence, not trust
+proof. Matching fingerprints support correlation and do not certify the
+bundle or complete a third-party audit.
+
 This page is a reviewer-facing sample transcript for Evidence Bundle strict
 verification. All command output below is **illustrative output** for external
 auditors and design partners to preview the expected CLI shape before handling a
@@ -56,8 +63,11 @@ saved verification result is reviewer evidence, including for failed
 verification attempts such as missing public keys or wrong public keys. It is
 not regulatory certification and is not completed third-party audit approval.
 Reviewers must interpret the file with out-of-band trusted public key
-provenance; `public_key_fingerprint_sha256` helps correlate the saved result
-with the key handoff record, but does not make the key trustworthy on its own.
+provenance, preserved in a Trusted Public Key Provenance Receipt;
+`public_key_fingerprint_sha256` helps correlate the saved result with the
+key handoff receipt, but does not make the key trustworthy on its own. A
+public key copied only from the Evidence Bundle must not be trusted by
+itself.
 
 ## Validating a saved JSON result shape
 

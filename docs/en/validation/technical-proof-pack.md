@@ -62,6 +62,7 @@ Start here for the completed reviewer path:
 - [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
 - [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
 - [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md)
+- [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
 - [External Audit Readiness Pack](external-audit-readiness.md)
 
 Boundaries:
@@ -70,7 +71,12 @@ Boundaries:
 - It is not regulatory certification.
 - It is not completed third-party audit approval.
 - Trusted public keys must come from an out-of-band reviewer/operator trust
-  channel.
+  channel, and reviewers should preserve a Trusted Public Key Provenance
+  Receipt.
+- `public_key_fingerprint_sha256` is key material evidence, not trust proof;
+  matching fingerprints support correlation, not certification.
+- A public key copied only from inside the Evidence Bundle is not trusted by
+  itself.
 
 ---
 
