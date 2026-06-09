@@ -11,6 +11,36 @@ import pytest
 from veritas_os.audit import trustlog_signed
 
 
+CONTRACT_JSON_FIELDS = {
+    "ok",
+    "tampered",
+    "hash_integrity_ok",
+    "signature_status",
+    "signature_verified",
+    "authenticity_ok",
+    "authenticity_failure",
+    "errors",
+    "warnings",
+}
+
+
+def _assert_contract_fields(output: dict) -> None:
+    """Assert reviewer-facing JSON contract fields are present."""
+    assert CONTRACT_JSON_FIELDS.issubset(output.keys())
+    assert isinstance(output["ok"], bool)
+    assert isinstance(output["tampered"], bool)
+    assert isinstance(output["hash_integrity_ok"], bool)
+    assert isinstance(output["signature_status"], str)
+    assert isinstance(output["signature_verified"], bool)
+    assert isinstance(output["authenticity_ok"], bool)
+    assert output["authenticity_failure"] is None or isinstance(
+        output["authenticity_failure"],
+        str,
+    )
+    assert isinstance(output["errors"], list)
+    assert isinstance(output["warnings"], list)
+
+
 def test_evidence_bundle_cli_generate_and_verify(tmp_path, monkeypatch) -> None:
     """CLI can generate and verify a decision evidence bundle."""
     log_path = tmp_path / "trustlog.jsonl"
@@ -228,6 +258,42 @@ def test_evidence_bundle_cli_verify_signed_manifest_with_public_key(
     assert "Manifest signature: PASS" in output
 
 
+def test_evidence_bundle_cli_strict_success_json_contract(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict --json success exposes stable reviewer-facing fields."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--public-key",
+            str(public_key),
+            "--require-signature",
+            "--json",
+        ]
+    )
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    _assert_contract_fields(output)
+    assert output["ok"] is True
+    assert output["tampered"] is False
+    assert output["hash_integrity_ok"] is True
+    assert output["signature_status"] == "pass"
+    assert output["signature_verified"] is True
+    assert output["authenticity_ok"] is True
+    assert output["authenticity_failure"] is None
+    assert output["errors"] == []
+
+
 def test_evidence_bundle_cli_verify_tampered_manifest_signature_fails(
     tmp_path,
     monkeypatch,
@@ -325,6 +391,40 @@ def test_verify_bundle_malformed_signature_reports_authenticity_error(
     assert result["authenticity_failure"] == "signature_verification_error"
 
 
+def test_evidence_bundle_cli_missing_public_key_json_contract(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict --json reports missing trusted public key without hash failure."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--require-signature",
+            "--json",
+        ]
+    )
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    _assert_contract_fields(output)
+    assert output["ok"] is False
+    assert output["tampered"] is True
+    assert output["hash_integrity_ok"] is True
+    assert output["signature_status"] == "not_verified"
+    assert output["signature_verified"] is False
+    assert output["authenticity_ok"] is False
+    assert output["authenticity_failure"] == "signature_not_verified"
+    assert any("No trusted public key supplied" in e for e in output["errors"])
+
+
 def test_evidence_bundle_cli_require_signature_without_public_key_fails(
     tmp_path,
     monkeypatch,
@@ -378,6 +478,92 @@ def test_evidence_bundle_cli_verify_manifest_signed_by_wrong_key_fails(
     )
 
     assert exit_code == 1
+
+
+def test_evidence_bundle_cli_wrong_key_json_contract(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict --json reports wrong trusted key as authenticity failure."""
+    from veritas_os.cli.evidence_bundle import main
+    from veritas_os.security.signing import store_keypair
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+    wrong_private_key = tmp_path / "wrong_json_keys" / "priv.key"
+    wrong_public_key = tmp_path / "wrong_json_keys" / "pub.key"
+    store_keypair(wrong_private_key, wrong_public_key)
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--public-key",
+            str(wrong_public_key),
+            "--require-signature",
+            "--json",
+        ]
+    )
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    _assert_contract_fields(output)
+    assert output["ok"] is False
+    assert output["tampered"] is True
+    assert output["hash_integrity_ok"] is True
+    assert output["signature_status"] == "fail"
+    assert output["signature_verified"] is False
+    assert output["authenticity_ok"] is False
+    assert output["authenticity_failure"] == "signature_verification_failed"
+    assert "Manifest signature verification failed" in output["errors"]
+
+
+def test_evidence_bundle_cli_malformed_signature_json_contract(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict --json distinguishes malformed signatures from wrong keys."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
+    manifest_path = bundle_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["manifest_signature"] = "not base64 ???"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--public-key",
+            str(public_key),
+            "--require-signature",
+            "--json",
+        ]
+    )
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    _assert_contract_fields(output)
+    assert output["ok"] is False
+    assert output["tampered"] is True
+    assert output["hash_integrity_ok"] is True
+    assert output["signature_status"] == "fail"
+    assert output["signature_verified"] is False
+    assert output["authenticity_ok"] is False
+    assert output["authenticity_failure"] == "signature_verification_error"
+    assert any(
+        error.startswith("Manifest signature verification error")
+        for error in output["errors"]
+    )
 
 
 def test_evidence_bundle_cli_require_signature_rejects_unsigned_bundle(
@@ -441,6 +627,44 @@ def test_evidence_bundle_cli_secure_or_prod_posture_rejects_unsigned_bundle(
     exit_code = main(["verify", "--bundle-dir", result["bundle_dir"]])
 
     assert exit_code == 1
+
+
+def test_evidence_bundle_cli_secure_unsigned_json_contract(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Secure posture --json reports unsigned bundles as authenticity failures."""
+    from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+    trustlog_signed.append_signed_decision({"request_id": "secure-json-unsigned"})
+    result = generate_evidence_bundle(
+        bundle_type="decision",
+        witness_ledger_path=log_path,
+        output_dir=tmp_path / "bundles",
+    )
+
+    exit_code = main(["verify", "--bundle-dir", result["bundle_dir"], "--json"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    _assert_contract_fields(output)
+    assert output["ok"] is False
+    assert output["tampered"] is True
+    assert output["hash_integrity_ok"] is True
+    assert output["signature_status"] == "missing"
+    assert output["signature_verified"] is False
+    assert output["authenticity_ok"] is False
+    assert output["authenticity_failure"] == "signature_missing"
+    assert "Manifest signature missing" in output["errors"]
 
 
 def test_evidence_bundle_cli_dev_without_public_key_warns_and_reports_json(

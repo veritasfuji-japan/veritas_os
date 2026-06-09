@@ -61,6 +61,7 @@ Start here for the completed reviewer path:
 - [Evidence Bundle Reviewer Checklist](evidence-bundle-reviewer-checklist.md)
 - [Evidence Bundle Signature Verification Demo](evidence-bundle-signature-verification.md)
 - [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
+- [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md)
 - [External Audit Readiness Pack](external-audit-readiness.md)
 
 Boundaries:
