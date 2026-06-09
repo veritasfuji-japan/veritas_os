@@ -1086,3 +1086,126 @@ def test_evidence_bundle_cli_validate_result_malformed_json_fails_clearly(
     assert exit_code == 1
     assert "Evidence bundle verification result schema: FAIL" in output
     assert "malformed JSON: line 1" in output
+
+
+def test_evidence_bundle_cli_validate_result_valid_saved_result_json_passes(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json emits a machine-readable success report."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "valid-result.json"
+    _write_result_payload(result_path, _valid_verification_result_payload())
+
+    exit_code = main(["validate-result", "--result", str(result_path), "--json"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert output == {
+        "ok": True,
+        "schema_valid": True,
+        "result_path": str(result_path),
+        "errors": [],
+    }
+
+
+def test_evidence_bundle_cli_validate_result_missing_required_field_json_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json reports missing required fields structurally."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "missing-field-result.json"
+    payload = _valid_verification_result_payload()
+    del payload["signature_verified"]
+    _write_result_payload(result_path, payload)
+
+    exit_code = main(["validate-result", "--result", str(result_path), "--json"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert output["ok"] is False
+    assert output["schema_valid"] is False
+    assert output["result_path"] == str(result_path)
+    assert output["errors"] == [
+        {
+            "path": "$",
+            "message": "'signature_verified' is a required property",
+        }
+    ]
+
+
+def test_evidence_bundle_cli_validate_result_invalid_signature_status_json_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json reports invalid signature_status paths."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "invalid-status-result.json"
+    payload = _valid_verification_result_payload()
+    payload["signature_status"] = "verified"
+    _write_result_payload(result_path, payload)
+
+    exit_code = main(["validate-result", "--result", str(result_path), "--json"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert output["ok"] is False
+    assert output["schema_valid"] is False
+    assert output["errors"][0]["path"] == "$['signature_status']"
+    assert "'verified' is not one of" in output["errors"][0]["message"]
+
+
+def test_evidence_bundle_cli_validate_result_invalid_fingerprint_json_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json reports invalid fingerprint paths."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "invalid-fingerprint-result.json"
+    payload = _valid_verification_result_payload()
+    payload["public_key_fingerprint_sha256"] = "A" * 64
+    _write_result_payload(result_path, payload)
+
+    exit_code = main(["validate-result", "--result", str(result_path), "--json"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert output["ok"] is False
+    assert output["schema_valid"] is False
+    assert output["errors"][0]["path"] == "$['public_key_fingerprint_sha256']"
+    assert "does not match '^[0-9a-f]{64}$'" in output["errors"][0]["message"]
+
+
+def test_evidence_bundle_cli_validate_result_malformed_json_json_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result --json reports malformed JSON as structured output."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "malformed-result.json"
+    result_path.write_text('{"ok": true,', encoding="utf-8")
+
+    exit_code = main(["validate-result", "--result", str(result_path), "--json"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert output == {
+        "ok": False,
+        "schema_valid": False,
+        "result_path": str(result_path),
+        "errors": [
+            {
+                "path": "$",
+                "message": (
+                    "malformed JSON: line 1, column 13: "
+                    "Expecting property name enclosed in double quotes"
+                ),
+            }
+        ],
+    }
