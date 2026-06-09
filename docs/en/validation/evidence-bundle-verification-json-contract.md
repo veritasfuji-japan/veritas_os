@@ -73,6 +73,31 @@ missing required fields, invalid field types, invalid enum values such as
 `public_key_fingerprint_sha256` values that are not `null` or 64-character
 lowercase hexadecimal strings.
 
+For CI, UI, or external audit-tool integrations, add `--json` to make the saved
+result Schema validation outcome machine-readable on stdout:
+
+```bash
+veritas-evidence-bundle validate-result \
+  --result evidence-bundle-verification-result.json \
+  --json
+```
+
+A schema-valid saved result emits only JSON on stdout and exits `0`:
+
+```json
+{
+  "ok": true,
+  "schema_valid": true,
+  "result_path": "evidence-bundle-verification-result.json",
+  "errors": []
+}
+```
+
+Schema-invalid or malformed JSON inputs emit only JSON on stdout and exit `1`.
+Each error contains a JSONPath-like `path` and reviewer/tooling-safe `message`.
+For malformed JSON, the path is `$` because the document cannot be parsed before
+schema validation.
+
 Schema validation confirms the saved result document shape only. It does not
 re-run Evidence Bundle file/hash checks, does not re-run Ed25519 manifest
 signature verification, does not establish trusted key provenance, and is not

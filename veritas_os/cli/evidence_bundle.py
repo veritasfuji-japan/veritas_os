@@ -82,15 +82,17 @@ def _public_key_fingerprint_sha256(public_key_path: Optional[Path]) -> Optional[
     return hashlib.sha256(public_key_bytes).hexdigest()
 
 
-def _format_json_schema_error(error: jsonschema.ValidationError) -> str:
-    """Format a JSON Schema validation error for CLI diagnostics."""
+def _json_schema_error_path(error: jsonschema.ValidationError) -> str:
+    """Return a JSONPath-like location for a JSON Schema validation error."""
     path = "$"
     if error.absolute_path:
         path += "".join(f"[{item!r}]" for item in error.absolute_path)
-    return f"error at {path}: {error.message}"
+    return path
 
 
-def _validate_verification_result_schema(result_path: Path) -> list[str]:
+def _validate_verification_result_schema(
+    result_path: Path,
+) -> list[dict[str, str]]:
     """Validate a saved Evidence Bundle verification result JSON file.
 
     The validation is intentionally limited to the saved result document shape.
@@ -100,14 +102,24 @@ def _validate_verification_result_schema(result_path: Path) -> list[str]:
     try:
         raw_result = result_path.read_text(encoding="utf-8")
     except OSError as exc:
-        return [f"failed to read result file {result_path}: {exc}"]
+        return [
+            {
+                "path": "$",
+                "message": f"failed to read result file {result_path}: {exc}",
+            }
+        ]
 
     try:
         result = json.loads(raw_result)
     except json.JSONDecodeError as exc:
         return [
-            "malformed JSON: "
-            f"line {exc.lineno}, column {exc.colno}: {exc.msg}"
+            {
+                "path": "$",
+                "message": (
+                    "malformed JSON: "
+                    f"line {exc.lineno}, column {exc.colno}: {exc.msg}"
+                ),
+            }
         ]
 
     try:
@@ -115,26 +127,48 @@ def _validate_verification_result_schema(result_path: Path) -> list[str]:
             VERIFICATION_RESULT_SCHEMA_PATH.read_text(encoding="utf-8")
         )
     except (OSError, json.JSONDecodeError) as exc:
-        return [f"failed to load verification result schema: {exc}"]
+        return [
+            {
+                "path": "$",
+                "message": f"failed to load verification result schema: {exc}",
+            }
+        ]
 
     validator = jsonschema.Draft202012Validator(schema)
     errors = sorted(
         validator.iter_errors(result),
         key=lambda error: (list(error.absolute_path), error.message),
     )
-    return [_format_json_schema_error(error) for error in errors]
+    return [
+        {"path": _json_schema_error_path(error), "message": error.message}
+        for error in errors
+    ]
 
 
-def _run_validate_result(result_path: Path) -> int:
-    """Run saved verification result JSON Schema validation and print status."""
+def _run_validate_result(result_path: Path, *, json_output: bool = False) -> int:
+    """Run saved verification result JSON Schema validation and print status.
+
+    When ``json_output`` is true, stdout is limited to a machine-readable
+    validation report for CI, UI, and external audit-tool integrations.
+    """
     errors = _validate_verification_result_schema(result_path)
+    output = {
+        "ok": not errors,
+        "schema_valid": not errors,
+        "result_path": str(result_path),
+        "errors": errors,
+    }
+    if json_output:
+        print(json.dumps(output, indent=2, ensure_ascii=False))
+        return 0 if output["ok"] else 1
+
     if not errors:
         print("Evidence bundle verification result schema: PASS")
         return 0
 
     print("Evidence bundle verification result schema: FAIL")
     for error in errors:
-        print(f"  {error}")
+        print(f"  error at {error['path']}: {error['message']}")
     return 1
 
 
@@ -209,6 +243,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Saved JSON result file from verify --json --output",
     )
+    validate.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable validation report as JSON",
+    )
 
     return parser
 
@@ -249,7 +288,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.command == "validate-result":
-        return _run_validate_result(args.result)
+        return _run_validate_result(args.result, json_output=args.json)
 
     if args.output is not None and not args.json:
         parser.error("verify --output requires --json")

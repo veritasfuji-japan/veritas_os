@@ -81,7 +81,45 @@ Evidence bundle verification result schema: FAIL
   error at $['signature_status']: 'verified' is not one of ['pass', 'fail', 'missing', 'not_verified']
 ```
 
-This schema validation confirms result shape only. It does not re-run
+For machine-readable saved-result Schema validation, add `--json`:
+
+```bash
+veritas-evidence-bundle validate-result \
+  --result evidence-bundle-verification-result.json \
+  --json
+```
+
+Illustrative `validate-result --json` success output:
+
+```json
+{
+  "ok": true,
+  "schema_valid": true,
+  "result_path": "evidence-bundle-verification-result.json",
+  "errors": []
+}
+```
+
+Illustrative `validate-result --json` failure output:
+
+```json
+{
+  "ok": false,
+  "schema_valid": false,
+  "result_path": "evidence-bundle-verification-result.json",
+  "errors": [
+    {
+      "path": "$['signature_status']",
+      "message": "'verified' is not one of ['pass', 'fail', 'missing', 'not_verified']"
+    }
+  ]
+}
+```
+
+Malformed JSON is also returned as structured JSON with `path` set to `$` and a
+message beginning with `malformed JSON:`.
+
+This schema validation confirms saved result shape only. It does not re-run
 cryptographic verification, does not establish out-of-band trusted key
 provenance, and is not regulatory certification or completed third-party audit
 approval.

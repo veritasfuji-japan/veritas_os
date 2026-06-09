@@ -62,11 +62,13 @@ veritas-evidence-bundle validate-result \
 
 `validate-result` checks JSON parsing and the saved result schema, including
 required fields, `signature_status` enum values, and
-`public_key_fingerprint_sha256` null-or-lowercase-hex shape. It does not re-run
-file/hash integrity checks or Ed25519 signature verification, does not establish
-trusted key provenance, and is not regulatory certification or completed
-third-party audit approval. Preserve the out-of-band trusted-key provenance
-record even when saved-result schema validation passes.
+`public_key_fingerprint_sha256` null-or-lowercase-hex shape. Add `--json` when
+CI, UI, or external audit tooling must consume a machine-readable validation
+report for the saved result file. It does not re-run file/hash integrity checks
+or Ed25519 signature verification, does not establish trusted key provenance,
+and is not regulatory certification or completed third-party audit approval.
+Preserve the out-of-band trusted-key provenance record even when saved-result
+schema validation passes.
 
 ## Verification order
 
