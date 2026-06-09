@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -74,6 +75,22 @@ def _public_key_fingerprint_sha256(public_key_path: Optional[Path]) -> Optional[
     return hashlib.sha256(public_key_bytes).hexdigest()
 
 
+def _dump_json_result(result: Dict[str, Any]) -> str:
+    """Serialize a verification result with the stable CLI JSON formatting."""
+    return json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False)
+
+
+def _write_verification_result(output_path: Path, result: Dict[str, Any]) -> None:
+    """Write the verification result as UTF-8 JSON reviewer evidence.
+
+    Failed verification results are intentionally written too: they are audit
+    evidence that a reviewer attempted strict verification and received a
+    machine-readable failure result.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(_dump_json_result(result) + "\n", encoding="utf-8")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build argparse parser for evidence bundle CLI."""
     parser = argparse.ArgumentParser(description="Generate/verify VERITAS evidence bundles")
@@ -110,6 +127,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail when the manifest signature is missing or cannot be verified",
     )
     verify.add_argument("--json", action="store_true")
+    verify.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Write the JSON verification result to this UTF-8 file. "
+            "Requires --json and does not suppress stdout JSON."
+        ),
+    )
 
     return parser
 
@@ -149,6 +174,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"entry_count={result['entry_count']}")
         return 0
 
+    if args.output is not None and not args.json:
+        parser.error("verify --output requires --json")
+        return 2
+
     require_signature = args.require_signature or _is_fail_closed_posture()
     public_key_fingerprint_sha256 = _public_key_fingerprint_sha256(args.public_key)
     verify_signature_fn = _build_signature_verifier(args.public_key)
@@ -170,8 +199,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         elif key_warning not in verify_result["warnings"]:
             verify_result["warnings"].append(key_warning)
 
+    if args.output is not None:
+        try:
+            _write_verification_result(args.output, verify_result)
+        except OSError as exc:
+            print(
+                f"error: failed to write verification result to {args.output}: {exc}",
+                file=sys.stderr,
+            )
+            return 2
+
     if args.json:
-        print(json.dumps(verify_result, indent=2, sort_keys=True, ensure_ascii=False))
+        print(_dump_json_result(verify_result))
     else:
         status = "PASS" if verify_result.get("ok") else "FAIL"
         hash_status = "PASS" if verify_result.get("hash_integrity_ok") else "FAIL"

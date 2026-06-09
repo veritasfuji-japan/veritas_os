@@ -38,6 +38,27 @@ integrity and manifest signature success. JSON consumers should use the stable
 contract fields documented in
 [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md).
 
+## Saving the JSON result
+
+When reviewers need a durable evidence artifact, add `--json --output <path>`:
+
+```bash
+veritas-evidence-bundle verify \
+  --bundle-dir <bundle_dir> \
+  --public-key <trusted_ed25519_public_key> \
+  --require-signature \
+  --json \
+  --output evidence-bundle-verification-result.json
+```
+
+The CLI writes the same JSON result to stdout and to the UTF-8 output file. The
+saved verification result is reviewer evidence, including for failed
+verification attempts such as missing public keys or wrong public keys. It is
+not regulatory certification and is not completed third-party audit approval.
+Reviewers must interpret the file with out-of-band trusted public key
+provenance; `public_key_fingerprint_sha256` helps correlate the saved result
+with the key handoff record, but does not make the key trustworthy on its own.
+
 ## Successful strict verification
 
 Illustrative output:

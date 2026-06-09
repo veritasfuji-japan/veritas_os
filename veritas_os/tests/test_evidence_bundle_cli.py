@@ -357,6 +357,196 @@ def test_evidence_bundle_cli_strict_success_json_contract(
     assert output["errors"] == []
 
 
+def _assert_written_result_matches_stdout(
+    output_path: Path,
+    stdout: str,
+) -> dict[str, Any]:
+    """Assert saved verification JSON exactly mirrors stdout and schema."""
+    assert output_path.read_text(encoding="utf-8") == stdout
+    output = json.loads(stdout)
+    _assert_contract_fields(output)
+    return output
+
+
+def test_evidence_bundle_cli_strict_success_json_output_file(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict success --json result can be saved as reviewer evidence."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
+    output_path = tmp_path / "review" / "strict-success-result.json"
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--public-key",
+            str(public_key),
+            "--require-signature",
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    output = _assert_written_result_matches_stdout(
+        output_path,
+        capsys.readouterr().out,
+    )
+
+    assert exit_code == 0
+    assert output["ok"] is True
+    assert output["signature_status"] == "pass"
+    assert output["signature_verified"] is True
+    assert output["public_key_fingerprint_sha256"] == hashlib.sha256(
+        public_key.read_bytes()
+    ).hexdigest()
+
+
+def test_evidence_bundle_cli_missing_public_key_json_output_file(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict missing-key --json failure can be saved as audit evidence."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+    output_path = tmp_path / "missing-key-result.json"
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--require-signature",
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    output = _assert_written_result_matches_stdout(
+        output_path,
+        capsys.readouterr().out,
+    )
+
+    assert exit_code == 1
+    assert output["ok"] is False
+    assert output["signature_status"] == "not_verified"
+    assert output["authenticity_failure"] == "signature_not_verified"
+    assert output["public_key_fingerprint_sha256"] is None
+
+
+def test_evidence_bundle_cli_wrong_key_json_output_file(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Strict wrong-key --json failure can be saved as audit evidence."""
+    from veritas_os.cli.evidence_bundle import main
+    from veritas_os.security.signing import store_keypair
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, _public_key = _signed_bundle(tmp_path, monkeypatch)
+    wrong_private_key = tmp_path / "wrong_output_keys" / "priv.key"
+    wrong_public_key = tmp_path / "wrong_output_keys" / "pub.key"
+    store_keypair(wrong_private_key, wrong_public_key)
+    output_path = tmp_path / "wrong-key-result.json"
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--public-key",
+            str(wrong_public_key),
+            "--require-signature",
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    output = _assert_written_result_matches_stdout(
+        output_path,
+        capsys.readouterr().out,
+    )
+
+    assert exit_code == 1
+    assert output["ok"] is False
+    assert output["signature_status"] == "fail"
+    assert output["authenticity_failure"] == "signature_verification_failed"
+    assert output["public_key_fingerprint_sha256"] == hashlib.sha256(
+        wrong_public_key.read_bytes()
+    ).hexdigest()
+
+
+def test_evidence_bundle_cli_output_requires_json(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """--output is reserved for JSON verification results."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(
+            [
+                "verify",
+                "--bundle-dir",
+                str(bundle_dir),
+                "--public-key",
+                str(public_key),
+                "--require-signature",
+                "--output",
+                str(tmp_path / "result.json"),
+            ]
+        )
+
+    assert excinfo.value.code == 2
+    assert "verify --output requires --json" in capsys.readouterr().err
+
+
+def test_evidence_bundle_cli_output_write_failure_is_clear(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """A result write failure exits non-zero with a clear stderr message."""
+    from veritas_os.cli.evidence_bundle import main
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    bundle_dir, _private_key, public_key = _signed_bundle(tmp_path, monkeypatch)
+    output_path = tmp_path / "existing-directory"
+    output_path.mkdir()
+
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            str(bundle_dir),
+            "--public-key",
+            str(public_key),
+            "--require-signature",
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "failed to write verification result" in captured.err
+
+
 def test_evidence_bundle_cli_verify_tampered_manifest_signature_fails(
     tmp_path,
     monkeypatch,

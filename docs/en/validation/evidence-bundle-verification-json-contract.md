@@ -19,6 +19,37 @@ itself.
 Machine-readable validation is pinned in the JSON Schema at
 [`schemas/evidence_bundle_verification_result.schema.json`](../../../schemas/evidence_bundle_verification_result.schema.json).
 
+## Saving reviewer evidence to a file
+
+Use `--output <path>` with `--json` to save the exact JSON verification result
+as UTF-8 reviewer evidence while still emitting the same JSON to stdout:
+
+```bash
+veritas-evidence-bundle verify \
+  --bundle-dir <bundle_dir> \
+  --public-key <trusted_ed25519_public_key> \
+  --require-signature \
+  --json \
+  --output evidence-bundle-verification-result.json
+```
+
+The saved file is evidence of the verification result observed by the reviewer.
+It is not regulatory certification and is not completed third-party audit
+approval. Failed verification results are also written when `--output` is used,
+because failure JSON is important audit evidence for missing keys, wrong keys,
+tampering, or other verification blockers.
+
+`--output` is reserved for the machine-readable JSON result and therefore
+requires `--json`; human-oriented CLI output remains unchanged when `--json` is
+not selected. If the result file cannot be written, the CLI exits non-zero and
+prints a clear write-failure diagnostic.
+
+Saved results must be interpreted together with out-of-band trusted public key
+provenance. `public_key_fingerprint_sha256` helps correlate the saved result
+with the reviewer/operator key handoff record, but the fingerprint does not by
+itself establish trust and a key copied only from the bundle must not be used as
+a trust source.
+
 ## Contract scope
 
 The contract separates two reviewer decisions that external UI and audit tooling
