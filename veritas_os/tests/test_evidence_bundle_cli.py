@@ -968,3 +968,121 @@ def test_verify_bundle_signed_manifest_without_verifier_warns(
     assert result["signature_verified"] is False
     assert result["signature_status"] == "not_verified"
     assert any("no signature verifier" in w for w in result["warnings"])
+
+
+def _valid_verification_result_payload() -> dict[str, Any]:
+    """Return a minimal schema-valid saved verification result payload."""
+    return {
+        "ok": True,
+        "tampered": False,
+        "hash_integrity_ok": True,
+        "signature_status": "pass",
+        "signature_verified": True,
+        "authenticity_ok": True,
+        "authenticity_failure": None,
+        "public_key_fingerprint_sha256": "a" * 64,
+        "errors": [],
+        "warnings": [],
+    }
+
+
+def _write_result_payload(path: Path, payload: dict[str, Any]) -> None:
+    """Write a saved verification result fixture as UTF-8 JSON."""
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_evidence_bundle_cli_validate_result_valid_saved_result_passes(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result accepts a saved verification result that matches schema."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "valid-result.json"
+    _write_result_payload(result_path, _valid_verification_result_payload())
+
+    exit_code = main(["validate-result", "--result", str(result_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert output == "Evidence bundle verification result schema: PASS\n"
+
+
+def test_evidence_bundle_cli_validate_result_missing_required_field_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result reports the missing required contract field."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "missing-field-result.json"
+    payload = _valid_verification_result_payload()
+    del payload["signature_verified"]
+    _write_result_payload(result_path, payload)
+
+    exit_code = main(["validate-result", "--result", str(result_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "Evidence bundle verification result schema: FAIL" in output
+    assert "'signature_verified' is a required property" in output
+
+
+def test_evidence_bundle_cli_validate_result_invalid_signature_status_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result reports invalid signature_status enum values."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "invalid-status-result.json"
+    payload = _valid_verification_result_payload()
+    payload["signature_status"] = "verified"
+    _write_result_payload(result_path, payload)
+
+    exit_code = main(["validate-result", "--result", str(result_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "Evidence bundle verification result schema: FAIL" in output
+    assert "$['signature_status']" in output
+    assert "'verified' is not one of" in output
+
+
+def test_evidence_bundle_cli_validate_result_invalid_fingerprint_pattern_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result reports invalid public_key_fingerprint_sha256 patterns."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "invalid-fingerprint-result.json"
+    payload = _valid_verification_result_payload()
+    payload["public_key_fingerprint_sha256"] = "A" * 64
+    _write_result_payload(result_path, payload)
+
+    exit_code = main(["validate-result", "--result", str(result_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "Evidence bundle verification result schema: FAIL" in output
+    assert "$['public_key_fingerprint_sha256']" in output
+    assert "does not match '^[0-9a-f]{64}$'" in output
+
+
+def test_evidence_bundle_cli_validate_result_malformed_json_fails_clearly(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-result reports malformed JSON before schema validation."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "malformed-result.json"
+    result_path.write_text('{"ok": true,', encoding="utf-8")
+
+    exit_code = main(["validate-result", "--result", str(result_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "Evidence bundle verification result schema: FAIL" in output
+    assert "malformed JSON: line 1" in output

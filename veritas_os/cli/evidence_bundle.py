@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+import jsonschema
+
 from veritas_os.audit.evidence_bundle import generate_evidence_bundle
 from veritas_os.audit.verify_bundle import verify_evidence_bundle
 from veritas_os.security.signing import verify_payload_signature
@@ -29,6 +31,11 @@ def _parse_key_value_pairs(values: Optional[list[str]]) -> Dict[str, str]:
 
 
 SECURE_POSTURES = {"secure", "prod"}
+VERIFICATION_RESULT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "evidence_bundle_verification_result.schema.json"
+)
 
 
 def _is_fail_closed_posture() -> bool:
@@ -73,6 +80,62 @@ def _public_key_fingerprint_sha256(public_key_path: Optional[Path]) -> Optional[
     except OSError:
         return None
     return hashlib.sha256(public_key_bytes).hexdigest()
+
+
+def _format_json_schema_error(error: jsonschema.ValidationError) -> str:
+    """Format a JSON Schema validation error for CLI diagnostics."""
+    path = "$"
+    if error.absolute_path:
+        path += "".join(f"[{item!r}]" for item in error.absolute_path)
+    return f"error at {path}: {error.message}"
+
+
+def _validate_verification_result_schema(result_path: Path) -> list[str]:
+    """Validate a saved Evidence Bundle verification result JSON file.
+
+    The validation is intentionally limited to the saved result document shape.
+    It does not re-run Evidence Bundle hash checks or Ed25519 signature
+    verification, and it does not establish trusted public key provenance.
+    """
+    try:
+        raw_result = result_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"failed to read result file {result_path}: {exc}"]
+
+    try:
+        result = json.loads(raw_result)
+    except json.JSONDecodeError as exc:
+        return [
+            "malformed JSON: "
+            f"line {exc.lineno}, column {exc.colno}: {exc.msg}"
+        ]
+
+    try:
+        schema = json.loads(
+            VERIFICATION_RESULT_SCHEMA_PATH.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"failed to load verification result schema: {exc}"]
+
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = sorted(
+        validator.iter_errors(result),
+        key=lambda error: (list(error.absolute_path), error.message),
+    )
+    return [_format_json_schema_error(error) for error in errors]
+
+
+def _run_validate_result(result_path: Path) -> int:
+    """Run saved verification result JSON Schema validation and print status."""
+    errors = _validate_verification_result_schema(result_path)
+    if not errors:
+        print("Evidence bundle verification result schema: PASS")
+        return 0
+
+    print("Evidence bundle verification result schema: FAIL")
+    for error in errors:
+        print(f"  {error}")
+    return 1
 
 
 def _dump_json_result(result: Dict[str, Any]) -> str:
@@ -136,6 +199,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    validate = sub.add_parser(
+        "validate-result",
+        help="Validate a saved verification result JSON file against the schema",
+    )
+    validate.add_argument(
+        "--result",
+        required=True,
+        type=Path,
+        help="Saved JSON result file from verify --json --output",
+    )
+
     return parser
 
 
@@ -173,6 +247,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"manifest_hash={result['manifest_hash']}")
             print(f"entry_count={result['entry_count']}")
         return 0
+
+    if args.command == "validate-result":
+        return _run_validate_result(args.result)
 
     if args.output is not None and not args.json:
         parser.error("verify --output requires --json")

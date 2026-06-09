@@ -50,6 +50,37 @@ with the reviewer/operator key handoff record, but the fingerprint does not by
 itself establish trust and a key copied only from the bundle must not be used as
 a trust source.
 
+## Validating a saved result against the schema
+
+Use `validate-result --result <path>` to check later that a saved verification
+result JSON file still conforms to the machine-readable schema:
+
+```bash
+veritas-evidence-bundle validate-result \
+  --result evidence-bundle-verification-result.json
+```
+
+A schema-valid saved result prints:
+
+```text
+Evidence bundle verification result schema: PASS
+```
+
+A malformed or schema-invalid saved result exits non-zero, prints
+`Evidence bundle verification result schema: FAIL`, and includes diagnostics for
+missing required fields, invalid field types, invalid enum values such as
+`signature_status`, and invalid patterns such as
+`public_key_fingerprint_sha256` values that are not `null` or 64-character
+lowercase hexadecimal strings.
+
+Schema validation confirms the saved result document shape only. It does not
+re-run Evidence Bundle file/hash checks, does not re-run Ed25519 manifest
+signature verification, does not establish trusted key provenance, and is not
+regulatory certification or completed third-party audit approval. Reviewers must
+still preserve out-of-band trusted public key provenance for the key represented
+by `public_key_fingerprint_sha256` before relying on any saved strict
+verification result.
+
 ## Contract scope
 
 The contract separates two reviewer decisions that external UI and audit tooling

@@ -59,6 +59,33 @@ Reviewers must interpret the file with out-of-band trusted public key
 provenance; `public_key_fingerprint_sha256` helps correlate the saved result
 with the key handoff record, but does not make the key trustworthy on its own.
 
+## Validating a saved JSON result shape
+
+A saved verification result can be checked later against the JSON Schema:
+
+```bash
+veritas-evidence-bundle validate-result \
+  --result evidence-bundle-verification-result.json
+```
+
+Illustrative success output:
+
+```text
+Evidence bundle verification result schema: PASS
+```
+
+Illustrative failure output:
+
+```text
+Evidence bundle verification result schema: FAIL
+  error at $['signature_status']: 'verified' is not one of ['pass', 'fail', 'missing', 'not_verified']
+```
+
+This schema validation confirms result shape only. It does not re-run
+cryptographic verification, does not establish out-of-band trusted key
+provenance, and is not regulatory certification or completed third-party audit
+approval.
+
 ## Successful strict verification
 
 Illustrative output:
