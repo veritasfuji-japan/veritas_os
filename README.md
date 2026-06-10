@@ -2129,8 +2129,11 @@ reviewer-handoff-review-result.json --json --output
 reviewer-review-result-validation.json` to validate the saved review result
 artifact, its schema conformance, acknowledgement structure, required artifact
 references, decision value, and forbidden sensitive/raw diagnostic patterns. The
-command records and checks review-result structure only: it does not create
-trust, does not replace out-of-band public key trust, does not prove regulatory
+`--json` output has a stable JSON Schema contract at
+[`schemas/reviewer_handoff_review_result_validation_report.schema.json`](schemas/reviewer_handoff_review_result_validation_report.schema.json),
+which validates the validation report shape. The command records validation
+status and checks review-result structure only: it does not create trust, does
+not replace out-of-band public key trust, does not prove regulatory
 certification, is not completed third-party audit approval, and does not
 establish cryptographic truth by itself.
 

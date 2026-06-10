@@ -168,7 +168,11 @@ decision values, and forbidden sensitive/raw diagnostic patterns. It records and
 checks review-result structure only: it does not create trust, does not replace
 out-of-band public key trust, does not prove regulatory certification, is not
 completed third-party audit approval, and does not establish cryptographic truth
-by itself. Its public output is boolean-only with fixed diagnostics.
+by itself. Its `--json` output has a stable JSON Schema contract at
+[`schemas/reviewer_handoff_review_result_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_validation_report.schema.json).
+That schema validates the validation report shape and records validation status,
+not cryptographic truth by itself. Its public output is boolean-only with fixed
+diagnostics.
 
 ## Verification order
 
