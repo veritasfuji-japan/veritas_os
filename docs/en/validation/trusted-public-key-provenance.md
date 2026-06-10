@@ -5,8 +5,11 @@ trusted the Ed25519 public key used during strict Evidence Bundle verification.
 It complements `verification-result.json`; it is not generated from the
 Evidence Bundle alone and it does not replace cryptographic verification.
 
-Schema:
+Receipt schema:
 [`schemas/trusted_public_key_provenance_receipt.schema.json`](../../../schemas/trusted_public_key_provenance_receipt.schema.json)
+
+`validate-key-provenance --json` report schema:
+[`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json)
 
 ## Why public key provenance matters
 
@@ -79,9 +82,14 @@ Bundle-internal key used: PASS
 Strict authenticity result: PASS
 ```
 
-For CI, UI, or audit-tool ingestion, add `--json`. Add `--output <path>` with
-`--json` to save the exact same JSON report that is emitted to stdout; failure
-reports are saved too, and parent directories are created when needed.
+For CI, UI, or audit-tool ingestion, add `--json`. The JSON report has a
+dedicated Draft 2020-12 schema at
+[`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json).
+That schema validates the report shape only; it does not re-run cryptographic
+verification, create trust, prove regulatory certification, or complete
+third-party audit approval. Add `--output <path>` with `--json` to save the
+exact same JSON report that is emitted to stdout; failure reports are saved too,
+and parent directories are created when needed.
 `--output` without `--json` is rejected. To avoid echoing externally supplied
 key material or local environment details in logs, the public CLI report exposes
 only booleans and fixed diagnostics. It does not print raw fingerprint values,

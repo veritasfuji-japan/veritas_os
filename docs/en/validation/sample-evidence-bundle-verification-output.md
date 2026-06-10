@@ -212,16 +212,18 @@ veritas-evidence-bundle validate-key-provenance \
 ```
 
 The stdout JSON and saved UTF-8 JSON file are byte-for-byte identical, including
-failure reports. `--output` without `--json` fails clearly. The public report
-does not echo raw fingerprint values, raw file paths, raw schema validator
-messages, or raw exception text; raw fingerprints remain in the source receipt
-and verification-result artifacts. This command validates receipt shape,
-validates saved verification-result shape, checks exact fingerprint correlation,
-rejects `bundle_internal_key_used: true`, and confirms strict authenticity
-success. It does not create trust by itself, does not re-run cryptographic
-verification, does not prove regulatory certification, and does not complete
-third-party audit approval. Matching fingerprints support correlation, not
-standalone trust.
+failure reports. `--output` without `--json` fails clearly. The JSON report has
+a dedicated Draft 2020-12 schema at
+[`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json).
+That schema validates the report shape only; it does not re-run cryptographic
+verification, create trust, prove regulatory certification, or complete
+third-party audit approval. The public report does not echo raw fingerprint
+values, raw file paths, raw schema validator messages, or raw exception text;
+raw fingerprints remain in the source receipt and verification-result artifacts.
+This command validates receipt shape, validates saved verification-result shape,
+checks exact fingerprint correlation, rejects `bundle_internal_key_used: true`,
+and confirms strict authenticity success. Matching fingerprints support
+correlation, not standalone trust.
 
 ## Successful strict verification
 

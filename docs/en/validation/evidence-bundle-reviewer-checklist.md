@@ -100,15 +100,17 @@ result schema, checks exact fingerprint correlation, rejects
 `bundle_internal_key_used: true`, and confirms strict authenticity success
 (`signature_status: "pass"`, `signature_verified: true`, and
 `authenticity_ok: true`). Add `--json --output <path>` to emit and save the
-exact same machine-readable report, including failure reports. The public report
-exposes only booleans and fixed diagnostics: it does not echo raw fingerprint
-values, raw file paths, raw schema validator messages, or raw exception text. It
-only records fingerprint presence and correlation status because the raw
-fingerprints remain in the source receipt and verification-result artifacts.
-The command does not create trust by itself, does not re-run cryptographic
-verification, does not prove regulatory certification, and does not complete
-third-party audit approval. Matching fingerprints support correlation, not
-standalone trust.
+exact same machine-readable report, including failure reports. The JSON report
+has a dedicated Draft 2020-12 schema at
+[`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json).
+That schema validates the report shape only; it does not re-run cryptographic
+verification, create trust, prove regulatory certification, or complete
+third-party audit approval. The public report exposes only booleans and fixed
+diagnostics: it does not echo raw fingerprint values, raw file paths, raw schema
+validator messages, or raw exception text. It only records fingerprint presence
+and correlation status because the raw fingerprints remain in the source receipt
+and verification-result artifacts. Matching fingerprints support correlation,
+not standalone trust.
 
 ## Verification order
 
