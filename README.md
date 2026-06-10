@@ -2111,6 +2111,10 @@ An illustrative sample artifact chain is available in
 Use it only to inspect expected file relationships; the samples do not create
 trust, do not replace out-of-band public key trust, do not prove regulatory
 certification, and are not completed third-party audit approval. Matching
-fingerprints support correlation only, not standalone trust.
+fingerprints support correlation only, not standalone trust. CI validates the
+sample artifact chain for structure, JSON Schema conformance, fixed artifact
+references, and forbidden sensitive/raw diagnostic patterns only; CI validation
+does not create trust, replace out-of-band public key trust, prove regulatory
+certification, or indicate completed third-party audit approval.
 
 Reviewer Evidence Packets may include optional Trusted Public Key Provenance validation artifact references (`trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`). Use the [Reviewer Key Provenance Walkthrough](docs/en/validation/reviewer-key-provenance-walkthrough.md) for the copyable review sequence. These references help reviewers check public key trust provenance, but the packet does not create trust, does not re-run cryptographic verification, does not replace out-of-band public key trust, is not regulatory certification, and is not completed third-party audit approval. Matching fingerprints support correlation only; they are not standalone trust proof. Reviewer Evidence Packets reference artifacts; they do not prove trust alone. Packet metadata references fixed artifact names and schema identifiers only, not raw fingerprints, raw local paths, exception text, schema validator messages, or externally supplied JSON values.

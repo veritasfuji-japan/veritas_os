@@ -36,6 +36,9 @@ Use it only to see expected file names and relationships. The samples do not
 create trust, do not replace out-of-band public key trust, do not prove
 regulatory certification, and are not completed third-party audit approval.
 Matching fingerprints in the samples support correlation only, not standalone
+trust. CI validates the illustrative sample chain for JSON Schema conformance,
+fixed artifact references, and forbidden sensitive/raw diagnostic patterns only;
+that CI validation does not create trust or replace out-of-band public key
 trust.
 
 ## Full reviewer sequence

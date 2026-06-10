@@ -37,6 +37,9 @@ jobs:
       - name: Check Reviewer Evidence Packet fixture
         run: python3 scripts/demo/check_reviewer_evidence_packet_fixture.py
 
+      - name: Validate key provenance reviewer samples
+        run: python3 scripts/quality/check_key_provenance_review_samples.py
+
       - name: Export current Reviewer Evidence Packet
         run: >
           python3 scripts/demo/export_reviewer_evidence_packet.py
