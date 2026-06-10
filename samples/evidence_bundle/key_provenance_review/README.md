@@ -25,6 +25,16 @@ verification-result.json
 | `key-provenance-validation.json` | Illustrates the saved `validate-key-provenance --json` report showing schema and fingerprint-correlation checks. |
 | `key-provenance-result-validation.json` | Illustrates the saved `validate-key-provenance-result --json` report for the provenance-validation report. |
 | `reviewer-evidence-packet.json` | Illustrates Reviewer Evidence Packet references to the key provenance artifacts. |
+| `sample-artifact-manifest.json` | Indexes the illustrative sample artifacts, roles, schema identifiers, and SHA-256 digests. |
+
+## Sample Artifact Manifest
+
+`sample-artifact-manifest.json` is an index for this illustrative sample set.
+It lists the expected artifact names, reviewer roles, schema identifiers, and
+SHA-256 digests for the files in this directory. The manifest checks sample
+structure and file integrity only. It does not create trust, does not replace
+out-of-band public key trust, is not regulatory certification, and is not
+completed third-party audit approval.
 
 ## Boundaries
 

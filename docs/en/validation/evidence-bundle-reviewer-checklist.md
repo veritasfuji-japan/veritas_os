@@ -49,8 +49,12 @@ see
 [`samples/evidence_bundle/key_provenance_review/`](../../../samples/evidence_bundle/key_provenance_review/).
 The directory is illustrative only and does not create trust, replace
 out-of-band public key trust, prove regulatory certification, or represent
-completed third-party audit approval. Matching fingerprints support correlation,
-not standalone trust.
+completed third-party audit approval. It now includes
+`sample-artifact-manifest.json`, an index of the sample artifacts, expected
+roles, schema identifiers, and SHA-256 digests. CI validates the manifest and
+artifact hashes for sample integrity, but hash matching supports sample
+integrity only; it is not standalone trust. Matching fingerprints support
+correlation, not standalone trust.
 
 ## Saving JSON reviewer evidence
 
@@ -226,6 +230,7 @@ Reviewer Evidence Packets may include an optional `key_provenance` metadata sect
 - `trusted-public-key-provenance.json`
 - `key-provenance-validation.json`
 - `key-provenance-result-validation.json`
+- `sample-artifact-manifest.json`
 
 These references help reviewers locate the artifacts used to check public key trust provenance for strict Evidence Bundle signature review. The packet does not create trust by itself, does not re-run cryptographic verification, and does not replace the out-of-band reviewer/operator trust channel. Matching fingerprints support correlation between the verification result and the Trusted Public Key Provenance Receipt; matching fingerprints are not standalone trust proof.
 
