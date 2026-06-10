@@ -255,6 +255,7 @@ Illustrative `--json` success output:
   "ok": true,
   "result_schema_valid": true,
   "validated_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+  "report_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
   "validator": "veritas-evidence-bundle validate-key-provenance-result",
   "errors": []
 }
@@ -262,12 +263,15 @@ Illustrative `--json` success output:
 
 Add `--json --output <path>` to save byte-for-byte the same JSON emitted to
 stdout; parent directories are created, and `--output` without `--json` fails
-clearly. `validate-key-provenance-result` validates saved report shape only. It
-does not re-run key provenance validation, does not re-run cryptographic
-verification, does not create trust, is not regulatory certification, and is
-not completed third-party audit approval. Output remains privacy-safe: it does
-not expose raw fingerprints, raw paths, raw exception text, raw schema
-validator messages, or raw JSON values from the saved report.
+clearly. `validate-key-provenance-result` has a dedicated Draft 2020-12
+JSON Schema at
+[`schemas/trusted_public_key_provenance_result_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_result_validation_report.schema.json).
+That schema validates the validator result shape only. It does not re-run key
+provenance validation, does not re-run cryptographic verification, does not
+create trust, is not regulatory certification, and is not completed third-party
+audit approval. Output remains privacy-safe: it does not expose raw
+fingerprints, raw paths, raw exception text, raw schema validator messages, or
+raw JSON values from the saved report.
 
 ## Successful strict verification
 

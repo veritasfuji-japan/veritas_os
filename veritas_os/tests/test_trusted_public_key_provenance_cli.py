@@ -21,6 +21,15 @@ REPORT_SCHEMA_PATH = (
     / "schemas"
     / "trusted_public_key_provenance_validation_report.schema.json"
 )
+RESULT_VALIDATION_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "trusted_public_key_provenance_result_validation_report.schema.json"
+)
+RESULT_VALIDATION_REPORT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "trusted_public_key_provenance_result_validation_report.schema.json"
+)
 
 
 def _valid_receipt_payload() -> dict[str, Any]:
@@ -68,7 +77,6 @@ def _write_valid_inputs(tmp_path: Path) -> tuple[Path, Path]:
     return receipt_path, verification_result_path
 
 
-
 def _report_schema_validator() -> jsonschema.Draft202012Validator:
     """Return the validate-key-provenance report schema validator."""
     schema = json.loads(REPORT_SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -80,6 +88,25 @@ def _assert_report_matches_schema(report: dict[str, Any]) -> None:
     """Assert a validate-key-provenance JSON report matches its schema."""
     _report_schema_validator().validate(report)
     assert report["report_schema_id"] == REPORT_SCHEMA_ID
+
+
+def _result_validation_report_schema_validator() -> (
+    jsonschema.Draft202012Validator
+):
+    """Return the validate-key-provenance-result report schema validator."""
+    schema = json.loads(
+        RESULT_VALIDATION_REPORT_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return jsonschema.Draft202012Validator(schema)
+
+
+def _assert_result_validation_report_matches_schema(
+    report: dict[str, Any],
+) -> None:
+    """Assert validate-key-provenance-result JSON matches its schema."""
+    _result_validation_report_schema_validator().validate(report)
+    assert report["report_schema_id"] == RESULT_VALIDATION_REPORT_SCHEMA_ID
 
 
 def _run_json_report(
@@ -775,7 +802,6 @@ def test_validate_key_provenance_result_invalid_saved_report_fails(
     assert "result does not satisfy schema" in output
     _assert_key_provenance_result_output_is_safe(output, result_path)
 
-
 def test_validate_key_provenance_result_malformed_json_fails_safely(
     tmp_path,
     capsys,
@@ -843,11 +869,95 @@ def test_validate_key_provenance_result_json_emits_stable_report(
         "ok": True,
         "result_schema_valid": True,
         "validated_schema_id": REPORT_SCHEMA_ID,
+        "report_schema_id": RESULT_VALIDATION_REPORT_SCHEMA_ID,
         "validator": "veritas-evidence-bundle validate-key-provenance-result",
         "errors": [],
     }
+    _assert_result_validation_report_matches_schema(report)
     assert output.endswith("\n")
     _assert_key_provenance_result_output_is_safe(output, result_path)
+
+
+def test_validate_key_provenance_result_malformed_json_report_matches_schema(
+    tmp_path,
+    capsys,
+) -> None:
+    """Malformed saved JSON failure output matches the result schema."""
+    result_path = tmp_path / "malformed-key-provenance-validation.json"
+    result_path.write_text('{"raw_saved_value": ', encoding="utf-8")
+
+    exit_code, report, stdout, stderr = _run_key_provenance_result_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert report["errors"] == [
+        {
+            "check": "result_json_valid",
+            "path": "$",
+            "message": "result file is not valid JSON",
+        }
+    ]
+    _assert_result_validation_report_matches_schema(report)
+    _assert_key_provenance_result_output_is_safe(stdout, result_path)
+
+
+def test_validate_key_provenance_result_missing_file_report_matches_schema(
+    tmp_path,
+    capsys,
+) -> None:
+    """Missing saved report failure output matches the result schema."""
+    result_path = tmp_path / "missing-key-provenance-validation.json"
+
+    exit_code, report, stdout, stderr = _run_key_provenance_result_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 2
+    assert stderr == ""
+    assert report["errors"] == [
+        {
+            "check": "result_readable",
+            "path": "$",
+            "message": "result file could not be read",
+        }
+    ]
+    _assert_result_validation_report_matches_schema(report)
+    _assert_key_provenance_result_output_is_safe(stdout, result_path)
+
+
+def test_validate_key_provenance_result_invalid_saved_report_matches_schema(
+    tmp_path,
+    capsys,
+) -> None:
+    """Schema-invalid saved report failure output matches result schema."""
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+    invalid_report = _valid_key_provenance_validation_report()
+    invalid_report["receipt_schema_valid"] = "raw-json-value"
+    invalid_report["unexpected_raw_value"] = "do-not-echo-this-json-value"
+    _write_json(result_path, invalid_report)
+
+    exit_code, report, stdout, stderr = _run_key_provenance_result_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert report["errors"] == [
+        {
+            "check": "result_schema_valid",
+            "path": "$",
+            "message": "result does not satisfy schema",
+        }
+    ]
+    _assert_result_validation_report_matches_schema(report)
+    _assert_key_provenance_result_output_is_safe(stdout, result_path)
+    assert "raw-json-value" not in stdout
+    assert "do-not-echo-this-json-value" not in stdout
 
 
 def test_validate_key_provenance_result_json_output_matches_stdout(
@@ -869,6 +979,7 @@ def test_validate_key_provenance_result_json_output_matches_stdout(
     assert stderr == ""
     assert report["ok"] is True
     assert output_path.read_text(encoding="utf-8") == stdout
+    _assert_result_validation_report_matches_schema(report)
     _assert_key_provenance_result_output_is_safe(stdout, result_path, output_path)
 
 
@@ -929,6 +1040,7 @@ def test_validate_key_provenance_result_failure_json_is_privacy_safe(
             "message": "result does not satisfy schema",
         }
     ]
+    _assert_result_validation_report_matches_schema(report)
     _assert_key_provenance_result_output_is_safe(stdout, result_path)
 
 

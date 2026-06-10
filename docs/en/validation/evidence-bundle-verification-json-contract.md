@@ -188,13 +188,16 @@ veritas-evidence-bundle validate-key-provenance-result \
   --result key-provenance-validation.json
 ```
 
-The command validates saved report shape only. It does not re-run key
+The command validates saved report shape only. Its `--json` output has a
+dedicated Draft 2020-12 schema at
+[`schemas/trusted_public_key_provenance_result_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_result_validation_report.schema.json).
+That schema validates the validator result shape only. It does not re-run key
 provenance validation, does not re-run cryptographic verification, does not
 create trust, is not regulatory certification, and is not completed third-party
 audit approval. Its JSON output uses `result_schema_valid`,
-`validated_schema_id`, `validator`, and fixed `errors`; it does not expose raw
-fingerprints, raw paths, raw exception text, raw schema validator messages, or
-raw JSON values from the saved report. Add `--json --output <path>` to save a
+`validated_schema_id`, `report_schema_id`, `validator`, and fixed `errors`; it
+does not expose raw fingerprints, raw paths, raw exception text, raw schema
+validator messages, or raw JSON values from the saved report. Add `--json --output <path>` to save a
 byte-for-byte copy of stdout JSON; parent directories are created, and
 `--output` without `--json` is rejected.
 
