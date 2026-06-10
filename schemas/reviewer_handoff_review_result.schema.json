@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/reviewer_handoff_review_result.schema.json",
+  "title": "Reviewer Handoff Review Result",
+  "description": "Machine-readable reviewer acceptance record for the Trusted Public Key Provenance and Evidence Bundle handoff flow. This artifact records what a reviewer checked and the reviewer decision only. It does not create trust, does not replace out-of-band public key trust, does not establish cryptographic truth by itself, is not regulatory certification, and is not completed third-party audit approval. Fields intentionally use fixed artifact names, fixed schema identifiers, booleans, and bounded notes; raw public keys, raw fingerprints, secrets, local paths, exception text, raw schema validator messages, and customer data are not permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "review_result_type",
+    "reviewed_at",
+    "reviewer",
+    "decision",
+    "review_scope",
+    "artifacts_checked",
+    "checks",
+    "limitations_acknowledged",
+    "notes"
+  ],
+  "properties": {
+    "review_result_type": {
+      "const": "reviewer_handoff_review_result"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewer_id",
+        "organization"
+      ],
+      "properties": {
+        "reviewer_id": {
+          "$ref": "#/$defs/safe_short_text"
+        },
+        "organization": {
+          "$ref": "#/$defs/safe_short_text"
+        }
+      }
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "ACCEPT",
+        "REJECT",
+        "NEEDS_FOLLOW_UP"
+      ]
+    },
+    "review_scope": {
+      "type": "string",
+      "const": "trusted_public_key_provenance_and_evidence_bundle_handoff"
+    },
+    "artifacts_checked": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/artifact_checked"
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_bundle_verification_result_checked",
+        "trusted_public_key_provenance_receipt_checked",
+        "key_provenance_validation_report_checked",
+        "key_provenance_result_validation_report_checked",
+        "reviewer_evidence_packet_references_checked",
+        "sample_manifest_hashes_checked",
+        "out_of_band_public_key_trust_confirmed"
+      ],
+      "properties": {
+        "evidence_bundle_verification_result_checked": {
+          "type": "boolean"
+        },
+        "trusted_public_key_provenance_receipt_checked": {
+          "type": "boolean"
+        },
+        "key_provenance_validation_report_checked": {
+          "type": "boolean"
+        },
+        "key_provenance_result_validation_report_checked": {
+          "type": "boolean"
+        },
+        "reviewer_evidence_packet_references_checked": {
+          "type": "boolean"
+        },
+        "sample_manifest_hashes_checked": {
+          "type": "boolean"
+        },
+        "out_of_band_public_key_trust_confirmed": {
+          "type": "boolean",
+          "description": "Reviewer-scope outcome for independent public key trust context. False means the record remains follow-up/context-dependent even if sample checks passed."
+        }
+      }
+    },
+    "limitations_acknowledged": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "does_not_create_trust",
+        "does_not_replace_out_of_band_public_key_trust",
+        "not_regulatory_certification",
+        "not_completed_third_party_audit_approval",
+        "fingerprint_matching_is_correlation_not_standalone_trust",
+        "sample_hashes_support_sample_integrity_only"
+      ],
+      "properties": {
+        "does_not_create_trust": {
+          "type": "boolean",
+          "const": true
+        },
+        "does_not_replace_out_of_band_public_key_trust": {
+          "type": "boolean",
+          "const": true
+        },
+        "not_regulatory_certification": {
+          "type": "boolean",
+          "const": true
+        },
+        "not_completed_third_party_audit_approval": {
+          "type": "boolean",
+          "const": true
+        },
+        "fingerprint_matching_is_correlation_not_standalone_trust": {
+          "type": "boolean",
+          "const": true
+        },
+        "sample_hashes_support_sample_integrity_only": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "notes": {
+      "$ref": "#/$defs/safe_note"
+    }
+  },
+  "$defs": {
+    "artifact_checked": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_name",
+        "schema_id",
+        "checked"
+      ],
+      "properties": {
+        "artifact_name": {
+          "type": "string",
+          "enum": [
+            "verification-result.json",
+            "trusted-public-key-provenance.json",
+            "key-provenance-validation.json",
+            "key-provenance-result-validation.json",
+            "reviewer-evidence-packet.json",
+            "sample-artifact-manifest.json"
+          ]
+        },
+        "schema_id": {
+          "enum": [
+            "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+            "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+            "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+            "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
+            "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
+            "https://veritas-os.example/schemas/trusted_public_key_provenance_review_sample_manifest.schema.json"
+          ]
+        },
+        "checked": {
+          "type": "boolean"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "artifact_name": {
+              "const": "verification-result.json"
+            },
+            "schema_id": {
+              "const": "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json"
+            }
+          }
+        },
+        {
+          "properties": {
+            "artifact_name": {
+              "const": "trusted-public-key-provenance.json"
+            },
+            "schema_id": {
+              "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json"
+            }
+          }
+        },
+        {
+          "properties": {
+            "artifact_name": {
+              "const": "key-provenance-validation.json"
+            },
+            "schema_id": {
+              "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json"
+            }
+          }
+        },
+        {
+          "properties": {
+            "artifact_name": {
+              "const": "key-provenance-result-validation.json"
+            },
+            "schema_id": {
+              "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json"
+            }
+          }
+        },
+        {
+          "properties": {
+            "artifact_name": {
+              "const": "reviewer-evidence-packet.json"
+            },
+            "schema_id": {
+              "const": "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json"
+            }
+          }
+        },
+        {
+          "properties": {
+            "artifact_name": {
+              "const": "sample-artifact-manifest.json"
+            },
+            "schema_id": {
+              "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_review_sample_manifest.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "safe_short_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "^(?!.*(?:-----BEGIN|[A-Za-z]:\\\\|/(?:Users|home|tmp|var|workspace)/|Traceback \\(most recent call last\\)|ValidationError|Exception:|is a required property|is not of type|customer[_ -]?(?!data\\b)|[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}|[0-9a-f]{64}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|sk_live_[0-9A-Za-z]{12,}|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{20,}|github_pat_[0-9A-Za-z_]{20,}|eyJ[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+|(?:api[_-]?key|access[_-]?token|password|secret)\\\\s*[:=])).*$"
+    },
+    "safe_note": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^(?!.*(?:-----BEGIN|[A-Za-z]:\\\\|/(?:Users|home|tmp|var|workspace)/|Traceback \\(most recent call last\\)|FileNotFoundError|PermissionError|RuntimeError:|ValidationError|Exception:|jsonschema\\.exceptions|is a required property|is not of type|Additional properties are not allowed|Failed validating|customer[_ -]?(?!data\\b)|[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}|[0-9a-f]{64}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|sk_live_[0-9A-Za-z]{12,}|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{20,}|github_pat_[0-9A-Za-z_]{20,}|eyJ[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+|(?:api[_-]?key|access[_-]?token|password|secret)\\\\s*[:=])).*$"
+    }
+  }
+}

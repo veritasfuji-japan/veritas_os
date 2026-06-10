@@ -34,10 +34,16 @@
       "sha256": "d4223449d5b8df4a77a642c09bceebc83fd12dc7c94ef4729b19cb7027c7a18a"
     },
     {
+      "artifact_name": "reviewer-handoff-review-result.json",
+      "role": "reviewer_handoff_review_result",
+      "schema_id": "https://veritas-os.example/schemas/reviewer_handoff_review_result.schema.json",
+      "sha256": "7074bbff8d56d2737a32c9c8974065a4009390f68b14549bb3e589ba8073c4c8"
+    },
+    {
       "artifact_name": "README.md",
       "role": "sample_readme",
       "schema_id": null,
-      "sha256": "950320f673a9bb6ae8ca8e0f13b8ff7297f43c47c3dd880546af6cfdaf836a68"
+      "sha256": "dabae4277d11d3aac016a384c62948b5e489a5f4bdda37db05bd37c003da0ec9"
     }
   ]
 }

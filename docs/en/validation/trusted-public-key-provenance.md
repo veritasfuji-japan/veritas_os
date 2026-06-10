@@ -14,6 +14,9 @@ Receipt schema:
 `validate-key-provenance --json` report schema:
 [`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json)
 
+Reviewer Review Result / Acceptance Record schema:
+[`schemas/reviewer_handoff_review_result.schema.json`](../../../schemas/reviewer_handoff_review_result.schema.json)
+
 ## Illustrative sample artifacts
 
 Reviewers who want to see the expected artifact relationships can inspect the
@@ -21,10 +24,14 @@ illustrative sample set at
 [`samples/evidence_bundle/key_provenance_review/`](../../../samples/evidence_bundle/key_provenance_review/).
 The sample set links `verification-result.json`,
 `trusted-public-key-provenance.json`, `key-provenance-validation.json`,
-`key-provenance-result-validation.json`, and `reviewer-evidence-packet.json`.
-It is illustrative only: it does not create trust, replace out-of-band public
-key trust, prove regulatory certification, or represent completed third-party
-audit approval. Matching fingerprints support correlation only.
+`key-provenance-result-validation.json`, `reviewer-evidence-packet.json`, and
+`reviewer-handoff-review-result.json`. The review-result artifact records what
+was checked and whether the reviewer decision is `ACCEPT`, `REJECT`, or
+`NEEDS_FOLLOW_UP`. It is illustrative only: it does not create trust, replace
+out-of-band public key trust, prove regulatory certification, or represent
+completed third-party audit approval. Matching fingerprints support correlation
+only, and the review result records outcome rather than cryptographic truth by
+itself.
 
 ## Why public key provenance matters
 
@@ -225,6 +232,16 @@ material. It does not re-run cryptographic verification, does not prove that the
 original Evidence Bundle is authentic by itself. This receipt is not
 regulatory certification. This receipt is not completed third-party audit
 approval.
+
+## Reviewer Review Result / Acceptance Record
+
+A reviewer handoff may include `reviewer-handoff-review-result.json` as a
+machine-readable record of artifacts checked, reviewer scope, limitation
+acknowledgements, and the reviewer decision: `ACCEPT`, `REJECT`, or
+`NEEDS_FOLLOW_UP`. The record depends on the reviewer's declared review scope
+and out-of-band public key trust context. It is not certification by itself, is
+not regulatory approval, is not completed third-party audit approval, and is
+not cryptographic truth by itself.
 
 ## Reviewer Evidence Packet key provenance references
 

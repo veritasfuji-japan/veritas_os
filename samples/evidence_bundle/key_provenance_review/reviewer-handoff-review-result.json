@@ -1,0 +1,60 @@
+{
+  "review_result_type": "reviewer_handoff_review_result",
+  "reviewed_at": "2026-01-15T12:08:00Z",
+  "reviewer": {
+    "reviewer_id": "external-reviewer-placeholder",
+    "organization": "reviewer-organization-placeholder"
+  },
+  "decision": "NEEDS_FOLLOW_UP",
+  "review_scope": "trusted_public_key_provenance_and_evidence_bundle_handoff",
+  "artifacts_checked": [
+    {
+      "artifact_name": "verification-result.json",
+      "schema_id": "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+      "checked": true
+    },
+    {
+      "artifact_name": "trusted-public-key-provenance.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+      "checked": true
+    },
+    {
+      "artifact_name": "key-provenance-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+      "checked": true
+    },
+    {
+      "artifact_name": "key-provenance-result-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
+      "checked": true
+    },
+    {
+      "artifact_name": "reviewer-evidence-packet.json",
+      "schema_id": "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
+      "checked": true
+    },
+    {
+      "artifact_name": "sample-artifact-manifest.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_review_sample_manifest.schema.json",
+      "checked": true
+    }
+  ],
+  "checks": {
+    "evidence_bundle_verification_result_checked": true,
+    "trusted_public_key_provenance_receipt_checked": true,
+    "key_provenance_validation_report_checked": true,
+    "key_provenance_result_validation_report_checked": true,
+    "reviewer_evidence_packet_references_checked": true,
+    "sample_manifest_hashes_checked": true,
+    "out_of_band_public_key_trust_confirmed": false
+  },
+  "limitations_acknowledged": {
+    "does_not_create_trust": true,
+    "does_not_replace_out_of_band_public_key_trust": true,
+    "not_regulatory_certification": true,
+    "not_completed_third_party_audit_approval": true,
+    "fingerprint_matching_is_correlation_not_standalone_trust": true,
+    "sample_hashes_support_sample_integrity_only": true
+  },
+  "notes": "Illustrative reviewer result placeholder. This record captures review outcome and follow-up context only; it is not certification, regulatory approval, completed third-party audit approval, or cryptographic truth by itself."
+}

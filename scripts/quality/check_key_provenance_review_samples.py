@@ -48,6 +48,10 @@ TRUSTED_PUBLIC_KEY_PROVENANCE_RESULT_VALIDATION_REPORT_SCHEMA_ID = (
     "https://veritas-os.example/schemas/"
     "trusted_public_key_provenance_result_validation_report.schema.json"
 )
+REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_review_result.schema.json"
+)
 
 SAMPLE_SCHEMA_CASES = {
     "verification-result.json": (
@@ -69,6 +73,9 @@ SAMPLE_SCHEMA_CASES = {
         REPO_ROOT
         / "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json"
     ),
+    "reviewer-handoff-review-result.json": (
+        REPO_ROOT / "schemas/reviewer_handoff_review_result.schema.json"
+    ),
     MANIFEST_NAME: MANIFEST_SCHEMA_PATH,
 }
 
@@ -78,6 +85,7 @@ EXPECTED_ARTIFACT_CHAIN = (
     "key-provenance-validation.json",
     "key-provenance-result-validation.json",
     "reviewer-evidence-packet.json",
+    "reviewer-handoff-review-result.json",
 )
 EXPECTED_MANIFEST_ARTIFACTS = (*EXPECTED_ARTIFACT_CHAIN, "README.md")
 EXPECTED_MANIFEST_ENTRIES = {
@@ -101,8 +109,21 @@ EXPECTED_MANIFEST_ENTRIES = {
         "role": "reviewer_evidence_packet",
         "schema_id": "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
     },
+    "reviewer-handoff-review-result.json": {
+        "role": "reviewer_handoff_review_result",
+        "schema_id": REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID,
+    },
     "README.md": {"role": "sample_readme", "schema_id": None},
 }
+
+REQUIRED_REVIEW_RESULT_LIMITATIONS = (
+    "does_not_create_trust",
+    "does_not_replace_out_of_band_public_key_trust",
+    "not_regulatory_certification",
+    "not_completed_third_party_audit_approval",
+    "fingerprint_matching_is_correlation_not_standalone_trust",
+    "sample_hashes_support_sample_integrity_only",
+)
 
 EXPECTED_KEY_PROVENANCE_REFERENCES = {
     "trusted_public_key_provenance_receipt": {
@@ -431,6 +452,35 @@ def _collect_boundary_problems() -> list[ValidationProblem]:
     ]
 
 
+def _collect_review_result_limitation_problems() -> list[ValidationProblem]:
+    """Require reviewer-result limitation acknowledgements to be true."""
+    review_result_path = SAMPLE_DIR / "reviewer-handoff-review-result.json"
+    try:
+        review_result = _load_json(review_result_path)
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        return [ValidationProblem(review_result_path, f"cannot inspect result: {exc}")]
+
+    limitations = review_result.get("limitations_acknowledged")
+    if not isinstance(limitations, dict):
+        return [
+            ValidationProblem(
+                review_result_path,
+                "limitations_acknowledged must be an object",
+            )
+        ]
+
+    problems: list[ValidationProblem] = []
+    for field in REQUIRED_REVIEW_RESULT_LIMITATIONS:
+        if limitations.get(field) is not True:
+            problems.append(
+                ValidationProblem(
+                    review_result_path,
+                    f"limitation acknowledgement must be true: {field}",
+                )
+            )
+    return problems
+
+
 def _artifact_names_from_walkthrough() -> tuple[str, ...]:
     """Extract expected JSON artifact names from the walkthrough artifact map."""
     text = WALKTHROUGH_PATH.read_text(encoding="utf-8")
@@ -556,6 +606,7 @@ def validate_key_provenance_review_samples() -> list[ValidationProblem]:
     problems.extend(_collect_manifest_problems())
     problems.extend(_collect_safety_problems())
     problems.extend(_collect_boundary_problems())
+    problems.extend(_collect_review_result_limitation_problems())
     problems.extend(_collect_chain_reference_problems())
     return problems
 

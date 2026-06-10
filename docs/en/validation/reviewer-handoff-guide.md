@@ -24,6 +24,7 @@ artifacts:
 | `key-provenance-result-validation.json` | Saved `validate-key-provenance-result` report confirming the saved validation report schema shape. |
 | `reviewer-evidence-packet.json` | Reviewer Evidence Packet that references the key provenance artifacts by stable artifact name and schema identifier. |
 | `sample-artifact-manifest.json` | Sample artifact manifest listing expected sample artifacts and SHA-256 digests for sample integrity checks. |
+| `reviewer-handoff-review-result.json` | Reviewer Review Result / Acceptance Record that records what was checked and the reviewer decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`). |
 
 The reviewer must obtain `trusted-public-key.pem` through an approved
 out-of-band reviewer/operator trust channel before relying on manifest signature
@@ -80,6 +81,9 @@ The package supports these reviewer checks:
   `key-provenance-result-validation.json`.
 - Reviewer Evidence Packet references to the expected key provenance artifacts
   by stable artifact name and schema identifier.
+- Reviewer Review Result / Acceptance Record contents, including checked
+  artifacts, decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`), limitations,
+  reviewer scope, and out-of-band trust context.
 - Sample artifact manifest SHA-256 consistency for the illustrative sample set.
 
 ## What the reviewer cannot infer from these artifacts alone
@@ -94,6 +98,9 @@ Keep these boundaries explicit in reviewer communications:
 - Sample artifact hashes prove sample integrity only, not production evidence
   authenticity.
 - Reviewer Evidence Packets reference artifacts; they do not prove trust alone.
+- Reviewer Review Results record review outcome only; they are not
+  cryptographic truth by themselves and reviewer decisions depend on reviewer
+  scope and out-of-band public key trust context.
 
 ## Reviewer checklist
 
@@ -106,4 +113,5 @@ Keep these boundaries explicit in reviewer communications:
 | Run `validate-key-provenance-result` | `key-provenance-validation.json` | Run the copyable `validate-key-provenance-result` command above. | The saved validation report conforms to its schema. | Schema conformance does not prove regulatory certification or third-party audit approval. |
 | Review `reviewer-evidence-packet.json` | `reviewer-evidence-packet.json` | Confirm key provenance references use only expected artifact names and schema identifiers. | The packet points reviewers to `trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`. | Reviewer Evidence Packets reference artifacts; they do not prove trust alone. |
 | Review `sample-artifact-manifest.json` | `sample-artifact-manifest.json` | Confirm listed sample artifacts and SHA-256 digests match the provided sample pack. | Sample artifact manifest SHA-256 consistency is preserved. | Sample artifact hashes prove sample integrity only, not production evidence authenticity. |
+| Record `reviewer-handoff-review-result.json` | `reviewer-handoff-review-result.json` | Record the artifacts checked, reviewer scope, limitation acknowledgements, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`). | The review outcome is machine-readable and tied to the reviewer's stated scope and out-of-band trust context. | The record is not certification, regulatory approval, completed third-party audit approval, or cryptographic truth by itself. |
 | Confirm CI sample validation status | CI sample validation logs or status checks | Confirm the sample validation check completed successfully for the submitted commit. | CI checked sample schema conformance, fixed references, manifest entries, and sample hashes. | CI sample validation does not create trust, replace out-of-band public key trust, prove regulatory certification, or indicate completed third-party audit approval. |
