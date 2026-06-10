@@ -2,6 +2,8 @@
 
 These examples should be read with the
 [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md).
+For the copyable Reviewer Evidence Packet sequence, see the
+[Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md).
 Strict verification requires reviewer/operator provenance for the public key;
 `public_key_fingerprint_sha256` records key material evidence, not trust
 proof. Matching fingerprints support correlation and do not certify the

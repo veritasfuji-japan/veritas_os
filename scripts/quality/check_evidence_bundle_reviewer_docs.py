@@ -20,6 +20,8 @@ REQUIRED_DOCS = (
     VALIDATION_DIR / "evidence-bundle-reviewer-checklist.md",
     VALIDATION_DIR / "evidence-bundle-signature-verification.md",
     VALIDATION_DIR / "sample-evidence-bundle-verification-output.md",
+    VALIDATION_DIR / "trusted-public-key-provenance.md",
+    VALIDATION_DIR / "reviewer-key-provenance-walkthrough.md",
     VALIDATION_DIR / "external-audit-readiness.md",
     VALIDATION_DIR / "technical-proof-pack.md",
     VALIDATION_DIR / "third-party-review-readiness.md",
@@ -29,6 +31,8 @@ REVIEWER_VERIFICATION_LINKS = (
     "evidence-bundle-reviewer-checklist.md",
     "evidence-bundle-signature-verification.md",
     "sample-evidence-bundle-verification-output.md",
+    "trusted-public-key-provenance.md",
+    "reviewer-key-provenance-walkthrough.md",
     "external-audit-readiness.md",
 )
 
@@ -46,6 +50,7 @@ README_VERIFICATION_LINKS = (
     "evidence-bundle-reviewer-checklist.md",
     "evidence-bundle-signature-verification.md",
     "sample-evidence-bundle-verification-output.md",
+    "reviewer-key-provenance-walkthrough.md",
 )
 
 SAFETY_BOUNDARY_PHRASES = (
@@ -63,6 +68,8 @@ VERIFICATION_CONCEPTS = (
     "manifest authenticity",
     "Ed25519",
     "trusted public key",
+    "Reviewer Evidence Packet",
+    "matching fingerprints support correlation, not standalone trust",
 )
 
 BOUNDARY_SOURCE_PATHS = (

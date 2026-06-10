@@ -379,6 +379,7 @@ Authority Evidence と Audit Log の違いは明確です。
 - **AML/KYC Beachhead（1-day PoC quickstart）**: [`docs/ja/guides/poc-pack-financial-quickstart.md`](docs/ja/guides/poc-pack-financial-quickstart.md)
 - **AML/KYC Governance Template Contract**: [`docs/ja/guides/financial-governance-templates.md`](docs/ja/guides/financial-governance-templates.md)（英語正本あり）
 - **External Audit / Evidence Bundle Readiness**: [`docs/ja/validation/external-audit-readiness.md`](docs/ja/validation/external-audit-readiness.md)（英語正本あり）
+- **Reviewer Key Provenance Walkthrough（英語正本）**: [`docs/en/validation/reviewer-key-provenance-walkthrough.md`](docs/en/validation/reviewer-key-provenance-walkthrough.md)
 - **External Technical Proof Pack（review/pilot/DD/audit）**: [`docs/ja/validation/technical-proof-pack.md`](docs/ja/validation/technical-proof-pack.md)（英語正本あり）
 - **AML/KYC Short Positioning（customer / operator / investor）**: [`docs/ja/positioning/aml-kyc-beachhead-short-positioning.md`](docs/ja/positioning/aml-kyc-beachhead-short-positioning.md)（英語正本あり）
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
@@ -1906,4 +1907,4 @@ Phase 2（今後）:
 
 ### Reviewer Evidence Packet の key provenance 参照
 
-Reviewer Evidence Packet には、Trusted Public Key Provenance validation artifact（`trusted-public-key-provenance.json`、`key-provenance-validation.json`、`key-provenance-result-validation.json`）への optional な参照を含められます。これらはレビュアーが public key trust provenance を確認するための手がかりですが、packet 自体が trust を作るものではなく、cryptographic verification を再実行するものでもありません。また regulatory certification や completed third-party audit approval ではありません。fingerprint の一致は correlation を支援するだけで、単独の trust proof ではありません。packet metadata は固定 artifact name と schema identifier のみを参照し、raw fingerprint、raw local path、exception text、schema validator message、外部 artifact 由来の raw JSON value は埋め込みません。
+Reviewer Evidence Packet には、Trusted Public Key Provenance validation artifact（`trusted-public-key-provenance.json`、`key-provenance-validation.json`、`key-provenance-result-validation.json`）への optional な参照を含められます。copyable な review sequence は [Reviewer Key Provenance Walkthrough](docs/en/validation/reviewer-key-provenance-walkthrough.md) を参照してください。これらはレビュアーが public key trust provenance を確認するための手がかりですが、packet 自体が trust を作るものではなく、out-of-band public key trust を置き換えるものでも、cryptographic verification を再実行するものでもありません。また regulatory certification や completed third-party audit approval ではありません。fingerprint の一致は correlation を支援するだけで、単独の trust proof ではありません。Reviewer Evidence Packet は artifact を参照するだけで、単独で trust を証明しません。packet metadata は固定 artifact name と schema identifier のみを参照し、raw fingerprint、raw local path、exception text、schema validator message、外部 artifact 由来の raw JSON value は埋め込みません。

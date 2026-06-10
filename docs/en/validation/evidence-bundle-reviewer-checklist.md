@@ -12,7 +12,10 @@ and the example transcripts in
 and the [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md).
 Use the [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
 to preserve the reviewer/operator trust basis for the public key used in
-strict verification.
+strict verification, and use the
+[Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md)
+when the Reviewer Evidence Packet should reference saved key provenance
+artifacts.
 
 ## Scope and non-certification boundary
 
