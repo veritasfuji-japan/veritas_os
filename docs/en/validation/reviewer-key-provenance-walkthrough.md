@@ -28,6 +28,16 @@ real public keys, local file paths, exception text, schema validator messages,
 private keys, production secrets, or unsanitized customer data into reviewer
 examples or packet metadata.
 
+## Illustrative sample artifacts
+
+A schema-valid, illustrative sample chain is available at
+[`samples/evidence_bundle/key_provenance_review/`](../../../samples/evidence_bundle/key_provenance_review/).
+Use it only to see expected file names and relationships. The samples do not
+create trust, do not replace out-of-band public key trust, do not prove
+regulatory certification, and are not completed third-party audit approval.
+Matching fingerprints in the samples support correlation only, not standalone
+trust.
+
 ## Full reviewer sequence
 
 1. Verify the Evidence Bundle strictly with a trusted public key.

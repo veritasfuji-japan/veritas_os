@@ -129,6 +129,10 @@ VERITAS には、local/offline の SaaS permission-change governed execution dem
 
 ## Reviewer Evidence Packet v1
 
+Trusted Public Key Provenance の reviewer walkthrough 用に、illustrative sample artifact chain を
+[`samples/evidence_bundle/key_provenance_review/`](samples/evidence_bundle/key_provenance_review/)
+に追加しています。これは expected file relationship を確認するためのサンプル限定であり、trust を作成せず、out-of-band public key trust を置き換えず、規制認証を証明せず、完了済み第三者監査承認でもありません。fingerprint の一致は correlation を支援するだけで、standalone trust ではありません。
+
 VERITAS には local/offline の Reviewer Evidence Packet v1 export が追加されています。これは、SaaS permission-change governed execution demo の結果を、case outcome、AuthorityEvidence / HumanApproval summary、OutcomeReceipt summary、EvidenceChainManifest summary、EvidenceChainVerification summary、aggregate counts、reviewer notes、決定論的 packet hash を含む JSON-friendly artifact としてまとめるものです。本番導入や監査認証の証明ではなく、local/offline の review packet です。
 
 - ドキュメント: docs/en/demo/reviewer-evidence-packet.md

@@ -13,6 +13,18 @@ Receipt schema:
 `validate-key-provenance --json` report schema:
 [`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json)
 
+## Illustrative sample artifacts
+
+Reviewers who want to see the expected artifact relationships can inspect the
+illustrative sample set at
+[`samples/evidence_bundle/key_provenance_review/`](../../../samples/evidence_bundle/key_provenance_review/).
+The sample set links `verification-result.json`,
+`trusted-public-key-provenance.json`, `key-provenance-validation.json`,
+`key-provenance-result-validation.json`, and `reviewer-evidence-packet.json`.
+It is illustrative only: it does not create trust, replace out-of-band public
+key trust, prove regulatory certification, or represent completed third-party
+audit approval. Matching fingerprints support correlation only.
+
 ## Why public key provenance matters
 
 Strict Evidence Bundle verification separates two questions:

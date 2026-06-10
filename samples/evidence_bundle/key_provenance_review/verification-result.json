@@ -1,0 +1,15 @@
+{
+  "authenticity_failure": null,
+  "authenticity_ok": true,
+  "errors": [],
+  "hash_integrity_ok": true,
+  "ok": true,
+  "public_key_fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "sample_notice": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval.",
+  "signature_status": "pass",
+  "signature_verified": true,
+  "tampered": false,
+  "warnings": [
+    "Illustrative sample only; matching fingerprints support correlation, not standalone trust."
+  ]
+}

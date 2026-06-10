@@ -1,0 +1,8 @@
+{
+  "errors": [],
+  "ok": true,
+  "report_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
+  "result_schema_valid": true,
+  "validated_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+  "validator": "veritas-evidence-bundle validate-key-provenance-result"
+}

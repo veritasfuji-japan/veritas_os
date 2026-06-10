@@ -1,0 +1,160 @@
+{
+  "aggregate_summary": {
+    "blocked_cases": 0,
+    "committed_cases": 1,
+    "failed_chains": 0,
+    "incomplete_chains": 0,
+    "indeterminate_chains": 0,
+    "local_offline_only": true,
+    "passed_cases": 1,
+    "total_cases": 1,
+    "verified_chains": 1
+  },
+  "boundary_note": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval. The packet references artifacts for reviewer navigation only; it does not create trust, replace out-of-band public key trust, or prove certification.",
+  "cases": [
+    {
+      "actual_outcome": "commit",
+      "authority_validation_status": "sample_authority_present",
+      "boundary_note": "Illustrative local/offline case summary only; not production evidence or audit approval.",
+      "case_id": "sample_key_provenance_review",
+      "evidence_chain_manifest_summary": {
+        "action_class": "sample.review",
+        "authority_evidence_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "authority_evidence_id": "sample-authority-evidence",
+        "bind_coverage_operation_id": "sample-operation",
+        "bind_receipt_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "bind_receipt_id": "sample-bind-receipt",
+        "chain_status": "complete",
+        "decision_id": "sample-decision",
+        "execution_intent_id": "sample-execution-intent",
+        "final_outcome": "commit",
+        "generated_at": "2026-01-15T12:05:00Z",
+        "human_approval_receipt_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "human_approval_receipt_id": "sample-human-approval",
+        "manifest_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "manifest_id": "sample-evidence-chain-manifest",
+        "metadata": {
+          "sample_context": "key provenance reviewer walkthrough"
+        },
+        "missing_links": [],
+        "observed_effects_summary": [
+          {
+            "effect": "sample reference packet assembled"
+          }
+        ],
+        "operation_id": "sample-operation",
+        "outcome_receipt_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "outcome_receipt_id": "sample-outcome-receipt",
+        "refusal_basis": [],
+        "requested_scope": [
+          "sample:review"
+        ],
+        "target_resource": "sample-evidence-bundle",
+        "target_system": "sample-review-system"
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "sample-decision",
+        "execution_intent_id": "sample-execution-intent",
+        "failure_reasons": [],
+        "is_valid": true,
+        "manifest_hash_matches": true,
+        "manifest_id": "sample-evidence-chain-manifest",
+        "metadata": {
+          "sample_context": "key provenance reviewer walkthrough"
+        },
+        "mismatched_links": [],
+        "missing_links": [],
+        "operation_id": "sample-operation",
+        "recomputed_manifest_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "verification_status": "verified",
+        "verified_at": "2026-01-15T12:06:00Z",
+        "verified_links": [
+          "authority_evidence",
+          "human_approval_receipt",
+          "bind_receipt",
+          "outcome_receipt"
+        ]
+      },
+      "expected_outcome": "Reviewer can follow illustrative key provenance artifact references.",
+      "failure_reasons": [],
+      "human_approval_summary": {
+        "approval_receipt_id": "sample-human-approval",
+        "approved": true,
+        "approved_scope": [
+          "sample:review"
+        ],
+        "approver_identity": "sample-reviewer",
+        "approver_role": "sample-review-role",
+        "failure_reasons": [],
+        "receipt_hash_present": true
+      },
+      "outcome_receipt_summary": {
+        "action_class": "sample.review",
+        "blocked": false,
+        "committed": true,
+        "decision_id": "sample-decision",
+        "escalated": false,
+        "evaluated_at": "2026-01-15T12:04:00Z",
+        "execution_intent_id": "sample-execution-intent",
+        "failure_reasons": [],
+        "final_outcome": "commit",
+        "intended_action": "assemble illustrative reviewer evidence packet",
+        "metadata": {
+          "sample_context": "key provenance reviewer walkthrough"
+        },
+        "observed_effects": [
+          {
+            "effect": "sample artifacts referenced"
+          }
+        ],
+        "operation_id": "sample-operation",
+        "outcome_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "outcome_receipt_id": "sample-outcome-receipt",
+        "postcondition_status": "passed",
+        "requested_scope": [
+          "sample:review"
+        ],
+        "rolled_back": false,
+        "target_resource": "sample-evidence-bundle",
+        "target_system": "sample-review-system"
+      },
+      "passed": true,
+      "refusal_basis": [],
+      "requested_scope": [
+        "sample:review"
+      ],
+      "reviewer_interpretation": "The packet points to the key provenance artifacts; reviewers still need independent public key trust.",
+      "runtime_recommended_outcome": "sample_commit_eligible",
+      "target_resource": "sample-evidence-bundle",
+      "target_system": "sample-review-system"
+    }
+  ],
+  "demo_id": "sample-key-provenance-review",
+  "generated_at": "2026-01-15T12:07:00Z",
+  "key_provenance": {
+    "key_provenance_result_validation_report": {
+      "artifact_name": "key-provenance-result-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json"
+    },
+    "key_provenance_validation_report": {
+      "artifact_name": "key-provenance-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json"
+    },
+    "trusted_public_key_provenance_receipt": {
+      "artifact_name": "trusted-public-key-provenance.json",
+      "required_for_strict_signature_review": true,
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json"
+    }
+  },
+  "local_offline_only": true,
+  "packet_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
+  "packet_version": "v1",
+  "reviewer_notes": [
+    "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval.",
+    "This sample demonstrates verification-result.json to trusted-public-key-provenance.json to key-provenance-validation.json to key-provenance-result-validation.json to reviewer-evidence-packet.json relationships.",
+    "Samples do not create trust, do not replace out-of-band public key trust, and matching fingerprints support correlation only."
+  ],
+  "summary": "Illustrative sample packet showing key provenance artifact references for reviewer walkthroughs.",
+  "title": "Illustrative Trusted Public Key Provenance Reviewer Evidence Packet"
+}
