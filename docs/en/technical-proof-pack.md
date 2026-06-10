@@ -5,7 +5,8 @@ The canonical English technical proof pack is
 
 For reviewer-facing Trusted Public Key Provenance artifacts in Reviewer Evidence
 Packets, use the
-[Reviewer Key Provenance Walkthrough](validation/reviewer-key-provenance-walkthrough.md).
+[Reviewer Key Provenance Walkthrough](validation/reviewer-key-provenance-walkthrough.md)
+and the [Reviewer Handoff Guide](validation/reviewer-handoff-guide.md).
 
 This forwarding entry point is not regulatory certification and is not completed
 third-party audit approval. It does not create trust, does not replace

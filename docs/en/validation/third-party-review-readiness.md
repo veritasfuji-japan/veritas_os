@@ -45,6 +45,7 @@ Use these as the shortest implementation entrypoints:
    - [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
    - [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
    - [Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md)
+   - [Reviewer Handoff Guide](reviewer-handoff-guide.md)
    - [External Audit Readiness Pack](external-audit-readiness.md)
 
 Related documentation map:

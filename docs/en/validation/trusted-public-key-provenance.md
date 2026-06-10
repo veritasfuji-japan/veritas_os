@@ -3,7 +3,8 @@
 The Trusted Public Key Provenance Receipt records why a reviewer or operator
 trusted the Ed25519 public key used during strict Evidence Bundle verification.
 For the end-to-end Reviewer Evidence Packet sequence, see the
-[Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md).
+[Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md) and the
+[Reviewer Handoff Guide](reviewer-handoff-guide.md).
 It complements `verification-result.json`; it is not generated from the
 Evidence Bundle alone and it does not replace cryptographic verification.
 
