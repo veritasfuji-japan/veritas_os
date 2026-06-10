@@ -1746,3 +1746,369 @@ def test_validate_review_result_json_diagnostics_do_not_leak_raw_values(
     assert str(result_path) not in rendered_output
     for raw_value in raw_values:
         assert raw_value not in rendered_output
+
+REVIEW_RESULT_REPORT_VALIDATOR = (
+    "veritas-evidence-bundle validate-review-result-report"
+)
+REVIEW_RESULT_REPORT_VALIDATION_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_review_result_report_validation_report.schema.json"
+)
+REVIEW_RESULT_REPORT_VALIDATION_SCHEMA_PATH = Path(
+    "schemas/reviewer_handoff_review_result_report_validation_report.schema.json"
+)
+
+
+def _load_review_result_report_validation_schema() -> dict[str, Any]:
+    """Load the validate-review-result-report JSON report Schema."""
+    return json.loads(
+        REVIEW_RESULT_REPORT_VALIDATION_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+
+
+def _assert_review_result_report_validation_schema(
+    output: dict[str, Any],
+) -> None:
+    """Assert validate-review-result-report --json output matches Schema."""
+    import jsonschema
+
+    schema = _load_review_result_report_validation_schema()
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.Draft202012Validator(schema).validate(output)
+
+
+def _valid_review_result_validation_report() -> dict[str, Any]:
+    """Return a valid validate-review-result --json report fixture."""
+    return {
+        "ok": True,
+        "result_schema_valid": True,
+        "decision_valid": True,
+        "limitations_acknowledged": True,
+        "artifacts_checked_shape_valid": True,
+        "forbidden_patterns_absent": True,
+        "validated_schema_id": REVIEW_RESULT_VALIDATED_SCHEMA_ID,
+        "report_schema_id": REVIEW_RESULT_REPORT_SCHEMA_ID,
+        "validator": REVIEW_RESULT_VALIDATOR,
+        "errors": [],
+    }
+
+
+def _write_review_result_validation_report(
+    tmp_path: Path,
+    report: dict[str, Any],
+) -> Path:
+    """Write a saved validate-review-result report fixture."""
+    result_path = tmp_path / "reviewer-review-result-validation.json"
+    result_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    return result_path
+
+
+def _run_validate_review_result_report_json(
+    result_path: Path,
+    capsys,
+    *extra_args: str,
+) -> tuple[int, dict[str, Any], str, str]:
+    """Run validate-review-result-report --json and parse stdout."""
+    from veritas_os.cli.evidence_bundle import main
+
+    exit_code = main(
+        [
+            "validate-review-result-report",
+            "--result",
+            str(result_path),
+            "--json",
+            *extra_args,
+        ]
+    )
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    _assert_review_result_report_validation_schema(report)
+    assert report["validated_schema_id"] == REVIEW_RESULT_REPORT_SCHEMA_ID
+    assert report["report_schema_id"] == REVIEW_RESULT_REPORT_VALIDATION_SCHEMA_ID
+    assert report["validator"] == REVIEW_RESULT_REPORT_VALIDATOR
+    return exit_code, report, captured.out, captured.err
+
+
+def _assert_review_result_report_output_is_safe(
+    output: str,
+    *paths: Path,
+) -> None:
+    """Assert report-validator output omits unsafe externally supplied text."""
+    forbidden_values = [
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN PUBLIC KEY-----",
+        "/workspace/private/customer/path",
+        "C:\\Users\\customer\\secret.json",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "RuntimeError: customer_data example",
+        "Traceback (most recent call last)",
+        "Failed validating customer_data against local schema",
+        "raw-json-value",
+        "do-not-echo-this-json-value",
+        "customer@example.com",
+    ]
+    for path in paths:
+        assert str(path) not in output
+    for value in forbidden_values:
+        assert value not in output
+
+
+def test_validate_review_result_report_valid_saved_report_passes(
+    tmp_path,
+    capsys,
+) -> None:
+    """validate-review-result-report accepts valid saved validation reports."""
+    result_path = _write_review_result_validation_report(
+        tmp_path,
+        _valid_review_result_validation_report(),
+    )
+
+    exit_code, report, stdout, stderr = _run_validate_review_result_report_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert report == {
+        "ok": True,
+        "result_schema_valid": True,
+        "forbidden_patterns_absent": True,
+        "validated_schema_id": REVIEW_RESULT_REPORT_SCHEMA_ID,
+        "report_schema_id": REVIEW_RESULT_REPORT_VALIDATION_SCHEMA_ID,
+        "validator": REVIEW_RESULT_REPORT_VALIDATOR,
+        "errors": [],
+    }
+    _assert_review_result_report_output_is_safe(stdout, result_path)
+
+
+def test_validate_review_result_report_malformed_json_fails_safely(
+    tmp_path,
+    capsys,
+) -> None:
+    """Malformed saved validation reports fail with fixed diagnostics."""
+    result_path = tmp_path / "reviewer-review-result-validation.json"
+    result_path.write_text('{"raw_saved_value": ', encoding="utf-8")
+
+    exit_code, report, stdout, stderr = _run_validate_review_result_report_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert report["errors"] == [
+        {
+            "check": "result_json_valid",
+            "path": "$",
+            "message": "result file is not valid JSON",
+        }
+    ]
+    _assert_review_result_report_output_is_safe(stdout, result_path)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "raw_values"),
+    [
+        (
+            lambda report: report.pop("report_schema_id"),
+            [],
+        ),
+        (
+            lambda report: report.__setitem__(
+                "validated_schema_id",
+                "https://veritas-os.example/schemas/wrong.schema.json",
+            ),
+            [],
+        ),
+        (
+            lambda report: report.__setitem__(
+                "validator",
+                "veritas-evidence-bundle wrong-validator",
+            ),
+            [],
+        ),
+        (
+            lambda report: report.__setitem__("ok", "raw-json-value"),
+            ["raw-json-value"],
+        ),
+        (
+            lambda report: report.__setitem__(
+                "errors",
+                [
+                    {
+                        "check": "unknown_check",
+                        "path": "$",
+                        "message": "do-not-echo-this-json-value",
+                    }
+                ],
+            ),
+            ["do-not-echo-this-json-value"],
+        ),
+    ],
+)
+def test_validate_review_result_report_schema_invalid_cases_fail_safely(
+    tmp_path,
+    capsys,
+    mutate,
+    raw_values: list[str],
+) -> None:
+    """Schema-invalid saved validation reports fail without raw details."""
+    saved_report = _valid_review_result_validation_report()
+    mutate(saved_report)
+    result_path = _write_review_result_validation_report(tmp_path, saved_report)
+
+    exit_code, report, stdout, stderr = _run_validate_review_result_report_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert report["ok"] is False
+    assert report["result_schema_valid"] is False
+    assert report["errors"] == [
+        {
+            "check": "result_schema_valid",
+            "path": "$",
+            "message": "result does not satisfy schema",
+        }
+    ]
+    _assert_review_result_report_output_is_safe(stdout, result_path)
+    for raw_value in raw_values:
+        assert raw_value not in stdout
+
+
+@pytest.mark.parametrize(
+    "unsafe_value",
+    [
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN PUBLIC KEY-----",
+        "/workspace/private/customer/path",
+        "RuntimeError: customer_data example",
+    ],
+)
+def test_validate_review_result_report_forbidden_patterns_fail_safely(
+    tmp_path,
+    capsys,
+    unsafe_value: str,
+) -> None:
+    """Saved reports with forbidden raw text fail with fixed diagnostics."""
+    saved_report = _valid_review_result_validation_report()
+    saved_report["errors"] = [
+        {
+            "check": "result_schema_valid",
+            "path": "$",
+            "message": "review result does not satisfy schema",
+        }
+    ]
+    saved_report["ok"] = False
+    saved_report["result_schema_valid"] = False
+    saved_report["decision_valid"] = False
+    saved_report["forbidden_patterns_absent"] = False
+    saved_report["unsafe_note"] = unsafe_value
+    result_path = _write_review_result_validation_report(tmp_path, saved_report)
+
+    exit_code, report, stdout, stderr = _run_validate_review_result_report_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert report["ok"] is False
+    assert any(
+        error["check"] == "result_schema_valid" for error in report["errors"]
+    )
+    assert any(
+        error["check"] == "forbidden_patterns_absent"
+        for error in report["errors"]
+    )
+    _assert_review_result_report_output_is_safe(stdout, result_path)
+
+
+def test_validate_review_result_report_json_output_file_matches_stdout(
+    tmp_path,
+    capsys,
+) -> None:
+    """--json --output writes the same JSON as stdout."""
+    result_path = _write_review_result_validation_report(
+        tmp_path,
+        _valid_review_result_validation_report(),
+    )
+    output_path = tmp_path / "reports" / "review-result-report-validation.json"
+
+    exit_code, report, stdout, stderr = _run_validate_review_result_report_json(
+        result_path,
+        capsys,
+        "--output",
+        str(output_path),
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert report["ok"] is True
+    assert output_path.read_text(encoding="utf-8") == stdout
+    _assert_review_result_report_output_is_safe(stdout, result_path, output_path)
+
+
+def test_validate_review_result_report_output_without_json_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """--output without --json fails as a usage error."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = _write_review_result_validation_report(
+        tmp_path,
+        _valid_review_result_validation_report(),
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(
+            [
+                "validate-review-result-report",
+                "--result",
+                str(result_path),
+                "--output",
+                str(tmp_path / "report-validation.json"),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert excinfo.value.code == 2
+    assert (
+        "validate-review-result-report --output requires --json" in captured.err
+    )
+    _assert_review_result_report_output_is_safe(captured.err, result_path)
+
+
+def test_validate_review_result_report_diagnostics_do_not_leak_raw_values(
+    tmp_path,
+    capsys,
+) -> None:
+    """Diagnostics omit raw JSON, paths, fingerprints, exceptions, and data."""
+    saved_report = _valid_review_result_validation_report()
+    raw_values = [
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN PUBLIC KEY-----",
+        "/workspace/private/customer/path",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "RuntimeError: customer_data example",
+        "Failed validating customer_data against local schema",
+        "customer@example.com",
+    ]
+    saved_report["unsafe_note"] = " ".join(raw_values)
+    result_path = _write_review_result_validation_report(tmp_path, saved_report)
+
+    exit_code, report, stdout, stderr = _run_validate_review_result_report_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert report["ok"] is False
+    _assert_review_result_report_output_is_safe(stdout, result_path)
+    for raw_value in raw_values:
+        assert raw_value not in stdout

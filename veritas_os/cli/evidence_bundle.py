@@ -65,6 +65,13 @@ REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID = (
 VALIDATE_REVIEW_RESULT_VALIDATOR = (
     "veritas-evidence-bundle validate-review-result"
 )
+REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/"
+    "reviewer_handoff_review_result_report_validation_report.schema.json"
+)
+VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR = (
+    "veritas-evidence-bundle validate-review-result-report"
+)
 VERIFICATION_RESULT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
@@ -84,6 +91,11 @@ REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
     / "reviewer_handoff_review_result.schema.json"
+)
+REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "reviewer_handoff_review_result_validation_report.schema.json"
 )
 
 
@@ -871,6 +883,155 @@ def _run_validate_review_result(
     return exit_code
 
 
+def _review_result_report_errors(
+    *,
+    result_readable: bool,
+    result_json_valid: bool,
+    result_schema_valid: bool,
+    forbidden_patterns_absent: bool,
+) -> list[dict[str, str]]:
+    """Build fixed diagnostics for saved review-result report validation.
+
+    Diagnostics intentionally omit raw file paths, raw JSON values, raw
+    fingerprints, exception text, schema validator messages, secrets, and
+    customer or production data from the externally supplied saved report.
+    """
+    if not result_readable:
+        return [
+            {
+                "check": "result_readable",
+                "path": "$",
+                "message": "result file could not be read",
+            }
+        ]
+    if not result_json_valid:
+        return [
+            {
+                "check": "result_json_valid",
+                "path": "$",
+                "message": "result file is not valid JSON",
+            }
+        ]
+
+    errors: list[dict[str, str]] = []
+    if not result_schema_valid:
+        errors.append(
+            {
+                "check": "result_schema_valid",
+                "path": "$",
+                "message": "result does not satisfy schema",
+            }
+        )
+    if not forbidden_patterns_absent:
+        errors.append(
+            {
+                "check": "forbidden_patterns_absent",
+                "path": "$",
+                "message": "result contains forbidden sensitive or raw text",
+            }
+        )
+    return errors
+
+
+def _validate_review_result_report_status(
+    result_path: Path,
+) -> tuple[dict[str, Any], int]:
+    """Validate a saved validate-review-result JSON report shape safely.
+
+    This second-level validator checks only the saved
+    ``validate-review-result --json`` validation report. It validates JSON
+    parsing, report schema conformance, fixed validator/schema metadata,
+    boolean-only status fields, fixed diagnostics, and absence of sensitive or
+    raw diagnostic patterns. It does not re-run reviewer review, create trust,
+    replace out-of-band public key trust, prove regulatory certification,
+    complete third-party audit approval, or establish cryptographic truth.
+    """
+    try:
+        raw_report = result_path.read_text(encoding="utf-8")
+    except OSError:
+        report_document = None
+        result_readable = False
+        result_json_valid = False
+        result_schema_valid = False
+        forbidden_patterns_absent = False
+        exit_code = 2
+    else:
+        result_readable = True
+        try:
+            report_document = json.loads(raw_report)
+        except json.JSONDecodeError:
+            report_document = None
+            result_json_valid = False
+            result_schema_valid = False
+            forbidden_patterns_absent = False
+            exit_code = 1
+        else:
+            result_json_valid = True
+            result_schema_valid = _json_schema_valid(
+                report_document,
+                REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_PATH,
+            )
+            forbidden_patterns_absent = not _contains_forbidden_review_result_pattern(
+                report_document
+            )
+            exit_code = 0 if result_schema_valid and forbidden_patterns_absent else 1
+
+    ok = result_schema_valid and forbidden_patterns_absent
+    output = {
+        "ok": ok,
+        "result_schema_valid": result_schema_valid,
+        "forbidden_patterns_absent": forbidden_patterns_absent,
+        "validated_schema_id": (
+            REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "report_schema_id": (
+            REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "validator": VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR,
+        "errors": _review_result_report_errors(
+            result_readable=result_readable,
+            result_json_valid=result_json_valid,
+            result_schema_valid=result_schema_valid,
+            forbidden_patterns_absent=forbidden_patterns_absent,
+        ),
+    }
+    return output, exit_code
+
+
+def _run_validate_review_result_report(
+    result_path: Path,
+    *,
+    json_output: bool = False,
+    output_path: Optional[Path] = None,
+) -> int:
+    """Run saved review-result validation report schema validation."""
+    output, exit_code = _validate_review_result_report_status(result_path)
+    if json_output:
+        output_json = json.dumps(output, indent=2, ensure_ascii=False)
+        if output_path is not None:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output_json + "\n", encoding="utf-8")
+            except OSError:
+                print(
+                    "error: failed to write review result report validation report",
+                    file=sys.stderr,
+                )
+                return 2
+        # codeql[py/clear-text-logging-sensitive-data]: this emits only fixed
+        # schema identifiers, booleans, and fixed diagnostics; raw paths,
+        # fingerprints, exception text, schema validator messages, secrets,
+        # customer data, and saved JSON values are intentionally not emitted.
+        print(output_json)
+        return exit_code
+
+    status = "PASS" if output["ok"] else "FAIL"
+    print(f"Reviewer handoff review result validation report schema: {status}")
+    for error in output["errors"]:
+        print(f"  error [{error['check']}]: {error['message']}")
+    return exit_code
+
+
 def _run_validate_result(
     result_path: Path,
     *,
@@ -1038,6 +1199,33 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    review_result_report = sub.add_parser(
+        "validate-review-result-report",
+        help=(
+            "Validate a saved validate-review-result JSON validation report "
+            "against the schema"
+        ),
+    )
+    review_result_report.add_argument(
+        "--result",
+        required=True,
+        type=Path,
+        help="Saved JSON report file from validate-review-result --json",
+    )
+    review_result_report.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable report validation report as JSON",
+    )
+    review_result_report.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Write the JSON review result report validation report to this "
+            "UTF-8 file. Requires --json and does not suppress stdout JSON."
+        ),
+    )
+
     key_provenance = sub.add_parser(
         "validate-key-provenance",
         help=(
@@ -1151,6 +1339,16 @@ def main(argv: Optional[list[str]] = None) -> int:
             parser.error("validate-review-result --output requires --json")
             return 2
         return _run_validate_review_result(
+            args.result,
+            json_output=args.json,
+            output_path=args.output,
+        )
+
+    if args.command == "validate-review-result-report":
+        if args.output is not None and not args.json:
+            parser.error("validate-review-result-report --output requires --json")
+            return 2
+        return _run_validate_review_result_report(
             args.result,
             json_output=args.json,
             output_path=args.output,

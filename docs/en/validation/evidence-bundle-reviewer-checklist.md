@@ -174,6 +174,24 @@ That schema validates the validation report shape and records validation status,
 not cryptographic truth by itself. Its public output is boolean-only with fixed
 diagnostics.
 
+To validate the saved `validate-review-result --json` validation report shape
+later, run:
+
+```bash
+veritas-evidence-bundle validate-review-result-report \
+  --result reviewer-review-result-validation.json \
+  --json \
+  --output reviewer-review-result-report-validation.json
+```
+
+`validate-review-result-report` validates report shape only. It does not re-run
+reviewer review, create trust, replace out-of-band public key trust, prove
+regulatory certification, indicate completed third-party audit approval, or
+establish cryptographic truth. It records validation-report structure, not
+cryptographic truth by itself, and emits only booleans, fixed schema
+identifiers, and fixed diagnostics. Its JSON output has a schema at
+[`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_report_validation_report.schema.json).
+
 ## Verification order
 
 | Step | Reviewer action | PASS criterion | FAIL / follow-up criterion |

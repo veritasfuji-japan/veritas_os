@@ -2135,6 +2135,16 @@ which validates the validation report shape. The command records validation
 status and checks review-result structure only: it does not create trust, does
 not replace out-of-band public key trust, does not prove regulatory
 certification, is not completed third-party audit approval, and does not
-establish cryptographic truth by itself.
+establish cryptographic truth by itself. Use `veritas-evidence-bundle
+validate-review-result-report --result reviewer-review-result-validation.json
+--json --output reviewer-review-result-report-validation.json` to validate the
+saved validation report emitted by `validate-review-result --json`. This
+second-level command validates report shape only; it does not re-run reviewer
+review, create trust, replace out-of-band public key trust, prove regulatory
+certification, indicate completed third-party audit approval, or establish
+cryptographic truth. It records validation-report structure, not cryptographic
+truth by itself. Its JSON output has a stable JSON Schema contract at
+[`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](schemas/reviewer_handoff_review_result_report_validation_report.schema.json)
+and remains boolean-only with fixed diagnostics.
 
 Reviewer Evidence Packets may include optional Trusted Public Key Provenance validation artifact references (`trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`). Use the [Reviewer Key Provenance Walkthrough](docs/en/validation/reviewer-key-provenance-walkthrough.md) for the copyable review sequence and the [Reviewer Handoff Guide](docs/en/validation/reviewer-handoff-guide.md) for what to send, what to verify, and what not to infer. These references help reviewers check public key trust provenance, but the packet does not create trust, does not re-run cryptographic verification, does not replace out-of-band public key trust, is not regulatory certification, and is not completed third-party audit approval. Matching fingerprints support correlation only; they are not standalone trust proof. Reviewer Evidence Packets reference artifacts; they do not prove trust alone. Packet metadata references fixed artifact names and schema identifiers only, not raw fingerprints, raw local paths, exception text, schema validator messages, or externally supplied JSON values.
