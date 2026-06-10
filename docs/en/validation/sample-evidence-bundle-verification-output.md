@@ -167,6 +167,62 @@ regulatory certification or completed third-party audit approval. A saved
 report for an existing result file, not evidence of a new Evidence Bundle
 verification run.
 
+## Validating trusted public key provenance correlation
+
+After strict verification and receipt preservation, reviewers can validate the
+receipt shape and correlate its fingerprint with the saved verification result:
+
+```bash
+veritas-evidence-bundle validate-key-provenance \
+  --receipt trusted-public-key-provenance.json \
+  --verification-result verification-result.json
+```
+
+Illustrative success output:
+
+```text
+Trusted public key provenance validation: PASS
+Receipt schema: PASS
+Verification result schema: PASS
+Fingerprint correlation: PASS
+Bundle-internal key used: PASS
+Strict authenticity result: PASS
+```
+
+Illustrative failure output:
+
+```text
+Trusted public key provenance validation: FAIL
+Receipt schema: PASS
+Verification result schema: PASS
+Fingerprint correlation: FAIL
+Bundle-internal key used: PASS
+Strict authenticity result: PASS
+  error [fingerprint_correlation_ok] at $['public_key_fingerprint_sha256']: receipt and verification result public key fingerprints do not match
+```
+
+For machine-readable output and saved audit evidence, use `--json --output`:
+
+```bash
+veritas-evidence-bundle validate-key-provenance \
+  --receipt trusted-public-key-provenance.json \
+  --verification-result verification-result.json \
+  --json \
+  --output key-provenance-validation.json
+```
+
+The stdout JSON and saved UTF-8 JSON file are byte-for-byte identical, including
+failure reports. `--output` without `--json` fails clearly. The public report
+does not echo raw fingerprint values, raw file paths, raw schema validator
+messages, or raw exception text; raw fingerprints remain in the source receipt
+and verification-result artifacts. This command validates receipt shape,
+validates saved verification-result shape, checks exact fingerprint correlation,
+rejects `bundle_internal_key_used: true`, and confirms strict authenticity
+success. It does not create trust by itself, does not re-run cryptographic
+verification, does not prove regulatory certification, and does not complete
+third-party audit approval. Matching fingerprints support correlation, not
+standalone trust.
+
 ## Successful strict verification
 
 Illustrative output:
