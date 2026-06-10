@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
+  "title": "Trusted Public Key Provenance Result Validation Report",
+  "description": "Machine-readable report contract emitted by veritas-evidence-bundle validate-key-provenance-result --json. This schema validates only the validator result shape for a saved validate-key-provenance --json report. It does not re-run key provenance validation, re-run cryptographic verification, create trust, prove regulatory certification, or complete third-party audit approval. The report intentionally exposes booleans, fixed schema identifiers, and fixed diagnostics only; it does not expose raw fingerprints, raw file paths, raw exception text, raw schema validator messages, or raw JSON values from the saved report.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ok",
+    "result_schema_valid",
+    "validated_schema_id",
+    "report_schema_id",
+    "validator",
+    "errors"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "Overall validate-key-provenance-result status. True means the saved validate-key-provenance --json report conformed to its JSON Schema."
+    },
+    "result_schema_valid": {
+      "type": "boolean",
+      "description": "True when the saved validate-key-provenance --json report conforms to the trusted public key provenance validation report schema."
+    },
+    "validated_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+      "description": "Identifies the saved validate-key-provenance --json report schema checked by validate-key-provenance-result."
+    },
+    "report_schema_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
+        null
+      ],
+      "description": "Identifies this validator result schema. This metadata validates report shape only; it does not re-run key provenance validation, re-run cryptographic verification, or establish trust."
+    },
+    "validator": {
+      "type": "string",
+      "const": "veritas-evidence-bundle validate-key-provenance-result",
+      "description": "Identifies the validator command that emitted this report."
+    },
+    "errors": {
+      "type": "array",
+      "description": "Fixed public diagnostics for failed saved-report checks. Empty when ok is true.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "check",
+          "path",
+          "message"
+        ],
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "result_readable",
+              "result_json_valid",
+              "result_schema_valid"
+            ],
+            "description": "Fixed saved-report check that failed."
+          },
+          "path": {
+            "type": "string",
+            "enum": [
+              "$"
+            ],
+            "description": "Fixed public JSONPath-like location for the failed check."
+          },
+          "message": {
+            "type": "string",
+            "enum": [
+              "result file could not be read",
+              "result file is not valid JSON",
+              "result does not satisfy schema"
+            ],
+            "description": "Fixed public diagnostic. Raw external values, raw file paths, raw fingerprints, exception text, raw schema validator messages, and raw JSON values are not permitted."
+          }
+        }
+      }
+    }
+  }
+}

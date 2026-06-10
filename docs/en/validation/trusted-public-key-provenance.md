@@ -123,12 +123,14 @@ Trusted public key provenance validation report schema: PASS
 Add `--json` for a stable machine-readable report, and add `--output <path>`
 with `--json` to save byte-for-byte the same JSON emitted to stdout. Parent
 directories are created when needed, and `--output` without `--json` is
-rejected. This command validates the saved report shape only. It does not
-re-run key provenance validation, does not re-run cryptographic verification,
-does not create trust, is not regulatory certification, and is not completed
-third-party audit approval. Its public output uses fixed diagnostics and does
-not expose raw fingerprints, raw file paths, raw exception text, raw schema
-validator messages, or raw JSON values from the saved report.
+rejected. The JSON output has a dedicated Draft 2020-12 schema at
+[`schemas/trusted_public_key_provenance_result_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_result_validation_report.schema.json).
+That schema validates the validator result shape only. It does not re-run key
+provenance validation, does not re-run cryptographic verification, does not
+create trust, is not regulatory certification, and is not completed third-party
+audit approval. Its public output uses fixed diagnostics and does not expose
+raw fingerprints, raw file paths, raw exception text, raw schema validator
+messages, or raw JSON values from the saved report.
 
 The command checks that:
 

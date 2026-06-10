@@ -46,6 +46,10 @@ VALIDATE_RESULT_VALIDATOR = "veritas-evidence-bundle validate-result"
 TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/trusted_public_key_provenance_validation_report.schema.json"
 )
+TRUSTED_PUBLIC_KEY_PROVENANCE_RESULT_VALIDATION_REPORT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/"
+    "trusted_public_key_provenance_result_validation_report.schema.json"
+)
 VALIDATE_KEY_PROVENANCE_VALIDATOR = "veritas-evidence-bundle validate-key-provenance"
 VALIDATE_KEY_PROVENANCE_RESULT_VALIDATOR = (
     "veritas-evidence-bundle validate-key-provenance-result"
@@ -546,6 +550,9 @@ def _validate_key_provenance_result_status(
         "result_schema_valid": result_schema_valid,
         "validated_schema_id": (
             TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "report_schema_id": (
+            TRUSTED_PUBLIC_KEY_PROVENANCE_RESULT_VALIDATION_REPORT_SCHEMA_ID
         ),
         "validator": VALIDATE_KEY_PROVENANCE_RESULT_VALIDATOR,
         "errors": _key_provenance_result_report_errors(
