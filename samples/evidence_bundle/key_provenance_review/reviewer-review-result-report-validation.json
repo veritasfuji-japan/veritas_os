@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "result_schema_valid": true,
+  "forbidden_patterns_absent": true,
+  "validated_schema_id": "https://veritas-os.example/schemas/reviewer_handoff_review_result_validation_report.schema.json",
+  "report_schema_id": "https://veritas-os.example/schemas/reviewer_handoff_review_result_report_validation_report.schema.json",
+  "validator": "veritas-evidence-bundle validate-review-result-report",
+  "errors": []
+}

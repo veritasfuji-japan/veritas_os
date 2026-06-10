@@ -2114,7 +2114,13 @@ certification, and are not completed third-party audit approval. Matching
 fingerprints support correlation only, not standalone trust. The sample set
 now includes `sample-artifact-manifest.json` to index expected artifacts, roles,
 schemas, and SHA-256 digests, plus `reviewer-handoff-review-result.json` as
-a reviewer Review Result / Acceptance Record. CI validates the sample artifact chain, manifest,
+a reviewer Review Result / Acceptance Record and saved reviewer result
+validation reports (`reviewer-review-result-validation.json` and
+`reviewer-review-result-report-validation.json`). These saved reports
+demonstrate validation output shape and validation status only; they do not
+create trust, replace out-of-band public key trust, prove regulatory
+certification, represent completed third-party audit approval, or establish
+cryptographic truth by themselves. CI validates the sample artifact chain, manifest,
 and artifact hashes for structure, JSON Schema conformance, fixed artifact
 references, and forbidden sensitive/raw diagnostic patterns only; hash matching
 supports sample integrity, not standalone trust. CI validation does not create

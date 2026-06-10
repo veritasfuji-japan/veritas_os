@@ -27,6 +27,8 @@ EXPECTED_ARTIFACTS = (
     "key-provenance-result-validation.json",
     "reviewer-evidence-packet.json",
     "reviewer-handoff-review-result.json",
+    "reviewer-review-result-validation.json",
+    "reviewer-review-result-report-validation.json",
     "README.md",
 )
 EXPECTED_ROLES = {
@@ -38,6 +40,12 @@ EXPECTED_ROLES = {
     ),
     "reviewer-evidence-packet.json": "reviewer_evidence_packet",
     "reviewer-handoff-review-result.json": "reviewer_handoff_review_result",
+    "reviewer-review-result-validation.json": (
+        "reviewer_handoff_review_result_validation_report"
+    ),
+    "reviewer-review-result-report-validation.json": (
+        "reviewer_handoff_review_result_report_validation_report"
+    ),
     "README.md": "sample_readme",
 }
 EXPECTED_SCHEMA_IDS = {
@@ -63,6 +71,14 @@ EXPECTED_SCHEMA_IDS = {
     "reviewer-handoff-review-result.json": (
         "https://veritas-os.example/schemas/"
         "reviewer_handoff_review_result.schema.json"
+    ),
+    "reviewer-review-result-validation.json": (
+        "https://veritas-os.example/schemas/"
+        "reviewer_handoff_review_result_validation_report.schema.json"
+    ),
+    "reviewer-review-result-report-validation.json": (
+        "https://veritas-os.example/schemas/"
+        "reviewer_handoff_review_result_report_validation_report.schema.json"
     ),
     "README.md": None,
 }
@@ -114,7 +130,6 @@ def _validate_manifest(payload: dict[str, Any], tmp_path: Path) -> None:
 
     schema = _load_json(MANIFEST_SCHEMA_PATH)
     jsonschema.Draft202012Validator(schema).validate(payload)
-
 
 
 def _validation_error_types() -> tuple[type[BaseException], ...]:

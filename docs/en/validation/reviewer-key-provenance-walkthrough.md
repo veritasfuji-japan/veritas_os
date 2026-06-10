@@ -47,9 +47,14 @@ digests. CI validates the illustrative sample chain and manifest for JSON Schema
 conformance, fixed artifact references, artifact hashes, and forbidden
 sensitive/raw diagnostic patterns only. The sample set also includes
 `reviewer-handoff-review-result.json` as an illustrative Review Result /
-Acceptance Record. Hash matching supports sample integrity, not standalone
-trust, and CI validation does not create trust or replace out-of-band public
-key trust.
+Acceptance Record, plus `reviewer-review-result-validation.json` and
+`reviewer-review-result-report-validation.json` as saved reviewer result
+validation report artifacts. These reports demonstrate validation output shape
+and validation status only; they do not create trust, replace out-of-band public
+key trust, prove regulatory certification, represent completed third-party
+audit approval, or establish cryptographic truth by themselves. Hash matching
+supports sample integrity, not standalone trust, and CI validation does not
+create trust or replace out-of-band public key trust.
 
 ## Full reviewer sequence
 
@@ -68,7 +73,7 @@ key trust.
     shape and review-boundary acknowledgements.
 11. Run `validate-review-result-report` to validate the saved
     `validate-review-result --json` validation report shape.
-11. Confirm `sample-artifact-manifest.json` lists the full illustrative sample
+12. Confirm `sample-artifact-manifest.json` lists the full illustrative sample
    set and that CI/sample validation checks the listed SHA-256 digests.
 
 ## 1. Verify the Evidence Bundle strictly
@@ -195,5 +200,6 @@ out-of-band public key trust context.
 | `key-provenance-result-validation.json` | `veritas-evidence-bundle validate-key-provenance-result --json --output key-provenance-result-validation.json` | Reviewer packet review and schema-aware audit tooling | [`schemas/trusted_public_key_provenance_result_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_result_validation_report.schema.json) | Records that the saved key provenance validation report itself matches the expected result-validation report shape. |
 | `reviewer-evidence-packet.json` | Reviewer Evidence Packet export or assembly process | Reviewer packet validation/report tooling and reviewer inspection | [`docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`](../demo/schemas/reviewer-evidence-packet-v1.schema.json) | Points reviewers to the saved artifacts; it is a navigation and evidence-packet reference, not standalone trust proof. |
 | `reviewer-handoff-review-result.json` | Reviewer review process | `veritas-evidence-bundle validate-review-result --result reviewer-handoff-review-result.json` and reviewer inspection | [`schemas/reviewer_handoff_review_result.schema.json`](../../../schemas/reviewer_handoff_review_result.schema.json) | Records artifacts checked, limitations acknowledged, reviewer scope, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`); it records outcome, not cryptographic truth by itself. |
-| `reviewer-review-result-validation.json` | `veritas-evidence-bundle validate-review-result --json --output reviewer-review-result-validation.json` | `veritas-evidence-bundle validate-review-result-report --result reviewer-review-result-validation.json` | [`schemas/reviewer_handoff_review_result_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_validation_report.schema.json) | Records saved review-result validation-report structure only; it does not re-run reviewer review, create trust, replace out-of-band public key trust, prove regulatory certification, or establish cryptographic truth. |
+| `reviewer-review-result-validation.json` | `veritas-evidence-bundle validate-review-result --json --output reviewer-review-result-validation.json` | `veritas-evidence-bundle validate-review-result-report --result reviewer-review-result-validation.json` | [`schemas/reviewer_handoff_review_result_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_validation_report.schema.json) | Records saved review-result validation-report structure and validation status only; it does not re-run reviewer review, create trust, replace out-of-band public key trust, prove regulatory certification, or establish cryptographic truth. |
+| `reviewer-review-result-report-validation.json` | `veritas-evidence-bundle validate-review-result-report --json --output reviewer-review-result-report-validation.json` | CI sample validation and reviewer inspection | [`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_report_validation_report.schema.json) | Records second-level validation-report shape only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 | `sample-artifact-manifest.json` | Illustrative sample set maintenance | CI sample validation and reviewer inspection | [`schemas/trusted_public_key_provenance_review_sample_manifest.schema.json`](../../../schemas/trusted_public_key_provenance_review_sample_manifest.schema.json) | Indexes expected sample artifacts, roles, schema identifiers, and SHA-256 digests; hash matching supports sample integrity, not standalone trust. |
