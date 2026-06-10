@@ -58,6 +58,10 @@ VALIDATE_KEY_PROVENANCE_RESULT_VALIDATOR = (
 REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/reviewer_handoff_review_result.schema.json"
 )
+REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/"
+    "reviewer_handoff_review_result_validation_report.schema.json"
+)
 VALIDATE_REVIEW_RESULT_VALIDATOR = (
     "veritas-evidence-bundle validate-review-result"
 )
@@ -823,6 +827,9 @@ def _validate_review_result_status(result_path: Path) -> tuple[dict[str, Any], i
         "artifacts_checked_shape_valid": artifacts_checked_shape_valid,
         "forbidden_patterns_absent": forbidden_patterns_absent,
         "validated_schema_id": REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID,
+        "report_schema_id": (
+            REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID
+        ),
         "validator": VALIDATE_REVIEW_RESULT_VALIDATOR,
         "errors": [],
     }

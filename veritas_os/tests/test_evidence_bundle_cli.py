@@ -1523,6 +1523,40 @@ REVIEW_RESULT_VALIDATED_SCHEMA_ID = (
     "reviewer_handoff_review_result.schema.json"
 )
 REVIEW_RESULT_VALIDATOR = "veritas-evidence-bundle validate-review-result"
+REVIEW_RESULT_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_review_result_validation_report.schema.json"
+)
+REVIEW_RESULT_REPORT_SCHEMA_PATH = Path(
+    "schemas/reviewer_handoff_review_result_validation_report.schema.json"
+)
+
+
+def _load_review_result_validation_report_schema() -> dict[str, Any]:
+    """Load the validate-review-result JSON validation report Schema."""
+    return json.loads(
+        REVIEW_RESULT_REPORT_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+
+
+def _assert_review_result_validation_report_schema(
+    output: dict[str, Any],
+) -> None:
+    """Assert validate-review-result --json output matches its Schema."""
+    import jsonschema
+
+    schema = _load_review_result_validation_report_schema()
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.Draft202012Validator(schema).validate(output)
+
+
+def _assert_review_result_validation_report_metadata(
+    output: dict[str, Any],
+) -> None:
+    """Assert validate-review-result reports include fixed metadata."""
+    assert output["validated_schema_id"] == REVIEW_RESULT_VALIDATED_SCHEMA_ID
+    assert output["report_schema_id"] == REVIEW_RESULT_REPORT_SCHEMA_ID
+    assert output["validator"] == REVIEW_RESULT_VALIDATOR
 
 
 def _load_review_result_sample() -> dict[str, Any]:
@@ -1551,6 +1585,8 @@ def _run_validate_review_result_json(result_path: Path, capsys) -> dict[str, Any
         assert exit_code == 0
     else:
         assert exit_code == 1
+    _assert_review_result_validation_report_schema(output)
+    _assert_review_result_validation_report_metadata(output)
     return output
 
 
@@ -1566,6 +1602,7 @@ def test_validate_review_result_valid_sample_passes(capsys) -> None:
         "artifacts_checked_shape_valid": True,
         "forbidden_patterns_absent": True,
         "validated_schema_id": REVIEW_RESULT_VALIDATED_SCHEMA_ID,
+        "report_schema_id": REVIEW_RESULT_REPORT_SCHEMA_ID,
         "validator": REVIEW_RESULT_VALIDATOR,
         "errors": [],
     }
@@ -1652,10 +1689,11 @@ def test_validate_review_result_json_output_file_matches_stdout(tmp_path, capsys
     captured = capsys.readouterr()
 
     assert exit_code == 0
+    stdout_output = json.loads(captured.out)
+    file_output = json.loads(output_path.read_text(encoding="utf-8"))
     assert captured.err == ""
-    assert json.loads(captured.out) == json.loads(
-        output_path.read_text(encoding="utf-8")
-    )
+    assert stdout_output == file_output
+    _assert_review_result_validation_report_schema(stdout_output)
 
 
 def test_validate_review_result_diagnostics_do_not_leak_raw_values(
@@ -1680,3 +1718,31 @@ def test_validate_review_result_diagnostics_do_not_leak_raw_values(
     assert raw_value not in captured.out
     assert str(result_path) not in captured.out
     assert "Reviewer handoff review result validation: FAIL" in captured.out
+
+
+def test_validate_review_result_json_diagnostics_do_not_leak_raw_values(
+    tmp_path,
+    capsys,
+) -> None:
+    """JSON diagnostics expose fixed strings, not sensitive raw input values."""
+    raw_values = [
+        "/workspace/private/customer/path",
+        "APPROVED_BY_CUSTOMER_PLACEHOLDER",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "RuntimeError: customer_data example",
+        "Failed validating customer_data against local schema",
+    ]
+    result = _load_review_result_sample()
+    result["decision"] = raw_values[1]
+    result["notes"] = " ".join(raw_values)
+    result_path = _write_review_result(tmp_path, result)
+
+    output = _run_validate_review_result_json(result_path, capsys)
+    rendered_output = json.dumps(output, sort_keys=True)
+
+    assert output["ok"] is False
+    assert output["decision_valid"] is False
+    assert output["forbidden_patterns_absent"] is False
+    assert str(result_path) not in rendered_output
+    for raw_value in raw_values:
+        assert raw_value not in rendered_output

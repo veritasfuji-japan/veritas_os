@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/reviewer_handoff_review_result_validation_report.schema.json",
+  "title": "Reviewer Handoff Review Result Validation Report",
+  "description": "Machine-readable report contract emitted by veritas-evidence-bundle validate-review-result --json. This schema validates only the shape of the validation report for a saved reviewer-handoff-review-result.json artifact. It does not create trust, does not replace out-of-band public key trust, does not prove regulatory certification, and is not completed third-party audit approval. The report records validation status, not cryptographic truth by itself. The report intentionally exposes booleans, fixed schema identifiers, and fixed diagnostics only; it does not expose raw file paths, raw JSON values, raw fingerprints, exception text, raw schema validator messages, secrets, or customer data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ok",
+    "result_schema_valid",
+    "decision_valid",
+    "limitations_acknowledged",
+    "artifacts_checked_shape_valid",
+    "forbidden_patterns_absent",
+    "validated_schema_id",
+    "report_schema_id",
+    "validator",
+    "errors"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "Overall validate-review-result status. True means the saved review result conformed to schema and review-boundary checks."
+    },
+    "result_schema_valid": {
+      "type": "boolean",
+      "description": "True when the saved reviewer handoff review result conforms to its JSON Schema."
+    },
+    "decision_valid": {
+      "type": "boolean",
+      "description": "True when the saved review result decision is one of the fixed supported decision values."
+    },
+    "limitations_acknowledged": {
+      "type": "boolean",
+      "description": "True when required limitation acknowledgements are present and boolean true."
+    },
+    "artifacts_checked_shape_valid": {
+      "type": "boolean",
+      "description": "True when required artifact references are present with fixed schema identifiers and checked status."
+    },
+    "forbidden_patterns_absent": {
+      "type": "boolean",
+      "description": "True when the saved review result does not contain forbidden sensitive or raw diagnostic patterns."
+    },
+    "validated_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/reviewer_handoff_review_result.schema.json",
+      "description": "Identifies the reviewer handoff review result schema checked by validate-review-result."
+    },
+    "report_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/reviewer_handoff_review_result_validation_report.schema.json",
+      "description": "Identifies this validator result schema. This metadata validates report shape only; it does not create trust or establish cryptographic truth."
+    },
+    "validator": {
+      "type": "string",
+      "const": "veritas-evidence-bundle validate-review-result",
+      "description": "Identifies the validator command that emitted this report."
+    },
+    "errors": {
+      "type": "array",
+      "description": "Fixed public diagnostics for failed review-result validation checks. Empty when ok is true.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "check",
+          "path",
+          "message"
+        ],
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "result_json_valid",
+              "result_schema_valid",
+              "decision_valid",
+              "limitations_acknowledged",
+              "artifacts_checked_shape_valid",
+              "forbidden_patterns_absent"
+            ],
+            "description": "Fixed review-result validation check that failed."
+          },
+          "path": {
+            "type": "string",
+            "enum": [
+              "$"
+            ],
+            "description": "Fixed public JSONPath-like location for the failed check."
+          },
+          "message": {
+            "type": "string",
+            "enum": [
+              "result file is not valid JSON or could not be read",
+              "review result does not satisfy schema",
+              "decision must be ACCEPT, REJECT, or NEEDS_FOLLOW_UP",
+              "required limitation acknowledgements must be boolean true",
+              "required artifact references must be present and checked",
+              "review result contains forbidden sensitive or raw diagnostic text"
+            ],
+            "description": "Fixed public diagnostic. Raw external values, raw file paths, raw fingerprints, exception text, raw schema validator messages, and raw JSON values are not permitted."
+          }
+        }
+      }
+    }
+  }
+}
