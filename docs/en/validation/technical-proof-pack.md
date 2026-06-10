@@ -63,6 +63,7 @@ Start here for the completed reviewer path:
 - [Sample Evidence Bundle Verification Output](sample-evidence-bundle-verification-output.md)
 - [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md)
 - [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
+- [Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md)
 - [External Audit Readiness Pack](external-audit-readiness.md)
 
 Boundaries:

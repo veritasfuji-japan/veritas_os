@@ -1,7 +1,8 @@
 # Evidence Bundle Verification JSON Contract
 
 For reviewer/operator key trust records, pair this contract with the
-[Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md).
+[Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md) and the
+[Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md).
 Strict verification requires trusted public key provenance before reviewers
 rely on authenticity. The `public_key_fingerprint_sha256` field records key
 material evidence; it is not trust proof. Matching fingerprints support
