@@ -205,3 +205,15 @@ key, the bundle is not reviewer-facing verified evidence.
   [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
 - Bundle contents and delivery policy:
   [External Audit Readiness Pack](external-audit-readiness.md)
+
+## Reviewer Evidence Packet key provenance references
+
+Reviewer Evidence Packets may include an optional `key_provenance` metadata section that references the Trusted Public Key Provenance validation artifacts by fixed artifact name and schema identifier:
+
+- `trusted-public-key-provenance.json`
+- `key-provenance-validation.json`
+- `key-provenance-result-validation.json`
+
+These references help reviewers locate the artifacts used to check public key trust provenance for strict Evidence Bundle signature review. The packet does not create trust by itself, does not re-run cryptographic verification, and does not replace the out-of-band reviewer/operator trust channel. Matching fingerprints support correlation between the verification result and the Trusted Public Key Provenance Receipt; matching fingerprints are not standalone trust proof.
+
+Reviewer Evidence Packet metadata must not embed raw public key fingerprints, raw local file paths, raw exception text, raw schema validator messages, or raw JSON values copied from externally supplied artifacts. It should reference only the stable artifact names and schema identifiers above. The packet is not regulatory certification and is not completed third-party audit approval.

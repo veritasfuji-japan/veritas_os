@@ -665,8 +665,23 @@
   ],
   "demo_id": "saas_permission_change_governed_execution_v1",
   "generated_at": "2026-04-26T00:00:00+00:00",
+  "key_provenance": {
+    "key_provenance_result_validation_report": {
+      "artifact_name": "key-provenance-result-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json"
+    },
+    "key_provenance_validation_report": {
+      "artifact_name": "key-provenance-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json"
+    },
+    "trusted_public_key_provenance_receipt": {
+      "artifact_name": "trusted-public-key-provenance.json",
+      "required_for_strict_signature_review": true,
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json"
+    }
+  },
   "local_offline_only": true,
-  "packet_hash": "c69551bc5fff66657ff8b00461bcedf2f998a171ada570064a48badab2c047d4",
+  "packet_hash": "497f9a8c97cf58f7be0658458e5f65f3cef285773fdc30c18341f1126390257f",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

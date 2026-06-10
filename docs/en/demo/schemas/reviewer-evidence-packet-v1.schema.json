@@ -74,6 +74,9 @@
       "items": {
         "$ref": "#/$defs/evaluation_governance_artifact"
       }
+    },
+    "key_provenance": {
+      "$ref": "#/$defs/key_provenance"
     }
   },
   "$defs": {
@@ -656,6 +659,110 @@
         },
         "required_for_review": {
           "type": "boolean"
+        }
+      }
+    },
+    "artifact_name": {
+      "type": "string",
+      "enum": [
+        "trusted-public-key-provenance.json",
+        "key-provenance-validation.json",
+        "key-provenance-result-validation.json"
+      ]
+    },
+    "key_provenance_schema_id": {
+      "type": "string",
+      "enum": [
+        "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+        "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+        "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json"
+      ]
+    },
+    "key_provenance_artifact_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_name",
+        "schema_id"
+      ],
+      "properties": {
+        "artifact_name": {
+          "$ref": "#/$defs/artifact_name"
+        },
+        "schema_id": {
+          "$ref": "#/$defs/key_provenance_schema_id"
+        }
+      }
+    },
+    "trusted_public_key_provenance_receipt_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_name",
+        "schema_id",
+        "required_for_strict_signature_review"
+      ],
+      "properties": {
+        "artifact_name": {
+          "const": "trusted-public-key-provenance.json"
+        },
+        "schema_id": {
+          "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json"
+        },
+        "required_for_strict_signature_review": {
+          "const": true
+        }
+      }
+    },
+    "key_provenance_validation_report_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_name",
+        "schema_id"
+      ],
+      "properties": {
+        "artifact_name": {
+          "const": "key-provenance-validation.json"
+        },
+        "schema_id": {
+          "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json"
+        }
+      }
+    },
+    "key_provenance_result_validation_report_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_name",
+        "schema_id"
+      ],
+      "properties": {
+        "artifact_name": {
+          "const": "key-provenance-result-validation.json"
+        },
+        "schema_id": {
+          "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json"
+        }
+      }
+    },
+    "key_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trusted_public_key_provenance_receipt",
+        "key_provenance_validation_report",
+        "key_provenance_result_validation_report"
+      ],
+      "properties": {
+        "trusted_public_key_provenance_receipt": {
+          "$ref": "#/$defs/trusted_public_key_provenance_receipt_reference"
+        },
+        "key_provenance_validation_report": {
+          "$ref": "#/$defs/key_provenance_validation_report_reference"
+        },
+        "key_provenance_result_validation_report": {
+          "$ref": "#/$defs/key_provenance_result_validation_report_reference"
         }
       }
     }

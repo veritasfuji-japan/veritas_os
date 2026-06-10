@@ -132,3 +132,51 @@ def test_no_network_or_environment_dependency_required(monkeypatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     packet = build_reviewer_evidence_packet()
     assert packet["local_offline_only"] is True
+
+
+def test_packet_key_provenance_uses_fixed_artifact_references() -> None:
+    packet = build_reviewer_evidence_packet()
+    key_provenance = packet["key_provenance"]
+
+    assert key_provenance == {
+        "trusted_public_key_provenance_receipt": {
+            "artifact_name": "trusted-public-key-provenance.json",
+            "schema_id": (
+                "https://veritas-os.example/schemas/"
+                "trusted_public_key_provenance_receipt.schema.json"
+            ),
+            "required_for_strict_signature_review": True,
+        },
+        "key_provenance_validation_report": {
+            "artifact_name": "key-provenance-validation.json",
+            "schema_id": (
+                "https://veritas-os.example/schemas/"
+                "trusted_public_key_provenance_validation_report.schema.json"
+            ),
+        },
+        "key_provenance_result_validation_report": {
+            "artifact_name": "key-provenance-result-validation.json",
+            "schema_id": (
+                "https://veritas-os.example/schemas/"
+                "trusted_public_key_provenance_result_validation_report.schema.json"
+            ),
+        },
+    }
+
+
+def test_packet_key_provenance_metadata_omits_raw_external_values() -> None:
+    packet = build_reviewer_evidence_packet()
+    metadata_text = str(packet["key_provenance"])
+
+    blocked_fragments = [
+        "public_key_fingerprint_sha256",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "/tmp/",
+        "C:\\\\",
+        "Traceback",
+        "ValidationError",
+        "jsonschema.exceptions",
+        "schema validator",
+    ]
+    for fragment in blocked_fragments:
+        assert fragment not in metadata_text

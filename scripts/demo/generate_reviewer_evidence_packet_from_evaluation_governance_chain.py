@@ -31,6 +31,11 @@ REVIEWER_PACKET_TEMPLATE_PATH = (
     / "docs/en/demo/examples"
     / "reviewer-evidence-packet-with-evaluation-governance-v1.json"
 )
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.demo.reviewer_key_provenance_metadata import key_provenance_metadata  # noqa: E402
+
 SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 ARTIFACT_TYPE_MAP = {
@@ -274,9 +279,7 @@ def validate_reviewer_packet(packet: dict[str, Any]) -> None:
     try:
         jsonschema.Draft202012Validator(schema).validate(packet)
     except jsonschema.ValidationError as exc:
-        raise ValueError(
-            f"Reviewer Evidence Packet schema validation failed: {exc}"
-        ) from exc
+        raise ValueError("Reviewer Evidence Packet schema validation failed") from exc
 
 
 def generate_reviewer_evidence_packet_from_chain(
@@ -315,6 +318,7 @@ def generate_reviewer_evidence_packet_from_chain(
     )
     packet["local_offline_only"] = True
     packet["evaluation_governance_artifacts"] = reviewer_artifacts
+    packet["key_provenance"] = key_provenance_metadata()
     packet["reviewer_notes"] = list(REVIEWER_NOTES)
     packet["packet_hash"] = _packet_hash(packet)
 
