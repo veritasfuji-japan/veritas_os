@@ -737,8 +737,23 @@
     }
   ],
   "generated_at": "2026-01-01T00:00:00Z",
+  "key_provenance": {
+    "key_provenance_result_validation_report": {
+      "artifact_name": "key-provenance-result-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json"
+    },
+    "key_provenance_validation_report": {
+      "artifact_name": "key-provenance-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json"
+    },
+    "trusted_public_key_provenance_receipt": {
+      "artifact_name": "trusted-public-key-provenance.json",
+      "required_for_strict_signature_review": true,
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json"
+    }
+  },
   "local_offline_only": true,
-  "packet_hash": "425af2062d031478088d0194daaf18462ce6c982e9db9d59598b28f9da0a852b",
+  "packet_hash": "ad718ce6e4068acc538e0f48c126e517c2f0f8285e96e324c03717e233b09641",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

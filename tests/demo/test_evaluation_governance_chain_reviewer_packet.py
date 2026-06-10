@@ -141,3 +141,89 @@ def test_unsupported_artifact_type_fails_clearly(tmp_path: Path) -> None:
             chain_manifest,
             tmp_path,
         )
+
+
+def test_schema_accepts_packet_without_key_provenance_section() -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+    packet.pop("key_provenance")
+
+    _validate_packet(packet)
+
+
+def test_schema_accepts_packet_with_key_provenance_section() -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+
+    _validate_packet(packet)
+    assert "key_provenance" in packet
+
+
+def test_key_provenance_schema_ids_match_existing_schema_ids() -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+    key_provenance = packet["key_provenance"]
+
+    schema_ids = {
+        name: _load_json(Path(path))["$id"]
+        for name, path in {
+            "trusted_public_key_provenance_receipt": (
+                "schemas/trusted_public_key_provenance_receipt.schema.json"
+            ),
+            "key_provenance_validation_report": (
+                "schemas/trusted_public_key_provenance_validation_report.schema.json"
+            ),
+            "key_provenance_result_validation_report": (
+                "schemas/"
+                "trusted_public_key_provenance_result_validation_report.schema.json"
+            ),
+        }.items()
+    }
+
+    for artifact_key, schema_id in schema_ids.items():
+        assert key_provenance[artifact_key]["schema_id"] == schema_id
+
+
+def test_key_provenance_metadata_uses_artifact_names_not_paths() -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+
+    artifact_names = [
+        entry["artifact_name"] for entry in packet["key_provenance"].values()
+    ]
+    assert artifact_names == [
+        "trusted-public-key-provenance.json",
+        "key-provenance-validation.json",
+        "key-provenance-result-validation.json",
+    ]
+    assert all("/" not in artifact_name for artifact_name in artifact_names)
+    assert all("\\\\" not in artifact_name for artifact_name in artifact_names)
+
+
+def test_key_provenance_metadata_omits_raw_sensitive_values() -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+    metadata_text = str(packet["key_provenance"])
+
+    blocked_fragments = [
+        "public_key_fingerprint_sha256",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "/tmp/",
+        "C:\\\\",
+        "Traceback",
+        "ValidationError",
+        "jsonschema.exceptions",
+        "schema validator",
+    ]
+    for fragment in blocked_fragments:
+        assert fragment not in metadata_text

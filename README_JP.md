@@ -1903,3 +1903,7 @@ Phase 2（今後）:
 
 - Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
 - Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
+
+### Reviewer Evidence Packet の key provenance 参照
+
+Reviewer Evidence Packet には、Trusted Public Key Provenance validation artifact（`trusted-public-key-provenance.json`、`key-provenance-validation.json`、`key-provenance-result-validation.json`）への optional な参照を含められます。これらはレビュアーが public key trust provenance を確認するための手がかりですが、packet 自体が trust を作るものではなく、cryptographic verification を再実行するものでもありません。また regulatory certification や completed third-party audit approval ではありません。fingerprint の一致は correlation を支援するだけで、単独の trust proof ではありません。packet metadata は固定 artifact name と schema identifier のみを参照し、raw fingerprint、raw local path、exception text、schema validator message、外部 artifact 由来の raw JSON value は埋め込みません。

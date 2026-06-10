@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.demo.reviewer_key_provenance_metadata import key_provenance_metadata
 from scripts.demo.saas_permission_change_governed_demo import (
     BOUNDARY_NOTE,
     run_saas_permission_change_governed_demo,
@@ -22,6 +23,8 @@ from veritas_os.security.hash import sha256_of_canonical_json
 PACKET_ID = "reviewer-evidence-packet-saas-permission-change-v1"
 PACKET_VERSION = "v1"
 PACKET_TITLE = "SaaS Permission-Change Governed Execution Reviewer Evidence Packet"
+
+
 REVIEWER_NOTES = [
     "This packet is generated from a local/offline fixture demo.",
     (
@@ -166,6 +169,7 @@ def build_reviewer_evidence_packet() -> dict[str, Any]:
         "local_offline_only": True,
         "cases": cases,
         "aggregate_summary": _aggregate_summary(cases),
+        "key_provenance": key_provenance_metadata(),
         "reviewer_notes": list(REVIEWER_NOTES),
         "packet_hash": "",
     }

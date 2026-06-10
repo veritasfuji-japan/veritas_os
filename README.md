@@ -2102,3 +2102,7 @@ We welcome contributions! Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for gu
 
 * Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
 * Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
+
+### Reviewer Evidence Packet key provenance references
+
+Reviewer Evidence Packets may include optional Trusted Public Key Provenance validation artifact references (`trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`). These references help reviewers check public key trust provenance, but the packet does not create trust, does not re-run cryptographic verification, is not regulatory certification, and is not completed third-party audit approval. Matching fingerprints support correlation only; they are not standalone trust proof. Packet metadata references fixed artifact names and schema identifiers only, not raw fingerprints, raw local paths, exception text, schema validator messages, or externally supplied JSON values.
