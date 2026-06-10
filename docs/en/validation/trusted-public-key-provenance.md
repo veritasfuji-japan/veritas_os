@@ -56,6 +56,69 @@ verification run and the out-of-band trust record. It is not regulatory
 certification and is not completed third-party audit approval. It is not
 standalone proof that the original Evidence Bundle is authentic.
 
+## CLI validation
+
+Use `validate-key-provenance` to validate the receipt shape, validate the saved
+Evidence Bundle verification result shape, and correlate the two saved
+fingerprints:
+
+```bash
+veritas-evidence-bundle validate-key-provenance \
+  --receipt trusted-public-key-provenance.json \
+  --verification-result verification-result.json
+```
+
+Successful human-readable output reports each check explicitly:
+
+```text
+Trusted public key provenance validation: PASS
+Receipt schema: PASS
+Verification result schema: PASS
+Fingerprint correlation: PASS
+Bundle-internal key used: PASS
+Strict authenticity result: PASS
+```
+
+For CI, UI, or audit-tool ingestion, add `--json`. Add `--output <path>` with
+`--json` to save the exact same JSON report that is emitted to stdout; failure
+reports are saved too, and parent directories are created when needed.
+`--output` without `--json` is rejected. To avoid echoing externally supplied
+key material or local environment details in logs, the public CLI report exposes
+only booleans and fixed diagnostics. It does not print raw fingerprint values,
+raw file paths, raw schema validator messages, or raw exception text; it only
+reports whether receipt and verification-result fingerprints are present and
+whether correlation passed. The raw fingerprints remain preserved in the source
+receipt and verification-result artifacts.
+
+```bash
+veritas-evidence-bundle validate-key-provenance \
+  --receipt trusted-public-key-provenance.json \
+  --verification-result verification-result.json \
+  --json \
+  --output key-provenance-validation.json
+```
+
+The command checks that:
+
+- `--receipt` conforms to
+  `schemas/trusted_public_key_provenance_receipt.schema.json`;
+- `--verification-result` conforms to
+  `schemas/evidence_bundle_verification_result.schema.json`;
+- both `public_key_fingerprint_sha256` values match exactly;
+- the receipt has `bundle_internal_key_used: false`; and
+- the saved result reports strict authenticity success: `signature_status:
+  "pass"`, `signature_verified: true`, and `authenticity_ok: true`.
+
+This command validates receipt shape and fingerprint correlation only. The CLI
+report intentionally does not echo raw fingerprint values, raw file paths, raw
+schema validator messages, or raw exception text; use the original receipt and
+verification-result artifacts when a reviewer must inspect exact fingerprints.
+It does not create trust by itself, does not re-run cryptographic verification,
+does not prove regulatory certification, and does not complete third-party
+audit approval. Matching fingerprints support correlation between a saved
+strict verification result and a reviewer/operator provenance record; they are
+not standalone trust.
+
 ## Fingerprint comparison
 
 Compare these fields exactly:
