@@ -225,6 +225,50 @@ checks exact fingerprint correlation, rejects `bundle_internal_key_used: true`,
 and confirms strict authenticity success. Matching fingerprints support
 correlation, not standalone trust.
 
+## Validating a saved key provenance validation report shape
+
+Saved `validate-key-provenance --json` reports can be checked against their
+Draft 2020-12 schema without re-running provenance or cryptographic checks:
+
+```bash
+veritas-evidence-bundle validate-key-provenance-result \
+  --result key-provenance-validation.json
+```
+
+Illustrative success output:
+
+```text
+Trusted public key provenance validation report schema: PASS
+```
+
+Illustrative failure output:
+
+```text
+Trusted public key provenance validation report schema: FAIL
+  error [result_schema_valid]: result does not satisfy schema
+```
+
+Illustrative `--json` success output:
+
+```json
+{
+  "ok": true,
+  "result_schema_valid": true,
+  "validated_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+  "validator": "veritas-evidence-bundle validate-key-provenance-result",
+  "errors": []
+}
+```
+
+Add `--json --output <path>` to save byte-for-byte the same JSON emitted to
+stdout; parent directories are created, and `--output` without `--json` fails
+clearly. `validate-key-provenance-result` validates saved report shape only. It
+does not re-run key provenance validation, does not re-run cryptographic
+verification, does not create trust, is not regulatory certification, and is
+not completed third-party audit approval. Output remains privacy-safe: it does
+not expose raw fingerprints, raw paths, raw exception text, raw schema
+validator messages, or raw JSON values from the saved report.
+
 ## Successful strict verification
 
 Illustrative output:
