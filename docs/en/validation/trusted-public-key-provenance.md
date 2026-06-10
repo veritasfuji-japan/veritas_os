@@ -106,6 +106,30 @@ veritas-evidence-bundle validate-key-provenance \
   --output key-provenance-validation.json
 ```
 
+Saved `validate-key-provenance --json` reports can be checked later with
+`validate-key-provenance-result`:
+
+```bash
+veritas-evidence-bundle validate-key-provenance-result \
+  --result key-provenance-validation.json
+```
+
+Successful human-readable output is:
+
+```text
+Trusted public key provenance validation report schema: PASS
+```
+
+Add `--json` for a stable machine-readable report, and add `--output <path>`
+with `--json` to save byte-for-byte the same JSON emitted to stdout. Parent
+directories are created when needed, and `--output` without `--json` is
+rejected. This command validates the saved report shape only. It does not
+re-run key provenance validation, does not re-run cryptographic verification,
+does not create trust, is not regulatory certification, and is not completed
+third-party audit approval. Its public output uses fixed diagnostics and does
+not expose raw fingerprints, raw file paths, raw exception text, raw schema
+validator messages, or raw JSON values from the saved report.
+
 The command checks that:
 
 - `--receipt` conforms to

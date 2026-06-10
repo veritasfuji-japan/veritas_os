@@ -47,6 +47,9 @@ TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/trusted_public_key_provenance_validation_report.schema.json"
 )
 VALIDATE_KEY_PROVENANCE_VALIDATOR = "veritas-evidence-bundle validate-key-provenance"
+VALIDATE_KEY_PROVENANCE_RESULT_VALIDATOR = (
+    "veritas-evidence-bundle validate-key-provenance-result"
+)
 VERIFICATION_RESULT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
@@ -56,6 +59,11 @@ TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
     / "trusted_public_key_provenance_receipt.schema.json"
+)
+TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "trusted_public_key_provenance_validation_report.schema.json"
 )
 
 
@@ -458,6 +466,131 @@ def _run_validate_key_provenance(
     return 0 if status.ok else 1
 
 
+def _key_provenance_result_report_errors(
+    *,
+    result_readable: bool,
+    result_json_valid: bool,
+    result_schema_valid: bool,
+) -> list[dict[str, str]]:
+    """Build fixed diagnostics for saved provenance report validation.
+
+    Diagnostics intentionally do not include raw file paths, exception text,
+    schema validator messages, raw fingerprints, or JSON values from the saved
+    report because saved validation reports may be externally supplied.
+    """
+    if not result_readable:
+        return [
+            {
+                "check": "result_readable",
+                "path": "$",
+                "message": "result file could not be read",
+            }
+        ]
+    if not result_json_valid:
+        return [
+            {
+                "check": "result_json_valid",
+                "path": "$",
+                "message": "result file is not valid JSON",
+            }
+        ]
+    if not result_schema_valid:
+        return [
+            {
+                "check": "result_schema_valid",
+                "path": "$",
+                "message": "result does not satisfy schema",
+            }
+        ]
+    return []
+
+
+def _validate_key_provenance_result_status(
+    result_path: Path,
+) -> tuple[dict[str, Any], int]:
+    """Validate a saved key provenance validation report shape safely.
+
+    The validator checks only the saved ``validate-key-provenance --json``
+    report against its JSON Schema. It does not re-run key provenance
+    validation, cryptographic verification, trust establishment, regulatory
+    certification, or third-party audit approval. Public output is limited to
+    booleans, fixed schema identifiers, and fixed diagnostics.
+    """
+    try:
+        raw_report = result_path.read_text(encoding="utf-8")
+    except OSError:
+        report_document = None
+        result_readable = False
+        result_json_valid = False
+        result_schema_valid = False
+        exit_code = 2
+    else:
+        result_readable = True
+        try:
+            report_document = json.loads(raw_report)
+        except json.JSONDecodeError:
+            report_document = None
+            result_json_valid = False
+            result_schema_valid = False
+            exit_code = 1
+        else:
+            result_json_valid = True
+            result_schema_valid = _json_schema_valid(
+                report_document,
+                TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_PATH,
+            )
+            exit_code = 0 if result_schema_valid else 1
+
+    output = {
+        "ok": result_schema_valid,
+        "result_schema_valid": result_schema_valid,
+        "validated_schema_id": (
+            TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "validator": VALIDATE_KEY_PROVENANCE_RESULT_VALIDATOR,
+        "errors": _key_provenance_result_report_errors(
+            result_readable=result_readable,
+            result_json_valid=result_json_valid,
+            result_schema_valid=result_schema_valid,
+        ),
+    }
+    return output, exit_code
+
+
+def _run_validate_key_provenance_result(
+    result_path: Path,
+    *,
+    json_output: bool = False,
+    output_path: Optional[Path] = None,
+) -> int:
+    """Run saved key provenance validation report schema validation."""
+    output, exit_code = _validate_key_provenance_result_status(result_path)
+    if json_output:
+        output_json = json.dumps(output, indent=2, ensure_ascii=False)
+        if output_path is not None:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output_json + "\n", encoding="utf-8")
+            except OSError:
+                print(
+                    "error: failed to write key provenance result validation report",
+                    file=sys.stderr,
+                )
+                return 2
+        # codeql[py/clear-text-logging-sensitive-data]: this emits only fixed
+        # schema identifiers, booleans, and fixed diagnostics; raw paths,
+        # fingerprints, exception text, schema validator messages, and saved
+        # JSON values are intentionally not emitted.
+        print(output_json)
+        return exit_code
+
+    status = "PASS" if output["ok"] else "FAIL"
+    print(f"Trusted public key provenance validation report schema: {status}")
+    for error in output["errors"]:
+        print(f"  error [{error['check']}]: {error['message']}")
+    return exit_code
+
+
 def _run_validate_result(
     result_path: Path,
     *,
@@ -631,6 +764,33 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    key_provenance_result = sub.add_parser(
+        "validate-key-provenance-result",
+        help=(
+            "Validate a saved key provenance validation report JSON file "
+            "against the schema"
+        ),
+    )
+    key_provenance_result.add_argument(
+        "--result",
+        required=True,
+        type=Path,
+        help="Saved JSON report file from validate-key-provenance --json",
+    )
+    key_provenance_result.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable result validation report as JSON",
+    )
+    key_provenance_result.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Write the JSON key provenance result validation report to this "
+            "UTF-8 file. Requires --json and does not suppress stdout JSON."
+        ),
+    )
+
     return parser
 
 
@@ -686,6 +846,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         return _run_validate_key_provenance(
             args.receipt,
             args.verification_result,
+            json_output=args.json,
+            output_path=args.output,
+        )
+
+    if args.command == "validate-key-provenance-result":
+        if args.output is not None and not args.json:
+            parser.error("validate-key-provenance-result --output requires --json")
+            return 2
+        return _run_validate_key_provenance_result(
+            args.result,
             json_output=args.json,
             output_path=args.output,
         )

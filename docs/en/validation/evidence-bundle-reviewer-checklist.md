@@ -112,6 +112,22 @@ and correlation status because the raw fingerprints remain in the source receipt
 and verification-result artifacts. Matching fingerprints support correlation,
 not standalone trust.
 
+To validate the saved `validate-key-provenance --json` report shape later, run:
+
+```bash
+veritas-evidence-bundle validate-key-provenance-result \
+  --result key-provenance-validation.json
+```
+
+This command validates saved report shape only. It does not re-run key
+provenance validation, does not re-run cryptographic verification, does not
+create trust, is not regulatory certification, and is not completed third-party
+audit approval. Add `--json --output <path>` to emit and save byte-for-byte the
+same fixed-diagnostic JSON report; parent directories are created and
+`--output` without `--json` is rejected. The output does not expose raw
+fingerprints, raw file paths, raw exception text, raw schema validator messages,
+or raw JSON values from the saved report.
+
 ## Verification order
 
 | Step | Reviewer action | PASS criterion | FAIL / follow-up criterion |

@@ -180,6 +180,24 @@ verification, create trust, prove regulatory certification, or complete
 third-party audit approval. The report does not expose raw fingerprints or raw
 paths. Matching fingerprints support correlation, not standalone trust.
 
+Use `validate-key-provenance-result` to validate a saved
+`validate-key-provenance --json` report against that report schema:
+
+```bash
+veritas-evidence-bundle validate-key-provenance-result \
+  --result key-provenance-validation.json
+```
+
+The command validates saved report shape only. It does not re-run key
+provenance validation, does not re-run cryptographic verification, does not
+create trust, is not regulatory certification, and is not completed third-party
+audit approval. Its JSON output uses `result_schema_valid`,
+`validated_schema_id`, `validator`, and fixed `errors`; it does not expose raw
+fingerprints, raw paths, raw exception text, raw schema validator messages, or
+raw JSON values from the saved report. Add `--json --output <path>` to save a
+byte-for-byte copy of stdout JSON; parent directories are created, and
+`--output` without `--json` is rejected.
+
 ## Contract scope
 
 The contract separates two reviewer decisions that external UI and audit tooling

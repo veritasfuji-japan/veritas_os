@@ -636,3 +636,332 @@ def test_validate_key_provenance_output_write_failure_is_clear(
         "error: failed to write key provenance validation report"
     )
     assert str(output_path) not in captured.err
+
+
+def _valid_key_provenance_validation_report() -> dict[str, Any]:
+    """Return a schema-valid validate-key-provenance JSON report."""
+    return {
+        "ok": True,
+        "receipt_schema_valid": True,
+        "verification_result_schema_valid": True,
+        "fingerprint_correlation_ok": True,
+        "bundle_internal_key_used_ok": True,
+        "strict_authenticity_ok": True,
+        "receipt_path_provided": True,
+        "verification_result_path_provided": True,
+        "receipt_public_key_fingerprint_present": True,
+        "verification_result_public_key_fingerprint_present": True,
+        "report_schema_id": REPORT_SCHEMA_ID,
+        "receipt_schema_id": (
+            "https://veritas-os.example/schemas/"
+            "trusted_public_key_provenance_receipt.schema.json"
+        ),
+        "verification_result_schema_id": (
+            "https://veritas-os.example/schemas/"
+            "evidence_bundle_verification_result.schema.json"
+        ),
+        "validator": "veritas-evidence-bundle validate-key-provenance",
+        "errors": [],
+    }
+
+
+def _write_valid_key_provenance_validation_report(tmp_path: Path) -> Path:
+    """Write a valid saved key provenance validation report fixture."""
+    report_path = tmp_path / "key-provenance-validation.json"
+    _write_json(report_path, _valid_key_provenance_validation_report())
+    return report_path
+
+
+def _run_key_provenance_result_json(
+    result_path: Path,
+    capsys,
+    *extra_args: str,
+) -> tuple[int, dict[str, Any], str, str]:
+    """Run validate-key-provenance-result --json and capture output."""
+    from veritas_os.cli.evidence_bundle import main
+
+    exit_code = main(
+        [
+            "validate-key-provenance-result",
+            "--result",
+            str(result_path),
+            "--json",
+            *extra_args,
+        ]
+    )
+    captured = capsys.readouterr()
+    return exit_code, json.loads(captured.out), captured.out, captured.err
+
+
+def _assert_key_provenance_result_output_is_safe(
+    output_text: str,
+    *paths: Path,
+) -> None:
+    """Assert saved report validation output omits user-controlled details."""
+    assert FINGERPRINT not in output_text
+    assert MISMATCHED_FINGERPRINT not in output_text
+    for path in paths:
+        assert str(path) not in output_text
+    assert "No such file" not in output_text
+    assert "Errno" not in output_text
+    assert "Traceback" not in output_text
+    assert "ValidationError" not in output_text
+    assert "is a required property" not in output_text
+    assert "is not one of" not in output_text
+    assert "not of type" not in output_text
+    assert "value does not satisfy schema at this path" not in output_text
+
+
+def test_validate_key_provenance_result_valid_saved_report_passes(
+    tmp_path,
+    capsys,
+) -> None:
+    """A saved schema-valid validate-key-provenance report passes."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+
+    exit_code = main(
+        [
+            "validate-key-provenance-result",
+            "--result",
+            str(result_path),
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert (
+        "Trusted public key provenance validation report schema: PASS" in output
+    )
+    _assert_key_provenance_result_output_is_safe(output, result_path)
+
+
+def test_validate_key_provenance_result_invalid_saved_report_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """A schema-invalid saved report fails with fixed diagnostics."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+    invalid_report = _valid_key_provenance_validation_report()
+    invalid_report.pop("receipt_schema_valid")
+    invalid_report["errors"] = [
+        {
+            "check": "receipt_schema_valid",
+            "path": "$",
+            "message": (
+                "raw schema message mentions "
+                f"{FINGERPRINT} and should never be echoed"
+            ),
+        }
+    ]
+    _write_json(result_path, invalid_report)
+
+    exit_code = main(
+        [
+            "validate-key-provenance-result",
+            "--result",
+            str(result_path),
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert (
+        "Trusted public key provenance validation report schema: FAIL" in output
+    )
+    assert "result does not satisfy schema" in output
+    _assert_key_provenance_result_output_is_safe(output, result_path)
+
+
+def test_validate_key_provenance_result_malformed_json_fails_safely(
+    tmp_path,
+    capsys,
+) -> None:
+    """Malformed saved JSON fails without parse exception details."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "malformed-key-provenance-validation.json"
+    result_path.write_text('{"public_key_fingerprint_sha256": ', encoding="utf-8")
+
+    exit_code = main(
+        [
+            "validate-key-provenance-result",
+            "--result",
+            str(result_path),
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "Trusted public key provenance validation report schema: FAIL" in output
+    assert "result file is not valid JSON" in output
+    _assert_key_provenance_result_output_is_safe(output, result_path)
+
+
+def test_validate_key_provenance_result_missing_file_fails_safely(
+    tmp_path,
+    capsys,
+) -> None:
+    """Missing saved reports return a read-error exit code safely."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = tmp_path / "missing-key-provenance-validation.json"
+
+    exit_code = main(
+        [
+            "validate-key-provenance-result",
+            "--result",
+            str(result_path),
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 2
+    assert "Trusted public key provenance validation report schema: FAIL" in output
+    assert "result file could not be read" in output
+    _assert_key_provenance_result_output_is_safe(output, result_path)
+
+
+def test_validate_key_provenance_result_json_emits_stable_report(
+    tmp_path,
+    capsys,
+) -> None:
+    """--json emits a stable boolean-only validation report."""
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+
+    exit_code, report, output, stderr = _run_key_provenance_result_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert report == {
+        "ok": True,
+        "result_schema_valid": True,
+        "validated_schema_id": REPORT_SCHEMA_ID,
+        "validator": "veritas-evidence-bundle validate-key-provenance-result",
+        "errors": [],
+    }
+    assert output.endswith("\n")
+    _assert_key_provenance_result_output_is_safe(output, result_path)
+
+
+def test_validate_key_provenance_result_json_output_matches_stdout(
+    tmp_path,
+    capsys,
+) -> None:
+    """--json --output writes byte-for-byte stdout-identical JSON."""
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+    output_path = tmp_path / "nested" / "reports" / "result-validation.json"
+
+    exit_code, report, stdout, stderr = _run_key_provenance_result_json(
+        result_path,
+        capsys,
+        "--output",
+        str(output_path),
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert report["ok"] is True
+    assert output_path.read_text(encoding="utf-8") == stdout
+    _assert_key_provenance_result_output_is_safe(stdout, result_path, output_path)
+
+
+def test_validate_key_provenance_result_output_without_json_fails(
+    tmp_path,
+    capsys,
+) -> None:
+    """--output without --json fails as a usage error."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(
+            [
+                "validate-key-provenance-result",
+                "--result",
+                str(result_path),
+                "--output",
+                str(tmp_path / "result-validation.json"),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert excinfo.value.code == 2
+    assert "validate-key-provenance-result --output requires --json" in captured.err
+    _assert_key_provenance_result_output_is_safe(captured.err, result_path)
+
+
+def test_validate_key_provenance_result_failure_json_is_privacy_safe(
+    tmp_path,
+    capsys,
+) -> None:
+    """Failure JSON omits paths, fingerprints, and raw validator details."""
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+    unsafe_report = _valid_key_provenance_validation_report()
+    unsafe_report["ok"] = "true"
+    unsafe_report["errors"] = [
+        {
+            "check": "fingerprint_correlation_ok",
+            "path": "$['public_key_fingerprint_sha256']",
+            "message": f"{FINGERPRINT} is not one of allowed values",
+        }
+    ]
+    _write_json(result_path, unsafe_report)
+
+    exit_code, report, stdout, stderr = _run_key_provenance_result_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert report["errors"] == [
+        {
+            "check": "result_schema_valid",
+            "path": "$",
+            "message": "result does not satisfy schema",
+        }
+    ]
+    _assert_key_provenance_result_output_is_safe(stdout, result_path)
+
+
+def test_validate_key_provenance_result_output_write_failure_is_safe(
+    tmp_path,
+    capsys,
+) -> None:
+    """--json --output write failures omit paths and exception text."""
+    from veritas_os.cli.evidence_bundle import main
+
+    result_path = _write_valid_key_provenance_validation_report(tmp_path)
+    output_path = tmp_path / "existing-directory"
+    output_path.mkdir()
+
+    exit_code = main(
+        [
+            "validate-key-provenance-result",
+            "--result",
+            str(result_path),
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert captured.err.strip() == (
+        "error: failed to write key provenance result validation report"
+    )
+    _assert_key_provenance_result_output_is_safe(
+        captured.err,
+        result_path,
+        output_path,
+    )
