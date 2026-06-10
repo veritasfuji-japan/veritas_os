@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/trusted_public_key_provenance_review_sample_manifest.schema.json",
+  "title": "Trusted Public Key Provenance Review Sample Manifest",
+  "description": "Indexes the illustrative Trusted Public Key Provenance reviewer sample artifacts and their expected hashes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_type",
+    "sample_notice",
+    "trust_boundary",
+    "artifacts"
+  ],
+  "properties": {
+    "manifest_type": {
+      "const": "trusted_public_key_provenance_review_sample_manifest"
+    },
+    "sample_notice": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trust_boundary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifact_name",
+          "role",
+          "schema_id",
+          "sha256"
+        ],
+        "properties": {
+          "artifact_name": {
+            "type": "string",
+            "enum": [
+              "verification-result.json",
+              "trusted-public-key-provenance.json",
+              "key-provenance-validation.json",
+              "key-provenance-result-validation.json",
+              "reviewer-evidence-packet.json",
+              "README.md"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "strict_evidence_bundle_verification_result",
+              "trusted_public_key_provenance_receipt",
+              "key_provenance_validation_report",
+              "key_provenance_result_validation_report",
+              "reviewer_evidence_packet",
+              "sample_readme"
+            ]
+          },
+          "schema_id": {
+            "enum": [
+              "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+              "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+              "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+              "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
+              "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
+              null
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  }
+}

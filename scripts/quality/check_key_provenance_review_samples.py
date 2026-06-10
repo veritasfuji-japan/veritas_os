@@ -9,6 +9,7 @@ content that would be unsafe to copy into public documentation.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import re
@@ -24,6 +25,12 @@ WALKTHROUGH_PATH = (
     REPO_ROOT / "docs/en/validation/reviewer-key-provenance-walkthrough.md"
 )
 AJV_MODULE_PATH = REPO_ROOT / "node_modules/.pnpm/ajv@6.14.0/node_modules/ajv"
+MANIFEST_NAME = "sample-artifact-manifest.json"
+MANIFEST_PATH = SAMPLE_DIR / MANIFEST_NAME
+MANIFEST_SCHEMA_PATH = (
+    REPO_ROOT
+    / "schemas/trusted_public_key_provenance_review_sample_manifest.schema.json"
+)
 
 EVIDENCE_BUNDLE_VERIFICATION_RESULT_SCHEMA_ID = (
     "https://veritas-os.example/schemas/"
@@ -62,6 +69,7 @@ SAMPLE_SCHEMA_CASES = {
         REPO_ROOT
         / "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json"
     ),
+    MANIFEST_NAME: MANIFEST_SCHEMA_PATH,
 }
 
 EXPECTED_ARTIFACT_CHAIN = (
@@ -71,6 +79,30 @@ EXPECTED_ARTIFACT_CHAIN = (
     "key-provenance-result-validation.json",
     "reviewer-evidence-packet.json",
 )
+EXPECTED_MANIFEST_ARTIFACTS = (*EXPECTED_ARTIFACT_CHAIN, "README.md")
+EXPECTED_MANIFEST_ENTRIES = {
+    "verification-result.json": {
+        "role": "strict_evidence_bundle_verification_result",
+        "schema_id": EVIDENCE_BUNDLE_VERIFICATION_RESULT_SCHEMA_ID,
+    },
+    "trusted-public-key-provenance.json": {
+        "role": "trusted_public_key_provenance_receipt",
+        "schema_id": TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID,
+    },
+    "key-provenance-validation.json": {
+        "role": "key_provenance_validation_report",
+        "schema_id": TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID,
+    },
+    "key-provenance-result-validation.json": {
+        "role": "key_provenance_result_validation_report",
+        "schema_id": TRUSTED_PUBLIC_KEY_PROVENANCE_RESULT_VALIDATION_REPORT_SCHEMA_ID,
+    },
+    "reviewer-evidence-packet.json": {
+        "role": "reviewer_evidence_packet",
+        "schema_id": "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
+    },
+    "README.md": {"role": "sample_readme", "schema_id": None},
+}
 
 EXPECTED_KEY_PROVENANCE_REFERENCES = {
     "trusted_public_key_provenance_receipt": {
@@ -280,6 +312,101 @@ def _collect_file_and_schema_problems() -> list[ValidationProblem]:
     return problems
 
 
+def _sha256(path: Path) -> str:
+    """Return the lowercase SHA-256 digest for a sample artifact file."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _collect_manifest_problems() -> list[ValidationProblem]:
+    """Validate manifest completeness, schema ids, and artifact digests."""
+    problems: list[ValidationProblem] = []
+    if not MANIFEST_PATH.is_file():
+        return [ValidationProblem(MANIFEST_PATH, "manifest file is missing")]
+
+    try:
+        manifest = _load_json(MANIFEST_PATH)
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        return [ValidationProblem(MANIFEST_PATH, f"cannot load manifest: {exc}")]
+
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        return [ValidationProblem(MANIFEST_PATH, "manifest artifacts must be a list")]
+
+    entries_by_name: dict[str, dict[str, Any]] = {}
+    for index, entry in enumerate(artifacts):
+        if not isinstance(entry, dict):
+            problems.append(
+                ValidationProblem(MANIFEST_PATH, f"artifact entry {index} is invalid")
+            )
+            continue
+        artifact_name = entry.get("artifact_name")
+        if not isinstance(artifact_name, str):
+            problems.append(
+                ValidationProblem(
+                    MANIFEST_PATH,
+                    f"artifact entry {index} has invalid artifact_name",
+                )
+            )
+            continue
+        if artifact_name in entries_by_name:
+            problems.append(
+                ValidationProblem(MANIFEST_PATH, f"duplicate artifact {artifact_name}")
+            )
+        entries_by_name[artifact_name] = entry
+
+    listed_names = tuple(entries_by_name)
+    if listed_names != EXPECTED_MANIFEST_ARTIFACTS:
+        problems.append(
+            ValidationProblem(
+                MANIFEST_PATH,
+                "artifact names do not match the reviewer walkthrough sample set",
+            )
+        )
+
+    missing = set(EXPECTED_MANIFEST_ARTIFACTS) - set(entries_by_name)
+    unexpected = set(entries_by_name) - set(EXPECTED_MANIFEST_ARTIFACTS)
+    if missing:
+        problems.append(
+            ValidationProblem(
+                MANIFEST_PATH,
+                "missing expected artifacts: " + ", ".join(sorted(missing)),
+            )
+        )
+    if unexpected:
+        problems.append(
+            ValidationProblem(
+                MANIFEST_PATH,
+                "unexpected artifacts: " + ", ".join(sorted(unexpected)),
+            )
+        )
+
+    for artifact_name, expected in EXPECTED_MANIFEST_ENTRIES.items():
+        entry = entries_by_name.get(artifact_name)
+        artifact_path = SAMPLE_DIR / artifact_name
+        if not artifact_path.is_file():
+            problems.append(ValidationProblem(artifact_path, "listed artifact is missing"))
+            continue
+        if entry is None:
+            continue
+        if entry.get("role") != expected["role"]:
+            problems.append(
+                ValidationProblem(MANIFEST_PATH, f"unexpected role for {artifact_name}")
+            )
+        if entry.get("schema_id") != expected["schema_id"]:
+            problems.append(
+                ValidationProblem(
+                    MANIFEST_PATH,
+                    f"unexpected schema_id for {artifact_name}",
+                )
+            )
+        if entry.get("sha256") != _sha256(artifact_path):
+            problems.append(
+                ValidationProblem(MANIFEST_PATH, f"sha256 mismatch for {artifact_name}")
+            )
+
+    return problems
+
+
 def _collect_safety_problems() -> list[ValidationProblem]:
     """Block private keys, secrets, local paths, raw errors, and customer data."""
     problems: list[ValidationProblem] = []
@@ -426,6 +553,7 @@ def validate_key_provenance_review_samples() -> list[ValidationProblem]:
     problems.extend(_collect_file_and_schema_problems())
     if problems:
         return problems
+    problems.extend(_collect_manifest_problems())
     problems.extend(_collect_safety_problems())
     problems.extend(_collect_boundary_problems())
     problems.extend(_collect_chain_reference_problems())

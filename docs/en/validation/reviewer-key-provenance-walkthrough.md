@@ -36,10 +36,13 @@ Use it only to see expected file names and relationships. The samples do not
 create trust, do not replace out-of-band public key trust, do not prove
 regulatory certification, and are not completed third-party audit approval.
 Matching fingerprints in the samples support correlation only, not standalone
-trust. CI validates the illustrative sample chain for JSON Schema conformance,
-fixed artifact references, and forbidden sensitive/raw diagnostic patterns only;
-that CI validation does not create trust or replace out-of-band public key
-trust.
+trust. The sample set now includes `sample-artifact-manifest.json` as an index
+of expected artifact names, reviewer roles, schema identifiers, and SHA-256 file
+digests. CI validates the illustrative sample chain and manifest for JSON Schema
+conformance, fixed artifact references, artifact hashes, and forbidden
+sensitive/raw diagnostic patterns only; hash matching supports sample integrity,
+not standalone trust, and CI validation does not create trust or replace
+out-of-band public key trust.
 
 ## Full reviewer sequence
 
@@ -52,6 +55,8 @@ trust.
 7. Save `key-provenance-result-validation.json`.
 8. Confirm `reviewer-evidence-packet.json` references these artifacts by fixed
    artifact name and schema identifier.
+9. Confirm `sample-artifact-manifest.json` lists the full illustrative sample set
+   and that CI/sample validation checks the listed SHA-256 digests.
 
 ## 1. Verify the Evidence Bundle strictly
 
@@ -141,3 +146,4 @@ copied from externally supplied artifacts.
 | `key-provenance-validation.json` | `veritas-evidence-bundle validate-key-provenance --json --output key-provenance-validation.json` | `veritas-evidence-bundle validate-key-provenance-result --result key-provenance-validation.json` | [`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json) | Records receipt schema validity, verification-result schema validity, strict-authenticity checks, and fingerprint correlation status. |
 | `key-provenance-result-validation.json` | `veritas-evidence-bundle validate-key-provenance-result --json --output key-provenance-result-validation.json` | Reviewer packet review and schema-aware audit tooling | [`schemas/trusted_public_key_provenance_result_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_result_validation_report.schema.json) | Records that the saved key provenance validation report itself matches the expected result-validation report shape. |
 | `reviewer-evidence-packet.json` | Reviewer Evidence Packet export or assembly process | Reviewer packet validation/report tooling and reviewer inspection | [`docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`](../demo/schemas/reviewer-evidence-packet-v1.schema.json) | Points reviewers to the saved artifacts; it is a navigation and evidence-packet reference, not standalone trust proof. |
+| `sample-artifact-manifest.json` | Illustrative sample set maintenance | CI sample validation and reviewer inspection | [`schemas/trusted_public_key_provenance_review_sample_manifest.schema.json`](../../../schemas/trusted_public_key_provenance_review_sample_manifest.schema.json) | Indexes expected sample artifacts, roles, schema identifiers, and SHA-256 digests; hash matching supports sample integrity, not standalone trust. |

@@ -1,0 +1,43 @@
+{
+  "manifest_type": "trusted_public_key_provenance_review_sample_manifest",
+  "sample_notice": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval.",
+  "trust_boundary": "This sample does not create trust and does not replace out-of-band public key trust.",
+  "artifacts": [
+    {
+      "artifact_name": "verification-result.json",
+      "role": "strict_evidence_bundle_verification_result",
+      "schema_id": "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+      "sha256": "751f0b1934cdb7539a9179e680ef9d16c0509fed6397ba736d84d19a6dbd5bb6"
+    },
+    {
+      "artifact_name": "trusted-public-key-provenance.json",
+      "role": "trusted_public_key_provenance_receipt",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+      "sha256": "853667d0e937fbf29ac9282e4895fd19613876a5500dc15465311f69d5d750b3"
+    },
+    {
+      "artifact_name": "key-provenance-validation.json",
+      "role": "key_provenance_validation_report",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+      "sha256": "ef1f3a3de69c1234d908adee2606617c643be20206fbce5029f137565de2c0b4"
+    },
+    {
+      "artifact_name": "key-provenance-result-validation.json",
+      "role": "key_provenance_result_validation_report",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
+      "sha256": "281eb62f7f8acd284fed7e2afea25b802da58eae7a3db95bd9f344e3f2157e07"
+    },
+    {
+      "artifact_name": "reviewer-evidence-packet.json",
+      "role": "reviewer_evidence_packet",
+      "schema_id": "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
+      "sha256": "d4223449d5b8df4a77a642c09bceebc83fd12dc7c94ef4729b19cb7027c7a18a"
+    },
+    {
+      "artifact_name": "README.md",
+      "role": "sample_readme",
+      "schema_id": null,
+      "sha256": "950320f673a9bb6ae8ca8e0f13b8ff7297f43c47c3dd880546af6cfdaf836a68"
+    }
+  ]
+}
