@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+  "title": "Trusted Public Key Provenance Validation Report",
+  "description": "Machine-readable report contract emitted by veritas-evidence-bundle validate-key-provenance --json. This schema validates the report shape only. It does not re-run cryptographic verification, create trust, prove regulatory certification, or complete third-party audit approval. The report intentionally exposes booleans and fixed diagnostics only; it does not expose raw fingerprints, raw file paths, raw exception text, raw schema validator messages, or raw JSON values.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "ok",
+    "receipt_schema_valid",
+    "verification_result_schema_valid",
+    "fingerprint_correlation_ok",
+    "bundle_internal_key_used_ok",
+    "strict_authenticity_ok",
+    "receipt_public_key_fingerprint_present",
+    "verification_result_public_key_fingerprint_present",
+    "report_schema_id",
+    "receipt_schema_id",
+    "verification_result_schema_id",
+    "validator",
+    "errors"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "Overall validate-key-provenance result. True means the receipt and saved verification result schemas passed, fingerprints correlated, bundle_internal_key_used was false, and strict authenticity succeeded."
+    },
+    "receipt_schema_valid": {
+      "type": "boolean",
+      "description": "True when the Trusted Public Key Provenance Receipt conforms to its JSON Schema."
+    },
+    "verification_result_schema_valid": {
+      "type": "boolean",
+      "description": "True when the saved Evidence Bundle verification result conforms to its JSON Schema."
+    },
+    "fingerprint_correlation_ok": {
+      "type": "boolean",
+      "description": "True when both inputs contain public key fingerprint fields and those internal values match. The raw values are not emitted in this report."
+    },
+    "bundle_internal_key_used_ok": {
+      "type": "boolean",
+      "description": "True when the receipt reports bundle_internal_key_used as false."
+    },
+    "strict_authenticity_ok": {
+      "type": "boolean",
+      "description": "True when the saved verification result reports strict authenticity success."
+    },
+    "receipt_public_key_fingerprint_present": {
+      "type": "boolean",
+      "description": "True when the receipt contains a public key fingerprint field. The raw fingerprint is not emitted."
+    },
+    "verification_result_public_key_fingerprint_present": {
+      "type": "boolean",
+      "description": "True when the saved verification result contains a public key fingerprint field. The raw fingerprint is not emitted."
+    },
+    "report_schema_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Identifies this validation report schema. This metadata validates report shape only; it does not re-run cryptographic verification or establish trust.",
+      "enum": [
+        "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+        null
+      ]
+    },
+    "receipt_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+      "description": "Identifies the Trusted Public Key Provenance Receipt schema used by validate-key-provenance."
+    },
+    "verification_result_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+      "description": "Identifies the saved Evidence Bundle verification result schema used by validate-key-provenance."
+    },
+    "validator": {
+      "type": "string",
+      "const": "veritas-evidence-bundle validate-key-provenance",
+      "description": "Identifies the validator command that emitted this report."
+    },
+    "errors": {
+      "type": "array",
+      "description": "Fixed public diagnostics for failed checks. Empty when ok is true.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "check",
+          "path",
+          "message"
+        ],
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "receipt_schema_valid",
+              "verification_result_schema_valid",
+              "fingerprint_correlation_ok",
+              "bundle_internal_key_used_ok",
+              "strict_authenticity_ok"
+            ],
+            "description": "Boolean check that failed."
+          },
+          "path": {
+            "type": "string",
+            "enum": [
+              "$",
+              "$['public_key_fingerprint_sha256']",
+              "$['bundle_internal_key_used']"
+            ],
+            "description": "Fixed public JSONPath-like location for the failed check."
+          },
+          "message": {
+            "type": "string",
+            "enum": [
+              "receipt does not satisfy schema",
+              "verification result does not satisfy schema",
+              "receipt and verification result public key fingerprints do not match",
+              "receipt bundle_internal_key_used must be false",
+              "verification result must report strict authenticity success"
+            ],
+            "description": "Fixed public diagnostic. Raw external values and raw validator messages are not permitted."
+          }
+        }
+      }
+    }
+  }
+}

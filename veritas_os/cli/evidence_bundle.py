@@ -43,6 +43,9 @@ TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/trusted_public_key_provenance_receipt.schema.json"
 )
 VALIDATE_RESULT_VALIDATOR = "veritas-evidence-bundle validate-result"
+TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/trusted_public_key_provenance_validation_report.schema.json"
+)
 VALIDATE_KEY_PROVENANCE_VALIDATOR = "veritas-evidence-bundle validate-key-provenance"
 VERIFICATION_RESULT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
@@ -372,7 +375,9 @@ def _key_provenance_public_report(
         "verification_result_public_key_fingerprint_present": (
             status.verification_result_public_key_fingerprint_present
         ),
-        "report_schema_id": None,
+        "report_schema_id": (
+            TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID
+        ),
         "receipt_schema_id": TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID,
         "verification_result_schema_id": VERIFICATION_RESULT_SCHEMA_ID,
         "validator": VALIDATE_KEY_PROVENANCE_VALIDATOR,

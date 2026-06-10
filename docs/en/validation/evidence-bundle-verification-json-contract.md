@@ -172,12 +172,13 @@ It does not echo raw fingerprint values, raw file paths, raw schema validator
 messages, or raw exception text; the raw fingerprints remain in the source
 receipt and verification-result artifacts. `--output <path>` is allowed only
 with `--json`; the saved JSON is byte-for-byte the same as stdout JSON, and
-failure reports are saved as audit evidence. This correlation report has no
-dedicated schema yet and is intentionally structured for future extension. It
-does not create trust by itself, does not re-run cryptographic verification,
-does not prove regulatory certification, and does not complete third-party
-audit approval. Matching fingerprints support correlation, not standalone
-trust.
+failure reports are saved as audit evidence. This correlation report has a
+dedicated Draft 2020-12 schema at
+[`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json).
+The schema validates the report shape only; it does not re-run cryptographic
+verification, create trust, prove regulatory certification, or complete
+third-party audit approval. The report does not expose raw fingerprints or raw
+paths. Matching fingerprints support correlation, not standalone trust.
 
 ## Contract scope
 
