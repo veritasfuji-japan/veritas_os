@@ -40,10 +40,22 @@
       "sha256": "7074bbff8d56d2737a32c9c8974065a4009390f68b14549bb3e589ba8073c4c8"
     },
     {
+      "artifact_name": "reviewer-review-result-validation.json",
+      "role": "reviewer_handoff_review_result_validation_report",
+      "schema_id": "https://veritas-os.example/schemas/reviewer_handoff_review_result_validation_report.schema.json",
+      "sha256": "1ec77ef557ad5061a900630e39356e2890e4f7d90ac5a1f8ae7bdfe05c179405"
+    },
+    {
+      "artifact_name": "reviewer-review-result-report-validation.json",
+      "role": "reviewer_handoff_review_result_report_validation_report",
+      "schema_id": "https://veritas-os.example/schemas/reviewer_handoff_review_result_report_validation_report.schema.json",
+      "sha256": "9f33ccd3f313d89da95d6525f28fe622b28c41d49dc708444ff7e6d6a29a5703"
+    },
+    {
       "artifact_name": "README.md",
       "role": "sample_readme",
       "schema_id": null,
-      "sha256": "dabae4277d11d3aac016a384c62948b5e489a5f4bdda37db05bd37c003da0ec9"
+      "sha256": "7c96ee371fd06eb478e7af64345f05daeb828eb8575e54ebc0bad884fc0ce266"
     }
   ]
 }

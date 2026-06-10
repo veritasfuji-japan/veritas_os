@@ -25,8 +25,8 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 9,
+      "maxItems": 9,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -46,6 +46,8 @@
               "key-provenance-result-validation.json",
               "reviewer-evidence-packet.json",
               "reviewer-handoff-review-result.json",
+              "reviewer-review-result-validation.json",
+              "reviewer-review-result-report-validation.json",
               "README.md"
             ]
           },
@@ -58,6 +60,8 @@
               "key_provenance_result_validation_report",
               "reviewer_evidence_packet",
               "reviewer_handoff_review_result",
+              "reviewer_handoff_review_result_validation_report",
+              "reviewer_handoff_review_result_report_validation_report",
               "sample_readme"
             ]
           },
@@ -69,6 +73,8 @@
               "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json",
               "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
               "https://veritas-os.example/schemas/reviewer_handoff_review_result.schema.json",
+              "https://veritas-os.example/schemas/reviewer_handoff_review_result_validation_report.schema.json",
+              "https://veritas-os.example/schemas/reviewer_handoff_review_result_report_validation_report.schema.json",
               null
             ]
           },

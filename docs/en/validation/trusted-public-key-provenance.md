@@ -24,14 +24,19 @@ illustrative sample set at
 [`samples/evidence_bundle/key_provenance_review/`](../../../samples/evidence_bundle/key_provenance_review/).
 The sample set links `verification-result.json`,
 `trusted-public-key-provenance.json`, `key-provenance-validation.json`,
-`key-provenance-result-validation.json`, `reviewer-evidence-packet.json`, and
-`reviewer-handoff-review-result.json`. The review-result artifact records what
-was checked and whether the reviewer decision is `ACCEPT`, `REJECT`, or
-`NEEDS_FOLLOW_UP`. It is illustrative only: it does not create trust, replace
-out-of-band public key trust, prove regulatory certification, or represent
-completed third-party audit approval. Matching fingerprints support correlation
-only, and the review result records outcome rather than cryptographic truth by
-itself.
+`key-provenance-result-validation.json`, `reviewer-evidence-packet.json`,
+`reviewer-handoff-review-result.json`, `reviewer-review-result-validation.json`,
+and `reviewer-review-result-report-validation.json`. The review-result artifact
+records what was checked and whether the reviewer decision is `ACCEPT`,
+`REJECT`, or `NEEDS_FOLLOW_UP`. The saved reviewer result validation reports
+demonstrate validation output shape and validation status only; they do not
+create trust, replace out-of-band public key trust, prove regulatory
+certification, represent completed third-party audit approval, or establish
+cryptographic truth by themselves. It is illustrative only: it does not create
+trust, replace out-of-band public key trust, prove regulatory certification, or
+represent completed third-party audit approval. Matching fingerprints support
+correlation only, sample hashes support sample integrity only, and the review
+result records outcome rather than cryptographic truth by itself.
 
 ## Why public key provenance matters
 

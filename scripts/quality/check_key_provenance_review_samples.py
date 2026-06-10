@@ -52,6 +52,20 @@ REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID = (
     "https://veritas-os.example/schemas/"
     "reviewer_handoff_review_result.schema.json"
 )
+REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_review_result_validation_report.schema.json"
+)
+REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_review_result_report_validation_report.schema.json"
+)
+VALIDATE_REVIEW_RESULT_VALIDATOR = (
+    "veritas-evidence-bundle validate-review-result"
+)
+VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR = (
+    "veritas-evidence-bundle validate-review-result-report"
+)
 
 SAMPLE_SCHEMA_CASES = {
     "verification-result.json": (
@@ -76,6 +90,15 @@ SAMPLE_SCHEMA_CASES = {
     "reviewer-handoff-review-result.json": (
         REPO_ROOT / "schemas/reviewer_handoff_review_result.schema.json"
     ),
+    "reviewer-review-result-validation.json": (
+        REPO_ROOT
+        / "schemas/reviewer_handoff_review_result_validation_report.schema.json"
+    ),
+    "reviewer-review-result-report-validation.json": (
+        REPO_ROOT
+        / "schemas/"
+        "reviewer_handoff_review_result_report_validation_report.schema.json"
+    ),
     MANIFEST_NAME: MANIFEST_SCHEMA_PATH,
 }
 
@@ -86,6 +109,8 @@ EXPECTED_ARTIFACT_CHAIN = (
     "key-provenance-result-validation.json",
     "reviewer-evidence-packet.json",
     "reviewer-handoff-review-result.json",
+    "reviewer-review-result-validation.json",
+    "reviewer-review-result-report-validation.json",
 )
 EXPECTED_MANIFEST_ARTIFACTS = (*EXPECTED_ARTIFACT_CHAIN, "README.md")
 EXPECTED_MANIFEST_ENTRIES = {
@@ -112,6 +137,16 @@ EXPECTED_MANIFEST_ENTRIES = {
     "reviewer-handoff-review-result.json": {
         "role": "reviewer_handoff_review_result",
         "schema_id": REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID,
+    },
+    "reviewer-review-result-validation.json": {
+        "role": "reviewer_handoff_review_result_validation_report",
+        "schema_id": REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID,
+    },
+    "reviewer-review-result-report-validation.json": {
+        "role": "reviewer_handoff_review_result_report_validation_report",
+        "schema_id": (
+            REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_ID
+        ),
     },
     "README.md": {"role": "sample_readme", "schema_id": None},
 }
@@ -497,12 +532,22 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
     packet_path = SAMPLE_DIR / "reviewer-evidence-packet.json"
     validation_path = SAMPLE_DIR / "key-provenance-validation.json"
     result_validation_path = SAMPLE_DIR / "key-provenance-result-validation.json"
+    review_result_validation_path = (
+        SAMPLE_DIR / "reviewer-review-result-validation.json"
+    )
+    review_result_report_validation_path = (
+        SAMPLE_DIR / "reviewer-review-result-report-validation.json"
+    )
     readme_path = SAMPLE_DIR / "README.md"
 
     try:
         packet = _load_json(packet_path)
         validation_report = _load_json(validation_path)
         result_validation_report = _load_json(result_validation_path)
+        review_result_validation_report = _load_json(review_result_validation_path)
+        review_result_report_validation_report = _load_json(
+            review_result_report_validation_path
+        )
         readme_text = readme_path.read_text(encoding="utf-8")
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         return [ValidationProblem(SAMPLE_DIR, f"cannot inspect chain: {exc}")]
@@ -592,6 +637,73 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
     ):
         problems.append(
             ValidationProblem(result_validation_path, "unexpected report_schema_id")
+        )
+
+    if (
+        review_result_validation_report.get("validated_schema_id")
+        != REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                review_result_validation_path,
+                "validated_schema_id does not reference the review result schema",
+            )
+        )
+
+    if (
+        review_result_validation_report.get("report_schema_id")
+        != REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                review_result_validation_path,
+                "unexpected review-result validation report_schema_id",
+            )
+        )
+
+    if (
+        review_result_validation_report.get("validator")
+        != VALIDATE_REVIEW_RESULT_VALIDATOR
+    ):
+        problems.append(
+            ValidationProblem(
+                review_result_validation_path,
+                "unexpected review-result validator",
+            )
+        )
+
+    if (
+        review_result_report_validation_report.get("validated_schema_id")
+        != REVIEWER_HANDOFF_REVIEW_RESULT_VALIDATION_REPORT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                review_result_report_validation_path,
+                "validated_schema_id does not reference the review-result "
+                "validation report schema",
+            )
+        )
+
+    if (
+        review_result_report_validation_report.get("report_schema_id")
+        != REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                review_result_report_validation_path,
+                "unexpected review-result report-validation report_schema_id",
+            )
+        )
+
+    if (
+        review_result_report_validation_report.get("validator")
+        != VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR
+    ):
+        problems.append(
+            ValidationProblem(
+                review_result_report_validation_path,
+                "unexpected review-result report validator",
+            )
         )
 
     return problems

@@ -40,6 +40,24 @@ SCHEMA_CASES = [
         "reviewer-evidence-packet.json",
         Path("docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json"),
     ),
+    (
+        "reviewer-handoff-review-result.json",
+        Path("schemas/reviewer_handoff_review_result.schema.json"),
+    ),
+    (
+        "reviewer-review-result-validation.json",
+        Path(
+            "schemas/"
+            "reviewer_handoff_review_result_validation_report.schema.json"
+        ),
+    ),
+    (
+        "reviewer-review-result-report-validation.json",
+        Path(
+            "schemas/"
+            "reviewer_handoff_review_result_report_validation_report.schema.json"
+        ),
+    ),
 ]
 EXPECTED_CHAIN = [
     "verification-result.json",
@@ -47,6 +65,9 @@ EXPECTED_CHAIN = [
     "key-provenance-validation.json",
     "key-provenance-result-validation.json",
     "reviewer-evidence-packet.json",
+    "reviewer-handoff-review-result.json",
+    "reviewer-review-result-validation.json",
+    "reviewer-review-result-report-validation.json",
 ]
 RAW_PRIVATE_KEY_PATTERNS = [
     "-----BEGIN PRIVATE KEY-----",
@@ -235,9 +256,39 @@ def test_key_provenance_review_samples_do_not_contain_schema_validator_messages(
         assert forbidden not in text, name
 
 
+def test_sample_fingerprints_are_synthetic_placeholders() -> None:
+    verification_result = _load_json(SAMPLE_DIR / "verification-result.json")
+    provenance_receipt = _load_json(
+        SAMPLE_DIR / "trusted-public-key-provenance.json"
+    )
+
+    assert verification_result["public_key_fingerprint_sha256"] == "1" * 64
+    assert provenance_receipt["public_key_fingerprint_sha256"] == "1" * 64
+
+
+def test_forbidden_raw_sensitive_patterns_are_rejected() -> None:
+    from scripts.quality import check_key_provenance_review_samples as gate
+
+    representative_forbidden_text = {
+        "raw private key": "-----BEGIN PRIVATE KEY-----",
+        "real secret or credential": "api_key = livevalue12345",
+        "absolute local path": "/home/example/secret.txt",
+        "exception traceback or raw exception text": "Traceback (most recent call last)",
+        "raw schema validator message": "is a required property",
+        "obvious production or customer data": "user@example.com",
+        "raw external value outside sample placeholders": "https://unexpected.example.net/value",
+    }
+
+    for category, text in representative_forbidden_text.items():
+        patterns = gate.SAFETY_PATTERNS[category]
+        assert any(pattern.search(text) for pattern in patterns), category
+
+
 @pytest.mark.parametrize(
     "doc_path",
     [
+        Path("samples/evidence_bundle/key_provenance_review/README.md"),
+        Path("docs/en/validation/reviewer-handoff-guide.md"),
         Path("docs/en/validation/reviewer-key-provenance-walkthrough.md"),
         Path("docs/en/validation/trusted-public-key-provenance.md"),
         Path("docs/en/validation/evidence-bundle-reviewer-checklist.md"),
@@ -249,3 +300,5 @@ def test_requested_docs_link_key_provenance_review_sample(doc_path: Path) -> Non
     text = doc_path.read_text(encoding="utf-8")
 
     assert "samples/evidence_bundle/key_provenance_review/" in text
+    assert "reviewer-review-result-validation.json" in text
+    assert "reviewer-review-result-report-validation.json" in text
