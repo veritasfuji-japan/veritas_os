@@ -384,6 +384,7 @@ Authority Evidence と Audit Log の違いは明確です。
 - **AML/KYC Governance Template Contract**: [`docs/ja/guides/financial-governance-templates.md`](docs/ja/guides/financial-governance-templates.md)（英語正本あり）
 - **External Audit / Evidence Bundle Readiness**: [`docs/ja/validation/external-audit-readiness.md`](docs/ja/validation/external-audit-readiness.md)（英語正本あり）
 - **Reviewer Key Provenance Walkthrough（英語正本）**: [`docs/en/validation/reviewer-key-provenance-walkthrough.md`](docs/en/validation/reviewer-key-provenance-walkthrough.md)
+  - `samples/evidence_bundle/key_provenance_review/` の illustrative sample chain は CI で JSON Schema conformance、固定 artifact reference、禁止された sensitive/raw diagnostic pattern のみを検証します。この CI validation は trust を作成せず、out-of-band public key trust を置き換えず、regulatory certification や completed third-party audit approval を示しません。
 - **External Technical Proof Pack（review/pilot/DD/audit）**: [`docs/ja/validation/technical-proof-pack.md`](docs/ja/validation/technical-proof-pack.md)（英語正本あり）
 - **AML/KYC Short Positioning（customer / operator / investor）**: [`docs/ja/positioning/aml-kyc-beachhead-short-positioning.md`](docs/ja/positioning/aml-kyc-beachhead-short-positioning.md)（英語正本あり）
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
