@@ -74,6 +74,15 @@ veritas-evidence-bundle validate-review-result \
   --output reviewer-review-result-validation.json
 ```
 
+Validate the saved review-result validation report shape:
+
+```bash
+veritas-evidence-bundle validate-review-result-report \
+  --result reviewer-review-result-validation.json \
+  --json \
+  --output reviewer-review-result-report-validation.json
+```
+
 `validate-review-result` checks the saved review result artifact against
 [`schemas/reviewer_handoff_review_result.schema.json`](../../../schemas/reviewer_handoff_review_result.schema.json)
 and verifies the decision enum, required artifact references, required boolean
@@ -90,6 +99,17 @@ certification, indicate completed third-party audit approval, or establish
 cryptographic truth by itself. JSON output uses booleans, fixed schema
 identifiers, and fixed diagnostics only.
 
+`validate-review-result-report` validates the saved validation report emitted by
+`validate-review-result --json` against
+[`schemas/reviewer_handoff_review_result_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_validation_report.schema.json).
+It validates report shape only; it does not re-run reviewer review, create
+trust, replace out-of-band public key trust, prove regulatory certification,
+indicate completed third-party audit approval, or establish cryptographic truth.
+It records validation-report structure, not cryptographic truth by itself. Its
+own `--json` output has a schema at
+[`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_report_validation_report.schema.json)
+and remains boolean-only with fixed diagnostics.
+
 ## What the reviewer can verify
 
 The package supports these reviewer checks:
@@ -102,8 +122,9 @@ The package supports these reviewer checks:
   `trusted-public-key-provenance.json` through matching public key fingerprint
   fields.
 - Saved validation report schema conformance for
-  `key-provenance-validation.json` and
-  `key-provenance-result-validation.json`.
+  `key-provenance-validation.json`,
+  `key-provenance-result-validation.json`, and
+  `reviewer-review-result-validation.json`.
 - Reviewer Evidence Packet references to the expected key provenance artifacts
   by stable artifact name and schema identifier.
 - Reviewer Review Result / Acceptance Record contents, including checked
@@ -136,6 +157,7 @@ Keep these boundaries explicit in reviewer communications:
 | Review `trusted-public-key-provenance.json` | `trusted-public-key-provenance.json` | Review receipt shape, trust-channel fields, reviewer/operator approval fields, and notes. | The receipt records the out-of-band trust rationale for the public key. | The receipt does not re-run cryptographic verification and does not create trust by itself. |
 | Run `validate-key-provenance` | `trusted-public-key-provenance.json`, `verification-result.json` | Run the copyable `validate-key-provenance` command above. | Receipt shape, verification-result shape, strict authenticity flags, and fingerprint correlation pass. | Matching fingerprints support correlation, not standalone trust. |
 | Run `validate-key-provenance-result` | `key-provenance-validation.json` | Run the copyable `validate-key-provenance-result` command above. | The saved validation report conforms to its schema. | Schema conformance does not prove regulatory certification or third-party audit approval. |
+| Run `validate-review-result-report` | `reviewer-review-result-validation.json` | Run the copyable `validate-review-result-report` command above. | The saved review-result validation report conforms to its schema. | Schema conformance records validation-report structure only; it does not re-run reviewer review, create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 | Review `reviewer-evidence-packet.json` | `reviewer-evidence-packet.json` | Confirm key provenance references use only expected artifact names and schema identifiers. | The packet points reviewers to `trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`. | Reviewer Evidence Packets reference artifacts; they do not prove trust alone. |
 | Review `sample-artifact-manifest.json` | `sample-artifact-manifest.json` | Confirm listed sample artifacts and SHA-256 digests match the provided sample pack. | Sample artifact manifest SHA-256 consistency is preserved. | Sample artifact hashes prove sample integrity only, not production evidence authenticity. |
 | Record `reviewer-handoff-review-result.json` | `reviewer-handoff-review-result.json` | Record the artifacts checked, reviewer scope, limitation acknowledgements, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`). | The review outcome is machine-readable and tied to the reviewer's stated scope and out-of-band trust context. | The record is not certification, regulatory approval, completed third-party audit approval, or cryptographic truth by itself. |
