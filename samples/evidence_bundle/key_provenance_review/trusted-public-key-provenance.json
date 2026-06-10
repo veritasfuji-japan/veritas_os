@@ -1,0 +1,11 @@
+{
+  "algorithm": "Ed25519",
+  "approval_reference": "SAMPLE-TRUST-REFERENCE-001",
+  "approved_by": "sample-reviewer",
+  "bundle_internal_key_used": false,
+  "notes": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval. Public key trust must come from an out-of-band reviewer/operator trust channel; matching fingerprints support correlation only.",
+  "public_key_fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "receipt_type": "trusted_public_key_provenance",
+  "received_at": "2026-01-15T12:00:00Z",
+  "trust_channel": "operator_handoff"
+}

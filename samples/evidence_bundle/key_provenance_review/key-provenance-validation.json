@@ -1,0 +1,16 @@
+{
+  "bundle_internal_key_used_ok": true,
+  "errors": [],
+  "fingerprint_correlation_ok": true,
+  "ok": true,
+  "receipt_public_key_fingerprint_present": true,
+  "receipt_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json",
+  "receipt_schema_valid": true,
+  "report_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json",
+  "sample_notice": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval.",
+  "strict_authenticity_ok": true,
+  "validator": "veritas-evidence-bundle validate-key-provenance",
+  "verification_result_public_key_fingerprint_present": true,
+  "verification_result_schema_id": "https://veritas-os.example/schemas/evidence_bundle_verification_result.schema.json",
+  "verification_result_schema_valid": true
+}

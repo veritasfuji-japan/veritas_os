@@ -42,6 +42,16 @@ Security boundaries:
 - Do not add private keys, real signing keys, production secrets, or unsanitized
   customer data to review notes or shared examples.
 
+## Illustrative key provenance sample
+
+For a small sample of the expected Trusted Public Key Provenance artifact chain,
+see
+[`samples/evidence_bundle/key_provenance_review/`](../../../samples/evidence_bundle/key_provenance_review/).
+The directory is illustrative only and does not create trust, replace
+out-of-band public key trust, prove regulatory certification, or represent
+completed third-party audit approval. Matching fingerprints support correlation,
+not standalone trust.
+
 ## Saving JSON reviewer evidence
 
 Reviewers can preserve a machine-readable audit trail by adding
