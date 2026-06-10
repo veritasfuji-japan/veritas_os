@@ -2123,6 +2123,15 @@ indicate completed third-party audit approval. The reviewer result records what
 was checked and a decision of `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`; it is
 not certification by itself, not regulatory approval, not completed
 third-party audit approval, and not cryptographic truth by itself. Reviewer
-decisions depend on reviewer scope and out-of-band public key trust context.
+decisions depend on reviewer scope and out-of-band public key trust context. Use
+`veritas-evidence-bundle validate-review-result --result
+reviewer-handoff-review-result.json --json --output
+reviewer-review-result-validation.json` to validate the saved review result
+artifact, its schema conformance, acknowledgement structure, required artifact
+references, decision value, and forbidden sensitive/raw diagnostic patterns. The
+command records and checks review-result structure only: it does not create
+trust, does not replace out-of-band public key trust, does not prove regulatory
+certification, is not completed third-party audit approval, and does not
+establish cryptographic truth by itself.
 
 Reviewer Evidence Packets may include optional Trusted Public Key Provenance validation artifact references (`trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`). Use the [Reviewer Key Provenance Walkthrough](docs/en/validation/reviewer-key-provenance-walkthrough.md) for the copyable review sequence and the [Reviewer Handoff Guide](docs/en/validation/reviewer-handoff-guide.md) for what to send, what to verify, and what not to infer. These references help reviewers check public key trust provenance, but the packet does not create trust, does not re-run cryptographic verification, does not replace out-of-band public key trust, is not regulatory certification, and is not completed third-party audit approval. Matching fingerprints support correlation only; they are not standalone trust proof. Reviewer Evidence Packets reference artifacts; they do not prove trust alone. Packet metadata references fixed artifact names and schema identifiers only, not raw fingerprints, raw local paths, exception text, schema validator messages, or externally supplied JSON values.

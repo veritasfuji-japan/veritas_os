@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,12 @@ VALIDATE_KEY_PROVENANCE_VALIDATOR = "veritas-evidence-bundle validate-key-proven
 VALIDATE_KEY_PROVENANCE_RESULT_VALIDATOR = (
     "veritas-evidence-bundle validate-key-provenance-result"
 )
+REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/reviewer_handoff_review_result.schema.json"
+)
+VALIDATE_REVIEW_RESULT_VALIDATOR = (
+    "veritas-evidence-bundle validate-review-result"
+)
 VERIFICATION_RESULT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
@@ -69,6 +76,71 @@ TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_PATH = (
     / "schemas"
     / "trusted_public_key_provenance_validation_report.schema.json"
 )
+REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "reviewer_handoff_review_result.schema.json"
+)
+
+
+REVIEW_RESULT_DECISIONS = {"ACCEPT", "REJECT", "NEEDS_FOLLOW_UP"}
+REVIEW_RESULT_REQUIRED_LIMITATIONS = {
+    "does_not_create_trust",
+    "does_not_replace_out_of_band_public_key_trust",
+    "not_regulatory_certification",
+    "not_completed_third_party_audit_approval",
+    "fingerprint_matching_is_correlation_not_standalone_trust",
+    "sample_hashes_support_sample_integrity_only",
+}
+REVIEW_RESULT_REQUIRED_ARTIFACTS = {
+    "verification-result.json": VERIFICATION_RESULT_SCHEMA_ID,
+    "trusted-public-key-provenance.json": (
+        TRUSTED_PUBLIC_KEY_PROVENANCE_RECEIPT_SCHEMA_ID
+    ),
+    "key-provenance-validation.json": (
+        TRUSTED_PUBLIC_KEY_PROVENANCE_VALIDATION_REPORT_SCHEMA_ID
+    ),
+    "key-provenance-result-validation.json": (
+        TRUSTED_PUBLIC_KEY_PROVENANCE_RESULT_VALIDATION_REPORT_SCHEMA_ID
+    ),
+    "reviewer-evidence-packet.json": (
+        "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json"
+    ),
+    "sample-artifact-manifest.json": (
+        f"{SCHEMA_BASE_URL}/"
+        "trusted_public_key_provenance_review_sample_manifest.schema.json"
+    ),
+}
+REVIEW_RESULT_FORBIDDEN_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"-----BEGIN [A-Z ]*(?:PUBLIC|PRIVATE) KEY-----",
+        r"\bssh-(?:rsa|ed25519)\s+[A-Za-z0-9+/=]{20,}",
+        r"\b[0-9a-f]{64}\b",
+        r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
+        r"\bsk_live_[0-9A-Za-z]{12,}\b",
+        r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b",
+        r"\bghp_[0-9A-Za-z]{20,}\b",
+        r"\bgithub_pat_[0-9A-Za-z_]{20,}\b",
+        r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b",
+        r"\b(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]",
+        r"(?:^|\s)/(?:Users|home|tmp|var|workspace)/[^\s,;]*",
+        r"[A-Za-z]:\\[^\s,;]*",
+        r"Traceback \(most recent call last\)",
+        (
+            r"\b(?:FileNotFoundError|PermissionError|RuntimeError|"
+            r"ValidationError|Exception):"
+        ),
+        r"jsonschema\.exceptions",
+        r"Failed validating",
+        r"is a required property",
+        r"is not of type",
+        r"Additional properties are not allowed",
+        r"\bcustomer(?:[_ -]?data)?\b",
+        r"\bproduction(?:[_ -]?data)?\b",
+        r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",
+    )
+]
 
 
 @dataclass(frozen=True)
@@ -598,6 +670,200 @@ def _run_validate_key_provenance_result(
     return exit_code
 
 
+def _contains_forbidden_review_result_pattern(value: Any) -> bool:
+    """Return whether a review result contains forbidden sensitive text.
+
+    The scan is intentionally boolean-only. Callers must not expose matched text
+    because the input may contain keys, fingerprints, local paths, exception
+    text, schema validator messages, secrets, or customer/production data.
+    """
+    if isinstance(value, str):
+        return any(
+            pattern.search(value) for pattern in REVIEW_RESULT_FORBIDDEN_PATTERNS
+        )
+    if isinstance(value, dict):
+        return any(
+            _contains_forbidden_review_result_pattern(item)
+            for pair in value.items()
+            for item in pair
+        )
+    if isinstance(value, list):
+        return any(
+            _contains_forbidden_review_result_pattern(item) for item in value
+        )
+    return False
+
+
+def _review_result_decision_valid(result: Any) -> bool:
+    """Return whether the reviewer result decision uses the allowed enum."""
+    return (
+        isinstance(result, dict)
+        and result.get("decision") in REVIEW_RESULT_DECISIONS
+    )
+
+
+def _review_result_limitations_acknowledged(result: Any) -> bool:
+    """Return whether required limitation acknowledgements are boolean true."""
+    if not isinstance(result, dict):
+        return False
+    limitations = result.get("limitations_acknowledged")
+    if not isinstance(limitations, dict):
+        return False
+    return all(
+        isinstance(limitations.get(field), bool) and limitations.get(field) is True
+        for field in REVIEW_RESULT_REQUIRED_LIMITATIONS
+    )
+
+
+def _review_result_artifacts_checked_shape_valid(result: Any) -> bool:
+    """Return whether all required artifact references are present and checked."""
+    if not isinstance(result, dict):
+        return False
+    artifacts = result.get("artifacts_checked")
+    if not isinstance(artifacts, list):
+        return False
+
+    observed: dict[str, str] = {}
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            return False
+        name = artifact.get("artifact_name")
+        schema_id = artifact.get("schema_id")
+        checked = artifact.get("checked")
+        if not isinstance(name, str) or not isinstance(schema_id, str):
+            return False
+        if not isinstance(checked, bool) or checked is not True:
+            return False
+        observed[name] = schema_id
+
+    return all(
+        observed.get(name) == schema_id
+        for name, schema_id in REVIEW_RESULT_REQUIRED_ARTIFACTS.items()
+    )
+
+
+def _review_result_public_errors(report: dict[str, Any]) -> list[dict[str, str]]:
+    """Build fixed diagnostics for review-result validation failures."""
+    errors: list[dict[str, str]] = []
+    checks = [
+        (
+            "result_json_valid",
+            "result file is not valid JSON or could not be read",
+            report["result_json_valid"],
+        ),
+        (
+            "result_schema_valid",
+            "review result does not satisfy schema",
+            report["result_schema_valid"],
+        ),
+        (
+            "decision_valid",
+            "decision must be ACCEPT, REJECT, or NEEDS_FOLLOW_UP",
+            report["decision_valid"],
+        ),
+        (
+            "limitations_acknowledged",
+            "required limitation acknowledgements must be boolean true",
+            report["limitations_acknowledged"],
+        ),
+        (
+            "artifacts_checked_shape_valid",
+            "required artifact references must be present and checked",
+            report["artifacts_checked_shape_valid"],
+        ),
+        (
+            "forbidden_patterns_absent",
+            "review result contains forbidden sensitive or raw diagnostic text",
+            report["forbidden_patterns_absent"],
+        ),
+    ]
+    for check, message, passed in checks:
+        if not passed:
+            errors.append({"check": check, "path": "$", "message": message})
+    return errors
+
+
+def _validate_review_result_status(result_path: Path) -> tuple[dict[str, Any], int]:
+    """Validate a saved reviewer handoff review result safely.
+
+    The validator checks JSON parsing, schema conformance, reviewer decision,
+    required artifact references, limitation acknowledgement structure, and
+    forbidden sensitive/raw diagnostic patterns. Public output is intentionally
+    limited to booleans, fixed identifiers, and fixed diagnostics; it does not
+    print raw JSON values, raw file paths, raw fingerprints, raw exceptions, raw
+    schema validator messages, secrets, or customer/production data.
+    """
+    result, result_json_valid = _load_json_document(result_path)
+    result_schema_valid = (
+        result_json_valid
+        and _json_schema_valid(result, REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_PATH)
+    )
+    decision_valid = result_json_valid and _review_result_decision_valid(result)
+    limitations_acknowledged = (
+        result_json_valid and _review_result_limitations_acknowledged(result)
+    )
+    artifacts_checked_shape_valid = (
+        result_json_valid and _review_result_artifacts_checked_shape_valid(result)
+    )
+    forbidden_patterns_absent = (
+        result_json_valid and not _contains_forbidden_review_result_pattern(result)
+    )
+    ok = (
+        result_schema_valid
+        and decision_valid
+        and limitations_acknowledged
+        and artifacts_checked_shape_valid
+        and forbidden_patterns_absent
+    )
+    report = {
+        "ok": ok,
+        "result_schema_valid": result_schema_valid,
+        "decision_valid": decision_valid,
+        "limitations_acknowledged": limitations_acknowledged,
+        "artifacts_checked_shape_valid": artifacts_checked_shape_valid,
+        "forbidden_patterns_absent": forbidden_patterns_absent,
+        "validated_schema_id": REVIEWER_HANDOFF_REVIEW_RESULT_SCHEMA_ID,
+        "validator": VALIDATE_REVIEW_RESULT_VALIDATOR,
+        "errors": [],
+    }
+    report["errors"] = _review_result_public_errors(
+        {**report, "result_json_valid": result_json_valid}
+    )
+    return report, 0 if ok else 1
+
+
+def _run_validate_review_result(
+    result_path: Path,
+    *,
+    json_output: bool = False,
+    output_path: Optional[Path] = None,
+) -> int:
+    """Run saved reviewer handoff review result validation."""
+    output, exit_code = _validate_review_result_status(result_path)
+    if json_output:
+        output_json = json.dumps(output, indent=2, ensure_ascii=False)
+        if output_path is not None:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(output_json + "\n", encoding="utf-8")
+            except OSError:
+                print(
+                    "error: failed to write review result validation report",
+                    file=sys.stderr,
+                )
+                return 2
+        # codeql[py/clear-text-logging-sensitive-data]: validate-review-result
+        # emits only fixed schema identifiers, booleans, and fixed diagnostics.
+        print(output_json)
+        return exit_code
+
+    status = "PASS" if output["ok"] else "FAIL"
+    print(f"Reviewer handoff review result validation: {status}")
+    for error in output["errors"]:
+        print(f"  error [{error['check']}]: {error['message']}")
+    return exit_code
+
+
 def _run_validate_result(
     result_path: Path,
     *,
@@ -738,6 +1004,33 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    review_result = sub.add_parser(
+        "validate-review-result",
+        help=(
+            "Validate a saved reviewer handoff review result artifact "
+            "against its schema and review-boundary checks"
+        ),
+    )
+    review_result.add_argument(
+        "--result",
+        required=True,
+        type=Path,
+        help="Saved reviewer-handoff-review-result.json artifact",
+    )
+    review_result.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable review result validation report as JSON",
+    )
+    review_result.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Write the JSON review result validation report to this UTF-8 "
+            "file. Requires --json and does not suppress stdout JSON."
+        ),
+    )
+
     key_provenance = sub.add_parser(
         "validate-key-provenance",
         help=(
@@ -841,6 +1134,16 @@ def main(argv: Optional[list[str]] = None) -> int:
             parser.error("validate-result --output requires --json")
             return 2
         return _run_validate_result(
+            args.result,
+            json_output=args.json,
+            output_path=args.output,
+        )
+
+    if args.command == "validate-review-result":
+        if args.output is not None and not args.json:
+            parser.error("validate-review-result --output requires --json")
+            return 2
+        return _run_validate_review_result(
             args.result,
             json_output=args.json,
             output_path=args.output,

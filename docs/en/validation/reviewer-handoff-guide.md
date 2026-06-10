@@ -65,6 +65,25 @@ veritas-evidence-bundle validate-key-provenance-result \
   --output key-provenance-result-validation.json
 ```
 
+Validate the saved Reviewer Review Result artifact:
+
+```bash
+veritas-evidence-bundle validate-review-result \
+  --result reviewer-handoff-review-result.json \
+  --json \
+  --output reviewer-review-result-validation.json
+```
+
+`validate-review-result` checks the saved review result artifact against
+[`schemas/reviewer_handoff_review_result.schema.json`](../../../schemas/reviewer_handoff_review_result.schema.json)
+and verifies the decision enum, required artifact references, required boolean
+limitation acknowledgements, and forbidden sensitive/raw diagnostic patterns.
+It records and checks review-result structure only: it does not create trust,
+does not replace out-of-band public key trust, does not prove regulatory
+certification, is not completed third-party audit approval, and does not
+establish cryptographic truth by itself. JSON output uses booleans, fixed schema
+identifiers, and fixed diagnostics only.
+
 ## What the reviewer can verify
 
 The package supports these reviewer checks:

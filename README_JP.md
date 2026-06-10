@@ -385,7 +385,21 @@ Authority Evidence と Audit Log の違いは明確です。
 - **External Audit / Evidence Bundle Readiness**: [`docs/ja/validation/external-audit-readiness.md`](docs/ja/validation/external-audit-readiness.md)（英語正本あり）
 - **Reviewer Key Provenance Walkthrough（英語正本）**: [`docs/en/validation/reviewer-key-provenance-walkthrough.md`](docs/en/validation/reviewer-key-provenance-walkthrough.md)
 - **Reviewer Handoff Guide（英語正本）**: [`docs/en/validation/reviewer-handoff-guide.md`](docs/en/validation/reviewer-handoff-guide.md)
-  - `samples/evidence_bundle/key_provenance_review/` の illustrative sample chain には `sample-artifact-manifest.json` と `reviewer-handoff-review-result.json` が含まれます。CI は JSON Schema conformance、固定 artifact reference、manifest、artifact hash、禁止された sensitive/raw diagnostic pattern を検証します。Reviewer Review Result は確認内容と `ACCEPT` / `REJECT` / `NEEDS_FOLLOW_UP` の decision を記録しますが、単独の certification、regulatory approval、completed third-party audit approval、cryptographic truth ではありません。hash matching は sample integrity を支援するだけで standalone trust ではありません。この CI validation は trust を作成せず、out-of-band public key trust を置き換えず、regulatory certification や completed third-party audit approval を示しません。
+  - `samples/evidence_bundle/key_provenance_review/` の illustrative sample chain には
+    `sample-artifact-manifest.json` と `reviewer-handoff-review-result.json` が含まれます。CI は
+    JSON Schema conformance、固定 artifact reference、manifest、artifact hash、禁止された
+    sensitive/raw diagnostic pattern を検証します。Reviewer Review Result は確認内容と
+    `ACCEPT` / `REJECT` / `NEEDS_FOLLOW_UP` の decision を記録しますが、単独の
+    certification、regulatory approval、completed third-party audit approval、cryptographic truth
+    ではありません。hash matching は sample integrity を支援するだけで standalone trust ではありません。
+    この CI validation は trust を作成せず、out-of-band public key trust を置き換えず、
+    regulatory certification や completed third-party audit approval を示しません。
+    `veritas-evidence-bundle validate-review-result --result reviewer-handoff-review-result.json --json --output reviewer-review-result-validation.json`
+    は、保存済み review result artifact の schema、acknowledgement structure、required artifact
+    reference、decision、禁止された sensitive/raw diagnostic pattern を検証します。この command は
+    review-result structure を記録・検査するだけで、trust を作成せず、out-of-band public key trust
+    を置き換えず、regulatory certification を証明せず、completed third-party audit approval
+    ではなく、それ単独で cryptographic truth を証明しません。
 - **External Technical Proof Pack（review/pilot/DD/audit）**: [`docs/ja/validation/technical-proof-pack.md`](docs/ja/validation/technical-proof-pack.md)（英語正本あり）
 - **AML/KYC Short Positioning（customer / operator / investor）**: [`docs/ja/positioning/aml-kyc-beachhead-short-positioning.md`](docs/ja/positioning/aml-kyc-beachhead-short-positioning.md)（英語正本あり）
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os

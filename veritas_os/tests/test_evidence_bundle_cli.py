@@ -1513,3 +1513,170 @@ def test_evidence_bundle_cli_validate_result_output_write_failure_is_clear(
     assert exit_code == 2
     assert captured.out == ""
     assert "failed to write validation report" in captured.err
+
+REVIEW_RESULT_SAMPLE_PATH = Path(
+    "samples/evidence_bundle/key_provenance_review/"
+    "reviewer-handoff-review-result.json"
+)
+REVIEW_RESULT_VALIDATED_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_review_result.schema.json"
+)
+REVIEW_RESULT_VALIDATOR = "veritas-evidence-bundle validate-review-result"
+
+
+def _load_review_result_sample() -> dict[str, Any]:
+    """Load the placeholder reviewer handoff review result sample."""
+    return json.loads(REVIEW_RESULT_SAMPLE_PATH.read_text(encoding="utf-8"))
+
+
+def _write_review_result(tmp_path: Path, result: dict[str, Any]) -> Path:
+    """Write a reviewer handoff review result fixture for CLI tests."""
+    result_path = tmp_path / "reviewer-handoff-review-result.json"
+    result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    return result_path
+
+
+def _run_validate_review_result_json(result_path: Path, capsys) -> dict[str, Any]:
+    """Run validate-review-result --json and return parsed stdout."""
+    from veritas_os.cli.evidence_bundle import main
+
+    exit_code = main(
+        ["validate-review-result", "--result", str(result_path), "--json"]
+    )
+    captured = capsys.readouterr()
+    output = json.loads(captured.out)
+    assert captured.err == ""
+    if output["ok"]:
+        assert exit_code == 0
+    else:
+        assert exit_code == 1
+    return output
+
+
+def test_validate_review_result_valid_sample_passes(capsys) -> None:
+    """validate-review-result accepts the illustrative sample artifact."""
+    output = _run_validate_review_result_json(REVIEW_RESULT_SAMPLE_PATH, capsys)
+
+    assert output == {
+        "ok": True,
+        "result_schema_valid": True,
+        "decision_valid": True,
+        "limitations_acknowledged": True,
+        "artifacts_checked_shape_valid": True,
+        "forbidden_patterns_absent": True,
+        "validated_schema_id": REVIEW_RESULT_VALIDATED_SCHEMA_ID,
+        "validator": REVIEW_RESULT_VALIDATOR,
+        "errors": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutate", "failed_check"),
+    [
+        (
+            lambda result: result.__setitem__("decision", "APPROVED"),
+            "decision_valid",
+        ),
+        (
+            lambda result: result["limitations_acknowledged"].pop(
+                "does_not_create_trust"
+            ),
+            "limitations_acknowledged",
+        ),
+        (
+            lambda result: result["limitations_acknowledged"].__setitem__(
+                "does_not_create_trust",
+                False,
+            ),
+            "limitations_acknowledged",
+        ),
+        (
+            lambda result: result.__setitem__(
+                "artifacts_checked",
+                result["artifacts_checked"][:-1],
+            ),
+            "artifacts_checked_shape_valid",
+        ),
+        (
+            lambda result: result.__setitem__(
+                "notes",
+                "-----BEGIN PRIVATE KEY-----",
+            ),
+            "forbidden_patterns_absent",
+        ),
+        (
+            lambda result: result.__setitem__("notes", "stored under /tmp/example"),
+            "forbidden_patterns_absent",
+        ),
+        (
+            lambda result: result.__setitem__("notes", "RuntimeError: example"),
+            "forbidden_patterns_absent",
+        ),
+    ],
+)
+def test_validate_review_result_invalid_cases_fail_safely(
+    tmp_path,
+    capsys,
+    mutate,
+    failed_check: str,
+) -> None:
+    """Invalid review result cases fail with fixed diagnostics."""
+    result = _load_review_result_sample()
+    mutate(result)
+    result_path = _write_review_result(tmp_path, result)
+
+    output = _run_validate_review_result_json(result_path, capsys)
+
+    assert output["ok"] is False
+    assert output[failed_check] is False
+    assert any(error["check"] == failed_check for error in output["errors"])
+
+
+def test_validate_review_result_json_output_file_matches_stdout(tmp_path, capsys) -> None:
+    """--json --output writes the same machine-readable report as stdout."""
+    output_path = tmp_path / "reviewer-review-result-validation.json"
+
+    from veritas_os.cli.evidence_bundle import main
+
+    exit_code = main(
+        [
+            "validate-review-result",
+            "--result",
+            str(REVIEW_RESULT_SAMPLE_PATH),
+            "--json",
+            "--output",
+            str(output_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert json.loads(captured.out) == json.loads(
+        output_path.read_text(encoding="utf-8")
+    )
+
+
+def test_validate_review_result_diagnostics_do_not_leak_raw_values(
+    tmp_path,
+    capsys,
+) -> None:
+    """Diagnostics do not echo raw JSON values or raw paths from invalid input."""
+    raw_path = "/workspace/private/customer/path"
+    raw_value = "APPROVED_BY_CUSTOMER_PLACEHOLDER"
+    result = _load_review_result_sample()
+    result["decision"] = raw_value
+    result["notes"] = raw_path
+    result_path = _write_review_result(tmp_path, result)
+
+    from veritas_os.cli.evidence_bundle import main
+
+    exit_code = main(["validate-review-result", "--result", str(result_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert raw_path not in captured.out
+    assert raw_value not in captured.out
+    assert str(result_path) not in captured.out
+    assert "Reviewer handoff review result validation: FAIL" in captured.out

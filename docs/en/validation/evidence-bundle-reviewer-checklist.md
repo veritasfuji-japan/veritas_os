@@ -153,6 +153,23 @@ same fixed-diagnostic JSON report; parent directories are created and
 fingerprints, raw file paths, raw exception text, raw schema validator messages,
 or raw JSON values from the saved report.
 
+To validate the saved Reviewer Review Result artifact, run:
+
+```bash
+veritas-evidence-bundle validate-review-result \
+  --result reviewer-handoff-review-result.json \
+  --json \
+  --output reviewer-review-result-validation.json
+```
+
+`validate-review-result` validates the saved review result artifact, including
+schema conformance, acknowledgement structure, required artifact references,
+decision values, and forbidden sensitive/raw diagnostic patterns. It records and
+checks review-result structure only: it does not create trust, does not replace
+out-of-band public key trust, does not prove regulatory certification, is not
+completed third-party audit approval, and does not establish cryptographic truth
+by itself. Its public output is boolean-only with fixed diagnostics.
+
 ## Verification order
 
 | Step | Reviewer action | PASS criterion | FAIL / follow-up criterion |
@@ -165,7 +182,7 @@ or raw JSON values from the saved report.
 | 6 | Inspect `acceptance_checklist.json`. | The checklist exists and has no blocking failures for the submitted bundle profile. | The checklist is missing, malformed, incomplete, or contains any blocking failure. |
 | 7 | Inspect `verification_report.json`. | The report exists and is consistent with the strict verification result and expected bundle scope. | The report is missing, malformed, stale, inconsistent with CLI output, or reports unresolved errors. |
 | 8 | Confirm no missing expected artifacts. | Required artifacts for the bundle type and review objective are present, including expected manifest, witness, report, acceptance, and profile-specific files. | Expected artifacts are absent, empty, renamed without explanation, or inconsistent with the handoff metadata. |
-| 9 | Record reviewer result in `reviewer-handoff-review-result.json`: `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`. | The final result records artifacts checked, command output, key provenance, limitation acknowledgements, reviewer scope, out-of-band trust context, and reviewer rationale. | The result is ambiguous, lacks key provenance, lacks CLI evidence, lacks limitation acknowledgements, or does not explain unresolved follow-up. |
+| 9 | Record reviewer result in `reviewer-handoff-review-result.json`: `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`, then run `veritas-evidence-bundle validate-review-result --result reviewer-handoff-review-result.json`. | The final result records artifacts checked, command output, key provenance, limitation acknowledgements, reviewer scope, out-of-band trust context, and reviewer rationale; the validator reports schema-valid structure and acknowledged limitations. | The result is ambiguous, lacks key provenance, lacks CLI evidence, lacks limitation acknowledgements, fails review-result validation, or does not explain unresolved follow-up. |
 
 ## Required ACCEPT criteria
 
