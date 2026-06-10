@@ -74,3 +74,69 @@ def test_readme_entrypoint_fails_when_no_readme_links_to_verification_docs(
 
 def test_current_evidence_bundle_reviewer_docs_are_consistent():
     assert checker.validate_evidence_bundle_reviewer_docs() == []
+
+
+def test_handoff_document_checker_reports_missing_artifacts(tmp_path, monkeypatch):
+    validation_dir = tmp_path / "docs/en/validation"
+    validation_dir.mkdir(parents=True)
+    handoff = validation_dir / "reviewer-handoff-guide.md"
+    handoff.write_text(
+        "Evidence Bundle\n"
+        "do not create trust by themselves\n"
+        "do not replace out-of-band public key trust\n"
+        "do not prove regulatory certification\n"
+        "not completed third-party audit approval\n"
+        "matching fingerprints support correlation, not standalone trust\n"
+        "sample artifact hashes prove sample integrity only, not production "
+        "evidence authenticity\n"
+        "Reviewer Evidence Packets reference artifacts; they do not prove "
+        "trust alone\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(checker, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(checker, "VALIDATION_DIR", validation_dir)
+
+    problems = checker.collect_handoff_document_problems(
+        {handoff: handoff.read_text(encoding="utf-8")}
+    )
+
+    assert (
+        "docs/en/validation/reviewer-handoff-guide.md: missing expected "
+        "artifact: verification-result.json"
+    ) in problems
+
+
+def test_handoff_document_checker_reports_forbidden_raw_patterns(
+    tmp_path, monkeypatch
+):
+    validation_dir = tmp_path / "docs/en/validation"
+    validation_dir.mkdir(parents=True)
+    handoff = validation_dir / "reviewer-handoff-guide.md"
+    handoff.write_text(
+        "Evidence Bundle verification-result.json "
+        "trusted-public-key-provenance.json key-provenance-validation.json "
+        "key-provenance-result-validation.json reviewer-evidence-packet.json "
+        "sample-artifact-manifest.json\n"
+        "do not create trust by themselves\n"
+        "do not replace out-of-band public key trust\n"
+        "do not prove regulatory certification\n"
+        "not completed third-party audit approval\n"
+        "matching fingerprints support correlation, not standalone trust\n"
+        "sample artifact hashes prove sample integrity only, not production "
+        "evidence authenticity\n"
+        "Reviewer Evidence Packets reference artifacts; they do not prove "
+        "trust alone\n"
+        "-----BEGIN PRIVATE KEY-----\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(checker, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(checker, "VALIDATION_DIR", validation_dir)
+
+    problems = checker.collect_handoff_document_problems(
+        {handoff: handoff.read_text(encoding="utf-8")}
+    )
+
+    assert (
+        "docs/en/validation/reviewer-handoff-guide.md: contains forbidden "
+        "raw private key pattern"
+    ) in problems

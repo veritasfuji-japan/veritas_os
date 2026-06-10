@@ -23,6 +23,8 @@ Important boundaries:
 - Matching fingerprints support correlation, not standalone trust.
 - Reviewer Evidence Packets reference artifacts; they do not prove trust alone.
 
+For reviewer handoff packaging, see the [Reviewer Handoff Guide](reviewer-handoff-guide.md).
+
 Use placeholder artifact names only in examples. Do not paste real fingerprints,
 real public keys, local file paths, exception text, schema validator messages,
 private keys, production secrets, or unsanitized customer data into reviewer

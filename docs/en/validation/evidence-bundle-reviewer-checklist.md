@@ -220,6 +220,8 @@ key, the bundle is not reviewer-facing verified evidence.
   [Evidence Bundle Verification JSON Contract](evidence-bundle-verification-json-contract.md)
 - Trusted public key provenance receipt and fingerprint correlation:
   [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
+- Reviewer handoff package contents, checks, and boundaries:
+  [Reviewer Handoff Guide](reviewer-handoff-guide.md)
 - Bundle contents and delivery policy:
   [External Audit Readiness Pack](external-audit-readiness.md)
 
