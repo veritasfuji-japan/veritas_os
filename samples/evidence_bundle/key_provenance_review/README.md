@@ -14,6 +14,7 @@ verification-result.json
 → key-provenance-validation.json
 → key-provenance-result-validation.json
 → reviewer-evidence-packet.json
+→ reviewer-handoff-review-result.json
 ```
 
 ## Files
@@ -25,6 +26,7 @@ verification-result.json
 | `key-provenance-validation.json` | Illustrates the saved `validate-key-provenance --json` report showing schema and fingerprint-correlation checks. |
 | `key-provenance-result-validation.json` | Illustrates the saved `validate-key-provenance-result --json` report for the provenance-validation report. |
 | `reviewer-evidence-packet.json` | Illustrates Reviewer Evidence Packet references to the key provenance artifacts. |
+| `reviewer-handoff-review-result.json` | Illustrates a reviewer-facing Review Result / Acceptance Record for what was checked and whether follow-up remains. |
 | `sample-artifact-manifest.json` | Indexes the illustrative sample artifacts, roles, schema identifiers, and SHA-256 digests. |
 
 ## Sample Artifact Manifest

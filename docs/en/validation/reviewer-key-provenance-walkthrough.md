@@ -22,6 +22,9 @@ Important boundaries:
 - This is not completed third-party audit approval.
 - Matching fingerprints support correlation, not standalone trust.
 - Reviewer Evidence Packets reference artifacts; they do not prove trust alone.
+- Reviewer Review Results record reviewer outcome only; decisions can be
+  `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP` and depend on reviewer scope plus
+  out-of-band public key trust context.
 
 For reviewer handoff packaging, see the [Reviewer Handoff Guide](reviewer-handoff-guide.md).
 
@@ -42,9 +45,11 @@ trust. The sample set now includes `sample-artifact-manifest.json` as an index
 of expected artifact names, reviewer roles, schema identifiers, and SHA-256 file
 digests. CI validates the illustrative sample chain and manifest for JSON Schema
 conformance, fixed artifact references, artifact hashes, and forbidden
-sensitive/raw diagnostic patterns only; hash matching supports sample integrity,
-not standalone trust, and CI validation does not create trust or replace
-out-of-band public key trust.
+sensitive/raw diagnostic patterns only. The sample set also includes
+`reviewer-handoff-review-result.json` as an illustrative Review Result /
+Acceptance Record. Hash matching supports sample integrity, not standalone
+trust, and CI validation does not create trust or replace out-of-band public
+key trust.
 
 ## Full reviewer sequence
 
@@ -57,8 +62,10 @@ out-of-band public key trust.
 7. Save `key-provenance-result-validation.json`.
 8. Confirm `reviewer-evidence-packet.json` references these artifacts by fixed
    artifact name and schema identifier.
-9. Confirm `sample-artifact-manifest.json` lists the full illustrative sample set
-   and that CI/sample validation checks the listed SHA-256 digests.
+9. Record or inspect `reviewer-handoff-review-result.json` with the reviewer
+   decision: `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`.
+10. Confirm `sample-artifact-manifest.json` lists the full illustrative sample
+   set and that CI/sample validation checks the listed SHA-256 digests.
 
 ## 1. Verify the Evidence Bundle strictly
 
@@ -139,6 +146,17 @@ Packet metadata must not embed raw public key fingerprints, raw local file
 paths, raw exception text, raw schema validator messages, or raw JSON values
 copied from externally supplied artifacts.
 
+## 6. Record the Reviewer Review Result
+
+Use `reviewer-handoff-review-result.json` when the reviewer needs a
+machine-readable Review Result / Acceptance Record. The artifact records what
+was checked, the reviewer, reviewer scope, limitation acknowledgements, and the
+decision value: `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`. It records the review
+outcome, not cryptographic truth by itself, and it is not certification,
+regulatory approval, or completed third-party audit approval. A reviewer
+decision depends on the reviewer's scope and out-of-band public key trust
+context.
+
 ## Artifact map
 
 | artifact | produced by | validated by | schema | reviewer purpose |
@@ -148,4 +166,5 @@ copied from externally supplied artifacts.
 | `key-provenance-validation.json` | `veritas-evidence-bundle validate-key-provenance --json --output key-provenance-validation.json` | `veritas-evidence-bundle validate-key-provenance-result --result key-provenance-validation.json` | [`schemas/trusted_public_key_provenance_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_validation_report.schema.json) | Records receipt schema validity, verification-result schema validity, strict-authenticity checks, and fingerprint correlation status. |
 | `key-provenance-result-validation.json` | `veritas-evidence-bundle validate-key-provenance-result --json --output key-provenance-result-validation.json` | Reviewer packet review and schema-aware audit tooling | [`schemas/trusted_public_key_provenance_result_validation_report.schema.json`](../../../schemas/trusted_public_key_provenance_result_validation_report.schema.json) | Records that the saved key provenance validation report itself matches the expected result-validation report shape. |
 | `reviewer-evidence-packet.json` | Reviewer Evidence Packet export or assembly process | Reviewer packet validation/report tooling and reviewer inspection | [`docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`](../demo/schemas/reviewer-evidence-packet-v1.schema.json) | Points reviewers to the saved artifacts; it is a navigation and evidence-packet reference, not standalone trust proof. |
+| `reviewer-handoff-review-result.json` | Reviewer review process | JSON Schema validation, CI sample validation, and reviewer inspection | [`schemas/reviewer_handoff_review_result.schema.json`](../../../schemas/reviewer_handoff_review_result.schema.json) | Records artifacts checked, limitations acknowledged, reviewer scope, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`); it records outcome, not cryptographic truth by itself. |
 | `sample-artifact-manifest.json` | Illustrative sample set maintenance | CI sample validation and reviewer inspection | [`schemas/trusted_public_key_provenance_review_sample_manifest.schema.json`](../../../schemas/trusted_public_key_provenance_review_sample_manifest.schema.json) | Indexes expected sample artifacts, roles, schema identifiers, and SHA-256 digests; hash matching supports sample integrity, not standalone trust. |

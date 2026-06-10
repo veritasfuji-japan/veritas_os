@@ -26,6 +26,7 @@ EXPECTED_ARTIFACTS = (
     "key-provenance-validation.json",
     "key-provenance-result-validation.json",
     "reviewer-evidence-packet.json",
+    "reviewer-handoff-review-result.json",
     "README.md",
 )
 EXPECTED_ROLES = {
@@ -36,6 +37,7 @@ EXPECTED_ROLES = {
         "key_provenance_result_validation_report"
     ),
     "reviewer-evidence-packet.json": "reviewer_evidence_packet",
+    "reviewer-handoff-review-result.json": "reviewer_handoff_review_result",
     "README.md": "sample_readme",
 }
 EXPECTED_SCHEMA_IDS = {
@@ -57,6 +59,10 @@ EXPECTED_SCHEMA_IDS = {
     ),
     "reviewer-evidence-packet.json": (
         "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json"
+    ),
+    "reviewer-handoff-review-result.json": (
+        "https://veritas-os.example/schemas/"
+        "reviewer_handoff_review_result.schema.json"
     ),
     "README.md": None,
 }

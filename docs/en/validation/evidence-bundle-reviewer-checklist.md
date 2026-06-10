@@ -15,14 +15,19 @@ to preserve the reviewer/operator trust basis for the public key used in
 strict verification, and use the
 [Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md)
 when the Reviewer Evidence Packet should reference saved key provenance
-artifacts.
+artifacts. When the handoff needs a machine-readable reviewer decision, record
+`reviewer-handoff-review-result.json` against
+[`schemas/reviewer_handoff_review_result.schema.json`](../../../schemas/reviewer_handoff_review_result.schema.json).
 
 ## Scope and non-certification boundary
 
 This checklist supports reviewer verification of one delivered Evidence Bundle.
 It is not regulatory certification, legal approval, or completed
 third-party audit approval. Reviewers remain responsible for their own audit scope,
-evidence sampling, legal/regulatory conclusions, and sign-off process.
+evidence sampling, legal/regulatory conclusions, and sign-off process. A
+Reviewer Review Result records review outcome only; it is not certification,
+regulatory approval, completed third-party audit approval, or cryptographic
+truth by itself.
 
 Security boundaries:
 
@@ -160,7 +165,7 @@ or raw JSON values from the saved report.
 | 6 | Inspect `acceptance_checklist.json`. | The checklist exists and has no blocking failures for the submitted bundle profile. | The checklist is missing, malformed, incomplete, or contains any blocking failure. |
 | 7 | Inspect `verification_report.json`. | The report exists and is consistent with the strict verification result and expected bundle scope. | The report is missing, malformed, stale, inconsistent with CLI output, or reports unresolved errors. |
 | 8 | Confirm no missing expected artifacts. | Required artifacts for the bundle type and review objective are present, including expected manifest, witness, report, acceptance, and profile-specific files. | Expected artifacts are absent, empty, renamed without explanation, or inconsistent with the handoff metadata. |
-| 9 | Record reviewer result: `ACCEPT`, `REJECT`, or `NEEDS FOLLOW-UP`. | The final result records evidence reviewed, command output, key provenance, blockers, and reviewer rationale. | The result is ambiguous, lacks key provenance, lacks CLI evidence, or does not explain unresolved exceptions. |
+| 9 | Record reviewer result in `reviewer-handoff-review-result.json`: `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`. | The final result records artifacts checked, command output, key provenance, limitation acknowledgements, reviewer scope, out-of-band trust context, and reviewer rationale. | The result is ambiguous, lacks key provenance, lacks CLI evidence, lacks limitation acknowledgements, or does not explain unresolved follow-up. |
 
 ## Required ACCEPT criteria
 
@@ -193,9 +198,9 @@ resolved by a corrected handoff:
 - Expected required artifacts are missing for the declared bundle type or review
   objective.
 
-## NEEDS FOLLOW-UP criteria
+## NEEDS_FOLLOW_UP criteria
 
-Record `NEEDS FOLLOW-UP` when the reviewer cannot yet accept or reject the
+Record `NEEDS_FOLLOW_UP` when the reviewer cannot yet accept or reject the
 bundle because clarification or replacement evidence is required. Typical cases:
 
 - The handoff channel is unclear but may be confirmed by the operator.
@@ -206,7 +211,7 @@ bundle because clarification or replacement evidence is required. Typical cases:
 - The reviewer needs a regenerated bundle to separate a procedural issue from a
   true integrity or authenticity failure.
 
-Do not use `NEEDS FOLLOW-UP` to bypass a cryptographic failure. If strict
+Do not use `NEEDS_FOLLOW_UP` to bypass a cryptographic failure. If strict
 verification cannot produce both required PASS lines under a trusted out-of-band
 key, the bundle is not reviewer-facing verified evidence.
 
