@@ -376,6 +376,10 @@ def test_validate_key_provenance_json_output_file_matches_stdout(
     assert exit_code == 0
     assert output_path.read_text(encoding="utf-8") == stdout
     assert json.loads(stdout)["ok"] is True
+    assert str(output_path) not in stdout
+    assert str(receipt_path) not in stdout
+    assert str(verification_result_path) not in stdout
+    assert FINGERPRINT not in stdout
 
 
 def test_validate_key_provenance_output_without_json_fails_clearly(

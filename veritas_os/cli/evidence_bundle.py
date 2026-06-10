@@ -357,6 +357,10 @@ def _key_provenance_public_report(
     status: KeyProvenanceValidationStatus,
 ) -> dict[str, Any]:
     """Build public validate-key-provenance JSON from fixed fields only."""
+    # The public validate-key-provenance report must remain boolean-only and
+    # must not include raw fingerprints, file paths, exception text, schema
+    # validator messages, or JSON values loaded from reviewer-controlled
+    # artifacts.
     return {
         "ok": status.ok,
         "receipt_schema_valid": status.receipt_schema_valid,
@@ -430,6 +434,11 @@ def _run_validate_key_provenance(
                     file=sys.stderr,
                 )
                 return 2
+        # lgtm [py/clear-text-logging-sensitive-data] The public
+        # validate-key-provenance JSON report is rebuilt from booleans, fixed
+        # identifiers, and fixed diagnostics only; raw fingerprints, file
+        # paths, exception text, schema validator messages, and JSON values
+        # loaded from reviewer-controlled artifacts are intentionally omitted.
         print(output_json)
         return 0 if status.ok else 1
 
