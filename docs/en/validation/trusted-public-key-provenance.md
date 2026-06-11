@@ -275,7 +275,9 @@ veritas-evidence-bundle validate-reviewer-handoff-package \
 
 This validates the sample manifest, artifact hashes, applicable schemas,
 expected artifact relationships, validator field values, synthetic placeholder
-fingerprints, and safety boundaries. It is a sample package integrity and safety
+fingerprints, and safety boundaries. The sample pack now includes the saved
+placeholder artifact `reviewer-handoff-package-validation.json` to demonstrate
+the output shape of `validate-reviewer-handoff-package --json`. It is a sample package integrity and safety
 check only. It does not create trust, replace out-of-band public key trust, prove
 regulatory certification, indicate completed third-party audit approval, or
 establish cryptographic truth by itself. Sample hashes support sample integrity

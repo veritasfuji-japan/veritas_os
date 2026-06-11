@@ -23,6 +23,14 @@ SAMPLE_PATH = (
     / "samples/evidence_bundle/key_provenance_review/"
     "reviewer-handoff-review-result.json"
 )
+PACKAGE_VALIDATION_SCHEMA_PATH = (
+    REPO_ROOT / "schemas/reviewer_handoff_package_validation_report.schema.json"
+)
+PACKAGE_VALIDATION_SAMPLE_PATH = (
+    REPO_ROOT
+    / "samples/evidence_bundle/key_provenance_review/"
+    "reviewer-handoff-package-validation.json"
+)
 MANIFEST_PATH = (
     REPO_ROOT
     / "samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json"
@@ -106,6 +114,35 @@ def test_manifest_includes_reviewer_result_with_matching_hash() -> None:
     assert entry["sha256"] == hashlib.sha256(SAMPLE_PATH.read_bytes()).hexdigest()
 
 
+def test_package_validation_report_sample_validates() -> None:
+    """The package validation report sample matches its JSON Schema."""
+    schema = _load_json(PACKAGE_VALIDATION_SCHEMA_PATH)
+    Draft202012Validator.check_schema(schema)
+
+    Draft202012Validator(schema).validate(
+        _load_json(PACKAGE_VALIDATION_SAMPLE_PATH)
+    )
+
+
+def test_manifest_includes_package_validation_report_with_matching_hash() -> None:
+    """The manifest indexes the package validation report and digest."""
+    manifest = _load_json(MANIFEST_PATH)
+    entries = {
+        entry["artifact_name"]: entry for entry in manifest["artifacts"]
+    }
+    entry = entries["reviewer-handoff-package-validation.json"]
+
+    assert entry["role"] == "reviewer_handoff_package_validation_report"
+    assert (
+        entry["schema_id"]
+        == "https://veritas-os.example/schemas/"
+        "reviewer_handoff_package_validation_report.schema.json"
+    )
+    assert entry["sha256"] == hashlib.sha256(
+        PACKAGE_VALIDATION_SAMPLE_PATH.read_bytes()
+    ).hexdigest()
+
+
 def test_sample_validation_script_exits_zero() -> None:
     """The reviewer sample quality gate accepts the updated sample set."""
     completed = subprocess.run(
@@ -125,6 +162,7 @@ def test_docs_link_to_reviewer_result_artifact_and_schema() -> None:
         text = doc_path.read_text(encoding="utf-8")
 
         assert "reviewer-handoff-review-result.json" in text
+        assert "reviewer-handoff-package-validation.json" in text
         assert "ACCEPT" in text
         assert "REJECT" in text
         assert "NEEDS_FOLLOW_UP" in text
