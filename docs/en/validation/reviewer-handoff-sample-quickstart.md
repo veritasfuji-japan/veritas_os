@@ -61,7 +61,16 @@ JSON, and compares the regenerated reports with the repository copies. This
 keeps sample reports aligned with current CLI behavior and confirms that
 privacy-preserving diagnostics remain fixed and boolean-only.
 
-## 8. Understand trust boundaries
+## 8. Understand the quickstart command guard
+
+The package validation command in this quickstart is CI-guarded by
+`scripts/quality/check_reviewer_handoff_quickstart_command.py`. The guard checks
+that the documented command is present, runs the equivalent package validator
+without overwriting checked-in sample files, and validates the generated report
+against the public output contract. This reduces docs/CLI drift and validates
+sample command reproducibility only.
+
+## 9. Understand trust boundaries
 
 The reviewer handoff sample package validates sample structure and validation
 status only. It does not create trust, does not replace out-of-band public key

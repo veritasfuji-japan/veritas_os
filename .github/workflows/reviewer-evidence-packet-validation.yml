@@ -43,6 +43,9 @@ jobs:
       - name: Check reviewer handoff sample regeneration
         run: python3 scripts/quality/check_reviewer_handoff_sample_regeneration.py
 
+      - name: Check reviewer handoff quickstart command
+        run: python3 scripts/quality/check_reviewer_handoff_quickstart_command.py
+
       - name: Export current Reviewer Evidence Packet
         run: >
           python3 scripts/demo/export_reviewer_evidence_packet.py
