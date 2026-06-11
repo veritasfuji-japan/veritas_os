@@ -74,8 +74,15 @@ VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR = (
 REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/reviewer_handoff_package_validation_report.schema.json"
 )
+REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/"
+    "reviewer_handoff_quickstart_command_validation_report.schema.json"
+)
 VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR = (
     "veritas-evidence-bundle validate-reviewer-handoff-package"
+)
+QUICKSTART_COMMAND_VALIDATOR = (
+    "scripts/quality/check_reviewer_handoff_quickstart_command.py"
 )
 REVIEWER_HANDOFF_PACKAGE_MANIFEST_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/"
@@ -120,6 +127,11 @@ REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
     / "reviewer_handoff_package_validation_report.schema.json"
+)
+REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "reviewer_handoff_quickstart_command_validation_report.schema.json"
 )
 REVIEWER_EVIDENCE_PACKET_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
@@ -200,6 +212,7 @@ REVIEWER_HANDOFF_PACKAGE_REQUIRED_ARTIFACTS = (
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
+    "reviewer-handoff-quickstart-command-validation.json",
     "README.md",
 )
 REVIEWER_HANDOFF_PACKAGE_EXPECTED_ENTRIES = {
@@ -256,6 +269,13 @@ REVIEWER_HANDOFF_PACKAGE_EXPECTED_ENTRIES = {
         "schema_id": REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID,
         "schema_path": REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_PATH,
     },
+    "reviewer-handoff-quickstart-command-validation.json": {
+        "role": "quickstart_command_validation_report",
+        "schema_id": REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID,
+        "schema_path": (
+            REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_PATH
+        ),
+    },
     "README.md": {
         "role": "sample_readme",
         "schema_id": None,
@@ -273,6 +293,9 @@ REVIEWER_HANDOFF_PACKAGE_EXPECTED_VALIDATORS = {
     ),
     "reviewer-handoff-package-validation.json": (
         VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR
+    ),
+    "reviewer-handoff-quickstart-command-validation.json": (
+        QUICKSTART_COMMAND_VALIDATOR
     ),
 }
 REVIEWER_HANDOFF_PACKAGE_SYNTHETIC_FINGERPRINT = "1" * 64
@@ -1309,7 +1332,8 @@ def _reviewer_handoff_package_public_errors(
         ("artifact_schemas_valid", "artifact schemas are not valid"),
         (
             "artifact_relationships_valid",
-            "artifact names, roles, schema ids, validators, or placeholders are invalid",
+            "artifact names, roles, schema ids, validators, or "
+            "placeholders are invalid",
         ),
         (
             "forbidden_patterns_absent",

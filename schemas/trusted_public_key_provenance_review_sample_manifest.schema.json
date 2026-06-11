@@ -25,8 +25,8 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 10,
-      "maxItems": 10,
+      "minItems": 11,
+      "maxItems": 11,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -49,6 +49,7 @@
               "reviewer-review-result-validation.json",
               "reviewer-review-result-report-validation.json",
               "reviewer-handoff-package-validation.json",
+              "reviewer-handoff-quickstart-command-validation.json",
               "README.md"
             ]
           },
@@ -64,6 +65,7 @@
               "reviewer_handoff_review_result_validation_report",
               "reviewer_handoff_review_result_report_validation_report",
               "reviewer_handoff_package_validation_report",
+              "quickstart_command_validation_report",
               "sample_readme"
             ]
           },
@@ -78,14 +80,46 @@
               "https://veritas-os.example/schemas/reviewer_handoff_review_result_validation_report.schema.json",
               "https://veritas-os.example/schemas/reviewer_handoff_review_result_report_validation_report.schema.json",
               "https://veritas-os.example/schemas/reviewer_handoff_package_validation_report.schema.json",
+              "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
               null
             ]
           },
           "sha256": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          },
+          "validator": {
+            "enum": [
+              "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+            ]
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "artifact_name": {
+                  "const": "reviewer-handoff-quickstart-command-validation.json"
+                }
+              },
+              "required": [
+                "artifact_name"
+              ]
+            },
+            "then": {
+              "required": [
+                "validator"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "validator"
+                ]
+              }
+            }
+          }
+        ]
       }
     }
   }

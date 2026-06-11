@@ -69,11 +69,14 @@ that the documented command is present, runs the equivalent package validator
 without overwriting checked-in sample files, and validates the generated report
 against the public output contract. Add `--json` to the guard for a stable
 machine-readable report, and add `--output reviewer-handoff-quickstart-command-validation.json`
-to write the same report to a file. That guard report validates command
+to write the same report to a file. The sample directory includes checked-in
+`reviewer-handoff-quickstart-command-validation.json` so reviewers can inspect
+the expected machine-readable report shape; CI validates it with the rest of the
+sample package. That guard report is not a trust source by itself and validates command
 presence, command executability, and output-contract status only, using the
 schema at
 [`schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`](../../../schemas/reviewer_handoff_quickstart_command_validation_report.schema.json).
-It records validation status only; it does not create trust, does not replace
+It records validation status only and is not a trust source by itself; it does not create trust, does not replace
 out-of-band public key trust, does not prove regulatory certification, is not
 completed third-party audit approval, and does not establish cryptographic truth
 by itself. This reduces docs/CLI drift and validates sample command
@@ -99,7 +102,8 @@ record validation status only.
 - `reviewer-review-result-validation.json`: validates reviewer decision record
 - `reviewer-review-result-report-validation.json`: validates saved reviewer-result validation report
 - `reviewer-handoff-package-validation.json`: validates package-level structure/status
-- `sample-artifact-manifest.json`: indexes sample artifacts, roles, schemas, and hashes
+- `reviewer-handoff-quickstart-command-validation.json`: checked-in quickstart command guard report shape/status
+- `sample-artifact-manifest.json`: indexes sample artifacts, roles, schemas, validators, and hashes
 - `README.md`: sample explanation
 
 ## What this proves
@@ -109,6 +113,8 @@ record validation status only.
 - The sample hashes match.
 - The sample schemas validate.
 - The sample validation reports match current CLI behavior.
+- The checked-in quickstart command validation report shows the expected
+  machine-readable report shape and is CI-validated.
 - Privacy-preserving diagnostics remain fixed and boolean-only.
 
 ## What this does not prove

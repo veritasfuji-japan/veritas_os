@@ -1,0 +1,20 @@
+{
+  "boolean_fields_valid": true,
+  "command_executable": true,
+  "command_present": true,
+  "errors": [],
+  "errors_array_valid": true,
+  "forbidden_patterns_absent": true,
+  "no_unknown_public_fields": true,
+  "ok": true,
+  "output_json_valid": true,
+  "output_schema_valid": true,
+  "quickstart_exists": true,
+  "report_schema_id": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
+  "report_schema_id_valid": true,
+  "validated_command": "veritas-evidence-bundle validate-reviewer-handoff-package",
+  "validated_document": "docs/en/validation/reviewer-handoff-sample-quickstart.md",
+  "validated_schema_id_valid": true,
+  "validator": "scripts/quality/check_reviewer_handoff_quickstart_command.py",
+  "validator_valid": true
+}
