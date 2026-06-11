@@ -65,6 +65,7 @@ Start here for the completed reviewer path:
 - [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
 - [Reviewer Key Provenance Walkthrough](reviewer-key-provenance-walkthrough.md)
 - [Reviewer Handoff Guide](reviewer-handoff-guide.md)
+- [Reviewer Handoff Sample Quickstart](reviewer-handoff-sample-quickstart.md)
 - [External Audit Readiness Pack](external-audit-readiness.md)
 
 Boundaries:

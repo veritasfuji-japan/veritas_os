@@ -7,6 +7,9 @@ map, not a trust source. The checked-in illustrative sample pack lives at
 `samples/evidence_bundle/key_provenance_review/` and now includes saved reviewer
 result validation report artifacts.
 
+For a concise runbook for this checked-in sample package, see the
+[Reviewer Handoff Sample Quickstart](reviewer-handoff-sample-quickstart.md).
+
 Use placeholder artifact names only. Do not add real keys, real fingerprints,
 real secrets, local absolute paths, customer data, exception text, raw schema
 validator messages, or externally supplied raw JSON values to examples,
