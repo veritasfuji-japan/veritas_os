@@ -228,3 +228,16 @@ hashes support sample integrity only.
 | `reviewer-review-result-report-validation.json` | `veritas-evidence-bundle validate-review-result-report --json --output reviewer-review-result-report-validation.json` | CI sample validation and reviewer inspection | [`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_report_validation_report.schema.json) | Records second-level validation-report shape only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 | `sample-artifact-manifest.json` | Illustrative sample set maintenance | `veritas-evidence-bundle validate-reviewer-handoff-package --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json --base-dir samples/evidence_bundle/key_provenance_review` and CI sample validation | [`schemas/trusted_public_key_provenance_review_sample_manifest.schema.json`](../../../schemas/trusted_public_key_provenance_review_sample_manifest.schema.json) | Indexes expected sample artifacts, roles, schema identifiers, and SHA-256 digests; hash matching supports sample integrity, not standalone trust. |
 | `reviewer-handoff-package-validation.json` | `veritas-evidence-bundle validate-reviewer-handoff-package --json --output reviewer-handoff-package-validation.json` | Reviewer/operator inspection and CI-style sample validation | [`schemas/reviewer_handoff_package_validation_report.schema.json`](../../../schemas/reviewer_handoff_package_validation_report.schema.json) | Records package validation status for manifest, hashes, schemas, relationships, and safety boundaries only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
+
+
+The checked-in reviewer handoff sample validation reports are CI-validated and
+regeneration-checked against CLI behavior. The regeneration check recreates
+`reviewer-review-result-validation.json`,
+`reviewer-review-result-report-validation.json`, and
+`reviewer-handoff-package-validation.json` from the sample inputs and compares
+normalized JSON with the checked-in files. This reduces drift between CLI output
+and documented samples, but validates sample reproducibility only. It does not
+create trust, replace out-of-band public key trust, prove regulatory
+certification, indicate completed third-party audit approval, or establish
+cryptographic truth. Sample hashes support sample integrity only, and validation
+reports record validation status, not cryptographic truth by themselves.

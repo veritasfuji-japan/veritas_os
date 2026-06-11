@@ -2167,4 +2167,17 @@ public key trust, prove regulatory certification, indicate completed third-party
 audit approval, or establish cryptographic truth by itself. Sample hashes
 support sample integrity only.
 
+
+The checked-in reviewer handoff sample validation reports are CI-validated and
+also regeneration-checked against current CLI behavior. The regeneration gate
+recreates `reviewer-review-result-validation.json`,
+`reviewer-review-result-report-validation.json`, and
+`reviewer-handoff-package-validation.json` in a temporary directory and compares
+normalized JSON with the repository copies. This reduces drift between CLI
+output and documented samples, but validates sample reproducibility only. It
+does not create trust, replace out-of-band public key trust, prove regulatory
+certification, indicate completed third-party audit approval, or establish
+cryptographic truth. Sample hashes support sample integrity only, and validation
+reports record validation status, not cryptographic truth by themselves.
+
 Reviewer Evidence Packets may include optional Trusted Public Key Provenance validation artifact references (`trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`). Use the [Reviewer Key Provenance Walkthrough](docs/en/validation/reviewer-key-provenance-walkthrough.md) for the copyable review sequence and the [Reviewer Handoff Guide](docs/en/validation/reviewer-handoff-guide.md) for what to send, what to verify, and what not to infer. These references help reviewers check public key trust provenance, but the packet does not create trust, does not re-run cryptographic verification, does not replace out-of-band public key trust, is not regulatory certification, and is not completed third-party audit approval. Matching fingerprints support correlation only; they are not standalone trust proof. Reviewer Evidence Packets reference artifacts; they do not prove trust alone. Packet metadata references fixed artifact names and schema identifiers only, not raw fingerprints, raw local paths, exception text, schema validator messages, or externally supplied JSON values.

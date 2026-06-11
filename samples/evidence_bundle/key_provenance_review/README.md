@@ -71,6 +71,21 @@ not prove regulatory certification, does not indicate completed third-party
 audit approval, and does not establish cryptographic truth by itself. Sample
 hashes support sample integrity only.
 
+## Regeneration check
+
+CI validates the checked-in reviewer handoff sample reports for schema and
+sample-pack structure, and also regeneration-checks them against current CLI
+behavior with `scripts/quality/check_reviewer_handoff_sample_regeneration.py`.
+The checker regenerates `reviewer-review-result-validation.json`,
+`reviewer-review-result-report-validation.json`, and
+`reviewer-handoff-package-validation.json` in a temporary directory and compares
+normalized JSON with the checked-in files. This reduces drift between CLI output
+and documented samples. It validates sample reproducibility only; it does not
+create trust, replace out-of-band public key trust, prove regulatory
+certification, indicate completed third-party audit approval, or establish
+cryptographic truth. Sample hashes support sample integrity only, and validation
+reports record validation status, not cryptographic truth by themselves.
+
 ## Boundaries
 
 - These samples are illustrative only.

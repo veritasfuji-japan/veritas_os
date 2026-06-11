@@ -64,7 +64,14 @@ demonstrate validation output shape and validation status only; they do not crea
 replace out-of-band public key trust, prove regulatory certification, represent
 completed third-party audit approval, or establish cryptographic truth by
 themselves. CI validates the manifest and artifact hashes for sample integrity,
-but hash matching supports sample integrity only; it is not standalone trust.
+but hash matching supports sample integrity only; it is not standalone trust. CI
+also regeneration-checks the saved reviewer handoff sample reports against
+current CLI behavior by recreating `reviewer-review-result-validation.json`,
+`reviewer-review-result-report-validation.json`, and
+`reviewer-handoff-package-validation.json` and comparing normalized JSON with
+the checked-in files. That reduces drift between CLI output and documented
+samples, but validates sample reproducibility only. Validation reports record
+validation status, not cryptographic truth by themselves.
 Matching fingerprints support correlation, not standalone trust.
 
 ## Saving JSON reviewer evidence

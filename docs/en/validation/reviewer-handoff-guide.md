@@ -137,6 +137,21 @@ The package supports these reviewer checks:
   reviewer scope, and out-of-band trust context.
 - Sample artifact manifest SHA-256 consistency for the illustrative sample set.
 - Whole-package sample validation through `veritas-evidence-bundle validate-reviewer-handoff-package`, covering manifest, hashes, schemas, relationships, and safety boundaries.
+- CI regeneration checking for the saved reviewer handoff sample validation reports, confirming they can be regenerated from the CLI and still match the checked-in sample outputs.
+
+## CI regeneration check for saved sample reports
+
+The checked-in sample reports (`reviewer-review-result-validation.json`,
+`reviewer-review-result-report-validation.json`, and
+`reviewer-handoff-package-validation.json`) are CI-validated for sample-pack
+structure and are also regeneration-checked against CLI behavior. The
+regeneration check reduces drift between CLI output and documented samples by
+recreating the reports in a temporary directory and comparing normalized JSON
+with the repository copies. This validates sample reproducibility only. It does
+not create trust, replace out-of-band public key trust, prove regulatory
+certification, indicate completed third-party audit approval, or establish
+cryptographic truth. Sample hashes support sample integrity only, and validation
+reports record validation status rather than cryptographic truth by themselves.
 
 ## What the reviewer cannot infer from these artifacts alone
 
