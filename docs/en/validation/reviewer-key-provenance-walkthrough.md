@@ -49,7 +49,8 @@ sensitive/raw diagnostic patterns only. The sample set also includes
 `reviewer-handoff-review-result.json` as an illustrative Review Result /
 Acceptance Record, plus `reviewer-review-result-validation.json` and
 `reviewer-review-result-report-validation.json` as saved reviewer result
-validation report artifacts. These reports demonstrate validation output shape
+validation report artifacts, and `reviewer-handoff-package-validation.json` as
+the saved package validation report artifact. These reports demonstrate validation output shape
 and validation status only; they do not create trust, replace out-of-band public
 key trust, prove regulatory certification, represent completed third-party
 audit approval, or establish cryptographic truth by themselves. Hash matching
@@ -206,8 +207,9 @@ The package validator checks the sample manifest, manifest schema, artifact
 presence under the declared base directory, SHA-256 digests, applicable artifact
 schemas, expected artifact names, expected roles, expected schema IDs, expected
 validator fields, synthetic placeholder fingerprints, and forbidden sensitive or
-raw diagnostic patterns. Its boolean-only validation report records validation
-status only. It does not create trust, does not replace out-of-band public key
+raw diagnostic patterns. The checked-in `reviewer-handoff-package-validation.json`
+sample demonstrates the output shape of `validate-reviewer-handoff-package --json`.
+Its boolean-only validation report records validation status only. It does not create trust, does not replace out-of-band public key
 trust, does not prove regulatory certification, is not completed third-party
 audit approval, and does not establish cryptographic truth by itself. Sample
 hashes support sample integrity only.

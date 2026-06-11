@@ -31,6 +31,10 @@ MANIFEST_SCHEMA_PATH = (
     REPO_ROOT
     / "schemas/trusted_public_key_provenance_review_sample_manifest.schema.json"
 )
+TRUSTED_PUBLIC_KEY_PROVENANCE_REVIEW_SAMPLE_MANIFEST_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "trusted_public_key_provenance_review_sample_manifest.schema.json"
+)
 
 EVIDENCE_BUNDLE_VERIFICATION_RESULT_SCHEMA_ID = (
     "https://veritas-os.example/schemas/"
@@ -60,11 +64,18 @@ REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_ID = (
     "https://veritas-os.example/schemas/"
     "reviewer_handoff_review_result_report_validation_report.schema.json"
 )
+REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_package_validation_report.schema.json"
+)
 VALIDATE_REVIEW_RESULT_VALIDATOR = (
     "veritas-evidence-bundle validate-review-result"
 )
 VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR = (
     "veritas-evidence-bundle validate-review-result-report"
+)
+VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR = (
+    "veritas-evidence-bundle validate-reviewer-handoff-package"
 )
 
 SAMPLE_SCHEMA_CASES = {
@@ -99,6 +110,10 @@ SAMPLE_SCHEMA_CASES = {
         / "schemas/"
         "reviewer_handoff_review_result_report_validation_report.schema.json"
     ),
+    "reviewer-handoff-package-validation.json": (
+        REPO_ROOT
+        / "schemas/reviewer_handoff_package_validation_report.schema.json"
+    ),
     MANIFEST_NAME: MANIFEST_SCHEMA_PATH,
 }
 
@@ -111,6 +126,7 @@ EXPECTED_ARTIFACT_CHAIN = (
     "reviewer-handoff-review-result.json",
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
+    "reviewer-handoff-package-validation.json",
 )
 EXPECTED_MANIFEST_ARTIFACTS = (*EXPECTED_ARTIFACT_CHAIN, "README.md")
 EXPECTED_MANIFEST_ENTRIES = {
@@ -147,6 +163,10 @@ EXPECTED_MANIFEST_ENTRIES = {
         "schema_id": (
             REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_ID
         ),
+    },
+    "reviewer-handoff-package-validation.json": {
+        "role": "reviewer_handoff_package_validation_report",
+        "schema_id": REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID,
     },
     "README.md": {"role": "sample_readme", "schema_id": None},
 }
@@ -538,6 +558,9 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
     review_result_report_validation_path = (
         SAMPLE_DIR / "reviewer-review-result-report-validation.json"
     )
+    package_validation_path = (
+        SAMPLE_DIR / "reviewer-handoff-package-validation.json"
+    )
     readme_path = SAMPLE_DIR / "README.md"
 
     try:
@@ -548,6 +571,7 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
         review_result_report_validation_report = _load_json(
             review_result_report_validation_path
         )
+        package_validation_report = _load_json(package_validation_path)
         readme_text = readme_path.read_text(encoding="utf-8")
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         return [ValidationProblem(SAMPLE_DIR, f"cannot inspect chain: {exc}")]
@@ -703,6 +727,39 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
             ValidationProblem(
                 review_result_report_validation_path,
                 "unexpected review-result report validator",
+            )
+        )
+
+    if (
+        package_validation_report.get("validated_schema_id")
+        != TRUSTED_PUBLIC_KEY_PROVENANCE_REVIEW_SAMPLE_MANIFEST_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                package_validation_path,
+                "validated_schema_id does not reference the sample manifest schema",
+            )
+        )
+
+    if (
+        package_validation_report.get("report_schema_id")
+        != REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                package_validation_path,
+                "unexpected package validation report_schema_id",
+            )
+        )
+
+    if (
+        package_validation_report.get("validator")
+        != VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR
+    ):
+        problems.append(
+            ValidationProblem(
+                package_validation_path,
+                "unexpected package validator",
             )
         )
 

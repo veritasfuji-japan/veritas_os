@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "manifest_schema_valid": true,
+  "artifacts_present": true,
+  "artifact_hashes_valid": true,
+  "artifact_schemas_valid": true,
+  "artifact_relationships_valid": true,
+  "forbidden_patterns_absent": true,
+  "validated_schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_review_sample_manifest.schema.json",
+  "report_schema_id": "https://veritas-os.example/schemas/reviewer_handoff_package_validation_report.schema.json",
+  "validator": "veritas-evidence-bundle validate-reviewer-handoff-package",
+  "errors": []
+}

@@ -58,6 +58,10 @@ SCHEMA_CASES = [
             "reviewer_handoff_review_result_report_validation_report.schema.json"
         ),
     ),
+    (
+        "reviewer-handoff-package-validation.json",
+        Path("schemas/reviewer_handoff_package_validation_report.schema.json"),
+    ),
 ]
 EXPECTED_CHAIN = [
     "verification-result.json",
@@ -68,6 +72,7 @@ EXPECTED_CHAIN = [
     "reviewer-handoff-review-result.json",
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
+    "reviewer-handoff-package-validation.json",
 ]
 RAW_PRIVATE_KEY_PATTERNS = [
     "-----BEGIN PRIVATE KEY-----",
@@ -302,3 +307,4 @@ def test_requested_docs_link_key_provenance_review_sample(doc_path: Path) -> Non
     assert "samples/evidence_bundle/key_provenance_review/" in text
     assert "reviewer-review-result-validation.json" in text
     assert "reviewer-review-result-report-validation.json" in text
+    assert "reviewer-handoff-package-validation.json" in text

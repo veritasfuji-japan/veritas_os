@@ -200,6 +200,7 @@ REVIEWER_HANDOFF_PACKAGE_REQUIRED_ARTIFACTS = (
     "reviewer-handoff-review-result.json",
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
+    "reviewer-handoff-package-validation.json",
     "README.md",
 )
 REVIEWER_HANDOFF_PACKAGE_EXPECTED_ENTRIES = {
@@ -251,6 +252,11 @@ REVIEWER_HANDOFF_PACKAGE_EXPECTED_ENTRIES = {
             REVIEWER_HANDOFF_REVIEW_RESULT_REPORT_VALIDATION_REPORT_SCHEMA_PATH
         ),
     },
+    "reviewer-handoff-package-validation.json": {
+        "role": "reviewer_handoff_package_validation_report",
+        "schema_id": REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID,
+        "schema_path": REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_PATH,
+    },
     "README.md": {
         "role": "sample_readme",
         "schema_id": None,
@@ -265,6 +271,9 @@ REVIEWER_HANDOFF_PACKAGE_EXPECTED_VALIDATORS = {
     "reviewer-review-result-validation.json": VALIDATE_REVIEW_RESULT_VALIDATOR,
     "reviewer-review-result-report-validation.json": (
         VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR
+    ),
+    "reviewer-handoff-package-validation.json": (
+        VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR
     ),
 }
 REVIEWER_HANDOFF_PACKAGE_SYNTHETIC_FINGERPRINT = "1" * 64

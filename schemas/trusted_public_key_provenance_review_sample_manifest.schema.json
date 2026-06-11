@@ -25,8 +25,8 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 9,
-      "maxItems": 9,
+      "minItems": 10,
+      "maxItems": 10,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -48,6 +48,7 @@
               "reviewer-handoff-review-result.json",
               "reviewer-review-result-validation.json",
               "reviewer-review-result-report-validation.json",
+              "reviewer-handoff-package-validation.json",
               "README.md"
             ]
           },
@@ -62,6 +63,7 @@
               "reviewer_handoff_review_result",
               "reviewer_handoff_review_result_validation_report",
               "reviewer_handoff_review_result_report_validation_report",
+              "reviewer_handoff_package_validation_report",
               "sample_readme"
             ]
           },
@@ -75,6 +77,7 @@
               "https://veritas-os.example/schemas/reviewer_handoff_review_result.schema.json",
               "https://veritas-os.example/schemas/reviewer_handoff_review_result_validation_report.schema.json",
               "https://veritas-os.example/schemas/reviewer_handoff_review_result_report_validation_report.schema.json",
+              "https://veritas-os.example/schemas/reviewer_handoff_package_validation_report.schema.json",
               null
             ]
           },

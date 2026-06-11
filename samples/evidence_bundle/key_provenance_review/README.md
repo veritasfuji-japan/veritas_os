@@ -18,6 +18,7 @@ verification-result.json
 → reviewer-handoff-review-result.json
 → reviewer-review-result-validation.json
 → reviewer-review-result-report-validation.json
+→ reviewer-handoff-package-validation.json
 ```
 
 ## Files
@@ -32,6 +33,7 @@ verification-result.json
 | `reviewer-handoff-review-result.json` | Illustrates a reviewer-facing Review Result / Acceptance Record for what was checked and whether follow-up remains. |
 | `reviewer-review-result-validation.json` | Illustrates saved `validate-review-result --json` output shape and validation status for the Review Result. |
 | `reviewer-review-result-report-validation.json` | Illustrates saved `validate-review-result-report --json` output shape for the saved Review Result validation report. |
+| `reviewer-handoff-package-validation.json` | Illustrates saved `validate-reviewer-handoff-package --json` output shape for manifest, hash, schema, relationship, and safety-boundary status only. |
 | `sample-artifact-manifest.json` | Indexes the illustrative sample artifacts, roles, schema identifiers, and SHA-256 digests. |
 
 ## Sample Artifact Manifest
@@ -39,7 +41,7 @@ verification-result.json
 `sample-artifact-manifest.json` is an index for this illustrative sample set.
 It lists the expected artifact names, reviewer roles, schema identifiers, and
 SHA-256 digests for the files in this directory, including saved reviewer
-result validation reports. The manifest checks sample structure and file
+result validation reports and the saved package validation report. The manifest checks sample structure and file
 integrity only. It does not create trust, does not replace
 out-of-band public key trust, is not regulatory certification, and is not
 completed third-party audit approval.
@@ -57,6 +59,9 @@ veritas-evidence-bundle validate-reviewer-handoff-package \
 
 For a machine-readable validation report, add `--json`; to save the exact same
 JSON emitted on stdout, add `--output reviewer-handoff-package-validation.json`.
+This sample pack checks in `reviewer-handoff-package-validation.json` as a safe
+placeholder artifact demonstrating the output shape of
+`validate-reviewer-handoff-package --json`.
 The command validates the manifest, manifest schema, artifact presence under
 `--base-dir`, SHA-256 digests, applicable artifact schemas, expected roles,
 expected schema identifiers, expected validator names, synthetic placeholder
@@ -75,6 +80,7 @@ hashes support sample integrity only.
 - These samples are not completed third-party audit approval.
 - Saved reviewer result validation reports demonstrate validation output shape
   only.
+- The saved package validation report demonstrates validation output shape only.
 - Validation reports record validation status, not cryptographic truth by
   themselves.
 - Sample hashes support sample integrity only.

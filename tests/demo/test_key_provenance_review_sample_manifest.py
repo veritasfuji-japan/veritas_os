@@ -29,6 +29,7 @@ EXPECTED_ARTIFACTS = (
     "reviewer-handoff-review-result.json",
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
+    "reviewer-handoff-package-validation.json",
     "README.md",
 )
 EXPECTED_ROLES = {
@@ -45,6 +46,9 @@ EXPECTED_ROLES = {
     ),
     "reviewer-review-result-report-validation.json": (
         "reviewer_handoff_review_result_report_validation_report"
+    ),
+    "reviewer-handoff-package-validation.json": (
+        "reviewer_handoff_package_validation_report"
     ),
     "README.md": "sample_readme",
 }
@@ -79,6 +83,10 @@ EXPECTED_SCHEMA_IDS = {
     "reviewer-review-result-report-validation.json": (
         "https://veritas-os.example/schemas/"
         "reviewer_handoff_review_result_report_validation_report.schema.json"
+    ),
+    "reviewer-handoff-package-validation.json": (
+        "https://veritas-os.example/schemas/"
+        "reviewer_handoff_package_validation_report.schema.json"
     ),
     "README.md": None,
 }

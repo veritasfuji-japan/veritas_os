@@ -75,6 +75,7 @@ HANDOFF_REQUIRED_ARTIFACTS = (
     "key-provenance-result-validation.json",
     "reviewer-evidence-packet.json",
     "sample-artifact-manifest.json",
+    "reviewer-handoff-package-validation.json",
 )
 
 HANDOFF_BOUNDARY_PHRASES = (

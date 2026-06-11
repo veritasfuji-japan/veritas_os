@@ -2116,7 +2116,8 @@ now includes `sample-artifact-manifest.json` to index expected artifacts, roles,
 schemas, and SHA-256 digests, plus `reviewer-handoff-review-result.json` as
 a reviewer Review Result / Acceptance Record and saved reviewer result
 validation reports (`reviewer-review-result-validation.json` and
-`reviewer-review-result-report-validation.json`). These saved reports
+`reviewer-review-result-report-validation.json`), plus the saved package
+validation report `reviewer-handoff-package-validation.json`. These saved reports
 demonstrate validation output shape and validation status only; they do not
 create trust, replace out-of-band public key trust, prove regulatory
 certification, represent completed third-party audit approval, or establish
@@ -2160,7 +2161,8 @@ handoff package structure from the manifest. The command checks manifest
 parsing, manifest schema conformance, artifact containment, artifact presence,
 SHA-256 digests, applicable schemas, expected names/roles/schema IDs, validator
 fields, synthetic placeholder fingerprints, and safety boundaries. Its report
-records validation status only; it does not create trust, replace out-of-band
+records validation status only and the checked-in sample demonstrates the output
+shape of `validate-reviewer-handoff-package --json`; it does not create trust, replace out-of-band
 public key trust, prove regulatory certification, indicate completed third-party
 audit approval, or establish cryptographic truth by itself. Sample hashes
 support sample integrity only.

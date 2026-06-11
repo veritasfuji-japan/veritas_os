@@ -149,6 +149,9 @@ Keep these boundaries explicit in reviewer communications:
 - Matching fingerprints support correlation, not standalone trust.
 - Saved reviewer result validation reports demonstrate validation output shape
   only and record validation status, not cryptographic truth by themselves.
+- The saved `reviewer-handoff-package-validation.json` artifact demonstrates
+  `validate-reviewer-handoff-package --json` output shape and package
+  validation status only.
 - Sample artifact hashes prove sample integrity only, not production evidence
   authenticity.
 - Reviewer Evidence Packets reference artifacts; they do not prove trust alone.
@@ -183,7 +186,9 @@ containment, artifact presence, SHA-256 digests, applicable artifact schemas,
 expected artifact names, expected roles, expected schema IDs, expected validator
 fields, synthetic placeholder fingerprints, and forbidden sensitive/raw text
 patterns. Add `--json` for a boolean-only report and `--output` to persist the
-same JSON report emitted on stdout.
+same JSON report emitted on stdout. The sample pack now includes the saved
+placeholder artifact `reviewer-handoff-package-validation.json` to demonstrate
+that output shape.
 
 This command validates sample package integrity and safety boundaries only. It
 does not create trust, does not replace out-of-band public key trust, does not
