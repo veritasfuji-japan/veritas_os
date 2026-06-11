@@ -67,8 +67,17 @@ The package validation command in this quickstart is CI-guarded by
 `scripts/quality/check_reviewer_handoff_quickstart_command.py`. The guard checks
 that the documented command is present, runs the equivalent package validator
 without overwriting checked-in sample files, and validates the generated report
-against the public output contract. This reduces docs/CLI drift and validates
-sample command reproducibility only.
+against the public output contract. Add `--json` to the guard for a stable
+machine-readable report, and add `--output reviewer-handoff-quickstart-command-validation.json`
+to write the same report to a file. That guard report validates command
+presence, command executability, and output-contract status only, using the
+schema at
+[`schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`](../../../schemas/reviewer_handoff_quickstart_command_validation_report.schema.json).
+It records validation status only; it does not create trust, does not replace
+out-of-band public key trust, does not prove regulatory certification, is not
+completed third-party audit approval, and does not establish cryptographic truth
+by itself. This reduces docs/CLI drift and validates sample command
+reproducibility only.
 
 ## 9. Understand trust boundaries
 
