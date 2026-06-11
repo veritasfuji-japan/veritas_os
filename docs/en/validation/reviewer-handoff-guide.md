@@ -136,6 +136,7 @@ The package supports these reviewer checks:
   artifacts, decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`), limitations,
   reviewer scope, and out-of-band trust context.
 - Sample artifact manifest SHA-256 consistency for the illustrative sample set.
+- Whole-package sample validation through `veritas-evidence-bundle validate-reviewer-handoff-package`, covering manifest, hashes, schemas, relationships, and safety boundaries.
 
 ## What the reviewer cannot infer from these artifacts alone
 
@@ -168,5 +169,24 @@ Keep these boundaries explicit in reviewer communications:
 | Run `validate-review-result-report` | `reviewer-review-result-validation.json` | Run the copyable `validate-review-result-report` command above. | The saved review-result validation report conforms to its schema and emits `reviewer-review-result-report-validation.json`. | Schema conformance records validation-report structure only; it does not re-run reviewer review, create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 | Review `reviewer-evidence-packet.json` | `reviewer-evidence-packet.json` | Confirm key provenance references use only expected artifact names and schema identifiers. | The packet points reviewers to `trusted-public-key-provenance.json`, `key-provenance-validation.json`, and `key-provenance-result-validation.json`. | Reviewer Evidence Packets reference artifacts; they do not prove trust alone. |
 | Review `sample-artifact-manifest.json` | `sample-artifact-manifest.json` | Confirm listed sample artifacts and SHA-256 digests match the provided sample pack. | Sample artifact manifest SHA-256 consistency is preserved. | Sample artifact hashes prove sample integrity only, not production evidence authenticity. |
+| Validate reviewer handoff package | `sample-artifact-manifest.json` and sample directory | Run `veritas-evidence-bundle validate-reviewer-handoff-package --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json --base-dir samples/evidence_bundle/key_provenance_review --json --output reviewer-handoff-package-validation.json`. | Manifest, hashes, schemas, expected relationships, validator names, synthetic placeholders, and safety boundaries pass. | Package validation records sample validation status only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 | Record `reviewer-handoff-review-result.json` | `reviewer-handoff-review-result.json` | Record the artifacts checked, reviewer scope, limitation acknowledgements, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`). | The review outcome is machine-readable and tied to the reviewer's stated scope and out-of-band trust context. | The record is not certification, regulatory approval, completed third-party audit approval, or cryptographic truth by itself. |
 | Confirm CI sample validation status | CI sample validation logs or status checks | Confirm the sample validation check completed successfully for the submitted commit. | CI checked sample schema conformance, fixed references, manifest entries, and sample hashes. | CI sample validation does not create trust, replace out-of-band public key trust, prove regulatory certification, or indicate completed third-party audit approval. |
+
+
+## Reviewer handoff package validation CLI
+
+`veritas-evidence-bundle validate-reviewer-handoff-package` validates the
+illustrative sample handoff package structure from `sample-artifact-manifest.json`
+and `--base-dir`. It checks manifest parsing, the manifest schema, artifact
+containment, artifact presence, SHA-256 digests, applicable artifact schemas,
+expected artifact names, expected roles, expected schema IDs, expected validator
+fields, synthetic placeholder fingerprints, and forbidden sensitive/raw text
+patterns. Add `--json` for a boolean-only report and `--output` to persist the
+same JSON report emitted on stdout.
+
+This command validates sample package integrity and safety boundaries only. It
+does not create trust, does not replace out-of-band public key trust, does not
+prove regulatory certification, does not represent completed third-party audit
+approval, and does not establish cryptographic truth by itself. Sample hashes
+support sample integrity only; validation reports record validation status only.

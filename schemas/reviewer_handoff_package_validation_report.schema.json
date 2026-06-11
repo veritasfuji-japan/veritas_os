@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/reviewer_handoff_package_validation_report.schema.json",
+  "title": "Reviewer Handoff Package Validation Report",
+  "description": "Boolean-only report emitted by veritas-evidence-bundle validate-reviewer-handoff-package.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ok",
+    "manifest_schema_valid",
+    "artifacts_present",
+    "artifact_hashes_valid",
+    "artifact_schemas_valid",
+    "artifact_relationships_valid",
+    "forbidden_patterns_absent",
+    "validated_schema_id",
+    "report_schema_id",
+    "validator",
+    "errors"
+  ],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "manifest_schema_valid": {"type": "boolean"},
+    "artifacts_present": {"type": "boolean"},
+    "artifact_hashes_valid": {"type": "boolean"},
+    "artifact_schemas_valid": {"type": "boolean"},
+    "artifact_relationships_valid": {"type": "boolean"},
+    "forbidden_patterns_absent": {"type": "boolean"},
+    "validated_schema_id": {
+      "const": "https://veritas-os.example/schemas/trusted_public_key_provenance_review_sample_manifest.schema.json"
+    },
+    "report_schema_id": {
+      "const": "https://veritas-os.example/schemas/reviewer_handoff_package_validation_report.schema.json"
+    },
+    "validator": {
+      "const": "veritas-evidence-bundle validate-reviewer-handoff-package"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "path", "message"],
+        "properties": {
+          "check": {
+            "enum": [
+              "manifest_json_valid",
+              "manifest_schema_valid",
+              "artifacts_present",
+              "artifact_hashes_valid",
+              "artifact_schemas_valid",
+              "artifact_relationships_valid",
+              "forbidden_patterns_absent"
+            ]
+          },
+          "path": {"const": "$"},
+          "message": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
