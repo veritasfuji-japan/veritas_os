@@ -153,7 +153,10 @@ def _schema_validation_failed(schema: dict[str, Any], payload: dict[str, Any]) -
     try:
         jsonschema.Draft202012Validator.check_schema(schema)
         jsonschema.Draft202012Validator(schema).validate(payload)
-    except jsonschema.exceptions.JsonSchemaException:
+    except (
+        jsonschema.exceptions.ValidationError,
+        jsonschema.exceptions.SchemaError,
+    ):
         return True
     return False
 
