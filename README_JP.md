@@ -411,6 +411,13 @@ Authority Evidence と Audit Log の違いは明確です。
     audit approval を証明せず、それ単独で cryptographic truth を証明しません。
     [`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](schemas/reviewer_handoff_review_result_report_validation_report.schema.json)
     は validation-report structure を記録するための schema であり、cryptographic truth 自体ではありません。
+    `veritas-evidence-bundle validate-reviewer-handoff-package --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json --base-dir samples/evidence_bundle/key_provenance_review --json --output reviewer-handoff-package-validation.json`
+    は、sample handoff package structure を manifest から検証します。manifest、hash、schema、
+    expected artifact name/role/schema ID、validator field、synthetic placeholder fingerprint、
+    safety boundary を検証しますが、trust を作成せず、out-of-band public key trust を置き換えず、
+    regulatory certification を証明せず、completed third-party audit approval ではなく、
+    cryptographic truth をそれ単独で証明しません。sample hash は sample integrity のみを支援し、
+    validation report は validation status のみを記録します。
 - **External Technical Proof Pack（review/pilot/DD/audit）**: [`docs/ja/validation/technical-proof-pack.md`](docs/ja/validation/technical-proof-pack.md)（英語正本あり）
 - **AML/KYC Short Positioning（customer / operator / investor）**: [`docs/ja/positioning/aml-kyc-beachhead-short-positioning.md`](docs/ja/positioning/aml-kyc-beachhead-short-positioning.md)（英語正本あり）
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os

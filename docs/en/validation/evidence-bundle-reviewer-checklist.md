@@ -288,3 +288,26 @@ Reviewer Evidence Packets may include an optional `key_provenance` metadata sect
 These references help reviewers locate the artifacts used to check public key trust provenance for strict Evidence Bundle signature review. The packet does not create trust by itself, does not re-run cryptographic verification, and does not replace the out-of-band reviewer/operator trust channel. Matching fingerprints support correlation between the verification result and the Trusted Public Key Provenance Receipt; matching fingerprints are not standalone trust proof.
 
 Reviewer Evidence Packet metadata must not embed raw public key fingerprints, raw local file paths, raw exception text, raw schema validator messages, or raw JSON values copied from externally supplied artifacts. It should reference only the stable artifact names and schema identifiers above. The packet is not regulatory certification and is not completed third-party audit approval.
+
+## Reviewer handoff sample package validation
+
+For the illustrative Reviewer Handoff sample pack, reviewers/operators can run:
+
+```bash
+veritas-evidence-bundle validate-reviewer-handoff-package \
+  --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json \
+  --base-dir samples/evidence_bundle/key_provenance_review \
+  --json \
+  --output reviewer-handoff-package-validation.json
+```
+
+The command validates the sample package structure from the artifact manifest:
+manifest parsing, manifest schema conformance, artifact containment under
+`--base-dir`, artifact presence, SHA-256 digests, applicable artifact schemas,
+expected artifact names, expected roles, expected schema IDs, expected validator
+fields, synthetic placeholder fingerprints, and forbidden sensitive/raw text
+patterns. The boolean-only report records validation status only. It does not
+create trust, does not replace out-of-band public key trust, does not prove
+regulatory certification, is not completed third-party audit approval, and does
+not establish cryptographic truth by itself. Sample hashes support sample
+integrity only.

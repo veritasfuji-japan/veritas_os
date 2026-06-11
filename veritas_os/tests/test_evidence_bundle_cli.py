@@ -2112,3 +2112,293 @@ def test_validate_review_result_report_diagnostics_do_not_leak_raw_values(
     _assert_review_result_report_output_is_safe(stdout, result_path)
     for raw_value in raw_values:
         assert raw_value not in stdout
+
+REVIEWER_PACKAGE_SAMPLE_DIR = Path(
+    "samples/evidence_bundle/key_provenance_review"
+)
+REVIEWER_PACKAGE_MANIFEST = REVIEWER_PACKAGE_SAMPLE_DIR / "sample-artifact-manifest.json"
+REVIEWER_PACKAGE_VALIDATOR = (
+    "veritas-evidence-bundle validate-reviewer-handoff-package"
+)
+REVIEWER_PACKAGE_REPORT_SCHEMA_PATH = Path(
+    "schemas/reviewer_handoff_package_validation_report.schema.json"
+)
+REVIEWER_PACKAGE_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_package_validation_report.schema.json"
+)
+REVIEWER_PACKAGE_MANIFEST_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "trusted_public_key_provenance_review_sample_manifest.schema.json"
+)
+
+
+def _copy_reviewer_package(tmp_path: Path) -> Path:
+    """Copy the reviewer handoff sample package into a mutable test dir."""
+    package_dir = tmp_path / "package"
+    package_dir.mkdir()
+    for path in REVIEWER_PACKAGE_SAMPLE_DIR.iterdir():
+        if path.is_file():
+            (package_dir / path.name).write_text(
+                path.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+    return package_dir
+
+
+def _load_reviewer_package_manifest(package_dir: Path) -> dict[str, Any]:
+    """Load a mutable reviewer package manifest fixture."""
+    return json.loads(
+        (package_dir / "sample-artifact-manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def _write_reviewer_package_manifest(
+    package_dir: Path,
+    manifest: dict[str, Any],
+) -> Path:
+    """Write a mutable reviewer package manifest fixture."""
+    manifest_path = package_dir / "sample-artifact-manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return manifest_path
+
+
+def _run_validate_reviewer_package_json(
+    manifest_path: Path,
+    base_dir: Path,
+    capsys,
+    *extra_args: str,
+) -> tuple[int, dict[str, Any], str, str]:
+    """Run validate-reviewer-handoff-package --json and parse stdout."""
+    from veritas_os.cli.evidence_bundle import main
+
+    args = [
+        "validate-reviewer-handoff-package",
+        "--manifest",
+        str(manifest_path),
+        "--base-dir",
+        str(base_dir),
+        "--json",
+        *extra_args,
+    ]
+    exit_code = main(args)
+    captured = capsys.readouterr()
+    return exit_code, json.loads(captured.out), captured.out, captured.err
+
+
+def _assert_reviewer_package_report_schema(output: dict[str, Any]) -> None:
+    """Assert package validation reports match their JSON Schema."""
+    import jsonschema
+
+    schema = json.loads(
+        REVIEWER_PACKAGE_REPORT_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.Draft202012Validator(schema).validate(output)
+
+
+def _assert_reviewer_package_output_is_safe(output: str, *paths: Path) -> None:
+    """Assert package validator output omits raw unsafe values."""
+    forbidden = [
+        "-----BEGIN PUBLIC KEY-----",
+        "-----BEGIN PRIVATE KEY-----",
+        "/workspace/private/customer/path",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "RuntimeError: customer_data example",
+        "Failed validating customer_data against local schema",
+        "customer@example.com",
+        "not-json-value",
+    ]
+    for value in forbidden:
+        assert value not in output
+    for path in paths:
+        assert str(path) not in output
+
+
+def test_validate_reviewer_handoff_package_valid_sample_passes(capsys) -> None:
+    """validate-reviewer-handoff-package accepts the sample package."""
+    exit_code, output, stdout, stderr = _run_validate_reviewer_package_json(
+        REVIEWER_PACKAGE_MANIFEST,
+        REVIEWER_PACKAGE_SAMPLE_DIR,
+        capsys,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert output == {
+        "ok": True,
+        "manifest_schema_valid": True,
+        "artifacts_present": True,
+        "artifact_hashes_valid": True,
+        "artifact_schemas_valid": True,
+        "artifact_relationships_valid": True,
+        "forbidden_patterns_absent": True,
+        "validated_schema_id": REVIEWER_PACKAGE_MANIFEST_SCHEMA_ID,
+        "report_schema_id": REVIEWER_PACKAGE_REPORT_SCHEMA_ID,
+        "validator": REVIEWER_PACKAGE_VALIDATOR,
+        "errors": [],
+    }
+    _assert_reviewer_package_report_schema(output)
+    _assert_reviewer_package_output_is_safe(stdout, REVIEWER_PACKAGE_MANIFEST)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "failed_check", "raw_value"),
+    [
+        (
+            lambda package_dir, manifest: (
+                package_dir / "README.md"
+            ).unlink(),
+            "artifacts_present",
+            None,
+        ),
+        (
+            lambda package_dir, manifest: (
+                package_dir / "README.md"
+            ).write_text("tampered", encoding="utf-8"),
+            "artifact_hashes_valid",
+            None,
+        ),
+        (
+            lambda package_dir, manifest: manifest["artifacts"][0].__setitem__(
+                "artifact_name",
+                "../verification-result.json",
+            ),
+            "manifest_schema_valid",
+            "../verification-result.json",
+        ),
+        (
+            lambda package_dir, manifest: manifest["artifacts"][0].__setitem__(
+                "schema_id",
+                "https://veritas-os.example/schemas/wrong.schema.json",
+            ),
+            "manifest_schema_valid",
+            "wrong.schema.json",
+        ),
+        (
+            lambda package_dir, manifest: json.loads(
+                (package_dir / "reviewer-review-result-validation.json").read_text(
+                    encoding="utf-8"
+                )
+            ),
+            "artifact_relationships_valid",
+            "wrong-validator",
+        ),
+        (
+            lambda package_dir, manifest: (
+                package_dir / "README.md"
+            ).write_text("-----BEGIN PUBLIC KEY-----", encoding="utf-8"),
+            "forbidden_patterns_absent",
+            "-----BEGIN PUBLIC KEY-----",
+        ),
+        (
+            lambda package_dir, manifest: (
+                package_dir / "README.md"
+            ).write_text("/workspace/private/customer/path", encoding="utf-8"),
+            "forbidden_patterns_absent",
+            "/workspace/private/customer/path",
+        ),
+        (
+            lambda package_dir, manifest: (
+                package_dir / "verification-result.json"
+            ).write_text("not-json-value", encoding="utf-8"),
+            "artifact_schemas_valid",
+            "not-json-value",
+        ),
+    ],
+)
+def test_validate_reviewer_handoff_package_invalid_cases_fail_safely(
+    tmp_path,
+    capsys,
+    mutate,
+    failed_check: str,
+    raw_value: str | None,
+) -> None:
+    """Invalid reviewer handoff packages fail with fixed diagnostics."""
+    package_dir = _copy_reviewer_package(tmp_path)
+    manifest = _load_reviewer_package_manifest(package_dir)
+    mutation_result = mutate(package_dir, manifest)
+    if raw_value == "wrong-validator":
+        report = mutation_result
+        report["validator"] = "veritas-evidence-bundle wrong-validator"
+        (package_dir / "reviewer-review-result-validation.json").write_text(
+            json.dumps(report, indent=2),
+            encoding="utf-8",
+        )
+    manifest_path = _write_reviewer_package_manifest(package_dir, manifest)
+
+    exit_code, output, stdout, stderr = _run_validate_reviewer_package_json(
+        manifest_path,
+        package_dir,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert output["ok"] is False
+    assert output[failed_check] is False
+    assert any(error["check"] == failed_check for error in output["errors"])
+    _assert_reviewer_package_report_schema(output)
+    _assert_reviewer_package_output_is_safe(stdout, manifest_path, package_dir)
+    if raw_value is not None:
+        assert raw_value not in stdout
+
+
+def test_validate_reviewer_handoff_package_json_output_file_matches_stdout(
+    tmp_path,
+    capsys,
+) -> None:
+    """--json --output writes the same JSON report as stdout."""
+    output_path = tmp_path / "reports" / "reviewer-package-validation.json"
+
+    exit_code, output, stdout, stderr = _run_validate_reviewer_package_json(
+        REVIEWER_PACKAGE_MANIFEST,
+        REVIEWER_PACKAGE_SAMPLE_DIR,
+        capsys,
+        "--output",
+        str(output_path),
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert output["ok"] is True
+    assert output_path.read_text(encoding="utf-8") == stdout
+    _assert_reviewer_package_report_schema(output)
+    _assert_reviewer_package_output_is_safe(
+        stdout,
+        REVIEWER_PACKAGE_MANIFEST,
+        output_path,
+    )
+
+
+def test_validate_reviewer_handoff_package_diagnostics_do_not_leak_raw_values(
+    tmp_path,
+    capsys,
+) -> None:
+    """Diagnostics omit raw content, paths, fingerprints, and schema messages."""
+    package_dir = _copy_reviewer_package(tmp_path)
+    raw_values = [
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "RuntimeError: customer_data example",
+        "Failed validating customer_data against local schema",
+        "customer@example.com",
+    ]
+    (package_dir / "README.md").write_text(
+        "\n".join(raw_values),
+        encoding="utf-8",
+    )
+
+    exit_code, output, stdout, stderr = _run_validate_reviewer_package_json(
+        package_dir / "sample-artifact-manifest.json",
+        package_dir,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert output["ok"] is False
+    _assert_reviewer_package_output_is_safe(stdout, package_dir)
+    for raw_value in raw_values:
+        assert raw_value not in stdout

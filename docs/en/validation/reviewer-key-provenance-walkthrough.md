@@ -73,8 +73,9 @@ create trust or replace out-of-band public key trust.
     shape and review-boundary acknowledgements.
 11. Run `validate-review-result-report` to validate the saved
     `validate-review-result --json` validation report shape.
-12. Confirm `sample-artifact-manifest.json` lists the full illustrative sample
-   set and that CI/sample validation checks the listed SHA-256 digests.
+12. Run `validate-reviewer-handoff-package` against `sample-artifact-manifest.json`
+    and the sample base directory to validate the whole sample package
+    structure, hashes, schemas, relationships, and safety boundaries.
 
 ## 1. Verify the Evidence Bundle strictly
 
@@ -190,6 +191,27 @@ trust, does not prove regulatory certification, and is not completed third-party
 audit approval. A reviewer decision depends on the reviewer's scope and
 out-of-band public key trust context.
 
+
+## 7. Validate the full reviewer handoff sample package
+
+```bash
+veritas-evidence-bundle validate-reviewer-handoff-package \
+  --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json \
+  --base-dir samples/evidence_bundle/key_provenance_review \
+  --json \
+  --output reviewer-handoff-package-validation.json
+```
+
+The package validator checks the sample manifest, manifest schema, artifact
+presence under the declared base directory, SHA-256 digests, applicable artifact
+schemas, expected artifact names, expected roles, expected schema IDs, expected
+validator fields, synthetic placeholder fingerprints, and forbidden sensitive or
+raw diagnostic patterns. Its boolean-only validation report records validation
+status only. It does not create trust, does not replace out-of-band public key
+trust, does not prove regulatory certification, is not completed third-party
+audit approval, and does not establish cryptographic truth by itself. Sample
+hashes support sample integrity only.
+
 ## Artifact map
 
 | artifact | produced by | validated by | schema | reviewer purpose |
@@ -202,4 +224,5 @@ out-of-band public key trust context.
 | `reviewer-handoff-review-result.json` | Reviewer review process | `veritas-evidence-bundle validate-review-result --result reviewer-handoff-review-result.json` and reviewer inspection | [`schemas/reviewer_handoff_review_result.schema.json`](../../../schemas/reviewer_handoff_review_result.schema.json) | Records artifacts checked, limitations acknowledged, reviewer scope, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`); it records outcome, not cryptographic truth by itself. |
 | `reviewer-review-result-validation.json` | `veritas-evidence-bundle validate-review-result --json --output reviewer-review-result-validation.json` | `veritas-evidence-bundle validate-review-result-report --result reviewer-review-result-validation.json` | [`schemas/reviewer_handoff_review_result_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_validation_report.schema.json) | Records saved review-result validation-report structure and validation status only; it does not re-run reviewer review, create trust, replace out-of-band public key trust, prove regulatory certification, or establish cryptographic truth. |
 | `reviewer-review-result-report-validation.json` | `veritas-evidence-bundle validate-review-result-report --json --output reviewer-review-result-report-validation.json` | CI sample validation and reviewer inspection | [`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](../../../schemas/reviewer_handoff_review_result_report_validation_report.schema.json) | Records second-level validation-report shape only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
-| `sample-artifact-manifest.json` | Illustrative sample set maintenance | CI sample validation and reviewer inspection | [`schemas/trusted_public_key_provenance_review_sample_manifest.schema.json`](../../../schemas/trusted_public_key_provenance_review_sample_manifest.schema.json) | Indexes expected sample artifacts, roles, schema identifiers, and SHA-256 digests; hash matching supports sample integrity, not standalone trust. |
+| `sample-artifact-manifest.json` | Illustrative sample set maintenance | `veritas-evidence-bundle validate-reviewer-handoff-package --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json --base-dir samples/evidence_bundle/key_provenance_review` and CI sample validation | [`schemas/trusted_public_key_provenance_review_sample_manifest.schema.json`](../../../schemas/trusted_public_key_provenance_review_sample_manifest.schema.json) | Indexes expected sample artifacts, roles, schema identifiers, and SHA-256 digests; hash matching supports sample integrity, not standalone trust. |
+| `reviewer-handoff-package-validation.json` | `veritas-evidence-bundle validate-reviewer-handoff-package --json --output reviewer-handoff-package-validation.json` | Reviewer/operator inspection and CI-style sample validation | [`schemas/reviewer_handoff_package_validation_report.schema.json`](../../../schemas/reviewer_handoff_package_validation_report.schema.json) | Records package validation status for manifest, hashes, schemas, relationships, and safety boundaries only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |

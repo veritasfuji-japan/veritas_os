@@ -44,6 +44,28 @@ integrity only. It does not create trust, does not replace
 out-of-band public key trust, is not regulatory certification, and is not
 completed third-party audit approval.
 
+## Package validation command
+
+Reviewers and operators can validate the whole illustrative handoff package from
+the manifest:
+
+```bash
+veritas-evidence-bundle validate-reviewer-handoff-package \
+  --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json \
+  --base-dir samples/evidence_bundle/key_provenance_review
+```
+
+For a machine-readable validation report, add `--json`; to save the exact same
+JSON emitted on stdout, add `--output reviewer-handoff-package-validation.json`.
+The command validates the manifest, manifest schema, artifact presence under
+`--base-dir`, SHA-256 digests, applicable artifact schemas, expected roles,
+expected schema identifiers, expected validator names, synthetic placeholder
+fingerprints, and safety boundaries. Its report records validation status only;
+it does not create trust, does not replace out-of-band public key trust, does
+not prove regulatory certification, does not indicate completed third-party
+audit approval, and does not establish cryptographic truth by itself. Sample
+hashes support sample integrity only.
+
 ## Boundaries
 
 - These samples are illustrative only.
