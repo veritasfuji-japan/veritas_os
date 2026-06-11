@@ -17,6 +17,8 @@ from scripts.quality.check_reviewer_handoff_quickstart_command import (
     EXPECTED_REPORT_SCHEMA_ID,
     EXPECTED_VALIDATED_SCHEMA_ID,
     EXPECTED_VALIDATOR,
+    VALIDATED_COMMAND,
+    VALIDATOR,
     OUTPUT_REPORT,
     QUICKSTART_PATH,
     QUICKSTART_REPORT_SCHEMA_PATH,
@@ -308,19 +310,22 @@ def test_quickstart_command_guard_json_wrong_validator_ok_false(
 ) -> None:
     """Generated output with a wrong validator identifier fails JSON mode."""
     payload = _load_sample_report()
-    payload["validator"] = "placeholder-validator"
+    raw_generated_validator = "fake-validator-raw-generated-json-value"
+    payload["validator"] = raw_generated_validator
 
     code, report, output = _run_guard_json(_quickstart_copy(tmp_path), payload)
 
     assert code == 1
     assert report["ok"] is False
     assert report["validator_valid"] is False
+    assert report["validated_command"] == VALIDATED_COMMAND
+    assert report["validator"] == VALIDATOR
     assert {error["check"] for error in report["errors"]} >= {
         "validator",
         "report_schema_contract",
     }
-    assert EXPECTED_VALIDATOR not in output
-    assert "placeholder-validator" not in output
+    assert all(set(error) == {"check", "message"} for error in report["errors"])
+    assert raw_generated_validator not in output
 
 
 def test_quickstart_command_guard_rejects_wrong_validated_schema_id(
