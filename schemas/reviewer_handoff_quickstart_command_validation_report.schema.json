@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
+  "title": "Reviewer Handoff Quickstart Command Validation Report",
+  "description": "Machine-readable report contract emitted by scripts/quality/check_reviewer_handoff_quickstart_command.py --json. This schema validates only command presence, command executability, and the public validation-report output contract for the reviewer handoff quickstart. The report records validation status only; it does not create trust, does not replace out-of-band public key trust, does not prove regulatory certification, is not completed third-party audit approval, and does not establish cryptographic truth by itself. The report intentionally exposes fixed identifiers, booleans, and fixed diagnostics only; it does not expose raw command stdout, raw command stderr, raw JSON values, raw artifact contents, raw file paths, raw fingerprints, raw public keys, raw secrets, exception text, raw schema validator messages, customer data, or production data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_schema_id",
+    "validated_document",
+    "validated_command",
+    "validator",
+    "ok",
+    "quickstart_exists",
+    "command_present",
+    "command_executable",
+    "output_json_valid",
+    "output_schema_valid",
+    "report_schema_id_valid",
+    "validated_schema_id_valid",
+    "validator_valid",
+    "boolean_fields_valid",
+    "errors_array_valid",
+    "no_unknown_public_fields",
+    "forbidden_patterns_absent",
+    "errors"
+  ],
+  "properties": {
+    "report_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
+      "description": "Identifies this command guard report schema. This metadata validates report shape only."
+    },
+    "validated_document": {
+      "type": "string",
+      "const": "docs/en/validation/reviewer-handoff-sample-quickstart.md",
+      "description": "Fixed repository-relative reviewer quickstart document identifier; raw local paths are not permitted."
+    },
+    "validated_command": {
+      "type": "string",
+      "const": "veritas-evidence-bundle validate-reviewer-handoff-package",
+      "description": "Fixed command family checked by the guard, without raw runtime output or local paths."
+    },
+    "validator": {
+      "type": "string",
+      "const": "scripts/quality/check_reviewer_handoff_quickstart_command.py",
+      "description": "Fixed repository-relative validator identifier; raw local paths are not permitted."
+    },
+    "ok": {"type": "boolean"},
+    "quickstart_exists": {"type": "boolean"},
+    "command_present": {"type": "boolean"},
+    "command_executable": {"type": "boolean"},
+    "output_json_valid": {"type": "boolean"},
+    "output_schema_valid": {"type": "boolean"},
+    "report_schema_id_valid": {"type": "boolean"},
+    "validated_schema_id_valid": {"type": "boolean"},
+    "validator_valid": {"type": "boolean"},
+    "boolean_fields_valid": {"type": "boolean"},
+    "errors_array_valid": {"type": "boolean"},
+    "no_unknown_public_fields": {"type": "boolean"},
+    "forbidden_patterns_absent": {
+      "type": "boolean",
+      "description": "True when the guard report uses fixed diagnostics and omits forbidden sensitive or raw diagnostic content."
+    },
+    "errors": {
+      "type": "array",
+      "description": "Fixed public diagnostics only. Empty when ok is true. Raw paths, raw JSON values, raw fingerprints, keys, secrets, exception text, schema validator messages, customer data, and production data are not permitted.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "message"],
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "quickstart_available",
+              "documented_command",
+              "command_execution",
+              "report_json",
+              "report_schema_available",
+              "report_schema_contract",
+              "public_fields",
+              "report_schema_id",
+              "validated_schema_id",
+              "validator",
+              "boolean_status_fields",
+              "errors_array",
+              "output_write"
+            ],
+            "description": "Fixed command guard check that failed."
+          },
+          "message": {
+            "type": "string",
+            "enum": [
+              "quickstart document is unavailable",
+              "quickstart command does not match the guarded command",
+              "documented command did not produce a validation report",
+              "generated report is not valid JSON object output",
+              "report schema is unavailable",
+              "generated report does not match the public schema contract",
+              "generated report public fields do not match the contract",
+              "generated report schema identifier is not accepted",
+              "generated validated schema identifier is not accepted",
+              "generated validator identifier is not accepted",
+              "generated status fields do not match the contract",
+              "generated errors field does not match the contract",
+              "JSON report output could not be written"
+            ],
+            "description": "Fixed public diagnostic. Raw command output, raw JSON values, raw paths, fingerprints, keys, secrets, exception text, schema validator messages, customer data, and production data are not permitted."
+          }
+        }
+      }
+    }
+  }
+}

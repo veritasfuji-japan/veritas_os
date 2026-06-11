@@ -2165,7 +2165,15 @@ records validation status only and the checked-in sample demonstrates the output
 shape of `validate-reviewer-handoff-package --json`; it does not create trust, replace out-of-band
 public key trust, prove regulatory certification, indicate completed third-party
 audit approval, or establish cryptographic truth by itself. Sample hashes
-support sample integrity only.
+support sample integrity only. The reviewer handoff quickstart command guard
+also supports `--json` and optional `--output reviewer-handoff-quickstart-command-validation.json`
+for a machine-readable report under
+[`schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`](schemas/reviewer_handoff_quickstart_command_validation_report.schema.json).
+That report validates command presence, command executability, and output
+contract status only; it records validation status only and does not create
+trust, replace out-of-band public key trust, prove regulatory certification,
+indicate completed third-party audit approval, or establish cryptographic truth
+by itself.
 
 
 The checked-in reviewer handoff sample validation reports are CI-validated and

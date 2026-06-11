@@ -141,6 +141,7 @@ The package supports these reviewer checks:
 - Sample artifact manifest SHA-256 consistency for the illustrative sample set.
 - Whole-package sample validation through `veritas-evidence-bundle validate-reviewer-handoff-package`, covering manifest, hashes, schemas, relationships, and safety boundaries.
 - CI regeneration checking for the saved reviewer handoff sample validation reports, confirming they can be regenerated from the CLI and still match the checked-in sample outputs.
+- Machine-readable quickstart command guard reporting through `scripts/quality/check_reviewer_handoff_quickstart_command.py --json`, validating command presence, command executability, and output-contract status only.
 
 ## CI regeneration check for saved sample reports
 
@@ -193,6 +194,7 @@ Keep these boundaries explicit in reviewer communications:
 | Validate reviewer handoff package | `sample-artifact-manifest.json` and sample directory | Run `veritas-evidence-bundle validate-reviewer-handoff-package --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json --base-dir samples/evidence_bundle/key_provenance_review --json --output reviewer-handoff-package-validation.json`. | Manifest, hashes, schemas, expected relationships, validator names, synthetic placeholders, and safety boundaries pass. | Package validation records sample validation status only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 | Record `reviewer-handoff-review-result.json` | `reviewer-handoff-review-result.json` | Record the artifacts checked, reviewer scope, limitation acknowledgements, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`). | The review outcome is machine-readable and tied to the reviewer's stated scope and out-of-band trust context. | The record is not certification, regulatory approval, completed third-party audit approval, or cryptographic truth by itself. |
 | Confirm CI sample validation status | CI sample validation logs or status checks | Confirm the sample validation check completed successfully for the submitted commit. | CI checked sample schema conformance, fixed references, manifest entries, and sample hashes. | CI sample validation does not create trust, replace out-of-band public key trust, prove regulatory certification, or indicate completed third-party audit approval. |
+| Inspect quickstart command guard JSON | `scripts/quality/check_reviewer_handoff_quickstart_command.py --json` output | Optionally run `scripts/quality/check_reviewer_handoff_quickstart_command.py --json --output reviewer-handoff-quickstart-command-validation.json`. | The guard reports command presence, command executability, and output-contract validation status under `schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`. | The report records validation status only; it does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 
 
 ## Reviewer handoff package validation CLI
@@ -213,3 +215,13 @@ does not create trust, does not replace out-of-band public key trust, does not
 prove regulatory certification, does not represent completed third-party audit
 approval, and does not establish cryptographic truth by itself. Sample hashes
 support sample integrity only; validation reports record validation status only.
+
+The reviewer handoff quickstart command guard also supports a machine-readable
+JSON mode: run `scripts/quality/check_reviewer_handoff_quickstart_command.py --json`
+or add `--output reviewer-handoff-quickstart-command-validation.json` to save the
+same normalized report. Its schema is
+[`schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`](../../../schemas/reviewer_handoff_quickstart_command_validation_report.schema.json).
+The guard report validates command presence, command executability, and output
+contract status only. It does not create trust, does not replace out-of-band
+public key trust, does not prove regulatory certification, is not completed
+third-party audit approval, and does not establish cryptographic truth by itself.

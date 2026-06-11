@@ -73,6 +73,19 @@ not prove regulatory certification, does not indicate completed third-party
 audit approval, and does not establish cryptographic truth by itself. Sample
 hashes support sample integrity only.
 
+## Quickstart command guard JSON report
+
+The reviewer handoff quickstart command guard
+(`scripts/quality/check_reviewer_handoff_quickstart_command.py`) supports
+`--json` and optional `--output reviewer-handoff-quickstart-command-validation.json`
+for CI-safe machine-readable status. The report validates command presence,
+command executability, and the package-validation output contract only, using
+[`schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`](../../../schemas/reviewer_handoff_quickstart_command_validation_report.schema.json).
+It records validation status only; it does not create trust, does not replace
+out-of-band public key trust, does not prove regulatory certification, is not
+completed third-party audit approval, and does not establish cryptographic truth
+by itself.
+
 ## Regeneration check
 
 CI validates the checked-in reviewer handoff sample reports for schema and
