@@ -4,6 +4,8 @@ This directory contains an illustrative sample artifact chain for the Trusted
 Public Key Provenance reviewer walkthrough. Repository path:
 `samples/evidence_bundle/key_provenance_review/`.
 
+Reviewer-facing quickstart: [Reviewer Handoff Sample Quickstart](../../../docs/en/validation/reviewer-handoff-sample-quickstart.md). For the broader handoff context, see the [Reviewer Handoff Guide](../../../docs/en/validation/reviewer-handoff-guide.md).
+
 > Illustrative sample only. Not production evidence, not regulatory
 > certification, and not completed third-party audit approval.
 

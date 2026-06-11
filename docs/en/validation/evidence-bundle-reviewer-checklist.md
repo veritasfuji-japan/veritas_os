@@ -278,7 +278,7 @@ key, the bundle is not reviewer-facing verified evidence.
 - Trusted public key provenance receipt and fingerprint correlation:
   [Trusted Public Key Provenance Receipt](trusted-public-key-provenance.md)
 - Reviewer handoff package contents, checks, and boundaries:
-  [Reviewer Handoff Guide](reviewer-handoff-guide.md)
+  [Reviewer Handoff Guide](reviewer-handoff-guide.md) and the [Reviewer Handoff Sample Quickstart](reviewer-handoff-sample-quickstart.md)
 - Bundle contents and delivery policy:
   [External Audit Readiness Pack](external-audit-readiness.md)
 

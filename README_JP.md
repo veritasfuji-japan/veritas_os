@@ -39,7 +39,7 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 10 分で実装スナップショットを確認する場合は、次の順で参照してください。
 
-外部レビュアーは [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md) から確認できます。このドキュメントでは、golden fixture の確認、validation report の実行、JSON Schema の確認、local/offline evidence chain の読み方を 10〜15 分で追えるように整理しています。あわせて [External Reviewer Artifact Index](docs/en/demo/external-reviewer-artifact-index.md) も参照してください。
+外部レビュアーは [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md) から確認できます。このドキュメントでは、golden fixture の確認、validation report の実行、JSON Schema の確認、local/offline evidence chain の読み方を 10〜15 分で追えるように整理しています。Evidence Bundle の complete checked-in sample flow は [Reviewer Handoff Sample Quickstart](docs/en/validation/reviewer-handoff-sample-quickstart.md) を参照してください。あわせて [External Reviewer Artifact Index](docs/en/demo/external-reviewer-artifact-index.md) も参照してください。
 
 1. [External Validation Brief](docs/REVIEWER_ENTRYPOINT.md)
 2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)

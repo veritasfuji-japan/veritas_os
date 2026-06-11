@@ -26,7 +26,7 @@ Important boundaries:
   `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP` and depend on reviewer scope plus
   out-of-band public key trust context.
 
-For reviewer handoff packaging, see the [Reviewer Handoff Guide](reviewer-handoff-guide.md).
+For reviewer handoff packaging, see the [Reviewer Handoff Guide](reviewer-handoff-guide.md). For the checked-in sample package flow, see the [Reviewer Handoff Sample Quickstart](reviewer-handoff-sample-quickstart.md).
 
 Use placeholder artifact names only in examples. Do not paste real fingerprints,
 real public keys, local file paths, exception text, schema validator messages,
