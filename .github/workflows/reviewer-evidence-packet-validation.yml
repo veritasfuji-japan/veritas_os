@@ -40,6 +40,9 @@ jobs:
       - name: Validate key provenance reviewer samples
         run: python3 scripts/quality/check_key_provenance_review_samples.py
 
+      - name: Check reviewer handoff sample regeneration
+        run: python3 scripts/quality/check_reviewer_handoff_sample_regeneration.py
+
       - name: Export current Reviewer Evidence Packet
         run: >
           python3 scripts/demo/export_reviewer_evidence_packet.py
