@@ -14,9 +14,8 @@ customer/production data.
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -65,17 +64,24 @@ def _canonical_json(path: Path) -> str | None:
     )
 
 
+def _cli_command(args: list[str]) -> list[str]:
+    """Return the module-based CLI invocation used by CI and local checks."""
+    return [sys.executable, "-m", "veritas_os.cli.evidence_bundle", *args]
+
+
 def _run_cli(args: list[str]) -> int | None:
     """Run the evidence-bundle CLI while suppressing raw command output."""
-    stdout = io.StringIO()
-    stderr = io.StringIO()
     try:
-        from veritas_os.cli.evidence_bundle import main as evidence_bundle_main
-
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            return evidence_bundle_main(args)
-    except (Exception, SystemExit):  # pragma: no cover - fixed diagnostic safety net.
+        completed = subprocess.run(
+            _cli_command(args),
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:  # pragma: no cover - fixed diagnostic safety net.
         return None
+    return completed.returncode
 
 
 def _regenerate_reports(sample_dir: Path, temp_dir: Path) -> list[RegenerationProblem]:

@@ -5,10 +5,15 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
-from scripts.quality.check_reviewer_handoff_sample_regeneration import run
+from scripts.quality.check_reviewer_handoff_sample_regeneration import (
+    _canonical_json,
+    _cli_command,
+    run,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_DIR = REPO_ROOT / "samples/evidence_bundle/key_provenance_review"
@@ -44,6 +49,24 @@ def _run_for_samples(sample_dir: Path) -> tuple[int, str]:
     stream = io.StringIO()
     code = run(sample_dir=sample_dir, stream=stream)
     return code, stream.getvalue()
+
+
+def test_canonical_json_sorts_keys_for_stable_comparison(tmp_path: Path) -> None:
+    """Canonical JSON comparison ignores object key order only."""
+    left = tmp_path / "left.json"
+    right = tmp_path / "right.json"
+    left.write_text('{"validator":"x","ok":true}', encoding="utf-8")
+    right.write_text('{"ok":true,"validator":"x"}', encoding="utf-8")
+
+    assert _canonical_json(left) == _canonical_json(right)
+
+
+def test_regeneration_checker_uses_module_cli_invocation() -> None:
+    """The checker invokes the CLI through python -m for CI stability."""
+    command = _cli_command(["validate-review-result", "--json"])
+
+    assert command[:3] == [sys.executable, "-m", "veritas_os.cli.evidence_bundle"]
+    assert command[3:] == ["validate-review-result", "--json"]
 
 
 def test_regeneration_checker_accepts_committed_samples() -> None:

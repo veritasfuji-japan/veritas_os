@@ -16,7 +16,6 @@ import jsonschema
 
 from veritas_os.audit.evidence_bundle import generate_evidence_bundle
 from veritas_os.audit.verify_bundle import verify_evidence_bundle
-from veritas_os.security.signing import verify_payload_signature
 
 
 def _parse_key_value_pairs(values: Optional[list[str]]) -> Dict[str, str]:
@@ -357,6 +356,8 @@ def _build_signature_verifier(
         return None
 
     def _verify(payload_hash: str, signature_b64: str) -> bool:
+        from veritas_os.security.signing import verify_payload_signature
+
         return verify_payload_signature(payload_hash, signature_b64, public_key_path)
 
     return _verify
