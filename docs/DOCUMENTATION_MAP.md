@@ -20,6 +20,7 @@
 | Architecture: Bind admissibility | `docs/en/architecture/bind_time_admissibility_evaluator.md` | `docs/ja/architecture/bind_time_admissibility_evaluator.md` | JA explanation / EN canonical | 互換リンクあり |
 | Architecture: Regulated action governance kernel | `docs/en/architecture/regulated-action-governance-kernel.md` | — | EN canonical only | Regulated action governance primitives |
 | Architecture: Authority evidence vs audit log | `docs/en/architecture/authority-evidence-vs-audit-log.md` | — | EN canonical only | 役割分離の明確化 |
+| Architecture: Governance drift design note | `docs/en/architecture/governance-drift.md` | — | EN canonical only | 将来の admissibility continuity 概念（runtime revalidation は未実装） |
 | Use case: AML/KYC regulated action path | `docs/en/use-cases/aml-kyc-regulated-action-path.md` | — | EN canonical only | 決定論fixture実行手順 |
 | Validation: Regulated action governance proof pack | `docs/en/validation/regulated-action-governance-proof-pack.md` | `docs/ja/validation/regulated-action-governance-proof-pack-summary.md` | JA summary / EN canonical | レビュー証跡パック（日本語要約あり） |
 | Validation: Regulated action governance quality gate | `docs/en/validation/regulated-action-governance-quality-gate.md` | `docs/ja/validation/regulated-action-governance-quality-gate-summary.md` | JA summary / EN canonical | 品質ゲートと実行証跡（日本語要約あり） |
