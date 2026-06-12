@@ -81,6 +81,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 
 ### Use Cases
 - [AML/KYC Regulated Action Path](use-cases/aml-kyc-regulated-action-path.md)
+- [AML/KYC Runtime Revalidation Scenarios](use-cases/aml-kyc-runtime-revalidation-scenarios.md)
 
 ### Reviews
 - [Reviews Index](reviews/README.md)
