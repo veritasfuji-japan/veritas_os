@@ -72,6 +72,10 @@ REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID = (
     "https://veritas-os.example/schemas/"
     "reviewer_handoff_quickstart_command_validation_report.schema.json"
 )
+REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_quickstart_command_report_validation_report.schema.json"
+)
 VALIDATE_REVIEW_RESULT_VALIDATOR = (
     "veritas-evidence-bundle validate-review-result"
 )
@@ -83,6 +87,9 @@ VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR = (
 )
 QUICKSTART_COMMAND_VALIDATOR = (
     "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+)
+VALIDATE_QUICKSTART_COMMAND_REPORT_VALIDATOR = (
+    "veritas-evidence-bundle validate-quickstart-command-report"
 )
 
 SAMPLE_SCHEMA_CASES = {
@@ -126,6 +133,11 @@ SAMPLE_SCHEMA_CASES = {
         / "schemas/"
         "reviewer_handoff_quickstart_command_validation_report.schema.json"
     ),
+    "reviewer-handoff-quickstart-command-report-validation.json": (
+        REPO_ROOT
+        / "schemas/"
+        "reviewer_handoff_quickstart_command_report_validation_report.schema.json"
+    ),
     MANIFEST_NAME: MANIFEST_SCHEMA_PATH,
 }
 
@@ -140,6 +152,7 @@ EXPECTED_ARTIFACT_CHAIN = (
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
     "reviewer-handoff-quickstart-command-validation.json",
+    "reviewer-handoff-quickstart-command-report-validation.json",
 )
 EXPECTED_MANIFEST_ARTIFACTS = (*EXPECTED_ARTIFACT_CHAIN, "README.md")
 EXPECTED_MANIFEST_ENTRIES = {
@@ -187,6 +200,13 @@ EXPECTED_MANIFEST_ENTRIES = {
             REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID
         ),
         "validator": QUICKSTART_COMMAND_VALIDATOR,
+    },
+    "reviewer-handoff-quickstart-command-report-validation.json": {
+        "role": "quickstart_command_report_validation_report",
+        "schema_id": (
+            REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "validator": VALIDATE_QUICKSTART_COMMAND_REPORT_VALIDATOR,
     },
     "README.md": {"role": "sample_readme", "schema_id": None},
 }
@@ -609,6 +629,9 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
     quickstart_command_validation_path = (
         SAMPLE_DIR / "reviewer-handoff-quickstart-command-validation.json"
     )
+    quickstart_command_report_validation_path = (
+        SAMPLE_DIR / "reviewer-handoff-quickstart-command-report-validation.json"
+    )
     readme_path = SAMPLE_DIR / "README.md"
 
     try:
@@ -622,6 +645,9 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
         package_validation_report = _load_json(package_validation_path)
         quickstart_command_validation_report = _load_json(
             quickstart_command_validation_path
+        )
+        quickstart_command_report_validation_report = _load_json(
+            quickstart_command_report_validation_path
         )
         readme_text = readme_path.read_text(encoding="utf-8")
     except (FileNotFoundError, json.JSONDecodeError) as exc:
@@ -841,6 +867,48 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
             ValidationProblem(
                 quickstart_command_validation_path,
                 "unexpected quickstart command validator",
+            )
+        )
+
+    if quickstart_command_report_validation_report.get("ok") is not True:
+        problems.append(
+            ValidationProblem(
+                quickstart_command_report_validation_path,
+                "quickstart command report validation report must be ok",
+            )
+        )
+
+    if (
+        quickstart_command_report_validation_report.get("validated_schema_id")
+        != REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                quickstart_command_report_validation_path,
+                "validated_schema_id does not reference the quickstart command "
+                "validation report schema",
+            )
+        )
+
+    if (
+        quickstart_command_report_validation_report.get("report_schema_id")
+        != REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                quickstart_command_report_validation_path,
+                "unexpected quickstart command report-validation report_schema_id",
+            )
+        )
+
+    if (
+        quickstart_command_report_validation_report.get("validator")
+        != VALIDATE_QUICKSTART_COMMAND_REPORT_VALIDATOR
+    ):
+        problems.append(
+            ValidationProblem(
+                quickstart_command_report_validation_path,
+                "unexpected quickstart command report validator",
             )
         )
 

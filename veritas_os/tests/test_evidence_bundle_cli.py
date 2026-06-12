@@ -1667,6 +1667,16 @@ def test_validate_review_result_invalid_cases_fail_safely(
 
     assert output["ok"] is False
     assert output[failed_check] is False
+    if failed_check in {
+        "boolean_fields_valid",
+        "errors_array_valid",
+        "no_unknown_public_fields",
+        "report_schema_id_valid",
+        "validated_document_valid",
+        "validated_command_valid",
+        "validator_valid",
+    }:
+        assert output["input_schema_valid"] is False
     assert any(error["check"] == failed_check for error in output["errors"])
 
 
@@ -2339,6 +2349,16 @@ def test_validate_reviewer_handoff_package_invalid_cases_fail_safely(
     assert stderr == ""
     assert output["ok"] is False
     assert output[failed_check] is False
+    if failed_check in {
+        "boolean_fields_valid",
+        "errors_array_valid",
+        "no_unknown_public_fields",
+        "report_schema_id_valid",
+        "validated_document_valid",
+        "validated_command_valid",
+        "validator_valid",
+    }:
+        assert output["input_schema_valid"] is False
     assert any(error["check"] == failed_check for error in output["errors"])
     _assert_reviewer_package_report_schema(output)
     _assert_reviewer_package_output_is_safe(stdout, manifest_path, package_dir)
@@ -2402,3 +2422,311 @@ def test_validate_reviewer_handoff_package_diagnostics_do_not_leak_raw_values(
     _assert_reviewer_package_output_is_safe(stdout, package_dir)
     for raw_value in raw_values:
         assert raw_value not in stdout
+
+QUICKSTART_COMMAND_REPORT_SAMPLE_PATH = (
+    REVIEWER_PACKAGE_SAMPLE_DIR
+    / "reviewer-handoff-quickstart-command-validation.json"
+)
+QUICKSTART_COMMAND_REPORT_VALIDATION_SAMPLE_PATH = (
+    REVIEWER_PACKAGE_SAMPLE_DIR
+    / "reviewer-handoff-quickstart-command-report-validation.json"
+)
+QUICKSTART_COMMAND_REPORT_VALIDATION_SCHEMA_PATH = Path(
+    "schemas/reviewer_handoff_quickstart_command_report_validation_report.schema.json"
+)
+QUICKSTART_COMMAND_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_quickstart_command_validation_report.schema.json"
+)
+QUICKSTART_COMMAND_REPORT_VALIDATION_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_quickstart_command_report_validation_report.schema.json"
+)
+QUICKSTART_COMMAND_REPORT_VALIDATOR = (
+    "veritas-evidence-bundle validate-quickstart-command-report"
+)
+
+
+def _load_quickstart_command_report() -> dict[str, Any]:
+    """Load the checked-in quickstart command validation report sample."""
+    return json.loads(
+        QUICKSTART_COMMAND_REPORT_SAMPLE_PATH.read_text(encoding="utf-8")
+    )
+
+
+def _write_quickstart_command_report(
+    tmp_path: Path,
+    report: dict[str, Any] | str,
+) -> Path:
+    """Write a mutable quickstart command validation report fixture."""
+    result_path = tmp_path / "reviewer-handoff-quickstart-command-validation.json"
+    if isinstance(report, str):
+        result_path.write_text(report, encoding="utf-8")
+    else:
+        result_path.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    return result_path
+
+
+def _assert_quickstart_command_report_validation_schema(
+    output: dict[str, Any],
+) -> None:
+    """Assert quickstart report validation output matches its JSON Schema."""
+    import jsonschema
+
+    schema = json.loads(
+        QUICKSTART_COMMAND_REPORT_VALIDATION_SCHEMA_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.Draft202012Validator(schema).validate(output)
+
+
+def _run_validate_quickstart_command_report_json(
+    result_path: Path,
+    capsys,
+    *extra_args: str,
+) -> tuple[int, dict[str, Any], str, str]:
+    """Run validate-quickstart-command-report --json and parse stdout."""
+    from veritas_os.cli.evidence_bundle import main
+
+    exit_code = main(
+        [
+            "validate-quickstart-command-report",
+            "--result",
+            str(result_path),
+            "--json",
+            *extra_args,
+        ]
+    )
+    captured = capsys.readouterr()
+    output = json.loads(captured.out)
+    _assert_quickstart_command_report_validation_schema(output)
+    return exit_code, output, captured.out, captured.err
+
+
+def _assert_quickstart_command_report_output_is_safe(
+    output: str,
+    *paths: Path,
+) -> None:
+    """Assert quickstart report validator output omits unsafe raw values."""
+    forbidden = [
+        "-----BEGIN PUBLIC KEY-----",
+        "-----BEGIN PRIVATE KEY-----",
+        "/workspace/private/customer/path",
+        "C:\\Users\\customer\\secret.json",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "RuntimeError: customer_data example",
+        "Traceback (most recent call last)",
+        "Failed validating customer_data against local schema",
+        "raw-json-value",
+        "do-not-echo-this-value",
+        "customer@example.com",
+    ]
+    for value in forbidden:
+        assert value not in output
+    for path in paths:
+        assert str(path) not in output
+
+
+def test_validate_quickstart_command_report_accepts_checked_in_sample(capsys) -> None:
+    """validate-quickstart-command-report accepts the sample saved report."""
+    exit_code, output, stdout, stderr = _run_validate_quickstart_command_report_json(
+        QUICKSTART_COMMAND_REPORT_SAMPLE_PATH,
+        capsys,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert output == {
+        "report_schema_id": QUICKSTART_COMMAND_REPORT_VALIDATION_SCHEMA_ID,
+        "validated_schema_id": QUICKSTART_COMMAND_REPORT_SCHEMA_ID,
+        "validated_result": "reviewer-handoff-quickstart-command-validation.json",
+        "validator": QUICKSTART_COMMAND_REPORT_VALIDATOR,
+        "ok": True,
+        "input_json_valid": True,
+        "input_schema_valid": True,
+        "report_schema_id_valid": True,
+        "validated_document_valid": True,
+        "validated_command_valid": True,
+        "validator_valid": True,
+        "boolean_fields_valid": True,
+        "errors_array_valid": True,
+        "no_unknown_public_fields": True,
+        "forbidden_patterns_absent": True,
+        "errors": [],
+    }
+    _assert_quickstart_command_report_output_is_safe(
+        stdout,
+        QUICKSTART_COMMAND_REPORT_SAMPLE_PATH,
+    )
+
+
+def test_validate_quickstart_command_report_output_file_matches_stdout(
+    tmp_path,
+    capsys,
+) -> None:
+    """--json --output writes the same normalized JSON report as stdout."""
+    output_path = tmp_path / "reports" / "quickstart-report-validation.json"
+
+    exit_code, output, stdout, stderr = _run_validate_quickstart_command_report_json(
+        QUICKSTART_COMMAND_REPORT_SAMPLE_PATH,
+        capsys,
+        "--output",
+        str(output_path),
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert output["ok"] is True
+    assert json.loads(output_path.read_text(encoding="utf-8")) == json.loads(stdout)
+    _assert_quickstart_command_report_output_is_safe(stdout, output_path)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "failed_check", "raw_value"),
+    [
+        (lambda report: "{not-json", "input_json_valid", "{not-json"),
+        (
+            lambda report: (report.pop("report_schema_id"), None)[1],
+            "report_schema_id_valid",
+            None,
+        ),
+        (
+            lambda report: (
+                report.__setitem__("validated_document", "docs/raw.md"),
+                None,
+            )[1],
+            "validated_document_valid",
+            "docs/raw.md",
+        ),
+        (
+            lambda report: (
+                report.__setitem__("validated_command", "raw-command"),
+                None,
+            )[1],
+            "validated_command_valid",
+            "raw-command",
+        ),
+        (
+            lambda report: (
+                report.__setitem__("validator", "raw-validator"),
+                None,
+            )[1],
+            "validator_valid",
+            "raw-validator",
+        ),
+        (
+            lambda report: (
+                report.__setitem__("ok", "RAW_BOOLEAN_STATUS_SENTINEL"),
+                None,
+            )[1],
+            "boolean_fields_valid",
+            "RAW_BOOLEAN_STATUS_SENTINEL",
+        ),
+        (
+            lambda report: (
+                report.__setitem__("unexpected_public_field", True),
+                None,
+            )[1],
+            "no_unknown_public_fields",
+            "unexpected_public_field",
+        ),
+        (
+            lambda report: (report.__setitem__("errors", "none"), None)[1],
+            "errors_array_valid",
+            "none",
+        ),
+    ],
+)
+def test_validate_quickstart_command_report_invalid_cases_fail_safely(
+    tmp_path,
+    capsys,
+    mutate,
+    failed_check: str,
+    raw_value: str | None,
+) -> None:
+    """Invalid saved quickstart reports fail with fixed diagnostics."""
+    report = _load_quickstart_command_report()
+    mutation_result = mutate(report)
+    result_path = _write_quickstart_command_report(
+        tmp_path,
+        mutation_result if isinstance(mutation_result, str) else report,
+    )
+
+    exit_code, output, stdout, stderr = _run_validate_quickstart_command_report_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert output["ok"] is False
+    assert output[failed_check] is False
+    if failed_check in {
+        "boolean_fields_valid",
+        "errors_array_valid",
+        "no_unknown_public_fields",
+        "report_schema_id_valid",
+        "validated_document_valid",
+        "validated_command_valid",
+        "validator_valid",
+    }:
+        assert output["input_schema_valid"] is False
+    assert any(error["check"] == failed_check for error in output["errors"])
+    _assert_quickstart_command_report_output_is_safe(stdout, result_path)
+    if raw_value is not None:
+        assert raw_value not in stdout
+
+
+def test_validate_quickstart_command_report_diagnostics_do_not_leak_raw_values(
+    tmp_path,
+    capsys,
+) -> None:
+    """Diagnostics omit raw streams, paths, fingerprints, keys, and messages."""
+    raw_values = [
+        "stdout: do-not-echo-this-value",
+        "stderr: do-not-echo-this-value",
+        "raw-json-value",
+        "/workspace/private/customer/path",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "-----BEGIN PUBLIC KEY-----",
+        "RuntimeError: customer_data example",
+        "Failed validating customer_data against local schema",
+        "customer@example.com",
+    ]
+    report = _load_quickstart_command_report()
+    report["errors"] = [
+        {"check": "report_json", "message": value} for value in raw_values
+    ]
+    result_path = _write_quickstart_command_report(tmp_path, report)
+
+    exit_code, output, stdout, stderr = _run_validate_quickstart_command_report_json(
+        result_path,
+        capsys,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert output["ok"] is False
+    assert output["forbidden_patterns_absent"] is False
+    _assert_quickstart_command_report_output_is_safe(stdout, result_path)
+    for raw_value in raw_values:
+        assert raw_value not in stdout
+
+
+def test_quickstart_command_report_validation_sample_is_listed_in_manifest() -> None:
+    """Sample manifest includes the quickstart report validation artifact."""
+    manifest = json.loads(REVIEWER_PACKAGE_MANIFEST.read_text(encoding="utf-8"))
+    entries = {entry["artifact_name"]: entry for entry in manifest["artifacts"]}
+    entry = entries["reviewer-handoff-quickstart-command-report-validation.json"]
+
+    assert entry["role"] == "quickstart_command_report_validation_report"
+    assert entry["schema_id"] == QUICKSTART_COMMAND_REPORT_VALIDATION_SCHEMA_ID
+    assert entry["validator"] == QUICKSTART_COMMAND_REPORT_VALIDATOR
+    assert entry["sha256"] == hashlib.sha256(
+        QUICKSTART_COMMAND_REPORT_VALIDATION_SAMPLE_PATH.read_bytes()
+    ).hexdigest()

@@ -69,6 +69,13 @@ SCHEMA_CASES = [
             "reviewer_handoff_quickstart_command_validation_report.schema.json"
         ),
     ),
+    (
+        "reviewer-handoff-quickstart-command-report-validation.json",
+        Path(
+            "schemas/"
+            "reviewer_handoff_quickstart_command_report_validation_report.schema.json"
+        ),
+    ),
 ]
 EXPECTED_CHAIN = [
     "verification-result.json",
@@ -81,6 +88,7 @@ EXPECTED_CHAIN = [
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
     "reviewer-handoff-quickstart-command-validation.json",
+    "reviewer-handoff-quickstart-command-report-validation.json",
 ]
 RAW_PRIVATE_KEY_PATTERNS = [
     "-----BEGIN PRIVATE KEY-----",

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_report_validation_report.schema.json",
+  "title": "Reviewer Handoff Quickstart Command Report Validation Report",
+  "description": "Machine-readable second-level validation report emitted by veritas-evidence-bundle validate-quickstart-command-report. This schema validates only the saved quickstart command validation report shape and fixed metadata. The report records validation status only; it does not create trust, does not replace out-of-band public key trust, does not prove regulatory certification, is not completed third-party audit approval, and does not establish cryptographic truth by itself. The report intentionally exposes fixed identifiers, booleans, and fixed diagnostics only; it does not expose raw command stdout, raw command stderr, raw JSON values, raw artifact contents, raw file paths, raw fingerprints, raw public keys, raw secrets, exception text, raw schema validator messages, customer data, or production data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_schema_id",
+    "validated_schema_id",
+    "validated_result",
+    "validator",
+    "ok",
+    "input_json_valid",
+    "input_schema_valid",
+    "report_schema_id_valid",
+    "validated_document_valid",
+    "validated_command_valid",
+    "validator_valid",
+    "boolean_fields_valid",
+    "errors_array_valid",
+    "no_unknown_public_fields",
+    "forbidden_patterns_absent",
+    "errors"
+  ],
+  "properties": {
+    "report_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_report_validation_report.schema.json",
+      "description": "Identifies this second-level validation report schema. This metadata validates report shape only."
+    },
+    "validated_schema_id": {
+      "type": "string",
+      "const": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
+      "description": "Identifies the saved quickstart command validation report schema being checked."
+    },
+    "validated_result": {
+      "type": "string",
+      "const": "reviewer-handoff-quickstart-command-validation.json",
+      "description": "Fixed artifact name being validated; raw local paths are not permitted."
+    },
+    "validator": {
+      "type": "string",
+      "const": "veritas-evidence-bundle validate-quickstart-command-report",
+      "description": "Fixed validator command identifier; raw local paths are not permitted."
+    },
+    "ok": {"type": "boolean"},
+    "input_json_valid": {"type": "boolean"},
+    "input_schema_valid": {"type": "boolean"},
+    "report_schema_id_valid": {"type": "boolean"},
+    "validated_document_valid": {"type": "boolean"},
+    "validated_command_valid": {"type": "boolean"},
+    "validator_valid": {"type": "boolean"},
+    "boolean_fields_valid": {"type": "boolean"},
+    "errors_array_valid": {"type": "boolean"},
+    "no_unknown_public_fields": {"type": "boolean"},
+    "forbidden_patterns_absent": {
+      "type": "boolean",
+      "description": "True when the saved report uses fixed diagnostics and omits forbidden sensitive or raw diagnostic content."
+    },
+    "errors": {
+      "type": "array",
+      "description": "Fixed public diagnostics only. Empty when ok is true. Raw paths, raw JSON values, raw fingerprints, keys, secrets, exception text, schema validator messages, customer data, and production data are not permitted.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "path", "message"],
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "input_json_valid",
+              "input_schema_valid",
+              "report_schema_id_valid",
+              "validated_document_valid",
+              "validated_command_valid",
+              "validator_valid",
+              "boolean_fields_valid",
+              "errors_array_valid",
+              "no_unknown_public_fields",
+              "forbidden_patterns_absent"
+            ],
+            "description": "Fixed validation check that failed."
+          },
+          "path": {
+            "type": "string",
+            "const": "$",
+            "description": "Fixed JSON root path only; raw local paths are not permitted."
+          },
+          "message": {
+            "type": "string",
+            "enum": [
+              "input report is not valid JSON object output",
+              "input report does not satisfy schema",
+              "input report schema identifier is not accepted",
+              "input validated document is not accepted",
+              "input validated command is not accepted",
+              "input validator identifier is not accepted",
+              "input status fields must be booleans",
+              "input errors field must be an array",
+              "input public fields do not match the contract",
+              "input report contains forbidden sensitive or raw text"
+            ],
+            "description": "Fixed public diagnostic. Raw command output, raw JSON values, raw paths, fingerprints, keys, secrets, exception text, schema validator messages, customer data, and production data are not permitted."
+          }
+        }
+      }
+    }
+  }
+}

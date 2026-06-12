@@ -2172,22 +2172,29 @@ for a machine-readable report under
 The sample package includes checked-in
 `reviewer-handoff-quickstart-command-validation.json` so reviewers can inspect
 the expected machine-readable report shape, and CI validates it with the sample
-manifest. The checked-in quickstart command validation report is a sample
-validation artifact and is not a trust source by itself. It records whether the
-documented quickstart command was present, executable, and produced the expected
-public output contract. It records validation status only, does not create
-trust, does not replace out-of-band public key trust, does not prove regulatory
-certification, is not completed third-party audit approval, and does not
-establish cryptographic truth by itself.
+manifest. The saved quickstart command validation report can now be
+independently validated with `veritas-evidence-bundle
+validate-quickstart-command-report --result
+samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-validation.json
+--json --output
+samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-report-validation.json`.
+The second-level report validates the saved report shape and fixed metadata
+only. The checked-in quickstart command validation report and its second-level
+validation report are sample validation artifacts and are not trust sources by
+themselves. They record validation status only, do not create trust, do not
+replace out-of-band public key trust, do not prove regulatory certification, are
+not completed third-party audit approval, and do not establish cryptographic
+truth by themselves.
 
 
 The checked-in reviewer handoff sample validation reports are CI-validated and
 also regeneration-checked against current CLI behavior. The regeneration gate
 recreates `reviewer-review-result-validation.json`,
 `reviewer-review-result-report-validation.json`,
-`reviewer-handoff-package-validation.json`, and
-`reviewer-handoff-quickstart-command-validation.json` in a temporary directory and compares
-normalized JSON with the repository copies. This reduces drift between CLI
+`reviewer-handoff-package-validation.json`,
+`reviewer-handoff-quickstart-command-validation.json`, and
+`reviewer-handoff-quickstart-command-report-validation.json` in a temporary
+directory and compares normalized JSON with the repository copies. This reduces drift between CLI
 output and documented samples, but validates sample reproducibility only. It
 does not create trust, replace out-of-band public key trust, prove regulatory
 certification, indicate completed third-party audit approval, or establish

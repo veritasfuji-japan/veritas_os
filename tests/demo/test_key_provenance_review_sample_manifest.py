@@ -31,6 +31,7 @@ EXPECTED_ARTIFACTS = (
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
     "reviewer-handoff-quickstart-command-validation.json",
+    "reviewer-handoff-quickstart-command-report-validation.json",
     "README.md",
 )
 EXPECTED_ROLES = {
@@ -53,6 +54,9 @@ EXPECTED_ROLES = {
     ),
     "reviewer-handoff-quickstart-command-validation.json": (
         "quickstart_command_validation_report"
+    ),
+    "reviewer-handoff-quickstart-command-report-validation.json": (
+        "quickstart_command_report_validation_report"
     ),
     "README.md": "sample_readme",
 }
@@ -95,6 +99,10 @@ EXPECTED_SCHEMA_IDS = {
     "reviewer-handoff-quickstart-command-validation.json": (
         "https://veritas-os.example/schemas/"
         "reviewer_handoff_quickstart_command_validation_report.schema.json"
+    ),
+    "reviewer-handoff-quickstart-command-report-validation.json": (
+        "https://veritas-os.example/schemas/"
+        "reviewer_handoff_quickstart_command_report_validation_report.schema.json"
     ),
     "README.md": None,
 }
@@ -195,6 +203,16 @@ def test_manifest_records_quickstart_command_validator() -> None:
 
     assert entry["validator"] == (
         "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+    )
+
+
+def test_manifest_records_quickstart_command_report_validator() -> None:
+    entry = _artifact_entries()[
+        "reviewer-handoff-quickstart-command-report-validation.json"
+    ]
+
+    assert entry["validator"] == (
+        "veritas-evidence-bundle validate-quickstart-command-report"
     )
 
 

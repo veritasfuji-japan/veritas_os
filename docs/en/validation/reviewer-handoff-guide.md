@@ -32,6 +32,8 @@ artifacts:
 | `reviewer-handoff-review-result.json` | Reviewer Review Result / Acceptance Record that records what was checked and the reviewer decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`). |
 | `reviewer-review-result-validation.json` | Saved `validate-review-result --json` output demonstrating validation output shape and validation status only. |
 | `reviewer-review-result-report-validation.json` | Saved `validate-review-result-report --json` output demonstrating second-level validation report shape only. |
+| `reviewer-handoff-quickstart-command-validation.json` | Saved quickstart command guard report for command presence, command executability, and output-contract status only. |
+| `reviewer-handoff-quickstart-command-report-validation.json` | Saved `validate-quickstart-command-report --json` output demonstrating second-level validation of the saved quickstart command report shape only. |
 
 The reviewer must obtain `trusted-public-key.pem` through an approved
 out-of-band reviewer/operator trust channel before relying on manifest signature
@@ -195,6 +197,7 @@ Keep these boundaries explicit in reviewer communications:
 | Record `reviewer-handoff-review-result.json` | `reviewer-handoff-review-result.json` | Record the artifacts checked, reviewer scope, limitation acknowledgements, and decision (`ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`). | The review outcome is machine-readable and tied to the reviewer's stated scope and out-of-band trust context. | The record is not certification, regulatory approval, completed third-party audit approval, or cryptographic truth by itself. |
 | Confirm CI sample validation status | CI sample validation logs or status checks | Confirm the sample validation check completed successfully for the submitted commit. | CI checked sample schema conformance, fixed references, manifest entries, and sample hashes. | CI sample validation does not create trust, replace out-of-band public key trust, prove regulatory certification, or indicate completed third-party audit approval. |
 | Inspect quickstart command guard JSON | `reviewer-handoff-quickstart-command-validation.json` or `scripts/quality/check_reviewer_handoff_quickstart_command.py --json` output | Inspect the checked-in quickstart command validation report sample or run `scripts/quality/check_reviewer_handoff_quickstart_command.py --json --output reviewer-handoff-quickstart-command-validation.json`. | The checked-in sample shows the expected machine-readable report shape and CI validates it; the guard reports command presence, command executability, and output-contract validation status under `schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`. | The report records validation status only; it is not a trust source by itself and does not create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
+| Validate saved quickstart command report | `reviewer-handoff-quickstart-command-validation.json` | Run `veritas-evidence-bundle validate-quickstart-command-report --result samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-validation.json --json --output samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-report-validation.json`. | The saved quickstart command validation report conforms to its schema, fixed public metadata, boolean status fields, and privacy-preserving diagnostic boundaries. | This second-level report validates the saved report shape only; it does not re-run the quickstart guard, create trust, replace out-of-band public key trust, prove regulatory certification, indicate completed third-party audit approval, or establish cryptographic truth. |
 
 
 ## Reviewer handoff package validation CLI
@@ -219,7 +222,15 @@ support sample integrity only; validation reports record validation status only.
 A checked-in quickstart command validation report sample,
 `reviewer-handoff-quickstart-command-validation.json`, is available in the
 sample package. It shows the expected machine-readable report shape, is
-CI-validated, and is not a trust source by itself.
+CI-validated, and is not a trust source by itself. The saved quickstart command
+validation report can also be independently validated with
+`veritas-evidence-bundle validate-quickstart-command-report`, which emits
+`reviewer-handoff-quickstart-command-report-validation.json` under
+[`schemas/reviewer_handoff_quickstart_command_report_validation_report.schema.json`](../../../schemas/reviewer_handoff_quickstart_command_report_validation_report.schema.json).
+That second-level report validates the saved report shape and fixed metadata
+only. It records validation status only; it does not create trust, replace
+out-of-band public key trust, prove regulatory certification, indicate completed
+third-party audit approval, or establish cryptographic truth by itself.
 
 The reviewer handoff quickstart command guard also supports a machine-readable
 JSON mode: run `scripts/quality/check_reviewer_handoff_quickstart_command.py --json`
