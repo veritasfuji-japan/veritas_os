@@ -20,6 +20,9 @@ SAMPLE_DIR = REPO_ROOT / "samples/evidence_bundle/key_provenance_review"
 REVIEW_RESULT_REPORT = "reviewer-review-result-validation.json"
 REVIEW_RESULT_REPORT_VALIDATION = "reviewer-review-result-report-validation.json"
 HANDOFF_PACKAGE_REPORT = "reviewer-handoff-package-validation.json"
+QUICKSTART_COMMAND_REPORT_VALIDATION = (
+    "reviewer-handoff-quickstart-command-report-validation.json"
+)
 
 
 def _copy_samples(tmp_path: Path) -> Path:
@@ -167,6 +170,24 @@ def test_regeneration_checker_rejects_unknown_field(tmp_path: Path) -> None:
 
     assert code == 1
     assert REVIEW_RESULT_REPORT in output
+
+
+
+def test_regeneration_checker_rejects_quickstart_report_validation_drift(
+    tmp_path: Path,
+) -> None:
+    """Changing the saved quickstart report validation sample is detected."""
+    sample_dir = _copy_samples(tmp_path)
+    report_path = sample_dir / QUICKSTART_COMMAND_REPORT_VALIDATION
+    payload = _load_json(report_path)
+    payload["ok"] = False
+    _write_json(report_path, payload)
+
+    code, output = _run_for_samples(sample_dir)
+
+    assert code == 1
+    assert QUICKSTART_COMMAND_REPORT_VALIDATION in output
+    assert "normalized_report_match" in output
 
 
 def test_regeneration_checker_diagnostics_do_not_leak_raw_values(

@@ -76,11 +76,27 @@ sample package. That guard report is not a trust source by itself and validates 
 presence, command executability, and output-contract status only, using the
 schema at
 [`schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`](../../../schemas/reviewer_handoff_quickstart_command_validation_report.schema.json).
-It records validation status only and is not a trust source by itself; it does not create trust, does not replace
-out-of-band public key trust, does not prove regulatory certification, is not
-completed third-party audit approval, and does not establish cryptographic truth
-by itself. This reduces docs/CLI drift and validates sample command
-reproducibility only.
+It records validation status only and is not a trust source by itself; it does
+not create trust, does not replace out-of-band public key trust, does not prove
+regulatory certification, is not completed third-party audit approval, and does
+not establish cryptographic truth by itself. This reduces docs/CLI drift and
+validates sample command reproducibility only.
+
+The saved quickstart command validation report can now be independently
+validated without re-running the original quickstart command guard:
+
+```bash
+veritas-evidence-bundle validate-quickstart-command-report \
+  --result samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-validation.json \
+  --json \
+  --output samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-report-validation.json
+```
+
+This second-level report validates the saved report shape and fixed metadata
+only. It records validation status only; it does not create trust, does not
+replace out-of-band public key trust, does not prove regulatory certification,
+is not completed third-party audit approval, and does not establish
+cryptographic truth by itself.
 
 ## 9. Understand trust boundaries
 
@@ -103,6 +119,7 @@ record validation status only.
 - `reviewer-review-result-report-validation.json`: validates saved reviewer-result validation report
 - `reviewer-handoff-package-validation.json`: validates package-level structure/status
 - `reviewer-handoff-quickstart-command-validation.json`: checked-in quickstart command guard report shape/status
+- `reviewer-handoff-quickstart-command-report-validation.json`: validates the saved quickstart command report shape only
 - `sample-artifact-manifest.json`: indexes sample artifacts, roles, schemas, validators, and hashes
 - `README.md`: sample explanation
 
@@ -115,6 +132,8 @@ record validation status only.
 - The sample validation reports match current CLI behavior.
 - The checked-in quickstart command validation report shows the expected
   machine-readable report shape and is CI-validated.
+- The checked-in quickstart command report validation report shows second-level
+  validation status for the saved report shape only.
 - Privacy-preserving diagnostics remain fixed and boolean-only.
 
 ## What this does not prove

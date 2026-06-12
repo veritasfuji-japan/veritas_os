@@ -1,0 +1,18 @@
+{
+  "report_schema_id": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_report_validation_report.schema.json",
+  "validated_schema_id": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
+  "validated_result": "reviewer-handoff-quickstart-command-validation.json",
+  "validator": "veritas-evidence-bundle validate-quickstart-command-report",
+  "ok": true,
+  "input_json_valid": true,
+  "input_schema_valid": true,
+  "report_schema_id_valid": true,
+  "validated_document_valid": true,
+  "validated_command_valid": true,
+  "validator_valid": true,
+  "boolean_fields_valid": true,
+  "errors_array_valid": true,
+  "no_unknown_public_fields": true,
+  "forbidden_patterns_absent": true,
+  "errors": []
+}

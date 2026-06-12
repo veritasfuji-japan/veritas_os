@@ -25,8 +25,8 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 11,
-      "maxItems": 11,
+      "minItems": 12,
+      "maxItems": 12,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -50,6 +50,7 @@
               "reviewer-review-result-report-validation.json",
               "reviewer-handoff-package-validation.json",
               "reviewer-handoff-quickstart-command-validation.json",
+              "reviewer-handoff-quickstart-command-report-validation.json",
               "README.md"
             ]
           },
@@ -66,6 +67,7 @@
               "reviewer_handoff_review_result_report_validation_report",
               "reviewer_handoff_package_validation_report",
               "quickstart_command_validation_report",
+              "quickstart_command_report_validation_report",
               "sample_readme"
             ]
           },
@@ -81,6 +83,7 @@
               "https://veritas-os.example/schemas/reviewer_handoff_review_result_report_validation_report.schema.json",
               "https://veritas-os.example/schemas/reviewer_handoff_package_validation_report.schema.json",
               "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
+              "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_report_validation_report.schema.json",
               null
             ]
           },
@@ -90,7 +93,8 @@
           },
           "validator": {
             "enum": [
-              "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+              "scripts/quality/check_reviewer_handoff_quickstart_command.py",
+              "veritas-evidence-bundle validate-quickstart-command-report"
             ]
           }
         },
@@ -107,8 +111,50 @@
               ]
             },
             "then": {
+              "properties": {
+                "validator": {
+                  "const": "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+                }
+              },
               "required": [
                 "validator"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "artifact_name": {
+                  "const": "reviewer-handoff-quickstart-command-report-validation.json"
+                }
+              },
+              "required": [
+                "artifact_name"
+              ]
+            },
+            "then": {
+              "properties": {
+                "validator": {
+                  "const": "veritas-evidence-bundle validate-quickstart-command-report"
+                }
+              },
+              "required": [
+                "validator"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "artifact_name": {
+                  "enum": [
+                    "reviewer-handoff-quickstart-command-validation.json",
+                    "reviewer-handoff-quickstart-command-report-validation.json"
+                  ]
+                }
+              },
+              "required": [
+                "artifact_name"
               ]
             },
             "else": {

@@ -22,6 +22,7 @@ verification-result.json
 → reviewer-review-result-report-validation.json
 → reviewer-handoff-package-validation.json
 → reviewer-handoff-quickstart-command-validation.json
+→ reviewer-handoff-quickstart-command-report-validation.json
 ```
 
 ## Files
@@ -38,6 +39,7 @@ verification-result.json
 | `reviewer-review-result-report-validation.json` | Illustrates saved `validate-review-result-report --json` output shape for the saved Review Result validation report. |
 | `reviewer-handoff-package-validation.json` | Illustrates saved `validate-reviewer-handoff-package --json` output shape for manifest, hash, schema, relationship, and safety-boundary status only. |
 | `reviewer-handoff-quickstart-command-validation.json` | Records the checked-in quickstart command guard result for command presence, command executability, and output-contract status only. |
+| `reviewer-handoff-quickstart-command-report-validation.json` | Records second-level validation of the saved quickstart command validation report shape only. |
 | `sample-artifact-manifest.json` | Indexes the illustrative sample artifacts, roles, schema identifiers, validators, and SHA-256 digests. |
 
 ## Sample Artifact Manifest
@@ -45,8 +47,9 @@ verification-result.json
 `sample-artifact-manifest.json` is an index for this illustrative sample set.
 It lists the expected artifact names, reviewer roles, schema identifiers, and
 SHA-256 digests for the files in this directory, including saved reviewer
-result validation reports, the saved package validation report, and the checked-in
-quickstart command validation report. The manifest checks sample structure and file
+result validation reports, the saved package validation report, the checked-in
+quickstart command validation report, and its second-level report validation
+artifact. The manifest checks sample structure and file
 integrity only. It does not create trust, does not replace
 out-of-band public key trust, is not regulatory certification, and is not
 completed third-party audit approval.
@@ -87,7 +90,23 @@ command executability, and the package-validation output contract only, using
 The checked-in sample report
 `reviewer-handoff-quickstart-command-validation.json` shows the expected
 machine-readable report shape and is CI-validated as part of this sample
-package. It records validation status only and is not a trust source by itself; it does not create trust, does not
+package. It records validation status only and is not a trust source by itself;
+it does not create trust, does not replace out-of-band public key trust, does
+not prove regulatory certification, is not completed third-party audit approval,
+and does not establish cryptographic truth by itself.
+
+The saved quickstart command validation report can also be independently
+validated without re-running the original quickstart command guard:
+
+```bash
+veritas-evidence-bundle validate-quickstart-command-report \
+  --result samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-validation.json \
+  --json \
+  --output samples/evidence_bundle/key_provenance_review/reviewer-handoff-quickstart-command-report-validation.json
+```
+
+The second-level report validates the saved report shape and fixed metadata
+only. It records validation status only; it does not create trust, does not
 replace out-of-band public key trust, does not prove regulatory certification,
 is not completed third-party audit approval, and does not establish
 cryptographic truth by itself.
@@ -98,9 +117,11 @@ CI validates the checked-in reviewer handoff sample reports for schema and
 sample-pack structure, and also regeneration-checks them against current CLI
 behavior with `scripts/quality/check_reviewer_handoff_sample_regeneration.py`.
 The checker regenerates `reviewer-review-result-validation.json`,
-`reviewer-review-result-report-validation.json`, and
-`reviewer-handoff-package-validation.json`, and
-`reviewer-handoff-quickstart-command-validation.json` in a temporary directory and compares
+`reviewer-review-result-report-validation.json`,
+`reviewer-handoff-package-validation.json`,
+`reviewer-handoff-quickstart-command-validation.json`, and
+`reviewer-handoff-quickstart-command-report-validation.json` in a temporary
+directory and compares
 normalized JSON with the checked-in files. This reduces drift between CLI output
 and documented samples. It validates sample reproducibility only; it does not
 create trust, replace out-of-band public key trust, prove regulatory
@@ -120,6 +141,8 @@ reports record validation status, not cryptographic truth by themselves.
 - The saved package validation report demonstrates validation output shape only.
 - The saved quickstart command validation report demonstrates expected
   machine-readable guard output shape only.
+- The saved quickstart command report validation report validates the saved
+  quickstart report shape only.
 - Validation reports record validation status, not cryptographic truth by
   themselves.
 - Sample hashes support sample integrity only.

@@ -36,12 +36,16 @@ HANDOFF_PACKAGE_VALIDATION_REPORT = "reviewer-handoff-package-validation.json"
 QUICKSTART_COMMAND_VALIDATION_REPORT = (
     "reviewer-handoff-quickstart-command-validation.json"
 )
+QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT = (
+    "reviewer-handoff-quickstart-command-report-validation.json"
+)
 
 REGENERATED_REPORTS = (
     REVIEW_RESULT_VALIDATION_REPORT,
     REVIEW_RESULT_REPORT_VALIDATION_REPORT,
     HANDOFF_PACKAGE_VALIDATION_REPORT,
     QUICKSTART_COMMAND_VALIDATION_REPORT,
+    QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT,
 )
 
 
@@ -146,6 +150,19 @@ def _regenerate_reports(sample_dir: Path, temp_dir: Path) -> list[RegenerationPr
                     "--output",
                     str(temp_dir / QUICKSTART_COMMAND_VALIDATION_REPORT),
                 ],
+            ),
+        ),
+        (
+            QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT,
+            _cli_command(
+                [
+                    "validate-quickstart-command-report",
+                    "--result",
+                    str(temp_dir / QUICKSTART_COMMAND_VALIDATION_REPORT),
+                    "--json",
+                    "--output",
+                    str(temp_dir / QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT),
+                ]
             ),
         ),
     )

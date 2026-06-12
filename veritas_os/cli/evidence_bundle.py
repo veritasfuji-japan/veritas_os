@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -78,6 +79,13 @@ REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID = (
     f"{SCHEMA_BASE_URL}/"
     "reviewer_handoff_quickstart_command_validation_report.schema.json"
 )
+REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_ID = (
+    f"{SCHEMA_BASE_URL}/"
+    "reviewer_handoff_quickstart_command_report_validation_report.schema.json"
+)
+VALIDATE_QUICKSTART_COMMAND_REPORT_VALIDATOR = (
+    "veritas-evidence-bundle validate-quickstart-command-report"
+)
 VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR = (
     "veritas-evidence-bundle validate-reviewer-handoff-package"
 )
@@ -132,6 +140,11 @@ REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
     / "schemas"
     / "reviewer_handoff_quickstart_command_validation_report.schema.json"
+)
+REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "schemas"
+    / "reviewer_handoff_quickstart_command_report_validation_report.schema.json"
 )
 REVIEWER_EVIDENCE_PACKET_SCHEMA_PATH = (
     Path(__file__).resolve().parents[2]
@@ -213,6 +226,7 @@ REVIEWER_HANDOFF_PACKAGE_REQUIRED_ARTIFACTS = (
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
     "reviewer-handoff-quickstart-command-validation.json",
+    "reviewer-handoff-quickstart-command-report-validation.json",
     "README.md",
 )
 REVIEWER_HANDOFF_PACKAGE_EXPECTED_ENTRIES = {
@@ -276,6 +290,15 @@ REVIEWER_HANDOFF_PACKAGE_EXPECTED_ENTRIES = {
             REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_PATH
         ),
     },
+    "reviewer-handoff-quickstart-command-report-validation.json": {
+        "role": "quickstart_command_report_validation_report",
+        "schema_id": (
+            REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "schema_path": (
+            REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_PATH
+        ),
+    },
     "README.md": {
         "role": "sample_readme",
         "schema_id": None,
@@ -296,6 +319,9 @@ REVIEWER_HANDOFF_PACKAGE_EXPECTED_VALIDATORS = {
     ),
     "reviewer-handoff-quickstart-command-validation.json": (
         QUICKSTART_COMMAND_VALIDATOR
+    ),
+    "reviewer-handoff-quickstart-command-report-validation.json": (
+        VALIDATE_QUICKSTART_COMMAND_REPORT_VALIDATOR
     ),
 }
 REVIEWER_HANDOFF_PACKAGE_SYNTHETIC_FINGERPRINT = "1" * 64
@@ -700,8 +726,7 @@ def _run_validate_key_provenance(
         output_json = json.dumps(report, indent=2, ensure_ascii=False)
         if output_path is not None:
             try:
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(output_json + "\n", encoding="utf-8")
+                _write_json_report_atomically(output_path, output_json)
             except OSError:
                 print(
                     "error: failed to write key provenance validation report",
@@ -1205,6 +1230,228 @@ def _run_validate_review_result_report(
     return exit_code
 
 
+QUICKSTART_COMMAND_REPORT_EXPECTED_DOCUMENT = (
+    "docs/en/validation/reviewer-handoff-sample-quickstart.md"
+)
+QUICKSTART_COMMAND_REPORT_EXPECTED_COMMAND = (
+    "veritas-evidence-bundle validate-reviewer-handoff-package"
+)
+QUICKSTART_COMMAND_REPORT_EXPECTED_VALIDATOR = (
+    "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+)
+QUICKSTART_COMMAND_REPORT_BOOLEAN_FIELDS = frozenset(
+    {
+        "ok",
+        "quickstart_exists",
+        "command_present",
+        "command_executable",
+        "output_json_valid",
+        "output_schema_valid",
+        "report_schema_id_valid",
+        "validated_schema_id_valid",
+        "validator_valid",
+        "boolean_fields_valid",
+        "errors_array_valid",
+        "no_unknown_public_fields",
+        "forbidden_patterns_absent",
+    }
+)
+QUICKSTART_COMMAND_REPORT_PUBLIC_FIELDS = frozenset(
+    {
+        "report_schema_id",
+        "validated_document",
+        "validated_command",
+        "validator",
+        "errors",
+        *QUICKSTART_COMMAND_REPORT_BOOLEAN_FIELDS,
+    }
+)
+
+
+def _quickstart_command_report_errors(
+    report: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Build fixed diagnostics for quickstart report validation failures."""
+    checks = [
+        ("input_json_valid", "input report is not valid JSON object output"),
+        ("input_schema_valid", "input report does not satisfy schema"),
+        ("report_schema_id_valid", "input report schema identifier is not accepted"),
+        ("validated_document_valid", "input validated document is not accepted"),
+        ("validated_command_valid", "input validated command is not accepted"),
+        ("validator_valid", "input validator identifier is not accepted"),
+        ("boolean_fields_valid", "input status fields must be booleans"),
+        ("errors_array_valid", "input errors field must be an array"),
+        ("no_unknown_public_fields", "input public fields do not match the contract"),
+        (
+            "forbidden_patterns_absent",
+            "input report contains forbidden sensitive or raw text",
+        ),
+    ]
+    return [
+        {"check": check, "path": "$", "message": message}
+        for check, message in checks
+        if not report[check]
+    ]
+
+
+def _validate_quickstart_command_report_status(
+    result_path: Path,
+) -> tuple[dict[str, Any], int]:
+    """Validate a saved quickstart command validation report safely.
+
+    This second-level validator checks only the saved JSON report emitted by
+    ``scripts/quality/check_reviewer_handoff_quickstart_command.py --json``.
+    It validates JSON parsing, schema conformance, fixed public identifiers,
+    boolean-only status fields, fixed public fields, fixed diagnostics shape,
+    and absence of forbidden sensitive/raw diagnostic patterns. It does not
+    re-run the quickstart command guard, create trust, replace out-of-band
+    public key trust, prove regulatory certification, complete third-party
+    audit approval, or establish cryptographic truth.
+    """
+    try:
+        raw_report = result_path.read_text(encoding="utf-8")
+    except OSError:
+        input_report: Any = None
+        input_json_valid = False
+        forbidden_patterns_absent = False
+    else:
+        try:
+            input_report = json.loads(raw_report)
+        except json.JSONDecodeError:
+            input_report = None
+            input_json_valid = False
+        else:
+            input_json_valid = isinstance(input_report, dict)
+        forbidden_patterns_absent = not any(
+            pattern.search(raw_report)
+            for pattern in REVIEWER_HANDOFF_PACKAGE_FORBIDDEN_PATTERNS
+        )
+
+    if not isinstance(input_report, dict):
+        input_report = {}
+
+    input_schema_valid = input_json_valid and _json_schema_valid(
+        input_report,
+        REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_PATH,
+    )
+    report_schema_id_valid = (
+        input_report.get("report_schema_id")
+        == REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID
+    )
+    validated_document_valid = (
+        input_report.get("validated_document")
+        == QUICKSTART_COMMAND_REPORT_EXPECTED_DOCUMENT
+    )
+    validated_command_valid = (
+        input_report.get("validated_command")
+        == QUICKSTART_COMMAND_REPORT_EXPECTED_COMMAND
+    )
+    validator_valid = (
+        input_report.get("validator")
+        == QUICKSTART_COMMAND_REPORT_EXPECTED_VALIDATOR
+    )
+    boolean_fields_valid = all(
+        isinstance(input_report.get(field), bool)
+        for field in QUICKSTART_COMMAND_REPORT_BOOLEAN_FIELDS
+    )
+    errors_array_valid = isinstance(input_report.get("errors"), list)
+    no_unknown_public_fields = (
+        set(input_report) == QUICKSTART_COMMAND_REPORT_PUBLIC_FIELDS
+    )
+    ok = (
+        input_json_valid
+        and input_schema_valid
+        and report_schema_id_valid
+        and validated_document_valid
+        and validated_command_valid
+        and validator_valid
+        and boolean_fields_valid
+        and errors_array_valid
+        and no_unknown_public_fields
+        and forbidden_patterns_absent
+    )
+    report = {
+        "report_schema_id": (
+            REVIEWER_HANDOFF_QUICKSTART_COMMAND_REPORT_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "validated_schema_id": (
+            REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "validated_result": "reviewer-handoff-quickstart-command-validation.json",
+        "validator": VALIDATE_QUICKSTART_COMMAND_REPORT_VALIDATOR,
+        "ok": ok,
+        "input_json_valid": input_json_valid,
+        "input_schema_valid": input_schema_valid,
+        "report_schema_id_valid": report_schema_id_valid,
+        "validated_document_valid": validated_document_valid,
+        "validated_command_valid": validated_command_valid,
+        "validator_valid": validator_valid,
+        "boolean_fields_valid": boolean_fields_valid,
+        "errors_array_valid": errors_array_valid,
+        "no_unknown_public_fields": no_unknown_public_fields,
+        "forbidden_patterns_absent": forbidden_patterns_absent,
+        "errors": [],
+    }
+    report["errors"] = _quickstart_command_report_errors(report)
+    return report, 0 if ok else 1
+
+
+def _write_json_report_atomically(output_path: Path, output_json: str) -> None:
+    """Write a complete JSON report without leaving partial invalid JSON."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=output_path.parent,
+            delete=False,
+        ) as temp_file:
+            temp_name = temp_file.name
+            temp_file.write(output_json + "\n")
+        Path(temp_name).replace(output_path)
+    except OSError:
+        if temp_name is not None:
+            try:
+                Path(temp_name).unlink()
+            except OSError:
+                pass
+        raise
+
+
+def _run_validate_quickstart_command_report(
+    result_path: Path,
+    *,
+    json_output: bool = False,
+    output_path: Optional[Path] = None,
+) -> int:
+    """Run saved quickstart command report validation."""
+    output, exit_code = _validate_quickstart_command_report_status(result_path)
+    if json_output:
+        output_json = json.dumps(output, indent=2, ensure_ascii=False)
+        if output_path is not None:
+            try:
+                _write_json_report_atomically(output_path, output_json)
+            except OSError:
+                print(
+                    "error: failed to write quickstart command report validation report",
+                    file=sys.stderr,
+                )
+                return 2
+        # codeql[py/clear-text-logging-sensitive-data]: this emits only fixed
+        # schema identifiers, booleans, and fixed diagnostics; raw paths,
+        # fingerprints, exception text, schema validator messages, secrets,
+        # customer data, and saved JSON values are intentionally not emitted.
+        print(output_json)
+        return exit_code
+
+    status = "PASS" if output["ok"] else "FAIL"
+    print(f"Reviewer handoff quickstart command validation report: {status}")
+    for error in output["errors"]:
+        print(f"  error [{error['check']}]: {error['message']}")
+    return exit_code
+
+
 def _safe_child_path(base_dir: Path, artifact_name: str) -> tuple[Path, bool]:
     """Resolve a manifest artifact path without exposing raw path diagnostics."""
     try:
@@ -1671,6 +1918,33 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    quickstart_command_report = sub.add_parser(
+        "validate-quickstart-command-report",
+        help=(
+            "Validate a saved reviewer handoff quickstart command validation "
+            "report against the schema"
+        ),
+    )
+    quickstart_command_report.add_argument(
+        "--result",
+        required=True,
+        type=Path,
+        help="Saved reviewer-handoff-quickstart-command-validation.json report",
+    )
+    quickstart_command_report.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable quickstart report validation report",
+    )
+    quickstart_command_report.add_argument(
+        "--output",
+        type=Path,
+        help=(
+            "Write the JSON quickstart report validation report to this "
+            "UTF-8 file. Requires --json and does not suppress stdout JSON."
+        ),
+    )
+
     key_provenance = sub.add_parser(
         "validate-key-provenance",
         help=(
@@ -1839,6 +2113,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         return _run_validate_reviewer_handoff_package(
             args.manifest,
             args.base_dir,
+            json_output=args.json,
+            output_path=args.output,
+        )
+
+    if args.command == "validate-quickstart-command-report":
+        if args.output is not None and not args.json:
+            parser.error("validate-quickstart-command-report --output requires --json")
+            return 2
+        return _run_validate_quickstart_command_report(
+            args.result,
             json_output=args.json,
             output_path=args.output,
         )
