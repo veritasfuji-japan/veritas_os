@@ -68,6 +68,10 @@ REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID = (
     "https://veritas-os.example/schemas/"
     "reviewer_handoff_package_validation_report.schema.json"
 )
+REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID = (
+    "https://veritas-os.example/schemas/"
+    "reviewer_handoff_quickstart_command_validation_report.schema.json"
+)
 VALIDATE_REVIEW_RESULT_VALIDATOR = (
     "veritas-evidence-bundle validate-review-result"
 )
@@ -76,6 +80,9 @@ VALIDATE_REVIEW_RESULT_REPORT_VALIDATOR = (
 )
 VALIDATE_REVIEWER_HANDOFF_PACKAGE_VALIDATOR = (
     "veritas-evidence-bundle validate-reviewer-handoff-package"
+)
+QUICKSTART_COMMAND_VALIDATOR = (
+    "scripts/quality/check_reviewer_handoff_quickstart_command.py"
 )
 
 SAMPLE_SCHEMA_CASES = {
@@ -114,6 +121,11 @@ SAMPLE_SCHEMA_CASES = {
         REPO_ROOT
         / "schemas/reviewer_handoff_package_validation_report.schema.json"
     ),
+    "reviewer-handoff-quickstart-command-validation.json": (
+        REPO_ROOT
+        / "schemas/"
+        "reviewer_handoff_quickstart_command_validation_report.schema.json"
+    ),
     MANIFEST_NAME: MANIFEST_SCHEMA_PATH,
 }
 
@@ -127,6 +139,7 @@ EXPECTED_ARTIFACT_CHAIN = (
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
+    "reviewer-handoff-quickstart-command-validation.json",
 )
 EXPECTED_MANIFEST_ARTIFACTS = (*EXPECTED_ARTIFACT_CHAIN, "README.md")
 EXPECTED_MANIFEST_ENTRIES = {
@@ -167,6 +180,13 @@ EXPECTED_MANIFEST_ENTRIES = {
     "reviewer-handoff-package-validation.json": {
         "role": "reviewer_handoff_package_validation_report",
         "schema_id": REVIEWER_HANDOFF_PACKAGE_VALIDATION_REPORT_SCHEMA_ID,
+    },
+    "reviewer-handoff-quickstart-command-validation.json": {
+        "role": "quickstart_command_validation_report",
+        "schema_id": (
+            REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID
+        ),
+        "validator": QUICKSTART_COMMAND_VALIDATOR,
     },
     "README.md": {"role": "sample_readme", "schema_id": None},
 }
@@ -242,6 +262,13 @@ SAFETY_PATTERNS = {
         re.compile(r"https?://(?!veritas-os\.(?:example|local)\b)[^\s\"')]+"),
         re.compile(r"-----BEGIN PUBLIC KEY-----"),
         re.compile(r"-----BEGIN CERTIFICATE-----"),
+    ),
+    "raw command stream dump": (
+        re.compile(r"(?im)^\s*(?:stdout|stderr)\s*[:=]"),
+        re.compile(r"(?i)raw command (?:stdout|stderr|output)"),
+    ),
+    "raw json value dump": (
+        re.compile(r"(?i)raw json (?:value|payload|dump)"),
     ),
 }
 
@@ -460,7 +487,9 @@ def _collect_manifest_problems() -> list[ValidationProblem]:
         entry = entries_by_name.get(artifact_name)
         artifact_path = SAMPLE_DIR / artifact_name
         if not artifact_path.is_file():
-            problems.append(ValidationProblem(artifact_path, "listed artifact is missing"))
+            problems.append(
+                ValidationProblem(artifact_path, "listed artifact is missing")
+            )
             continue
         if entry is None:
             continue
@@ -473,6 +502,22 @@ def _collect_manifest_problems() -> list[ValidationProblem]:
                 ValidationProblem(
                     MANIFEST_PATH,
                     f"unexpected schema_id for {artifact_name}",
+                )
+            )
+        expected_validator = expected.get("validator")
+        if expected_validator is None:
+            if "validator" in entry:
+                problems.append(
+                    ValidationProblem(
+                        MANIFEST_PATH,
+                        f"unexpected validator for {artifact_name}",
+                    )
+                )
+        elif entry.get("validator") != expected_validator:
+            problems.append(
+                ValidationProblem(
+                    MANIFEST_PATH,
+                    f"unexpected validator for {artifact_name}",
                 )
             )
         if entry.get("sha256") != _sha256(artifact_path):
@@ -561,6 +606,9 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
     package_validation_path = (
         SAMPLE_DIR / "reviewer-handoff-package-validation.json"
     )
+    quickstart_command_validation_path = (
+        SAMPLE_DIR / "reviewer-handoff-quickstart-command-validation.json"
+    )
     readme_path = SAMPLE_DIR / "README.md"
 
     try:
@@ -572,6 +620,9 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
             review_result_report_validation_path
         )
         package_validation_report = _load_json(package_validation_path)
+        quickstart_command_validation_report = _load_json(
+            quickstart_command_validation_path
+        )
         readme_text = readme_path.read_text(encoding="utf-8")
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         return [ValidationProblem(SAMPLE_DIR, f"cannot inspect chain: {exc}")]
@@ -760,6 +811,36 @@ def _collect_chain_reference_problems() -> list[ValidationProblem]:
             ValidationProblem(
                 package_validation_path,
                 "unexpected package validator",
+            )
+        )
+
+    if quickstart_command_validation_report.get("ok") is not True:
+        problems.append(
+            ValidationProblem(
+                quickstart_command_validation_path,
+                "quickstart command validation report must be ok",
+            )
+        )
+
+    if (
+        quickstart_command_validation_report.get("report_schema_id")
+        != REVIEWER_HANDOFF_QUICKSTART_COMMAND_VALIDATION_REPORT_SCHEMA_ID
+    ):
+        problems.append(
+            ValidationProblem(
+                quickstart_command_validation_path,
+                "unexpected quickstart command validation report_schema_id",
+            )
+        )
+
+    if (
+        quickstart_command_validation_report.get("validator")
+        != QUICKSTART_COMMAND_VALIDATOR
+    ):
+        problems.append(
+            ValidationProblem(
+                quickstart_command_validation_path,
+                "unexpected quickstart command validator",
             )
         )
 

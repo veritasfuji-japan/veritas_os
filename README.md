@@ -2169,18 +2169,24 @@ support sample integrity only. The reviewer handoff quickstart command guard
 also supports `--json` and optional `--output reviewer-handoff-quickstart-command-validation.json`
 for a machine-readable report under
 [`schemas/reviewer_handoff_quickstart_command_validation_report.schema.json`](schemas/reviewer_handoff_quickstart_command_validation_report.schema.json).
-That report validates command presence, command executability, and output
-contract status only; it records validation status only and does not create
-trust, replace out-of-band public key trust, prove regulatory certification,
-indicate completed third-party audit approval, or establish cryptographic truth
-by itself.
+The sample package includes checked-in
+`reviewer-handoff-quickstart-command-validation.json` so reviewers can inspect
+the expected machine-readable report shape, and CI validates it with the sample
+manifest. The checked-in quickstart command validation report is a sample
+validation artifact and is not a trust source by itself. It records whether the
+documented quickstart command was present, executable, and produced the expected
+public output contract. It records validation status only, does not create
+trust, does not replace out-of-band public key trust, does not prove regulatory
+certification, is not completed third-party audit approval, and does not
+establish cryptographic truth by itself.
 
 
 The checked-in reviewer handoff sample validation reports are CI-validated and
 also regeneration-checked against current CLI behavior. The regeneration gate
 recreates `reviewer-review-result-validation.json`,
-`reviewer-review-result-report-validation.json`, and
-`reviewer-handoff-package-validation.json` in a temporary directory and compares
+`reviewer-review-result-report-validation.json`,
+`reviewer-handoff-package-validation.json`, and
+`reviewer-handoff-quickstart-command-validation.json` in a temporary directory and compares
 normalized JSON with the repository copies. This reduces drift between CLI
 output and documented samples, but validates sample reproducibility only. It
 does not create trust, replace out-of-band public key trust, prove regulatory

@@ -58,10 +58,17 @@
       "sha256": "c5aa0fc0fee387eb8ad38975f443bd2ec24e4ed0fa18c91645209fa0dc649cb2"
     },
     {
+      "artifact_name": "reviewer-handoff-quickstart-command-validation.json",
+      "role": "quickstart_command_validation_report",
+      "schema_id": "https://veritas-os.example/schemas/reviewer_handoff_quickstart_command_validation_report.schema.json",
+      "sha256": "78ffdc403d4732f923e84934f8b741bf16c81019310af213ce2d3e81f04bd9a1",
+      "validator": "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+    },
+    {
       "artifact_name": "README.md",
       "role": "sample_readme",
       "schema_id": null,
-      "sha256": "1cca3fe0974fe3d48cf9510b2204f7d331eaea912b0ef734a62e3498faa612be"
+      "sha256": "b377cdb50c4b404779dbb3c8f921003f8ffbb4d676d794f040d5921481308f3b"
     }
   ]
 }

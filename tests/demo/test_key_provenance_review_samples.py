@@ -62,6 +62,13 @@ SCHEMA_CASES = [
         "reviewer-handoff-package-validation.json",
         Path("schemas/reviewer_handoff_package_validation_report.schema.json"),
     ),
+    (
+        "reviewer-handoff-quickstart-command-validation.json",
+        Path(
+            "schemas/"
+            "reviewer_handoff_quickstart_command_validation_report.schema.json"
+        ),
+    ),
 ]
 EXPECTED_CHAIN = [
     "verification-result.json",
@@ -73,6 +80,7 @@ EXPECTED_CHAIN = [
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
+    "reviewer-handoff-quickstart-command-validation.json",
 ]
 RAW_PRIVATE_KEY_PATTERNS = [
     "-----BEGIN PRIVATE KEY-----",
@@ -278,10 +286,16 @@ def test_forbidden_raw_sensitive_patterns_are_rejected() -> None:
         "raw private key": "-----BEGIN PRIVATE KEY-----",
         "real secret or credential": "api_key = livevalue12345",
         "absolute local path": "/home/example/secret.txt",
-        "exception traceback or raw exception text": "Traceback (most recent call last)",
+        "exception traceback or raw exception text": (
+            "Traceback (most recent call last)"
+        ),
         "raw schema validator message": "is a required property",
         "obvious production or customer data": "user@example.com",
-        "raw external value outside sample placeholders": "https://unexpected.example.net/value",
+        "raw external value outside sample placeholders": (
+            "https://unexpected.example.net/value"
+        ),
+        "raw command stream dump": "stderr: sensitive output",
+        "raw json value dump": "raw json payload",
     }
 
     for category, text in representative_forbidden_text.items():
@@ -308,3 +322,23 @@ def test_requested_docs_link_key_provenance_review_sample(doc_path: Path) -> Non
     assert "reviewer-review-result-validation.json" in text
     assert "reviewer-review-result-report-validation.json" in text
     assert "reviewer-handoff-package-validation.json" in text
+
+
+@pytest.mark.parametrize(
+    "doc_path",
+    [
+        Path("samples/evidence_bundle/key_provenance_review/README.md"),
+        Path("docs/en/validation/reviewer-handoff-sample-quickstart.md"),
+        Path("docs/en/validation/reviewer-handoff-guide.md"),
+        Path("docs/en/validation/reviewer-key-provenance-walkthrough.md"),
+        Path("README.md"),
+        Path("README_JP.md"),
+    ],
+)
+def test_requested_docs_mention_quickstart_command_report_boundary(
+    doc_path: Path,
+) -> None:
+    text = doc_path.read_text(encoding="utf-8")
+
+    assert "reviewer-handoff-quickstart-command-validation.json" in text
+    assert "trust source" in text or "trust を" in text

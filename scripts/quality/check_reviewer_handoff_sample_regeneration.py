@@ -33,11 +33,15 @@ REVIEW_RESULT_REPORT_VALIDATION_REPORT = (
     "reviewer-review-result-report-validation.json"
 )
 HANDOFF_PACKAGE_VALIDATION_REPORT = "reviewer-handoff-package-validation.json"
+QUICKSTART_COMMAND_VALIDATION_REPORT = (
+    "reviewer-handoff-quickstart-command-validation.json"
+)
 
 REGENERATED_REPORTS = (
     REVIEW_RESULT_VALIDATION_REPORT,
     REVIEW_RESULT_REPORT_VALIDATION_REPORT,
     HANDOFF_PACKAGE_VALIDATION_REPORT,
+    QUICKSTART_COMMAND_VALIDATION_REPORT,
 )
 
 
@@ -64,16 +68,11 @@ def _canonical_json(path: Path) -> str | None:
     )
 
 
-def _cli_command(args: list[str]) -> list[str]:
-    """Return the module-based CLI invocation used by CI and local checks."""
-    return [sys.executable, "-m", "veritas_os.cli.evidence_bundle", *args]
-
-
-def _run_cli(args: list[str]) -> int | None:
-    """Run the evidence-bundle CLI while suppressing raw command output."""
+def _run_command(command: list[str]) -> int | None:
+    """Run a regeneration command while suppressing raw command output."""
     try:
         completed = subprocess.run(
-            _cli_command(args),
+            command,
             cwd=REPO_ROOT,
             check=False,
             capture_output=True,
@@ -84,49 +83,76 @@ def _run_cli(args: list[str]) -> int | None:
     return completed.returncode
 
 
+def _cli_command(args: list[str]) -> list[str]:
+    """Return the module-based CLI invocation used by CI and local checks."""
+    return [sys.executable, "-m", "veritas_os.cli.evidence_bundle", *args]
+
+
+def _script_command(script: str, args: list[str]) -> list[str]:
+    """Return a repository script invocation used by regeneration checks."""
+    return [sys.executable, script, *args]
+
+
 def _regenerate_reports(sample_dir: Path, temp_dir: Path) -> list[RegenerationProblem]:
     """Regenerate reviewer handoff reports into ``temp_dir`` using CLI behavior."""
     commands = (
         (
             REVIEW_RESULT_VALIDATION_REPORT,
-            [
-                "validate-review-result",
-                "--result",
-                str(sample_dir / REVIEW_RESULT_INPUT),
-                "--json",
-                "--output",
-                str(temp_dir / REVIEW_RESULT_VALIDATION_REPORT),
-            ],
+            _cli_command(
+                [
+                    "validate-review-result",
+                    "--result",
+                    str(sample_dir / REVIEW_RESULT_INPUT),
+                    "--json",
+                    "--output",
+                    str(temp_dir / REVIEW_RESULT_VALIDATION_REPORT),
+                ]
+            ),
         ),
         (
             REVIEW_RESULT_REPORT_VALIDATION_REPORT,
-            [
-                "validate-review-result-report",
-                "--result",
-                str(temp_dir / REVIEW_RESULT_VALIDATION_REPORT),
-                "--json",
-                "--output",
-                str(temp_dir / REVIEW_RESULT_REPORT_VALIDATION_REPORT),
-            ],
+            _cli_command(
+                [
+                    "validate-review-result-report",
+                    "--result",
+                    str(temp_dir / REVIEW_RESULT_VALIDATION_REPORT),
+                    "--json",
+                    "--output",
+                    str(temp_dir / REVIEW_RESULT_REPORT_VALIDATION_REPORT),
+                ]
+            ),
         ),
         (
             HANDOFF_PACKAGE_VALIDATION_REPORT,
-            [
-                "validate-reviewer-handoff-package",
-                "--manifest",
-                str(sample_dir / MANIFEST_INPUT),
-                "--base-dir",
-                str(sample_dir),
-                "--json",
-                "--output",
-                str(temp_dir / HANDOFF_PACKAGE_VALIDATION_REPORT),
-            ],
+            _cli_command(
+                [
+                    "validate-reviewer-handoff-package",
+                    "--manifest",
+                    str(sample_dir / MANIFEST_INPUT),
+                    "--base-dir",
+                    str(sample_dir),
+                    "--json",
+                    "--output",
+                    str(temp_dir / HANDOFF_PACKAGE_VALIDATION_REPORT),
+                ]
+            ),
+        ),
+        (
+            QUICKSTART_COMMAND_VALIDATION_REPORT,
+            _script_command(
+                "scripts/quality/check_reviewer_handoff_quickstart_command.py",
+                [
+                    "--json",
+                    "--output",
+                    str(temp_dir / QUICKSTART_COMMAND_VALIDATION_REPORT),
+                ],
+            ),
         ),
     )
 
     problems: list[RegenerationProblem] = []
     for artifact_name, args in commands:
-        exit_code = _run_cli(args)
+        exit_code = _run_command(args)
         generated_path = temp_dir / artifact_name
         if exit_code not in (0, 1) or not generated_path.is_file():
             problems.append(
@@ -174,7 +200,9 @@ def _compare_reports(sample_dir: Path, temp_dir: Path) -> list[RegenerationProbl
     return problems
 
 
-def collect_regeneration_problems(sample_dir: Path = SAMPLE_DIR) -> list[RegenerationProblem]:
+def collect_regeneration_problems(
+    sample_dir: Path = SAMPLE_DIR,
+) -> list[RegenerationProblem]:
     """Return deterministic sample regeneration problems for ``sample_dir``."""
     if not sample_dir.is_dir():
         return [

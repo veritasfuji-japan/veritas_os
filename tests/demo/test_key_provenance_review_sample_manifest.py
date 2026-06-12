@@ -30,6 +30,7 @@ EXPECTED_ARTIFACTS = (
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
+    "reviewer-handoff-quickstart-command-validation.json",
     "README.md",
 )
 EXPECTED_ROLES = {
@@ -49,6 +50,9 @@ EXPECTED_ROLES = {
     ),
     "reviewer-handoff-package-validation.json": (
         "reviewer_handoff_package_validation_report"
+    ),
+    "reviewer-handoff-quickstart-command-validation.json": (
+        "quickstart_command_validation_report"
     ),
     "README.md": "sample_readme",
 }
@@ -87,6 +91,10 @@ EXPECTED_SCHEMA_IDS = {
     "reviewer-handoff-package-validation.json": (
         "https://veritas-os.example/schemas/"
         "reviewer_handoff_package_validation_report.schema.json"
+    ),
+    "reviewer-handoff-quickstart-command-validation.json": (
+        "https://veritas-os.example/schemas/"
+        "reviewer_handoff_quickstart_command_validation_report.schema.json"
     ),
     "README.md": None,
 }
@@ -180,6 +188,37 @@ def test_manifest_sha256_digests_match_actual_files() -> None:
         digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
 
         assert entry["sha256"] == digest
+
+
+def test_manifest_records_quickstart_command_validator() -> None:
+    entry = _artifact_entries()["reviewer-handoff-quickstart-command-validation.json"]
+
+    assert entry["validator"] == (
+        "scripts/quality/check_reviewer_handoff_quickstart_command.py"
+    )
+
+
+def test_quickstart_command_report_is_checked_in_and_ok() -> None:
+    report = _load_json(
+        SAMPLE_DIR / "reviewer-handoff-quickstart-command-validation.json"
+    )
+
+    assert report["ok"] is True
+    assert report["errors"] == []
+    assert all(
+        isinstance(value, bool)
+        for key, value in report.items()
+        if key.endswith("_valid") or key in {
+            "ok",
+            "quickstart_exists",
+            "command_present",
+            "command_executable",
+            "output_json_valid",
+            "output_schema_valid",
+            "no_unknown_public_fields",
+            "forbidden_patterns_absent",
+        }
+    )
 
 
 def test_manifest_rejects_unknown_artifact_names(tmp_path: Path) -> None:

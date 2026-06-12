@@ -92,6 +92,7 @@ HANDOFF_REQUIRED_ARTIFACTS = (
     "reviewer-evidence-packet.json",
     "sample-artifact-manifest.json",
     "reviewer-handoff-package-validation.json",
+    "reviewer-handoff-quickstart-command-validation.json",
 )
 
 QUICKSTART_REQUIRED_ARTIFACTS = (
@@ -104,6 +105,7 @@ QUICKSTART_REQUIRED_ARTIFACTS = (
     "reviewer-review-result-validation.json",
     "reviewer-review-result-report-validation.json",
     "reviewer-handoff-package-validation.json",
+    "reviewer-handoff-quickstart-command-validation.json",
     "sample-artifact-manifest.json",
     "README.md",
 )
