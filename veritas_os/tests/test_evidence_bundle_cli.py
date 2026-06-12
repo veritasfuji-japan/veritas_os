@@ -1667,6 +1667,16 @@ def test_validate_review_result_invalid_cases_fail_safely(
 
     assert output["ok"] is False
     assert output[failed_check] is False
+    if failed_check in {
+        "boolean_fields_valid",
+        "errors_array_valid",
+        "no_unknown_public_fields",
+        "report_schema_id_valid",
+        "validated_document_valid",
+        "validated_command_valid",
+        "validator_valid",
+    }:
+        assert output["input_schema_valid"] is False
     assert any(error["check"] == failed_check for error in output["errors"])
 
 
@@ -2339,6 +2349,16 @@ def test_validate_reviewer_handoff_package_invalid_cases_fail_safely(
     assert stderr == ""
     assert output["ok"] is False
     assert output[failed_check] is False
+    if failed_check in {
+        "boolean_fields_valid",
+        "errors_array_valid",
+        "no_unknown_public_fields",
+        "report_schema_id_valid",
+        "validated_document_valid",
+        "validated_command_valid",
+        "validator_valid",
+    }:
+        assert output["input_schema_valid"] is False
     assert any(error["check"] == failed_check for error in output["errors"])
     _assert_reviewer_package_report_schema(output)
     _assert_reviewer_package_output_is_safe(stdout, manifest_path, package_dir)
@@ -2600,9 +2620,12 @@ def test_validate_quickstart_command_report_output_file_matches_stdout(
             "raw-validator",
         ),
         (
-            lambda report: (report.__setitem__("ok", "true"), None)[1],
+            lambda report: (
+                report.__setitem__("ok", "RAW_BOOLEAN_STATUS_SENTINEL"),
+                None,
+            )[1],
             "boolean_fields_valid",
-            "true",
+            "RAW_BOOLEAN_STATUS_SENTINEL",
         ),
         (
             lambda report: (
@@ -2643,6 +2666,16 @@ def test_validate_quickstart_command_report_invalid_cases_fail_safely(
     assert stderr == ""
     assert output["ok"] is False
     assert output[failed_check] is False
+    if failed_check in {
+        "boolean_fields_valid",
+        "errors_array_valid",
+        "no_unknown_public_fields",
+        "report_schema_id_valid",
+        "validated_document_valid",
+        "validated_command_valid",
+        "validator_valid",
+    }:
+        assert output["input_schema_valid"] is False
     assert any(error["check"] == failed_check for error in output["errors"])
     _assert_quickstart_command_report_output_is_safe(stdout, result_path)
     if raw_value is not None:
