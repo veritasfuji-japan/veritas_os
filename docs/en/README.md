@@ -61,6 +61,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Regulated Action Governance Kernel](architecture/regulated-action-governance-kernel.md)
 - [Authority Evidence vs Audit Log](architecture/authority-evidence-vs-audit-log.md)
 - [Governance Drift Design Note](architecture/governance-drift.md)
+- [Runtime Revalidation Trigger Model](architecture/runtime-revalidation-trigger-model.md)
 - [Observable Digest Ref Contract Addendum](architecture/observable-digest-ref-contract-addendum.md)
 - [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
 - [Governance Artifact Lifecycle](governance/governance-artifact-lifecycle.md)
