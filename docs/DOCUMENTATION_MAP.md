@@ -23,6 +23,7 @@
 | Architecture: Governance drift design note | `docs/en/architecture/governance-drift.md` | — | EN canonical only | 将来の admissibility continuity 概念（runtime revalidation は未実装） |
 | Architecture: Runtime revalidation trigger model | `docs/en/architecture/runtime-revalidation-trigger-model.md` | — | EN canonical only | Governance drift の将来 trigger / outcome 分類モデル（未実装） |
 | Use case: AML/KYC regulated action path | `docs/en/use-cases/aml-kyc-regulated-action-path.md` | — | EN canonical only | 決定論fixture実行手順 |
+| Use case: AML/KYC runtime revalidation scenarios | `docs/en/use-cases/aml-kyc-runtime-revalidation-scenarios.md` | — | EN canonical only | Governance Drift / runtime revalidation conceptsのAML/KYCシナリオ例（未実装） |
 | Validation: Regulated action governance proof pack | `docs/en/validation/regulated-action-governance-proof-pack.md` | `docs/ja/validation/regulated-action-governance-proof-pack-summary.md` | JA summary / EN canonical | レビュー証跡パック（日本語要約あり） |
 | Validation: Regulated action governance quality gate | `docs/en/validation/regulated-action-governance-quality-gate.md` | `docs/ja/validation/regulated-action-governance-quality-gate-summary.md` | JA summary / EN canonical | 品質ゲートと実行証跡（日本語要約あり） |
 | Validation: External review handoff (regulated action governance) | `docs/en/validation/external-review-handoff-regulated-action-governance.md` | `docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md` | JA summary / EN canonical | 外部レビューハンドオフ導線（日本語要約あり） |
