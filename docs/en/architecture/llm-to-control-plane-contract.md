@@ -66,6 +66,8 @@ A conceptual `DecisionCandidate` should include fields such as:
 
 The rationale may be useful for reviewer context, but it is not a substitute for structured fields. A candidate that only contains natural-language reasoning is not sufficient for non-LLM governance evaluation.
 
+DecisionCandidate v1 also includes normalization helpers and a canonical non-throwing promotion/refusal result. Normalization may trim strings, canonicalize list fields, and convert unclear raw approval values into review-oriented structured values, but normalization does not mean execution is allowed. Promotion to `ExecutionIntent` still requires validation, and refused candidates may be represented as structured promotion results for review without being promoted. These helpers remain additive: they are not wired into `/v1/decide`, do not change the public API response shape, do not perform live LLM extraction, and do not validate authority against live IAM, IdP, SaaS, bank, sanctions, or customer systems.
+
 ## 5. Promotion rule
 
 A `DecisionCandidate` may become an `ExecutionIntent` only when all of the following are true:
