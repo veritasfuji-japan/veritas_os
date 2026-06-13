@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import pytest
 
+from veritas_os.audit.evidence_bundle import (
+    build_decision_candidate_refusal_evidence_entry,
+)
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.policy.decision_candidate import (
     DecisionCandidate,
@@ -440,3 +443,24 @@ def test_refusal_artifact_hashing_is_deterministic_with_fixed_id() -> None:
     assert hash_decision_candidate_refusal_artifact(first) == (
         hash_decision_candidate_refusal_artifact(second)
     )
+
+
+def test_refusal_artifact_evidence_entry_preserves_pre_execution_boundary() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(target_resource=""),
+        created_at="2026-06-13T00:00:00Z",
+    )
+
+    assert artifact is not None
+    entry = build_decision_candidate_refusal_evidence_entry(artifact)
+
+    assert entry["artifact_type"] == "decision_candidate_refusal_artifact"
+    assert entry["candidate_hash"] == artifact.candidate_hash
+    assert entry["artifact_hash"] == hash_decision_candidate_refusal_artifact(
+        artifact
+    )
+    assert "bind_receipt_id" not in entry
+    assert entry["metadata"]["pre_execution_intent_evidence"] is True
+    assert entry["metadata"]["execution_intent_created"] is False
+    assert entry["metadata"]["bind_receipt_created"] is False
+    assert entry["metadata"]["execution_attempted"] is False

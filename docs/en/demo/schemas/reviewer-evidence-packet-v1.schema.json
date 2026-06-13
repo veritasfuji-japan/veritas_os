@@ -20,7 +20,10 @@
   ],
   "properties": {
     "packet_id": {
-      "const": "reviewer-evidence-packet-saas-permission-change-v1"
+      "enum": [
+        "reviewer-evidence-packet-saas-permission-change-v1",
+        "reviewer-evidence-packet-decision-candidate-refusal-v1"
+      ]
     },
     "packet_version": {
       "const": "v1"
@@ -73,6 +76,12 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/evaluation_governance_artifact"
+      }
+    },
+    "decision_candidate_refusal_artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision_candidate_refusal_artifact"
       }
     },
     "key_provenance": {
@@ -659,6 +668,102 @@
         },
         "required_for_review": {
           "type": "boolean"
+        }
+      }
+    },
+    "decision_candidate_refusal_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_type",
+        "artifact_id",
+        "refusal_id",
+        "candidate_id",
+        "candidate_hash",
+        "refusal_type",
+        "promotion_status",
+        "refusal_reason_codes",
+        "missing_required_fields",
+        "ambiguity_flags",
+        "requires_human_review",
+        "fail_closed",
+        "artifact_hash",
+        "created_at",
+        "metadata"
+      ],
+      "properties": {
+        "artifact_type": {
+          "const": "decision_candidate_refusal_artifact"
+        },
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refusal_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "refusal_type": {
+          "enum": [
+            "FAIL_CLOSED",
+            "HUMAN_REVIEW_REQUIRED",
+            "REFUSED"
+          ]
+        },
+        "promotion_status": {
+          "enum": [
+            "REFUSED",
+            "HUMAN_REVIEW_REQUIRED"
+          ]
+        },
+        "refusal_reason_codes": {
+          "$ref": "#/$defs/string_array"
+        },
+        "missing_required_fields": {
+          "$ref": "#/$defs/string_array"
+        },
+        "ambiguity_flags": {
+          "$ref": "#/$defs/string_array"
+        },
+        "requires_human_review": {
+          "type": "boolean"
+        },
+        "fail_closed": {
+          "type": "boolean"
+        },
+        "artifact_hash": {
+          "$ref": "#/$defs/sha256_hex"
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "pre_execution_intent_evidence": {
+              "const": true
+            },
+            "execution_intent_created": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "execution_attempted": {
+              "const": false
+            }
+          }
         }
       }
     },

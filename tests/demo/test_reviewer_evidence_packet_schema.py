@@ -16,6 +16,10 @@ SCHEMA_PATH = Path("docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
 FIXTURE_PATH = Path(
     "docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json"
 )
+DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH = Path(
+    "docs/en/demo/fixtures/"
+    "reviewer-evidence-packet-decision-candidate-refusal-v1.json"
+)
 EVALUATION_GOVERNANCE_EXAMPLE_PATH = Path(
     "docs/en/demo/examples/"
     "reviewer-evidence-packet-with-evaluation-governance-v1.json"
@@ -343,6 +347,27 @@ def test_schema_declares_core_packet_properties() -> None:
 
 def test_golden_fixture_validates_against_schema_or_fallback() -> None:
     _validate_or_fallback(_load_json(FIXTURE_PATH), _load_json(SCHEMA_PATH))
+
+
+def test_decision_candidate_refusal_fixture_validates_against_schema() -> None:
+    packet = _load_json(DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH)
+    _validate_or_fallback(packet, _load_json(SCHEMA_PATH))
+
+
+def test_decision_candidate_refusal_fixture_preserves_runtime_boundary() -> None:
+    packet = _load_json(DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH)
+    artifacts = packet["decision_candidate_refusal_artifacts"]
+
+    assert len(artifacts) == 1
+    artifact = artifacts[0]
+    assert artifact["artifact_type"] == "decision_candidate_refusal_artifact"
+    assert SHA256_HEX_PATTERN.fullmatch(artifact["candidate_hash"])
+    assert SHA256_HEX_PATTERN.fullmatch(artifact["artifact_hash"])
+    assert "bind_receipt_id" not in artifact
+    assert artifact["metadata"]["pre_execution_intent_evidence"] is True
+    assert artifact["metadata"]["execution_intent_created"] is False
+    assert artifact["metadata"]["bind_receipt_created"] is False
+    assert artifact["metadata"]["execution_attempted"] is False
 
 
 def test_generated_packet_validates_against_schema_or_fallback() -> None:
