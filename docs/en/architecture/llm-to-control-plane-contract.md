@@ -74,6 +74,8 @@ did not become an `ExecutionIntent`; it is pre-`ExecutionIntent` evidence for
 reviewer inspection of fail-closed or human-review-required outcomes. It is not
 a `BindReceipt`, does not mean execution was attempted, and does not perform
 live LLM extraction, live authority-source validation, or bind adjudication.
+Reviewer-facing packet examples for this artifact remain local/offline
+fixture-backed evidence unless a later PR explicitly integrates them.
 
 ## 5. Promotion rule
 

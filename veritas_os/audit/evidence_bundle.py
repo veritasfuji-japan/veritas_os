@@ -32,6 +32,10 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from veritas_os.audit.evidence_bundle_schema import BUNDLE_SCHEMA_VERSION, BUNDLE_TYPES
 from veritas_os.core.decision_semantics import canonicalize_public_gate_decision
+from veritas_os.policy.decision_candidate import (
+    DecisionCandidateRefusalArtifact,
+    hash_decision_candidate_refusal_artifact,
+)
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 _logger = logging.getLogger(__name__)
@@ -72,6 +76,42 @@ _VERIFICATION_SCOPE = [
     "file_hash_integrity",
     "manifest_signature_authenticity",
 ]
+
+
+def build_decision_candidate_refusal_evidence_entry(
+    artifact: DecisionCandidateRefusalArtifact,
+) -> Dict[str, Any]:
+    """Build reviewer evidence for a pre-``ExecutionIntent`` refusal artifact.
+
+    The returned descriptor is intentionally side-effect free. It records why a
+    ``DecisionCandidate`` was not promoted and does not perform bind
+    adjudication, create a ``BindReceipt``, append TrustLog entries, call
+    adapters, write files, or imply that execution was attempted.
+    """
+    artifact_hash = hash_decision_candidate_refusal_artifact(artifact)
+    return {
+        "artifact_type": "decision_candidate_refusal_artifact",
+        "artifact_id": artifact.refusal_id,
+        "refusal_id": artifact.refusal_id,
+        "candidate_id": artifact.candidate_id,
+        "candidate_hash": artifact.candidate_hash,
+        "refusal_type": artifact.refusal_type,
+        "promotion_status": artifact.promotion_status,
+        "refusal_reason_codes": list(artifact.refusal_reason_codes),
+        "missing_required_fields": list(artifact.missing_required_fields),
+        "ambiguity_flags": list(artifact.ambiguity_flags),
+        "requires_human_review": artifact.requires_human_review,
+        "fail_closed": artifact.fail_closed,
+        "artifact_hash": artifact_hash,
+        "created_at": artifact.created_at,
+        "metadata": {
+            **dict(artifact.metadata),
+            "pre_execution_intent_evidence": True,
+            "execution_intent_created": False,
+            "bind_receipt_created": False,
+            "execution_attempted": False,
+        },
+    }
 
 
 def _uuid7() -> str:

@@ -74,7 +74,8 @@ flowchart TD
 または人間レビュー必須の結果をレビュアーが検査するための
 pre-`ExecutionIntent` evidence です。これは `BindReceipt` ではなく、実行が試行された
 ことを意味せず、live LLM extraction、live authority-source validation、bind
-adjudication も行いません。
+adjudication も行いません。この artifact の reviewer-facing packet の例は、後続 PR
+で明示的に統合されるまでは local/offline fixture-backed evidence のままです。
 
 ## 5. 昇格ルール
 

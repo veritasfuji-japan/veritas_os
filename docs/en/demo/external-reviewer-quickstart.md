@@ -24,6 +24,8 @@ The current review path demonstrates:
 - EvidenceChainManifest linking artifacts
 - EvidenceChainVerifier checking manifest/artifact consistency
 - Reviewer Evidence Packet packaging the result
+- optional `DecisionCandidateRefusalArtifact` reviewer evidence for local/offline
+  pre-`ExecutionIntent` candidates that fail closed or require human review
 - golden fixture, schema, and validation report checks
 
 ## Fast path
@@ -51,6 +53,13 @@ Use this 10–15 minute path for a reviewer-facing inspection:
    `scripts/demo/saas_permission_change_governed_demo.py`
 7. Optionally review Evaluation Governance artifacts, if present. These attachments are optional in v1, non-enforcing, and useful for architecture-hardening review without changing runtime admissibility.
    A synthetic example packet is available at `docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json`; schema validation does not require the referenced artifact files to exist.
+8. Optionally review the local/offline DecisionCandidate refusal fixture:
+   `docs/en/demo/fixtures/reviewer-evidence-packet-decision-candidate-refusal-v1.json`.
+   The refusal artifact records why a candidate did not become an
+   `ExecutionIntent`; it is not a `BindReceipt`, does not imply execution was
+   attempted, and does not perform `/v1/decide` wiring, TrustLog writes, bind
+   adjudication, adapter calls, live LLM extraction, live authority-source
+   validation, or live IAM/IdP/SaaS/bank/sanctions/customer-system integration.
 
 ## Evaluation Governance offline reviewer demo
 
