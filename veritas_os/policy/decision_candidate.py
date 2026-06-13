@@ -25,6 +25,14 @@ class DecisionCandidatePromotionStatus(str, Enum):
     HUMAN_REVIEW_REQUIRED = "HUMAN_REVIEW_REQUIRED"
 
 
+class DecisionCandidateRefusalType(str, Enum):
+    """Canonical refusal artifact type for non-promoted candidates."""
+
+    FAIL_CLOSED = "FAIL_CLOSED"
+    HUMAN_REVIEW_REQUIRED = "HUMAN_REVIEW_REQUIRED"
+    REFUSED = "REFUSED"
+
+
 class DecisionCandidateRefusalReason(str, Enum):
     """Reason codes emitted by ``DecisionCandidate`` validation."""
 
@@ -182,6 +190,64 @@ class DecisionCandidatePromotionResult:
             "refusal_reason_codes": list(self.refusal_reason_codes),
             "requires_human_review": self.requires_human_review,
             "fail_closed": self.fail_closed,
+        }
+
+
+@dataclass(frozen=True)
+class DecisionCandidateRefusalArtifact:
+    """Canonical pre-``ExecutionIntent`` evidence for refused candidates.
+
+    The artifact records why a normalized ``DecisionCandidate`` did not become
+    an ``ExecutionIntent``. It is review evidence only: constructing it does
+    not perform bind adjudication, append TrustLog entries, call adapters, or
+    imply that any execution attempt occurred.
+    """
+
+    candidate_id: str
+    candidate_hash: str
+    source_model: str
+    source_trace_ref: str | None
+    promotion_status: str
+    refusal_reason_codes: list[str]
+    missing_required_fields: list[str]
+    ambiguity_flags: list[str]
+    requires_human_review: bool
+    fail_closed: bool
+    normalized_candidate_snapshot: dict[str, Any]
+    validation_result_snapshot: dict[str, Any]
+    refusal_id: str = field(default_factory=lambda: uuid4().hex)
+    refusal_type: str = DecisionCandidateRefusalType.REFUSED.value
+    created_at: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Canonicalize refusal type from fail-closed and review state."""
+        refusal_type = self.refusal_type
+        if self.fail_closed:
+            refusal_type = DecisionCandidateRefusalType.FAIL_CLOSED.value
+        elif self.requires_human_review:
+            refusal_type = DecisionCandidateRefusalType.HUMAN_REVIEW_REQUIRED.value
+        object.__setattr__(self, "refusal_type", refusal_type)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable representation."""
+        return {
+            "refusal_id": self.refusal_id,
+            "candidate_id": self.candidate_id,
+            "candidate_hash": self.candidate_hash,
+            "source_model": self.source_model,
+            "source_trace_ref": self.source_trace_ref,
+            "promotion_status": self.promotion_status,
+            "refusal_reason_codes": list(self.refusal_reason_codes),
+            "missing_required_fields": list(self.missing_required_fields),
+            "ambiguity_flags": list(self.ambiguity_flags),
+            "requires_human_review": self.requires_human_review,
+            "fail_closed": self.fail_closed,
+            "normalized_candidate_snapshot": dict(self.normalized_candidate_snapshot),
+            "validation_result_snapshot": dict(self.validation_result_snapshot),
+            "refusal_type": self.refusal_type,
+            "created_at": self.created_at,
+            "metadata": dict(self.metadata),
         }
 
 
@@ -478,6 +544,57 @@ def promote_decision_candidate_to_execution_intent(
     return result.execution_intent
 
 
+def build_decision_candidate_refusal_artifact(
+    result: DecisionCandidatePromotionResult,
+    *,
+    created_at: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> DecisionCandidateRefusalArtifact:
+    """Build a canonical refusal artifact from a non-promoted result.
+
+    Raises:
+        ValueError: If ``result`` represents a promoted candidate.
+    """
+    if result.promoted:
+        raise ValueError("Promoted candidates cannot produce refusal artifacts")
+
+    normalized_candidate = result.normalized_candidate
+    validation_result = result.validation_result
+    return DecisionCandidateRefusalArtifact(
+        candidate_id=normalized_candidate.candidate_id,
+        candidate_hash=hash_decision_candidate(normalized_candidate),
+        source_model=normalized_candidate.source_model,
+        source_trace_ref=normalized_candidate.source_trace_ref,
+        promotion_status=validation_result.promotion_status.value,
+        refusal_reason_codes=list(result.refusal_reason_codes),
+        missing_required_fields=list(validation_result.missing_required_fields),
+        ambiguity_flags=list(validation_result.ambiguity_flags),
+        requires_human_review=result.requires_human_review,
+        fail_closed=result.fail_closed,
+        normalized_candidate_snapshot=normalized_candidate.to_dict(),
+        validation_result_snapshot=validation_result.to_dict(),
+        created_at=created_at,
+        metadata=dict(metadata or {}),
+    )
+
+
+def try_build_decision_candidate_refusal_artifact(
+    candidate: DecisionCandidate | dict[str, Any],
+    *,
+    created_at: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> DecisionCandidateRefusalArtifact | None:
+    """Return a refusal artifact for invalid candidates, or ``None`` if promotable."""
+    result = try_promote_decision_candidate_to_execution_intent(candidate)
+    if result.promoted:
+        return None
+    return build_decision_candidate_refusal_artifact(
+        result,
+        created_at=created_at,
+        metadata=metadata,
+    )
+
+
 def canonical_decision_candidate_json(
     candidate: DecisionCandidate | dict[str, Any],
 ) -> str:
@@ -488,3 +605,17 @@ def canonical_decision_candidate_json(
 def hash_decision_candidate(candidate: DecisionCandidate | dict[str, Any]) -> str:
     """Compute SHA-256 over canonical ``DecisionCandidate`` payload."""
     return sha256_of_canonical_json(normalize_decision_candidate(candidate).to_dict())
+
+
+def canonical_decision_candidate_refusal_artifact_json(
+    artifact: DecisionCandidateRefusalArtifact,
+) -> str:
+    """Serialize refusal artifact with canonical deterministic JSON ordering."""
+    return canonical_json_dumps(artifact.to_dict())
+
+
+def hash_decision_candidate_refusal_artifact(
+    artifact: DecisionCandidateRefusalArtifact,
+) -> str:
+    """Compute SHA-256 over a canonical refusal artifact payload."""
+    return sha256_of_canonical_json(artifact.to_dict())

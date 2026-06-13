@@ -6,10 +6,15 @@ from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.policy.decision_candidate import (
     DecisionCandidate,
     DecisionCandidatePromotionStatus,
+    DecisionCandidateRefusalArtifact,
     DecisionCandidateRefusalReason,
+    DecisionCandidateRefusalType,
+    build_decision_candidate_refusal_artifact,
     hash_decision_candidate,
+    hash_decision_candidate_refusal_artifact,
     normalize_decision_candidate,
     promote_decision_candidate_to_execution_intent,
+    try_build_decision_candidate_refusal_artifact,
     try_promote_decision_candidate_to_execution_intent,
     validate_decision_candidate,
 )
@@ -319,3 +324,119 @@ def test_promotable_dict_payload_can_produce_execution_intent() -> None:
     assert isinstance(result.execution_intent, ExecutionIntent)
     assert result.execution_intent.actor_identity == "user:alice"
     assert result.execution_intent.decision_id == "decision-1"
+
+
+def test_missing_required_field_candidate_produces_refusal_artifact() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(target_resource="")
+    )
+
+    assert artifact is not None
+    assert artifact.refusal_type == DecisionCandidateRefusalType.FAIL_CLOSED.value
+    assert artifact.fail_closed is True
+    assert "target_resource" in artifact.missing_required_fields
+    assert (
+        DecisionCandidateRefusalReason.MISSING_REQUIRED_FIELD.value
+        in artifact.refusal_reason_codes
+    )
+
+
+def test_ambiguity_flags_produce_human_review_refusal_artifact() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(ambiguity_flags=["multiple_targets"])
+    )
+
+    assert artifact is not None
+    assert (
+        artifact.refusal_type
+        == DecisionCandidateRefusalType.HUMAN_REVIEW_REQUIRED.value
+    )
+    assert artifact.requires_human_review is True
+    assert artifact.ambiguity_flags == ["multiple_targets"]
+
+
+def test_fail_closed_candidate_produces_fail_closed_refusal_type() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(required_authority=[])
+    )
+
+    assert artifact is not None
+    assert artifact.refusal_type == DecisionCandidateRefusalType.FAIL_CLOSED.value
+    assert artifact.fail_closed is True
+
+
+def test_promoted_candidate_cannot_build_refusal_artifact() -> None:
+    result = try_promote_decision_candidate_to_execution_intent(_complete_candidate())
+
+    assert result.promoted is True
+    with pytest.raises(ValueError, match="Promoted candidates"):
+        build_decision_candidate_refusal_artifact(result)
+
+
+def test_try_build_refusal_artifact_returns_artifact_for_invalid_candidate() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(actor_identity="").to_dict()
+    )
+
+    assert isinstance(artifact, DecisionCandidateRefusalArtifact)
+    assert artifact.candidate_id == "candidate-1"
+
+
+def test_try_build_refusal_artifact_returns_none_for_promotable_candidate() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(_complete_candidate())
+
+    assert artifact is None
+
+
+def test_refusal_artifact_includes_candidate_hash() -> None:
+    candidate = _complete_candidate(target_resource="")
+    artifact = try_build_decision_candidate_refusal_artifact(candidate)
+
+    assert artifact is not None
+    assert artifact.candidate_hash == hash_decision_candidate(candidate)
+
+
+def test_refusal_artifact_includes_normalized_candidate_snapshot() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(actor_identity=" user:alice ", target_resource="")
+    )
+
+    assert artifact is not None
+    assert artifact.normalized_candidate_snapshot["actor_identity"] == "user:alice"
+    assert artifact.normalized_candidate_snapshot["target_resource"] == ""
+
+
+def test_refusal_artifact_includes_validation_result_snapshot() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(target_resource="")
+    )
+
+    assert artifact is not None
+    snapshot = artifact.validation_result_snapshot
+    assert snapshot["promotable"] is False
+    assert snapshot["fail_closed"] is True
+    assert "target_resource" in snapshot["missing_required_fields"]
+
+
+def test_refusal_artifact_hashing_is_deterministic_with_fixed_id() -> None:
+    candidate = _complete_candidate(target_resource="")
+    result = try_promote_decision_candidate_to_execution_intent(candidate)
+    artifact = build_decision_candidate_refusal_artifact(result)
+    first = DecisionCandidateRefusalArtifact(
+        **{
+            **artifact.to_dict(),
+            "refusal_id": "refusal-fixed",
+            "created_at": None,
+        }
+    )
+    second = DecisionCandidateRefusalArtifact(
+        **{
+            **artifact.to_dict(),
+            "refusal_id": "refusal-fixed",
+            "created_at": None,
+        }
+    )
+
+    assert hash_decision_candidate_refusal_artifact(first) == (
+        hash_decision_candidate_refusal_artifact(second)
+    )

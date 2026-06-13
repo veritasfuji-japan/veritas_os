@@ -68,6 +68,13 @@ The rationale may be useful for reviewer context, but it is not a substitute for
 
 DecisionCandidate v1 also includes normalization helpers and a canonical non-throwing promotion/refusal result. Normalization may trim strings, canonicalize list fields, and convert unclear raw approval values into review-oriented structured values, but normalization does not mean execution is allowed. Promotion to `ExecutionIntent` still requires validation, and refused candidates may be represented as structured promotion results for review without being promoted. These helpers remain additive: they are not wired into `/v1/decide`, do not change the public API response shape, do not perform live LLM extraction, and do not validate authority against live IAM, IdP, SaaS, bank, sanctions, or customer systems.
 
+Non-promoted `DecisionCandidate` results may also be represented as a
+`DecisionCandidateRefusalArtifact`. A refusal artifact records why a candidate
+did not become an `ExecutionIntent`; it is pre-`ExecutionIntent` evidence for
+reviewer inspection of fail-closed or human-review-required outcomes. It is not
+a `BindReceipt`, does not mean execution was attempted, and does not perform
+live LLM extraction, live authority-source validation, or bind adjudication.
+
 ## 5. Promotion rule
 
 A `DecisionCandidate` may become an `ExecutionIntent` only when all of the following are true:

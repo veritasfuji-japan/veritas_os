@@ -68,6 +68,14 @@ flowchart TD
 
 `DecisionCandidate` v1 には、正規化ヘルパーと、例外を投げずに昇格または拒否を表す標準的な結果オブジェクトも含まれます。正規化は文字列の trim、リストフィールドの正規化、不明確な承認値のレビュー向け構造値への変換を行えますが、正規化されたことは実行許可を意味しません。`ExecutionIntent` への昇格には引き続き検証が必要であり、拒否された候補は昇格されないまま構造化された promotion result として表現できます。これらのヘルパーは追加的なものであり、`/v1/decide` には接続されず、public API のレスポンス形状を変更せず、live LLM extraction も、IAM、IdP、SaaS、銀行、制裁リスト、顧客システムに対するライブ権限検証も行いません。
 
+昇格されなかった `DecisionCandidate` の結果は、
+`DecisionCandidateRefusalArtifact` として表現することもできます。refusal artifact
+は、候補が `ExecutionIntent` にならなかった理由を記録するものであり、fail-closed
+または人間レビュー必須の結果をレビュアーが検査するための
+pre-`ExecutionIntent` evidence です。これは `BindReceipt` ではなく、実行が試行された
+ことを意味せず、live LLM extraction、live authority-source validation、bind
+adjudication も行いません。
+
 ## 5. 昇格ルール
 
 `DecisionCandidate` は、次の条件をすべて満たす場合にのみ `ExecutionIntent` へ昇格できます。
