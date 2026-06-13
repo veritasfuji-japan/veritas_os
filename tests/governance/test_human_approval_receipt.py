@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import AuthorityEvidence, VerificationResult
 from veritas_os.governance.human_approval_receipt import (
@@ -278,3 +280,118 @@ def test_human_approval_state_uses_finalized_receipt_hash() -> None:
 
     assert state["approved"] is True
     assert state["receipt_hash"] == finalized.receipt_hash
+
+
+def test_raw_approved_dict_without_receipt_hash_fails_closed() -> None:
+    """Runtime authority cannot trust a self-asserted approval dict."""
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state={"approved": True},
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert result.recommended_outcome == "block"
+    assert "human_approval_receipt_missing" in result.reason_summary
+
+
+def test_raw_approved_dict_with_untrusted_receipt_hash_fails_closed() -> None:
+    """Receipt-shaped dicts must include validated receipt state metadata."""
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state={
+            "approved": True,
+            "approval_receipt_id": "har-001",
+            "receipt_hash": "0" * 64,
+            "validated_at": "2026-05-10T00:00:00+00:00",
+        },
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert "human_approval_receipt_missing" in result.reason_summary
+
+
+@pytest.mark.parametrize(
+    ("receipt_overrides", "requested_scope", "action_class", "policy_snapshot_id", "reason"),
+    [
+        (
+            {"expires_at": "2026-04-01T00:00:00+00:00"},
+            ["ledger:debit"],
+            "wire_transfer",
+            "policy-001",
+            "human_approval_expired",
+        ),
+        (
+            {"signature_verified": False},
+            ["ledger:debit"],
+            "wire_transfer",
+            "policy-001",
+            "human_approval_signature_unverified",
+        ),
+        (
+            {"approved_scope": ["ledger:credit"]},
+            ["ledger:debit"],
+            "wire_transfer",
+            "policy-001",
+            "human_approval_scope_not_granted",
+        ),
+        (
+            {"policy_snapshot_id": "policy-other"},
+            ["ledger:debit"],
+            "wire_transfer",
+            "policy-001",
+            "human_approval_policy_snapshot_mismatch",
+        ),
+        (
+            {"approved_action_class": "other_action"},
+            ["ledger:debit"],
+            "wire_transfer",
+            "policy-001",
+            "human_approval_action_class_mismatch",
+        ),
+    ],
+)
+def test_runtime_authority_blocks_invalid_human_approval_receipt_state(
+    receipt_overrides: dict[str, object],
+    requested_scope: list[str],
+    action_class: str,
+    policy_snapshot_id: str,
+    reason: str,
+) -> None:
+    """Runtime authority propagates fail-closed receipt validation reasons."""
+    approval_state = build_human_approval_state(
+        _receipt(**receipt_overrides),
+        requested_scope=requested_scope,
+        action_class=action_class,
+        policy_snapshot_id=policy_snapshot_id,
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state=approval_state,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert result.recommended_outcome == "block"
+    assert reason in result.reason_summary

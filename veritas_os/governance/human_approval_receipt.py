@@ -155,6 +155,7 @@ def build_human_approval_state(
 
     return {
         "approved": True,
+        "approval_state_source": "validated_human_approval_receipt",
         "approval_receipt_id": finalized_receipt.approval_receipt_id,
         "approver_identity": finalized_receipt.approver_identity,
         "approver_role": finalized_receipt.approver_role,

@@ -734,6 +734,94 @@ class TestEvidenceBundleVerification:
         assert verify_result["tampered"] is True
         assert any("Hash mismatch" in e for e in verify_result["errors"])
 
+    def test_bundle_without_signature_verifier_reports_integrity_only(
+        self,
+        _trustlog_env,
+    ):
+        """Bundle generation must not self-report signature verification."""
+        env = _trustlog_env
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-integrity-only", "decision": "allow"}
+        )
+
+        from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+        result = generate_evidence_bundle(
+            bundle_type="decision",
+            witness_ledger_path=env["log_path"],
+            output_dir=env["tmp_path"] / "bundles",
+            request_ids=["r-integrity-only"],
+        )
+
+        report = json.loads(
+            (Path(result["bundle_dir"]) / "verification_report.json").read_text()
+        )
+        assert report["verification_mode"] == "integrity_only"
+        assert report["signature_verification_performed"] is False
+        assert report["signature_ok"] is False
+        assert "signature_verifier_not_provided" in report["verification_limitations"]
+
+    def test_bundle_secure_posture_requires_signature_verifier(
+        self,
+        _trustlog_env,
+        monkeypatch,
+    ):
+        """Secure/prod evidence bundles fail closed without a verifier."""
+        env = _trustlog_env
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-secure-requires-verifier", "decision": "allow"}
+        )
+        monkeypatch.setenv("VERITAS_POSTURE", "secure")
+
+        from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+        with pytest.raises(ValueError, match="Signature verification is required"):
+            generate_evidence_bundle(
+                bundle_type="decision",
+                witness_ledger_path=env["log_path"],
+                output_dir=env["tmp_path"] / "bundles",
+                request_ids=["r-secure-requires-verifier"],
+            )
+
+    def test_bundle_signature_verifier_result_controls_report(self, _trustlog_env):
+        """Provided verifier results must drive signature_ok and ok."""
+        env = _trustlog_env
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-verifier-true", "decision": "allow"}
+        )
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-verifier-false", "decision": "allow"}
+        )
+
+        from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+        true_result = generate_evidence_bundle(
+            bundle_type="decision",
+            witness_ledger_path=env["log_path"],
+            output_dir=env["tmp_path"] / "bundles",
+            request_ids=["r-verifier-true"],
+            verify_signature_fn=lambda _entry: True,
+        )
+        true_report = json.loads(
+            (Path(true_result["bundle_dir"]) / "verification_report.json").read_text()
+        )
+        assert true_report["signature_verification_performed"] is True
+        assert true_report["signature_ok"] is True
+
+        false_result = generate_evidence_bundle(
+            bundle_type="decision",
+            witness_ledger_path=env["log_path"],
+            output_dir=env["tmp_path"] / "bundles",
+            request_ids=["r-verifier-false"],
+            verify_signature_fn=lambda _entry: False,
+        )
+        false_report = json.loads(
+            (Path(false_result["bundle_dir"]) / "verification_report.json").read_text()
+        )
+        assert false_report["signature_verification_performed"] is True
+        assert false_report["signature_ok"] is False
+        assert false_report["ok"] is False
+
     def test_detect_missing_file(self, _trustlog_env):
         """Verification detects deleted file from bundle."""
         env = _trustlog_env

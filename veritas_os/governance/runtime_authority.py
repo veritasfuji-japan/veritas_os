@@ -14,6 +14,8 @@ from veritas_os.governance.authority_evidence import (
 )
 from veritas_os.governance.predicates import PredicateResult
 
+_HUMAN_APPROVAL_STATE_SOURCE = "validated_human_approval_receipt"
+
 RuntimeValidationStatus = Literal["pass", "fail"]
 RecommendedOutcome = Literal["commit", "block", "escalate", "refuse"]
 KNOWN_PREDICATE_TYPES = {
@@ -262,18 +264,16 @@ class RuntimeAuthorityValidator:
             )
 
             needs_approval = self._requires_human_approval(action_contract)
-            approved = bool(human_approval_state.get("approved"))
-            human_approval_ok = (not needs_approval) or approved
+            approval_ok, approval_reason = self._validated_human_approval_state(
+                human_approval_state
+            )
+            human_approval_ok = (not needs_approval) or approval_ok
             predicates.append(
                 self._predicate(
                     predicate_id="p-human-approval-present",
                     predicate_type="human_approval_present",
                     status="pass" if human_approval_ok else "missing",
-                    reason=(
-                        "human_approval_present"
-                        if human_approval_ok
-                        else "human_approval_missing"
-                    ),
+                    reason="human_approval_present" if human_approval_ok else approval_reason,
                     evaluated_at=evaluated_at,
                 )
             )
@@ -357,6 +357,42 @@ class RuntimeAuthorityValidator:
             escalation_basis=escalation_basis,
             reason_summary=summary,
         )
+
+    def _validated_human_approval_state(
+        self,
+        human_approval_state: dict[str, Any],
+    ) -> tuple[bool, str]:
+        """Accept only approval state derived from HumanApprovalReceipt validation.
+
+        Compatibility with raw dictionaries is fail-closed: callers may still
+        pass a dict, but ``{"approved": True}`` is not sufficient unless the
+        state carries receipt-derived validation metadata from
+        ``build_human_approval_state``.
+        """
+        if not bool(human_approval_state.get("approved")):
+            reasons = human_approval_state.get("failure_reasons")
+            if isinstance(reasons, list) and reasons:
+                return False, str(sorted(str(reason) for reason in reasons)[0])
+            return False, "human_approval_missing"
+
+        if (
+            human_approval_state.get("approval_state_source")
+            != _HUMAN_APPROVAL_STATE_SOURCE
+        ):
+            return False, "human_approval_receipt_missing"
+
+        required_fields = ("approval_receipt_id", "receipt_hash", "validated_at")
+        if not all(
+            str(human_approval_state.get(field) or "").strip()
+            for field in required_fields
+        ):
+            return False, "human_approval_receipt_missing"
+
+        failure_reasons = human_approval_state.get("failure_reasons")
+        if failure_reasons:
+            return False, "human_approval_receipt_invalid"
+
+        return True, "human_approval_present"
 
     def _stale_should_escalate(self, action_contract: ActionClassContract | None) -> bool:
         if not action_contract:
