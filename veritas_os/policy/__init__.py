@@ -27,23 +27,38 @@ from .bind_core import (
     normalize_bind_receipt,
     normalize_execution_intent,
 )
-from .bind_execution import BindBoundaryAdapter, ReferenceBindAdapter, execute_bind_boundary
+from .bind_execution import (
+    BindBoundaryAdapter,
+    ReferenceBindAdapter,
+    execute_bind_boundary,
+)
 from .decision_candidate import (
     DecisionCandidate,
+    DecisionCandidatePromotionResult,
     DecisionCandidatePromotionStatus,
     DecisionCandidateRefusalReason,
     DecisionCandidateValidationResult,
     canonical_decision_candidate_json,
+    normalize_decision_candidate,
     hash_decision_candidate,
     promote_decision_candidate_to_execution_intent,
+    try_promote_decision_candidate_to_execution_intent,
     validate_decision_candidate,
 )
-from .bind_revalidation import replay_bind_receipt_admissibility, revalidate_bind_receipt
+from .bind_revalidation import (
+    replay_bind_receipt_admissibility,
+    revalidate_bind_receipt,
+)
 from .policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
 from .evaluator import PolicyEvaluationResult, evaluate_runtime_policies
 from .generated_tests import GeneratedPolicyTestCase, build_generated_test_cases
 from .hash import canonical_ir_json, semantic_policy_hash
-from .models import OutcomeAction, PolicyCompilationError, PolicyValidationError, SourcePolicy
+from .models import (
+    OutcomeAction,
+    PolicyCompilationError,
+    PolicyValidationError,
+    SourcePolicy,
+)
 from .normalize import to_canonical_ir
 from .runtime_adapter import (
     RuntimePolicy,
@@ -57,6 +72,7 @@ __all__ = [
     "OutcomeAction",
     "ExecutionIntent",
     "DecisionCandidate",
+    "DecisionCandidatePromotionResult",
     "DecisionCandidatePromotionStatus",
     "DecisionCandidateRefusalReason",
     "DecisionCandidateValidationResult",
@@ -68,6 +84,7 @@ __all__ = [
     "promote_policy_bundle_with_bind_boundary",
     "execute_bind_boundary",
     "promote_decision_candidate_to_execution_intent",
+    "try_promote_decision_candidate_to_execution_intent",
     "validate_decision_candidate",
     "replay_bind_receipt_admissibility",
     "revalidate_bind_receipt",
@@ -77,6 +94,7 @@ __all__ = [
     "BindReasonCode",
     "BIND_OUTCOME_VALUES",
     "normalize_execution_intent",
+    "normalize_decision_candidate",
     "normalize_bind_receipt",
     "append_execution_intent_trustlog",
     "append_bind_receipt_trustlog",
