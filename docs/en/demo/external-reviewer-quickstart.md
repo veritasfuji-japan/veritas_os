@@ -28,6 +28,24 @@ The current review path demonstrates:
   pre-`ExecutionIntent` candidates that fail closed or require human review
 - golden fixture, schema, and validation report checks
 
+
+## LLM-to-Control-Plane boundary checklist
+
+Reviewers can inspect the LLM-to-Control-Plane boundary through:
+
+- the architecture note: `docs/en/architecture/llm-to-control-plane-contract.md`
+- the `DecisionCandidateRefusalArtifact` fixture: `docs/en/demo/fixtures/reviewer-evidence-packet-decision-candidate-refusal-v1.json`
+- the reviewer packet schema: `docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`
+
+Reviewer interpretation:
+
+- A refused `DecisionCandidate` did not become an `ExecutionIntent`.
+- A refusal artifact explains why promotion failed or human review was required.
+- A refusal artifact is not a `BindReceipt`.
+- It does not imply execution was attempted.
+- It does not perform live LLM extraction, live authority-source validation, bind adjudication, TrustLog writes, adapter calls, or live IAM/IdP/SaaS/bank/sanctions/customer-system integration.
+- It is not legal advice, regulatory approval, or third-party certification.
+
 ## Fast path
 
 Use this 10–15 minute path for a reviewer-facing inspection:

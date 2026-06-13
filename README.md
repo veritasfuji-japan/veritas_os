@@ -64,6 +64,30 @@ Boundary:
 - This is not third-party certification.
 - Fixture-backed PoC evidence should not be presented as live bank-side integration.
 
+
+## LLM-to-Control-Plane Boundary
+
+VERITAS does not ask an LLM to govern itself. LLM or agent output is treated as a proposal. Before it can become an executable governance input, it must cross a structured control-plane boundary:
+
+```mermaid
+flowchart TD
+    A[LLM / Agent Proposal] --> B[DecisionCandidate]
+    B --> C[Normalize]
+    C --> D[Validate]
+    D -->|Incomplete or ambiguous| E[DecisionCandidateRefusalArtifact]
+    D -->|Valid and complete| F[ExecutionIntent]
+    E --> G[Reviewer Evidence Packet]
+    F --> H[Bind Adjudication]
+```
+
+If the candidate is incomplete, ambiguous, missing required authority or human approval context, or relies only on natural-language rationale, it is not promoted to `ExecutionIntent`. It may instead become a `DecisionCandidateRefusalArtifact`, which records why the candidate was refused or sent to human review.
+
+This artifact is pre-`ExecutionIntent` reviewer evidence. It is not a `BindReceipt`, does not imply execution was attempted, and does not perform live LLM extraction, live authority-source validation, or bind adjudication. It is not legal advice, regulatory approval, third-party certification, or a claim of live IAM, IdP, SaaS, bank, sanctions, or customer-system integration.
+
+- [LLM-to-Control-Plane Contract](docs/en/architecture/llm-to-control-plane-contract.md)
+- [DecisionCandidate refusal fixture](docs/en/demo/fixtures/reviewer-evidence-packet-decision-candidate-refusal-v1.json)
+- [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
+
 ## Evaluation Governance reviewer artifacts
 
 VERITAS includes a reviewer-facing Evaluation Governance artifact chain for inspecting how authority, evaluator definition, evaluation receipts, outcome deltas, evaluator drift, trajectory movement, and legitimacy-impacting changes can be represented for external review.

@@ -21,7 +21,9 @@ Key local/offline reviewer-facing artifacts:
 - `docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json`
   - checked-in golden fixture
 - `docs/en/demo/fixtures/reviewer-evidence-packet-decision-candidate-refusal-v1.json`
-  - local/offline reviewer fixture showing a `DecisionCandidateRefusalArtifact` as pre-`ExecutionIntent` evidence; it is not a `BindReceipt`, does not imply execution was attempted, and does not wire into `/v1/decide`, TrustLog, bind adjudication, adapters, live LLM extraction, live authority-source validation, or live IAM/IdP/SaaS/bank/sanctions/customer-system integrations
+  - local/offline fixture-backed reviewer evidence showing a `DecisionCandidateRefusalArtifact` as pre-`ExecutionIntent` evidence for LLM/agent proposals that fail closed or require human review
+  - useful for reviewing why a `DecisionCandidate` was refused before promotion; it is not a `BindReceipt`, does not imply execution was attempted, and does not imply legal advice, regulatory approval, or third-party certification
+  - does not wire into `/v1/decide`, perform bind adjudication, write to TrustLog, call adapters, perform live LLM extraction, perform live authority-source validation, or claim live IAM/IdP/SaaS/bank/sanctions/customer-system integration
 - `docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json`
   - JSON Schema contract
 - `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
