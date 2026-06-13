@@ -77,6 +77,14 @@ live LLM extraction, live authority-source validation, or bind adjudication.
 Reviewer-facing packet examples for this artifact remain local/offline
 fixture-backed evidence unless a later PR explicitly integrates them.
 
+`DecisionCandidateRefusalArtifact` may contain internal review context. For
+external review, `DecisionCandidateRefusalReviewerExport` is the safer redacted
+view: it preserves refusal reason codes, candidate hash, artifact hash, and
+promotion status while omitting raw candidate snapshots, raw validation
+snapshots, raw natural-language content, prompts, tokens, credentials, and
+sensitive metadata. The export does not imply execution was attempted, is not a
+`BindReceipt`, and does not perform live integrations or bind adjudication.
+
 ## 5. Promotion rule
 
 A `DecisionCandidate` may become an `ExecutionIntent` only when all of the following are true:

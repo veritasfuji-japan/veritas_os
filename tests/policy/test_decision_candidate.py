@@ -4,6 +4,7 @@ import pytest
 
 from veritas_os.audit.evidence_bundle import (
     build_decision_candidate_refusal_evidence_entry,
+    build_decision_candidate_refusal_reviewer_export_entry,
 )
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.policy.decision_candidate import (
@@ -13,8 +14,10 @@ from veritas_os.policy.decision_candidate import (
     DecisionCandidateRefusalReason,
     DecisionCandidateRefusalType,
     build_decision_candidate_refusal_artifact,
+    build_decision_candidate_refusal_reviewer_export,
     hash_decision_candidate,
     hash_decision_candidate_refusal_artifact,
+    hash_decision_candidate_refusal_reviewer_export,
     normalize_decision_candidate,
     promote_decision_candidate_to_execution_intent,
     try_build_decision_candidate_refusal_artifact,
@@ -464,3 +467,95 @@ def test_refusal_artifact_evidence_entry_preserves_pre_execution_boundary() -> N
     assert entry["metadata"]["execution_intent_created"] is False
     assert entry["metadata"]["bind_receipt_created"] is False
     assert entry["metadata"]["execution_attempted"] is False
+
+
+def test_refusal_reviewer_export_omits_sensitive_artifact_content() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(
+            target_resource="customer:secret-account-123",
+            required_authority=[],
+            metadata={"prompt": "raw natural-language prompt with token secret"},
+        ),
+        metadata={"secret": "do-not-export", "prompt": "raw prompt"},
+    )
+
+    assert artifact is not None
+    export = build_decision_candidate_refusal_reviewer_export(artifact)
+    payload = export.to_dict()
+    payload_text = str(payload)
+
+    assert payload["refusal_id"] == artifact.refusal_id
+    assert payload["candidate_id"] == artifact.candidate_id
+    assert payload["candidate_hash"] == artifact.candidate_hash
+    assert payload["artifact_hash"] == hash_decision_candidate_refusal_artifact(
+        artifact
+    )
+    assert payload["redaction_profile"] == "reviewer_safe_v1"
+    assert "target_resource" in payload["redacted_fields"]
+    assert "metadata" in payload["redacted_fields"]
+    assert "normalized_candidate_snapshot" in payload["omitted_fields"]
+    assert "validation_result_snapshot" in payload["omitted_fields"]
+    assert "raw_natural_language" in payload["omitted_fields"]
+    assert "normalized_candidate_snapshot" not in payload
+    assert "validation_result_snapshot" not in payload
+    assert "customer:secret-account-123" not in payload_text
+    assert "raw natural-language prompt" not in payload_text
+    assert "do-not-export" not in payload_text
+
+
+def test_refusal_reviewer_export_hashing_is_deterministic_with_fixed_id() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(target_resource="")
+    )
+
+    assert artifact is not None
+    export = build_decision_candidate_refusal_reviewer_export(artifact)
+    first = type(export)(
+        **{
+            **export.to_dict(),
+            "export_id": "export-fixed",
+            "created_at": None,
+        }
+    )
+    second = type(export)(
+        **{
+            **export.to_dict(),
+            "export_id": "export-fixed",
+            "created_at": None,
+        }
+    )
+
+    assert hash_decision_candidate_refusal_reviewer_export(first) == (
+        hash_decision_candidate_refusal_reviewer_export(second)
+    )
+
+
+def test_refusal_reviewer_export_evidence_entry_preserves_safe_boundary() -> None:
+    artifact = try_build_decision_candidate_refusal_artifact(
+        _complete_candidate(ambiguity_flags=["multiple_targets"])
+    )
+
+    assert artifact is not None
+    export = build_decision_candidate_refusal_reviewer_export(
+        artifact,
+        metadata={"fixture": True},
+    )
+    entry = build_decision_candidate_refusal_reviewer_export_entry(export)
+
+    assert entry["artifact_type"] == "decision_candidate_refusal_reviewer_export"
+    assert entry["export_id"] == export.export_id
+    assert entry["refusal_id"] == artifact.refusal_id
+    assert entry["candidate_id"] == artifact.candidate_id
+    assert entry["candidate_hash"] == artifact.candidate_hash
+    assert entry["artifact_hash"] == export.artifact_hash
+    assert entry["export_hash"] == hash_decision_candidate_refusal_reviewer_export(
+        export
+    )
+    assert entry["redaction_profile"] == "reviewer_safe_v1"
+    assert entry["metadata"]["fixture"] is True
+    assert entry["metadata"]["reviewer_safe_export"] is True
+    assert entry["metadata"]["raw_candidate_snapshot_included"] is False
+    assert entry["metadata"]["raw_validation_snapshot_included"] is False
+    assert entry["metadata"]["raw_natural_language_included"] is False
+    assert entry["metadata"]["execution_attempted"] is False
+    assert entry["metadata"]["bind_receipt_created"] is False

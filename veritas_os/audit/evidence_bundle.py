@@ -34,7 +34,9 @@ from veritas_os.audit.evidence_bundle_schema import BUNDLE_SCHEMA_VERSION, BUNDL
 from veritas_os.core.decision_semantics import canonicalize_public_gate_decision
 from veritas_os.policy.decision_candidate import (
     DecisionCandidateRefusalArtifact,
+    DecisionCandidateRefusalReviewerExport,
     hash_decision_candidate_refusal_artifact,
+    hash_decision_candidate_refusal_reviewer_export,
 )
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
@@ -110,6 +112,33 @@ def build_decision_candidate_refusal_evidence_entry(
             "execution_intent_created": False,
             "bind_receipt_created": False,
             "execution_attempted": False,
+        },
+    }
+
+
+def build_decision_candidate_refusal_reviewer_export_entry(
+    export: DecisionCandidateRefusalReviewerExport,
+) -> Dict[str, Any]:
+    """Build side-effect-free evidence for a redacted refusal export."""
+    return {
+        "artifact_type": "decision_candidate_refusal_reviewer_export",
+        "export_id": export.export_id,
+        "refusal_id": export.refusal_id,
+        "candidate_id": export.candidate_id,
+        "candidate_hash": export.candidate_hash,
+        "artifact_hash": export.artifact_hash,
+        "export_hash": hash_decision_candidate_refusal_reviewer_export(export),
+        "redaction_profile": export.redaction_profile,
+        "redacted_fields": list(export.redacted_fields),
+        "omitted_fields": list(export.omitted_fields),
+        "metadata": {
+            **dict(export.metadata),
+            "reviewer_safe_export": True,
+            "raw_candidate_snapshot_included": False,
+            "raw_validation_snapshot_included": False,
+            "raw_natural_language_included": False,
+            "execution_attempted": False,
+            "bind_receipt_created": False,
         },
     }
 
