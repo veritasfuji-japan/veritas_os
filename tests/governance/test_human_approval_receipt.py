@@ -312,8 +312,12 @@ def test_raw_approved_dict_with_untrusted_receipt_hash_fails_closed() -> None:
         actor_identity="operator:alice",
         human_approval_state={
             "approved": True,
+            "approval_state_source": "validated_human_approval_receipt",
             "approval_receipt_id": "har-001",
             "receipt_hash": "0" * 64,
+            "approved_scope": ["ledger:debit"],
+            "approved_action_class": "wire_transfer",
+            "policy_snapshot_id": "policy-001",
             "validated_at": "2026-05-10T00:00:00+00:00",
         },
         bind_context_metadata={"session_id": "bind-001"},
@@ -322,6 +326,60 @@ def test_raw_approved_dict_with_untrusted_receipt_hash_fails_closed() -> None:
 
     assert result.status == "fail"
     assert "human_approval_receipt_missing" in result.reason_summary
+
+
+def test_tampered_receipt_hash_in_built_state_fails_closed() -> None:
+    """Runtime authority rejects receipt-derived state with tampered hash."""
+    approval_state = build_human_approval_state(
+        _receipt(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+    approval_state["receipt_hash"] = "f" * 64
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state=approval_state,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert "human_approval_validation_hash_mismatch" in result.reason_summary
+
+
+def test_tampered_approved_scope_in_built_state_fails_closed() -> None:
+    """Runtime authority rejects receipt-derived state with tampered scope."""
+    approval_state = build_human_approval_state(
+        _receipt(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+    approval_state["approved_scope"] = ["ledger:mint"]
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state=approval_state,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert "human_approval_validation_hash_mismatch" in result.reason_summary
 
 
 @pytest.mark.parametrize(

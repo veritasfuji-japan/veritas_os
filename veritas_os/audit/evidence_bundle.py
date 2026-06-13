@@ -187,6 +187,7 @@ def _build_acceptance_checklist(
     written_files: Sequence[str],
     *,
     decision_record_profile: str,
+    verification_report: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build acceptance checklist used for external audit submission gating."""
     written = set(written_files)
@@ -207,10 +208,19 @@ def _build_acceptance_checklist(
         },
         {
             "id": "verification_report_present",
-            "title": "Verification report included",
+            "title": "Verification report included and passing",
             "required": True,
-            "status": "pass" if "verification_report.json" in written else "fail",
+            "status": (
+                "pass"
+                if "verification_report.json" in written
+                and bool((verification_report or {}).get("ok"))
+                else "fail"
+            ),
             "evidence": ["verification_report.json"],
+            "details": {
+                "report_ok": bool((verification_report or {}).get("ok")),
+                "verification_mode": (verification_report or {}).get("verification_mode"),
+            },
         },
         {
             "id": "decision_record_contract",
@@ -630,7 +640,33 @@ def generate_evidence_bundle(
         _write_json_file(bundle_dir, "verification_report.json", verify_result)
         written_files.append("verification_report.json")
     except Exception as exc:  # noqa: BLE001
-        _logger.warning("Bundle verification skipped: %s", exc)
+        stable_error = exc.__class__.__name__
+        if signature_required:
+            raise ValueError(
+                f"Evidence bundle verification failed: {stable_error}"
+            ) from exc
+        _logger.warning("Bundle verification failed: %s", exc)
+        verify_result = {
+            "ledger": "witness",
+            "total_entries": len(entries),
+            "valid_entries": 0,
+            "invalid_entries": len(entries),
+            "chain_ok": False,
+            "signature_ok": False,
+            "linkage_ok": False,
+            "mirror_ok": False,
+            "last_hash": None,
+            "detailed_errors": [],
+            "verification_notes": [],
+            "ok": False,
+            "signature_verification_performed": verify_signature_fn is not None,
+            "signature_verification_required": signature_required,
+            "verification_mode": "verification_failed",
+            "verification_error": stable_error,
+            "verification_limitations": ["verification_exception"],
+        }
+        _write_json_file(bundle_dir, "verification_report.json", verify_result)
+        written_files.append("verification_report.json")
 
     if bundle_type == "decision":
         decision_entry = entries[0]
@@ -652,6 +688,7 @@ def generate_evidence_bundle(
         bundle_type,
         tuple(sorted(written_files)),
         decision_record_profile=decision_record_profile,
+        verification_report=verify_result,
     )
     _write_json_file(bundle_dir, "acceptance_checklist.json", acceptance_checklist)
     written_files.append("acceptance_checklist.json")

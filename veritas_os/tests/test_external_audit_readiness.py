@@ -783,6 +783,75 @@ class TestEvidenceBundleVerification:
                 request_ids=["r-secure-requires-verifier"],
             )
 
+    def test_bundle_secure_posture_raises_when_verifier_raises(
+        self,
+        _trustlog_env,
+        monkeypatch,
+    ):
+        """Secure/prod bundle generation fails closed on verification exceptions."""
+        env = _trustlog_env
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-secure-verifier-raises", "decision": "allow"}
+        )
+        monkeypatch.setenv("VERITAS_POSTURE", "secure")
+
+        from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+        def raising_verifier(_entry):
+            raise RuntimeError("boom with unstable detail")
+
+        with pytest.raises(ValueError, match="Evidence bundle verification failed"):
+            generate_evidence_bundle(
+                bundle_type="decision",
+                witness_ledger_path=env["log_path"],
+                output_dir=env["tmp_path"] / "bundles",
+                request_ids=["r-secure-verifier-raises"],
+                verify_signature_fn=raising_verifier,
+            )
+
+    def test_bundle_dev_posture_writes_failed_report_when_verifier_raises(
+        self,
+        _trustlog_env,
+        monkeypatch,
+    ):
+        """Dev/test bundle generation writes a failed report on exceptions."""
+        env = _trustlog_env
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-dev-verifier-raises", "decision": "allow"}
+        )
+        monkeypatch.setenv("VERITAS_POSTURE", "dev")
+
+        from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+        def raising_verifier(_entry):
+            raise RuntimeError("boom with unstable detail")
+
+        result = generate_evidence_bundle(
+            bundle_type="decision",
+            witness_ledger_path=env["log_path"],
+            output_dir=env["tmp_path"] / "bundles",
+            request_ids=["r-dev-verifier-raises"],
+            verify_signature_fn=raising_verifier,
+        )
+
+        bundle_dir = Path(result["bundle_dir"])
+        report_path = bundle_dir / "verification_report.json"
+        assert report_path.exists()
+        report = json.loads(report_path.read_text())
+        assert report["ok"] is False
+        assert report["signature_ok"] is False
+        assert report["signature_verification_performed"] is True
+        assert report["verification_mode"] == "verification_failed"
+        assert report["verification_error"] == "RuntimeError"
+        assert report["verification_limitations"] == ["verification_exception"]
+
+        checklist = json.loads((bundle_dir / "acceptance_checklist.json").read_text())
+        verification_item = next(
+            item for item in checklist["items"] if item["id"] == "verification_report_present"
+        )
+        assert verification_item["status"] == "fail"
+        assert verification_item["details"]["report_ok"] is False
+
     def test_bundle_signature_verifier_result_controls_report(self, _trustlog_env):
         """Provided verifier results must drive signature_ok and ok."""
         env = _trustlog_env
