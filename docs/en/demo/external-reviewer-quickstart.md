@@ -44,6 +44,7 @@ Reviewer interpretation:
 - A refusal artifact is not a `BindReceipt`.
 - It does not imply execution was attempted.
 - It does not perform live LLM extraction, live authority-source validation, bind adjudication, TrustLog writes, adapter calls, or live IAM/IdP/SaaS/bank/sanctions/customer-system integration.
+- Prefer `DecisionCandidateRefusalReviewerExport` for external review when available; it keeps refusal reason, candidate hash, artifact hash, and promotion status while omitting raw snapshots, natural-language content, prompts, tokens, credentials, and sensitive metadata.
 - It is not legal advice, regulatory approval, or third-party certification.
 
 ## Fast path

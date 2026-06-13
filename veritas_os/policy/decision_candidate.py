@@ -83,6 +83,29 @@ REGULATED_TRUE_VALUES = {"true", "yes", "high", "regulated"}
 REGULATED_FALSE_VALUES = {"false", "no", "none"}
 
 
+REVIEWER_REDACTION_PROFILE = "reviewer_safe_v1"
+
+REDACTED_REVIEWER_FIELDS = (
+    "target_resource",
+    "actor_identity",
+    "source_model",
+    "metadata",
+)
+
+OMITTED_REVIEWER_FIELDS = (
+    "normalized_candidate_snapshot",
+    "validation_result_snapshot",
+    "source_trace_ref",
+    "raw_natural_language",
+    "candidate_rationale_text",
+    "prompt",
+    "completion",
+    "token",
+    "credential",
+    "secret",
+)
+
+
 @dataclass(frozen=True)
 class DecisionCandidate:
     """Runtime-neutral candidate contract before ``ExecutionIntent``.
@@ -246,6 +269,63 @@ class DecisionCandidateRefusalArtifact:
             "normalized_candidate_snapshot": dict(self.normalized_candidate_snapshot),
             "validation_result_snapshot": dict(self.validation_result_snapshot),
             "refusal_type": self.refusal_type,
+            "created_at": self.created_at,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class DecisionCandidateRefusalReviewerExport:
+    """Redacted reviewer-facing view of a refusal artifact.
+
+    This export preserves structured refusal signals and hashes while omitting
+    raw candidate snapshots, validation snapshots, natural-language content,
+    prompts, tokens, credentials, and sensitive metadata values. Building it is
+    side-effect free and does not imply execution was attempted.
+    """
+
+    refusal_id: str
+    candidate_id: str
+    candidate_hash: str
+    artifact_hash: str
+    refusal_type: str
+    promotion_status: str
+    refusal_reason_codes: list[str]
+    missing_required_fields: list[str]
+    ambiguity_flags: list[str]
+    requires_human_review: bool
+    fail_closed: bool
+    safe_summary: str
+    export_id: str = field(default_factory=lambda: uuid4().hex)
+    redaction_profile: str = REVIEWER_REDACTION_PROFILE
+    redacted_fields: list[str] = field(
+        default_factory=lambda: list(REDACTED_REVIEWER_FIELDS)
+    )
+    omitted_fields: list[str] = field(
+        default_factory=lambda: list(OMITTED_REVIEWER_FIELDS)
+    )
+    created_at: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable redacted reviewer export."""
+        return {
+            "export_id": self.export_id,
+            "refusal_id": self.refusal_id,
+            "candidate_id": self.candidate_id,
+            "candidate_hash": self.candidate_hash,
+            "artifact_hash": self.artifact_hash,
+            "refusal_type": self.refusal_type,
+            "promotion_status": self.promotion_status,
+            "refusal_reason_codes": list(self.refusal_reason_codes),
+            "missing_required_fields": list(self.missing_required_fields),
+            "ambiguity_flags": list(self.ambiguity_flags),
+            "requires_human_review": self.requires_human_review,
+            "fail_closed": self.fail_closed,
+            "safe_summary": self.safe_summary,
+            "redaction_profile": self.redaction_profile,
+            "redacted_fields": list(self.redacted_fields),
+            "omitted_fields": list(self.omitted_fields),
             "created_at": self.created_at,
             "metadata": dict(self.metadata),
         }
@@ -595,6 +675,62 @@ def try_build_decision_candidate_refusal_artifact(
     )
 
 
+def _build_refusal_reviewer_safe_summary(
+    artifact: DecisionCandidateRefusalArtifact,
+) -> str:
+    """Build a deterministic generic reviewer summary without raw identifiers."""
+    if artifact.missing_required_fields:
+        return (
+            "DecisionCandidate was not promoted to ExecutionIntent because "
+            "required structured fields were missing."
+        )
+    if artifact.fail_closed:
+        return (
+            "DecisionCandidate was not promoted to ExecutionIntent because "
+            "structured validation failed closed."
+        )
+    if artifact.ambiguity_flags or artifact.requires_human_review:
+        return (
+            "DecisionCandidate requires human review because ambiguity flags "
+            "were present."
+        )
+    return (
+        "DecisionCandidate was not promoted to ExecutionIntent because "
+        "structured validation did not permit promotion."
+    )
+
+
+def build_decision_candidate_refusal_reviewer_export(
+    artifact: DecisionCandidateRefusalArtifact,
+    *,
+    created_at: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> DecisionCandidateRefusalReviewerExport:
+    """Build a redacted reviewer-facing export for a refusal artifact.
+
+    The export includes structured refusal reason fields and hashes only. It
+    intentionally omits raw candidate snapshots, validation snapshots, source
+    traces, natural-language rationale, prompts, tokens, credentials, and raw
+    artifact metadata values.
+    """
+    return DecisionCandidateRefusalReviewerExport(
+        refusal_id=artifact.refusal_id,
+        candidate_id=artifact.candidate_id,
+        candidate_hash=artifact.candidate_hash,
+        artifact_hash=hash_decision_candidate_refusal_artifact(artifact),
+        refusal_type=artifact.refusal_type,
+        promotion_status=artifact.promotion_status,
+        refusal_reason_codes=list(artifact.refusal_reason_codes),
+        missing_required_fields=list(artifact.missing_required_fields),
+        ambiguity_flags=list(artifact.ambiguity_flags),
+        requires_human_review=artifact.requires_human_review,
+        fail_closed=artifact.fail_closed,
+        safe_summary=_build_refusal_reviewer_safe_summary(artifact),
+        created_at=created_at,
+        metadata=dict(metadata or {}),
+    )
+
+
 def canonical_decision_candidate_json(
     candidate: DecisionCandidate | dict[str, Any],
 ) -> str:
@@ -619,3 +755,17 @@ def hash_decision_candidate_refusal_artifact(
 ) -> str:
     """Compute SHA-256 over a canonical refusal artifact payload."""
     return sha256_of_canonical_json(artifact.to_dict())
+
+
+def canonical_decision_candidate_refusal_reviewer_export_json(
+    export: DecisionCandidateRefusalReviewerExport,
+) -> str:
+    """Serialize reviewer refusal export with deterministic JSON ordering."""
+    return canonical_json_dumps(export.to_dict())
+
+
+def hash_decision_candidate_refusal_reviewer_export(
+    export: DecisionCandidateRefusalReviewerExport,
+) -> str:
+    """Compute SHA-256 over a canonical reviewer refusal export payload."""
+    return sha256_of_canonical_json(export.to_dict())
