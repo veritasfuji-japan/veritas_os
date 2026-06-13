@@ -28,6 +28,16 @@ from .bind_core import (
     normalize_execution_intent,
 )
 from .bind_execution import BindBoundaryAdapter, ReferenceBindAdapter, execute_bind_boundary
+from .decision_candidate import (
+    DecisionCandidate,
+    DecisionCandidatePromotionStatus,
+    DecisionCandidateRefusalReason,
+    DecisionCandidateValidationResult,
+    canonical_decision_candidate_json,
+    hash_decision_candidate,
+    promote_decision_candidate_to_execution_intent,
+    validate_decision_candidate,
+)
 from .bind_revalidation import replay_bind_receipt_admissibility, revalidate_bind_receipt
 from .policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
 from .evaluator import PolicyEvaluationResult, evaluate_runtime_policies
@@ -46,6 +56,10 @@ from .schema import load_and_validate_policy, validate_source_policy
 __all__ = [
     "OutcomeAction",
     "ExecutionIntent",
+    "DecisionCandidate",
+    "DecisionCandidatePromotionStatus",
+    "DecisionCandidateRefusalReason",
+    "DecisionCandidateValidationResult",
     "BindReceipt",
     "FinalOutcome",
     "BindBoundaryAdapter",
@@ -53,6 +67,8 @@ __all__ = [
     "PolicyBundlePromotionAdapter",
     "promote_policy_bundle_with_bind_boundary",
     "execute_bind_boundary",
+    "promote_decision_candidate_to_execution_intent",
+    "validate_decision_candidate",
     "replay_bind_receipt_admissibility",
     "revalidate_bind_receipt",
     "execute_bind_adjudication",
@@ -74,6 +90,7 @@ __all__ = [
     "GeneratedPolicyTestCase",
     "canonical_ir_json",
     "canonical_execution_intent_json",
+    "canonical_decision_candidate_json",
     "canonical_bind_receipt_json",
     "compile_policy_to_bundle",
     "build_generated_test_cases",
@@ -83,6 +100,7 @@ __all__ = [
     "PolicyEvaluationResult",
     "semantic_policy_hash",
     "hash_execution_intent",
+    "hash_decision_candidate",
     "hash_bind_receipt",
     "RuntimePolicy",
     "RuntimePolicyBundle",
