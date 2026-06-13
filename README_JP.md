@@ -56,6 +56,8 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 13. [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
 14. [External Reviewer Artifact Index v1](docs/en/demo/external-reviewer-artifact-index.md)
 15. Bind Coverage Registry v1（local/offline）: docs/en/architecture/bind-coverage-registry.md
+16. LLM-to-Control-Plane Contract（LLMと制御プレーンの責任分界）: docs/ja/architecture/llm-to-control-plane-contract.md
+    - English: docs/en/architecture/llm-to-control-plane-contract.md
 
 境界条件:
 

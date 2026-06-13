@@ -54,6 +54,8 @@ For a concise business-facing overview, see [Enterprise Value Brief](docs/en/pos
 13. [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
 14. [External Reviewer Artifact Index v1](docs/en/demo/external-reviewer-artifact-index.md)
 15. Bind Coverage Registry v1 (local/offline): docs/en/architecture/bind-coverage-registry.md
+16. LLM-to-Control-Plane Contract: docs/en/architecture/llm-to-control-plane-contract.md
+    - 日本語補助版: docs/ja/architecture/llm-to-control-plane-contract.md
 
 Boundary:
 
