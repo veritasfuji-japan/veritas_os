@@ -38,7 +38,10 @@ The key boundary is between unstructured LLM output and the structured `Decision
 
 ## 4. Candidate fields
 
-`DecisionCandidate` is a proposed v1 conceptual structure. This PR documents the contract only; it does not add a runtime schema or change API behavior.
+`DecisionCandidate` v1 is represented by an additive, runtime-neutral schema in
+`veritas_os/policy/decision_candidate.py`. The schema provides validation and
+promotion helpers for the pre-`ExecutionIntent` boundary without changing
+`/v1/decide` behavior or public API response shape.
 
 A conceptual `DecisionCandidate` should include fields such as:
 
@@ -59,6 +62,7 @@ A conceptual `DecisionCandidate` should include fields such as:
 - `ambiguity_flags`
 - `missing_required_fields`
 - `candidate_rationale_ref`
+- `metadata`
 
 The rationale may be useful for reviewer context, but it is not a substitute for structured fields. A candidate that only contains natural-language reasoning is not sufficient for non-LLM governance evaluation.
 
@@ -118,5 +122,8 @@ Bind does not manufacture legitimacy. Invalid, ambiguous, or incomplete candidat
 - This is not regulatory approval.
 - This is not third-party certification.
 - This does not claim live IAM, IdP, SaaS, bank, sanctions, or customer-system integration.
-- This PR documents the contract; it does not implement production-grade LLM extraction, enterprise workflow integration, or live authority-source validation.
+- The additive schema does not add live LLM extraction.
+- The additive schema is not wired into `/v1/decide` and does not change API behavior.
+- The additive schema does not perform live authority-source validation.
+- This contract and schema do not implement production-grade LLM parsing, enterprise workflow integration, or live authority-source validation.
 - Fixture-backed or local/offline evidence must not be presented as live production integration.
