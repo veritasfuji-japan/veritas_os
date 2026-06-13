@@ -66,6 +66,30 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 - 第三者認証ではありません。
 - fixture ベースの PoC 証跡は、実銀行統合の証明として提示してはいけません。
 
+
+## LLMと制御プレーンの責任分界
+
+VERITASは、LLMに自己監査や最終判断を任せる設計ではありません。LLMやエージェントの出力は、まず「提案」として扱われます。実行可能なガバナンス入力になる前に、構造化された制御プレーン境界を通過します。
+
+```mermaid
+flowchart TD
+    A[LLM / Agent Proposal] --> B[DecisionCandidate]
+    B --> C[Normalize]
+    C --> D[Validate]
+    D -->|Incomplete or ambiguous| E[DecisionCandidateRefusalArtifact]
+    D -->|Valid and complete| F[ExecutionIntent]
+    E --> G[Reviewer Evidence Packet]
+    F --> H[Bind Adjudication]
+```
+
+候補が不完全、曖昧、必要な権限情報や人間承認情報を欠く、または自然言語の理由だけに依存している場合、その候補は `ExecutionIntent` へ昇格されません。その場合、`DecisionCandidateRefusalArtifact` として「なぜ `ExecutionIntent` にならなかったのか」を記録できます。
+
+これは pre-`ExecutionIntent` のレビュアー向け証拠であり、`BindReceipt` ではありません。実行が試行されたことも意味せず、live LLM extraction、live authority-source validation、bind adjudication も行いません。法的助言、規制当局の承認、第三者認証、または live IAM / IdP / SaaS / bank / sanctions / customer-system integration の主張でもありません。
+
+- [LLMと制御プレーンの責任分界](docs/ja/architecture/llm-to-control-plane-contract.md)
+- [DecisionCandidate refusal fixture](docs/en/demo/fixtures/reviewer-evidence-packet-decision-candidate-refusal-v1.json)
+- [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
+
 ## Evaluation Governance レビュアー向け成果物
 
 VERITASには、authority、評価関数の定義、Evaluation Receipt、outcome delta、評価drift、trajectory movement、legitimacyに影響し得る変更を外部レビュー可能にするための Evaluation Governance artifact chain が含まれています。
