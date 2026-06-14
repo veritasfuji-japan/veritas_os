@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from veritas_os.security.hash import sha256_of_canonical_json
 
+HUMAN_APPROVAL_STATE_SOURCE = "validated_human_approval_receipt"
+
 ApprovalResult = Literal["approved", "denied", "expired", "indeterminate"]
 
 
@@ -153,15 +155,33 @@ def build_human_approval_state(
 
     finalized_receipt = with_receipt_hash(receipt)
 
-    return {
+    state = {
         "approved": True,
+        "approval_state_source": HUMAN_APPROVAL_STATE_SOURCE,
         "approval_receipt_id": finalized_receipt.approval_receipt_id,
         "approver_identity": finalized_receipt.approver_identity,
         "approver_role": finalized_receipt.approver_role,
         "approved_scope": sorted(str(scope) for scope in finalized_receipt.approved_scope),
+        "approved_action_class": finalized_receipt.approved_action_class,
+        "policy_snapshot_id": finalized_receipt.policy_snapshot_id,
         "receipt_hash": finalized_receipt.receipt_hash,
         "validated_at": evaluated_at.isoformat(),
     }
+    state["approval_validation_hash"] = human_approval_state_validation_hash(state)
+    return state
+
+
+def human_approval_state_validation_hash(state: dict[str, Any]) -> str:
+    """Hash receipt-derived approval validation metadata for tamper detection."""
+    payload = {
+        "approval_receipt_id": state.get("approval_receipt_id"),
+        "receipt_hash": state.get("receipt_hash"),
+        "approved_scope": sorted(str(scope) for scope in state.get("approved_scope", [])),
+        "policy_snapshot_id": state.get("policy_snapshot_id"),
+        "approved_action_class": state.get("approved_action_class"),
+        "validated_at": state.get("validated_at"),
+    }
+    return sha256_of_canonical_json(payload)
 
 
 def _parse_iso_datetime(value: str) -> datetime | None:

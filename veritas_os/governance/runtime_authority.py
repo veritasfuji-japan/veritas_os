@@ -12,6 +12,12 @@ from veritas_os.governance.authority_evidence import (
     VerificationResult,
     is_expired,
 )
+from veritas_os.governance.human_approval_receipt import (
+    HUMAN_APPROVAL_STATE_SOURCE,
+    HumanApprovalReceipt,
+    build_human_approval_state,
+    human_approval_state_validation_hash,
+)
 from veritas_os.governance.predicates import PredicateResult
 
 RuntimeValidationStatus = Literal["pass", "fail"]
@@ -64,12 +70,21 @@ class RuntimeAuthorityValidator:
         required_evidence_metadata: dict[str, Any],
         policy_snapshot_id: str | None,
         actor_identity: str | None,
-        human_approval_state: dict[str, Any],
-        bind_context_metadata: dict[str, Any],
+        human_approval_state: dict[str, Any] | None = None,
+        human_approval_receipt: HumanApprovalReceipt | None = None,
+        bind_context_metadata: dict[str, Any] | None = None,
         now: datetime | None = None,
     ) -> RuntimeAuthorityValidationResult:
-        """Validate runtime authority with explicit deterministic predicates."""
+        """Validate runtime authority with explicit deterministic predicates.
+
+        Human approval is authoritative only when provided as a
+        ``HumanApprovalReceipt`` or as a tamper-evident state produced by
+        ``build_human_approval_state``. Raw compatibility dictionaries are
+        accepted only as fail-closed/non-approved inputs.
+        """
         evaluated_at = (now or datetime.now(UTC)).isoformat()
+        human_approval_state = human_approval_state or {}
+        bind_context_metadata = bind_context_metadata or {}
         predicates: list[PredicateResult] = []
 
         try:
@@ -262,18 +277,21 @@ class RuntimeAuthorityValidator:
             )
 
             needs_approval = self._requires_human_approval(action_contract)
-            approved = bool(human_approval_state.get("approved"))
-            human_approval_ok = (not needs_approval) or approved
+            approval_ok, approval_reason = self._validated_human_approval(
+                human_approval_state=human_approval_state,
+                human_approval_receipt=human_approval_receipt,
+                requested_scope=requested_scope,
+                action_contract=action_contract,
+                policy_snapshot_id=policy_snapshot_id,
+                now=now,
+            )
+            human_approval_ok = (not needs_approval) or approval_ok
             predicates.append(
                 self._predicate(
                     predicate_id="p-human-approval-present",
                     predicate_type="human_approval_present",
                     status="pass" if human_approval_ok else "missing",
-                    reason=(
-                        "human_approval_present"
-                        if human_approval_ok
-                        else "human_approval_missing"
-                    ),
+                    reason="human_approval_present" if human_approval_ok else approval_reason,
                     evaluated_at=evaluated_at,
                 )
             )
@@ -357,6 +375,78 @@ class RuntimeAuthorityValidator:
             escalation_basis=escalation_basis,
             reason_summary=summary,
         )
+
+    def _validated_human_approval(
+        self,
+        *,
+        human_approval_state: dict[str, Any],
+        human_approval_receipt: HumanApprovalReceipt | None,
+        requested_scope: list[str],
+        action_contract: ActionClassContract | None,
+        policy_snapshot_id: str | None,
+        now: datetime | None,
+    ) -> tuple[bool, str]:
+        """Validate human approval from a receipt before compatibility state."""
+        if human_approval_receipt is not None:
+            receipt_state = build_human_approval_state(
+                human_approval_receipt,
+                requested_scope=requested_scope,
+                action_class=action_contract.action_class if action_contract else None,
+                policy_snapshot_id=policy_snapshot_id,
+                now=now,
+            )
+            return self._validated_human_approval_state(receipt_state)
+
+        return self._validated_human_approval_state(human_approval_state)
+
+    def _validated_human_approval_state(
+        self,
+        human_approval_state: dict[str, Any],
+    ) -> tuple[bool, str]:
+        """Accept only approval state derived from HumanApprovalReceipt validation.
+
+        Compatibility with raw dictionaries is fail-closed: callers may still
+        pass a dict, but ``{"approved": True}`` is not sufficient unless the
+        state carries receipt-derived validation metadata from
+        ``build_human_approval_state``.
+        """
+        if not bool(human_approval_state.get("approved")):
+            reasons = human_approval_state.get("failure_reasons")
+            if isinstance(reasons, list) and reasons:
+                return False, str(sorted(str(reason) for reason in reasons)[0])
+            return False, "human_approval_missing"
+
+        if (
+            human_approval_state.get("approval_state_source")
+            != HUMAN_APPROVAL_STATE_SOURCE
+        ):
+            return False, "human_approval_receipt_missing"
+
+        required_fields = (
+            "approval_receipt_id",
+            "receipt_hash",
+            "approved_action_class",
+            "policy_snapshot_id",
+            "validated_at",
+            "approval_validation_hash",
+        )
+        if not all(
+            str(human_approval_state.get(field) or "").strip()
+            for field in required_fields
+        ):
+            return False, "human_approval_receipt_missing"
+        if not isinstance(human_approval_state.get("approved_scope"), list):
+            return False, "human_approval_receipt_missing"
+
+        expected_hash = human_approval_state_validation_hash(human_approval_state)
+        if human_approval_state.get("approval_validation_hash") != expected_hash:
+            return False, "human_approval_validation_hash_mismatch"
+
+        failure_reasons = human_approval_state.get("failure_reasons")
+        if failure_reasons:
+            return False, "human_approval_receipt_invalid"
+
+        return True, "human_approval_present"
 
     def _stale_should_escalate(self, action_contract: ActionClassContract | None) -> bool:
         if not action_contract:

@@ -975,6 +975,36 @@ def test_evidence_bundle_cli_require_signature_rejects_unsigned_bundle(
     assert exit_code == 1
 
 
+def test_evidence_bundle_generation_dev_without_verifier_is_integrity_only(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Dev/test bundle generation writes an integrity-only failed report."""
+    from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+    trustlog_signed.append_signed_decision({"request_id": "dev-integrity-only"})
+
+    result = generate_evidence_bundle(
+        bundle_type="decision",
+        witness_ledger_path=log_path,
+        output_dir=tmp_path / "bundles",
+    )
+
+    report_path = Path(result["bundle_dir"]) / "verification_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["verification_mode"] == "integrity_only"
+    assert report["signature_verification_performed"] is False
+    assert report["ok"] is False
+    assert report["signature_ok"] is False
+
+
 @pytest.mark.parametrize("posture", ["secure", "prod"])
 def test_evidence_bundle_cli_secure_or_prod_posture_rejects_unsigned_bundle(
     tmp_path,
@@ -983,7 +1013,6 @@ def test_evidence_bundle_cli_secure_or_prod_posture_rejects_unsigned_bundle(
 ) -> None:
     """VERITAS_POSTURE=secure/prod requires manifest signature verification."""
     from veritas_os.audit.evidence_bundle import generate_evidence_bundle
-    from veritas_os.cli.evidence_bundle import main
 
     monkeypatch.setenv("VERITAS_POSTURE", posture)
     log_path = tmp_path / "trustlog.jsonl"
@@ -993,15 +1022,13 @@ def test_evidence_bundle_cli_secure_or_prod_posture_rejects_unsigned_bundle(
     monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
     monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
     trustlog_signed.append_signed_decision({"request_id": "secure-unsigned"})
-    result = generate_evidence_bundle(
-        bundle_type="decision",
-        witness_ledger_path=log_path,
-        output_dir=tmp_path / "bundles",
-    )
 
-    exit_code = main(["verify", "--bundle-dir", result["bundle_dir"]])
-
-    assert exit_code == 1
+    with pytest.raises(ValueError, match="Signature verification is required"):
+        generate_evidence_bundle(
+            bundle_type="decision",
+            witness_ledger_path=log_path,
+            output_dir=tmp_path / "bundles",
+        )
 
 
 def test_evidence_bundle_cli_secure_unsigned_json_contract(
@@ -1009,11 +1036,11 @@ def test_evidence_bundle_cli_secure_unsigned_json_contract(
     monkeypatch,
     capsys,
 ) -> None:
-    """Secure posture --json reports unsigned bundles as authenticity failures."""
+    """Dev posture --json can still require signatures for contract checks."""
     from veritas_os.audit.evidence_bundle import generate_evidence_bundle
     from veritas_os.cli.evidence_bundle import main
 
-    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
     log_path = tmp_path / "trustlog.jsonl"
     private_key = tmp_path / "keys" / "priv.key"
     public_key = tmp_path / "keys" / "pub.key"
@@ -1027,7 +1054,15 @@ def test_evidence_bundle_cli_secure_unsigned_json_contract(
         output_dir=tmp_path / "bundles",
     )
 
-    exit_code = main(["verify", "--bundle-dir", result["bundle_dir"], "--json"])
+    exit_code = main(
+        [
+            "verify",
+            "--bundle-dir",
+            result["bundle_dir"],
+            "--require-signature",
+            "--json",
+        ]
+    )
     output = json.loads(capsys.readouterr().out)
 
     assert exit_code == 1

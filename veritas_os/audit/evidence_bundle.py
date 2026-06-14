@@ -187,6 +187,7 @@ def _build_acceptance_checklist(
     written_files: Sequence[str],
     *,
     decision_record_profile: str,
+    verification_report: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build acceptance checklist used for external audit submission gating."""
     written = set(written_files)
@@ -207,10 +208,19 @@ def _build_acceptance_checklist(
         },
         {
             "id": "verification_report_present",
-            "title": "Verification report included",
+            "title": "Verification report included and passing",
             "required": True,
-            "status": "pass" if "verification_report.json" in written else "fail",
+            "status": (
+                "pass"
+                if "verification_report.json" in written
+                and bool((verification_report or {}).get("ok"))
+                else "fail"
+            ),
             "evidence": ["verification_report.json"],
+            "details": {
+                "report_ok": bool((verification_report or {}).get("ok")),
+                "verification_mode": (verification_report or {}).get("verification_mode"),
+            },
         },
         {
             "id": "decision_record_contract",
@@ -256,7 +266,10 @@ def _build_bundle_readme(
         f"- Run: {_REVIEWER_VERIFY_COMMAND}",
         "- Obtain the trusted public key from the reviewer/operator trust channel;",
         "  do not trust a public key only because it is included in this bundle.",
-        "- Inspect verification_report.json for chain and signature status.",
+        "- Verification is only cryptographically complete when a trusted public key",
+        "  verifier is supplied and --require-signature is used.",
+        "- Inspect verification_report.json for chain and signature status;",
+        "  integrity-only reports are not signature-verified.",
         "",
     ]
     return "\n".join(lines)
@@ -280,6 +293,8 @@ def _build_ui_delivery_hook(
         "requires_trusted_public_key": True,
         "signature_required_in_postures": _SIGNATURE_REQUIRED_POSTURES,
         "verification_scope": _VERIFICATION_SCOPE,
+        "verification_requires_trusted_public_key": True,
+        "verification_requires_require_signature_flag": True,
     }
 
 
@@ -453,6 +468,7 @@ def generate_evidence_bundle(
     incident_metadata: Optional[Dict[str, Any]] = None,
     signer_fn: Optional[Callable[[str], str]] = None,
     signer_metadata: Optional[Dict[str, Any]] = None,
+    verify_signature_fn: Optional[Callable[[Dict[str, Any]], bool]] = None,
     decision_record_profile: str = "minimum",
     bundle_id: Optional[str] = None,
     created_by: str = "veritas_os",
@@ -471,6 +487,9 @@ def generate_evidence_bundle(
         incident_metadata: Optional incident metadata.
         signer_fn: Optional callable that signs a payload hash and returns base64.
         signer_metadata: Optional signer metadata dict.
+        verify_signature_fn: Optional trusted signature verifier for witness entries.
+            When omitted, bundle verification is limited to integrity checks and
+            cannot report cryptographic signature verification as passed.
         decision_record_profile: Contract profile used for decision_record.json.
         bundle_id: Optional explicit bundle ID (default: auto-generated UUIDv7).
         created_by: Creator identifier.
@@ -490,6 +509,14 @@ def generate_evidence_bundle(
 
     if not bundle_id:
         bundle_id = _uuid7()
+
+    posture = os.getenv("VERITAS_POSTURE", "dev").strip().lower()
+    signature_required = posture in _SIGNATURE_REQUIRED_POSTURES
+    if signature_required and verify_signature_fn is None:
+        raise ValueError(
+            "Signature verification is required for secure/prod evidence bundle "
+            "generation; provide verify_signature_fn."
+        )
 
     # Load and filter entries
     all_entries = _load_witness_entries(witness_ledger_path)
@@ -586,21 +613,60 @@ def generate_evidence_bundle(
         written_files.append("release_provenance.json")
 
     verify_result: Dict[str, Any] = {}
-    # Run verification and include report
+    # Run verification and include report. Never substitute a permissive/no-op
+    # verifier: signature_ok may only pass when a trusted verifier runs.
     try:
         from veritas_os.audit.trustlog_verify import verify_witness_ledger
 
-        def _noop_verify(_entry: Dict[str, Any]) -> bool:
-            return True  # Signature verification is optional in bundle context
-
+        signature_performed = verify_signature_fn is not None
         verify_result = verify_witness_ledger(
             entries=entries,
-            verify_signature_fn=_noop_verify,
+            verify_signature_fn=verify_signature_fn,
         )
+        limitations = [] if signature_performed else ["signature_verifier_not_provided"]
+        verify_result.update(
+            {
+                "verification_mode": (
+                    "signature_and_integrity" if signature_performed else "integrity_only"
+                ),
+                "signature_verification_performed": signature_performed,
+                "signature_verification_required": signature_required,
+                "verification_limitations": limitations,
+            }
+        )
+        if not signature_performed:
+            verify_result["signature_ok"] = False
+            verify_result["ok"] = False
         _write_json_file(bundle_dir, "verification_report.json", verify_result)
         written_files.append("verification_report.json")
     except Exception as exc:  # noqa: BLE001
-        _logger.warning("Bundle verification skipped: %s", exc)
+        stable_error = exc.__class__.__name__
+        if signature_required:
+            raise ValueError(
+                f"Evidence bundle verification failed: {stable_error}"
+            ) from exc
+        _logger.warning("Bundle verification failed: %s", exc)
+        verify_result = {
+            "ledger": "witness",
+            "total_entries": len(entries),
+            "valid_entries": 0,
+            "invalid_entries": len(entries),
+            "chain_ok": False,
+            "signature_ok": False,
+            "linkage_ok": False,
+            "mirror_ok": False,
+            "last_hash": None,
+            "detailed_errors": [],
+            "verification_notes": [],
+            "ok": False,
+            "signature_verification_performed": verify_signature_fn is not None,
+            "signature_verification_required": signature_required,
+            "verification_mode": "verification_failed",
+            "verification_error": stable_error,
+            "verification_limitations": ["verification_exception"],
+        }
+        _write_json_file(bundle_dir, "verification_report.json", verify_result)
+        written_files.append("verification_report.json")
 
     if bundle_type == "decision":
         decision_entry = entries[0]
@@ -622,6 +688,7 @@ def generate_evidence_bundle(
         bundle_type,
         tuple(sorted(written_files)),
         decision_record_profile=decision_record_profile,
+        verification_report=verify_result,
     )
     _write_json_file(bundle_dir, "acceptance_checklist.json", acceptance_checklist)
     written_files.append("acceptance_checklist.json")
