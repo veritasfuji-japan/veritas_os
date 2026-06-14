@@ -14,7 +14,10 @@ from veritas_os.governance.human_approval_receipt import (
     validate_human_approval_receipt,
     with_receipt_hash,
 )
-from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
+from veritas_os.governance.runtime_authority import (
+    RuntimeAuthorityValidationResult,
+    RuntimeAuthorityValidator,
+)
 
 
 def _receipt(**overrides: object) -> HumanApprovalReceipt:
@@ -453,3 +456,148 @@ def test_runtime_authority_blocks_invalid_human_approval_receipt_state(
     assert result.status == "fail"
     assert result.recommended_outcome == "block"
     assert reason in result.reason_summary
+
+
+def _approval_reason(result: RuntimeAuthorityValidationResult) -> str:
+    return next(
+        predicate.reason
+        for predicate in result.missing_predicates
+        if predicate.predicate_type == "human_approval_present"
+    )
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_passes_with_valid_human_approval_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+    validator = RuntimeAuthorityValidator()
+
+    result = validator.validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_receipt=_receipt(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+    assert result.recommended_outcome == "commit"
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_rejects_compatibility_state_without_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+    validator = RuntimeAuthorityValidator()
+    approval_state = build_human_approval_state(
+        _receipt(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    result = validator.validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state=approval_state,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_receipt_required"
+
+
+def test_dev_posture_keeps_compatibility_state_support(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    validator = RuntimeAuthorityValidator()
+    approval_state = build_human_approval_state(
+        _receipt(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    result = validator.validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state=approval_state,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+
+
+def test_dev_posture_rejects_raw_approved_dict(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    validator = RuntimeAuthorityValidator()
+
+    result = validator.validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state={"approved": True},
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_receipt_missing"
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+@pytest.mark.parametrize(
+    ("receipt_overrides", "expected_reason"),
+    [
+        ({"expires_at": "2026-04-01T00:00:00+00:00"}, "human_approval_expired"),
+        ({"signature_verified": False}, "human_approval_signature_unverified"),
+        ({"approved_scope": ["ledger:credit"]}, "human_approval_scope_not_granted"),
+    ],
+)
+def test_strict_posture_invalid_receipt_propagates_validation_reason(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+    receipt_overrides: dict[str, object],
+    expected_reason: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+    validator = RuntimeAuthorityValidator()
+
+    result = validator.validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_receipt=_receipt(**receipt_overrides),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == expected_reason

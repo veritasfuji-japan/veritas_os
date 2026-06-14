@@ -27,6 +27,14 @@ It is designed to make approval:
   - action-class mismatch.
 - A compatibility helper that converts the receipt into the existing runtime `human_approval_state` shape.
 
+## Runtime posture trust boundary
+
+Runtime approval validation is posture-aware:
+
+- `dev` and `test` style local workflows may use receipt-derived compatibility `human_approval_state` dictionaries produced by `build_human_approval_state()` for demos, fixtures, and migration.
+- `secure` and `prod` posture require an explicit `HumanApprovalReceipt` object, or a future signed approval artifact path, when human approval is needed. Compatibility dictionaries alone are not authoritative in those postures.
+- `approval_validation_hash` is tamper-evident metadata for accidental/internal mutation detection. It is not cryptographically signed and is not a substitute for receipt verification across an external trust boundary.
+
 ## Explicit boundary (non-goals)
 
 This is local/offline v1 only.
