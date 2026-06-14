@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from uuid import uuid4
 from typing import Any, Callable, Literal
 
 from veritas_os.security.hash import sha256_of_canonical_json
@@ -17,6 +18,21 @@ HUMAN_APPROVAL_STATE_SOURCE = "validated_human_approval_receipt"
 ApprovalResult = Literal["approved", "denied", "expired", "indeterminate"]
 SIGNED_APPROVAL_ARTIFACT_TYPE = "human_approval_receipt"
 SIGNED_APPROVAL_ARTIFACT_VERSION = "v1"
+VERIFICATION_SOURCE_SIGNED_ARTIFACT = "signed_human_approval_artifact"
+VERIFIER_DERIVED_PROVENANCE_KEYS = frozenset(
+    {
+        "verification_source",
+        "artifact_type",
+        "artifact_version",
+        "signer_key_id",
+        "signer_algorithm",
+        "signed_at",
+        "verified_at",
+        "receipt_hash_verified",
+        "signature_verified_by_runtime",
+    }
+)
+_VERIFIED_RECEIPT_REGISTRY: dict[int, str] = {}
 
 
 @dataclass(frozen=True)
@@ -86,7 +102,58 @@ def _receipt_from_signed_payload(payload: dict[str, Any]) -> HumanApprovalReceip
     receipt_payload.pop("receipt_hash", None)
     receipt_payload["signature_verified"] = False
     receipt_payload["receipt_hash"] = ""
+    receipt_payload["metadata"] = _without_verifier_derived_provenance(
+        receipt_payload.get("metadata")
+    )
     return HumanApprovalReceipt(**receipt_payload)
+
+
+def _without_verifier_derived_provenance(value: Any) -> dict[str, Any]:
+    """Return caller metadata with verifier-controlled provenance stripped."""
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key): item
+        for key, item in value.items()
+        if str(key) not in VERIFIER_DERIVED_PROVENANCE_KEYS
+    }
+
+
+def _artifact_signer_metadata(artifact: dict[str, Any]) -> tuple[str | None, str | None]:
+    signer = artifact.get("signer")
+    if not isinstance(signer, dict):
+        return None, None
+    key_id = signer.get("key_id")
+    algorithm = signer.get("algorithm")
+    return (
+        None if key_id is None else str(key_id),
+        None if algorithm is None else str(algorithm),
+    )
+
+
+def has_verified_human_approval_artifact_provenance(
+    receipt: HumanApprovalReceipt,
+) -> bool:
+    """Return whether a receipt has in-process verifier-derived provenance.
+
+    The public metadata fields are inspectable and serializable, but they are
+    not cryptographically sealed. This in-process registry prevents a naked
+    caller-constructed dataclass with forged metadata from being accepted in
+    the current runtime process. A serialized copy still requires future sealed
+    receipt/proof-object work before it can be distinguished cryptographically.
+    """
+    metadata = receipt.metadata
+    runtime_token = metadata.get("_runtime_verification_token")
+    return (
+        isinstance(runtime_token, str)
+        and _VERIFIED_RECEIPT_REGISTRY.get(id(receipt)) == runtime_token
+        and receipt.signature_verified is True
+        and metadata.get("verification_source") == VERIFICATION_SOURCE_SIGNED_ARTIFACT
+        and metadata.get("artifact_type") == SIGNED_APPROVAL_ARTIFACT_TYPE
+        and metadata.get("artifact_version") == SIGNED_APPROVAL_ARTIFACT_VERSION
+        and metadata.get("signature_verified_by_runtime") is True
+        and metadata.get("receipt_hash_verified") is True
+    )
 
 
 def verify_human_approval_receipt_artifact(
@@ -128,10 +195,30 @@ def verify_human_approval_receipt_artifact(
     if verify_signature_fn(artifact) is not True:
         raise ValueError("human_approval_signature_verification_failed")
 
+    signer_key_id, signer_algorithm = _artifact_signer_metadata(artifact)
+    verified_at = (now or datetime.now(UTC)).isoformat()
     verified_payload = unsigned_receipt.to_dict()
     verified_payload["signature_verified"] = True
     verified_payload["receipt_hash"] = expected_hash
+    runtime_token = uuid4().hex
+    verified_metadata = dict(verified_payload.get("metadata") or {})
+    verified_metadata.update(
+        {
+            "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
+            "artifact_type": SIGNED_APPROVAL_ARTIFACT_TYPE,
+            "artifact_version": SIGNED_APPROVAL_ARTIFACT_VERSION,
+            "signer_key_id": signer_key_id,
+            "signer_algorithm": signer_algorithm,
+            "signed_at": artifact.get("signed_at"),
+            "verified_at": verified_at,
+            "receipt_hash_verified": True,
+            "signature_verified_by_runtime": True,
+            "_runtime_verification_token": runtime_token,
+        }
+    )
+    verified_payload["metadata"] = verified_metadata
     verified_receipt = HumanApprovalReceipt(**verified_payload)
+    _VERIFIED_RECEIPT_REGISTRY[id(verified_receipt)] = runtime_token
     validation_result = validate_human_approval_receipt(
         verified_receipt,
         requested_scope=requested_scope,
