@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import (
@@ -18,6 +18,7 @@ from veritas_os.governance.human_approval_receipt import (
     HumanApprovalReceipt,
     build_human_approval_state,
     human_approval_state_validation_hash,
+    verify_human_approval_receipt_artifact,
 )
 from veritas_os.governance.predicates import PredicateResult
 
@@ -73,6 +74,10 @@ class RuntimeAuthorityValidator:
         actor_identity: str | None,
         human_approval_state: dict[str, Any] | None = None,
         human_approval_receipt: HumanApprovalReceipt | None = None,
+        human_approval_artifact: dict[str, Any] | None = None,
+        verify_human_approval_signature_fn: (
+            Callable[[dict[str, Any]], bool] | None
+        ) = None,
         bind_context_metadata: dict[str, Any] | None = None,
         now: datetime | None = None,
     ) -> RuntimeAuthorityValidationResult:
@@ -281,6 +286,8 @@ class RuntimeAuthorityValidator:
             approval_ok, approval_reason = self._validated_human_approval(
                 human_approval_state=human_approval_state,
                 human_approval_receipt=human_approval_receipt,
+                human_approval_artifact=human_approval_artifact,
+                verify_human_approval_signature_fn=verify_human_approval_signature_fn,
                 requested_scope=requested_scope,
                 action_contract=action_contract,
                 policy_snapshot_id=policy_snapshot_id,
@@ -382,6 +389,8 @@ class RuntimeAuthorityValidator:
         *,
         human_approval_state: dict[str, Any],
         human_approval_receipt: HumanApprovalReceipt | None,
+        human_approval_artifact: dict[str, Any] | None,
+        verify_human_approval_signature_fn: Callable[[dict[str, Any]], bool] | None,
         requested_scope: list[str],
         action_contract: ActionClassContract | None,
         policy_snapshot_id: str | None,
@@ -390,17 +399,40 @@ class RuntimeAuthorityValidator:
         """Validate human approval using posture-aware trust boundaries.
 
         Secure and production postures require an explicit
-        ``HumanApprovalReceipt`` (or a future signed approval artifact path) as
-        the authoritative approval source. Compatibility dictionaries remain
-        accepted only in dev/test-style postures because their deterministic
+        signed approval artifact, or a ``HumanApprovalReceipt`` whose signature
+        has already been verified, as the authoritative approval source.
+        Compatibility dictionaries remain accepted only in dev/test-style
+        postures because their deterministic
         validation hash is tamper-evident, not cryptographically signed.
         """
         strict_posture = self._requires_receipt_for_human_approval()
+        action_class = action_contract.action_class if action_contract else None
+        if human_approval_artifact is not None:
+            try:
+                verified_receipt = verify_human_approval_receipt_artifact(
+                    human_approval_artifact,
+                    verify_human_approval_signature_fn,
+                    requested_scope=requested_scope,
+                    action_class=action_class,
+                    policy_snapshot_id=policy_snapshot_id,
+                    now=now,
+                )
+            except ValueError as exc:
+                return False, str(exc)
+            receipt_state = build_human_approval_state(
+                verified_receipt,
+                requested_scope=requested_scope,
+                action_class=action_class,
+                policy_snapshot_id=policy_snapshot_id,
+                now=now,
+            )
+            return self._validated_human_approval_state(receipt_state)
+
         if human_approval_receipt is not None:
             receipt_state = build_human_approval_state(
                 human_approval_receipt,
                 requested_scope=requested_scope,
-                action_class=action_contract.action_class if action_contract else None,
+                action_class=action_class,
                 policy_snapshot_id=policy_snapshot_id,
                 now=now,
             )

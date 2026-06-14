@@ -12,6 +12,7 @@ from veritas_os.governance.human_approval_receipt import (
     HumanApprovalReceipt,
     build_human_approval_state,
     validate_human_approval_receipt,
+    verify_human_approval_receipt_artifact,
     with_receipt_hash,
 )
 from veritas_os.governance.runtime_authority import (
@@ -41,6 +42,30 @@ def _receipt(**overrides: object) -> HumanApprovalReceipt:
     }
     payload.update(overrides)
     return HumanApprovalReceipt(**payload)
+
+
+def _signed_artifact(
+    receipt: HumanApprovalReceipt | None = None,
+    **overrides: object,
+) -> dict[str, object]:
+    base_receipt = receipt or _receipt(signature_verified=False)
+    receipt_payload = base_receipt.to_dict_for_hash()
+    receipt_payload["signature_verified"] = True
+    digest_payload = dict(receipt_payload)
+    digest_payload["signature_verified"] = False
+    digest_payload["receipt_hash"] = ""
+    digest_receipt = HumanApprovalReceipt(**digest_payload)
+    artifact = {
+        "artifact_type": "human_approval_receipt",
+        "artifact_version": "v1",
+        "receipt": receipt_payload,
+        "receipt_hash": digest_receipt.deterministic_digest(),
+        "signature": "test-signature",
+        "signer": {"key_id": "test-key", "algorithm": "test-only"},
+        "signed_at": "2026-05-01T00:00:00+00:00",
+    }
+    artifact.update(overrides)
+    return artifact
 
 
 def _contract(**overrides: object) -> ActionClassContract:
@@ -601,3 +626,154 @@ def test_strict_posture_invalid_receipt_propagates_validation_reason(
 
     assert result.status == "fail"
     assert _approval_reason(result) == expected_reason
+
+
+def test_signed_human_approval_artifact_verification_sets_signature_verified() -> None:
+    artifact = _signed_artifact()
+
+    receipt = verify_human_approval_receipt_artifact(
+        artifact,
+        lambda signed_artifact: signed_artifact["signature"] == "test-signature",
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert receipt.signature_verified is True
+    assert receipt.receipt_hash == artifact["receipt_hash"]
+
+
+def test_signed_human_approval_artifact_bad_signature_fails() -> None:
+    artifact = _signed_artifact()
+
+    with pytest.raises(ValueError, match="human_approval_signature_verification_failed"):
+        verify_human_approval_receipt_artifact(
+            artifact,
+            lambda _artifact: False,
+            requested_scope=["ledger:debit"],
+            action_class="wire_transfer",
+            policy_snapshot_id="policy-001",
+            now=datetime(2026, 5, 10, tzinfo=UTC),
+        )
+
+
+def test_signed_human_approval_artifact_tampered_receipt_hash_fails() -> None:
+    artifact = _signed_artifact(receipt_hash="f" * 64)
+
+    with pytest.raises(ValueError, match="human_approval_receipt_hash_mismatch"):
+        verify_human_approval_receipt_artifact(
+            artifact,
+            lambda _artifact: True,
+            requested_scope=["ledger:debit"],
+            action_class="wire_transfer",
+            policy_snapshot_id="policy-001",
+            now=datetime(2026, 5, 10, tzinfo=UTC),
+        )
+
+
+def test_signed_human_approval_artifact_without_verifier_fails() -> None:
+    with pytest.raises(ValueError, match="human_approval_signature_verifier_required"):
+        verify_human_approval_receipt_artifact(
+            _signed_artifact(),
+            None,
+            requested_scope=["ledger:debit"],
+            action_class="wire_transfer",
+            policy_snapshot_id="policy-001",
+            now=datetime(2026, 5, 10, tzinfo=UTC),
+        )
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_passes_with_valid_signed_human_approval_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: True,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+    assert result.recommended_outcome == "commit"
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_rejects_signed_artifact_with_bad_signature(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: False,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_signature_verification_failed"
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_rejects_signed_artifact_with_tampered_receipt_hash(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(receipt_hash="f" * 64),
+        verify_human_approval_signature_fn=lambda _artifact: True,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_receipt_hash_mismatch"
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_rejects_signed_artifact_without_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_signature_verifier_required"

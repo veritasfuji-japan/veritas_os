@@ -8,13 +8,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from veritas_os.security.hash import sha256_of_canonical_json
 
 HUMAN_APPROVAL_STATE_SOURCE = "validated_human_approval_receipt"
 
 ApprovalResult = Literal["approved", "denied", "expired", "indeterminate"]
+SIGNED_APPROVAL_ARTIFACT_TYPE = "human_approval_receipt"
+SIGNED_APPROVAL_ARTIFACT_VERSION = "v1"
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,70 @@ def with_receipt_hash(receipt: HumanApprovalReceipt) -> HumanApprovalReceipt:
     data = receipt.to_dict()
     data["receipt_hash"] = digest
     return HumanApprovalReceipt(**data)
+
+
+def _receipt_from_signed_payload(payload: dict[str, Any]) -> HumanApprovalReceipt:
+    """Build a receipt from signed artifact payload without trusting signature state."""
+    receipt_payload = dict(payload)
+    receipt_payload.pop("receipt_hash", None)
+    receipt_payload["signature_verified"] = False
+    receipt_payload["receipt_hash"] = ""
+    return HumanApprovalReceipt(**receipt_payload)
+
+
+def verify_human_approval_receipt_artifact(
+    artifact: dict[str, Any],
+    verify_signature_fn: Callable[[dict[str, Any]], bool] | None,
+    *,
+    requested_scope: list[str],
+    action_class: str | None,
+    policy_snapshot_id: str | None,
+    now: datetime | None = None,
+) -> HumanApprovalReceipt:
+    """Verify a signed Human Approval Receipt artifact fail-closed.
+
+    The caller-supplied ``signature_verified`` value in raw artifact data is
+    never trusted. This helper recomputes the canonical receipt hash, requires
+    an explicit signature verifier, invokes it over the full artifact, and only
+    then returns a ``HumanApprovalReceipt`` with ``signature_verified=True``.
+    Existing receipt validation errors are raised as deterministic reason
+    strings so runtime authority can propagate them without opening a bypass.
+    """
+    if not isinstance(artifact, dict):
+        raise ValueError("human_approval_artifact_invalid")
+    if artifact.get("artifact_type") != SIGNED_APPROVAL_ARTIFACT_TYPE:
+        raise ValueError("human_approval_artifact_type_invalid")
+    if artifact.get("artifact_version") != SIGNED_APPROVAL_ARTIFACT_VERSION:
+        raise ValueError("human_approval_artifact_version_invalid")
+    if verify_signature_fn is None:
+        raise ValueError("human_approval_signature_verifier_required")
+
+    receipt_payload = artifact.get("receipt")
+    if not isinstance(receipt_payload, dict):
+        raise ValueError("human_approval_receipt_missing")
+
+    unsigned_receipt = _receipt_from_signed_payload(receipt_payload)
+    expected_hash = unsigned_receipt.deterministic_digest()
+    if artifact.get("receipt_hash") != expected_hash:
+        raise ValueError("human_approval_receipt_hash_mismatch")
+
+    if verify_signature_fn(artifact) is not True:
+        raise ValueError("human_approval_signature_verification_failed")
+
+    verified_payload = unsigned_receipt.to_dict()
+    verified_payload["signature_verified"] = True
+    verified_payload["receipt_hash"] = expected_hash
+    verified_receipt = HumanApprovalReceipt(**verified_payload)
+    validation_result = validate_human_approval_receipt(
+        verified_receipt,
+        requested_scope=requested_scope,
+        action_class=action_class,
+        policy_snapshot_id=policy_snapshot_id,
+        now=now,
+    )
+    if not validation_result.is_valid:
+        raise ValueError(validation_result.failure_reasons[0])
+    return verified_receipt
 
 
 @dataclass(frozen=True)
