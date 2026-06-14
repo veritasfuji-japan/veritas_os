@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -386,7 +387,15 @@ class RuntimeAuthorityValidator:
         policy_snapshot_id: str | None,
         now: datetime | None,
     ) -> tuple[bool, str]:
-        """Validate human approval from a receipt before compatibility state."""
+        """Validate human approval using posture-aware trust boundaries.
+
+        Secure and production postures require an explicit
+        ``HumanApprovalReceipt`` (or a future signed approval artifact path) as
+        the authoritative approval source. Compatibility dictionaries remain
+        accepted only in dev/test-style postures because their deterministic
+        validation hash is tamper-evident, not cryptographically signed.
+        """
+        strict_posture = self._requires_receipt_for_human_approval()
         if human_approval_receipt is not None:
             receipt_state = build_human_approval_state(
                 human_approval_receipt,
@@ -397,7 +406,14 @@ class RuntimeAuthorityValidator:
             )
             return self._validated_human_approval_state(receipt_state)
 
+        if strict_posture:
+            return False, "human_approval_receipt_required"
+
         return self._validated_human_approval_state(human_approval_state)
+
+    def _requires_receipt_for_human_approval(self) -> bool:
+        """Return whether current posture requires receipt-backed approval."""
+        return os.getenv("VERITAS_POSTURE", "dev").strip().lower() in {"secure", "prod"}
 
     def _validated_human_approval_state(
         self,
