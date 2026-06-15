@@ -128,7 +128,7 @@ class HumanApprovalSignatureVerifier(Protocol):
 
 Production deployments must bind this contract to deployment-controlled cryptographic infrastructure, such as KMS, HSM, or trusted public-key verification. The verifier must return verifier-derived `verified`, `key_id`, `algorithm`, `signer_identity`, `signer_role`, and `reason` metadata. `RuntimeAuthorityValidator` remains implementation agnostic: it can use `human_approval_signature_verifier` or the older `verify_human_approval_signature_fn`, but `secure`/`prod` should prefer the interface and still rejects bare boolean results.
 
-No production verifier is provided or assumed by default. `TestHumanApprovalSignatureVerifier` is a deterministic test/dev-only helper for fixtures and demos; it is not production assurance and must not be treated as evidence of real cryptographic verification.
+No production verifier is provided or assumed by default. Production deployments must provide their own `HumanApprovalSignatureVerifier` bound to deployment-controlled KMS, HSM, or trusted public-key infrastructure. `TestHumanApprovalSignatureVerifier` is a deterministic test/dev-only helper for fixtures and demos; it is explicitly marked test-only and `RuntimeAuthorityValidator` blocks it in `secure`/`prod` posture with `human_approval_test_signature_verifier_not_allowed`. Local/dev demos may use the test verifier only outside strict posture; it is not production assurance and must not be treated as evidence of real cryptographic verification.
 
 ## Explicit boundary (non-goals)
 
