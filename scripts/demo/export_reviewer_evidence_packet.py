@@ -53,6 +53,16 @@ def _human_approval_summary(human_approval_state: dict[str, Any]) -> dict[str, A
         "approver_role": human_approval_state.get("approver_role"),
         "approved_scope": list(human_approval_state.get("approved_scope", [])),
         "receipt_hash_present": bool(receipt_hash),
+        "context_binding": {
+            "request_ref": human_approval_state.get("request_ref"),
+            "ai_output_ref": human_approval_state.get("ai_output_ref"),
+            "execution_intent_id": human_approval_state.get("execution_intent_id"),
+            "decision_id": human_approval_state.get("decision_id"),
+            "action_class": human_approval_state.get("approved_action_class"),
+            "policy_snapshot_id": human_approval_state.get("policy_snapshot_id"),
+            "authority_evidence_id": human_approval_state.get("authority_evidence_id"),
+            "bind_context_hash": human_approval_state.get("bind_context_hash"),
+        },
         "failure_reasons": list(human_approval_state.get("failure_reasons", [])),
     }
 

@@ -209,6 +209,7 @@
         "approver_role",
         "approved_scope",
         "receipt_hash_present",
+        "context_binding",
         "failure_reasons"
       ],
       "properties": {
@@ -241,6 +242,9 @@
         },
         "failure_reasons": {
           "$ref": "#/$defs/string_array"
+        },
+        "context_binding": {
+          "$ref": "#/$defs/human_approval_context_binding"
         }
       }
     },
@@ -868,6 +872,70 @@
         },
         "key_provenance_result_validation_report": {
           "$ref": "#/$defs/key_provenance_result_validation_report_reference"
+        }
+      }
+    },
+    "human_approval_context_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_ref",
+        "ai_output_ref",
+        "execution_intent_id",
+        "decision_id",
+        "action_class",
+        "policy_snapshot_id",
+        "authority_evidence_id",
+        "bind_context_hash"
+      ],
+      "properties": {
+        "request_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ai_output_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "execution_intent_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "action_class": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policy_snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authority_evidence_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind_context_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }

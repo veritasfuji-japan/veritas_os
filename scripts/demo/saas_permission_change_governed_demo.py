@@ -96,6 +96,9 @@ def _human_approval_receipt(
         approval_result="approved",
         signature_verified=True,
         receipt_hash="",
+        request_ref="request-saas-permission-change-001",
+        ai_output_ref="ai-output-saas-permission-change-001",
+        bind_context_hash="bind-context-saas-permission-change-001",
         metadata={"fixture": True},
     )
 
@@ -152,6 +155,10 @@ def _evaluate_case(
         policy_snapshot_id="policy-snapshot-saas-001",
         actor_identity="agent:ops-assistant",
         human_approval_state=human_approval_state,
+        request_ref="request-saas-permission-change-001",
+        ai_output_ref="ai-output-saas-permission-change-001",
+        execution_intent_id="intent-saas-001",
+        bind_context_hash="bind-context-saas-permission-change-001",
         bind_context_metadata={"session_id": "bind-saas-001", "fixture": True},
         now=FIXED_NOW,
     )
