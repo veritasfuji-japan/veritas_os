@@ -16,6 +16,8 @@ from veritas_os.governance.authority_evidence import (
 from veritas_os.governance.human_approval_receipt import (
     HUMAN_APPROVAL_STATE_SOURCE,
     HumanApprovalReceipt,
+    HumanApprovalSignatureVerificationResult,
+    HumanApprovalSignerPolicy,
     VerifiedHumanApprovalReceipt,
     build_human_approval_state,
     has_verified_human_approval_artifact_provenance,
@@ -80,8 +82,10 @@ class RuntimeAuthorityValidator:
         verified_human_approval: VerifiedHumanApprovalReceipt | None = None,
         human_approval_artifact: dict[str, Any] | None = None,
         verify_human_approval_signature_fn: (
-            Callable[[dict[str, Any]], bool] | None
+            Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult]
+            | None
         ) = None,
+        human_approval_signer_policy: HumanApprovalSignerPolicy | None = None,
         bind_context_metadata: dict[str, Any] | None = None,
         now: datetime | None = None,
     ) -> RuntimeAuthorityValidationResult:
@@ -293,6 +297,7 @@ class RuntimeAuthorityValidator:
                 verified_human_approval=verified_human_approval,
                 human_approval_artifact=human_approval_artifact,
                 verify_human_approval_signature_fn=verify_human_approval_signature_fn,
+                human_approval_signer_policy=human_approval_signer_policy,
                 requested_scope=requested_scope,
                 action_contract=action_contract,
                 policy_snapshot_id=policy_snapshot_id,
@@ -396,7 +401,11 @@ class RuntimeAuthorityValidator:
         human_approval_receipt: HumanApprovalReceipt | None,
         verified_human_approval: VerifiedHumanApprovalReceipt | None,
         human_approval_artifact: dict[str, Any] | None,
-        verify_human_approval_signature_fn: Callable[[dict[str, Any]], bool] | None,
+        verify_human_approval_signature_fn: (
+            Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult]
+            | None
+        ),
+        human_approval_signer_policy: HumanApprovalSignerPolicy | None,
         requested_scope: list[str],
         action_contract: ActionClassContract | None,
         policy_snapshot_id: str | None,
@@ -434,6 +443,7 @@ class RuntimeAuthorityValidator:
                     action_class=action_class,
                     policy_snapshot_id=policy_snapshot_id,
                     now=now,
+                    signer_policy=human_approval_signer_policy,
                 )
             except ValueError as exc:
                 return False, str(exc)

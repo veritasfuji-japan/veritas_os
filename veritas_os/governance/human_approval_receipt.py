@@ -28,6 +28,11 @@ VERIFICATION_PROOF_HASH_FIELDS = (
     "signed_at",
     "verified_at",
     "verification_source",
+    "signer_identity",
+    "signer_role",
+    "signer_policy_id",
+    "signer_policy_hash",
+    "signature_verification_reason",
 )
 VERIFIER_DERIVED_PROVENANCE_KEYS = frozenset(
     {
@@ -40,9 +45,68 @@ VERIFIER_DERIVED_PROVENANCE_KEYS = frozenset(
         "verified_at",
         "receipt_hash_verified",
         "signature_verified_by_runtime",
+        "signer_identity",
+        "signer_role",
+        "signer_policy_id",
+        "signer_policy_hash",
+        "signature_verification_reason",
     }
 )
 _VERIFIED_RECEIPT_REGISTRY: dict[int, str] = {}
+
+
+@dataclass(frozen=True)
+class HumanApprovalSignerPolicy:
+    """Policy constraints for signed HumanApprovalReceipt signers."""
+
+    policy_id: str
+    allowed_key_ids: list[str]
+    allowed_algorithms: list[str]
+    required_signer_roles: list[str] | None = None
+    allowed_action_classes: list[str] | None = None
+    allowed_policy_snapshot_ids: list[str] | None = None
+    policy_hash: str | None = None
+
+    def to_dict_for_hash(self) -> dict[str, Any]:
+        """Return canonical signer policy fields for provenance hashing."""
+        return {
+            "policy_id": self.policy_id,
+            "allowed_key_ids": sorted(str(item) for item in self.allowed_key_ids),
+            "allowed_algorithms": sorted(str(item) for item in self.allowed_algorithms),
+            "required_signer_roles": (
+                None
+                if self.required_signer_roles is None
+                else sorted(str(item) for item in self.required_signer_roles)
+            ),
+            "allowed_action_classes": (
+                None
+                if self.allowed_action_classes is None
+                else sorted(str(item) for item in self.allowed_action_classes)
+            ),
+            "allowed_policy_snapshot_ids": (
+                None
+                if self.allowed_policy_snapshot_ids is None
+                else sorted(str(item) for item in self.allowed_policy_snapshot_ids)
+            ),
+        }
+
+    def deterministic_hash(self) -> str:
+        """Return the explicit policy hash or a canonical hash of policy fields."""
+        if self.policy_hash:
+            return self.policy_hash
+        return sha256_of_canonical_json(self.to_dict_for_hash())
+
+
+@dataclass(frozen=True)
+class HumanApprovalSignatureVerificationResult:
+    """Structured cryptographic verification result with signer metadata."""
+
+    verified: bool
+    key_id: str | None = None
+    algorithm: str | None = None
+    signer_identity: str | None = None
+    signer_role: str | None = None
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -115,6 +179,11 @@ class VerifiedHumanApprovalReceipt:
     receipt_hash: str
     signer_key_id: str | None
     signer_algorithm: str | None
+    signer_identity: str | None
+    signer_role: str | None
+    signer_policy_id: str
+    signer_policy_hash: str
+    signature_verification_reason: str | None
     signed_at: str | None
     verified_at: str
     verification_source: Literal["signed_human_approval_artifact"]
@@ -128,6 +197,11 @@ class VerifiedHumanApprovalReceipt:
             "artifact_version": self.artifact_version,
             "signer_key_id": self.signer_key_id,
             "signer_algorithm": self.signer_algorithm,
+            "signer_identity": self.signer_identity,
+            "signer_role": self.signer_role,
+            "signer_policy_id": self.signer_policy_id,
+            "signer_policy_hash": self.signer_policy_hash,
+            "signature_verification_reason": self.signature_verification_reason,
             "signed_at": self.signed_at,
             "verified_at": self.verified_at,
             "verification_source": self.verification_source,
@@ -183,6 +257,55 @@ def _artifact_signer_metadata(artifact: dict[str, Any]) -> tuple[str | None, str
     )
 
 
+def _structured_verification_result(
+    raw_result: bool | HumanApprovalSignatureVerificationResult,
+    artifact: dict[str, Any],
+) -> HumanApprovalSignatureVerificationResult:
+    """Normalize legacy bool verifier output into structured metadata."""
+    if isinstance(raw_result, HumanApprovalSignatureVerificationResult):
+        return raw_result
+    key_id, algorithm = _artifact_signer_metadata(artifact)
+    signer = artifact.get("signer") if isinstance(artifact.get("signer"), dict) else {}
+    return HumanApprovalSignatureVerificationResult(
+        verified=raw_result is True,
+        key_id=key_id,
+        algorithm=algorithm,
+        signer_identity=(
+            None
+            if signer.get("identity") is None
+            else str(signer.get("identity"))
+        ),
+        signer_role=None if signer.get("role") is None else str(signer.get("role")),
+        reason="legacy_bool_verifier" if raw_result is True else None,
+    )
+
+
+def _validate_signer_policy(
+    result: HumanApprovalSignatureVerificationResult,
+    policy: HumanApprovalSignerPolicy,
+    *,
+    action_class: str | None,
+    policy_snapshot_id: str | None,
+) -> None:
+    """Fail closed when verifier signer metadata violates signer policy."""
+    if result.key_id not in {str(item) for item in policy.allowed_key_ids}:
+        raise ValueError("human_approval_signer_key_not_allowed")
+    if result.algorithm not in {str(item) for item in policy.allowed_algorithms}:
+        raise ValueError("human_approval_signer_algorithm_not_allowed")
+    if policy.required_signer_roles is not None:
+        roles = {str(item) for item in policy.required_signer_roles}
+        if result.signer_role not in roles:
+            raise ValueError("human_approval_signer_role_not_allowed")
+    if policy.allowed_action_classes is not None:
+        actions = {str(item) for item in policy.allowed_action_classes}
+        if action_class not in actions:
+            raise ValueError("human_approval_signer_action_class_not_allowed")
+    if policy.allowed_policy_snapshot_ids is not None:
+        snapshots = {str(item) for item in policy.allowed_policy_snapshot_ids}
+        if policy_snapshot_id not in snapshots:
+            raise ValueError("human_approval_signer_policy_snapshot_not_allowed")
+
+
 def has_verified_human_approval_artifact_provenance(
     receipt: HumanApprovalReceipt,
 ) -> bool:
@@ -210,12 +333,16 @@ def has_verified_human_approval_artifact_provenance(
 
 def verify_human_approval_receipt_artifact_to_proof(
     artifact: dict[str, Any],
-    verify_signature_fn: Callable[[dict[str, Any]], bool] | None,
+    verify_signature_fn: (
+        Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult]
+        | None
+    ),
     *,
     requested_scope: list[str],
     action_class: str | None,
     policy_snapshot_id: str | None,
     now: datetime | None = None,
+    signer_policy: HumanApprovalSignerPolicy | None = None,
 ) -> VerifiedHumanApprovalReceipt:
     """Verify a signed artifact and return a sealed approval proof.
 
@@ -243,10 +370,23 @@ def verify_human_approval_receipt_artifact_to_proof(
     if artifact.get("receipt_hash") != expected_hash:
         raise ValueError("human_approval_receipt_hash_mismatch")
 
-    if verify_signature_fn(artifact) is not True:
+    verification_result = _structured_verification_result(
+        verify_signature_fn(artifact), artifact
+    )
+    if verification_result.verified is not True:
         raise ValueError("human_approval_signature_verification_failed")
+    if signer_policy is None:
+        raise ValueError("human_approval_signer_policy_required")
+    _validate_signer_policy(
+        verification_result,
+        signer_policy,
+        action_class=action_class,
+        policy_snapshot_id=policy_snapshot_id,
+    )
 
-    signer_key_id, signer_algorithm = _artifact_signer_metadata(artifact)
+    signer_key_id = verification_result.key_id
+    signer_algorithm = verification_result.algorithm
+    signer_policy_hash = signer_policy.deterministic_hash()
     verified_at = (now or datetime.now(UTC)).isoformat()
     runtime_token = uuid4().hex
     verified_payload = unsigned_receipt.to_dict()
@@ -260,6 +400,11 @@ def verify_human_approval_receipt_artifact_to_proof(
             "artifact_version": SIGNED_APPROVAL_ARTIFACT_VERSION,
             "signer_key_id": signer_key_id,
             "signer_algorithm": signer_algorithm,
+            "signer_identity": verification_result.signer_identity,
+            "signer_role": verification_result.signer_role,
+            "signer_policy_id": signer_policy.policy_id,
+            "signer_policy_hash": signer_policy_hash,
+            "signature_verification_reason": verification_result.reason,
             "signed_at": artifact.get("signed_at"),
             "verified_at": verified_at,
             "receipt_hash_verified": True,
@@ -287,6 +432,11 @@ def verify_human_approval_receipt_artifact_to_proof(
         "receipt_hash": expected_hash,
         "signer_key_id": signer_key_id,
         "signer_algorithm": signer_algorithm,
+        "signer_identity": verification_result.signer_identity,
+        "signer_role": verification_result.signer_role,
+        "signer_policy_id": signer_policy.policy_id,
+        "signer_policy_hash": signer_policy_hash,
+        "signature_verification_reason": verification_result.reason,
         "signed_at": artifact.get("signed_at"),
         "verified_at": verified_at,
         "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
@@ -297,12 +447,16 @@ def verify_human_approval_receipt_artifact_to_proof(
 
 def verify_human_approval_receipt_artifact(
     artifact: dict[str, Any],
-    verify_signature_fn: Callable[[dict[str, Any]], bool] | None,
+    verify_signature_fn: (
+        Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult]
+        | None
+    ),
     *,
     requested_scope: list[str],
     action_class: str | None,
     policy_snapshot_id: str | None,
     now: datetime | None = None,
+    signer_policy: HumanApprovalSignerPolicy | None = None,
 ) -> HumanApprovalReceipt:
     """Verify a signed artifact and return its validated receipt.
 
@@ -318,6 +472,7 @@ def verify_human_approval_receipt_artifact(
         action_class=action_class,
         policy_snapshot_id=policy_snapshot_id,
         now=now,
+        signer_policy=signer_policy,
     ).receipt
 
 

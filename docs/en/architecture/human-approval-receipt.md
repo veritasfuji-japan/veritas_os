@@ -36,11 +36,13 @@ Runtime approval validation is posture-aware:
 - `HumanApprovalReceipt` is the local/offline receipt representation used after validation. It is not, by itself, a cross-process trust-boundary proof.
 - A signed approval artifact is the preferred external-review and `secure`/`prod` trust-boundary format. It wraps the receipt payload, canonical `receipt_hash`, signature, signer metadata, and `signed_at` timestamp.
 - `signature_verified=True` alone is not sufficient across `secure`/`prod` trust boundaries. Raw input is not allowed to self-assert signature verification.
-- Signed artifact verification is the source of runtime approval trust for `secure`/`prod`. `verify_human_approval_receipt_artifact_to_proof()` recomputes the receipt hash, requires the injected verifier, rejects bad signatures, validates scope/action/policy/expiry, and returns a `VerifiedHumanApprovalReceipt`.
-- `VerifiedHumanApprovalReceipt` is the runtime verified proof object. It carries the validated receipt plus signer metadata, `verified_at`, `verification_source`, and `verification_proof_hash` computed over canonical verifier-derived proof fields.
+- Signed artifact verification is the source of runtime approval trust for `secure`/`prod`. `verify_human_approval_receipt_artifact_to_proof()` recomputes the receipt hash, requires the injected verifier, rejects bad signatures, validates signer key ID/algorithm/role/action-class/policy-snapshot authorization against `HumanApprovalSignerPolicy`, validates scope/action/policy/expiry, and returns a `VerifiedHumanApprovalReceipt`.
+- `VerifiedHumanApprovalReceipt` is the runtime verified proof object. It carries the validated receipt plus signer metadata, signer policy provenance, `signature_verification_reason`, `verified_at`, `verification_source`, and `verification_proof_hash` computed over canonical verifier-derived proof fields including `signer_policy_hash`.
 - `secure` and `prod` posture should use either a `VerifiedHumanApprovalReceipt` proof object or the signed artifact verification path. A direct `HumanApprovalReceipt` is accepted only under the transitional in-process registry provenance path. Compatibility dictionaries alone are not authoritative in those postures.
 - A direct `HumanApprovalReceipt` without verifier-derived provenance is a local/offline representation, not a secure/prod trust-boundary proof.
 - `dev` and `test` style local workflows may use receipt-derived compatibility `human_approval_state` dictionaries produced by `build_human_approval_state()` for demos, fixtures, and migration.
+- Cryptographic signature validity is necessary but not sufficient: signer authorization must also be policy-checked before a signed approval is admissible.
+- `VerifiedHumanApprovalReceipt` proves both receipt integrity/signature verification and signer admissibility under governance policy.
 - `approval_validation_hash` is tamper-evident metadata for accidental/internal mutation detection. It is not cryptographically signed and is not a substitute for signed artifact verification across an external trust boundary.
 
 A signed approval artifact has this deterministic v1 envelope shape:
@@ -54,13 +56,15 @@ A signed approval artifact has this deterministic v1 envelope shape:
   "signature": "external signature bytes or encoding",
   "signer": {
     "key_id": "review-key-id",
-    "algorithm": "ed25519|ecdsa-p256|test-only"
+    "algorithm": "ed25519|ecdsa-p256|test-only",
+    "identity": "operator:approver-1",
+    "role": "risk_manager"
   },
   "signed_at": "2026-05-01T00:00:00+00:00"
 }
 ```
 
-Verification is fail-closed: runtime recomputes `receipt_hash`, requires an explicit verifier for signed artifacts, rejects bad signatures, verifies `verification_proof_hash` for proof objects, requires verifier-derived provenance for transitional direct receipts in `secure`/`prod`, and propagates expiry, scope, policy-snapshot, and action-class validation failures.
+Verification is fail-closed: runtime recomputes `receipt_hash`, requires an explicit verifier and `HumanApprovalSignerPolicy` for signed artifacts, rejects bad signatures, rejects signer policy violations with deterministic reasons (`human_approval_signer_key_not_allowed`, `human_approval_signer_algorithm_not_allowed`, `human_approval_signer_role_not_allowed`, `human_approval_signer_action_class_not_allowed`, `human_approval_signer_policy_snapshot_not_allowed`), verifies `verification_proof_hash` for proof objects, requires verifier-derived provenance for transitional direct receipts in `secure`/`prod`, and propagates expiry, scope, policy-snapshot, and action-class validation failures.
 
 Successful artifact verification returns a proof object similar to:
 
@@ -72,6 +76,11 @@ Successful artifact verification returns a proof object similar to:
   "receipt_hash": "canonical sha256 of the receipt payload",
   "signer_key_id": "review-key-id",
   "signer_algorithm": "ed25519",
+  "signer_identity": "operator:approver-1",
+  "signer_role": "risk_manager",
+  "signer_policy_id": "approval-signer-policy-v1",
+  "signer_policy_hash": "canonical sha256 of signer policy",
+  "signature_verification_reason": "kms_signature_valid",
   "signed_at": "2026-05-01T00:00:00+00:00",
   "verified_at": "2026-05-01T00:00:01+00:00",
   "verification_source": "signed_human_approval_artifact",
@@ -88,6 +97,11 @@ For backward compatibility, `verify_human_approval_receipt_artifact()` still ret
   "artifact_version": "v1",
   "signer_key_id": "review-key-id",
   "signer_algorithm": "ed25519",
+  "signer_identity": "operator:approver-1",
+  "signer_role": "risk_manager",
+  "signer_policy_id": "approval-signer-policy-v1",
+  "signer_policy_hash": "canonical sha256 of signer policy",
+  "signature_verification_reason": "kms_signature_valid",
   "signed_at": "2026-05-01T00:00:00+00:00",
   "verified_at": "2026-05-01T00:00:01+00:00",
   "receipt_hash_verified": true,
