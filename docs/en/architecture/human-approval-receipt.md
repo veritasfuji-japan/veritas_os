@@ -27,16 +27,18 @@ It is designed to make approval:
   - action-class mismatch.
 - A compatibility helper that converts the receipt into the existing runtime `human_approval_state` shape.
 - A signed approval artifact envelope for crossing external-review and secure/prod runtime trust boundaries.
+- A sealed `VerifiedHumanApprovalReceipt` proof object emitted only after signed-artifact verification succeeds.
 
 ## Runtime posture trust boundary
 
 Runtime approval validation is posture-aware:
 
-- `HumanApprovalReceipt` is the local/offline receipt representation used after validation.
+- `HumanApprovalReceipt` is the local/offline receipt representation used after validation. It is not, by itself, a cross-process trust-boundary proof.
 - A signed approval artifact is the preferred external-review and `secure`/`prod` trust-boundary format. It wraps the receipt payload, canonical `receipt_hash`, signature, signer metadata, and `signed_at` timestamp.
 - `signature_verified=True` alone is not sufficient across `secure`/`prod` trust boundaries. Raw input is not allowed to self-assert signature verification.
-- Signed artifact verification is the source of runtime approval trust for `secure`/`prod`. `verify_human_approval_receipt_artifact()` recomputes the receipt hash, calls the injected verifier, and only then attaches verifier-derived provenance metadata to the returned receipt.
-- `secure` and `prod` posture prefer a signed approval artifact plus verifier. A direct `HumanApprovalReceipt` is accepted only when it has `signature_verified=True` and verifier-derived provenance showing `verification_source="signed_human_approval_artifact"`, `signature_verified_by_runtime=true`, and `receipt_hash_verified=true`. Compatibility dictionaries alone are not authoritative in those postures.
+- Signed artifact verification is the source of runtime approval trust for `secure`/`prod`. `verify_human_approval_receipt_artifact_to_proof()` recomputes the receipt hash, requires the injected verifier, rejects bad signatures, validates scope/action/policy/expiry, and returns a `VerifiedHumanApprovalReceipt`.
+- `VerifiedHumanApprovalReceipt` is the runtime verified proof object. It carries the validated receipt plus signer metadata, `verified_at`, `verification_source`, and `verification_proof_hash` computed over canonical verifier-derived proof fields.
+- `secure` and `prod` posture should use either a `VerifiedHumanApprovalReceipt` proof object or the signed artifact verification path. A direct `HumanApprovalReceipt` is accepted only under the transitional in-process registry provenance path. Compatibility dictionaries alone are not authoritative in those postures.
 - A direct `HumanApprovalReceipt` without verifier-derived provenance is a local/offline representation, not a secure/prod trust-boundary proof.
 - `dev` and `test` style local workflows may use receipt-derived compatibility `human_approval_state` dictionaries produced by `build_human_approval_state()` for demos, fixtures, and migration.
 - `approval_validation_hash` is tamper-evident metadata for accidental/internal mutation detection. It is not cryptographically signed and is not a substitute for signed artifact verification across an external trust boundary.
@@ -58,9 +60,26 @@ A signed approval artifact has this deterministic v1 envelope shape:
 }
 ```
 
-Verification is fail-closed: runtime recomputes `receipt_hash`, requires an explicit verifier for signed artifacts, rejects bad signatures, requires verifier-derived provenance for direct receipts in `secure`/`prod`, and propagates expiry, scope, policy-snapshot, and action-class validation failures.
+Verification is fail-closed: runtime recomputes `receipt_hash`, requires an explicit verifier for signed artifacts, rejects bad signatures, verifies `verification_proof_hash` for proof objects, requires verifier-derived provenance for transitional direct receipts in `secure`/`prod`, and propagates expiry, scope, policy-snapshot, and action-class validation failures.
 
-Successful artifact verification returns a receipt with verifier-derived metadata similar to:
+Successful artifact verification returns a proof object similar to:
+
+```json
+{
+  "receipt": { "...": "validated HumanApprovalReceipt" },
+  "artifact_type": "human_approval_receipt",
+  "artifact_version": "v1",
+  "receipt_hash": "canonical sha256 of the receipt payload",
+  "signer_key_id": "review-key-id",
+  "signer_algorithm": "ed25519",
+  "signed_at": "2026-05-01T00:00:00+00:00",
+  "verified_at": "2026-05-01T00:00:01+00:00",
+  "verification_source": "signed_human_approval_artifact",
+  "verification_proof_hash": "canonical sha256 of proof metadata"
+}
+```
+
+For backward compatibility, `verify_human_approval_receipt_artifact()` still returns the validated receipt from this proof. That receipt includes verifier-derived metadata similar to:
 
 ```json
 {
@@ -76,7 +95,7 @@ Successful artifact verification returns a receipt with verifier-derived metadat
 }
 ```
 
-These fields are verifier-derived only when set by `verify_human_approval_receipt_artifact()`. Caller-supplied copies are stripped from raw signed payload metadata before verification and are not treated as cryptographic proof on their own. Current direct-receipt provenance uses an in-process verification registry to reject simple forged metadata, but serialized copies remain a known limitation because the dataclass is not sealed. TODO: add a sealed/internal verified receipt type or signer-backed proof object for cryptographic provenance portability.
+These fields are verifier-derived only when set through signed-artifact verification. Caller-supplied copies are stripped from raw signed payload metadata before verification and are not treated as cryptographic proof on their own. Current direct-receipt provenance still uses an in-process verification registry as a transitional compatibility control; it rejects simple forged metadata in one runtime process, but it should not be treated as cross-process cryptographic sealing. Cross-process callers should pass `VerifiedHumanApprovalReceipt` or the original signed artifact plus verifier.
 
 ## Explicit boundary (non-goals)
 
