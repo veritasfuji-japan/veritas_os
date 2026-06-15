@@ -16,12 +16,14 @@ from veritas_os.governance.authority_evidence import (
 from veritas_os.governance.human_approval_receipt import (
     HUMAN_APPROVAL_STATE_SOURCE,
     HumanApprovalReceipt,
+    VerifiedHumanApprovalReceipt,
     build_human_approval_state,
     has_verified_human_approval_artifact_provenance,
     human_approval_state_validation_hash,
-    verify_human_approval_receipt_artifact,
+    verify_human_approval_receipt_artifact_to_proof,
 )
 from veritas_os.governance.predicates import PredicateResult
+from veritas_os.security.hash import sha256_of_canonical_json
 
 RuntimeValidationStatus = Literal["pass", "fail"]
 RecommendedOutcome = Literal["commit", "block", "escalate", "refuse"]
@@ -75,6 +77,7 @@ class RuntimeAuthorityValidator:
         actor_identity: str | None,
         human_approval_state: dict[str, Any] | None = None,
         human_approval_receipt: HumanApprovalReceipt | None = None,
+        verified_human_approval: VerifiedHumanApprovalReceipt | None = None,
         human_approval_artifact: dict[str, Any] | None = None,
         verify_human_approval_signature_fn: (
             Callable[[dict[str, Any]], bool] | None
@@ -287,6 +290,7 @@ class RuntimeAuthorityValidator:
             approval_ok, approval_reason = self._validated_human_approval(
                 human_approval_state=human_approval_state,
                 human_approval_receipt=human_approval_receipt,
+                verified_human_approval=verified_human_approval,
                 human_approval_artifact=human_approval_artifact,
                 verify_human_approval_signature_fn=verify_human_approval_signature_fn,
                 requested_scope=requested_scope,
@@ -390,6 +394,7 @@ class RuntimeAuthorityValidator:
         *,
         human_approval_state: dict[str, Any],
         human_approval_receipt: HumanApprovalReceipt | None,
+        verified_human_approval: VerifiedHumanApprovalReceipt | None,
         human_approval_artifact: dict[str, Any] | None,
         verify_human_approval_signature_fn: Callable[[dict[str, Any]], bool] | None,
         requested_scope: list[str],
@@ -410,9 +415,19 @@ class RuntimeAuthorityValidator:
         """
         strict_posture = self._requires_receipt_for_human_approval()
         action_class = action_contract.action_class if action_contract else None
+        if verified_human_approval is not None:
+            proof_valid, proof_reason = self._validated_human_approval_proof(
+                verified_human_approval,
+                requested_scope=requested_scope,
+                action_class=action_class,
+                policy_snapshot_id=policy_snapshot_id,
+                now=now,
+            )
+            return proof_valid, proof_reason
+
         if human_approval_artifact is not None:
             try:
-                verified_receipt = verify_human_approval_receipt_artifact(
+                verified_proof = verify_human_approval_receipt_artifact_to_proof(
                     human_approval_artifact,
                     verify_human_approval_signature_fn,
                     requested_scope=requested_scope,
@@ -423,7 +438,7 @@ class RuntimeAuthorityValidator:
             except ValueError as exc:
                 return False, str(exc)
             receipt_state = build_human_approval_state(
-                verified_receipt,
+                verified_proof.receipt,
                 requested_scope=requested_scope,
                 action_class=action_class,
                 policy_snapshot_id=policy_snapshot_id,
@@ -449,6 +464,37 @@ class RuntimeAuthorityValidator:
             return False, "human_approval_receipt_required"
 
         return self._validated_human_approval_state(human_approval_state)
+
+
+    def _validated_human_approval_proof(
+        self,
+        proof: VerifiedHumanApprovalReceipt,
+        *,
+        requested_scope: list[str],
+        action_class: str | None,
+        policy_snapshot_id: str | None,
+        now: datetime | None,
+    ) -> tuple[bool, str]:
+        """Validate a sealed verified approval proof fail-closed."""
+        if proof.verification_source != "signed_human_approval_artifact":
+            return False, "human_approval_artifact_provenance_required"
+        if proof.receipt.signature_verified is not True:
+            return False, "human_approval_signature_unverified"
+        if proof.receipt_hash != proof.receipt.receipt_hash:
+            return False, "human_approval_receipt_hash_mismatch"
+
+        expected_proof_hash = sha256_of_canonical_json(proof.proof_hash_payload())
+        if proof.verification_proof_hash != expected_proof_hash:
+            return False, "human_approval_verification_proof_hash_mismatch"
+
+        receipt_state = build_human_approval_state(
+            proof.receipt,
+            requested_scope=requested_scope,
+            action_class=action_class,
+            policy_snapshot_id=policy_snapshot_id,
+            now=now,
+        )
+        return self._validated_human_approval_state(receipt_state)
 
     def _requires_receipt_for_human_approval(self) -> bool:
         """Return whether current posture requires receipt-backed approval."""

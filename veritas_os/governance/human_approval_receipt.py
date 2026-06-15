@@ -19,6 +19,16 @@ ApprovalResult = Literal["approved", "denied", "expired", "indeterminate"]
 SIGNED_APPROVAL_ARTIFACT_TYPE = "human_approval_receipt"
 SIGNED_APPROVAL_ARTIFACT_VERSION = "v1"
 VERIFICATION_SOURCE_SIGNED_ARTIFACT = "signed_human_approval_artifact"
+VERIFICATION_PROOF_HASH_FIELDS = (
+    "receipt_hash",
+    "artifact_type",
+    "artifact_version",
+    "signer_key_id",
+    "signer_algorithm",
+    "signed_at",
+    "verified_at",
+    "verification_source",
+)
 VERIFIER_DERIVED_PROVENANCE_KEYS = frozenset(
     {
         "verification_source",
@@ -86,6 +96,48 @@ class HumanApprovalReceipt:
     def deterministic_digest(self) -> str:
         """Compute canonical SHA-256 digest of the receipt hash payload."""
         return sha256_of_canonical_json(self.to_dict_for_hash())
+
+
+@dataclass(frozen=True)
+class VerifiedHumanApprovalReceipt:
+    """Sealed runtime proof for a verified Human Approval Receipt artifact.
+
+    Instances are emitted only by
+    ``verify_human_approval_receipt_artifact_to_proof`` after receipt hash,
+    signature, scope, action-class, policy-snapshot, and expiry checks pass.
+    The ``verification_proof_hash`` seals verifier-derived provenance so runtime
+    code can detect tampering when the proof crosses process boundaries.
+    """
+
+    receipt: HumanApprovalReceipt
+    artifact_type: str
+    artifact_version: str
+    receipt_hash: str
+    signer_key_id: str | None
+    signer_algorithm: str | None
+    signed_at: str | None
+    verified_at: str
+    verification_source: Literal["signed_human_approval_artifact"]
+    verification_proof_hash: str
+
+    def proof_hash_payload(self) -> dict[str, Any]:
+        """Return canonical verifier-derived proof fields for hashing."""
+        return {
+            "receipt_hash": self.receipt_hash,
+            "artifact_type": self.artifact_type,
+            "artifact_version": self.artifact_version,
+            "signer_key_id": self.signer_key_id,
+            "signer_algorithm": self.signer_algorithm,
+            "signed_at": self.signed_at,
+            "verified_at": self.verified_at,
+            "verification_source": self.verification_source,
+        }
+
+
+def _verification_proof_hash(payload: dict[str, Any]) -> str:
+    """Compute the canonical proof hash for verifier-derived fields."""
+    proof_payload = {field: payload.get(field) for field in VERIFICATION_PROOF_HASH_FIELDS}
+    return sha256_of_canonical_json(proof_payload)
 
 
 def with_receipt_hash(receipt: HumanApprovalReceipt) -> HumanApprovalReceipt:
@@ -156,7 +208,7 @@ def has_verified_human_approval_artifact_provenance(
     )
 
 
-def verify_human_approval_receipt_artifact(
+def verify_human_approval_receipt_artifact_to_proof(
     artifact: dict[str, Any],
     verify_signature_fn: Callable[[dict[str, Any]], bool] | None,
     *,
@@ -164,15 +216,14 @@ def verify_human_approval_receipt_artifact(
     action_class: str | None,
     policy_snapshot_id: str | None,
     now: datetime | None = None,
-) -> HumanApprovalReceipt:
-    """Verify a signed Human Approval Receipt artifact fail-closed.
+) -> VerifiedHumanApprovalReceipt:
+    """Verify a signed artifact and return a sealed approval proof.
 
     The caller-supplied ``signature_verified`` value in raw artifact data is
     never trusted. This helper recomputes the canonical receipt hash, requires
-    an explicit signature verifier, invokes it over the full artifact, and only
-    then returns a ``HumanApprovalReceipt`` with ``signature_verified=True``.
-    Existing receipt validation errors are raised as deterministic reason
-    strings so runtime authority can propagate them without opening a bypass.
+    an explicit signature verifier, rejects bad signatures, validates receipt
+    scope/action/policy/expiry, and only then emits a
+    ``VerifiedHumanApprovalReceipt`` with a canonical proof hash.
     """
     if not isinstance(artifact, dict):
         raise ValueError("human_approval_artifact_invalid")
@@ -197,10 +248,10 @@ def verify_human_approval_receipt_artifact(
 
     signer_key_id, signer_algorithm = _artifact_signer_metadata(artifact)
     verified_at = (now or datetime.now(UTC)).isoformat()
+    runtime_token = uuid4().hex
     verified_payload = unsigned_receipt.to_dict()
     verified_payload["signature_verified"] = True
     verified_payload["receipt_hash"] = expected_hash
-    runtime_token = uuid4().hex
     verified_metadata = dict(verified_payload.get("metadata") or {})
     verified_metadata.update(
         {
@@ -228,7 +279,46 @@ def verify_human_approval_receipt_artifact(
     )
     if not validation_result.is_valid:
         raise ValueError(validation_result.failure_reasons[0])
-    return verified_receipt
+
+    proof_payload = {
+        "receipt": verified_receipt,
+        "artifact_type": SIGNED_APPROVAL_ARTIFACT_TYPE,
+        "artifact_version": SIGNED_APPROVAL_ARTIFACT_VERSION,
+        "receipt_hash": expected_hash,
+        "signer_key_id": signer_key_id,
+        "signer_algorithm": signer_algorithm,
+        "signed_at": artifact.get("signed_at"),
+        "verified_at": verified_at,
+        "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
+    }
+    proof_payload["verification_proof_hash"] = _verification_proof_hash(proof_payload)
+    return VerifiedHumanApprovalReceipt(**proof_payload)
+
+
+def verify_human_approval_receipt_artifact(
+    artifact: dict[str, Any],
+    verify_signature_fn: Callable[[dict[str, Any]], bool] | None,
+    *,
+    requested_scope: list[str],
+    action_class: str | None,
+    policy_snapshot_id: str | None,
+    now: datetime | None = None,
+) -> HumanApprovalReceipt:
+    """Verify a signed artifact and return its validated receipt.
+
+    Compatibility wrapper for callers that still consume
+    ``HumanApprovalReceipt``. Secure/prod runtime validation should prefer
+    ``verify_human_approval_receipt_artifact_to_proof`` and pass the resulting
+    ``VerifiedHumanApprovalReceipt``.
+    """
+    return verify_human_approval_receipt_artifact_to_proof(
+        artifact,
+        verify_signature_fn,
+        requested_scope=requested_scope,
+        action_class=action_class,
+        policy_snapshot_id=policy_snapshot_id,
+        now=now,
+    ).receipt
 
 
 @dataclass(frozen=True)
