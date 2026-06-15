@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import uuid4
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Protocol
 
 from veritas_os.security.hash import sha256_of_canonical_json
 
@@ -113,6 +113,55 @@ class HumanApprovalSignatureVerificationResult:
     signer_identity: str | None = None
     signer_role: str | None = None
     reason: str | None = None
+
+
+class HumanApprovalSignatureVerifier(Protocol):
+    """Production verifier contract for signed HumanApprovalReceipt artifacts.
+
+    Implementations should bind this interface to deployment-controlled
+    cryptographic verification infrastructure such as KMS, HSM, or trusted
+    public-key material. The verifier must not trust unsigned artifact signer
+    fields as its source of truth; it must return verifier-derived metadata.
+    """
+
+    def verify(
+        self,
+        artifact: dict[str, Any],
+    ) -> HumanApprovalSignatureVerificationResult:
+        """Verify ``artifact`` and return structured signer metadata."""
+        ...
+
+
+@dataclass(frozen=True)
+class TestHumanApprovalSignatureVerifier:
+    """Deterministic test/dev-only verifier for local fixtures.
+
+    This verifier is not production assurance and is intentionally not used as
+    any default. It simply returns configured structured verification metadata
+    so tests and demos can exercise runtime behavior without KMS/HSM or real
+    public-key verification.
+    """
+
+    key_id: str = "test-key"
+    algorithm: str = "test-only"
+    signer_identity: str = "operator:approver-1"
+    signer_role: str = "risk_manager"
+    verified: bool = True
+    reason: str = "test_dev_only_verifier"
+
+    def verify(
+        self,
+        artifact: dict[str, Any],
+    ) -> HumanApprovalSignatureVerificationResult:
+        """Return deterministic structured metadata for test/dev artifacts."""
+        return HumanApprovalSignatureVerificationResult(
+            verified=self.verified,
+            key_id=self.key_id,
+            algorithm=self.algorithm,
+            signer_identity=self.signer_identity,
+            signer_role=self.signer_role,
+            reason=self.reason,
+        )
 
 
 @dataclass(frozen=True)

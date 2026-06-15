@@ -28,6 +28,7 @@ It is designed to make approval:
 - A compatibility helper that converts the receipt into the existing runtime `human_approval_state` shape.
 - A signed approval artifact envelope for crossing external-review and secure/prod runtime trust boundaries.
 - A sealed `VerifiedHumanApprovalReceipt` proof object emitted only after signed-artifact verification succeeds.
+- An explicit `HumanApprovalSignatureVerifier` contract for production verifier implementations.
 
 ## Runtime posture trust boundary
 
@@ -111,6 +112,23 @@ For backward compatibility, `verify_human_approval_receipt_artifact()` still ret
 ```
 
 These fields are verifier-derived only when set through signed-artifact verification. Caller-supplied copies are stripped from raw signed payload metadata before verification and are not treated as cryptographic proof on their own. Current direct-receipt provenance still uses an in-process verification registry as a transitional compatibility control; it rejects simple forged metadata in one runtime process, but it should not be treated as cross-process cryptographic sealing. Cross-process callers should pass `VerifiedHumanApprovalReceipt` or the original signed artifact plus verifier. Production security still depends on real key management, KMS/HSM or equivalent verifier implementation, key rotation, and operational controls outside this local/offline helper.
+
+
+## Verifier contract
+
+VERITAS defines an explicit `HumanApprovalSignatureVerifier` interface:
+
+```python
+class HumanApprovalSignatureVerifier(Protocol):
+    def verify(
+        self,
+        artifact: dict[str, Any],
+    ) -> HumanApprovalSignatureVerificationResult: ...
+```
+
+Production deployments must bind this contract to deployment-controlled cryptographic infrastructure, such as KMS, HSM, or trusted public-key verification. The verifier must return verifier-derived `verified`, `key_id`, `algorithm`, `signer_identity`, `signer_role`, and `reason` metadata. `RuntimeAuthorityValidator` remains implementation agnostic: it can use `human_approval_signature_verifier` or the older `verify_human_approval_signature_fn`, but `secure`/`prod` should prefer the interface and still rejects bare boolean results.
+
+No production verifier is provided or assumed by default. `TestHumanApprovalSignatureVerifier` is a deterministic test/dev-only helper for fixtures and demos; it is not production assurance and must not be treated as evidence of real cryptographic verification.
 
 ## Explicit boundary (non-goals)
 

@@ -17,6 +17,7 @@ from veritas_os.governance.human_approval_receipt import (
     HUMAN_APPROVAL_STATE_SOURCE,
     HumanApprovalReceipt,
     HumanApprovalSignatureVerificationResult,
+    HumanApprovalSignatureVerifier,
     HumanApprovalSignerPolicy,
     VerifiedHumanApprovalReceipt,
     build_human_approval_state,
@@ -85,6 +86,7 @@ class RuntimeAuthorityValidator:
             Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult]
             | None
         ) = None,
+        human_approval_signature_verifier: HumanApprovalSignatureVerifier | None = None,
         human_approval_signer_policy: HumanApprovalSignerPolicy | None = None,
         bind_context_metadata: dict[str, Any] | None = None,
         now: datetime | None = None,
@@ -297,6 +299,7 @@ class RuntimeAuthorityValidator:
                 verified_human_approval=verified_human_approval,
                 human_approval_artifact=human_approval_artifact,
                 verify_human_approval_signature_fn=verify_human_approval_signature_fn,
+                human_approval_signature_verifier=human_approval_signature_verifier,
                 human_approval_signer_policy=human_approval_signer_policy,
                 requested_scope=requested_scope,
                 action_contract=action_contract,
@@ -405,6 +408,7 @@ class RuntimeAuthorityValidator:
             Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult]
             | None
         ),
+        human_approval_signature_verifier: HumanApprovalSignatureVerifier | None,
         human_approval_signer_policy: HumanApprovalSignerPolicy | None,
         requested_scope: list[str],
         action_contract: ActionClassContract | None,
@@ -435,10 +439,14 @@ class RuntimeAuthorityValidator:
             return proof_valid, proof_reason
 
         if human_approval_artifact is not None:
+            verification_fn = self._human_approval_signature_verification_fn(
+                human_approval_signature_verifier=human_approval_signature_verifier,
+                verify_human_approval_signature_fn=verify_human_approval_signature_fn,
+            )
             try:
                 verified_proof = verify_human_approval_receipt_artifact_to_proof(
                     human_approval_artifact,
-                    verify_human_approval_signature_fn,
+                    verification_fn,
                     requested_scope=requested_scope,
                     action_class=action_class,
                     policy_snapshot_id=policy_snapshot_id,
@@ -448,6 +456,8 @@ class RuntimeAuthorityValidator:
                 )
             except ValueError as exc:
                 return False, str(exc)
+            except Exception:
+                return False, "human_approval_signature_verification_failed"
             receipt_state = build_human_approval_state(
                 verified_proof.receipt,
                 requested_scope=requested_scope,
@@ -475,6 +485,20 @@ class RuntimeAuthorityValidator:
             return False, "human_approval_receipt_required"
 
         return self._validated_human_approval_state(human_approval_state)
+
+    def _human_approval_signature_verification_fn(
+        self,
+        *,
+        human_approval_signature_verifier: HumanApprovalSignatureVerifier | None,
+        verify_human_approval_signature_fn: (
+            Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult]
+            | None
+        ),
+    ) -> Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult] | None:
+        """Return the preferred signature verifier callable without defaults."""
+        if human_approval_signature_verifier is not None:
+            return human_approval_signature_verifier.verify
+        return verify_human_approval_signature_fn
 
 
     def _validated_human_approval_proof(

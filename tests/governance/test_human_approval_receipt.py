@@ -13,6 +13,7 @@ from veritas_os.governance.human_approval_receipt import (
     HumanApprovalReceipt,
     HumanApprovalSignatureVerificationResult,
     HumanApprovalSignerPolicy,
+    TestHumanApprovalSignatureVerifier,
     VerifiedHumanApprovalReceipt,
     build_human_approval_state,
     validate_human_approval_receipt,
@@ -846,6 +847,130 @@ def test_strict_posture_accepts_receipt_returned_by_artifact_verifier(
     assert result.status == "pass"
     assert result.recommended_outcome == "commit"
 
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_passes_with_human_approval_signature_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(),
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+    assert result.recommended_outcome == "commit"
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_prefers_human_approval_signature_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verified=False
+        ),
+        human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(),
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+
+
+def test_dev_posture_can_use_test_human_approval_signature_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(),
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+
+
+
+def test_strict_posture_rejects_incomplete_signature_verifier_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(key_id=""),
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_signature_key_id_missing"
+
+
+def test_strict_posture_rejects_signature_verifier_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    def raise_verification_error(_artifact: dict[str, object]) -> object:
+        raise RuntimeError("kms unavailable")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=raise_verification_error,
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_signature_verification_failed"
 
 @pytest.mark.parametrize("posture", ["secure", "prod"])
 def test_strict_posture_passes_with_valid_signed_human_approval_artifact(
