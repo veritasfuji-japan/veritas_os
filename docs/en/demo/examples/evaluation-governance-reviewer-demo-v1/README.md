@@ -52,6 +52,15 @@ prefer `--output-dir` so repository files are not modified.
 The suite is covered by a focused CI-safe smoke test using temporary
 output directories.
 
+## Portable generated paths
+
+Reviewer-facing generated artifacts must use repository-relative POSIX paths
+for path-bearing fields such as `input_dir`, `output_dir`, `artifact_ref`,
+`source_path`, and `generated_from`. Do not commit local absolute prefixes such
+as `/workspace/`, `/home/runner/`, `/tmp/`, or Windows drive paths; this keeps
+reviewer evidence portable and reproducible across local, CI, and external
+reviewer environments.
+
 ## Validate checked-in generated examples
 
 ```bash

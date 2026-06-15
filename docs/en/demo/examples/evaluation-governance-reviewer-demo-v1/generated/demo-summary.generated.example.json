@@ -43,7 +43,7 @@
       "artifact_type": "reviewer_evidence_packet"
     }
   ],
-  "input_dir": "/workspace/veritas_os/docs/en/demo/examples/evaluation-governance-offline-chain-v1",
+  "input_dir": "docs/en/demo/examples/evaluation-governance-offline-chain-v1",
   "issued_at": "2026-01-01T00:00:00Z",
   "non_enforcing": true,
   "non_goals": [
