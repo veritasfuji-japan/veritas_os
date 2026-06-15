@@ -23,6 +23,7 @@ from veritas_os.governance.human_approval_receipt import (
     build_human_approval_state,
     has_verified_human_approval_artifact_provenance,
     human_approval_state_validation_hash,
+    validate_human_approval_context_binding,
     verify_human_approval_receipt_artifact_to_proof,
 )
 from veritas_os.governance.predicates import PredicateResult
@@ -88,6 +89,10 @@ class RuntimeAuthorityValidator:
         ) = None,
         human_approval_signature_verifier: HumanApprovalSignatureVerifier | None = None,
         human_approval_signer_policy: HumanApprovalSignerPolicy | None = None,
+        request_ref: str | None = None,
+        ai_output_ref: str | None = None,
+        execution_intent_id: str | None = None,
+        bind_context_hash: str | None = None,
         bind_context_metadata: dict[str, Any] | None = None,
         now: datetime | None = None,
     ) -> RuntimeAuthorityValidationResult:
@@ -305,6 +310,15 @@ class RuntimeAuthorityValidator:
                 action_contract=action_contract,
                 policy_snapshot_id=policy_snapshot_id,
                 now=now,
+                request_ref=request_ref,
+                ai_output_ref=ai_output_ref,
+                execution_intent_id=execution_intent_id,
+                bind_context_hash=bind_context_hash,
+                authority_evidence_id=(
+                    authority_evidence.authority_evidence_id
+                    if authority_evidence is not None
+                    else None
+                ),
             )
             human_approval_ok = (not needs_approval) or approval_ok
             predicates.append(
@@ -414,6 +428,11 @@ class RuntimeAuthorityValidator:
         action_contract: ActionClassContract | None,
         policy_snapshot_id: str | None,
         now: datetime | None,
+        request_ref: str | None,
+        ai_output_ref: str | None,
+        execution_intent_id: str | None,
+        bind_context_hash: str | None,
+        authority_evidence_id: str | None,
     ) -> tuple[bool, str]:
         """Validate human approval using posture-aware trust boundaries.
 
@@ -435,6 +454,11 @@ class RuntimeAuthorityValidator:
                 action_class=action_class,
                 policy_snapshot_id=policy_snapshot_id,
                 now=now,
+                request_ref=request_ref,
+                ai_output_ref=ai_output_ref,
+                execution_intent_id=execution_intent_id,
+                bind_context_hash=bind_context_hash,
+                authority_evidence_id=authority_evidence_id,
             )
             return proof_valid, proof_reason
 
@@ -465,6 +489,18 @@ class RuntimeAuthorityValidator:
                 return False, str(exc)
             except Exception:
                 return False, "human_approval_signature_verification_failed"
+            binding_ok, binding_reason = self._validated_human_approval_context_binding(
+                verified_proof.receipt,
+                request_ref=request_ref,
+                ai_output_ref=ai_output_ref,
+                execution_intent_id=execution_intent_id,
+                action_class=action_class,
+                policy_snapshot_id=policy_snapshot_id,
+                authority_evidence_id=authority_evidence_id,
+                bind_context_hash=bind_context_hash,
+            )
+            if not binding_ok:
+                return False, binding_reason
             receipt_state = build_human_approval_state(
                 verified_proof.receipt,
                 requested_scope=requested_scope,
@@ -479,6 +515,18 @@ class RuntimeAuthorityValidator:
                 human_approval_receipt
             ):
                 return False, "human_approval_artifact_provenance_required"
+            binding_ok, binding_reason = self._validated_human_approval_context_binding(
+                human_approval_receipt,
+                request_ref=request_ref,
+                ai_output_ref=ai_output_ref,
+                execution_intent_id=execution_intent_id,
+                action_class=action_class,
+                policy_snapshot_id=policy_snapshot_id,
+                authority_evidence_id=authority_evidence_id,
+                bind_context_hash=bind_context_hash,
+            )
+            if not binding_ok:
+                return False, binding_reason
             receipt_state = build_human_approval_state(
                 human_approval_receipt,
                 requested_scope=requested_scope,
@@ -492,6 +540,33 @@ class RuntimeAuthorityValidator:
             return False, "human_approval_receipt_required"
 
         return self._validated_human_approval_state(human_approval_state)
+
+    def _validated_human_approval_context_binding(
+        self,
+        receipt: HumanApprovalReceipt,
+        *,
+        request_ref: str | None,
+        ai_output_ref: str | None,
+        execution_intent_id: str | None,
+        action_class: str | None,
+        policy_snapshot_id: str | None,
+        authority_evidence_id: str | None,
+        bind_context_hash: str | None,
+    ) -> tuple[bool, str]:
+        """Fail closed if a signed approval is replayed across contexts."""
+        validation_result = validate_human_approval_context_binding(
+            receipt,
+            request_ref=request_ref,
+            ai_output_ref=ai_output_ref,
+            execution_intent_id=execution_intent_id,
+            action_class=action_class,
+            policy_snapshot_id=policy_snapshot_id,
+            authority_evidence_id=authority_evidence_id,
+            bind_context_hash=bind_context_hash,
+        )
+        if validation_result.is_valid:
+            return True, "human_approval_context_bound"
+        return False, validation_result.failure_reasons[0]
 
     def _is_test_human_approval_signature_verifier(
         self,
@@ -522,6 +597,11 @@ class RuntimeAuthorityValidator:
         action_class: str | None,
         policy_snapshot_id: str | None,
         now: datetime | None,
+        request_ref: str | None,
+        ai_output_ref: str | None,
+        execution_intent_id: str | None,
+        bind_context_hash: str | None,
+        authority_evidence_id: str | None,
     ) -> tuple[bool, str]:
         """Validate a sealed verified approval proof fail-closed."""
         if proof.verification_source != "signed_human_approval_artifact":
@@ -534,6 +614,19 @@ class RuntimeAuthorityValidator:
         expected_proof_hash = sha256_of_canonical_json(proof.proof_hash_payload())
         if proof.verification_proof_hash != expected_proof_hash:
             return False, "human_approval_verification_proof_hash_mismatch"
+
+        binding_ok, binding_reason = self._validated_human_approval_context_binding(
+            proof.receipt,
+            request_ref=request_ref,
+            ai_output_ref=ai_output_ref,
+            execution_intent_id=execution_intent_id,
+            action_class=action_class,
+            policy_snapshot_id=policy_snapshot_id,
+            authority_evidence_id=authority_evidence_id,
+            bind_context_hash=bind_context_hash,
+        )
+        if not binding_ok:
+            return False, binding_reason
 
         receipt_state = build_human_approval_state(
             proof.receipt,

@@ -95,6 +95,16 @@
         ],
         "approver_identity": "human:synthetic_reviewer",
         "approver_role": "synthetic_reviewer",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": null,
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [],
         "receipt_hash_present": true
       },
@@ -224,6 +234,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_missing"
         ],
@@ -351,6 +371,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_expired"
         ],
@@ -480,6 +510,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_scope_not_granted"
         ],
@@ -611,6 +651,16 @@
         ],
         "approver_identity": "human:synthetic_reviewer",
         "approver_role": "synthetic_reviewer",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [],
         "receipt_hash_present": true
       },
@@ -753,7 +803,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "c361eb1bac6f36e751f449a1e3d5af0de439bd7f5d3602bbee6ca87ceb33c053",
+  "packet_hash": "029563fa0a13e59cdc976e27cb1de1bdab7b9a28d471087a7b2ac537c8b3e6e4",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

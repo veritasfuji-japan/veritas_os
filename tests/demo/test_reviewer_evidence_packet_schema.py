@@ -66,7 +66,19 @@ REQUIRED_HUMAN_APPROVAL_FIELDS = [
     "approved_scope",
     "receipt_hash_present",
     "failure_reasons",
+    "context_binding",
 ]
+REQUIRED_HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS = [
+    "request_ref",
+    "ai_output_ref",
+    "execution_intent_id",
+    "decision_id",
+    "action_class",
+    "policy_snapshot_id",
+    "authority_evidence_id",
+    "bind_context_hash",
+]
+
 REQUIRED_OUTCOME_RECEIPT_FIELDS = [
     "outcome_receipt_id",
     "decision_id",
@@ -189,7 +201,10 @@ def _assert_nullable_hash(value: Any) -> None:
 
 def _assert_fallback_packet_shape(packet: dict[str, Any]) -> None:
     _assert_required_fields(packet, REQUIRED_TOP_LEVEL_FIELDS)
-    assert packet["packet_id"] == "reviewer-evidence-packet-saas-permission-change-v1"
+    assert packet["packet_id"] in {
+        "reviewer-evidence-packet-saas-permission-change-v1",
+        "reviewer-evidence-packet-decision-candidate-refusal-v1",
+    }
     assert packet["packet_version"] == "v1"
     assert packet["local_offline_only"] is True
     assert SHA256_HEX_PATTERN.fullmatch(packet["packet_hash"])
@@ -238,6 +253,16 @@ def _assert_human_approval_shape(summary: dict[str, Any]) -> None:
     _assert_string_array(summary["approved_scope"])
     assert isinstance(summary["receipt_hash_present"], bool)
     _assert_string_array(summary["failure_reasons"])
+    context_binding = summary["context_binding"]
+    assert isinstance(context_binding, dict)
+    _assert_required_fields(
+        context_binding, REQUIRED_HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS
+    )
+    assert set(context_binding) == set(REQUIRED_HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS)
+    assert all(
+        value is None or isinstance(value, str)
+        for value in context_binding.values()
+    )
 
 
 def _assert_outcome_receipt_shape(summary: dict[str, Any]) -> None:

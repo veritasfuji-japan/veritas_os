@@ -66,6 +66,17 @@ SCHEMA_REFS_BY_ARTIFACT_TYPE = {
     ),
 }
 
+HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS = (
+    "request_ref",
+    "ai_output_ref",
+    "execution_intent_id",
+    "decision_id",
+    "action_class",
+    "policy_snapshot_id",
+    "authority_evidence_id",
+    "bind_context_hash",
+)
+
 REVIEWER_NOTES = [
     (
         "This packet is a synthetic offline reviewer evidence packet generated "
@@ -262,6 +273,55 @@ def _sanitize_synthetic_template_values(payload: Any) -> Any:
     return payload
 
 
+def _ensure_human_approval_context_binding(packet: dict[str, Any]) -> None:
+    """Populate required human approval context binding on template cases.
+
+    Older reviewer packet templates may predate the strict
+    ``human_approval_summary.context_binding`` schema requirement. Synthetic
+    Evaluation Governance reviewer packets must still make missing context
+    explicit with null values rather than omitting the binding object.
+    """
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return
+
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        summary = case.get("human_approval_summary")
+        if not isinstance(summary, dict):
+            continue
+        manifest = case.get("evidence_chain_manifest_summary")
+        outcome = case.get("outcome_receipt_summary")
+        if not isinstance(manifest, dict):
+            manifest = {}
+        if not isinstance(outcome, dict):
+            outcome = {}
+
+        existing = summary.get("context_binding")
+        if not isinstance(existing, dict):
+            existing = {}
+        summary["context_binding"] = {
+            "request_ref": existing.get("request_ref"),
+            "ai_output_ref": existing.get("ai_output_ref"),
+            "execution_intent_id": existing.get("execution_intent_id")
+            or manifest.get("execution_intent_id")
+            or outcome.get("execution_intent_id"),
+            "decision_id": existing.get("decision_id")
+            or manifest.get("decision_id")
+            or outcome.get("decision_id"),
+            "action_class": existing.get("action_class")
+            or manifest.get("action_class")
+            or outcome.get("action_class"),
+            "policy_snapshot_id": existing.get("policy_snapshot_id"),
+            "authority_evidence_id": existing.get("authority_evidence_id")
+            or manifest.get("authority_evidence_id"),
+            "bind_context_hash": existing.get("bind_context_hash"),
+        }
+        for field in HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS:
+            summary["context_binding"].setdefault(field, None)
+
+
 def _packet_hash(packet: dict[str, Any]) -> str:
     """Compute Reviewer Evidence Packet hash excluding packet_hash itself."""
     payload = copy.deepcopy(packet)
@@ -302,6 +362,7 @@ def generate_reviewer_evidence_packet_from_chain(
     packet = _sanitize_synthetic_template_values(
         load_json(REVIEWER_PACKET_TEMPLATE_PATH)
     )
+    _ensure_human_approval_context_binding(packet)
     packet["demo_id"] = "evaluation_governance_offline_chain_reviewer_packet_v1"
     packet["generated_at"] = issued_at
     packet["title"] = "Evaluation Governance Offline Chain Reviewer Evidence Packet"

@@ -95,6 +95,16 @@
         ],
         "approver_identity": "human:manager.alex",
         "approver_role": "engineering_manager",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": null,
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [],
         "receipt_hash_present": true
       },
@@ -224,6 +234,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_missing"
         ],
@@ -351,6 +371,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_expired"
         ],
@@ -480,6 +510,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_scope_not_granted"
         ],
@@ -611,6 +651,16 @@
         ],
         "approver_identity": "human:manager.alex",
         "approver_role": "engineering_manager",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [],
         "receipt_hash_present": true
       },
@@ -713,7 +763,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "dc281b854019d93aed8f42a46d7a83e144a81f5de71896a34e84a16f3e117a42",
+  "packet_hash": "ca2ececd9d08e1a16f5a74ca033ca54a5ef66438ecb7abaabcdeb93bef670ca9",
   "packet_id": "reviewer-evidence-packet-decision-candidate-refusal-v1",
   "packet_version": "v1",
   "reviewer_notes": [
