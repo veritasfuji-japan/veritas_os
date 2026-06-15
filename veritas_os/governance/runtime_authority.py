@@ -17,6 +17,7 @@ from veritas_os.governance.human_approval_receipt import (
     HUMAN_APPROVAL_STATE_SOURCE,
     HumanApprovalReceipt,
     build_human_approval_state,
+    has_verified_human_approval_artifact_provenance,
     human_approval_state_validation_hash,
     verify_human_approval_receipt_artifact,
 )
@@ -398,9 +399,11 @@ class RuntimeAuthorityValidator:
     ) -> tuple[bool, str]:
         """Validate human approval using posture-aware trust boundaries.
 
-        Secure and production postures require an explicit
-        signed approval artifact, or a ``HumanApprovalReceipt`` whose signature
-        has already been verified, as the authoritative approval source.
+        Secure and production postures require an explicit signed approval
+        artifact, or a ``HumanApprovalReceipt`` carrying verifier-derived
+        signed-artifact provenance from this runtime process, as the
+        authoritative approval source. A raw ``signature_verified=True`` flag
+        is not trusted across those boundaries.
         Compatibility dictionaries remain accepted only in dev/test-style
         postures because their deterministic
         validation hash is tamper-evident, not cryptographically signed.
@@ -429,6 +432,10 @@ class RuntimeAuthorityValidator:
             return self._validated_human_approval_state(receipt_state)
 
         if human_approval_receipt is not None:
+            if strict_posture and not has_verified_human_approval_artifact_provenance(
+                human_approval_receipt
+            ):
+                return False, "human_approval_artifact_provenance_required"
             receipt_state = build_human_approval_state(
                 human_approval_receipt,
                 requested_scope=requested_scope,
