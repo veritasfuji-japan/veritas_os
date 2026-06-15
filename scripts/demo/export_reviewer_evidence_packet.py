@@ -43,7 +43,70 @@ REVIEWER_NOTES = [
 ]
 
 
-def _human_approval_summary(human_approval_state: dict[str, Any]) -> dict[str, Any]:
+HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS = (
+    "request_ref",
+    "ai_output_ref",
+    "execution_intent_id",
+    "decision_id",
+    "action_class",
+    "policy_snapshot_id",
+    "authority_evidence_id",
+    "bind_context_hash",
+)
+
+
+def _empty_human_approval_context_binding() -> dict[str, None]:
+    """Return explicit null context-binding fields for legacy/demo packets."""
+    return {field: None for field in HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS}
+
+
+def _context_value(*sources: dict[str, Any], field: str) -> Any:
+    """Return the first non-empty context value from deterministic sources."""
+    for source in sources:
+        value = source.get(field)
+        if value is not None:
+            return value
+    return None
+
+
+def _human_approval_context_binding(
+    human_approval_state: dict[str, Any], case: dict[str, Any]
+) -> dict[str, Any]:
+    """Build reviewer-facing context binding with nulls for unavailable data."""
+    manifest = case.get("evidence_chain_manifest_summary", {})
+    outcome = case.get("outcome_receipt_summary", {})
+    if not isinstance(manifest, dict):
+        manifest = {}
+    if not isinstance(outcome, dict):
+        outcome = {}
+
+    context_binding = _empty_human_approval_context_binding()
+    context_binding.update(
+        {
+            "request_ref": human_approval_state.get("request_ref"),
+            "ai_output_ref": human_approval_state.get("ai_output_ref"),
+            "execution_intent_id": _context_value(
+                human_approval_state, manifest, outcome, field="execution_intent_id"
+            ),
+            "decision_id": _context_value(
+                human_approval_state, manifest, outcome, field="decision_id"
+            ),
+            "action_class": _context_value(
+                human_approval_state, manifest, outcome, field="action_class"
+            ),
+            "policy_snapshot_id": human_approval_state.get("policy_snapshot_id"),
+            "authority_evidence_id": _context_value(
+                human_approval_state, manifest, field="authority_evidence_id"
+            ),
+            "bind_context_hash": human_approval_state.get("bind_context_hash"),
+        }
+    )
+    return context_binding
+
+
+def _human_approval_summary(
+    human_approval_state: dict[str, Any], case: dict[str, Any]
+) -> dict[str, Any]:
     """Return a compact deterministic summary of human approval state."""
     receipt_hash = human_approval_state.get("receipt_hash")
     return {
@@ -54,6 +117,9 @@ def _human_approval_summary(human_approval_state: dict[str, Any]) -> dict[str, A
         "approved_scope": list(human_approval_state.get("approved_scope", [])),
         "receipt_hash_present": bool(receipt_hash),
         "failure_reasons": list(human_approval_state.get("failure_reasons", [])),
+        "context_binding": _human_approval_context_binding(
+            human_approval_state, case
+        ),
     }
 
 
@@ -95,7 +161,9 @@ def _case_summary(case: dict[str, Any]) -> dict[str, Any]:
         "target_resource": case["target_resource"],
         "authority_validation_status": case["authority_validation_status"],
         "runtime_recommended_outcome": case["runtime_recommended_outcome"],
-        "human_approval_summary": _human_approval_summary(case["human_approval_state"]),
+        "human_approval_summary": _human_approval_summary(
+            case["human_approval_state"], case
+        ),
         "refusal_basis": case["refusal_basis"],
         "failure_reasons": list(case["failure_reasons"]),
         "outcome_receipt_summary": copy.deepcopy(case["outcome_receipt_summary"]),

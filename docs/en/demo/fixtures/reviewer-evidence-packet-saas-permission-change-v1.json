@@ -29,9 +29,9 @@
         "execution_intent_id": "intent-saas-001",
         "final_outcome": "block",
         "generated_at": "2026-04-26T00:00:00+00:00",
-        "human_approval_receipt_hash": "22c26614740e5a495beea2a46f1e8a498303e8c50d96a2f25a2a8e788d1c4547",
+        "human_approval_receipt_hash": "55db4aa2686f01d6e1133b880ee85e82572957b3e0e3dd63bce692a8be4d38ba",
         "human_approval_receipt_id": "har-saas-001",
-        "manifest_hash": "66e0d0a277ca167b9021191e721a87c19edffa954f70d671e35bfe434613db8e",
+        "manifest_hash": "3b3c9e99917f7c5e4f20f32ea086106b5481c93fe6fd9d5fb75624bffe829b76",
         "manifest_id": "ecm-saas-permission-change-missing_authority",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -71,7 +71,7 @@
           "authority_evidence_hash"
         ],
         "operation_id": "saas-permission-change-missing_authority",
-        "recomputed_manifest_hash": "66e0d0a277ca167b9021191e721a87c19edffa954f70d671e35bfe434613db8e",
+        "recomputed_manifest_hash": "3b3c9e99917f7c5e4f20f32ea086106b5481c93fe6fd9d5fb75624bffe829b76",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -95,6 +95,16 @@
         ],
         "approver_identity": "human:manager.alex",
         "approver_role": "engineering_manager",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": null,
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": "policy-snapshot-saas-001",
+          "request_ref": null
+        },
         "failure_reasons": [],
         "receipt_hash_present": true
       },
@@ -224,6 +234,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_missing"
         ],
@@ -351,6 +371,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_expired"
         ],
@@ -480,6 +510,16 @@
         "approved_scope": [],
         "approver_identity": null,
         "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [
           "human_approval_scope_not_granted"
         ],
@@ -549,9 +589,9 @@
         "execution_intent_id": "intent-saas-001",
         "final_outcome": "commit",
         "generated_at": "2026-04-26T00:00:00+00:00",
-        "human_approval_receipt_hash": "22c26614740e5a495beea2a46f1e8a498303e8c50d96a2f25a2a8e788d1c4547",
+        "human_approval_receipt_hash": "55db4aa2686f01d6e1133b880ee85e82572957b3e0e3dd63bce692a8be4d38ba",
         "human_approval_receipt_id": "har-saas-001",
-        "manifest_hash": "264d650ff037717002e56642e702db0853792e256bf0b624cd5d6df2f5bc1bcb",
+        "manifest_hash": "db051eac92da9e63d462315018048c52470abcdda0136e18f9f5373f5c874ed9",
         "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -590,7 +630,7 @@
         "mismatched_links": [],
         "missing_links": [],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "recomputed_manifest_hash": "264d650ff037717002e56642e702db0853792e256bf0b624cd5d6df2f5bc1bcb",
+        "recomputed_manifest_hash": "db051eac92da9e63d462315018048c52470abcdda0136e18f9f5373f5c874ed9",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -611,6 +651,16 @@
         ],
         "approver_identity": "human:manager.alex",
         "approver_role": "engineering_manager",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": "policy-snapshot-saas-001",
+          "request_ref": null
+        },
         "failure_reasons": [],
         "receipt_hash_present": true
       },
@@ -681,7 +731,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "e5b79db2479426be446ebe100d3e7c025c8a6f3613b03d949bebbac11565f70e",
+  "packet_hash": "629cc9ca2f926525880b330b967518c69ffb431bf70b394cea4cb347a0b1fa92",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

@@ -38,12 +38,12 @@
       "artifact_type": "chain_manifest"
     },
     {
-      "artifact_hash": "ff980465d217b085cb77421daee6c29b67026a0bac3193b93a0cb75e7641893f",
+      "artifact_hash": "1b28c26d5d5361d3352ea4fcbe51b1383391ff670cd5afec4fb0677d690c112b",
       "artifact_ref": "reviewer-evidence-packet.generated.example.json",
       "artifact_type": "reviewer_evidence_packet"
     }
   ],
-  "input_dir": "docs/en/demo/examples/evaluation-governance-offline-chain-v1",
+  "input_dir": "/workspace/veritas_os/docs/en/demo/examples/evaluation-governance-offline-chain-v1",
   "issued_at": "2026-01-01T00:00:00Z",
   "non_enforcing": true,
   "non_goals": [

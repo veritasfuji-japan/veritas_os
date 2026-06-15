@@ -85,6 +85,16 @@
         ],
         "approver_identity": "sample-reviewer",
         "approver_role": "sample-review-role",
+        "context_binding": {
+          "action_class": "sample.review",
+          "ai_output_ref": null,
+          "authority_evidence_id": "sample-authority-evidence",
+          "bind_context_hash": null,
+          "decision_id": "sample-decision",
+          "execution_intent_id": "sample-execution-intent",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
         "failure_reasons": [],
         "receipt_hash_present": true
       },
@@ -147,7 +157,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "packet_hash": "3668c4cac2b61685d35830f7d9d8ef06836d8a19fef2fe84e31e8ec64cabe3fa",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

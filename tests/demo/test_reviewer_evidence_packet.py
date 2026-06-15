@@ -80,6 +80,16 @@ def test_human_approval_summary_is_compact_and_deterministic() -> None:
         "approved_scope": [],
         "receipt_hash_present": False,
         "failure_reasons": ["human_approval_missing"],
+        "context_binding": {
+            "request_ref": None,
+            "ai_output_ref": None,
+            "execution_intent_id": "intent-saas-001",
+            "decision_id": "decision-saas-001",
+            "action_class": "permission_change",
+            "policy_snapshot_id": None,
+            "authority_evidence_id": "aev-saas-001",
+            "bind_context_hash": None,
+        },
     }
 
 

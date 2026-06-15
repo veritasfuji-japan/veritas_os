@@ -33,6 +33,14 @@ VERIFICATION_PROOF_HASH_FIELDS = (
     "signer_policy_id",
     "signer_policy_hash",
     "signature_verification_reason",
+    "request_ref",
+    "ai_output_ref",
+    "execution_intent_id",
+    "decision_id",
+    "action_class",
+    "policy_snapshot_id",
+    "authority_evidence_id",
+    "bind_context_hash",
 )
 VERIFIER_DERIVED_PROVENANCE_KEYS = frozenset(
     {
@@ -184,6 +192,9 @@ class HumanApprovalReceipt:
     approval_result: ApprovalResult
     signature_verified: bool
     receipt_hash: str
+    request_ref: str | None = None
+    ai_output_ref: str | None = None
+    bind_context_hash: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -201,6 +212,9 @@ class HumanApprovalReceipt:
             "expires_at": self.expires_at,
             "policy_snapshot_id": self.policy_snapshot_id,
             "authority_evidence_id": self.authority_evidence_id,
+            "request_ref": self.request_ref,
+            "ai_output_ref": self.ai_output_ref,
+            "bind_context_hash": self.bind_context_hash,
             "approval_result": self.approval_result,
             "signature_verified": self.signature_verified,
             "receipt_hash": self.receipt_hash,
@@ -243,6 +257,14 @@ class VerifiedHumanApprovalReceipt:
     signed_at: str | None
     verified_at: str
     verification_source: Literal["signed_human_approval_artifact"]
+    request_ref: str | None
+    ai_output_ref: str | None
+    execution_intent_id: str
+    decision_id: str
+    action_class: str
+    policy_snapshot_id: str | None
+    authority_evidence_id: str | None
+    bind_context_hash: str | None
     verification_proof_hash: str
 
     def proof_hash_payload(self) -> dict[str, Any]:
@@ -261,6 +283,14 @@ class VerifiedHumanApprovalReceipt:
             "signed_at": self.signed_at,
             "verified_at": self.verified_at,
             "verification_source": self.verification_source,
+            "request_ref": self.request_ref,
+            "ai_output_ref": self.ai_output_ref,
+            "execution_intent_id": self.execution_intent_id,
+            "decision_id": self.decision_id,
+            "action_class": self.action_class,
+            "policy_snapshot_id": self.policy_snapshot_id,
+            "authority_evidence_id": self.authority_evidence_id,
+            "bind_context_hash": self.bind_context_hash,
         }
 
 
@@ -536,6 +566,14 @@ def verify_human_approval_receipt_artifact_to_proof(
         "signed_at": artifact.get("signed_at"),
         "verified_at": verified_at,
         "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
+        "request_ref": verified_receipt.request_ref,
+        "ai_output_ref": verified_receipt.ai_output_ref,
+        "execution_intent_id": verified_receipt.execution_intent_id,
+        "decision_id": verified_receipt.decision_id,
+        "action_class": verified_receipt.approved_action_class,
+        "policy_snapshot_id": verified_receipt.policy_snapshot_id,
+        "authority_evidence_id": verified_receipt.authority_evidence_id,
+        "bind_context_hash": verified_receipt.bind_context_hash,
     }
     proof_payload["verification_proof_hash"] = _verification_proof_hash(proof_payload)
     return VerifiedHumanApprovalReceipt(**proof_payload)
@@ -582,6 +620,67 @@ class HumanApprovalValidationResult:
     failure_reasons: list[str]
 
 
+def validate_human_approval_context_binding(
+    receipt: HumanApprovalReceipt | None,
+    *,
+    request_ref: str | None = None,
+    ai_output_ref: str | None = None,
+    execution_intent_id: str | None = None,
+    decision_id: str | None = None,
+    action_class: str | None = None,
+    policy_snapshot_id: str | None = None,
+    authority_evidence_id: str | None = None,
+    bind_context_hash: str | None = None,
+) -> HumanApprovalValidationResult:
+    """Validate that approval is bound to the exact governed action context.
+
+    A valid signature and authorized signer are insufficient for secure/prod
+    replay resistance. Every provided expected binding value must match the
+    receipt value deterministically, otherwise validation fails closed with a
+    stable reason.
+    """
+    if receipt is None:
+        return HumanApprovalValidationResult(False, ["human_approval_missing"])
+
+    expected_pairs = (
+        (request_ref, receipt.request_ref, "human_approval_request_ref_mismatch"),
+        (ai_output_ref, receipt.ai_output_ref, "human_approval_ai_output_ref_mismatch"),
+        (
+            execution_intent_id,
+            receipt.execution_intent_id,
+            "human_approval_execution_intent_mismatch",
+        ),
+        (decision_id, receipt.decision_id, "human_approval_decision_id_mismatch"),
+        (
+            action_class,
+            receipt.approved_action_class,
+            "human_approval_action_class_mismatch",
+        ),
+        (
+            policy_snapshot_id,
+            receipt.policy_snapshot_id,
+            "human_approval_policy_snapshot_mismatch",
+        ),
+        (
+            authority_evidence_id,
+            receipt.authority_evidence_id,
+            "human_approval_authority_evidence_mismatch",
+        ),
+        (
+            bind_context_hash,
+            receipt.bind_context_hash,
+            "human_approval_bind_context_hash_mismatch",
+        ),
+    )
+    failure_reasons = [
+        reason
+        for expected, actual, reason in expected_pairs
+        if expected is not None and str(expected) != str(actual)
+    ]
+    return HumanApprovalValidationResult(
+        not failure_reasons, sorted(set(failure_reasons))
+    )
+
 def validate_human_approval_receipt(
     receipt: HumanApprovalReceipt | None,
     *,
@@ -623,7 +722,9 @@ def validate_human_approval_receipt(
     if action_class is not None and action_class != receipt.approved_action_class:
         failure_reasons.append("human_approval_action_class_mismatch")
 
-    return HumanApprovalValidationResult(not failure_reasons, sorted(set(failure_reasons)))
+    return HumanApprovalValidationResult(
+        not failure_reasons, sorted(set(failure_reasons))
+    )
 
 
 def build_human_approval_state(
