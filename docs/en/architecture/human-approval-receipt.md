@@ -24,7 +24,8 @@ It is designed to make approval:
   - expiry invalid/expired,
   - scope mismatch,
   - policy snapshot mismatch,
-  - action-class mismatch.
+  - action-class mismatch,
+  - explicit request/action context-binding mismatch.
 - A compatibility helper that converts the receipt into the existing runtime `human_approval_state` shape.
 - A signed approval artifact envelope for crossing external-review and secure/prod runtime trust boundaries.
 - A sealed `VerifiedHumanApprovalReceipt` proof object emitted only after signed-artifact verification succeeds.
@@ -43,6 +44,7 @@ Runtime approval validation is posture-aware:
 - A direct `HumanApprovalReceipt` without verifier-derived provenance is a local/offline representation, not a secure/prod trust-boundary proof.
 - `dev` and `test` style local workflows may use receipt-derived compatibility `human_approval_state` dictionaries produced by `build_human_approval_state()` for demos, fixtures, and migration.
 - Cryptographic signature validity is necessary but not sufficient: signer authorization must also be policy-checked before a signed approval is admissible. The signer policy check depends on explicit verifier-returned key ID, algorithm, signer identity, signer role, and verification reason metadata rather than trusting unsigned artifact fields.
+- An authorized signer is also not sufficient by itself: in `secure`/`prod`, the signed approval must be bound to the exact governed request/action context being evaluated. Runtime context binding compares `request_ref`, `ai_output_ref`, `execution_intent_id`, `decision_id`, `action_class`, `policy_snapshot_id`, `authority_evidence_id`, and `bind_context_hash` when those expected values are supplied. Replaying a valid signed approval across a different request, AI output, execution intent, action class, policy snapshot, authority evidence record, or bind context is rejected fail-closed.
 - Legacy boolean verifier results are dev/test compatibility only. In `secure`/`prod`, a verifier returning bare `True` or `False` fails closed with `human_approval_structured_signature_result_required`; the verifier must return `HumanApprovalSignatureVerificationResult`.
 - `VerifiedHumanApprovalReceipt` proves both receipt integrity/signature verification and signer admissibility under governance policy.
 - `approval_validation_hash` is tamper-evident metadata for accidental/internal mutation detection. It is not cryptographically signed and is not a substitute for signed artifact verification across an external trust boundary.
@@ -53,7 +55,17 @@ A signed approval artifact has this deterministic v1 envelope shape:
 {
   "artifact_type": "human_approval_receipt",
   "artifact_version": "v1",
-  "receipt": { "...": "HumanApprovalReceipt fields except receipt_hash" },
+  "receipt": {
+    "...": "HumanApprovalReceipt fields except receipt_hash",
+    "request_ref": "request-001",
+    "ai_output_ref": "ai-output-001",
+    "execution_intent_id": "intent-001",
+    "decision_id": "decision-001",
+    "approved_action_class": "wire_transfer",
+    "policy_snapshot_id": "policy-001",
+    "authority_evidence_id": "aev-001",
+    "bind_context_hash": "canonical bind context hash"
+  },
   "receipt_hash": "canonical sha256 of the receipt payload",
   "signature": "external signature bytes or encoding",
   "signer": {
@@ -66,7 +78,7 @@ A signed approval artifact has this deterministic v1 envelope shape:
 }
 ```
 
-Verification is fail-closed: runtime recomputes `receipt_hash`, requires an explicit verifier and `HumanApprovalSignerPolicy` for signed artifacts, rejects boolean verifier output in `secure`/`prod`, rejects bad signatures, rejects incomplete structured verification metadata with deterministic reasons (`human_approval_signature_verification_failed`, `human_approval_signature_key_id_missing`, `human_approval_signature_algorithm_missing`, `human_approval_signature_signer_identity_missing`, `human_approval_signature_signer_role_missing`), rejects signer policy violations with deterministic reasons (`human_approval_signer_key_not_allowed`, `human_approval_signer_algorithm_not_allowed`, `human_approval_signer_role_not_allowed`, `human_approval_signer_action_class_not_allowed`, `human_approval_signer_policy_snapshot_not_allowed`), verifies `verification_proof_hash` for proof objects, requires verifier-derived provenance for transitional direct receipts in `secure`/`prod`, and propagates expiry, scope, policy-snapshot, and action-class validation failures.
+Verification is fail-closed: runtime recomputes `receipt_hash`, requires an explicit verifier and `HumanApprovalSignerPolicy` for signed artifacts, rejects boolean verifier output in `secure`/`prod`, rejects bad signatures, rejects incomplete structured verification metadata with deterministic reasons (`human_approval_signature_verification_failed`, `human_approval_signature_key_id_missing`, `human_approval_signature_algorithm_missing`, `human_approval_signature_signer_identity_missing`, `human_approval_signature_signer_role_missing`), rejects signer policy violations with deterministic reasons (`human_approval_signer_key_not_allowed`, `human_approval_signer_algorithm_not_allowed`, `human_approval_signer_role_not_allowed`, `human_approval_signer_action_class_not_allowed`, `human_approval_signer_policy_snapshot_not_allowed`), verifies `verification_proof_hash` for proof objects, requires verifier-derived provenance for transitional direct receipts in `secure`/`prod`, rejects context-binding mismatch with deterministic reasons (`human_approval_request_ref_mismatch`, `human_approval_ai_output_ref_mismatch`, `human_approval_execution_intent_mismatch`, `human_approval_decision_id_mismatch`, `human_approval_action_class_mismatch`, `human_approval_policy_snapshot_mismatch`, `human_approval_authority_evidence_mismatch`, `human_approval_bind_context_hash_mismatch`), and propagates expiry, scope, policy-snapshot, and action-class validation failures.
 
 Successful artifact verification returns a proof object similar to:
 
@@ -86,7 +98,14 @@ Successful artifact verification returns a proof object similar to:
   "signed_at": "2026-05-01T00:00:00+00:00",
   "verified_at": "2026-05-01T00:00:01+00:00",
   "verification_source": "signed_human_approval_artifact",
-  "verification_proof_hash": "canonical sha256 of proof metadata"
+  "request_ref": "request-001",
+  "ai_output_ref": "ai-output-001",
+  "execution_intent_id": "intent-001",
+  "action_class": "wire_transfer",
+  "policy_snapshot_id": "policy-001",
+  "authority_evidence_id": "aev-001",
+  "bind_context_hash": "canonical bind context hash",
+  "verification_proof_hash": "canonical sha256 of proof metadata and context binding provenance"
 }
 ```
 

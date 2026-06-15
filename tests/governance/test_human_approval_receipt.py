@@ -1423,3 +1423,173 @@ def test_dev_posture_plain_receipt_compatibility_remains_intact(
 
     assert result.status == "pass"
     assert result.recommended_outcome == "commit"
+
+
+def _bound_receipt(**overrides: object) -> HumanApprovalReceipt:
+    payload = {
+        "request_ref": "request-001",
+        "ai_output_ref": "ai-output-001",
+        "execution_intent_id": "intent-001",
+        "decision_id": "decision-001",
+        "approved_action_class": "wire_transfer",
+        "policy_snapshot_id": "policy-001",
+        "authority_evidence_id": "aev-001",
+        "bind_context_hash": "bind-hash-001",
+    }
+    payload.update(overrides)
+    return _receipt(**payload)
+
+
+def test_verified_human_approval_proof_hash_includes_context_binding() -> None:
+    proof = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(_bound_receipt(signature_verified=False)),
+        lambda _artifact: _signature_result(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
+    )
+
+    payload = proof.proof_hash_payload()
+
+    assert payload["request_ref"] == "request-001"
+    assert payload["ai_output_ref"] == "ai-output-001"
+    assert payload["execution_intent_id"] == "intent-001"
+    assert payload["action_class"] == "wire_transfer"
+    assert payload["policy_snapshot_id"] == "policy-001"
+    assert payload["authority_evidence_id"] == "aev-001"
+    assert payload["bind_context_hash"] == "bind-hash-001"
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_passes_signed_approval_bound_to_same_context(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(
+            _bound_receipt(signature_verified=False)
+        ),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
+        human_approval_signer_policy=_signer_policy(),
+        request_ref="request-001",
+        ai_output_ref="ai-output-001",
+        execution_intent_id="intent-001",
+        bind_context_hash="bind-hash-001",
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+
+
+@pytest.mark.parametrize(
+    ("runtime_overrides", "receipt_overrides", "expected_reason"),
+    [
+        ({"request_ref": "request-999"}, {}, "human_approval_request_ref_mismatch"),
+        (
+            {"ai_output_ref": "ai-output-999"},
+            {},
+            "human_approval_ai_output_ref_mismatch",
+        ),
+        (
+            {"execution_intent_id": "intent-999"},
+            {},
+            "human_approval_execution_intent_mismatch",
+        ),
+        (
+            {},
+            {"approved_action_class": "account_closure"},
+            "human_approval_action_class_mismatch",
+        ),
+        (
+            {},
+            {"policy_snapshot_id": "policy-999"},
+            "human_approval_policy_snapshot_mismatch",
+        ),
+        (
+            {},
+            {"authority_evidence_id": "aev-999"},
+            "human_approval_authority_evidence_mismatch",
+        ),
+        (
+            {"bind_context_hash": "bind-hash-999"},
+            {},
+            "human_approval_bind_context_hash_mismatch",
+        ),
+    ],
+)
+def test_strict_posture_rejects_signed_approval_reused_across_context(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime_overrides: dict[str, str],
+    receipt_overrides: dict[str, str],
+    expected_reason: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    runtime_payload = {
+        "policy_snapshot_id": "policy-001",
+        "request_ref": "request-001",
+        "ai_output_ref": "ai-output-001",
+        "execution_intent_id": "intent-001",
+        "bind_context_hash": "bind-hash-001",
+    }
+    runtime_payload.update(runtime_overrides)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(
+            _bound_receipt(signature_verified=False, **receipt_overrides)
+        ),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        **runtime_payload,
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == expected_reason
+
+
+def test_dev_posture_unbound_compatibility_state_remains_intact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    state = build_human_approval_state(
+        _receipt(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_state=state,
+        request_ref="request-001",
+        ai_output_ref="ai-output-001",
+        execution_intent_id="intent-001",
+        bind_context_hash="bind-hash-001",
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
