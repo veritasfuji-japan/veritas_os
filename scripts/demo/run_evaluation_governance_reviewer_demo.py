@@ -109,6 +109,30 @@ def canonical_json_hash(payload: Any) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def normalize_artifact_path(path: Path, repo_root: Path = REPO_ROOT) -> str:
+    """Return a portable POSIX repository-relative artifact path.
+
+    Reviewer-facing generated artifacts must not persist local host absolute
+    path prefixes. Paths inside ``repo_root`` are made repository-relative;
+    already-relative paths are normalized to POSIX separators. Absolute paths
+    outside the repository are rejected because they are not reproducible.
+    """
+    raw_path = Path(path)
+    if not raw_path.is_absolute():
+        return str(raw_path).replace("\\", "/")
+
+    resolved_path = raw_path.resolve(strict=False)
+    resolved_repo_root = repo_root.resolve(strict=False)
+    try:
+        relative_path = resolved_path.relative_to(resolved_repo_root)
+    except ValueError as exc:
+        raise ValueError(
+            "artifact path must be repository-relative or inside repo_root: "
+            f"{path}"
+        ) from exc
+    return relative_path.as_posix()
+
+
 def _artifact_entry(
     artifact_type: str,
     artifact_ref: str,
@@ -151,7 +175,7 @@ def build_demo_summary(
         "issued_at": ISSUED_AT,
         "non_runtime": True,
         "non_enforcing": True,
-        "input_dir": input_dir.as_posix(),
+        "input_dir": normalize_artifact_path(input_dir, REPO_ROOT),
         "generated_artifacts": generated_artifacts,
         "demo_summary": (
             "Synthetic offline Evaluation Governance reviewer demo generated "

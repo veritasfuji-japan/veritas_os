@@ -50,6 +50,7 @@ def test_runner_imports_cleanly() -> None:
     assert callable(runner.build_demo_summary)
     assert callable(runner.write_json)
     assert callable(runner.load_json)
+    assert callable(runner.normalize_artifact_path)
     assert callable(runner.main)
 
 
@@ -70,6 +71,7 @@ def test_run_reviewer_demo_generates_expected_artifacts(tmp_path: Path) -> None:
     assert summary["non_runtime"] is True
     assert summary["non_enforcing"] is True
     assert REQUIRED_NON_GOALS <= set(summary["non_goals"])
+    assert summary["input_dir"] == EXAMPLE_DIR.as_posix()
     assert result.reviewer_packet == packet
     assert result.demo_summary == summary
 
@@ -114,3 +116,21 @@ def test_runner_cli_refuses_implicit_example_mutation() -> None:
 
     assert completed.returncode != 0
     assert "refusing to write checked-in generated examples" in completed.stderr
+
+
+def test_normalize_artifact_path_returns_portable_repo_relative_paths() -> None:
+    absolute_input = runner.REPO_ROOT / EXAMPLE_DIR
+
+    assert runner.normalize_artifact_path(absolute_input) == EXAMPLE_DIR.as_posix()
+    assert runner.normalize_artifact_path(Path("docs\\en\\demo")) == (
+        "docs/en/demo"
+    )
+
+
+def test_normalize_artifact_path_rejects_external_absolute_paths() -> None:
+    try:
+        runner.normalize_artifact_path(Path("/tmp/external-reviewer-demo"))
+    except ValueError as exc:
+        assert "repository-relative or inside repo_root" in str(exc)
+    else:
+        raise AssertionError("external absolute path was accepted")
