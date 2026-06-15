@@ -23,6 +23,8 @@ from veritas_os.governance.action_contracts import (
 )
 from veritas_os.governance.human_approval_receipt import (
     HumanApprovalReceipt,
+    HumanApprovalSignatureVerificationResult,
+    HumanApprovalSignerPolicy,
     VerifiedHumanApprovalReceipt,
     HumanApprovalValidationResult,
     build_human_approval_state,
@@ -85,6 +87,8 @@ __all__ = [
     "build_human_approval_state",
     "HumanApprovalValidationResult",
     "HumanApprovalReceipt",
+    "HumanApprovalSignatureVerificationResult",
+    "HumanApprovalSignerPolicy",
     "VerifiedHumanApprovalReceipt",
     "with_receipt_hash",
     "verify_human_approval_receipt_artifact_to_proof",

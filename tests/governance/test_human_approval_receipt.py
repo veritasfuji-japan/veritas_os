@@ -11,6 +11,8 @@ from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import AuthorityEvidence, VerificationResult
 from veritas_os.governance.human_approval_receipt import (
     HumanApprovalReceipt,
+    HumanApprovalSignatureVerificationResult,
+    HumanApprovalSignerPolicy,
     VerifiedHumanApprovalReceipt,
     build_human_approval_state,
     validate_human_approval_receipt,
@@ -64,11 +66,29 @@ def _signed_artifact(
         "receipt": receipt_payload,
         "receipt_hash": digest_receipt.deterministic_digest(),
         "signature": "test-signature",
-        "signer": {"key_id": "test-key", "algorithm": "test-only"},
+        "signer": {
+            "key_id": "test-key",
+            "algorithm": "test-only",
+            "identity": "operator:approver-1",
+            "role": "risk_manager",
+        },
         "signed_at": "2026-05-01T00:00:00+00:00",
     }
     artifact.update(overrides)
     return artifact
+
+
+def _signer_policy(**overrides: object) -> HumanApprovalSignerPolicy:
+    payload = {
+        "policy_id": "signer-policy-001",
+        "allowed_key_ids": ["test-key"],
+        "allowed_algorithms": ["test-only"],
+        "required_signer_roles": ["risk_manager"],
+        "allowed_action_classes": ["wire_transfer"],
+        "allowed_policy_snapshot_ids": ["policy-001"],
+    }
+    payload.update(overrides)
+    return HumanApprovalSignerPolicy(**payload)
 
 
 def _contract(**overrides: object) -> ActionClassContract:
@@ -661,6 +681,7 @@ def test_signed_human_approval_artifact_verification_sets_signature_verified() -
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
     )
 
     assert receipt.signature_verified is True
@@ -687,6 +708,7 @@ def test_signed_human_approval_artifact_bad_signature_fails() -> None:
             action_class="wire_transfer",
             policy_snapshot_id="policy-001",
             now=datetime(2026, 5, 10, tzinfo=UTC),
+            signer_policy=_signer_policy(),
         )
 
 
@@ -701,6 +723,7 @@ def test_signed_human_approval_artifact_tampered_receipt_hash_fails() -> None:
             action_class="wire_transfer",
             policy_snapshot_id="policy-001",
             now=datetime(2026, 5, 10, tzinfo=UTC),
+            signer_policy=_signer_policy(),
         )
 
 
@@ -713,6 +736,7 @@ def test_signed_human_approval_artifact_without_verifier_fails() -> None:
             action_class="wire_transfer",
             policy_snapshot_id="policy-001",
             now=datetime(2026, 5, 10, tzinfo=UTC),
+            signer_policy=_signer_policy(),
         )
 
 
@@ -789,6 +813,7 @@ def test_strict_posture_accepts_receipt_returned_by_artifact_verifier(
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
     )
 
     result = RuntimeAuthorityValidator().validate(
@@ -823,6 +848,7 @@ def test_strict_posture_passes_with_valid_signed_human_approval_artifact(
         actor_identity="operator:alice",
         human_approval_artifact=_signed_artifact(),
         verify_human_approval_signature_fn=lambda _artifact: True,
+        human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -871,6 +897,7 @@ def test_strict_posture_rejects_signed_artifact_with_tampered_receipt_hash(
         actor_identity="operator:alice",
         human_approval_artifact=_signed_artifact(receipt_hash="f" * 64),
         verify_human_approval_signature_fn=lambda _artifact: True,
+        human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -910,6 +937,7 @@ def test_signed_human_approval_artifact_verification_produces_proof() -> None:
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
     )
 
     assert isinstance(proof, VerifiedHumanApprovalReceipt)
@@ -919,6 +947,94 @@ def test_signed_human_approval_artifact_verification_produces_proof() -> None:
     assert proof.artifact_version == "v1"
     assert proof.verification_source == "signed_human_approval_artifact"
     assert len(proof.verification_proof_hash) == 64
+
+
+def test_signed_human_approval_artifact_valid_signer_policy_passes() -> None:
+    proof = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(),
+        lambda _artifact: HumanApprovalSignatureVerificationResult(
+            verified=True,
+            key_id="test-key",
+            algorithm="test-only",
+            signer_identity="operator:approver-1",
+            signer_role="risk_manager",
+            reason="test_verified",
+        ),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
+    )
+
+    assert proof.signer_identity == "operator:approver-1"
+    assert proof.signer_role == "risk_manager"
+    assert proof.signer_policy_id == "signer-policy-001"
+    assert proof.signature_verification_reason == "test_verified"
+
+
+@pytest.mark.parametrize(
+    ("policy", "expected_reason"),
+    [
+        (
+            _signer_policy(allowed_key_ids=["other-key"]),
+            "human_approval_signer_key_not_allowed",
+        ),
+        (
+            _signer_policy(allowed_algorithms=["ed25519"]),
+            "human_approval_signer_algorithm_not_allowed",
+        ),
+        (
+            _signer_policy(required_signer_roles=["security_reviewer"]),
+            "human_approval_signer_role_not_allowed",
+        ),
+        (
+            _signer_policy(allowed_action_classes=["account_closure"]),
+            "human_approval_signer_action_class_not_allowed",
+        ),
+        (
+            _signer_policy(allowed_policy_snapshot_ids=["policy-999"]),
+            "human_approval_signer_policy_snapshot_not_allowed",
+        ),
+    ],
+)
+def test_signed_human_approval_artifact_signer_policy_failures(
+    policy: HumanApprovalSignerPolicy,
+    expected_reason: str,
+) -> None:
+    with pytest.raises(ValueError, match=expected_reason):
+        verify_human_approval_receipt_artifact_to_proof(
+            _signed_artifact(),
+            lambda _artifact: True,
+            requested_scope=["ledger:debit"],
+            action_class="wire_transfer",
+            policy_snapshot_id="policy-001",
+            now=datetime(2026, 5, 10, tzinfo=UTC),
+            signer_policy=policy,
+        )
+
+
+def test_signed_human_approval_proof_hash_changes_with_signer_policy_hash() -> None:
+    first = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(),
+        lambda _artifact: True,
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(policy_hash="a" * 64),
+    )
+    second = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(),
+        lambda _artifact: True,
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(policy_hash="b" * 64),
+    )
+
+    assert first.verification_proof_hash != second.verification_proof_hash
 
 
 @pytest.mark.parametrize("posture", ["secure", "prod"])
@@ -934,6 +1050,7 @@ def test_strict_posture_passes_with_valid_verified_human_approval_proof(
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
     )
 
     result = RuntimeAuthorityValidator().validate(
@@ -965,6 +1082,7 @@ def test_strict_posture_rejects_tampered_verified_proof_hash(
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
     )
 
     result = RuntimeAuthorityValidator().validate(
@@ -998,6 +1116,7 @@ def test_strict_posture_rejects_tampered_verified_receipt_hash(
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
     )
 
     result = RuntimeAuthorityValidator().validate(
