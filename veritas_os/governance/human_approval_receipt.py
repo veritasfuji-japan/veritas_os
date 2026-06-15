@@ -63,6 +63,7 @@ class HumanApprovalSignerPolicy:
     allowed_key_ids: list[str]
     allowed_algorithms: list[str]
     required_signer_roles: list[str] | None = None
+    required_signer_identities: list[str] | None = None
     allowed_action_classes: list[str] | None = None
     allowed_policy_snapshot_ids: list[str] | None = None
     policy_hash: str | None = None
@@ -77,6 +78,11 @@ class HumanApprovalSignerPolicy:
                 None
                 if self.required_signer_roles is None
                 else sorted(str(item) for item in self.required_signer_roles)
+            ),
+            "required_signer_identities": (
+                None
+                if self.required_signer_identities is None
+                else sorted(str(item) for item in self.required_signer_identities)
             ),
             "allowed_action_classes": (
                 None
@@ -260,10 +266,21 @@ def _artifact_signer_metadata(artifact: dict[str, Any]) -> tuple[str | None, str
 def _structured_verification_result(
     raw_result: bool | HumanApprovalSignatureVerificationResult,
     artifact: dict[str, Any],
+    *,
+    require_structured_signature_result: bool = False,
 ) -> HumanApprovalSignatureVerificationResult:
-    """Normalize legacy bool verifier output into structured metadata."""
+    """Normalize verifier output and fail closed when structured output is required.
+
+    Legacy boolean verifier results are retained for dev/test compatibility only.
+    Secure and production callers must set
+    ``require_structured_signature_result`` so verifier-returned key, algorithm,
+    signer identity, signer role, and reason metadata are explicit rather than
+    inferred from untrusted artifact fields.
+    """
     if isinstance(raw_result, HumanApprovalSignatureVerificationResult):
         return raw_result
+    if require_structured_signature_result:
+        raise ValueError("human_approval_structured_signature_result_required")
     key_id, algorithm = _artifact_signer_metadata(artifact)
     signer = artifact.get("signer") if isinstance(artifact.get("signer"), dict) else {}
     return HumanApprovalSignatureVerificationResult(
@@ -280,6 +297,29 @@ def _structured_verification_result(
     )
 
 
+def _validate_signature_verification_result(
+    result: HumanApprovalSignatureVerificationResult,
+    policy: HumanApprovalSignerPolicy,
+) -> None:
+    """Fail closed when structured signature verification metadata is incomplete."""
+    if result.verified is not True:
+        raise ValueError("human_approval_signature_verification_failed")
+    if not str(result.key_id or "").strip():
+        raise ValueError("human_approval_signature_key_id_missing")
+    if not str(result.algorithm or "").strip():
+        raise ValueError("human_approval_signature_algorithm_missing")
+    if (
+        policy.required_signer_identities is not None
+        and not str(result.signer_identity or "").strip()
+    ):
+        raise ValueError("human_approval_signature_signer_identity_missing")
+    if (
+        policy.required_signer_roles is not None
+        and not str(result.signer_role or "").strip()
+    ):
+        raise ValueError("human_approval_signature_signer_role_missing")
+
+
 def _validate_signer_policy(
     result: HumanApprovalSignatureVerificationResult,
     policy: HumanApprovalSignerPolicy,
@@ -288,6 +328,7 @@ def _validate_signer_policy(
     policy_snapshot_id: str | None,
 ) -> None:
     """Fail closed when verifier signer metadata violates signer policy."""
+    _validate_signature_verification_result(result, policy)
     if result.key_id not in {str(item) for item in policy.allowed_key_ids}:
         raise ValueError("human_approval_signer_key_not_allowed")
     if result.algorithm not in {str(item) for item in policy.allowed_algorithms}:
@@ -296,6 +337,10 @@ def _validate_signer_policy(
         roles = {str(item) for item in policy.required_signer_roles}
         if result.signer_role not in roles:
             raise ValueError("human_approval_signer_role_not_allowed")
+    if policy.required_signer_identities is not None:
+        identities = {str(item) for item in policy.required_signer_identities}
+        if result.signer_identity not in identities:
+            raise ValueError("human_approval_signer_identity_not_allowed")
     if policy.allowed_action_classes is not None:
         actions = {str(item) for item in policy.allowed_action_classes}
         if action_class not in actions:
@@ -343,6 +388,7 @@ def verify_human_approval_receipt_artifact_to_proof(
     policy_snapshot_id: str | None,
     now: datetime | None = None,
     signer_policy: HumanApprovalSignerPolicy | None = None,
+    require_structured_signature_result: bool = False,
 ) -> VerifiedHumanApprovalReceipt:
     """Verify a signed artifact and return a sealed approval proof.
 
@@ -370,13 +416,13 @@ def verify_human_approval_receipt_artifact_to_proof(
     if artifact.get("receipt_hash") != expected_hash:
         raise ValueError("human_approval_receipt_hash_mismatch")
 
-    verification_result = _structured_verification_result(
-        verify_signature_fn(artifact), artifact
-    )
-    if verification_result.verified is not True:
-        raise ValueError("human_approval_signature_verification_failed")
     if signer_policy is None:
         raise ValueError("human_approval_signer_policy_required")
+    verification_result = _structured_verification_result(
+        verify_signature_fn(artifact),
+        artifact,
+        require_structured_signature_result=require_structured_signature_result,
+    )
     _validate_signer_policy(
         verification_result,
         signer_policy,
@@ -457,6 +503,7 @@ def verify_human_approval_receipt_artifact(
     policy_snapshot_id: str | None,
     now: datetime | None = None,
     signer_policy: HumanApprovalSignerPolicy | None = None,
+    require_structured_signature_result: bool = False,
 ) -> HumanApprovalReceipt:
     """Verify a signed artifact and return its validated receipt.
 
@@ -473,6 +520,7 @@ def verify_human_approval_receipt_artifact(
         policy_snapshot_id=policy_snapshot_id,
         now=now,
         signer_policy=signer_policy,
+        require_structured_signature_result=require_structured_signature_result,
     ).receipt
 
 
