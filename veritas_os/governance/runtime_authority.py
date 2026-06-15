@@ -444,6 +444,7 @@ class RuntimeAuthorityValidator:
                     policy_snapshot_id=policy_snapshot_id,
                     now=now,
                     signer_policy=human_approval_signer_policy,
+                    require_structured_signature_result=strict_posture,
                 )
             except ValueError as exc:
                 return False, str(exc)
