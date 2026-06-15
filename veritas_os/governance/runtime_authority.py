@@ -439,6 +439,13 @@ class RuntimeAuthorityValidator:
             return proof_valid, proof_reason
 
         if human_approval_artifact is not None:
+            if (
+                strict_posture
+                and self._is_test_human_approval_signature_verifier(
+                    human_approval_signature_verifier
+                )
+            ):
+                return False, "human_approval_test_signature_verifier_not_allowed"
             verification_fn = self._human_approval_signature_verification_fn(
                 human_approval_signature_verifier=human_approval_signature_verifier,
                 verify_human_approval_signature_fn=verify_human_approval_signature_fn,
@@ -486,6 +493,13 @@ class RuntimeAuthorityValidator:
 
         return self._validated_human_approval_state(human_approval_state)
 
+    def _is_test_human_approval_signature_verifier(
+        self,
+        verifier: HumanApprovalSignatureVerifier | None,
+    ) -> bool:
+        """Return whether ``verifier`` is explicitly marked test/dev-only."""
+        return bool(getattr(verifier, "is_test_verifier", False))
+
     def _human_approval_signature_verification_fn(
         self,
         *,
@@ -499,7 +513,6 @@ class RuntimeAuthorityValidator:
         if human_approval_signature_verifier is not None:
             return human_approval_signature_verifier.verify
         return verify_human_approval_signature_fn
-
 
     def _validated_human_approval_proof(
         self,

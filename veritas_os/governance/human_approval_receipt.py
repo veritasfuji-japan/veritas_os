@@ -148,6 +148,7 @@ class TestHumanApprovalSignatureVerifier:
     signer_role: str = "risk_manager"
     verified: bool = True
     reason: str = "test_dev_only_verifier"
+    is_test_verifier: bool = True
 
     def verify(
         self,

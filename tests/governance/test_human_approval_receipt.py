@@ -92,6 +92,23 @@ def _signature_result(**overrides: object) -> HumanApprovalSignatureVerification
     return HumanApprovalSignatureVerificationResult(**payload)
 
 
+class _ProductionHumanApprovalSignatureVerifier:
+    """Non-test verifier fixture that satisfies the production verifier contract."""
+
+    def __init__(
+        self,
+        result: HumanApprovalSignatureVerificationResult | None = None,
+    ) -> None:
+        self._result = result or _signature_result()
+
+    def verify(
+        self,
+        artifact: dict[str, object],
+    ) -> HumanApprovalSignatureVerificationResult:
+        """Return a structured verification result for production-path tests."""
+        return self._result
+
+
 def _signer_policy(**overrides: object) -> HumanApprovalSignerPolicy:
     payload = {
         "policy_id": "signer-policy-001",
@@ -850,7 +867,7 @@ def test_strict_posture_accepts_receipt_returned_by_artifact_verifier(
 
 
 @pytest.mark.parametrize("posture", ["secure", "prod"])
-def test_strict_posture_passes_with_human_approval_signature_verifier(
+def test_strict_posture_rejects_test_human_approval_signature_verifier(
     monkeypatch: pytest.MonkeyPatch,
     posture: str,
 ) -> None:
@@ -865,6 +882,33 @@ def test_strict_posture_passes_with_human_approval_signature_verifier(
         actor_identity="operator:alice",
         human_approval_artifact=_signed_artifact(),
         human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(),
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == (
+        "human_approval_test_signature_verifier_not_allowed"
+    )
+
+
+@pytest.mark.parametrize("posture", ["secure", "prod"])
+def test_strict_posture_accepts_non_test_human_approval_signature_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+    posture: str,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        human_approval_signature_verifier=_ProductionHumanApprovalSignatureVerifier(),
         human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
@@ -892,7 +936,7 @@ def test_strict_posture_prefers_human_approval_signature_verifier(
         verify_human_approval_signature_fn=lambda _artifact: _signature_result(
             verified=False
         ),
-        human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(),
+        human_approval_signature_verifier=_ProductionHumanApprovalSignatureVerifier(),
         human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
@@ -901,10 +945,12 @@ def test_strict_posture_prefers_human_approval_signature_verifier(
     assert result.status == "pass"
 
 
-def test_dev_posture_can_use_test_human_approval_signature_verifier(
+@pytest.mark.parametrize("posture", ["dev", "test"])
+def test_dev_test_posture_can_use_test_human_approval_signature_verifier(
     monkeypatch: pytest.MonkeyPatch,
+    posture: str,
 ) -> None:
-    monkeypatch.setenv("VERITAS_POSTURE", "dev")
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
 
     result = RuntimeAuthorityValidator().validate(
         action_contract=_contract(),
@@ -921,7 +967,6 @@ def test_dev_posture_can_use_test_human_approval_signature_verifier(
     )
 
     assert result.status == "pass"
-
 
 
 def test_strict_posture_rejects_incomplete_signature_verifier_result(
@@ -937,7 +982,9 @@ def test_strict_posture_rejects_incomplete_signature_verifier_result(
         policy_snapshot_id="policy-001",
         actor_identity="operator:alice",
         human_approval_artifact=_signed_artifact(),
-        human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(key_id=""),
+        human_approval_signature_verifier=_ProductionHumanApprovalSignatureVerifier(
+            _signature_result(key_id="")
+        ),
         human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
@@ -971,6 +1018,7 @@ def test_strict_posture_rejects_signature_verifier_exception(
 
     assert result.status == "fail"
     assert _approval_reason(result) == "human_approval_signature_verification_failed"
+
 
 @pytest.mark.parametrize("posture", ["secure", "prod"])
 def test_strict_posture_passes_with_valid_signed_human_approval_artifact(

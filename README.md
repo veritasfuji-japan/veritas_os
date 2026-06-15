@@ -126,7 +126,7 @@ Boundary:
 
 ## Human Approval Receipt v1
 
-VERITAS now includes a local/offline Human Approval Receipt v1 artifact. It represents human approval as a deterministic, hashable, scope-bound, expiry-aware governance artifact. Dev/test local workflows may convert receipts into compatibility `human_approval_state` dictionaries for demos, fixtures, and migration, but `secure`/`prod` posture requires an explicit `HumanApprovalReceipt` object or a future signed approval artifact path when human approval is needed. The `approval_validation_hash` is tamper-evident metadata, not a substitute for cryptographic receipt verification. This does not add live IdP, SSO, IAM, KMS/HSM, e-signature, or production approval workflow integration.
+VERITAS now includes a local/offline Human Approval Receipt v1 artifact. It represents human approval as a deterministic, hashable, scope-bound, expiry-aware governance artifact. Dev/test local workflows may convert receipts into compatibility `human_approval_state` dictionaries for demos, fixtures, and migration, but `secure`/`prod` posture requires an explicit `HumanApprovalReceipt` object with verifier-derived provenance, a signed approval artifact plus production verifier, or a sealed verified proof when human approval is needed. `TestHumanApprovalSignatureVerifier` is blocked in `secure`/`prod`; production deployments must provide their own verifier bound to KMS/HSM or trusted public-key infrastructure. The `approval_validation_hash` is tamper-evident metadata, not a substitute for cryptographic receipt verification. This does not add live IdP, SSO, IAM, KMS/HSM, e-signature, or production approval workflow integration.
 
 Boundary:
 
