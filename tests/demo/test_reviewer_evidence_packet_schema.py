@@ -24,6 +24,9 @@ EVALUATION_GOVERNANCE_EXAMPLE_PATH = Path(
     "docs/en/demo/examples/"
     "reviewer-evidence-packet-with-evaluation-governance-v1.json"
 )
+CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH = Path(
+    "docs/en/demo/examples/context-bound-approval-replay-prevention-v1.json"
+)
 SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 REQUIRED_TOP_LEVEL_FIELDS = [
     "packet_id",
@@ -204,6 +207,7 @@ def _assert_fallback_packet_shape(packet: dict[str, Any]) -> None:
     assert packet["packet_id"] in {
         "reviewer-evidence-packet-saas-permission-change-v1",
         "reviewer-evidence-packet-decision-candidate-refusal-v1",
+        "reviewer-evidence-packet-approval-replay-prevention-v1",
     }
     assert packet["packet_version"] == "v1"
     assert packet["local_offline_only"] is True
@@ -563,3 +567,25 @@ def test_schema_rejects_invalid_evaluation_governance_artifact_hash() -> None:
     validator = jsonschema.Draft202012Validator(_load_json(SCHEMA_PATH))
     with pytest.raises(jsonschema.ValidationError):
         validator.validate(packet)
+
+
+def test_context_bound_approval_replay_example_validates_against_schema() -> None:
+    packet = _load_json(CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH)
+
+    _validate_or_fallback(packet, _load_json(SCHEMA_PATH))
+
+
+def test_context_bound_approval_replay_example_declares_failure_reasons() -> None:
+    packet = _load_json(CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH)
+    cases = {case["case_id"]: case for case in packet["cases"]}
+
+    assert cases["valid_same_context"]["failure_reasons"] == []
+    assert cases["replay_different_request_ref"]["failure_reasons"] == [
+        "human_approval_request_ref_mismatch"
+    ]
+    assert cases["replay_different_action_class"]["failure_reasons"] == [
+        "human_approval_action_class_mismatch"
+    ]
+    assert cases["replay_different_bind_context_hash"]["failure_reasons"] == [
+        "human_approval_bind_context_hash_mismatch"
+    ]
