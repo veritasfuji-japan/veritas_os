@@ -161,6 +161,7 @@ jobs:
 
       - name: Block high/critical CVEs in Python core production dependencies
         run: |
+          set +e
           # Temporary narrow exception:
           # - PYSEC-2026-161 is fixed in starlette>=1.0.1.
           # - fastapi==0.121.0 currently does not resolve with starlette==1.0.1.
@@ -168,7 +169,36 @@ jobs:
           # - To remove: confirm `pip install "fastapi>=X" "starlette>=1.0.1"`
           #   resolves without conflict, then delete --ignore-vuln PYSEC-2026-161
           #   from this file and from security-gates.yml (or main.yml).
-          pip-audit -r veritas_os/requirements-core.txt --desc --ignore-vuln PYSEC-2026-161
+          pip-audit -r veritas_os/requirements-core.txt --desc --format json \
+            --output pip-audit-core.json --ignore-vuln PYSEC-2026-161
+          audit_status=$?
+
+          echo "::group::pip-audit core JSON report"
+          if [ -f pip-audit-core.json ]; then
+            cat pip-audit-core.json
+          else
+            echo "pip-audit-core.json was not produced."
+          fi
+          echo "::endgroup::"
+
+          echo "::group::pip-audit core human-readable report"
+          pip-audit -r veritas_os/requirements-core.txt --desc \
+            --ignore-vuln PYSEC-2026-161
+          human_status=$?
+          echo "::endgroup::"
+
+          if [ "$audit_status" -ne 0 ]; then
+            exit "$audit_status"
+          fi
+          exit "$human_status"
+
+      - name: Upload Python core pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-core-${{ github.job }}
+          path: pip-audit-core.json
+          if-no-files-found: ignore
 
       - name: Python full/optional dependency audit (informational)
         continue-on-error: true
