@@ -162,7 +162,7 @@ jobs:
       - name: Block high/critical CVEs in Python core production dependencies
         run: |
           set +e
-          # Temporary narrow Starlette exceptions:
+          # Temporary narrow Starlette exceptions (tracking: PR #2048):
           # - PYSEC-2026-161 is fixed in starlette>=1.0.1.
           # - GHSA-wqp7-x3pw-xc5r / CVE-2026-48818 and
           #   GHSA-x746-7m8f-x49c / CVE-2026-48817 are fixed in
