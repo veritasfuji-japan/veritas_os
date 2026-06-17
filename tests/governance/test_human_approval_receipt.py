@@ -1221,6 +1221,133 @@ def test_structured_signature_verification_result_missing_fields_fail(
         )
 
 
+def test_matching_artifact_key_id_and_verifier_key_id_passes() -> None:
+    proof = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(key_id="test-key"),
+        lambda _artifact: _signature_result(key_id="test-key"),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
+        require_structured_signature_result=True,
+    )
+
+    assert proof.signer_key_id == "test-key"
+
+
+@pytest.mark.parametrize(
+    ("artifact_overrides", "verification_overrides", "expected_reason"),
+    [
+        (
+            {"signer_key_id": "artifact-key"},
+            {"key_id": "test-key"},
+            "human_approval_signer_key_mismatch",
+        ),
+        (
+            {"signer_algorithm": "artifact-algorithm"},
+            {"algorithm": "test-only"},
+            "human_approval_signer_algorithm_mismatch",
+        ),
+        (
+            {"signer_identity": "operator:artifact-approver"},
+            {"signer_identity": "operator:approver-1"},
+            "human_approval_signer_identity_mismatch",
+        ),
+        (
+            {"signer_role": "artifact-role"},
+            {"signer_role": "risk_manager"},
+            "human_approval_signer_role_mismatch",
+        ),
+    ],
+)
+def test_signed_artifact_signer_metadata_mismatch_fails(
+    artifact_overrides: dict[str, str],
+    verification_overrides: dict[str, str],
+    expected_reason: str,
+) -> None:
+    with pytest.raises(ValueError, match=expected_reason):
+        verify_human_approval_receipt_artifact_to_proof(
+            _signed_artifact(**artifact_overrides),
+            lambda _artifact: _signature_result(**verification_overrides),
+            requested_scope=["ledger:debit"],
+            action_class="wire_transfer",
+            policy_snapshot_id="policy-001",
+            now=datetime(2026, 5, 10, tzinfo=UTC),
+            signer_policy=_signer_policy(),
+            require_structured_signature_result=True,
+        )
+
+
+def test_missing_artifact_signer_metadata_passes_with_valid_verifier_result() -> None:
+    artifact = _signed_artifact(signer={})
+
+    proof = verify_human_approval_receipt_artifact_to_proof(
+        artifact,
+        lambda _artifact: _signature_result(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
+        require_structured_signature_result=True,
+    )
+
+    assert proof.signer_key_id == "test-key"
+    assert proof.signer_identity == "operator:approver-1"
+
+
+def test_signer_policy_uses_verifier_metadata_not_artifact_claims() -> None:
+    proof = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(signer={}),
+        lambda _artifact: _signature_result(
+            key_id="verifier-key",
+            algorithm="ed25519",
+            signer_identity="operator:verifier-approver",
+            signer_role="security_reviewer",
+        ),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(
+            allowed_key_ids=["verifier-key"],
+            allowed_algorithms=["ed25519"],
+            required_signer_identities=["operator:verifier-approver"],
+            required_signer_roles=["security_reviewer"],
+        ),
+        require_structured_signature_result=True,
+    )
+
+    assert proof.signer_key_id == "verifier-key"
+    assert proof.signer_algorithm == "ed25519"
+    assert proof.signer_identity == "operator:verifier-approver"
+    assert proof.signer_role == "security_reviewer"
+
+
+def test_runtime_does_not_emit_verified_approval_on_metadata_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(signer_key_id="artifact-key"),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
+        human_approval_signer_policy=_signer_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_signer_key_mismatch"
+
+
 def test_signed_human_approval_artifact_valid_signer_policy_passes() -> None:
     proof = verify_human_approval_receipt_artifact_to_proof(
         _signed_artifact(),
