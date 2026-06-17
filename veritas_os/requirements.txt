@@ -30,6 +30,8 @@ jsonschema==4.23.0
 # --- Core: LLM Integration ---
 openai==1.53.0
 httpx==0.28.1
+# Fixed CVE-2026-45409 in IDNA URL handling.
+idna==3.15
 
 # --- Core: Numerical ---
 numpy==1.26.4
