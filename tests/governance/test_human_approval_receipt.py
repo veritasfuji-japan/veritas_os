@@ -567,7 +567,12 @@ def test_strict_posture_rejects_valid_receipt_without_artifact_provenance(
     )
 
     assert result.status == "fail"
-    assert _approval_reason(result) == "human_approval_artifact_provenance_required"
+    expected_reason = (
+        "human_approval_direct_receipt_not_allowed_in_prod"
+        if posture == "prod"
+        else "human_approval_artifact_provenance_required"
+    )
+    assert _approval_reason(result) == expected_reason
 
 
 @pytest.mark.parametrize("posture", ["secure", "prod"])
@@ -700,7 +705,12 @@ def test_strict_posture_invalid_direct_receipt_requires_provenance(
     )
 
     assert result.status == "fail"
-    assert _approval_reason(result) == "human_approval_artifact_provenance_required"
+    expected_reason = (
+        "human_approval_direct_receipt_not_allowed_in_prod"
+        if posture == "prod"
+        else "human_approval_artifact_provenance_required"
+    )
+    assert _approval_reason(result) == expected_reason
 
 
 def test_signed_human_approval_artifact_verification_sets_signature_verified() -> None:
@@ -792,7 +802,12 @@ def test_strict_posture_rejects_naked_signature_verified_receipt(
     )
 
     assert result.status == "fail"
-    assert _approval_reason(result) == "human_approval_artifact_provenance_required"
+    expected_reason = (
+        "human_approval_direct_receipt_not_allowed_in_prod"
+        if posture == "prod"
+        else "human_approval_artifact_provenance_required"
+    )
+    assert _approval_reason(result) == expected_reason
 
 
 @pytest.mark.parametrize("posture", ["secure", "prod"])
@@ -829,11 +844,16 @@ def test_strict_posture_rejects_forged_receipt_provenance(
     )
 
     assert result.status == "fail"
-    assert _approval_reason(result) == "human_approval_artifact_provenance_required"
+    expected_reason = (
+        "human_approval_direct_receipt_not_allowed_in_prod"
+        if posture == "prod"
+        else "human_approval_artifact_provenance_required"
+    )
+    assert _approval_reason(result) == expected_reason
 
 
-@pytest.mark.parametrize("posture", ["secure", "prod"])
-def test_strict_posture_accepts_receipt_returned_by_artifact_verifier(
+@pytest.mark.parametrize("posture", ["secure"])
+def test_secure_posture_accepts_receipt_returned_by_artifact_verifier(
     monkeypatch: pytest.MonkeyPatch,
     posture: str,
 ) -> None:
@@ -863,6 +883,40 @@ def test_strict_posture_accepts_receipt_returned_by_artifact_verifier(
 
     assert result.status == "pass"
     assert result.recommended_outcome == "commit"
+
+
+def test_prod_posture_rejects_direct_receipt_returned_by_artifact_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prod requires proof objects or signed artifact verification at boundary."""
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+    verified_receipt = verify_human_approval_receipt_artifact(
+        _signed_artifact(),
+        lambda _artifact: _signature_result(),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
+        require_structured_signature_result=True,
+    )
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_receipt=verified_receipt,
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == (
+        "human_approval_direct_receipt_not_allowed_in_prod"
+    )
 
 
 
@@ -1655,13 +1709,15 @@ def test_strict_posture_passes_signed_approval_bound_to_same_context(
         ),
     ],
 )
+@pytest.mark.parametrize("posture", ["secure", "prod"])
 def test_strict_posture_rejects_signed_approval_reused_across_context(
     monkeypatch: pytest.MonkeyPatch,
     runtime_overrides: dict[str, str],
     receipt_overrides: dict[str, str],
     expected_reason: str,
+    posture: str,
 ) -> None:
-    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    monkeypatch.setenv("VERITAS_POSTURE", posture)
     runtime_payload = {
         "policy_snapshot_id": "policy-001",
         "request_ref": "request-001",
