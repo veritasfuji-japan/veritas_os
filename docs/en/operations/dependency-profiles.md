@@ -73,6 +73,10 @@ keeping full backward compatibility via the `[full]` extra.
 ## CI / Docker Behavior
 
 - **CI blocking dependency audit** (`main.yml`, `security-gates.yml`): `pip-audit -r veritas_os/requirements-core.txt --desc`.
+  The Starlette `--ignore-vuln` entries added in PR #2048 are temporary,
+  narrowly scoped audit exceptions for the current FastAPI resolver constraint.
+  Remove those ignores as soon as FastAPI resolves with `starlette>=1.3.1`;
+  do not add adjacent Starlette ignores or weaken the blocking audit gate.
 - **CI informational full audit**: `pip-audit -r veritas_os/requirements.txt --desc` with non-blocking status, so optional ML/security posture remains visible.
 - **CI install paths**: Some jobs still install `requirements.txt` for full-coverage test environments.
 - **Docker** (`Dockerfile`): Installs via `requirements.txt` → full dependency set. No change needed.
