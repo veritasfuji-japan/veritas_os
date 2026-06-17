@@ -343,6 +343,76 @@ def _artifact_signer_metadata(artifact: dict[str, Any]) -> tuple[str | None, str
     )
 
 
+def _first_present(mapping: dict[str, Any], names: tuple[str, ...]) -> str | None:
+    """Return the first non-empty signer metadata claim from ``mapping``."""
+    for name in names:
+        if name in mapping and mapping[name] is not None:
+            return str(mapping[name])
+    return None
+
+
+def _artifact_metadata_claims(artifact: dict[str, Any]) -> dict[str, str | None]:
+    """Return signer metadata self-claims from the artifact for cross-checking.
+
+    Artifact/envelope signer metadata is never authorization source of truth.
+    These values are only compared against verifier-derived metadata and a
+    contradiction fails closed before any verified proof is emitted.
+    """
+    signer = artifact.get("signer")
+    signer_mapping = signer if isinstance(signer, dict) else {}
+    receipt = artifact.get("receipt")
+    receipt_mapping = receipt if isinstance(receipt, dict) else {}
+    metadata = receipt_mapping.get("metadata")
+    metadata_mapping = metadata if isinstance(metadata, dict) else {}
+
+    return {
+        "key_id": (
+            _first_present(artifact, ("key_id", "signer_key_id"))
+            or _first_present(signer_mapping, ("key_id", "signer_key_id"))
+            or _first_present(metadata_mapping, ("key_id", "signer_key_id"))
+        ),
+        "algorithm": (
+            _first_present(artifact, ("algorithm", "signer_algorithm"))
+            or _first_present(signer_mapping, ("algorithm", "signer_algorithm"))
+            or _first_present(metadata_mapping, ("algorithm", "signer_algorithm"))
+        ),
+        "signer_identity": (
+            _first_present(artifact, ("signer_identity",))
+            or _first_present(signer_mapping, ("signer_identity", "identity"))
+            or _first_present(metadata_mapping, ("signer_identity",))
+        ),
+        "signer_role": (
+            _first_present(artifact, ("signer_role",))
+            or _first_present(signer_mapping, ("signer_role", "role"))
+            or _first_present(metadata_mapping, ("signer_role",))
+        ),
+    }
+
+
+def _validate_artifact_signer_metadata_claims(
+    artifact: dict[str, Any],
+    result: HumanApprovalSignatureVerificationResult,
+) -> None:
+    """Fail closed when artifact signer self-claims contradict verifier output."""
+    claims = _artifact_metadata_claims(artifact)
+    checks = (
+        ("key_id", result.key_id, "human_approval_signer_key_mismatch"),
+        ("algorithm", result.algorithm, "human_approval_signer_algorithm_mismatch"),
+        (
+            "signer_identity",
+            result.signer_identity,
+            "human_approval_signer_identity_mismatch",
+        ),
+        ("signer_role", result.signer_role, "human_approval_signer_role_mismatch"),
+    )
+    for claim_name, verifier_value, reason in checks:
+        artifact_value = claims[claim_name]
+        if artifact_value is None or verifier_value is None:
+            continue
+        if artifact_value != str(verifier_value):
+            raise ValueError(reason)
+
+
 def _structured_verification_result(
     raw_result: bool | HumanApprovalSignatureVerificationResult,
     artifact: dict[str, Any],
@@ -509,6 +579,7 @@ def verify_human_approval_receipt_artifact_to_proof(
         action_class=action_class,
         policy_snapshot_id=policy_snapshot_id,
     )
+    _validate_artifact_signer_metadata_claims(artifact, verification_result)
 
     signer_key_id = verification_result.key_id
     signer_algorithm = verification_result.algorithm
