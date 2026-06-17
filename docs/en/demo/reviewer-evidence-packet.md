@@ -42,6 +42,28 @@ Evaluation Governance reviewer packet examples can be generated from the offline
 
 Evaluation Governance artifacts are non-enforcing in v1 unless future runtime integration is added. Their presence supports external review, but does not automatically establish legitimacy, does not change runtime admissibility, does not introduce fail-closed behavior, and does not require live receipt generation.
 
+
+## Context-bound approval replay prevention
+
+Reviewer Evidence Packet v1 also includes a deterministic local/offline example for context-bound HumanApprovalReceipt replay prevention at `docs/en/demo/examples/context-bound-approval-replay-prevention-v1.json`.
+
+The example uses one valid signed HumanApprovalReceipt fixture and evaluates it against four governed request/action contexts:
+
+- valid approval, same context => `commit_eligible`
+- valid approval, different `request_ref` => `block` with `human_approval_request_ref_mismatch`
+- valid approval, different `action_class` => `block` with `human_approval_action_class_mismatch`
+- valid approval, different `bind_context_hash` => `block` with `human_approval_bind_context_hash_mismatch`
+
+This demonstrates that signature validity alone is not enough for governed execution. The approval must also match the exact reviewer-visible context binding fields, so replay attempts fail closed with deterministic reasons.
+
+Generate the example locally with:
+
+```bash
+python3 scripts/demo/export_context_bound_approval_replay_packet.py
+```
+
+The command performs no network calls and requires no credentials.
+
 ## Local/offline boundary
 
 Reviewer Evidence Packet v1 is a local/offline fixture export only.

@@ -190,3 +190,41 @@ def test_packet_key_provenance_metadata_omits_raw_external_values() -> None:
     ]
     for fragment in blocked_fragments:
         assert fragment not in metadata_text
+
+
+def test_context_bound_approval_replay_packet_is_deterministic() -> None:
+    """Replay-prevention reviewer examples must be stable fixtures."""
+    from scripts.demo.export_context_bound_approval_replay_packet import (
+        build_context_bound_approval_replay_packet,
+    )
+
+    first = build_context_bound_approval_replay_packet()
+    second = build_context_bound_approval_replay_packet()
+
+    assert first == second
+    assert first["packet_hash"] == second["packet_hash"]
+
+
+def test_context_bound_approval_replay_packet_failure_reasons() -> None:
+    """Replay attempts expose deterministic context-binding mismatch reasons."""
+    from scripts.demo.export_context_bound_approval_replay_packet import (
+        build_context_bound_approval_replay_packet,
+    )
+
+    packet = build_context_bound_approval_replay_packet()
+    cases = {case["case_id"]: case for case in packet["cases"]}
+
+    assert cases["valid_same_context"]["actual_outcome"] == "commit_eligible"
+    assert cases["valid_same_context"]["failure_reasons"] == []
+    assert cases["replay_different_request_ref"]["actual_outcome"] == "block"
+    assert cases["replay_different_request_ref"]["failure_reasons"] == [
+        "human_approval_request_ref_mismatch"
+    ]
+    assert cases["replay_different_action_class"]["actual_outcome"] == "block"
+    assert cases["replay_different_action_class"]["failure_reasons"] == [
+        "human_approval_action_class_mismatch"
+    ]
+    assert cases["replay_different_bind_context_hash"]["actual_outcome"] == "block"
+    assert cases["replay_different_bind_context_hash"]["failure_reasons"] == [
+        "human_approval_bind_context_hash_mismatch"
+    ]

@@ -1,0 +1,531 @@
+{
+  "aggregate_summary": {
+    "blocked_cases": 3,
+    "committed_cases": 1,
+    "failed_chains": 3,
+    "incomplete_chains": 0,
+    "indeterminate_chains": 0,
+    "local_offline_only": true,
+    "passed_cases": 4,
+    "total_cases": 4,
+    "verified_chains": 1
+  },
+  "boundary_note": "Local/offline deterministic reviewer example only; no live identity, signature, SaaS, IAM, audit-store, or production approval system is used.",
+  "cases": [
+    {
+      "actual_outcome": "commit_eligible",
+      "authority_validation_status": "valid",
+      "boundary_note": "Local/offline deterministic reviewer example only; no live identity, signature, SaaS, IAM, audit-store, or production approval system is used.",
+      "case_id": "valid_same_context",
+      "evidence_chain_manifest_summary": {
+        "action_class": "permission_change",
+        "authority_evidence_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+        "authority_evidence_id": "aev-replay-001",
+        "bind_coverage_operation_id": "operation-valid_same_context",
+        "bind_receipt_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "bind_receipt_id": "bind-valid_same_context",
+        "chain_status": "complete",
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "final_outcome": "commit_eligible",
+        "generated_at": "2026-05-10T00:00:00+00:00",
+        "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
+        "human_approval_receipt_id": "har-replay-001",
+        "manifest_hash": "500e061d7bd00b0562b8f962fd18590447f63680b35ffc5c5cec08555d4d81be",
+        "manifest_id": "manifest-valid_same_context",
+        "metadata": {
+          "signature_validity_alone_is_insufficient": true
+        },
+        "missing_links": [],
+        "observed_effects_summary": [],
+        "operation_id": "operation-valid_same_context",
+        "outcome_receipt_hash": "3b30184cfee6dba9d26da3e5f3431a518c3da27d30b0709099a712b359090a36",
+        "outcome_receipt_id": "outcome-valid_same_context",
+        "refusal_basis": [],
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [],
+        "is_valid": true,
+        "manifest_hash_matches": true,
+        "manifest_id": "manifest-valid_same_context",
+        "metadata": {
+          "context_binding_valid": true
+        },
+        "mismatched_links": [],
+        "missing_links": [],
+        "operation_id": "operation-valid_same_context",
+        "recomputed_manifest_hash": "500e061d7bd00b0562b8f962fd18590447f63680b35ffc5c5cec08555d4d81be",
+        "verification_status": "verified",
+        "verified_at": "2026-05-10T00:00:00+00:00",
+        "verified_links": [
+          "human_approval_receipt_signature"
+        ]
+      },
+      "expected_outcome": "commit_eligible",
+      "failure_reasons": [],
+      "human_approval_summary": {
+        "approval_receipt_id": "har-replay-001",
+        "approved": true,
+        "approved_scope": [
+          "workspace:permission:update"
+        ],
+        "approver_identity": "operator:approver-1",
+        "approver_role": "risk_manager",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": "ai-output:permission-change:001",
+          "authority_evidence_id": "aev-replay-001",
+          "bind_context_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+          "decision_id": "decision-replay-001",
+          "execution_intent_id": "intent-replay-001",
+          "policy_snapshot_id": "policy-replay-001",
+          "request_ref": "request:permission-change:001"
+        },
+        "failure_reasons": [],
+        "receipt_hash_present": true
+      },
+      "outcome_receipt_summary": {
+        "action_class": "permission_change",
+        "blocked": false,
+        "committed": true,
+        "decision_id": "decision-replay-001",
+        "escalated": false,
+        "evaluated_at": "2026-05-10T00:00:00+00:00",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [],
+        "final_outcome": "commit_eligible",
+        "intended_action": "Apply reviewer-demo permission change.",
+        "metadata": {
+          "context_binding_valid": true
+        },
+        "observed_effects": [],
+        "operation_id": "operation-valid_same_context",
+        "outcome_hash": "3b30184cfee6dba9d26da3e5f3431a518c3da27d30b0709099a712b359090a36",
+        "outcome_receipt_id": "outcome-valid_same_context",
+        "postcondition_status": "passed",
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "rolled_back": false,
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "passed": true,
+      "refusal_basis": [],
+      "requested_scope": [
+        "workspace:permission:update"
+      ],
+      "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
+      "runtime_recommended_outcome": "commit",
+      "target_resource": "workspace:demo",
+      "target_system": "local-demo-iam"
+    },
+    {
+      "actual_outcome": "block",
+      "authority_validation_status": "valid",
+      "boundary_note": "Local/offline deterministic reviewer example only; no live identity, signature, SaaS, IAM, audit-store, or production approval system is used.",
+      "case_id": "replay_different_request_ref",
+      "evidence_chain_manifest_summary": {
+        "action_class": "permission_change",
+        "authority_evidence_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+        "authority_evidence_id": "aev-replay-001",
+        "bind_coverage_operation_id": "operation-replay_different_request_ref",
+        "bind_receipt_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "bind_receipt_id": "bind-replay_different_request_ref",
+        "chain_status": "blocked",
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "final_outcome": "block",
+        "generated_at": "2026-05-10T00:00:00+00:00",
+        "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
+        "human_approval_receipt_id": "har-replay-001",
+        "manifest_hash": "116b8f569634bf937df5182318c394e6994ba951de54ba05596c33b2b0432fff",
+        "manifest_id": "manifest-replay_different_request_ref",
+        "metadata": {
+          "signature_validity_alone_is_insufficient": true
+        },
+        "missing_links": [],
+        "observed_effects_summary": [],
+        "operation_id": "operation-replay_different_request_ref",
+        "outcome_receipt_hash": "ec37e4aca9d80eae84e91360dd9a7e0ac9619a7bcca65f35b15dbc276b844a4d",
+        "outcome_receipt_id": "outcome-replay_different_request_ref",
+        "refusal_basis": [
+          "human_approval_request_ref_mismatch"
+        ],
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [
+          "human_approval_request_ref_mismatch"
+        ],
+        "is_valid": false,
+        "manifest_hash_matches": true,
+        "manifest_id": "manifest-replay_different_request_ref",
+        "metadata": {
+          "context_binding_valid": false
+        },
+        "mismatched_links": [
+          "human_approval_request_ref_mismatch"
+        ],
+        "missing_links": [],
+        "operation_id": "operation-replay_different_request_ref",
+        "recomputed_manifest_hash": "116b8f569634bf937df5182318c394e6994ba951de54ba05596c33b2b0432fff",
+        "verification_status": "failed",
+        "verified_at": "2026-05-10T00:00:00+00:00",
+        "verified_links": [
+          "human_approval_receipt_signature"
+        ]
+      },
+      "expected_outcome": "block",
+      "failure_reasons": [
+        "human_approval_request_ref_mismatch"
+      ],
+      "human_approval_summary": {
+        "approval_receipt_id": "har-replay-001",
+        "approved": false,
+        "approved_scope": [
+          "workspace:permission:update"
+        ],
+        "approver_identity": "operator:approver-1",
+        "approver_role": "risk_manager",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": "ai-output:permission-change:001",
+          "authority_evidence_id": "aev-replay-001",
+          "bind_context_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+          "decision_id": "decision-replay-001",
+          "execution_intent_id": "intent-replay-001",
+          "policy_snapshot_id": "policy-replay-001",
+          "request_ref": "request:permission-change:replay-other"
+        },
+        "failure_reasons": [
+          "human_approval_request_ref_mismatch"
+        ],
+        "receipt_hash_present": true
+      },
+      "outcome_receipt_summary": {
+        "action_class": "permission_change",
+        "blocked": true,
+        "committed": false,
+        "decision_id": "decision-replay-001",
+        "escalated": false,
+        "evaluated_at": "2026-05-10T00:00:00+00:00",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [
+          "human_approval_request_ref_mismatch"
+        ],
+        "final_outcome": "block",
+        "intended_action": "Apply reviewer-demo permission change.",
+        "metadata": {
+          "context_binding_valid": false
+        },
+        "observed_effects": [],
+        "operation_id": "operation-replay_different_request_ref",
+        "outcome_hash": "ec37e4aca9d80eae84e91360dd9a7e0ac9619a7bcca65f35b15dbc276b844a4d",
+        "outcome_receipt_id": "outcome-replay_different_request_ref",
+        "postcondition_status": "skipped",
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "rolled_back": false,
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "passed": true,
+      "refusal_basis": [
+        "human_approval_request_ref_mismatch"
+      ],
+      "requested_scope": [
+        "workspace:permission:update"
+      ],
+      "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
+      "runtime_recommended_outcome": "block",
+      "target_resource": "workspace:demo",
+      "target_system": "local-demo-iam"
+    },
+    {
+      "actual_outcome": "block",
+      "authority_validation_status": "valid",
+      "boundary_note": "Local/offline deterministic reviewer example only; no live identity, signature, SaaS, IAM, audit-store, or production approval system is used.",
+      "case_id": "replay_different_action_class",
+      "evidence_chain_manifest_summary": {
+        "action_class": "admin_role_assignment",
+        "authority_evidence_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+        "authority_evidence_id": "aev-replay-001",
+        "bind_coverage_operation_id": "operation-replay_different_action_class",
+        "bind_receipt_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "bind_receipt_id": "bind-replay_different_action_class",
+        "chain_status": "blocked",
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "final_outcome": "block",
+        "generated_at": "2026-05-10T00:00:00+00:00",
+        "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
+        "human_approval_receipt_id": "har-replay-001",
+        "manifest_hash": "8a5ddd8ea86184eb6ac4a7eb50a9224f677bdc527447838f28485210eaa0a6c7",
+        "manifest_id": "manifest-replay_different_action_class",
+        "metadata": {
+          "signature_validity_alone_is_insufficient": true
+        },
+        "missing_links": [],
+        "observed_effects_summary": [],
+        "operation_id": "operation-replay_different_action_class",
+        "outcome_receipt_hash": "b006d62316529d82228822d55bb4c7b452c630746caf6af5d335681bc4211bdf",
+        "outcome_receipt_id": "outcome-replay_different_action_class",
+        "refusal_basis": [
+          "human_approval_action_class_mismatch"
+        ],
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [
+          "human_approval_action_class_mismatch"
+        ],
+        "is_valid": false,
+        "manifest_hash_matches": true,
+        "manifest_id": "manifest-replay_different_action_class",
+        "metadata": {
+          "context_binding_valid": false
+        },
+        "mismatched_links": [
+          "human_approval_action_class_mismatch"
+        ],
+        "missing_links": [],
+        "operation_id": "operation-replay_different_action_class",
+        "recomputed_manifest_hash": "8a5ddd8ea86184eb6ac4a7eb50a9224f677bdc527447838f28485210eaa0a6c7",
+        "verification_status": "failed",
+        "verified_at": "2026-05-10T00:00:00+00:00",
+        "verified_links": [
+          "human_approval_receipt_signature"
+        ]
+      },
+      "expected_outcome": "block",
+      "failure_reasons": [
+        "human_approval_action_class_mismatch"
+      ],
+      "human_approval_summary": {
+        "approval_receipt_id": "har-replay-001",
+        "approved": false,
+        "approved_scope": [
+          "workspace:permission:update"
+        ],
+        "approver_identity": "operator:approver-1",
+        "approver_role": "risk_manager",
+        "context_binding": {
+          "action_class": "admin_role_assignment",
+          "ai_output_ref": "ai-output:permission-change:001",
+          "authority_evidence_id": "aev-replay-001",
+          "bind_context_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+          "decision_id": "decision-replay-001",
+          "execution_intent_id": "intent-replay-001",
+          "policy_snapshot_id": "policy-replay-001",
+          "request_ref": "request:permission-change:001"
+        },
+        "failure_reasons": [
+          "human_approval_action_class_mismatch"
+        ],
+        "receipt_hash_present": true
+      },
+      "outcome_receipt_summary": {
+        "action_class": "admin_role_assignment",
+        "blocked": true,
+        "committed": false,
+        "decision_id": "decision-replay-001",
+        "escalated": false,
+        "evaluated_at": "2026-05-10T00:00:00+00:00",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [
+          "human_approval_action_class_mismatch"
+        ],
+        "final_outcome": "block",
+        "intended_action": "Apply reviewer-demo permission change.",
+        "metadata": {
+          "context_binding_valid": false
+        },
+        "observed_effects": [],
+        "operation_id": "operation-replay_different_action_class",
+        "outcome_hash": "b006d62316529d82228822d55bb4c7b452c630746caf6af5d335681bc4211bdf",
+        "outcome_receipt_id": "outcome-replay_different_action_class",
+        "postcondition_status": "skipped",
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "rolled_back": false,
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "passed": true,
+      "refusal_basis": [
+        "human_approval_action_class_mismatch"
+      ],
+      "requested_scope": [
+        "workspace:permission:update"
+      ],
+      "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
+      "runtime_recommended_outcome": "block",
+      "target_resource": "workspace:demo",
+      "target_system": "local-demo-iam"
+    },
+    {
+      "actual_outcome": "block",
+      "authority_validation_status": "valid",
+      "boundary_note": "Local/offline deterministic reviewer example only; no live identity, signature, SaaS, IAM, audit-store, or production approval system is used.",
+      "case_id": "replay_different_bind_context_hash",
+      "evidence_chain_manifest_summary": {
+        "action_class": "permission_change",
+        "authority_evidence_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+        "authority_evidence_id": "aev-replay-001",
+        "bind_coverage_operation_id": "operation-replay_different_bind_context_hash",
+        "bind_receipt_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "bind_receipt_id": "bind-replay_different_bind_context_hash",
+        "chain_status": "blocked",
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "final_outcome": "block",
+        "generated_at": "2026-05-10T00:00:00+00:00",
+        "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
+        "human_approval_receipt_id": "har-replay-001",
+        "manifest_hash": "655a6d507b285a50d0e3db8bd80d0c5fa76149acc200536daaf7d0fd813d5969",
+        "manifest_id": "manifest-replay_different_bind_context_hash",
+        "metadata": {
+          "signature_validity_alone_is_insufficient": true
+        },
+        "missing_links": [],
+        "observed_effects_summary": [],
+        "operation_id": "operation-replay_different_bind_context_hash",
+        "outcome_receipt_hash": "41a9bf20fb5f8603f01c85e54cbe8375a25f1062b84f710a20601a56255e5470",
+        "outcome_receipt_id": "outcome-replay_different_bind_context_hash",
+        "refusal_basis": [
+          "human_approval_bind_context_hash_mismatch"
+        ],
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-replay-001",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [
+          "human_approval_bind_context_hash_mismatch"
+        ],
+        "is_valid": false,
+        "manifest_hash_matches": true,
+        "manifest_id": "manifest-replay_different_bind_context_hash",
+        "metadata": {
+          "context_binding_valid": false
+        },
+        "mismatched_links": [
+          "human_approval_bind_context_hash_mismatch"
+        ],
+        "missing_links": [],
+        "operation_id": "operation-replay_different_bind_context_hash",
+        "recomputed_manifest_hash": "655a6d507b285a50d0e3db8bd80d0c5fa76149acc200536daaf7d0fd813d5969",
+        "verification_status": "failed",
+        "verified_at": "2026-05-10T00:00:00+00:00",
+        "verified_links": [
+          "human_approval_receipt_signature"
+        ]
+      },
+      "expected_outcome": "block",
+      "failure_reasons": [
+        "human_approval_bind_context_hash_mismatch"
+      ],
+      "human_approval_summary": {
+        "approval_receipt_id": "har-replay-001",
+        "approved": false,
+        "approved_scope": [
+          "workspace:permission:update"
+        ],
+        "approver_identity": "operator:approver-1",
+        "approver_role": "risk_manager",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": "ai-output:permission-change:001",
+          "authority_evidence_id": "aev-replay-001",
+          "bind_context_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+          "decision_id": "decision-replay-001",
+          "execution_intent_id": "intent-replay-001",
+          "policy_snapshot_id": "policy-replay-001",
+          "request_ref": "request:permission-change:001"
+        },
+        "failure_reasons": [
+          "human_approval_bind_context_hash_mismatch"
+        ],
+        "receipt_hash_present": true
+      },
+      "outcome_receipt_summary": {
+        "action_class": "permission_change",
+        "blocked": true,
+        "committed": false,
+        "decision_id": "decision-replay-001",
+        "escalated": false,
+        "evaluated_at": "2026-05-10T00:00:00+00:00",
+        "execution_intent_id": "intent-replay-001",
+        "failure_reasons": [
+          "human_approval_bind_context_hash_mismatch"
+        ],
+        "final_outcome": "block",
+        "intended_action": "Apply reviewer-demo permission change.",
+        "metadata": {
+          "context_binding_valid": false
+        },
+        "observed_effects": [],
+        "operation_id": "operation-replay_different_bind_context_hash",
+        "outcome_hash": "41a9bf20fb5f8603f01c85e54cbe8375a25f1062b84f710a20601a56255e5470",
+        "outcome_receipt_id": "outcome-replay_different_bind_context_hash",
+        "postcondition_status": "skipped",
+        "requested_scope": [
+          "workspace:permission:update"
+        ],
+        "rolled_back": false,
+        "target_resource": "workspace:demo",
+        "target_system": "local-demo-iam"
+      },
+      "passed": true,
+      "refusal_basis": [
+        "human_approval_bind_context_hash_mismatch"
+      ],
+      "requested_scope": [
+        "workspace:permission:update"
+      ],
+      "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
+      "runtime_recommended_outcome": "block",
+      "target_resource": "workspace:demo",
+      "target_system": "local-demo-iam"
+    }
+  ],
+  "demo_id": "context-bound-approval-replay-prevention-v1",
+  "generated_at": "2026-05-10T00:00:00+00:00",
+  "local_offline_only": true,
+  "packet_hash": "a304c94baa2cf4fcb699f7c97de3d2f940090864604beed0231e3d7f63ae18e8",
+  "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
+  "packet_version": "v1",
+  "reviewer_notes": [
+    "Signature validity alone is not enough for governed execution.",
+    "The same signed receipt passes only for its original context.",
+    "Different request_ref, action_class, or bind_context_hash values fail closed."
+  ],
+  "summary": "Deterministic examples showing that valid approval signatures are insufficient when replayed against a different governed context.",
+  "title": "Context-bound Approval Replay Prevention Reviewer Examples"
+}
