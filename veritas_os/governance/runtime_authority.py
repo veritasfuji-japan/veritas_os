@@ -486,6 +486,7 @@ class RuntimeAuthorityValidator:
                     now=now,
                     signer_policy=human_approval_signer_policy,
                     require_structured_signature_result=strict_posture,
+                    require_production_verifier=posture == "prod",
                 )
             except ValueError as exc:
                 return False, str(exc)
@@ -589,9 +590,37 @@ class RuntimeAuthorityValidator:
         ),
     ) -> Callable[[dict[str, Any]], bool | HumanApprovalSignatureVerificationResult] | None:
         """Return the preferred signature verifier callable without defaults."""
-        if human_approval_signature_verifier is not None:
-            return human_approval_signature_verifier.verify
-        return verify_human_approval_signature_fn
+        if human_approval_signature_verifier is None:
+            return verify_human_approval_signature_fn
+
+        def verify_with_marker(
+            artifact: dict[str, Any],
+        ) -> bool | HumanApprovalSignatureVerificationResult:
+            result = human_approval_signature_verifier.verify(artifact)
+            if not isinstance(result, HumanApprovalSignatureVerificationResult):
+                return result
+            marker_level = getattr(
+                human_approval_signature_verifier,
+                "verifier_trust_level",
+                None,
+            )
+            if marker_level is None and bool(
+                getattr(human_approval_signature_verifier, "production_verifier", False)
+            ):
+                marker_level = "production"
+            if result.verifier_trust_level is not None or marker_level is None:
+                return result
+            return HumanApprovalSignatureVerificationResult(
+                verified=result.verified,
+                key_id=result.key_id,
+                algorithm=result.algorithm,
+                signer_identity=result.signer_identity,
+                signer_role=result.signer_role,
+                reason=result.reason,
+                verifier_trust_level=str(marker_level),
+            )
+
+        return verify_with_marker
 
     def _validated_human_approval_proof(
         self,
@@ -610,6 +639,11 @@ class RuntimeAuthorityValidator:
         """Validate a sealed verified approval proof fail-closed."""
         if proof.verification_source != "signed_human_approval_artifact":
             return False, "human_approval_artifact_provenance_required"
+        if self._runtime_posture() == "prod":
+            if proof.verifier_trust_level is None:
+                return False, "human_approval_production_verifier_required"
+            if str(proof.verifier_trust_level).strip().lower() != "production":
+                return False, "human_approval_verifier_trust_level_not_allowed"
         if proof.receipt.signature_verified is not True:
             return False, "human_approval_signature_unverified"
         if proof.receipt_hash != proof.receipt.receipt_hash:
