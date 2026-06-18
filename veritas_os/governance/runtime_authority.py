@@ -436,16 +436,18 @@ class RuntimeAuthorityValidator:
     ) -> tuple[bool, str]:
         """Validate human approval using posture-aware trust boundaries.
 
-        Secure and production postures require an explicit signed approval
-        artifact, or a ``HumanApprovalReceipt`` carrying verifier-derived
-        signed-artifact provenance from this runtime process, as the
-        authoritative approval source. A raw ``signature_verified=True`` flag
-        is not trusted across those boundaries.
+        Production posture requires either a sealed
+        ``VerifiedHumanApprovalReceipt`` or the original signed artifact plus
+        verifier and signer policy. Secure posture temporarily retains direct
+        ``HumanApprovalReceipt`` verifier-derived provenance for migration, but
+        a raw ``signature_verified=True`` flag is not trusted across strict
+        boundaries.
         Compatibility dictionaries remain accepted only in dev/test-style
         postures because their deterministic
         validation hash is tamper-evident, not cryptographically signed.
         """
-        strict_posture = self._requires_receipt_for_human_approval()
+        posture = self._runtime_posture()
+        strict_posture = posture in {"secure", "prod"}
         action_class = action_contract.action_class if action_contract else None
         if verified_human_approval is not None:
             proof_valid, proof_reason = self._validated_human_approval_proof(
@@ -511,6 +513,8 @@ class RuntimeAuthorityValidator:
             return self._validated_human_approval_state(receipt_state)
 
         if human_approval_receipt is not None:
+            if posture == "prod":
+                return False, "human_approval_direct_receipt_not_allowed_in_prod"
             if strict_posture and not has_verified_human_approval_artifact_provenance(
                 human_approval_receipt
             ):
@@ -637,9 +641,13 @@ class RuntimeAuthorityValidator:
         )
         return self._validated_human_approval_state(receipt_state)
 
+    def _runtime_posture(self) -> str:
+        """Return normalized runtime posture for trust-boundary decisions."""
+        return os.getenv("VERITAS_POSTURE", "dev").strip().lower()
+
     def _requires_receipt_for_human_approval(self) -> bool:
         """Return whether current posture requires receipt-backed approval."""
-        return os.getenv("VERITAS_POSTURE", "dev").strip().lower() in {"secure", "prod"}
+        return self._runtime_posture() in {"secure", "prod"}
 
     def _validated_human_approval_state(
         self,
