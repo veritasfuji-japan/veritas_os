@@ -34,6 +34,8 @@ class EvidenceChainManifest:
     authority_evidence_hash: str | None
     human_approval_receipt_id: str | None
     human_approval_receipt_hash: str | None
+    verified_human_approval_proof_hash: str | None
+    human_approval_required: bool
     bind_receipt_id: str | None
     bind_receipt_hash: str | None
     outcome_receipt_id: str | None
@@ -63,6 +65,10 @@ class EvidenceChainManifest:
             "authority_evidence_hash": self.authority_evidence_hash,
             "human_approval_receipt_id": self.human_approval_receipt_id,
             "human_approval_receipt_hash": self.human_approval_receipt_hash,
+            "verified_human_approval_proof_hash": (
+                self.verified_human_approval_proof_hash
+            ),
+            "human_approval_required": self.human_approval_required,
             "bind_receipt_id": self.bind_receipt_id,
             "bind_receipt_hash": self.bind_receipt_hash,
             "outcome_receipt_id": self.outcome_receipt_id,
@@ -134,7 +140,12 @@ def validate_evidence_chain_manifest(
         failure_reasons.append("evidence_chain_invalid_chain_status")
 
     if manifest.chain_status == "complete":
-        for field_name in _REQUIRED_COMPLETE_HASH_FIELDS:
+        required_fields = [
+            field
+            for field in _REQUIRED_COMPLETE_HASH_FIELDS
+            if field != "human_approval_receipt_hash" or manifest.human_approval_required
+        ]
+        for field_name in required_fields:
             if not str(getattr(manifest, field_name) or "").strip():
                 failure_reasons.append("evidence_chain_complete_missing_required_hash")
                 break
@@ -176,6 +187,8 @@ def build_evidence_chain_manifest(
     authority_evidence_hash: str | None = None,
     human_approval_receipt_id: str | None = None,
     human_approval_receipt_hash: str | None = None,
+    verified_human_approval_proof_hash: str | None = None,
+    human_approval_required: bool = True,
     bind_receipt_id: str | None = None,
     bind_receipt_hash: str | None = None,
     outcome_receipt_id: str | None = None,
@@ -190,12 +203,14 @@ def build_evidence_chain_manifest(
     missing_links: list[str] = []
     for label, value in (
         ("authority_evidence_hash", authority_evidence_hash),
-        ("human_approval_receipt_hash", human_approval_receipt_hash),
         ("outcome_receipt_hash", outcome_receipt_hash),
         ("bind_coverage_operation_id", bind_coverage_operation_id),
     ):
         if not str(value or "").strip():
             missing_links.append(label)
+
+    if human_approval_required and not str(human_approval_receipt_hash or "").strip():
+        missing_links.append("human_approval_receipt_hash")
 
     normalized_outcome = str(final_outcome).strip().lower()
     if normalized_outcome in _BLOCKED_OUTCOMES:
@@ -220,6 +235,8 @@ def build_evidence_chain_manifest(
         authority_evidence_hash=authority_evidence_hash,
         human_approval_receipt_id=human_approval_receipt_id,
         human_approval_receipt_hash=human_approval_receipt_hash,
+        verified_human_approval_proof_hash=verified_human_approval_proof_hash,
+        human_approval_required=human_approval_required,
         bind_receipt_id=bind_receipt_id,
         bind_receipt_hash=bind_receipt_hash,
         outcome_receipt_id=outcome_receipt_id,

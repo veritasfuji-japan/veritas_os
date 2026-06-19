@@ -115,3 +115,37 @@ def test_build_outcome_receipt_returns_hash_populated_receipt() -> None:
         evaluated_at="2026-04-26T00:00:00+00:00",
     )
     assert receipt.outcome_hash
+
+
+def test_build_outcome_receipt_binds_verified_human_approval_proof_metadata() -> None:
+    proof = type(
+        "Proof",
+        (),
+        {
+            "verification_proof_hash": "p" * 64,
+            "verification_source": "signed_human_approval_artifact",
+            "receipt": type("Receipt", (), {"approval_receipt_id": "har-1"})(),
+        },
+    )()
+
+    receipt = build_outcome_receipt(
+        decision_id="decision-001",
+        execution_intent_id="intent-001",
+        bind_receipt_id="bind-001",
+        operation_id="op-001",
+        action_class="permission_change",
+        target_system="mock_saas_directory",
+        target_resource="contractor:external.user@example.test",
+        intended_action="grant_admin_permission",
+        requested_scope=["saas:grant_admin"],
+        final_outcome="commit",
+        evaluated_at="2026-04-26T00:00:00+00:00",
+        verified_human_approval=proof,
+    )
+
+    assert receipt.metadata["verified_human_approval_proof_hash"] == "p" * 64
+    assert receipt.metadata["verified_human_approval_receipt_id"] == "har-1"
+    assert (
+        receipt.metadata["human_approval_verification_source"]
+        == "signed_human_approval_artifact"
+    )
