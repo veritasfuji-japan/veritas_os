@@ -33,3 +33,15 @@ It is **not**:
 - regulatory approval
 - third-party certification
 - production access-control validation
+
+## Verified human approval proof continuity
+
+When human approval is required, the manifest summary includes `verified_human_approval_proof_hash` and records whether human approval was required for the chain. This lets reviewers verify continuity across:
+
+- the decision artifact,
+- the bind receipt or bind-time decision evidence,
+- the human approval receipt and sealed verified proof,
+- the outcome receipt, and
+- the evidence-chain manifest.
+
+The manifest-level proof hash must match the proof hash embedded in the `OutcomeReceipt` metadata and the actual `VerifiedHumanApprovalReceipt.verification_proof_hash`. If policy explicitly allows no human approval, the manifest may set human approval as not required and omit the proof hash while preserving valid no-approval flows.

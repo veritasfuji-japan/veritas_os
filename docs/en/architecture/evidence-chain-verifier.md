@@ -55,3 +55,13 @@ This verifier is not legal advice, regulatory approval, third-party
 certification, production audit certification, or proof of live production audit
 coverage. It is a deterministic local/offline consistency checker for governance
 artifacts supplied to it.
+
+## Human approval proof substitution checks
+
+For approval-required chains, verification fails closed when the verified human approval proof hash is missing or inconsistent. The verifier checks that:
+
+- the manifest carries `verified_human_approval_proof_hash`,
+- the outcome metadata carries the same `verified_human_approval_proof_hash`, and
+- the supplied `VerifiedHumanApprovalReceipt` carries that same `verification_proof_hash`.
+
+Deterministic failure reasons include `human_approval_proof_hash_missing`, `human_approval_proof_hash_mismatch`, `outcome_human_approval_proof_hash_mismatch`, and `manifest_human_approval_proof_hash_mismatch`. These checks prevent approval substitution after bind-time validation by proving that the committed outcome and evidence-chain manifest refer to the same sealed approval proof.

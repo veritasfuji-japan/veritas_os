@@ -68,6 +68,8 @@ def verify_evidence_chain_manifest(
     authority_evidence: Any | None = None,
     human_approval_receipt: Any | None = None,
     outcome_receipt: Any | None = None,
+    verified_human_approval: Any | None = None,
+    approval_required: bool = False,
     bind_coverage_operation_id: str | None = None,
     bind_receipt: Any | None = None,
     verified_at: str,
@@ -154,6 +156,17 @@ def verify_evidence_chain_manifest(
         missing_links=missing_links,
         mismatched_links=mismatched_links,
         indeterminate_links=indeterminate_links,
+        failure_reasons=failure_reasons,
+    )
+
+    _verify_human_approval_proof_hash_binding(
+        approval_required=approval_required,
+        manifest=manifest,
+        outcome_receipt=outcome_receipt,
+        verified_human_approval=verified_human_approval,
+        verified_links=verified_links,
+        missing_links=missing_links,
+        mismatched_links=mismatched_links,
         failure_reasons=failure_reasons,
     )
 
@@ -265,6 +278,106 @@ def _verify_hash_link(
     else:
         mismatched_links.append(link_name)
         failure_reasons.append(mismatch_reason)
+
+
+def _metadata_value(artifact: Any | None, key: str) -> str | None:
+    """Return a string metadata value from a mapping or dataclass artifact."""
+    if artifact is None:
+        return None
+    metadata = (
+        artifact.get("metadata")
+        if isinstance(artifact, dict)
+        else getattr(artifact, "metadata", None)
+    )
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get(key)
+    return None if value is None else str(value)
+
+
+def _proof_hash_value(proof: Any | None) -> str | None:
+    """Return the hash of a VerifiedHumanApprovalReceipt-like proof."""
+    if proof is None:
+        return None
+    value = (
+        proof.get("verification_proof_hash")
+        if isinstance(proof, dict)
+        else getattr(proof, "verification_proof_hash", None)
+    )
+    return None if value is None else str(value)
+
+
+def _approval_required_for_proof_binding(
+    *,
+    approval_required: bool,
+    manifest: EvidenceChainManifest,
+    outcome_receipt: Any | None,
+    verified_human_approval: Any | None,
+) -> bool:
+    """Infer whether approval-proof continuity must be enforced."""
+    return bool(
+        approval_required
+        or str(getattr(manifest, "verified_human_approval_proof_hash", "") or "").strip()
+        or _metadata_value(outcome_receipt, "verified_human_approval_proof_hash")
+        or verified_human_approval is not None
+    )
+
+
+def _verify_human_approval_proof_hash_binding(
+    *,
+    approval_required: bool,
+    manifest: EvidenceChainManifest,
+    outcome_receipt: Any | None,
+    verified_human_approval: Any | None,
+    verified_links: list[str],
+    missing_links: list[str],
+    mismatched_links: list[str],
+    failure_reasons: list[str],
+) -> None:
+    """Fail closed when required approval proof hash continuity is broken."""
+    if not _approval_required_for_proof_binding(
+        approval_required=approval_required,
+        manifest=manifest,
+        outcome_receipt=outcome_receipt,
+        verified_human_approval=verified_human_approval,
+    ):
+        return
+
+    manifest_hash = str(
+        getattr(manifest, "verified_human_approval_proof_hash", "") or ""
+    ).strip()
+    outcome_hash = str(
+        _metadata_value(outcome_receipt, "verified_human_approval_proof_hash") or ""
+    ).strip()
+    actual_hash = str(_proof_hash_value(verified_human_approval) or "").strip()
+
+    if not manifest_hash:
+        missing_links.append("verified_human_approval_proof_hash")
+        failure_reasons.append("human_approval_proof_hash_missing")
+    if not outcome_hash:
+        missing_links.append("outcome_verified_human_approval_proof_hash")
+        failure_reasons.append("human_approval_proof_hash_missing")
+    if not actual_hash:
+        missing_links.append("verified_human_approval")
+        failure_reasons.append("human_approval_proof_hash_missing")
+
+    if manifest_hash and outcome_hash and manifest_hash != outcome_hash:
+        mismatched_links.append("verified_human_approval_proof_hash")
+        failure_reasons.append("outcome_human_approval_proof_hash_mismatch")
+    if manifest_hash and actual_hash and manifest_hash != actual_hash:
+        mismatched_links.append("verified_human_approval_proof_hash")
+        failure_reasons.append("manifest_human_approval_proof_hash_mismatch")
+    if outcome_hash and actual_hash and outcome_hash != actual_hash:
+        mismatched_links.append("outcome_verified_human_approval_proof_hash")
+        failure_reasons.append("human_approval_proof_hash_mismatch")
+
+    if (
+        manifest_hash
+        and outcome_hash
+        and actual_hash
+        and manifest_hash == outcome_hash == actual_hash
+    ):
+        verified_links.append("verified_human_approval_proof_hash")
 
 
 def _validate_verified_at(verified_at: str, failure_reasons: list[str]) -> None:
