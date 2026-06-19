@@ -453,6 +453,8 @@
         "authority_evidence_hash",
         "human_approval_receipt_id",
         "human_approval_receipt_hash",
+        "verified_human_approval_proof_hash",
+        "human_approval_required",
         "bind_receipt_id",
         "bind_receipt_hash",
         "outcome_receipt_id",
@@ -567,6 +569,12 @@
         },
         "metadata": {
           "type": "object"
+        },
+        "verified_human_approval_proof_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "human_approval_required": {
+          "type": "boolean"
         }
       }
     },

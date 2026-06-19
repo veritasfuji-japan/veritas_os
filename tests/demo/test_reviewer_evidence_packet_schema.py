@@ -117,6 +117,8 @@ REQUIRED_MANIFEST_FIELDS = [
     "authority_evidence_hash",
     "human_approval_receipt_id",
     "human_approval_receipt_hash",
+    "verified_human_approval_proof_hash",
+    "human_approval_required",
     "bind_receipt_id",
     "bind_receipt_hash",
     "outcome_receipt_id",
@@ -297,6 +299,8 @@ def _assert_manifest_shape(summary: dict[str, Any]) -> None:
     }
     _assert_nullable_hash(summary["authority_evidence_hash"])
     _assert_nullable_hash(summary["human_approval_receipt_hash"])
+    _assert_nullable_hash(summary["verified_human_approval_proof_hash"])
+    assert isinstance(summary["human_approval_required"], bool)
     _assert_nullable_hash(summary["bind_receipt_hash"])
     assert SHA256_HEX_PATTERN.fullmatch(summary["outcome_receipt_hash"])
     _assert_string_array(summary["missing_links"])

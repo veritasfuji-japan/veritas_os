@@ -31,7 +31,8 @@
         "generated_at": "2026-05-10T00:00:00+00:00",
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
-        "manifest_hash": "500e061d7bd00b0562b8f962fd18590447f63680b35ffc5c5cec08555d4d81be",
+        "human_approval_required": true,
+        "manifest_hash": "ec3ea1e78def9c3d5f24869b0c371d87a682955a7ba051d13255caef2396edf9",
         "manifest_id": "manifest-valid_same_context",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -46,7 +47,8 @@
           "workspace:permission:update"
         ],
         "target_resource": "workspace:demo",
-        "target_system": "local-demo-iam"
+        "target_system": "local-demo-iam",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-replay-001",
@@ -146,7 +148,8 @@
         "generated_at": "2026-05-10T00:00:00+00:00",
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
-        "manifest_hash": "116b8f569634bf937df5182318c394e6994ba951de54ba05596c33b2b0432fff",
+        "human_approval_required": true,
+        "manifest_hash": "e945dd62aadf843adee7aceffbc5d6f0c0e2b8df248ffd4bbf2d57734e598fbf",
         "manifest_id": "manifest-replay_different_request_ref",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -163,7 +166,8 @@
           "workspace:permission:update"
         ],
         "target_resource": "workspace:demo",
-        "target_system": "local-demo-iam"
+        "target_system": "local-demo-iam",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-replay-001",
@@ -275,7 +279,8 @@
         "generated_at": "2026-05-10T00:00:00+00:00",
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
-        "manifest_hash": "8a5ddd8ea86184eb6ac4a7eb50a9224f677bdc527447838f28485210eaa0a6c7",
+        "human_approval_required": true,
+        "manifest_hash": "459fabb0620270130ea9eb34b1dadcddd4751b9b17d36abc3e8767ca64e05fee",
         "manifest_id": "manifest-replay_different_action_class",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -292,7 +297,8 @@
           "workspace:permission:update"
         ],
         "target_resource": "workspace:demo",
-        "target_system": "local-demo-iam"
+        "target_system": "local-demo-iam",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-replay-001",
@@ -404,7 +410,8 @@
         "generated_at": "2026-05-10T00:00:00+00:00",
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
-        "manifest_hash": "655a6d507b285a50d0e3db8bd80d0c5fa76149acc200536daaf7d0fd813d5969",
+        "human_approval_required": true,
+        "manifest_hash": "3c7ff11156413f169003a961375aba601daf95ff34206ce1758f8f440e7f00ee",
         "manifest_id": "manifest-replay_different_bind_context_hash",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -421,7 +428,8 @@
           "workspace:permission:update"
         ],
         "target_resource": "workspace:demo",
-        "target_system": "local-demo-iam"
+        "target_system": "local-demo-iam",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-replay-001",
@@ -518,7 +526,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "a304c94baa2cf4fcb699f7c97de3d2f940090864604beed0231e3d7f63ae18e8",
+  "packet_hash": "6ba78f7e838aa916fa43fa448942995c9a0d74bcbfc1b668918fab85b28aa3d9",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [
