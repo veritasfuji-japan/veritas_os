@@ -894,7 +894,7 @@ def test_prod_posture_rejects_direct_receipt_returned_by_artifact_verifier(
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
     verified_receipt = verify_human_approval_receipt_artifact(
         _signed_artifact(),
-        lambda _artifact: _signature_result(),
+        lambda _artifact: _signature_result(verifier_trust_level="production"),
         requested_scope=["ledger:debit"],
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
@@ -1196,7 +1196,10 @@ def test_strict_posture_rejects_signed_artifact_with_bad_signature(
         actor_identity="operator:alice",
         human_approval_artifact=_signed_artifact(),
         verify_human_approval_signature_fn=(
-            lambda _artifact: _signature_result(verified=False)
+            lambda _artifact: _signature_result(
+                verified=False,
+                verifier_trust_level="production",
+            )
         ),
         human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
@@ -1499,7 +1502,9 @@ def test_runtime_does_not_emit_verified_approval_on_metadata_mismatch(
         policy_snapshot_id="policy-001",
         actor_identity="operator:alice",
         human_approval_artifact=_signed_artifact(signer_key_id="artifact-key"),
-        verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production"
+        ),
         human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
@@ -1602,7 +1607,7 @@ def test_strict_posture_passes_with_valid_verified_human_approval_proof(
     monkeypatch.setenv("VERITAS_POSTURE", posture)
     proof = verify_human_approval_receipt_artifact_to_proof(
         _signed_artifact(),
-        lambda _artifact: _signature_result(),
+        lambda _artifact: _signature_result(verifier_trust_level="production"),
         requested_scope=["ledger:debit"],
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
@@ -1634,7 +1639,7 @@ def test_strict_posture_rejects_tampered_verified_proof_hash(
     monkeypatch.setenv("VERITAS_POSTURE", posture)
     proof = verify_human_approval_receipt_artifact_to_proof(
         _signed_artifact(),
-        lambda _artifact: True,
+        lambda _artifact: _signature_result(verifier_trust_level="production"),
         requested_scope=["ledger:debit"],
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
@@ -1668,7 +1673,7 @@ def test_strict_posture_rejects_tampered_verified_receipt_hash(
     monkeypatch.setenv("VERITAS_POSTURE", posture)
     proof = verify_human_approval_receipt_artifact_to_proof(
         _signed_artifact(),
-        lambda _artifact: True,
+        lambda _artifact: _signature_result(verifier_trust_level="production"),
         requested_scope=["ledger:debit"],
         action_class="wire_transfer",
         policy_snapshot_id="policy-001",
@@ -1767,7 +1772,9 @@ def test_strict_posture_passes_signed_approval_bound_to_same_context(
         human_approval_artifact=_signed_artifact(
             _bound_receipt(signature_verified=False)
         ),
-        verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production"
+        ),
         human_approval_signer_policy=_signer_policy(),
         request_ref="request-001",
         ai_output_ref="ai-output-001",
@@ -1843,7 +1850,9 @@ def test_strict_posture_rejects_signed_approval_reused_across_context(
         human_approval_artifact=_signed_artifact(
             _bound_receipt(signature_verified=False, **receipt_overrides)
         ),
-        verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production"
+        ),
         human_approval_signer_policy=_signer_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
