@@ -33,6 +33,7 @@ VERIFICATION_PROOF_HASH_FIELDS = (
     "signer_policy_id",
     "signer_policy_hash",
     "signature_verification_reason",
+    "verifier_trust_level",
     "request_ref",
     "ai_output_ref",
     "execution_intent_id",
@@ -58,6 +59,7 @@ VERIFIER_DERIVED_PROVENANCE_KEYS = frozenset(
         "signer_policy_id",
         "signer_policy_hash",
         "signature_verification_reason",
+        "verifier_trust_level",
     }
 )
 _VERIFIED_RECEIPT_REGISTRY: dict[int, str] = {}
@@ -121,6 +123,7 @@ class HumanApprovalSignatureVerificationResult:
     signer_identity: str | None = None
     signer_role: str | None = None
     reason: str | None = None
+    verifier_trust_level: str | None = None
 
 
 class HumanApprovalSignatureVerifier(Protocol):
@@ -157,6 +160,7 @@ class TestHumanApprovalSignatureVerifier:
     verified: bool = True
     reason: str = "test_dev_only_verifier"
     is_test_verifier: bool = True
+    verifier_trust_level: str = "test"
 
     def verify(
         self,
@@ -170,6 +174,7 @@ class TestHumanApprovalSignatureVerifier:
             signer_identity=self.signer_identity,
             signer_role=self.signer_role,
             reason=self.reason,
+            verifier_trust_level=self.verifier_trust_level,
         )
 
 
@@ -254,6 +259,7 @@ class VerifiedHumanApprovalReceipt:
     signer_policy_id: str
     signer_policy_hash: str
     signature_verification_reason: str | None
+    verifier_trust_level: str | None
     signed_at: str | None
     verified_at: str
     verification_source: Literal["signed_human_approval_artifact"]
@@ -280,6 +286,7 @@ class VerifiedHumanApprovalReceipt:
             "signer_policy_id": self.signer_policy_id,
             "signer_policy_hash": self.signer_policy_hash,
             "signature_verification_reason": self.signature_verification_reason,
+            "verifier_trust_level": self.verifier_trust_level,
             "signed_at": self.signed_at,
             "verified_at": self.verified_at,
             "verification_source": self.verification_source,
@@ -444,6 +451,7 @@ def _structured_verification_result(
         ),
         signer_role=None if signer.get("role") is None else str(signer.get("role")),
         reason="legacy_bool_verifier" if raw_result is True else None,
+        verifier_trust_level=None,
     )
 
 
@@ -468,6 +476,18 @@ def _validate_signature_verification_result(
         and not str(result.signer_role or "").strip()
     ):
         raise ValueError("human_approval_signature_signer_role_missing")
+
+
+def _validate_production_verifier_trust_level(
+    result: HumanApprovalSignatureVerificationResult,
+) -> None:
+    """Require positive production-grade verifier provenance for prod."""
+    trust_level = result.verifier_trust_level
+    if trust_level is None:
+        raise ValueError("human_approval_production_verifier_required")
+    normalized = str(trust_level).strip().lower()
+    if normalized != "production":
+        raise ValueError("human_approval_verifier_trust_level_not_allowed")
 
 
 def _validate_signer_policy(
@@ -539,6 +559,7 @@ def verify_human_approval_receipt_artifact_to_proof(
     now: datetime | None = None,
     signer_policy: HumanApprovalSignerPolicy | None = None,
     require_structured_signature_result: bool = False,
+    require_production_verifier: bool = False,
 ) -> VerifiedHumanApprovalReceipt:
     """Verify a signed artifact and return a sealed approval proof.
 
@@ -573,6 +594,8 @@ def verify_human_approval_receipt_artifact_to_proof(
         artifact,
         require_structured_signature_result=require_structured_signature_result,
     )
+    if require_production_verifier:
+        _validate_production_verifier_trust_level(verification_result)
     _validate_signer_policy(
         verification_result,
         signer_policy,
@@ -602,6 +625,7 @@ def verify_human_approval_receipt_artifact_to_proof(
             "signer_policy_id": signer_policy.policy_id,
             "signer_policy_hash": signer_policy_hash,
             "signature_verification_reason": verification_result.reason,
+            "verifier_trust_level": verification_result.verifier_trust_level,
             "signed_at": artifact.get("signed_at"),
             "verified_at": verified_at,
             "receipt_hash_verified": True,
@@ -634,6 +658,7 @@ def verify_human_approval_receipt_artifact_to_proof(
         "signer_policy_id": signer_policy.policy_id,
         "signer_policy_hash": signer_policy_hash,
         "signature_verification_reason": verification_result.reason,
+        "verifier_trust_level": verification_result.verifier_trust_level,
         "signed_at": artifact.get("signed_at"),
         "verified_at": verified_at,
         "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
@@ -663,6 +688,7 @@ def verify_human_approval_receipt_artifact(
     now: datetime | None = None,
     signer_policy: HumanApprovalSignerPolicy | None = None,
     require_structured_signature_result: bool = False,
+    require_production_verifier: bool = False,
 ) -> HumanApprovalReceipt:
     """Verify a signed artifact and return its validated receipt.
 
@@ -680,6 +706,7 @@ def verify_human_approval_receipt_artifact(
         now=now,
         signer_policy=signer_policy,
         require_structured_signature_result=require_structured_signature_result,
+        require_production_verifier=require_production_verifier,
     ).receipt
 
 
