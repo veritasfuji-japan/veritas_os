@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from veritas_os.governance.human_approval_receipt import VerifiedHumanApprovalReceipt
 from veritas_os.security.hash import sha256_of_canonical_json
 
 PostconditionStatus = Literal["passed", "failed", "skipped", "indeterminate"]
@@ -166,14 +167,35 @@ def build_outcome_receipt(
     rollback_status: str | None = None,
     evaluated_at: str = "",
     metadata: dict[str, Any] | None = None,
+    verified_human_approval: VerifiedHumanApprovalReceipt | None = None,
 ) -> OutcomeReceipt:
-    """Build a deterministic local/offline finalized outcome receipt."""
+    """Build a deterministic local/offline finalized outcome receipt.
+
+    When a sealed verified human approval proof is supplied, its proof hash,
+    receipt id, and verification source are bound into metadata before the
+    outcome hash is finalized.
+    """
     normalized_outcome = str(final_outcome).strip().lower()
     normalized_rollback = str(rollback_status or "").strip().lower()
     committed = normalized_outcome in _COMMITTED_OUTCOMES
     blocked = normalized_outcome in {"block", "blocked", "refuse", "refused"}
     escalated = normalized_outcome in {"escalate", "escalated"}
     rolled_back = normalized_rollback in {"performed", "rolled_back", "success", "completed"}
+    receipt_metadata = dict(metadata or {})
+    if verified_human_approval is not None:
+        receipt_metadata.update(
+            {
+                "verified_human_approval_proof_hash": (
+                    verified_human_approval.verification_proof_hash
+                ),
+                "verified_human_approval_receipt_id": (
+                    verified_human_approval.receipt.approval_receipt_id
+                ),
+                "human_approval_verification_source": (
+                    verified_human_approval.verification_source
+                ),
+            }
+        )
 
     receipt = OutcomeReceipt(
         outcome_receipt_id=f"outcome-{operation_id}",
@@ -199,7 +221,7 @@ def build_outcome_receipt(
         rollback_status=rollback_status,
         evaluated_at=evaluated_at,
         outcome_hash="",
-        metadata=dict(metadata or {}),
+        metadata=receipt_metadata,
     )
     return with_outcome_hash(receipt)
 

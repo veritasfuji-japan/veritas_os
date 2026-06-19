@@ -31,7 +31,8 @@
         "generated_at": "2026-04-26T00:00:00+00:00",
         "human_approval_receipt_hash": "55db4aa2686f01d6e1133b880ee85e82572957b3e0e3dd63bce692a8be4d38ba",
         "human_approval_receipt_id": "har-saas-001",
-        "manifest_hash": "3b3c9e99917f7c5e4f20f32ea086106b5481c93fe6fd9d5fb75624bffe829b76",
+        "human_approval_required": true,
+        "manifest_hash": "4c59caecf410cce8c718a7fa43ff5de32174d142a32048e22b6977d8b91220f3",
         "manifest_id": "ecm-saas-permission-change-missing_authority",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -53,7 +54,8 @@
           "saas:grant_admin"
         ],
         "target_resource": "contractor:external.user@example.test",
-        "target_system": "mock_saas_directory"
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -71,7 +73,7 @@
           "authority_evidence_hash"
         ],
         "operation_id": "saas-permission-change-missing_authority",
-        "recomputed_manifest_hash": "3b3c9e99917f7c5e4f20f32ea086106b5481c93fe6fd9d5fb75624bffe829b76",
+        "recomputed_manifest_hash": "4c59caecf410cce8c718a7fa43ff5de32174d142a32048e22b6977d8b91220f3",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -176,7 +178,8 @@
         "generated_at": "2026-04-26T00:00:00+00:00",
         "human_approval_receipt_hash": null,
         "human_approval_receipt_id": null,
-        "manifest_hash": "de5f807be0e901dc94a3968a831a30485aa059dc04722e479771199d1226477b",
+        "human_approval_required": true,
+        "manifest_hash": "1992a33be9389de9394ffa43291c46105f2d703485c904422a299e6834cb2a5f",
         "manifest_id": "ecm-saas-permission-change-missing_human_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -196,7 +199,8 @@
           "saas:grant_admin"
         ],
         "target_resource": "contractor:external.user@example.test",
-        "target_system": "mock_saas_directory"
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -214,7 +218,7 @@
           "human_approval_receipt_hash"
         ],
         "operation_id": "saas-permission-change-missing_human_approval",
-        "recomputed_manifest_hash": "de5f807be0e901dc94a3968a831a30485aa059dc04722e479771199d1226477b",
+        "recomputed_manifest_hash": "1992a33be9389de9394ffa43291c46105f2d703485c904422a299e6834cb2a5f",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -313,7 +317,8 @@
         "generated_at": "2026-04-26T00:00:00+00:00",
         "human_approval_receipt_hash": null,
         "human_approval_receipt_id": null,
-        "manifest_hash": "5fe5e0f4a5b8758f9ef550dfb5007116c3a2e8dedc6952f944e84529532ea628",
+        "human_approval_required": true,
+        "manifest_hash": "a4deefad2a5a2bcf2a4738d812a83099f794b19a06f85df2bd7e2dc493d210c1",
         "manifest_id": "ecm-saas-permission-change-expired_human_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -333,7 +338,8 @@
           "saas:grant_admin"
         ],
         "target_resource": "contractor:external.user@example.test",
-        "target_system": "mock_saas_directory"
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -351,7 +357,7 @@
           "human_approval_receipt_hash"
         ],
         "operation_id": "saas-permission-change-expired_human_approval",
-        "recomputed_manifest_hash": "5fe5e0f4a5b8758f9ef550dfb5007116c3a2e8dedc6952f944e84529532ea628",
+        "recomputed_manifest_hash": "a4deefad2a5a2bcf2a4738d812a83099f794b19a06f85df2bd7e2dc493d210c1",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -450,7 +456,8 @@
         "generated_at": "2026-04-26T00:00:00+00:00",
         "human_approval_receipt_hash": null,
         "human_approval_receipt_id": null,
-        "manifest_hash": "3b46df974ec6ff40375387ba377546be1c04a277db90535d3570d577206ab7d3",
+        "human_approval_required": true,
+        "manifest_hash": "7d2954a9e6f222e64f1f1fbcd87626e5bdbe9c8c2960528b11c2df1cb2257b47",
         "manifest_id": "ecm-saas-permission-change-scope_mismatch",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -471,7 +478,8 @@
           "saas:grant_admin"
         ],
         "target_resource": "contractor:external.user@example.test",
-        "target_system": "mock_saas_directory"
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -489,7 +497,7 @@
           "human_approval_receipt_hash"
         ],
         "operation_id": "saas-permission-change-scope_mismatch",
-        "recomputed_manifest_hash": "3b46df974ec6ff40375387ba377546be1c04a277db90535d3570d577206ab7d3",
+        "recomputed_manifest_hash": "7d2954a9e6f222e64f1f1fbcd87626e5bdbe9c8c2960528b11c2df1cb2257b47",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -591,7 +599,8 @@
         "generated_at": "2026-04-26T00:00:00+00:00",
         "human_approval_receipt_hash": "55db4aa2686f01d6e1133b880ee85e82572957b3e0e3dd63bce692a8be4d38ba",
         "human_approval_receipt_id": "har-saas-001",
-        "manifest_hash": "db051eac92da9e63d462315018048c52470abcdda0136e18f9f5373f5c874ed9",
+        "human_approval_required": true,
+        "manifest_hash": "bcb536dc12e621155a2e1c61143fc14875ce04c7b5e23d79fee418bae9f2b31c",
         "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -614,7 +623,8 @@
           "saas:grant_admin"
         ],
         "target_resource": "contractor:external.user@example.test",
-        "target_system": "mock_saas_directory"
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -630,7 +640,7 @@
         "mismatched_links": [],
         "missing_links": [],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "recomputed_manifest_hash": "db051eac92da9e63d462315018048c52470abcdda0136e18f9f5373f5c874ed9",
+        "recomputed_manifest_hash": "bcb536dc12e621155a2e1c61143fc14875ce04c7b5e23d79fee418bae9f2b31c",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -731,7 +741,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "629cc9ca2f926525880b330b967518c69ffb431bf70b394cea4cb347a0b1fa92",
+  "packet_hash": "945341d3035c60f628eaffdcc568cfbdd2b5128d89fc4f3cad6a97cdf0cf7282",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

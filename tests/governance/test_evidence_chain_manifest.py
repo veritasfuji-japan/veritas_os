@@ -24,6 +24,8 @@ def _base_manifest() -> EvidenceChainManifest:
         authority_evidence_hash="a" * 64,
         human_approval_receipt_id="har-1",
         human_approval_receipt_hash="b" * 64,
+        verified_human_approval_proof_hash="p" * 64,
+        human_approval_required=True,
         bind_receipt_id=None,
         bind_receipt_hash=None,
         outcome_receipt_id="outcome-1",
@@ -130,6 +132,8 @@ def test_build_evidence_chain_manifest_returns_hash_populated_manifest() -> None
         final_outcome="commit",
         authority_evidence_hash="a" * 64,
         human_approval_receipt_hash="b" * 64,
+        verified_human_approval_proof_hash="p" * 64,
+        human_approval_required=True,
         outcome_receipt_hash="c" * 64,
         bind_coverage_operation_id="saas_permission_change_demo",
         generated_at="2026-04-26T00:00:00+00:00",
@@ -149,6 +153,8 @@ def test_build_evidence_chain_manifest_derives_complete_when_required_links_exis
         final_outcome="commit",
         authority_evidence_hash="a" * 64,
         human_approval_receipt_hash="b" * 64,
+        verified_human_approval_proof_hash="p" * 64,
+        human_approval_required=True,
         outcome_receipt_hash="c" * 64,
         bind_coverage_operation_id="cov",
         generated_at="2026-04-26T00:00:00+00:00",
@@ -185,3 +191,26 @@ def test_build_evidence_chain_manifest_derives_incomplete_when_non_blocked_lacks
         generated_at="2026-04-26T00:00:00+00:00",
     )
     assert manifest.chain_status == "incomplete"
+
+
+def test_build_evidence_chain_manifest_includes_verified_human_approval_proof_hash() -> None:
+    manifest = build_evidence_chain_manifest(
+        decision_id="d",
+        execution_intent_id="i",
+        operation_id="op",
+        action_class="ac",
+        target_system="ts",
+        target_resource="tr",
+        requested_scope=["x"],
+        final_outcome="commit",
+        authority_evidence_hash="a" * 64,
+        human_approval_receipt_hash="b" * 64,
+        verified_human_approval_proof_hash="p" * 64,
+        human_approval_required=True,
+        outcome_receipt_hash="c" * 64,
+        bind_coverage_operation_id="cov",
+        generated_at="2026-04-26T00:00:00+00:00",
+    )
+
+    assert manifest.verified_human_approval_proof_hash == "p" * 64
+    assert manifest.to_dict()["verified_human_approval_proof_hash"] == "p" * 64
