@@ -74,7 +74,8 @@
           "authority_evidence",
           "human_approval_receipt",
           "bind_receipt",
-          "outcome_receipt"
+          "outcome_receipt",
+          "verified_human_approval_proof_hash"
         ]
       },
       "expected_outcome": "Reviewer can follow illustrative key provenance artifact references.",
@@ -112,7 +113,8 @@
         "final_outcome": "commit",
         "intended_action": "assemble illustrative reviewer evidence packet",
         "metadata": {
-          "sample_context": "key provenance reviewer walkthrough"
+          "sample_context": "key provenance reviewer walkthrough",
+          "verified_human_approval_proof_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
         },
         "observed_effects": [
           {

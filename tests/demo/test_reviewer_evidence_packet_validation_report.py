@@ -142,3 +142,107 @@ def test_validation_report_detects_missing_evidence_chain_verification() -> None
     assert report["status"] == "fail"
     assert "required_case_fields_missing" in report["failure_reasons"]
     assert "evidence_chain_verification_missing" in report["failure_reasons"]
+
+def _valid_case_packet() -> dict[str, object]:
+    packet = copy.deepcopy(build_reviewer_evidence_packet())
+    packet["cases"] = [
+        case
+        for case in packet["cases"]
+        if case["case_id"] == "valid_authority_and_approval"
+    ]
+    return packet
+
+
+def test_approval_required_packet_passes_with_matching_proof_hashes() -> None:
+    report = _report_for_mutated_packet(_valid_case_packet())
+
+    assert report["checks"]["approval_proof_continuity_valid"] is True
+    assert report["checks"]["approval_proof_continuity_reasons"] == []
+
+
+def test_approval_required_packet_fails_when_manifest_proof_hash_missing() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["evidence_chain_manifest_summary"][
+        "verified_human_approval_proof_hash"
+    ] = None
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert (
+        "reviewer_packet_human_approval_proof_hash_missing"
+        in report["failure_reasons"]
+    )
+
+
+def test_approval_required_packet_fails_when_outcome_proof_hash_missing() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["outcome_receipt_summary"]["metadata"].pop(
+        "verified_human_approval_proof_hash"
+    )
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert (
+        "reviewer_packet_outcome_human_approval_proof_hash_missing"
+        in report["failure_reasons"]
+    )
+
+
+def test_approval_required_packet_fails_when_proof_hashes_differ() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["outcome_receipt_summary"]["metadata"][
+        "verified_human_approval_proof_hash"
+    ] = "f" * 64
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert (
+        "reviewer_packet_human_approval_proof_hash_mismatch"
+        in report["failure_reasons"]
+    )
+
+
+def test_approval_required_verified_packet_fails_when_link_not_verified() -> None:
+    packet = _valid_case_packet()
+    links = packet["cases"][0]["evidence_chain_verification_summary"][
+        "verified_links"
+    ]
+    links.remove("verified_human_approval_proof_hash")
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert (
+        "reviewer_packet_human_approval_proof_link_not_verified"
+        in report["failure_reasons"]
+    )
+
+
+def test_no_approval_required_packet_passes_without_proof_hash() -> None:
+    packet = _valid_case_packet()
+    case = packet["cases"][0]
+    case["evidence_chain_manifest_summary"]["human_approval_required"] = False
+    case["evidence_chain_manifest_summary"][
+        "verified_human_approval_proof_hash"
+    ] = None
+    case["outcome_receipt_summary"]["metadata"].pop(
+        "verified_human_approval_proof_hash", None
+    )
+    case["evidence_chain_verification_summary"]["verified_links"].remove(
+        "verified_human_approval_proof_hash"
+    )
+
+    report = _report_for_mutated_packet(packet)
+
+    assert "reviewer_packet_human_approval_proof_hash_missing" not in report[
+        "failure_reasons"
+    ]
+    assert "reviewer_packet_outcome_human_approval_proof_hash_missing" not in report[
+        "failure_reasons"
+    ]
+    assert "reviewer_packet_human_approval_proof_link_not_verified" not in report[
+        "failure_reasons"
+    ]
