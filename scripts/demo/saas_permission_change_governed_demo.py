@@ -12,15 +12,22 @@ from veritas_os.governance import (
     CommitBoundaryEvaluator,
     HumanApprovalReceipt,
     RuntimeAuthorityValidator,
+    VerifiedHumanApprovalReceipt,
     build_evidence_chain_manifest,
     build_outcome_receipt,
     build_human_approval_state,
     verify_evidence_chain_manifest,
     with_receipt_hash,
 )
+from veritas_os.governance.human_approval_receipt import (
+    SIGNED_APPROVAL_ARTIFACT_TYPE,
+    SIGNED_APPROVAL_ARTIFACT_VERSION,
+    VERIFICATION_SOURCE_SIGNED_ARTIFACT,
+)
 from veritas_os.governance.authority_evidence_ingestion import (
     ingest_authority_evidence_payload,
 )
+from veritas_os.security.hash import sha256_of_canonical_json
 
 FIXED_NOW = datetime.fromisoformat("2026-04-26T00:00:00").replace(tzinfo=UTC)
 REQUESTED_SCOPE = ["saas:grant_admin"]
@@ -98,6 +105,49 @@ def _human_approval_receipt(
         receipt_hash="",
         metadata={"fixture": True},
     )
+
+
+def _verified_human_approval_proof(
+    receipt: HumanApprovalReceipt,
+) -> VerifiedHumanApprovalReceipt:
+    """Return a deterministic local/offline verified approval proof fixture."""
+    finalized = with_receipt_hash(receipt)
+    proof_payload = {
+        "receipt": finalized,
+        "artifact_type": SIGNED_APPROVAL_ARTIFACT_TYPE,
+        "artifact_version": SIGNED_APPROVAL_ARTIFACT_VERSION,
+        "receipt_hash": finalized.receipt_hash,
+        "signer_key_id": "local-demo-key",
+        "signer_algorithm": "local-offline-fixture",
+        "signer_identity": finalized.approver_identity,
+        "signer_role": finalized.approver_role,
+        "signer_policy_id": "local-demo-signer-policy",
+        "signer_policy_hash": sha256_of_canonical_json(
+            {"policy_id": "local-demo-signer-policy", "fixture_only": True}
+        ),
+        "signature_verification_reason": "local_offline_fixture_verified",
+        "verifier_trust_level": "production",
+        "signed_at": finalized.approved_at,
+        "verified_at": FIXED_NOW.isoformat(),
+        "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
+        "request_ref": finalized.request_ref,
+        "ai_output_ref": finalized.ai_output_ref,
+        "execution_intent_id": finalized.execution_intent_id,
+        "decision_id": finalized.decision_id,
+        "action_class": finalized.approved_action_class,
+        "policy_snapshot_id": finalized.policy_snapshot_id,
+        "authority_evidence_id": finalized.authority_evidence_id,
+        "bind_context_hash": finalized.bind_context_hash,
+    }
+    proof_hash_payload = {
+        key: value
+        for key, value in proof_payload.items()
+        if key != "receipt"
+    }
+    proof_payload["verification_proof_hash"] = sha256_of_canonical_json(
+        proof_hash_payload
+    )
+    return VerifiedHumanApprovalReceipt(**proof_payload)
 
 
 def _evaluate_case(
@@ -195,6 +245,10 @@ def _evaluate_case(
         ]
         postcondition_status = "passed"
 
+    verified_human_approval = None
+    if receipt is not None and human_approval_state.get("approved"):
+        verified_human_approval = _verified_human_approval_proof(receipt)
+
     outcome_receipt = build_outcome_receipt(
         decision_id="decision-saas-001",
         execution_intent_id="intent-saas-001",
@@ -212,6 +266,7 @@ def _evaluate_case(
         rollback_status=None,
         evaluated_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
+        verified_human_approval=verified_human_approval,
     )
     authority_evidence_id = (
         authority_evidence.authority_evidence_id
@@ -255,17 +310,25 @@ def _evaluate_case(
         observed_effects_summary=observed_effects,
         generated_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
+        verified_human_approval_proof_hash=(
+            verified_human_approval.verification_proof_hash
+            if verified_human_approval is not None
+            else None
+        ),
     )
 
-    finalized_human_approval_receipt = None
-    if receipt is not None and human_approval_state.get("approved"):
-        finalized_human_approval_receipt = with_receipt_hash(receipt)
+    finalized_human_approval_receipt = (
+        verified_human_approval.receipt
+        if verified_human_approval is not None
+        else None
+    )
 
     evidence_chain_verification = verify_evidence_chain_manifest(
         manifest=evidence_chain_manifest,
         authority_evidence=authority_evidence,
         human_approval_receipt=finalized_human_approval_receipt,
         outcome_receipt=outcome_receipt,
+        verified_human_approval=verified_human_approval,
         bind_coverage_operation_id="saas_permission_change_demo",
         verified_at=FIXED_NOW.isoformat(),
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},

@@ -114,6 +114,9 @@ FAILURE_REASON_BY_CHECK = {
     "evidence_chain_verification_present": "evidence_chain_verification_missing",
     "valid_case_chain_verified": "valid_case_chain_not_verified",
     "no_mismatched_links_in_demo": "demo_mismatched_links_present",
+    "approval_proof_continuity_valid": (
+        "reviewer_packet_human_approval_proof_continuity_invalid"
+    ),
     "local_offline_boundary_present": "local_offline_boundary_missing",
 }
 
@@ -295,6 +298,115 @@ def _no_mismatched_links_in_demo(packet: dict[str, Any]) -> bool:
     )
 
 
+def _case_approval_proof_continuity_reasons(case: dict[str, Any]) -> list[str]:
+    """Return reviewer-facing approval proof continuity validation reasons.
+
+    Reviewer packets must prove that approval-required cases bind the same
+    verified human approval proof hash in the EvidenceChainManifest, the
+    OutcomeReceipt metadata, and verified evidence-chain links.
+    """
+    reasons: list[str] = []
+    manifest = case.get("evidence_chain_manifest_summary", {})
+    outcome = case.get("outcome_receipt_summary", {})
+    verification = case.get("evidence_chain_verification_summary")
+    if not isinstance(manifest, dict):
+        manifest = {}
+    if not isinstance(outcome, dict):
+        outcome = {}
+
+    committed = outcome.get("committed") is True
+    has_proof_binding = bool(
+        manifest.get("verified_human_approval_proof_hash")
+        or (
+            isinstance(outcome.get("metadata", {}), dict)
+            and outcome.get("metadata", {}).get(
+                "verified_human_approval_proof_hash"
+            )
+        )
+    )
+    approval_required = manifest.get("human_approval_required") is True
+    if not approval_required or (not committed and not has_proof_binding):
+        return reasons
+
+    manifest_hash = str(
+        manifest.get("verified_human_approval_proof_hash") or ""
+    ).strip()
+    metadata = outcome.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    outcome_hash = str(
+        metadata.get("verified_human_approval_proof_hash") or ""
+    ).strip()
+
+    if not manifest_hash:
+        reasons.append("reviewer_packet_human_approval_proof_hash_missing")
+    if not outcome_hash:
+        reasons.append("reviewer_packet_outcome_human_approval_proof_hash_missing")
+    if manifest_hash and outcome_hash and manifest_hash != outcome_hash:
+        reasons.append("reviewer_packet_human_approval_proof_hash_mismatch")
+
+    if isinstance(verification, dict):
+        status = verification.get("verification_status")
+        verified_links = verification.get("verified_links", [])
+        if not isinstance(verified_links, list):
+            verified_links = []
+        failure_reasons = verification.get("failure_reasons", [])
+        if not isinstance(failure_reasons, list):
+            failure_reasons = []
+        continuity_failure_reasons = {
+            "human_approval_proof_hash_missing",
+            "outcome_human_approval_proof_hash_mismatch",
+            "manifest_human_approval_proof_hash_mismatch",
+            "human_approval_proof_hash_mismatch",
+        }
+        if (
+            status == "verified"
+            and "verified_human_approval_proof_hash" not in verified_links
+        ):
+            reasons.append("reviewer_packet_human_approval_proof_link_not_verified")
+        if status in {"failed", "incomplete"} and (
+            "verified_human_approval_proof_hash"
+            in verification.get("missing_links", [])
+            or "outcome_verified_human_approval_proof_hash" in verification.get(
+                "missing_links", []
+            )
+            or "verified_human_approval_proof_hash" in verification.get(
+                "mismatched_links", []
+            )
+            or "outcome_verified_human_approval_proof_hash" in verification.get(
+                "mismatched_links", []
+            )
+        ):
+            if not any(
+                reason in continuity_failure_reasons for reason in failure_reasons
+            ):
+                reasons.append(
+                    "reviewer_packet_human_approval_proof_link_not_verified"
+                )
+    return reasons
+
+
+def _approval_proof_continuity_reasons(packet: dict[str, Any]) -> list[str]:
+    """Return deterministic approval proof continuity reasons for all cases."""
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return ["required_case_fields_missing"]
+    reasons: list[str] = []
+    for case in cases:
+        if not isinstance(case, dict):
+            reasons.append("required_case_fields_missing")
+            continue
+        for reason in _case_approval_proof_continuity_reasons(case):
+            if reason not in reasons:
+                reasons.append(reason)
+    return reasons
+
+
+def _approval_proof_continuity_valid(packet: dict[str, Any]) -> bool:
+    """Return whether all cases preserve reviewer approval proof continuity."""
+    return not _approval_proof_continuity_reasons(packet)
+
+
 def _local_offline_boundary_present(packet: dict[str, Any]) -> bool:
     """Return whether packet-level local/offline boundary markers are present."""
     boundary_note = packet.get("boundary_note")
@@ -348,6 +460,9 @@ def _build_checks(
         ),
         "valid_case_chain_verified": _valid_case_chain_verified(generated_packet),
         "no_mismatched_links_in_demo": _no_mismatched_links_in_demo(generated_packet),
+        "approval_proof_continuity_valid": _approval_proof_continuity_valid(
+            generated_packet
+        ),
         "local_offline_boundary_present": _local_offline_boundary_present(
             generated_packet
         ),
@@ -363,6 +478,9 @@ def _failure_reasons(checks: dict[str, Any]) -> list[str]:
             check_name == "schema_validation_status" and value == "fail"
         )
         if failed:
+            reasons.append(reason)
+    for reason in checks.get("approval_proof_continuity_reasons", []):
+        if reason not in reasons:
             reasons.append(reason)
     return reasons
 
@@ -402,6 +520,9 @@ def _build_report_for_packet(
         fixture_parseable,
         schema_exists,
         schema_parseable,
+    )
+    checks["approval_proof_continuity_reasons"] = (
+        _approval_proof_continuity_reasons(packet)
     )
     failure_reasons = _failure_reasons(checks)
     return {
