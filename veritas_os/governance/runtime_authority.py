@@ -19,6 +19,7 @@ from veritas_os.governance.human_approval_receipt import (
     HumanApprovalSignatureVerificationResult,
     HumanApprovalSignatureVerifier,
     HumanApprovalSignerPolicy,
+    HumanApprovalVerifierPolicy,
     VerifiedHumanApprovalReceipt,
     build_human_approval_state,
     has_verified_human_approval_artifact_provenance,
@@ -89,6 +90,7 @@ class RuntimeAuthorityValidator:
         ) = None,
         human_approval_signature_verifier: HumanApprovalSignatureVerifier | None = None,
         human_approval_signer_policy: HumanApprovalSignerPolicy | None = None,
+        human_approval_verifier_policy: HumanApprovalVerifierPolicy | None = None,
         request_ref: str | None = None,
         ai_output_ref: str | None = None,
         execution_intent_id: str | None = None,
@@ -306,6 +308,7 @@ class RuntimeAuthorityValidator:
                 verify_human_approval_signature_fn=verify_human_approval_signature_fn,
                 human_approval_signature_verifier=human_approval_signature_verifier,
                 human_approval_signer_policy=human_approval_signer_policy,
+                human_approval_verifier_policy=human_approval_verifier_policy,
                 requested_scope=requested_scope,
                 action_contract=action_contract,
                 policy_snapshot_id=policy_snapshot_id,
@@ -424,6 +427,7 @@ class RuntimeAuthorityValidator:
         ),
         human_approval_signature_verifier: HumanApprovalSignatureVerifier | None,
         human_approval_signer_policy: HumanApprovalSignerPolicy | None,
+        human_approval_verifier_policy: HumanApprovalVerifierPolicy | None,
         requested_scope: list[str],
         action_contract: ActionClassContract | None,
         policy_snapshot_id: str | None,
@@ -461,6 +465,7 @@ class RuntimeAuthorityValidator:
                 execution_intent_id=execution_intent_id,
                 bind_context_hash=bind_context_hash,
                 authority_evidence_id=authority_evidence_id,
+                verifier_policy=human_approval_verifier_policy,
             )
             return proof_valid, proof_reason
 
@@ -485,6 +490,7 @@ class RuntimeAuthorityValidator:
                     policy_snapshot_id=policy_snapshot_id,
                     now=now,
                     signer_policy=human_approval_signer_policy,
+                    verifier_policy=human_approval_verifier_policy,
                     require_structured_signature_result=strict_posture,
                     require_production_verifier=posture == "prod",
                 )
@@ -618,6 +624,10 @@ class RuntimeAuthorityValidator:
                 signer_role=result.signer_role,
                 reason=result.reason,
                 verifier_trust_level=str(marker_level),
+                verifier_id=result.verifier_id,
+                verifier_key_id=result.verifier_key_id,
+                verifier_policy_id=result.verifier_policy_id,
+                verifier_policy_hash=result.verifier_policy_hash,
             )
 
         return verify_with_marker
@@ -635,6 +645,7 @@ class RuntimeAuthorityValidator:
         execution_intent_id: str | None,
         bind_context_hash: str | None,
         authority_evidence_id: str | None,
+        verifier_policy: HumanApprovalVerifierPolicy | None = None,
     ) -> tuple[bool, str]:
         """Validate a sealed verified approval proof fail-closed."""
         if proof.verification_source != "signed_human_approval_artifact":
@@ -644,6 +655,24 @@ class RuntimeAuthorityValidator:
                 return False, "human_approval_production_verifier_required"
             if str(proof.verifier_trust_level).strip().lower() != "production":
                 return False, "human_approval_verifier_trust_level_not_allowed"
+            if not str(proof.verifier_id or "").strip():
+                return False, "human_approval_verifier_id_required"
+            if verifier_policy is None:
+                return False, "human_approval_verifier_not_allowed"
+            approved = verifier_policy.approved_verifier_by_id(proof.verifier_id)
+            if approved is None or approved.trust_level.strip().lower() != "production":
+                return False, "human_approval_verifier_not_allowed"
+            if (
+                approved.verifier_key_id is not None
+                and proof.verifier_key_id != approved.verifier_key_id
+            ):
+                return False, "human_approval_verifier_key_mismatch"
+            if (
+                approved.policy_hash is not None
+                and proof.verifier_policy_hash is not None
+            ):
+                if proof.verifier_policy_hash != approved.policy_hash:
+                    return False, "human_approval_verifier_policy_hash_mismatch"
         if proof.receipt.signature_verified is not True:
             return False, "human_approval_signature_unverified"
         if proof.receipt_hash != proof.receipt.receipt_hash:

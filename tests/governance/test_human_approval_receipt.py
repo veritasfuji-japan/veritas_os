@@ -10,9 +10,11 @@ import pytest
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import AuthorityEvidence, VerificationResult
 from veritas_os.governance.human_approval_receipt import (
+    ApprovedHumanApprovalVerifier,
     HumanApprovalReceipt,
     HumanApprovalSignatureVerificationResult,
     HumanApprovalSignerPolicy,
+    HumanApprovalVerifierPolicy,
     TestHumanApprovalSignatureVerifier,
     VerifiedHumanApprovalReceipt,
     build_human_approval_state,
@@ -87,6 +89,10 @@ def _signature_result(**overrides: object) -> HumanApprovalSignatureVerification
         "signer_identity": "operator:approver-1",
         "signer_role": "risk_manager",
         "reason": "test_verified",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "verifier-key-001",
+        "verifier_policy_id": "human-approval-verifier-policy-v1",
+        "verifier_policy_hash": "c" * 64,
     }
     payload.update(overrides)
     return HumanApprovalSignatureVerificationResult(**payload)
@@ -123,6 +129,22 @@ def _signer_policy(**overrides: object) -> HumanApprovalSignerPolicy:
     }
     payload.update(overrides)
     return HumanApprovalSignerPolicy(**payload)
+
+
+def _verifier_policy(**overrides: object) -> HumanApprovalVerifierPolicy:
+    payload = {
+        "approved_human_approval_verifiers": [
+            ApprovedHumanApprovalVerifier(
+                verifier_id="veritas-human-approval-verifier-v1",
+                trust_level="production",
+                verifier_key_id="verifier-key-001",
+                policy_id="human-approval-verifier-policy-v1",
+                policy_hash="c" * 64,
+            )
+        ]
+    }
+    payload.update(overrides)
+    return HumanApprovalVerifierPolicy(**payload)
 
 
 def _contract(**overrides: object) -> ActionClassContract:
@@ -868,6 +890,7 @@ def test_secure_posture_accepts_receipt_returned_by_artifact_verifier(
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
         signer_policy=_signer_policy(),
+        verifier_policy=_verifier_policy(),
         require_structured_signature_result=True,
     )
 
@@ -900,6 +923,7 @@ def test_prod_posture_rejects_direct_receipt_returned_by_artifact_verifier(
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
         signer_policy=_signer_policy(),
+        verifier_policy=_verifier_policy(),
         require_structured_signature_result=True,
     )
 
@@ -939,6 +963,7 @@ def test_strict_posture_rejects_test_human_approval_signature_verifier(
         human_approval_artifact=_signed_artifact(),
         human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -966,6 +991,7 @@ def test_strict_posture_accepts_production_human_approval_signature_verifier(
         human_approval_artifact=_signed_artifact(),
         human_approval_signature_verifier=_ProductionHumanApprovalSignatureVerifier(),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -994,6 +1020,7 @@ def test_strict_posture_prefers_human_approval_signature_verifier(
         ),
         human_approval_signature_verifier=_ProductionHumanApprovalSignatureVerifier(),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1018,6 +1045,7 @@ def test_dev_test_posture_can_use_test_human_approval_signature_verifier(
         human_approval_artifact=_signed_artifact(),
         human_approval_signature_verifier=TestHumanApprovalSignatureVerifier(),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1042,6 +1070,7 @@ def test_strict_posture_rejects_incomplete_signature_verifier_result(
             _signature_result(key_id="")
         ),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1068,6 +1097,7 @@ def test_strict_posture_rejects_signature_verifier_exception(
         human_approval_artifact=_signed_artifact(),
         verify_human_approval_signature_fn=raise_verification_error,
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1076,6 +1106,154 @@ def test_strict_posture_rejects_signature_verifier_exception(
     assert _approval_reason(result) == "human_approval_signature_verification_failed"
 
 
+
+
+def test_prod_accepts_approved_verifier_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production"
+        ),
+        human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "pass"
+
+
+def test_prod_rejects_missing_verifier_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production",
+            verifier_id=None,
+        ),
+        human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_verifier_id_required"
+
+
+def test_prod_rejects_unapproved_verifier_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production",
+            verifier_id="unapproved-verifier",
+        ),
+        human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_verifier_not_allowed"
+
+
+def test_prod_rejects_verifier_key_id_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production",
+            verifier_key_id="wrong-key",
+        ),
+        human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_verifier_key_mismatch"
+
+
+def test_prod_rejects_verifier_policy_hash_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+
+    result = RuntimeAuthorityValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=_authority(),
+        requested_scope=["ledger:debit"],
+        required_evidence_metadata={"kyc_status": {"present": True, "fresh": True}},
+        policy_snapshot_id="policy-001",
+        actor_identity="operator:alice",
+        human_approval_artifact=_signed_artifact(),
+        verify_human_approval_signature_fn=lambda _artifact: _signature_result(
+            verifier_trust_level="production",
+            verifier_policy_hash="d" * 64,
+        ),
+        human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    assert result.status == "fail"
+    assert _approval_reason(result) == "human_approval_verifier_policy_hash_mismatch"
+
+
+def test_verifier_id_changes_deterministic_proof_hash() -> None:
+    first = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(),
+        lambda _artifact: _signature_result(verifier_id="verifier-one"),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
+    )
+    second = verify_human_approval_receipt_artifact_to_proof(
+        _signed_artifact(),
+        lambda _artifact: _signature_result(verifier_id="verifier-two"),
+        requested_scope=["ledger:debit"],
+        action_class="wire_transfer",
+        policy_snapshot_id="policy-001",
+        now=datetime(2026, 5, 10, tzinfo=UTC),
+        signer_policy=_signer_policy(),
+    )
+
+    assert first.verification_proof_hash != second.verification_proof_hash
 
 
 def test_prod_posture_accepts_signed_artifact_with_production_trust_level(
@@ -1095,6 +1273,7 @@ def test_prod_posture_accepts_signed_artifact_with_production_trust_level(
             verifier_trust_level="production"
         ),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1118,6 +1297,7 @@ def test_prod_posture_rejects_signed_artifact_missing_verifier_trust_level(
         human_approval_artifact=_signed_artifact(),
         verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1145,6 +1325,7 @@ def test_prod_posture_rejects_non_production_verifier_trust_level(
             verifier_trust_level=trust_level
         ),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1172,6 +1353,7 @@ def test_secure_posture_passes_with_valid_signed_human_approval_artifact(
         human_approval_artifact=_signed_artifact(),
         verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1202,6 +1384,7 @@ def test_strict_posture_rejects_signed_artifact_with_bad_signature(
             )
         ),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1227,6 +1410,7 @@ def test_strict_posture_rejects_signed_artifact_with_tampered_receipt_hash(
         human_approval_artifact=_signed_artifact(receipt_hash="f" * 64),
         verify_human_approval_signature_fn=lambda _artifact: _signature_result(),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1321,6 +1505,7 @@ def test_strict_posture_rejects_bool_signature_verifier_result(
         human_approval_artifact=_signed_artifact(),
         verify_human_approval_signature_fn=lambda _artifact: True,
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1346,6 +1531,7 @@ def test_dev_posture_accepts_bool_signature_verifier_result(
         human_approval_artifact=_signed_artifact(),
         verify_human_approval_signature_fn=lambda _artifact: True,
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1394,6 +1580,7 @@ def test_matching_artifact_key_id_and_verifier_key_id_passes() -> None:
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
         signer_policy=_signer_policy(),
+        verifier_policy=_verifier_policy(),
         require_structured_signature_result=True,
     )
 
@@ -1454,6 +1641,7 @@ def test_missing_artifact_signer_metadata_passes_with_valid_verifier_result() ->
         policy_snapshot_id="policy-001",
         now=datetime(2026, 5, 10, tzinfo=UTC),
         signer_policy=_signer_policy(),
+        verifier_policy=_verifier_policy(),
         require_structured_signature_result=True,
     )
 
@@ -1506,6 +1694,7 @@ def test_runtime_does_not_emit_verified_approval_on_metadata_mismatch(
             verifier_trust_level="production"
         ),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1623,6 +1812,7 @@ def test_strict_posture_passes_with_valid_verified_human_approval_proof(
         policy_snapshot_id="policy-001",
         actor_identity="operator:alice",
         verified_human_approval=proof,
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1655,6 +1845,7 @@ def test_strict_posture_rejects_tampered_verified_proof_hash(
         policy_snapshot_id="policy-001",
         actor_identity="operator:alice",
         verified_human_approval=replace(proof, verification_proof_hash="f" * 64),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1689,6 +1880,7 @@ def test_strict_posture_rejects_tampered_verified_receipt_hash(
         policy_snapshot_id="policy-001",
         actor_identity="operator:alice",
         verified_human_approval=replace(proof, receipt_hash="f" * 64),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
@@ -1776,6 +1968,7 @@ def test_strict_posture_passes_signed_approval_bound_to_same_context(
             verifier_trust_level="production"
         ),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         request_ref="request-001",
         ai_output_ref="ai-output-001",
         execution_intent_id="intent-001",
@@ -1854,6 +2047,7 @@ def test_strict_posture_rejects_signed_approval_reused_across_context(
             verifier_trust_level="production"
         ),
         human_approval_signer_policy=_signer_policy(),
+        human_approval_verifier_policy=_verifier_policy(),
         bind_context_metadata={"session_id": "bind-001"},
         now=datetime(2026, 5, 10, tzinfo=UTC),
         **runtime_payload,
