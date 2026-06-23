@@ -39,8 +39,8 @@ Runtime approval validation is posture-aware:
 - A signed approval artifact is the preferred external-review and `secure`/`prod` trust-boundary format. It wraps the receipt payload, canonical `receipt_hash`, signature, signer metadata, and `signed_at` timestamp.
 - `signature_verified=True` alone is not sufficient across `secure`/`prod` trust boundaries. Raw input is not allowed to self-assert signature verification.
 - Signed artifact verification is the source of runtime approval trust for `secure`/`prod`. `verify_human_approval_receipt_artifact_to_proof()` recomputes the receipt hash, requires the injected verifier, rejects bad signatures, requires a structured `HumanApprovalSignatureVerificationResult` in `secure`/`prod`, treats verifier-derived key ID/algorithm/signer identity/signer role as authoritative, validates that verifier-derived signer metadata against `HumanApprovalSignerPolicy`, cross-checks any artifact signer metadata self-claims, validates scope/action/policy/expiry, and returns a `VerifiedHumanApprovalReceipt`.
-- In `prod`, the verifier must positively identify production-grade provenance. `verifier_trust_level == "production"` on the structured verification result is accepted; missing trust level fails closed with `human_approval_production_verifier_required`, and explicit non-production values (`"test"`, `"development"`, `"unknown"`, or any other non-production value) fail with `human_approval_verifier_trust_level_not_allowed`. A verifier implementation may also expose a production marker that the runtime converts into production verifier provenance. "Not a test verifier" is not sufficient in prod.
-- `VerifiedHumanApprovalReceipt` is the runtime verified proof object. It carries the validated receipt plus verifier-derived signer metadata, signer policy provenance, `signature_verification_reason`, `verifier_trust_level`, `verified_at`, `verification_source`, and `verification_proof_hash` computed over canonical verifier-derived proof fields including `signer_policy_hash` and `verifier_trust_level`. Artifact/envelope signer self-claims are never copied in as authorization truth.
+- In `prod`, the verifier must positively identify production-grade provenance and a governance-approved verifier identity. `verifier_trust_level == "production"` is necessary but not sufficient: `verifier_id` must be present and listed in `HumanApprovalVerifierPolicy.approved_human_approval_verifiers`. If the policy configures a `verifier_key_id`, it must match verifier output; if both verifier output and policy provide a `verifier_policy_hash`, they must match. Missing trust level fails closed with `human_approval_production_verifier_required`, non-production trust fails with `human_approval_verifier_trust_level_not_allowed`, missing identity fails with `human_approval_verifier_id_required`, unapproved identity fails with `human_approval_verifier_not_allowed`, key mismatch fails with `human_approval_verifier_key_mismatch`, and policy-hash mismatch fails with `human_approval_verifier_policy_hash_mismatch`. A verifier implementation may also expose a production marker that the runtime converts into production verifier provenance. "Not a test verifier" is not sufficient in prod.
+- `VerifiedHumanApprovalReceipt` is the runtime verified proof object. It carries the validated receipt plus verifier-derived signer metadata, signer policy provenance, `signature_verification_reason`, `verifier_trust_level`, verifier identity fields (`verifier_id`, optional `verifier_key_id`, optional `verifier_policy_id`, optional `verifier_policy_hash`), `verified_at`, `verification_source`, and `verification_proof_hash` computed over canonical verifier-derived proof fields including `signer_policy_hash`, `verifier_trust_level`, and verifier identity/policy fields. Artifact/envelope signer self-claims are never copied in as authorization truth.
 - `secure` posture may retain the transitional direct `HumanApprovalReceipt` in-process registry provenance path during migration, but that compatibility path is not a production trust-boundary proof. Compatibility dictionaries alone are not authoritative in strict postures.
 - `prod` posture is stricter than secure migration behavior: it does not accept direct `HumanApprovalReceipt` provenance, even when the receipt carries in-process verifier-derived provenance. Prod requires either a `VerifiedHumanApprovalReceipt` proof object or the signed artifact verification path with a production verifier, explicit production verifier provenance, and signer policy.
 - A direct `HumanApprovalReceipt` is a local/offline representation, not a prod trust-boundary proof.
@@ -98,6 +98,10 @@ Successful artifact verification returns a proof object similar to:
   "signer_policy_hash": "canonical sha256 of signer policy",
   "signature_verification_reason": "kms_signature_valid",
   "verifier_trust_level": "production",
+  "verifier_id": "veritas-human-approval-verifier-v1",
+  "verifier_key_id": "optional-key-id",
+  "verifier_policy_id": "human-approval-verifier-policy-v1",
+  "verifier_policy_hash": "canonical sha256 of verifier policy snapshot",
   "signed_at": "2026-05-01T00:00:00+00:00",
   "verified_at": "2026-05-01T00:00:01+00:00",
   "verification_source": "signed_human_approval_artifact",
@@ -127,6 +131,10 @@ For backward compatibility, `verify_human_approval_receipt_artifact()` still ret
   "signer_policy_hash": "canonical sha256 of signer policy",
   "signature_verification_reason": "kms_signature_valid",
   "verifier_trust_level": "production",
+  "verifier_id": "veritas-human-approval-verifier-v1",
+  "verifier_key_id": "optional-key-id",
+  "verifier_policy_id": "human-approval-verifier-policy-v1",
+  "verifier_policy_hash": "canonical sha256 of verifier policy snapshot",
   "signed_at": "2026-05-01T00:00:00+00:00",
   "verified_at": "2026-05-01T00:00:01+00:00",
   "receipt_hash_verified": true,
@@ -136,6 +144,19 @@ For backward compatibility, `verify_human_approval_receipt_artifact()` still ret
 
 These fields are verifier-derived only when set through signed-artifact verification. Caller-supplied copies are stripped from raw signed payload metadata before verification and are not treated as cryptographic proof on their own. If an artifact or envelope also contains signer metadata such as `key_id`, `signer_key_id`, `algorithm`, `signer_algorithm`, `signer_identity`, or `signer_role`, VERITAS treats those values as cross-checks only: missing artifact metadata is allowed, matching metadata may pass, but contradictory metadata fails closed and no `VerifiedHumanApprovalReceipt` is emitted. Artifact/envelope self-claims cannot authorize a signer or override verifier-derived key, algorithm, identity, or role. Current secure-only direct-receipt provenance still uses an in-process verification registry as a transitional compatibility control; it rejects simple forged metadata in one runtime process, but it should not be treated as cross-process cryptographic sealing. Prod rejects this direct receipt path entirely. Cross-process and prod callers should pass `VerifiedHumanApprovalReceipt` or the original signed artifact plus verifier. Production security still depends on real key management, KMS/HSM or equivalent verifier implementation, key rotation, and operational controls outside this local/offline helper.
 
+
+A production verifier allowlist follows the same explicit policy-object style as signer policy configuration. A minimal equivalent shape is:
+
+```yaml
+approved_human_approval_verifiers:
+  - verifier_id: veritas-human-approval-verifier-v1
+    trust_level: production
+    verifier_key_id: optional-key-id
+    policy_id: human-approval-verifier-policy-v1
+    policy_hash: canonical-sha256-of-policy-snapshot
+```
+
+Reviewers and auditors can now answer which verifier produced the proof by inspecting `verifier_id` and can determine whether that verifier was authorized by comparing it to the configured `HumanApprovalVerifierPolicy`.
 
 ## Verifier contract
 
@@ -149,7 +170,7 @@ class HumanApprovalSignatureVerifier(Protocol):
     ) -> HumanApprovalSignatureVerificationResult: ...
 ```
 
-Production deployments must bind this contract to deployment-controlled cryptographic infrastructure, such as KMS, HSM, or trusted public-key verification. The verifier must return verifier-derived `verified`, `key_id`, `algorithm`, `signer_identity`, `signer_role`, `reason`, and in prod `verifier_trust_level="production"` metadata (or expose a production verifier marker on the implementation). `RuntimeAuthorityValidator` remains implementation agnostic: it can use `human_approval_signature_verifier` or the older `verify_human_approval_signature_fn`, but `secure`/`prod` should prefer the interface and still rejects bare boolean results. Secure may retain missing `verifier_trust_level` migration compatibility; prod must not.
+Production deployments must bind this contract to deployment-controlled cryptographic infrastructure, such as KMS, HSM, or trusted public-key verification. The verifier must return verifier-derived `verified`, `key_id`, `algorithm`, `signer_identity`, `signer_role`, `reason`, verifier identity fields, and in prod `verifier_trust_level="production"` metadata (or expose a production verifier marker on the implementation). `RuntimeAuthorityValidator` remains implementation agnostic: it can use `human_approval_signature_verifier` or the older `verify_human_approval_signature_fn`, but `secure`/`prod` should prefer the interface and still rejects bare boolean results. Secure may retain missing `verifier_trust_level` migration compatibility; prod must not.
 
 No production verifier is provided or assumed by default. Production deployments must provide their own `HumanApprovalSignatureVerifier` bound to deployment-controlled KMS, HSM, or trusted public-key infrastructure. `TestHumanApprovalSignatureVerifier` is a deterministic test/dev-only helper for fixtures and demos; it is explicitly marked test-only and `RuntimeAuthorityValidator` blocks it in `secure`/`prod` posture with `human_approval_test_signature_verifier_not_allowed`. Local/dev demos may use the test verifier only outside strict posture; it is not production assurance and must not be treated as evidence of real cryptographic verification.
 
