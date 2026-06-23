@@ -127,6 +127,22 @@ def _verified_human_approval_proof(
         ),
         "signature_verification_reason": "local_offline_fixture_verified",
         "verifier_trust_level": "production",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_id": "human-approval-verifier-policy-v1",
+        "verifier_policy_hash": sha256_of_canonical_json(
+            {
+                "approved_human_approval_verifiers": [
+                    {
+                        "verifier_id": "veritas-human-approval-verifier-v1",
+                        "trust_level": "production",
+                        "verifier_key_id": "local-demo-verifier-key",
+                        "policy_id": "human-approval-verifier-policy-v1",
+                    }
+                ],
+                "fixture_only": True,
+            }
+        ),
         "signed_at": finalized.approved_at,
         "verified_at": FIXED_NOW.isoformat(),
         "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
