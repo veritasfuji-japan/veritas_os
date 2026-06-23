@@ -178,6 +178,30 @@
         "refusal_basis": {
           "$ref": "#/$defs/string_array"
         },
+        "verifier_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_key_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_policy_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_policy_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "verification_proof_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
         "failure_reasons": {
           "$ref": "#/$defs/string_array"
         },
@@ -210,6 +234,11 @@
         "approver_role",
         "approved_scope",
         "receipt_hash_present",
+        "verifier_id",
+        "verifier_key_id",
+        "verifier_policy_id",
+        "verifier_policy_hash",
+        "verification_proof_hash",
         "failure_reasons",
         "context_binding"
       ],
@@ -454,6 +483,10 @@
         "human_approval_receipt_id",
         "human_approval_receipt_hash",
         "verified_human_approval_proof_hash",
+        "human_approval_verifier_id",
+        "human_approval_verifier_key_id",
+        "human_approval_verifier_policy_id",
+        "human_approval_verifier_policy_hash",
         "human_approval_required",
         "bind_receipt_id",
         "bind_receipt_hash",
@@ -571,6 +604,27 @@
           "type": "object"
         },
         "verified_human_approval_proof_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "human_approval_verifier_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "human_approval_verifier_key_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "human_approval_verifier_policy_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "human_approval_verifier_policy_hash": {
           "$ref": "#/$defs/nullable_sha256_hex"
         },
         "human_approval_required": {

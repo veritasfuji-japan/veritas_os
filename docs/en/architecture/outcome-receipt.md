@@ -33,5 +33,9 @@ When an action requires human approval and bind-time validation uses a sealed `V
 - `verified_human_approval_proof_hash`
 - `verified_human_approval_receipt_id`
 - `human_approval_verification_source`
+- `human_approval_verifier_id`
+- `human_approval_verifier_key_id`
+- `human_approval_verifier_policy_id`
+- `human_approval_verifier_policy_hash`
 
-These metadata fields are included in the deterministic outcome hash payload. Reviewers can therefore check that the committed outcome references the same verified approval proof that passed bind-time validation, rather than a later substituted approval artifact. No-approval-required paths remain valid without these metadata fields.
+These metadata fields are included in the deterministic outcome hash payload. Reviewers can therefore check that the committed outcome references the same verified approval proof that passed bind-time validation, and that the verifier identity was authorized by the same verifier policy snapshot carried by the EvidenceChainManifest and reviewer packet. No-approval-required paths remain valid without these metadata fields.

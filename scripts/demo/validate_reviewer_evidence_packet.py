@@ -345,6 +345,35 @@ def _case_approval_proof_continuity_reasons(case: dict[str, Any]) -> list[str]:
     if manifest_hash and outcome_hash and manifest_hash != outcome_hash:
         reasons.append("reviewer_packet_human_approval_proof_hash_mismatch")
 
+    summary = case.get("human_approval_summary", {})
+    if not isinstance(summary, dict):
+        summary = {}
+    if not str(summary.get("verifier_id") or "").strip():
+        reasons.append("reviewer_packet_verifier_id_missing")
+    if not str(summary.get("verifier_policy_id") or "").strip():
+        reasons.append("reviewer_packet_verifier_policy_id_missing")
+    proof_policy_hash = str(summary.get("verifier_policy_hash") or "").strip()
+    manifest_policy_hash = str(
+        manifest.get("human_approval_verifier_policy_hash") or ""
+    ).strip()
+    outcome_policy_hash = str(
+        metadata.get("human_approval_verifier_policy_hash") or ""
+    ).strip()
+    if not proof_policy_hash or not manifest_policy_hash or not outcome_policy_hash:
+        reasons.append("reviewer_packet_verifier_policy_hash_missing")
+    if (
+        proof_policy_hash
+        and manifest_policy_hash
+        and proof_policy_hash != manifest_policy_hash
+    ):
+        reasons.append("reviewer_packet_verifier_policy_hash_mismatch")
+    if (
+        outcome_policy_hash
+        and manifest_policy_hash
+        and outcome_policy_hash != manifest_policy_hash
+    ):
+        reasons.append("reviewer_packet_verifier_policy_hash_mismatch")
+
     if isinstance(verification, dict):
         status = verification.get("verification_status")
         verified_links = verification.get("verified_links", [])

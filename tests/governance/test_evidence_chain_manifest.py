@@ -25,6 +25,10 @@ def _base_manifest() -> EvidenceChainManifest:
         human_approval_receipt_id="har-1",
         human_approval_receipt_hash="b" * 64,
         verified_human_approval_proof_hash="p" * 64,
+        human_approval_verifier_id="verifier-1",
+        human_approval_verifier_key_id="verifier-key-1",
+        human_approval_verifier_policy_id="verifier-policy-1",
+        human_approval_verifier_policy_hash="v" * 64,
         human_approval_required=True,
         bind_receipt_id=None,
         bind_receipt_hash=None,
@@ -206,6 +210,10 @@ def test_build_evidence_chain_manifest_includes_verified_human_approval_proof_ha
         authority_evidence_hash="a" * 64,
         human_approval_receipt_hash="b" * 64,
         verified_human_approval_proof_hash="p" * 64,
+        human_approval_verifier_id="verifier-1",
+        human_approval_verifier_key_id="verifier-key-1",
+        human_approval_verifier_policy_id="verifier-policy-1",
+        human_approval_verifier_policy_hash="v" * 64,
         human_approval_required=True,
         outcome_receipt_hash="c" * 64,
         bind_coverage_operation_id="cov",
@@ -214,3 +222,7 @@ def test_build_evidence_chain_manifest_includes_verified_human_approval_proof_ha
 
     assert manifest.verified_human_approval_proof_hash == "p" * 64
     assert manifest.to_dict()["verified_human_approval_proof_hash"] == "p" * 64
+    assert manifest.to_dict()["human_approval_verifier_id"] == "verifier-1"
+    assert manifest.to_dict()["human_approval_verifier_key_id"] == "verifier-key-1"
+    assert manifest.to_dict()["human_approval_verifier_policy_id"] == "verifier-policy-1"
+    assert manifest.to_dict()["human_approval_verifier_policy_hash"] == "v" * 64

@@ -246,3 +246,45 @@ def test_no_approval_required_packet_passes_without_proof_hash() -> None:
     assert "reviewer_packet_human_approval_proof_link_not_verified" not in report[
         "failure_reasons"
     ]
+
+
+def test_approval_required_packet_fails_when_verifier_id_missing() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["human_approval_summary"]["verifier_id"] = None
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert "reviewer_packet_verifier_id_missing" in report["failure_reasons"]
+
+
+def test_approval_required_packet_fails_when_verifier_policy_id_missing() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["human_approval_summary"]["verifier_policy_id"] = None
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert "reviewer_packet_verifier_policy_id_missing" in report["failure_reasons"]
+
+
+def test_approval_required_packet_fails_when_verifier_policy_hash_missing() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["human_approval_summary"]["verifier_policy_hash"] = None
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert "reviewer_packet_verifier_policy_hash_missing" in report["failure_reasons"]
+
+
+def test_approval_required_packet_fails_when_verifier_policy_hashes_differ() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["outcome_receipt_summary"]["metadata"][
+        "human_approval_verifier_policy_hash"
+    ] = "f" * 64
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert "reviewer_packet_verifier_policy_hash_mismatch" in report["failure_reasons"]
