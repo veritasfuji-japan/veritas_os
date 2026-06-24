@@ -38,7 +38,7 @@
       "artifact_type": "chain_manifest"
     },
     {
-      "artifact_hash": "1b28c26d5d5361d3352ea4fcbe51b1383391ff670cd5afec4fb0677d690c112b",
+      "artifact_hash": "4184f2616139fa9fae22e79d854da61d6cd2b8c05691ca4de3294d7bc9271f34",
       "artifact_ref": "reviewer-evidence-packet.generated.example.json",
       "artifact_type": "reviewer_evidence_packet"
     }

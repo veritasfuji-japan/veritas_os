@@ -66,6 +66,14 @@ SCHEMA_REFS_BY_ARTIFACT_TYPE = {
     ),
 }
 
+HUMAN_APPROVAL_SUMMARY_VERIFIER_FIELDS = (
+    "verifier_id",
+    "verifier_key_id",
+    "verifier_policy_id",
+    "verifier_policy_hash",
+    "verification_proof_hash",
+)
+
 HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS = (
     "request_ref",
     "ai_output_ref",
@@ -320,6 +328,8 @@ def _ensure_human_approval_context_binding(packet: dict[str, Any]) -> None:
         }
         for field in HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS:
             summary["context_binding"].setdefault(field, None)
+        for field in HUMAN_APPROVAL_SUMMARY_VERIFIER_FIELDS:
+            summary.setdefault(field, None)
 
 
 def _packet_hash(packet: dict[str, Any]) -> str:

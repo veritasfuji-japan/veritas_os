@@ -68,6 +68,11 @@ REQUIRED_HUMAN_APPROVAL_FIELDS = [
     "approver_role",
     "approved_scope",
     "receipt_hash_present",
+    "verifier_id",
+    "verifier_key_id",
+    "verifier_policy_id",
+    "verifier_policy_hash",
+    "verification_proof_hash",
     "failure_reasons",
     "context_binding",
 ]

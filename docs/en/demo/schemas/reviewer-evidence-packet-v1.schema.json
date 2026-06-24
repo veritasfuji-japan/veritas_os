@@ -178,30 +178,6 @@
         "refusal_basis": {
           "$ref": "#/$defs/string_array"
         },
-        "verifier_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "verifier_key_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "verifier_policy_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "verifier_policy_hash": {
-          "$ref": "#/$defs/nullable_sha256_hex"
-        },
-        "verification_proof_hash": {
-          "$ref": "#/$defs/nullable_sha256_hex"
-        },
         "failure_reasons": {
           "$ref": "#/$defs/string_array"
         },
@@ -269,6 +245,30 @@
         },
         "receipt_hash_present": {
           "type": "boolean"
+        },
+        "verifier_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_key_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_policy_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_policy_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "verification_proof_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
         },
         "failure_reasons": {
           "$ref": "#/$defs/string_array"

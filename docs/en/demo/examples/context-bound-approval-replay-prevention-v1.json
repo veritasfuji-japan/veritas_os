@@ -32,6 +32,10 @@
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "ec3ea1e78def9c3d5f24869b0c371d87a682955a7ba051d13255caef2396edf9",
         "manifest_id": "manifest-valid_same_context",
         "metadata": {
@@ -91,7 +95,12 @@
           "request_ref": "request:permission-change:001"
         },
         "failure_reasons": [],
-        "receipt_hash_present": true
+        "receipt_hash_present": true,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -149,6 +158,10 @@
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "e945dd62aadf843adee7aceffbc5d6f0c0e2b8df248ffd4bbf2d57734e598fbf",
         "manifest_id": "manifest-replay_different_request_ref",
         "metadata": {
@@ -218,7 +231,12 @@
         "failure_reasons": [
           "human_approval_request_ref_mismatch"
         ],
-        "receipt_hash_present": true
+        "receipt_hash_present": true,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -280,6 +298,10 @@
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "459fabb0620270130ea9eb34b1dadcddd4751b9b17d36abc3e8767ca64e05fee",
         "manifest_id": "manifest-replay_different_action_class",
         "metadata": {
@@ -349,7 +371,12 @@
         "failure_reasons": [
           "human_approval_action_class_mismatch"
         ],
-        "receipt_hash_present": true
+        "receipt_hash_present": true,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "admin_role_assignment",
@@ -411,6 +438,10 @@
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "3c7ff11156413f169003a961375aba601daf95ff34206ce1758f8f440e7f00ee",
         "manifest_id": "manifest-replay_different_bind_context_hash",
         "metadata": {
@@ -480,7 +511,12 @@
         "failure_reasons": [
           "human_approval_bind_context_hash_mismatch"
         ],
-        "receipt_hash_present": true
+        "receipt_hash_present": true,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -526,7 +562,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "758f29352aa26676ec2371e7e46079066ad2fceec14f324aa66c3a172a7e6a74",
+  "packet_hash": "cf76af5982722e7be56a026eeb1a380c99947d79f387a6819b06c3ad91dcc682",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [

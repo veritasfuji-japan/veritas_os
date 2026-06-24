@@ -32,6 +32,10 @@
         "human_approval_receipt_hash": "22c26614740e5a495beea2a46f1e8a498303e8c50d96a2f25a2a8e788d1c4547",
         "human_approval_receipt_id": "har-saas-001",
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "62ff0ccbe8428576cf885a78855f473d958310236b24f3299625742c4aa9da06",
         "manifest_id": "ecm-saas-permission-change-missing_authority",
         "metadata": {
@@ -108,7 +112,12 @@
           "request_ref": null
         },
         "failure_reasons": [],
-        "receipt_hash_present": true
+        "receipt_hash_present": true,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -179,6 +188,10 @@
         "human_approval_receipt_hash": null,
         "human_approval_receipt_id": null,
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "6336bd4b68ad353846c0b01eb5ad880e36ef3ebd0cb2f701543ec42e42fb2171",
         "manifest_id": "ecm-saas-permission-change-missing_human_approval",
         "metadata": {
@@ -251,7 +264,12 @@
         "failure_reasons": [
           "human_approval_missing"
         ],
-        "receipt_hash_present": false
+        "receipt_hash_present": false,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -318,6 +336,10 @@
         "human_approval_receipt_hash": null,
         "human_approval_receipt_id": null,
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "01e7b387b8f643b0dde77f0bec570016c598ae943ae3afaaa3c3485a77970457",
         "manifest_id": "ecm-saas-permission-change-expired_human_approval",
         "metadata": {
@@ -390,7 +412,12 @@
         "failure_reasons": [
           "human_approval_expired"
         ],
-        "receipt_hash_present": false
+        "receipt_hash_present": false,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -457,6 +484,10 @@
         "human_approval_receipt_hash": null,
         "human_approval_receipt_id": null,
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "4a8ee2ed20eef406321f857901cced1ccba59bc1096248f132b77a34f13b2025",
         "manifest_id": "ecm-saas-permission-change-scope_mismatch",
         "metadata": {
@@ -531,7 +562,12 @@
         "failure_reasons": [
           "human_approval_scope_not_granted"
         ],
-        "receipt_hash_present": false
+        "receipt_hash_present": false,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -600,6 +636,10 @@
         "human_approval_receipt_hash": "22c26614740e5a495beea2a46f1e8a498303e8c50d96a2f25a2a8e788d1c4547",
         "human_approval_receipt_id": "har-saas-001",
         "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
         "manifest_hash": "251e61b8b66ada5df3b8c9515a3dc18c6da354053c745bf9dcf75283e57914e1",
         "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
         "metadata": {
@@ -672,7 +712,12 @@
           "request_ref": null
         },
         "failure_reasons": [],
-        "receipt_hash_present": true
+        "receipt_hash_present": true,
+        "verification_proof_hash": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -813,7 +858,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "e02bfef9376d4575b62d9e7adc9319ec49c811fa57855d414a938cf5a5d5078d",
+  "packet_hash": "24ae264354196c8488debc95931a4d21ac49786247bb126302a6a635dfa79a3c",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

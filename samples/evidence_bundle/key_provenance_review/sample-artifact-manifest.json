@@ -1,7 +1,4 @@
 {
-  "manifest_type": "trusted_public_key_provenance_review_sample_manifest",
-  "sample_notice": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval.",
-  "trust_boundary": "This sample does not create trust and does not replace out-of-band public key trust.",
   "artifacts": [
     {
       "artifact_name": "verification-result.json",
@@ -31,7 +28,7 @@
       "artifact_name": "reviewer-evidence-packet.json",
       "role": "reviewer_evidence_packet",
       "schema_id": "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
-      "sha256": "e399a3757e6bfe5159546dac9be968cb639ce87c2bf65112a26c3470e7f0ed2f"
+      "sha256": "c5f8dcd953a50138c1e4c9a1fef826b884b31bac2a29dabf4a487514bd479af8"
     },
     {
       "artifact_name": "reviewer-handoff-review-result.json",
@@ -77,5 +74,8 @@
       "schema_id": null,
       "sha256": "b9c2e5bbc15d5890f64425416967639007db039ef412571dbde8f914b5f4df4a"
     }
-  ]
+  ],
+  "manifest_type": "trusted_public_key_provenance_review_sample_manifest",
+  "sample_notice": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval.",
+  "trust_boundary": "This sample does not create trust and does not replace out-of-band public key trust."
 }
