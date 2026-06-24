@@ -10,7 +10,7 @@
     "total_cases": 5,
     "verified_chains": 5
   },
-  "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+  "boundary_note": "local/offline synthetic reviewer evidence only; no /v1/decide call, runtime admissibility change, live service integration, legitimacy determination, or compliance certification",
   "cases": [
     {
       "actual_outcome": "block",
@@ -57,7 +57,7 @@
         "requested_scope": [
           "saas:grant_admin"
         ],
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory",
         "verified_human_approval_proof_hash": null
       },
@@ -99,8 +99,8 @@
         "approved_scope": [
           "saas:grant_admin"
         ],
-        "approver_identity": "human:manager.alex",
-        "approver_role": "engineering_manager",
+        "approver_identity": "human:synthetic_reviewer",
+        "approver_role": "synthetic_reviewer",
         "context_binding": {
           "action_class": "permission_change",
           "ai_output_ref": null,
@@ -151,7 +151,7 @@
         ],
         "rollback_status": null,
         "rolled_back": false,
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory"
       },
       "passed": true,
@@ -165,7 +165,7 @@
       ],
       "reviewer_interpretation": "The local/offline fixture blocked because AuthorityEvidence was missing.",
       "runtime_recommended_outcome": "block",
-      "target_resource": "contractor:external.user@example.test",
+      "target_resource": "synthetic_offline_resource",
       "target_system": "mock_saas_directory"
     },
     {
@@ -211,7 +211,7 @@
         "requested_scope": [
           "saas:grant_admin"
         ],
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory",
         "verified_human_approval_proof_hash": null
       },
@@ -301,7 +301,7 @@
         ],
         "rollback_status": null,
         "rolled_back": false,
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory"
       },
       "passed": true,
@@ -313,7 +313,7 @@
       ],
       "reviewer_interpretation": "The local/offline fixture blocked because HumanApprovalReceipt was missing.",
       "runtime_recommended_outcome": "block",
-      "target_resource": "contractor:external.user@example.test",
+      "target_resource": "synthetic_offline_resource",
       "target_system": "mock_saas_directory"
     },
     {
@@ -359,7 +359,7 @@
         "requested_scope": [
           "saas:grant_admin"
         ],
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory",
         "verified_human_approval_proof_hash": null
       },
@@ -449,7 +449,7 @@
         ],
         "rollback_status": null,
         "rolled_back": false,
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory"
       },
       "passed": true,
@@ -461,7 +461,7 @@
       ],
       "reviewer_interpretation": "The local/offline fixture blocked because HumanApprovalReceipt was expired.",
       "runtime_recommended_outcome": "block",
-      "target_resource": "contractor:external.user@example.test",
+      "target_resource": "synthetic_offline_resource",
       "target_system": "mock_saas_directory"
     },
     {
@@ -508,7 +508,7 @@
         "requested_scope": [
           "saas:grant_admin"
         ],
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory",
         "verified_human_approval_proof_hash": null
       },
@@ -600,7 +600,7 @@
         ],
         "rollback_status": null,
         "rolled_back": false,
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory"
       },
       "passed": true,
@@ -613,7 +613,7 @@
       ],
       "reviewer_interpretation": "The local/offline fixture blocked because approved authority or approval scope was insufficient.",
       "runtime_recommended_outcome": "block",
-      "target_resource": "contractor:external.user@example.test",
+      "target_resource": "synthetic_offline_resource",
       "target_system": "mock_saas_directory"
     },
     {
@@ -636,11 +636,11 @@
         "human_approval_receipt_hash": "22c26614740e5a495beea2a46f1e8a498303e8c50d96a2f25a2a8e788d1c4547",
         "human_approval_receipt_id": "har-saas-001",
         "human_approval_required": true,
-        "human_approval_verifier_id": null,
-        "human_approval_verifier_key_id": null,
-        "human_approval_verifier_policy_hash": null,
-        "human_approval_verifier_policy_id": null,
-        "manifest_hash": "c3a7ed2805f936c898340168d8ae693b9734c9732b517a16fa53ab5c4d7aecb9",
+        "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+        "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+        "manifest_hash": "5b1a60de9131745f4d53f91c83b021796842dc4882f16b3403844005c6dbe858",
         "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -652,19 +652,19 @@
             "effect_type": "permission_grant",
             "fixture_only": true,
             "permission": "saas:grant_admin",
-            "target_resource": "contractor:external.user@example.test"
+            "target_resource": "synthetic_offline_resource"
           }
         ],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "outcome_receipt_hash": "e8eb969be01b97993b20283a6f0314f5e83be4d6377e879f7b3719562e5a036a",
+        "outcome_receipt_hash": "1186d57ff77b5cd25f3031c569418941140aa5ff16d3eb537c0cc2be816cefdc",
         "outcome_receipt_id": "outcome-saas-permission-change-valid_authority_and_approval",
         "refusal_basis": [],
         "requested_scope": [
           "saas:grant_admin"
         ],
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory",
-        "verified_human_approval_proof_hash": null
+        "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c"
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -680,7 +680,7 @@
         "mismatched_links": [],
         "missing_links": [],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "recomputed_manifest_hash": "c3a7ed2805f936c898340168d8ae693b9734c9732b517a16fa53ab5c4d7aecb9",
+        "recomputed_manifest_hash": "5b1a60de9131745f4d53f91c83b021796842dc4882f16b3403844005c6dbe858",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -688,7 +688,8 @@
           "bind_coverage_operation_id",
           "human_approval_receipt_hash",
           "manifest_hash",
-          "outcome_receipt_hash"
+          "outcome_receipt_hash",
+          "verified_human_approval_proof_hash"
         ]
       },
       "expected_outcome": "commit",
@@ -699,8 +700,8 @@
         "approved_scope": [
           "saas:grant_admin"
         ],
-        "approver_identity": "human:manager.alex",
-        "approver_role": "engineering_manager",
+        "approver_identity": "human:synthetic_reviewer",
+        "approver_role": "synthetic_reviewer",
         "context_binding": {
           "action_class": "permission_change",
           "ai_output_ref": null,
@@ -713,11 +714,11 @@
         },
         "failure_reasons": [],
         "receipt_hash_present": true,
-        "verification_proof_hash": null,
-        "verifier_id": null,
-        "verifier_key_id": null,
-        "verifier_policy_hash": null,
-        "verifier_policy_id": null
+        "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -733,18 +734,25 @@
         "intended_action": "grant_admin_permission",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
-          "fixture_only": true
+          "fixture_only": true,
+          "human_approval_verification_source": "signed_human_approval_artifact",
+          "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+          "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+          "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+          "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+          "verified_human_approval_receipt_id": "har-saas-001"
         },
         "observed_effects": [
           {
             "effect_type": "permission_grant",
             "fixture_only": true,
             "permission": "saas:grant_admin",
-            "target_resource": "contractor:external.user@example.test"
+            "target_resource": "synthetic_offline_resource"
           }
         ],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "outcome_hash": "e8eb969be01b97993b20283a6f0314f5e83be4d6377e879f7b3719562e5a036a",
+        "outcome_hash": "1186d57ff77b5cd25f3031c569418941140aa5ff16d3eb537c0cc2be816cefdc",
         "outcome_receipt_id": "outcome-saas-permission-change-valid_authority_and_approval",
         "post_state_fingerprint": null,
         "postcondition_status": "passed",
@@ -754,7 +762,7 @@
         ],
         "rollback_status": null,
         "rolled_back": false,
-        "target_resource": "contractor:external.user@example.test",
+        "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory"
       },
       "passed": true,
@@ -764,96 +772,109 @@
       ],
       "reviewer_interpretation": "AuthorityEvidence and HumanApprovalReceipt were sufficient for the local/offline fixture to reach a commit outcome.",
       "runtime_recommended_outcome": "commit",
-      "target_resource": "contractor:external.user@example.test",
+      "target_resource": "synthetic_offline_resource",
       "target_system": "mock_saas_directory"
     }
   ],
-  "demo_id": "saas_permission_change_governed_execution_v1",
+  "demo_id": "evaluation_governance_offline_chain_reviewer_packet_v1",
   "evaluation_governance_artifacts": [
     {
-      "artifact_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/root-authority-manifest-v1.example.json",
-      "artifact_type": "root_authority_manifest",
-      "required_for_review": false,
-      "schema_ref": "docs/en/demo/schemas/root-authority-manifest-v1.schema.json"
-    },
-    {
-      "artifact_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/evaluation-function-manifest-v1.example.json",
-      "artifact_type": "evaluation_function_manifest",
-      "required_for_review": false,
-      "schema_ref": "docs/en/demo/schemas/evaluation-function-manifest-v1.schema.json"
-    },
-    {
-      "artifact_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/manifest-change-receipt-v1.example.json",
-      "artifact_type": "manifest_change_receipt",
-      "required_for_review": false,
-      "schema_ref": "docs/en/demo/schemas/manifest-change-receipt-v1.schema.json"
-    },
-    {
-      "artifact_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/evaluation-receipt-v1.example.json",
+      "artifact_hash": "5cae168299c60becc997dde84fc143fa059edc2b5fca81dde1997f5916f4500f",
+      "artifact_ref": "evaluation-receipt-1.example.json",
       "artifact_type": "evaluation_receipt",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/evaluation-receipt-v1.schema.json"
     },
     {
-      "artifact_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/outcome-delta-attribution-v1.example.json",
+      "artifact_hash": "81c64573c36975ccf755f53718d1b759d00f612832aee47c35081117824a9cfa",
+      "artifact_ref": "evaluation-receipt-2.example.json",
+      "artifact_type": "evaluation_receipt",
+      "required_for_review": false,
+      "schema_ref": "docs/en/demo/schemas/evaluation-receipt-v1.schema.json"
+    },
+    {
+      "artifact_hash": "9e029c8f3a1df6f1b368def1d6cc7a665ffd6efe1b5c05c1d198d18f5105efb4",
+      "artifact_ref": "evaluation-receipt-3.example.json",
+      "artifact_type": "evaluation_receipt",
+      "required_for_review": false,
+      "schema_ref": "docs/en/demo/schemas/evaluation-receipt-v1.schema.json"
+    },
+    {
+      "artifact_hash": "4ce275c69363b76007a280e2ffcfb384efa2bc795532745f88dfc4da10ae6421",
+      "artifact_ref": "manifest-change-receipt.example.json",
+      "artifact_type": "manifest_change_receipt",
+      "required_for_review": false,
+      "schema_ref": "docs/en/demo/schemas/manifest-change-receipt-v1.schema.json"
+    },
+    {
+      "artifact_hash": "17029f187996728b120db5bbf7bb92f26d6a16f833bdc3b7c66bd05077d62d33",
+      "artifact_ref": "generated/outcome-delta-attribution-1.generated.example.json",
       "artifact_type": "outcome_delta_attribution",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/outcome-delta-attribution-v1.schema.json"
     },
     {
-      "artifact_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/evaluation-drift-detection-v1.example.json",
+      "artifact_hash": "59fac37138155946793fd958cdf2e8c96a842671fa1f64829e6c1f99b3dd531e",
+      "artifact_ref": "generated/outcome-delta-attribution-2.generated.example.json",
+      "artifact_type": "outcome_delta_attribution",
+      "required_for_review": false,
+      "schema_ref": "docs/en/demo/schemas/outcome-delta-attribution-v1.schema.json"
+    },
+    {
+      "artifact_hash": "9e6390164ff4d51dcc66d19b58dc9ca08f915ad07637ef580228aca4a39d3c6e",
+      "artifact_ref": "generated/evaluation-drift-detection-1.generated.example.json",
       "artifact_type": "evaluation_drift_detection",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/evaluation-drift-detection-v1.schema.json"
     },
     {
-      "artifact_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/trajectory-admissibility-monitor-v1.example.json",
+      "artifact_hash": "16b7d149551c7a415ee931a10d83c5e4d486fab59b0adda649d65b1e81d08b40",
+      "artifact_ref": "generated/evaluation-drift-detection-2.generated.example.json",
+      "artifact_type": "evaluation_drift_detection",
+      "required_for_review": false,
+      "schema_ref": "docs/en/demo/schemas/evaluation-drift-detection-v1.schema.json"
+    },
+    {
+      "artifact_hash": "900ca433a0128a9f4e9308f9da783c6ae11dc7ae68af5fdd61add67d30f67c89",
+      "artifact_ref": "generated/trajectory-admissibility-monitor.generated.example.json",
       "artifact_type": "trajectory_admissibility_monitor",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/trajectory-admissibility-monitor-v1.schema.json"
     },
     {
-      "artifact_hash": "1111111111111111111111111111111111111111111111111111111111111111",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/legitimacy-impact-review-v1.example.json",
+      "artifact_hash": "2af7ec64add0c6e1919216fb79c47d56ad3f60653a009503646cc108d61efda0",
+      "artifact_ref": "generated/legitimacy-impact-review.generated.example.json",
       "artifact_type": "legitimacy_impact_review",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/legitimacy-impact-review-v1.schema.json"
-    },
-    {
-      "artifact_hash": "2222222222222222222222222222222222222222222222222222222222222222",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/adversarial-architecture-test-matrix-v1.example.json",
-      "artifact_type": "adversarial_architecture_test_matrix",
-      "required_for_review": false,
-      "schema_ref": "docs/en/demo/schemas/adversarial-architecture-test-matrix-v1.schema.json"
-    },
-    {
-      "artifact_hash": "3333333333333333333333333333333333333333333333333333333333333333",
-      "artifact_ref": "docs/en/demo/examples/evaluation-governance/adversarial-scenario-fixtures-v1.example.json",
-      "artifact_type": "adversarial_scenario_fixtures",
-      "required_for_review": false,
-      "schema_ref": "docs/en/demo/schemas/adversarial-scenario-fixtures-v1.schema.json"
     }
   ],
-  "generated_at": "2026-04-26T00:00:00+00:00",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "key_provenance": {
+    "key_provenance_result_validation_report": {
+      "artifact_name": "key-provenance-result-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_result_validation_report.schema.json"
+    },
+    "key_provenance_validation_report": {
+      "artifact_name": "key-provenance-validation.json",
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_validation_report.schema.json"
+    },
+    "trusted_public_key_provenance_receipt": {
+      "artifact_name": "trusted-public-key-provenance.json",
+      "required_for_strict_signature_review": true,
+      "schema_id": "https://veritas-os.example/schemas/trusted_public_key_provenance_receipt.schema.json"
+    }
+  },
   "local_offline_only": true,
-  "packet_hash": "bdc60f007f63c89f16da1db5caf5ef77bfa2d8e7ff634a62503a71e1c30baa1d",
+  "packet_hash": "fdca300657a7ce23ed6fc721863538da29809c3c799c485b15e4cd78209d965e",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [
-    "This packet is generated from a local/offline fixture demo.",
-    "It does not connect to live SaaS, IAM, IdP, SSO, customer directory, bank, sanctions, or production approval systems.",
-    "It demonstrates bind-time governance and evidence-chain verification using deterministic artifacts.",
-    "It is not legal advice, regulatory approval, third-party certification, production audit certification, or proof of live deployment.",
-    "Evaluation Governance artifact references in this example are optional reviewer-facing attachments, non-enforcing in v1, and are not dereferenced by schema validation.",
-    "These synthetic references do not automatically establish legitimacy and do not change runtime admissibility or /v1/decide behavior."
+    "This packet is a synthetic offline reviewer evidence packet generated from an Evaluation Governance offline chain manifest.",
+    "Evaluation Governance artifacts are attached as optional reviewer evidence and are not runtime enforcement inputs.",
+    "This helper does not call /v1/decide, change runtime admissibility, or introduce fail-closed behavior.",
+    "This packet does not prove legitimacy, certify compliance, or include secrets, PII, customer data, or live external service data."
   ],
-  "summary": "Deterministic local/offline reviewer packet for the SaaS permission-change governed execution demo.",
-  "title": "SaaS Permission-Change Governed Execution Reviewer Evidence Packet"
+  "summary": "Synthetic local/offline reviewer packet generated from Evaluation Governance offline chain manifest 'evaluation-governance-offline-chain-example-001'. It attaches chain artifacts as optional reviewer evidence and does not establish legitimacy or certify compliance.",
+  "title": "Evaluation Governance Offline Chain Reviewer Evidence Packet"
 }

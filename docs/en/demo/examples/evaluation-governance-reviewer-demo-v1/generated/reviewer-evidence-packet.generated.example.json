@@ -36,7 +36,7 @@
         "human_approval_verifier_key_id": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "62ff0ccbe8428576cf885a78855f473d958310236b24f3299625742c4aa9da06",
+        "manifest_hash": "8b12d0c3f8a916f357e8311dcd1e20ad16bc3e468192016e491d86c3cbfe1f7b",
         "manifest_id": "ecm-saas-permission-change-missing_authority",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -77,7 +77,7 @@
           "authority_evidence_hash"
         ],
         "operation_id": "saas-permission-change-missing_authority",
-        "recomputed_manifest_hash": "62ff0ccbe8428576cf885a78855f473d958310236b24f3299625742c4aa9da06",
+        "recomputed_manifest_hash": "8b12d0c3f8a916f357e8311dcd1e20ad16bc3e468192016e491d86c3cbfe1f7b",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -192,7 +192,7 @@
         "human_approval_verifier_key_id": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "6336bd4b68ad353846c0b01eb5ad880e36ef3ebd0cb2f701543ec42e42fb2171",
+        "manifest_hash": "1992a33be9389de9394ffa43291c46105f2d703485c904422a299e6834cb2a5f",
         "manifest_id": "ecm-saas-permission-change-missing_human_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -231,7 +231,7 @@
           "human_approval_receipt_hash"
         ],
         "operation_id": "saas-permission-change-missing_human_approval",
-        "recomputed_manifest_hash": "6336bd4b68ad353846c0b01eb5ad880e36ef3ebd0cb2f701543ec42e42fb2171",
+        "recomputed_manifest_hash": "1992a33be9389de9394ffa43291c46105f2d703485c904422a299e6834cb2a5f",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -340,7 +340,7 @@
         "human_approval_verifier_key_id": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "01e7b387b8f643b0dde77f0bec570016c598ae943ae3afaaa3c3485a77970457",
+        "manifest_hash": "01269f1895cd817090ea87e50df0dac9f5f8177de62ac2998154fee5d2b4d36c",
         "manifest_id": "ecm-saas-permission-change-expired_human_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -379,7 +379,7 @@
           "human_approval_receipt_hash"
         ],
         "operation_id": "saas-permission-change-expired_human_approval",
-        "recomputed_manifest_hash": "01e7b387b8f643b0dde77f0bec570016c598ae943ae3afaaa3c3485a77970457",
+        "recomputed_manifest_hash": "01269f1895cd817090ea87e50df0dac9f5f8177de62ac2998154fee5d2b4d36c",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -488,7 +488,7 @@
         "human_approval_verifier_key_id": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "4a8ee2ed20eef406321f857901cced1ccba59bc1096248f132b77a34f13b2025",
+        "manifest_hash": "88824854f29f8d6e1a7d8447d7a1d2012670a258bdc58fdcaf3d7e12be573cd0",
         "manifest_id": "ecm-saas-permission-change-scope_mismatch",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -528,7 +528,7 @@
           "human_approval_receipt_hash"
         ],
         "operation_id": "saas-permission-change-scope_mismatch",
-        "recomputed_manifest_hash": "4a8ee2ed20eef406321f857901cced1ccba59bc1096248f132b77a34f13b2025",
+        "recomputed_manifest_hash": "88824854f29f8d6e1a7d8447d7a1d2012670a258bdc58fdcaf3d7e12be573cd0",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -636,11 +636,11 @@
         "human_approval_receipt_hash": "22c26614740e5a495beea2a46f1e8a498303e8c50d96a2f25a2a8e788d1c4547",
         "human_approval_receipt_id": "har-saas-001",
         "human_approval_required": true,
-        "human_approval_verifier_id": null,
-        "human_approval_verifier_key_id": null,
-        "human_approval_verifier_policy_hash": null,
-        "human_approval_verifier_policy_id": null,
-        "manifest_hash": "251e61b8b66ada5df3b8c9515a3dc18c6da354053c745bf9dcf75283e57914e1",
+        "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+        "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+        "manifest_hash": "5b1a60de9131745f4d53f91c83b021796842dc4882f16b3403844005c6dbe858",
         "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
@@ -656,7 +656,7 @@
           }
         ],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "outcome_receipt_hash": "e8eb969be01b97993b20283a6f0314f5e83be4d6377e879f7b3719562e5a036a",
+        "outcome_receipt_hash": "1186d57ff77b5cd25f3031c569418941140aa5ff16d3eb537c0cc2be816cefdc",
         "outcome_receipt_id": "outcome-saas-permission-change-valid_authority_and_approval",
         "refusal_basis": [],
         "requested_scope": [
@@ -664,7 +664,7 @@
         ],
         "target_resource": "synthetic_offline_resource",
         "target_system": "mock_saas_directory",
-        "verified_human_approval_proof_hash": null
+        "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c"
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -680,7 +680,7 @@
         "mismatched_links": [],
         "missing_links": [],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "recomputed_manifest_hash": "251e61b8b66ada5df3b8c9515a3dc18c6da354053c745bf9dcf75283e57914e1",
+        "recomputed_manifest_hash": "5b1a60de9131745f4d53f91c83b021796842dc4882f16b3403844005c6dbe858",
         "verification_status": "verified",
         "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
@@ -688,7 +688,8 @@
           "bind_coverage_operation_id",
           "human_approval_receipt_hash",
           "manifest_hash",
-          "outcome_receipt_hash"
+          "outcome_receipt_hash",
+          "verified_human_approval_proof_hash"
         ]
       },
       "expected_outcome": "commit",
@@ -713,11 +714,11 @@
         },
         "failure_reasons": [],
         "receipt_hash_present": true,
-        "verification_proof_hash": null,
-        "verifier_id": null,
-        "verifier_key_id": null,
-        "verifier_policy_hash": null,
-        "verifier_policy_id": null
+        "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -733,7 +734,14 @@
         "intended_action": "grant_admin_permission",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
-          "fixture_only": true
+          "fixture_only": true,
+          "human_approval_verification_source": "signed_human_approval_artifact",
+          "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+          "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+          "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+          "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+          "verified_human_approval_receipt_id": "har-saas-001"
         },
         "observed_effects": [
           {
@@ -744,7 +752,7 @@
           }
         ],
         "operation_id": "saas-permission-change-valid_authority_and_approval",
-        "outcome_hash": "e8eb969be01b97993b20283a6f0314f5e83be4d6377e879f7b3719562e5a036a",
+        "outcome_hash": "1186d57ff77b5cd25f3031c569418941140aa5ff16d3eb537c0cc2be816cefdc",
         "outcome_receipt_id": "outcome-saas-permission-change-valid_authority_and_approval",
         "post_state_fingerprint": null,
         "postcondition_status": "passed",
@@ -800,42 +808,42 @@
     },
     {
       "artifact_hash": "17029f187996728b120db5bbf7bb92f26d6a16f833bdc3b7c66bd05077d62d33",
-      "artifact_ref": "outcome-delta-attribution-1.generated.example.json",
+      "artifact_ref": "generated/outcome-delta-attribution-1.generated.example.json",
       "artifact_type": "outcome_delta_attribution",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/outcome-delta-attribution-v1.schema.json"
     },
     {
       "artifact_hash": "59fac37138155946793fd958cdf2e8c96a842671fa1f64829e6c1f99b3dd531e",
-      "artifact_ref": "outcome-delta-attribution-2.generated.example.json",
+      "artifact_ref": "generated/outcome-delta-attribution-2.generated.example.json",
       "artifact_type": "outcome_delta_attribution",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/outcome-delta-attribution-v1.schema.json"
     },
     {
       "artifact_hash": "9e6390164ff4d51dcc66d19b58dc9ca08f915ad07637ef580228aca4a39d3c6e",
-      "artifact_ref": "evaluation-drift-detection-1.generated.example.json",
+      "artifact_ref": "generated/evaluation-drift-detection-1.generated.example.json",
       "artifact_type": "evaluation_drift_detection",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/evaluation-drift-detection-v1.schema.json"
     },
     {
       "artifact_hash": "16b7d149551c7a415ee931a10d83c5e4d486fab59b0adda649d65b1e81d08b40",
-      "artifact_ref": "evaluation-drift-detection-2.generated.example.json",
+      "artifact_ref": "generated/evaluation-drift-detection-2.generated.example.json",
       "artifact_type": "evaluation_drift_detection",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/evaluation-drift-detection-v1.schema.json"
     },
     {
       "artifact_hash": "900ca433a0128a9f4e9308f9da783c6ae11dc7ae68af5fdd61add67d30f67c89",
-      "artifact_ref": "trajectory-admissibility-monitor.generated.example.json",
+      "artifact_ref": "generated/trajectory-admissibility-monitor.generated.example.json",
       "artifact_type": "trajectory_admissibility_monitor",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/trajectory-admissibility-monitor-v1.schema.json"
     },
     {
       "artifact_hash": "2af7ec64add0c6e1919216fb79c47d56ad3f60653a009503646cc108d61efda0",
-      "artifact_ref": "legitimacy-impact-review.generated.example.json",
+      "artifact_ref": "generated/legitimacy-impact-review.generated.example.json",
       "artifact_type": "legitimacy_impact_review",
       "required_for_review": false,
       "schema_ref": "docs/en/demo/schemas/legitimacy-impact-review-v1.schema.json"
@@ -858,7 +866,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "3c41b228657f7631582db2c510b3bf913155371a9da0408a781e1d1f14f14abf",
+  "packet_hash": "fdca300657a7ce23ed6fc721863538da29809c3c799c485b15e4cd78209d965e",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

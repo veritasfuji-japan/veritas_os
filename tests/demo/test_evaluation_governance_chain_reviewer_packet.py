@@ -227,3 +227,36 @@ def test_key_provenance_metadata_omits_raw_sensitive_values() -> None:
     ]
     for fragment in blocked_fragments:
         assert fragment not in metadata_text
+
+
+def test_valid_approval_case_carries_verifier_policy_evidence() -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+    case = next(
+        case
+        for case in packet["cases"]
+        if case["case_id"] == "valid_authority_and_approval"
+    )
+    summary = case["human_approval_summary"]
+    manifest = case["evidence_chain_manifest_summary"]
+    outcome_metadata = case["outcome_receipt_summary"]["metadata"]
+
+    assert summary["verifier_id"] == "veritas-human-approval-verifier-v1"
+    assert summary["verifier_key_id"] == "local-demo-verifier-key"
+    assert summary["verifier_policy_id"] == "human-approval-verifier-policy-v1"
+    assert summary["verifier_policy_hash"]
+    assert summary["verification_proof_hash"]
+    assert manifest["human_approval_verifier_policy_hash"] == summary[
+        "verifier_policy_hash"
+    ]
+    assert outcome_metadata["human_approval_verifier_policy_hash"] == summary[
+        "verifier_policy_hash"
+    ]
+    assert manifest["verified_human_approval_proof_hash"] == summary[
+        "verification_proof_hash"
+    ]
+    assert outcome_metadata["verified_human_approval_proof_hash"] == summary[
+        "verification_proof_hash"
+    ]
