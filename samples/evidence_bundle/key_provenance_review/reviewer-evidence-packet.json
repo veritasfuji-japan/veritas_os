@@ -32,10 +32,10 @@
         "human_approval_receipt_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "human_approval_receipt_id": "sample-human-approval",
         "human_approval_required": true,
-        "human_approval_verifier_id": null,
-        "human_approval_verifier_key_id": null,
-        "human_approval_verifier_policy_hash": null,
-        "human_approval_verifier_policy_id": null,
+        "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+        "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
         "manifest_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "manifest_id": "sample-evidence-chain-manifest",
         "metadata": {
@@ -104,11 +104,11 @@
         },
         "failure_reasons": [],
         "receipt_hash_present": true,
-        "verification_proof_hash": null,
-        "verifier_id": null,
-        "verifier_key_id": null,
-        "verifier_policy_hash": null,
-        "verifier_policy_id": null
+        "verification_proof_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
       },
       "outcome_receipt_summary": {
         "action_class": "sample.review",
@@ -122,8 +122,14 @@
         "final_outcome": "commit",
         "intended_action": "assemble illustrative reviewer evidence packet",
         "metadata": {
+          "human_approval_verification_source": "signed_human_approval_artifact",
+          "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+          "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+          "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
           "sample_context": "key provenance reviewer walkthrough",
-          "verified_human_approval_proof_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          "verified_human_approval_proof_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "verified_human_approval_receipt_id": "sample-human-approval"
         },
         "observed_effects": [
           {
@@ -170,7 +176,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "6a12ffc17dc4866e7c54034d6c9b44e401e45597f6153ee938e040f6d63704fa",
+  "packet_hash": "8852fc9ad0df441745ea8d3ec92e0ee16770ccc73778d76d16ceb328c67677f3",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

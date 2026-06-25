@@ -636,10 +636,10 @@
         "human_approval_receipt_hash": "22c26614740e5a495beea2a46f1e8a498303e8c50d96a2f25a2a8e788d1c4547",
         "human_approval_receipt_id": "har-saas-001",
         "human_approval_required": true,
-        "human_approval_verifier_id": null,
-        "human_approval_verifier_key_id": null,
-        "human_approval_verifier_policy_hash": null,
-        "human_approval_verifier_policy_id": null,
+        "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+        "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
         "manifest_hash": "c3a7ed2805f936c898340168d8ae693b9734c9732b517a16fa53ab5c4d7aecb9",
         "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
         "metadata": {
@@ -664,7 +664,7 @@
         ],
         "target_resource": "contractor:external.user@example.test",
         "target_system": "mock_saas_directory",
-        "verified_human_approval_proof_hash": null
+        "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c"
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-saas-001",
@@ -688,7 +688,8 @@
           "bind_coverage_operation_id",
           "human_approval_receipt_hash",
           "manifest_hash",
-          "outcome_receipt_hash"
+          "outcome_receipt_hash",
+          "verified_human_approval_proof_hash"
         ]
       },
       "expected_outcome": "commit",
@@ -713,11 +714,11 @@
         },
         "failure_reasons": [],
         "receipt_hash_present": true,
-        "verification_proof_hash": null,
-        "verifier_id": null,
-        "verifier_key_id": null,
-        "verifier_policy_hash": null,
-        "verifier_policy_id": null
+        "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -733,7 +734,14 @@
         "intended_action": "grant_admin_permission",
         "metadata": {
           "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
-          "fixture_only": true
+          "fixture_only": true,
+          "human_approval_verification_source": "signed_human_approval_artifact",
+          "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+          "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+          "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+          "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+          "verified_human_approval_receipt_id": "har-saas-001"
         },
         "observed_effects": [
           {
@@ -818,7 +826,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "648f595ce1ebf1835bd4b62573a2f7808ad4a75b2208125990b27af52b935412",
+  "packet_hash": "b4adc1825b215739bc6189d29e2c7b1be819c99bd7e655764de9e7207e5ce009",
   "packet_id": "reviewer-evidence-packet-decision-candidate-refusal-v1",
   "packet_version": "v1",
   "reviewer_notes": [

@@ -594,3 +594,34 @@ def test_context_bound_approval_replay_example_declares_failure_reasons() -> Non
     assert cases["replay_different_bind_context_hash"]["failure_reasons"] == [
         "human_approval_bind_context_hash_mismatch"
     ]
+
+
+def test_approval_proof_present_cases_carry_verifier_policy_fields() -> None:
+    packet_paths = [
+        FIXTURE_PATH,
+        DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH,
+        EVALUATION_GOVERNANCE_EXAMPLE_PATH,
+        CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH,
+        Path("samples/evidence_bundle/key_provenance_review/reviewer-evidence-packet.json"),
+    ]
+    for packet_path in packet_paths:
+        packet = _load_json(packet_path)
+        for case in packet["cases"]:
+            summary = case["human_approval_summary"]
+            manifest = case["evidence_chain_manifest_summary"]
+            outcome_metadata = case["outcome_receipt_summary"].get("metadata", {})
+            proof_hash = manifest.get("verified_human_approval_proof_hash")
+            if not proof_hash:
+                continue
+
+            assert summary["verifier_id"] == "veritas-human-approval-verifier-v1"
+            assert summary["verifier_key_id"] == "local-demo-verifier-key"
+            assert summary["verifier_policy_id"] == "human-approval-verifier-policy-v1"
+            assert summary["verifier_policy_hash"]
+            assert summary["verification_proof_hash"] == proof_hash
+            assert manifest["human_approval_verifier_policy_hash"] == summary[
+                "verifier_policy_hash"
+            ]
+            assert outcome_metadata["human_approval_verifier_policy_hash"] == summary[
+                "verifier_policy_hash"
+            ]

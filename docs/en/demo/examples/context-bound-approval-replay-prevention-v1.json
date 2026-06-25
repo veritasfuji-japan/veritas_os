@@ -32,10 +32,10 @@
         "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
         "human_approval_receipt_id": "har-replay-001",
         "human_approval_required": true,
-        "human_approval_verifier_id": null,
-        "human_approval_verifier_key_id": null,
-        "human_approval_verifier_policy_hash": null,
-        "human_approval_verifier_policy_id": null,
+        "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+        "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
         "manifest_hash": "ec3ea1e78def9c3d5f24869b0c371d87a682955a7ba051d13255caef2396edf9",
         "manifest_id": "manifest-valid_same_context",
         "metadata": {
@@ -52,7 +52,7 @@
         ],
         "target_resource": "workspace:demo",
         "target_system": "local-demo-iam",
-        "verified_human_approval_proof_hash": null
+        "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c"
       },
       "evidence_chain_verification_summary": {
         "decision_id": "decision-replay-001",
@@ -71,7 +71,8 @@
         "verification_status": "verified",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
-          "human_approval_receipt_signature"
+          "human_approval_receipt_signature",
+          "verified_human_approval_proof_hash"
         ]
       },
       "expected_outcome": "commit_eligible",
@@ -96,11 +97,11 @@
         },
         "failure_reasons": [],
         "receipt_hash_present": true,
-        "verification_proof_hash": null,
-        "verifier_id": null,
-        "verifier_key_id": null,
-        "verifier_policy_hash": null,
-        "verifier_policy_id": null
+        "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
       },
       "outcome_receipt_summary": {
         "action_class": "permission_change",
@@ -114,7 +115,14 @@
         "final_outcome": "commit_eligible",
         "intended_action": "Apply reviewer-demo permission change.",
         "metadata": {
-          "context_binding_valid": true
+          "context_binding_valid": true,
+          "human_approval_verification_source": "signed_human_approval_artifact",
+          "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+          "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+          "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+          "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+          "verified_human_approval_receipt_id": "har-replay-001"
         },
         "observed_effects": [],
         "operation_id": "operation-valid_same_context",
@@ -562,7 +570,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "cf76af5982722e7be56a026eeb1a380c99947d79f387a6819b06c3ad91dcc682",
+  "packet_hash": "a1f2b91cc178b3632947d5fd210a9e55414f614879bffde08041837c4a8c564a",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [
