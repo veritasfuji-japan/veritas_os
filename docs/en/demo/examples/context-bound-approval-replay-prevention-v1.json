@@ -163,8 +163,8 @@
         "execution_intent_id": "intent-replay-001",
         "final_outcome": "block",
         "generated_at": "2026-05-10T00:00:00+00:00",
-        "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
-        "human_approval_receipt_id": "har-replay-001",
+        "human_approval_receipt_hash": null,
+        "human_approval_receipt_id": null,
         "human_approval_required": true,
         "human_approval_verifier_id": null,
         "human_approval_verifier_key_id": null,
@@ -239,7 +239,7 @@
         "failure_reasons": [
           "human_approval_request_ref_mismatch"
         ],
-        "receipt_hash_present": true,
+        "receipt_hash_present": false,
         "verification_proof_hash": null,
         "verifier_id": null,
         "verifier_key_id": null,
@@ -303,8 +303,8 @@
         "execution_intent_id": "intent-replay-001",
         "final_outcome": "block",
         "generated_at": "2026-05-10T00:00:00+00:00",
-        "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
-        "human_approval_receipt_id": "har-replay-001",
+        "human_approval_receipt_hash": null,
+        "human_approval_receipt_id": null,
         "human_approval_required": true,
         "human_approval_verifier_id": null,
         "human_approval_verifier_key_id": null,
@@ -379,7 +379,7 @@
         "failure_reasons": [
           "human_approval_action_class_mismatch"
         ],
-        "receipt_hash_present": true,
+        "receipt_hash_present": false,
         "verification_proof_hash": null,
         "verifier_id": null,
         "verifier_key_id": null,
@@ -443,8 +443,8 @@
         "execution_intent_id": "intent-replay-001",
         "final_outcome": "block",
         "generated_at": "2026-05-10T00:00:00+00:00",
-        "human_approval_receipt_hash": "ee7949ac4e2ff999c6c3681fe90d6d4cbf4ce3f0143c7b7e59ce3aa0103d2042",
-        "human_approval_receipt_id": "har-replay-001",
+        "human_approval_receipt_hash": null,
+        "human_approval_receipt_id": null,
         "human_approval_required": true,
         "human_approval_verifier_id": null,
         "human_approval_verifier_key_id": null,
@@ -519,7 +519,7 @@
         "failure_reasons": [
           "human_approval_bind_context_hash_mismatch"
         ],
-        "receipt_hash_present": true,
+        "receipt_hash_present": false,
         "verification_proof_hash": null,
         "verifier_id": null,
         "verifier_key_id": null,
@@ -570,7 +570,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "a1f2b91cc178b3632947d5fd210a9e55414f614879bffde08041837c4a8c564a",
+  "packet_hash": "6c621f1ae48a7db0d7fc7c9c444fe3aea2e1cb4ea1ae7ce834f3435801bf5972",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [

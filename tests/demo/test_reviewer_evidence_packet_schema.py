@@ -625,3 +625,19 @@ def test_approval_proof_present_cases_carry_verifier_policy_fields() -> None:
             assert outcome_metadata["human_approval_verifier_policy_hash"] == summary[
                 "verifier_policy_hash"
             ]
+
+
+def test_failed_context_bound_replay_cases_do_not_claim_verified_receipts() -> None:
+    packet = _load_json(CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH)
+    for case in packet["cases"]:
+        if case["case_id"] == "valid_same_context":
+            continue
+        summary = case["human_approval_summary"]
+        manifest = case["evidence_chain_manifest_summary"]
+
+        assert summary["approved"] is False
+        assert summary["receipt_hash_present"] is False
+        assert manifest["human_approval_receipt_id"] is None
+        assert manifest["human_approval_receipt_hash"] is None
+        assert summary["verifier_id"] is None
+        assert manifest["human_approval_verifier_id"] is None

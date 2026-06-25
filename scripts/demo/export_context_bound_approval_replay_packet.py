@@ -159,8 +159,12 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "requested_scope": list(REQUESTED_SCOPE),
         "authority_evidence_id": expected_context["authority_evidence_id"],
         "authority_evidence_hash": "3" * 64,
-        "human_approval_receipt_id": receipt.approval_receipt_id,
-        "human_approval_receipt_hash": receipt.receipt_hash,
+        "human_approval_receipt_id": (
+            receipt.approval_receipt_id if validation.is_valid else None
+        ),
+        "human_approval_receipt_hash": (
+            receipt.receipt_hash if validation.is_valid else None
+        ),
         "verified_human_approval_proof_hash": (
             VERIFIED_APPROVAL_PROOF_HASH if validation.is_valid else None
         ),
@@ -229,7 +233,7 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
             "approver_identity": receipt.approver_identity,
             "approver_role": receipt.approver_role,
             "approved_scope": list(receipt.approved_scope),
-            "receipt_hash_present": True,
+            "receipt_hash_present": validation.is_valid,
             "verifier_id": VERIFIER_ID if validation.is_valid else None,
             "verifier_key_id": VERIFIER_KEY_ID if validation.is_valid else None,
             "verifier_policy_id": VERIFIER_POLICY_ID if validation.is_valid else None,

@@ -353,8 +353,6 @@ def _is_verified_approval_case(
         summary.get("approved") is True
         and summary.get("receipt_hash_present") is True
         and manifest.get("human_approval_required") is True
-        and str(outcome.get("final_outcome") or "").strip().lower()
-        in {"commit", "committed", "commit_eligible"}
         and not summary.get("failure_reasons")
     )
 
