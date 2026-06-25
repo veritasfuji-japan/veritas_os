@@ -70,10 +70,12 @@ Reviewer Evidence Packet validation now checks human approval proof continuity f
 
 - `evidence_chain_manifest_summary.verified_human_approval_proof_hash` is present;
 - `outcome_receipt_summary.metadata.verified_human_approval_proof_hash` is present;
-- both proof hashes match; and
+- both proof hashes match;
+- reviewer summaries expose the approver, verifier, `verifier_policy_id`, `verifier_policy_hash`, and proof hash;
+- the verifier policy hash in the reviewer summary, manifest summary, and outcome metadata match; and
 - a verified `evidence_chain_verification_summary` includes `verified_human_approval_proof_hash` in `verified_links`.
 
-For failed or incomplete evidence-chain verification caused by approval proof continuity, reviewer validation expects deterministic failure reasons from the evidence-chain verifier. This prevents reviewer-facing artifacts from presenting a committed outcome with a substituted, missing, or unverified human approval proof. No-approval-required flows may keep the proof hash fields absent and do not need the proof hash link in `verified_links`.
+For failed or incomplete evidence-chain verification caused by approval proof continuity, reviewer validation expects deterministic failure reasons from the evidence-chain verifier. This prevents reviewer-facing artifacts from presenting a committed outcome with a substituted, missing, or unverified human approval proof, or with a missing/mismatched verifier policy snapshot. No-approval-required flows may keep the proof hash and verifier policy fields absent and do not need the proof hash link in `verified_links`.
 
 ## Local/offline boundary
 

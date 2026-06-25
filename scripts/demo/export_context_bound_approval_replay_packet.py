@@ -31,6 +31,15 @@ BOUNDARY_NOTE = (
     "Local/offline deterministic reviewer example only; no live identity, "
     "signature, SaaS, IAM, audit-store, or production approval system is used."
 )
+VERIFIED_APPROVAL_PROOF_HASH = (
+    "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c"
+)
+VERIFIER_ID = "veritas-human-approval-verifier-v1"
+VERIFIER_KEY_ID = "local-demo-verifier-key"
+VERIFIER_POLICY_ID = "human-approval-verifier-policy-v1"
+VERIFIER_POLICY_HASH = (
+    "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd"
+)
 BASE_CONTEXT = {
     "request_ref": "request:permission-change:001",
     "ai_output_ref": "ai-output:permission-change:001",
@@ -120,6 +129,24 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "outcome_hash": "",
         "metadata": {"context_binding_valid": validation.is_valid},
     }
+    if validation.is_valid:
+        outcome["metadata"].update(
+            {
+                "verified_human_approval_proof_hash": (
+                    VERIFIED_APPROVAL_PROOF_HASH
+                ),
+                "verified_human_approval_receipt_id": (
+                    receipt.approval_receipt_id
+                ),
+                "human_approval_verification_source": (
+                    "signed_human_approval_artifact"
+                ),
+                "human_approval_verifier_id": VERIFIER_ID,
+                "human_approval_verifier_key_id": VERIFIER_KEY_ID,
+                "human_approval_verifier_policy_id": VERIFIER_POLICY_ID,
+                "human_approval_verifier_policy_hash": VERIFIER_POLICY_HASH,
+            }
+        )
     outcome["outcome_hash"] = _hash_payload(outcome)
     manifest = {
         "manifest_id": f"manifest-{case_id}",
@@ -132,8 +159,26 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "requested_scope": list(REQUESTED_SCOPE),
         "authority_evidence_id": expected_context["authority_evidence_id"],
         "authority_evidence_hash": "3" * 64,
-        "human_approval_receipt_id": receipt.approval_receipt_id,
-        "human_approval_receipt_hash": receipt.receipt_hash,
+        "human_approval_receipt_id": (
+            receipt.approval_receipt_id if validation.is_valid else None
+        ),
+        "human_approval_receipt_hash": (
+            receipt.receipt_hash if validation.is_valid else None
+        ),
+        "verified_human_approval_proof_hash": (
+            VERIFIED_APPROVAL_PROOF_HASH if validation.is_valid else None
+        ),
+        "human_approval_verifier_id": VERIFIER_ID if validation.is_valid else None,
+        "human_approval_verifier_key_id": (
+            VERIFIER_KEY_ID if validation.is_valid else None
+        ),
+        "human_approval_verifier_policy_id": (
+            VERIFIER_POLICY_ID if validation.is_valid else None
+        ),
+        "human_approval_verifier_policy_hash": (
+            VERIFIER_POLICY_HASH if validation.is_valid else None
+        ),
+        "human_approval_required": True,
         "bind_receipt_id": f"bind-{case_id}",
         "bind_receipt_hash": expected_context["bind_context_hash"],
         "outcome_receipt_id": outcome["outcome_receipt_id"],
@@ -156,7 +201,14 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "decision_id": expected_context["decision_id"],
         "execution_intent_id": expected_context["execution_intent_id"],
         "operation_id": operation_id,
-        "verified_links": ["human_approval_receipt_signature"],
+        "verified_links": (
+            [
+                "human_approval_receipt_signature",
+                "verified_human_approval_proof_hash",
+            ]
+            if validation.is_valid
+            else ["human_approval_receipt_signature"]
+        ),
         "missing_links": [],
         "mismatched_links": list(failure_reasons),
         "failure_reasons": list(failure_reasons),
@@ -181,7 +233,16 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
             "approver_identity": receipt.approver_identity,
             "approver_role": receipt.approver_role,
             "approved_scope": list(receipt.approved_scope),
-            "receipt_hash_present": True,
+            "receipt_hash_present": validation.is_valid,
+            "verifier_id": VERIFIER_ID if validation.is_valid else None,
+            "verifier_key_id": VERIFIER_KEY_ID if validation.is_valid else None,
+            "verifier_policy_id": VERIFIER_POLICY_ID if validation.is_valid else None,
+            "verifier_policy_hash": (
+                VERIFIER_POLICY_HASH if validation.is_valid else None
+            ),
+            "verification_proof_hash": (
+                VERIFIED_APPROVAL_PROOF_HASH if validation.is_valid else None
+            ),
             "failure_reasons": list(failure_reasons),
             "context_binding": copy.deepcopy(expected_context),
         },

@@ -124,6 +124,10 @@ def test_build_outcome_receipt_binds_verified_human_approval_proof_metadata() ->
         {
             "verification_proof_hash": "p" * 64,
             "verification_source": "signed_human_approval_artifact",
+            "verifier_id": "verifier-1",
+            "verifier_key_id": "verifier-key-1",
+            "verifier_policy_id": "verifier-policy-1",
+            "verifier_policy_hash": "v" * 64,
             "receipt": type("Receipt", (), {"approval_receipt_id": "har-1"})(),
         },
     )()
@@ -149,3 +153,7 @@ def test_build_outcome_receipt_binds_verified_human_approval_proof_metadata() ->
         receipt.metadata["human_approval_verification_source"]
         == "signed_human_approval_artifact"
     )
+    assert receipt.metadata["human_approval_verifier_id"] == "verifier-1"
+    assert receipt.metadata["human_approval_verifier_key_id"] == "verifier-key-1"
+    assert receipt.metadata["human_approval_verifier_policy_id"] == "verifier-policy-1"
+    assert receipt.metadata["human_approval_verifier_policy_hash"] == "v" * 64
