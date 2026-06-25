@@ -104,7 +104,9 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         receipt,
         **expected_context,
     )
-    failure_reasons = validation.failure_reasons
+    failure_reasons = list(validation.failure_reasons)
+    if not validation.is_valid:
+        failure_reasons.append("human_approval_proof_not_verified")
     actual_outcome = "commit_eligible" if validation.is_valid else "block"
     operation_id = f"operation-{case_id}"
     outcome = {

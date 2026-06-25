@@ -586,13 +586,16 @@ def test_context_bound_approval_replay_example_declares_failure_reasons() -> Non
 
     assert cases["valid_same_context"]["failure_reasons"] == []
     assert cases["replay_different_request_ref"]["failure_reasons"] == [
-        "human_approval_request_ref_mismatch"
+        "human_approval_request_ref_mismatch",
+        "human_approval_proof_not_verified",
     ]
     assert cases["replay_different_action_class"]["failure_reasons"] == [
-        "human_approval_action_class_mismatch"
+        "human_approval_action_class_mismatch",
+        "human_approval_proof_not_verified",
     ]
     assert cases["replay_different_bind_context_hash"]["failure_reasons"] == [
-        "human_approval_bind_context_hash_mismatch"
+        "human_approval_bind_context_hash_mismatch",
+        "human_approval_proof_not_verified",
     ]
 
 

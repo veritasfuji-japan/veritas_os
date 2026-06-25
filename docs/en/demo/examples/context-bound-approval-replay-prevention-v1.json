@@ -181,7 +181,8 @@
         "outcome_receipt_hash": "ec37e4aca9d80eae84e91360dd9a7e0ac9619a7bcca65f35b15dbc276b844a4d",
         "outcome_receipt_id": "outcome-replay_different_request_ref",
         "refusal_basis": [
-          "human_approval_request_ref_mismatch"
+          "human_approval_request_ref_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "requested_scope": [
           "workspace:permission:update"
@@ -194,7 +195,8 @@
         "decision_id": "decision-replay-001",
         "execution_intent_id": "intent-replay-001",
         "failure_reasons": [
-          "human_approval_request_ref_mismatch"
+          "human_approval_request_ref_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "is_valid": false,
         "manifest_hash_matches": true,
@@ -216,7 +218,8 @@
       },
       "expected_outcome": "block",
       "failure_reasons": [
-        "human_approval_request_ref_mismatch"
+        "human_approval_request_ref_mismatch",
+        "human_approval_proof_not_verified"
       ],
       "human_approval_summary": {
         "approval_receipt_id": "har-replay-001",
@@ -237,7 +240,8 @@
           "request_ref": "request:permission-change:replay-other"
         },
         "failure_reasons": [
-          "human_approval_request_ref_mismatch"
+          "human_approval_request_ref_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
@@ -255,7 +259,8 @@
         "evaluated_at": "2026-05-10T00:00:00+00:00",
         "execution_intent_id": "intent-replay-001",
         "failure_reasons": [
-          "human_approval_request_ref_mismatch"
+          "human_approval_request_ref_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "final_outcome": "block",
         "intended_action": "Apply reviewer-demo permission change.",
@@ -276,7 +281,8 @@
       },
       "passed": true,
       "refusal_basis": [
-        "human_approval_request_ref_mismatch"
+        "human_approval_request_ref_mismatch",
+        "human_approval_proof_not_verified"
       ],
       "requested_scope": [
         "workspace:permission:update"
@@ -321,7 +327,8 @@
         "outcome_receipt_hash": "b006d62316529d82228822d55bb4c7b452c630746caf6af5d335681bc4211bdf",
         "outcome_receipt_id": "outcome-replay_different_action_class",
         "refusal_basis": [
-          "human_approval_action_class_mismatch"
+          "human_approval_action_class_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "requested_scope": [
           "workspace:permission:update"
@@ -334,7 +341,8 @@
         "decision_id": "decision-replay-001",
         "execution_intent_id": "intent-replay-001",
         "failure_reasons": [
-          "human_approval_action_class_mismatch"
+          "human_approval_action_class_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "is_valid": false,
         "manifest_hash_matches": true,
@@ -356,7 +364,8 @@
       },
       "expected_outcome": "block",
       "failure_reasons": [
-        "human_approval_action_class_mismatch"
+        "human_approval_action_class_mismatch",
+        "human_approval_proof_not_verified"
       ],
       "human_approval_summary": {
         "approval_receipt_id": "har-replay-001",
@@ -377,7 +386,8 @@
           "request_ref": "request:permission-change:001"
         },
         "failure_reasons": [
-          "human_approval_action_class_mismatch"
+          "human_approval_action_class_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
@@ -395,7 +405,8 @@
         "evaluated_at": "2026-05-10T00:00:00+00:00",
         "execution_intent_id": "intent-replay-001",
         "failure_reasons": [
-          "human_approval_action_class_mismatch"
+          "human_approval_action_class_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "final_outcome": "block",
         "intended_action": "Apply reviewer-demo permission change.",
@@ -416,7 +427,8 @@
       },
       "passed": true,
       "refusal_basis": [
-        "human_approval_action_class_mismatch"
+        "human_approval_action_class_mismatch",
+        "human_approval_proof_not_verified"
       ],
       "requested_scope": [
         "workspace:permission:update"
@@ -461,7 +473,8 @@
         "outcome_receipt_hash": "41a9bf20fb5f8603f01c85e54cbe8375a25f1062b84f710a20601a56255e5470",
         "outcome_receipt_id": "outcome-replay_different_bind_context_hash",
         "refusal_basis": [
-          "human_approval_bind_context_hash_mismatch"
+          "human_approval_bind_context_hash_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "requested_scope": [
           "workspace:permission:update"
@@ -474,7 +487,8 @@
         "decision_id": "decision-replay-001",
         "execution_intent_id": "intent-replay-001",
         "failure_reasons": [
-          "human_approval_bind_context_hash_mismatch"
+          "human_approval_bind_context_hash_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "is_valid": false,
         "manifest_hash_matches": true,
@@ -496,7 +510,8 @@
       },
       "expected_outcome": "block",
       "failure_reasons": [
-        "human_approval_bind_context_hash_mismatch"
+        "human_approval_bind_context_hash_mismatch",
+        "human_approval_proof_not_verified"
       ],
       "human_approval_summary": {
         "approval_receipt_id": "har-replay-001",
@@ -517,7 +532,8 @@
           "request_ref": "request:permission-change:001"
         },
         "failure_reasons": [
-          "human_approval_bind_context_hash_mismatch"
+          "human_approval_bind_context_hash_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
@@ -535,7 +551,8 @@
         "evaluated_at": "2026-05-10T00:00:00+00:00",
         "execution_intent_id": "intent-replay-001",
         "failure_reasons": [
-          "human_approval_bind_context_hash_mismatch"
+          "human_approval_bind_context_hash_mismatch",
+          "human_approval_proof_not_verified"
         ],
         "final_outcome": "block",
         "intended_action": "Apply reviewer-demo permission change.",
@@ -556,7 +573,8 @@
       },
       "passed": true,
       "refusal_basis": [
-        "human_approval_bind_context_hash_mismatch"
+        "human_approval_bind_context_hash_mismatch",
+        "human_approval_proof_not_verified"
       ],
       "requested_scope": [
         "workspace:permission:update"
@@ -570,7 +588,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "6c621f1ae48a7db0d7fc7c9c444fe3aea2e1cb4ea1ae7ce834f3435801bf5972",
+  "packet_hash": "82139b52758b41926655b96a2ad0b6cfd6249ebb744caaeb7bc7182acac9e8a5",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [
