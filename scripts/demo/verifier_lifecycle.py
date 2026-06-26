@@ -11,6 +11,19 @@ from typing import Any
 
 from veritas_os.security.hash import sha256_of_canonical_json
 
+LIFECYCLE_SNAPSHOT_HASH_FIELDS = (
+    "verifier_id",
+    "verifier_key_id",
+    "verifier_policy_id",
+    "verifier_policy_hash",
+    "verifier_lifecycle_status",
+    "verifier_valid_from",
+    "verifier_valid_until",
+    "verifier_revoked_at",
+    "verifier_revocation_reason",
+    "verifier_lifecycle_policy_hash",
+)
+
 VERIFIER_ID = "veritas-human-approval-verifier-v1"
 VERIFIER_KEY_ID = "local-demo-verifier-key"
 VERIFIER_POLICY_ID = "human-approval-verifier-policy-v1"
@@ -93,7 +106,7 @@ def verifier_lifecycle_summary_from_human_approval(
         lifecycle_snapshot=lifecycle,
         proof_verified_at=human_approval_summary.get("verified_at"),
     )
-    return {
+    summary = {
         "verifier_id": lifecycle["verifier_id"],
         "verifier_key_id": lifecycle["verifier_key_id"],
         "verifier_policy_id": lifecycle["verifier_policy_id"],
@@ -106,6 +119,26 @@ def verifier_lifecycle_summary_from_human_approval(
         "verifier_lifecycle_policy_hash": lifecycle["verifier_policy_hash"],
         "failure_reasons": failure_reasons,
     }
+    summary["verifier_lifecycle_snapshot_hash"] = (
+        compute_verifier_lifecycle_snapshot_hash(summary)
+    )
+    return summary
+
+
+def compute_verifier_lifecycle_snapshot_hash(
+    lifecycle_summary: dict[str, Any],
+) -> str:
+    """Compute the canonical SHA-256 hash of lifecycle-relevant fields.
+
+    The hash intentionally excludes validation failure reasons and the hash
+    field itself so reviewer packets can verify that the lifecycle evidence used
+    for validation is exactly the lifecycle field snapshot presented to them.
+    """
+    payload = {
+        field: lifecycle_summary.get(field)
+        for field in LIFECYCLE_SNAPSHOT_HASH_FIELDS
+    }
+    return sha256_of_canonical_json(payload)
 
 
 def validate_human_approval_verifier_lifecycle_snapshot(
@@ -127,6 +160,15 @@ def validate_human_approval_verifier_lifecycle_snapshot(
     if not isinstance(lifecycle_snapshot, dict):
         return ["reviewer_packet_verifier_lifecycle_missing"]
 
+    if "verifier_lifecycle_status" in lifecycle_snapshot:
+        snapshot_hash = lifecycle_snapshot.get("verifier_lifecycle_snapshot_hash")
+        if not isinstance(snapshot_hash, str) or not snapshot_hash.strip():
+            return ["reviewer_packet_verifier_lifecycle_snapshot_hash_missing"]
+        if snapshot_hash != compute_verifier_lifecycle_snapshot_hash(
+            lifecycle_snapshot
+        ):
+            return ["reviewer_packet_verifier_lifecycle_snapshot_hash_mismatch"]
+
     checks = (
         ("verifier_id", "reviewer_packet_verifier_lifecycle_id_mismatch"),
         ("verifier_key_id", "reviewer_packet_verifier_lifecycle_key_mismatch"),
@@ -147,9 +189,18 @@ def validate_human_approval_verifier_lifecycle_snapshot(
     verified_at = _parse_timestamp(
         proof_verified_at or human_approval_summary.get("verified_at")
     )
-    valid_from = _parse_timestamp(lifecycle_snapshot.get("valid_from"))
-    valid_until = _parse_timestamp(lifecycle_snapshot.get("valid_until"))
-    revoked_at = _parse_timestamp(lifecycle_snapshot.get("revoked_at"))
+    valid_from = _parse_timestamp(
+        lifecycle_snapshot.get("verifier_valid_from")
+        or lifecycle_snapshot.get("valid_from")
+    )
+    valid_until = _parse_timestamp(
+        lifecycle_snapshot.get("verifier_valid_until")
+        or lifecycle_snapshot.get("valid_until")
+    )
+    revoked_at = _parse_timestamp(
+        lifecycle_snapshot.get("verifier_revoked_at")
+        or lifecycle_snapshot.get("revoked_at")
+    )
 
     if verified_at is None:
         return ["reviewer_packet_verifier_lifecycle_missing"]

@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo.verifier_lifecycle import (  # noqa: E402
+    compute_verifier_lifecycle_snapshot_hash,
     validate_human_approval_verifier_lifecycle_snapshot,
 )
 from scripts.demo.export_reviewer_evidence_packet import (  # noqa: E402
@@ -123,6 +124,15 @@ FAILURE_REASON_BY_CHECK = {
     ),
     "verifier_lifecycle_valid": (
         "reviewer_packet_verifier_lifecycle_invalid"
+    ),
+    "verifier_lifecycle_snapshot_hashes_present": (
+        "reviewer_packet_verifier_lifecycle_snapshot_hash_missing"
+    ),
+    "verifier_lifecycle_snapshot_hashes_match": (
+        "reviewer_packet_verifier_lifecycle_snapshot_hash_mismatch"
+    ),
+    "committed_lifecycle_status_clean": (
+        "reviewer_packet_committed_lifecycle_status_not_clean"
     ),
     "local_offline_boundary_present": "local_offline_boundary_missing",
 }
@@ -471,6 +481,60 @@ def _verifier_lifecycle_valid(packet: dict[str, Any]) -> bool:
     return not _verifier_lifecycle_reasons(packet)
 
 
+def _lifecycle_summaries(packet: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return non-null verifier lifecycle summaries from packet cases."""
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return []
+    return [
+        case["verifier_lifecycle_summary"]
+        for case in cases
+        if isinstance(case, dict)
+        and isinstance(case.get("verifier_lifecycle_summary"), dict)
+    ]
+
+
+def _verifier_lifecycle_snapshot_hashes_present(packet: dict[str, Any]) -> bool:
+    """Return whether every lifecycle summary carries its snapshot hash."""
+    return all(
+        bool(summary.get("verifier_lifecycle_snapshot_hash"))
+        and bool(
+            SHA256_HEX_PATTERN.fullmatch(
+                str(summary.get("verifier_lifecycle_snapshot_hash"))
+            )
+        )
+        for summary in _lifecycle_summaries(packet)
+    )
+
+
+def _verifier_lifecycle_snapshot_hashes_match(packet: dict[str, Any]) -> bool:
+    """Return whether lifecycle snapshot hashes match the displayed fields."""
+    return all(
+        summary.get("verifier_lifecycle_snapshot_hash")
+        == compute_verifier_lifecycle_snapshot_hash(summary)
+        for summary in _lifecycle_summaries(packet)
+    )
+
+
+def _committed_lifecycle_status_clean(packet: dict[str, Any]) -> bool:
+    """Return whether committed cases carry clean lifecycle evidence."""
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return False
+    for case in cases:
+        if not isinstance(case, dict):
+            return False
+        outcome = case.get("outcome_receipt_summary", {})
+        if not isinstance(outcome, dict) or outcome.get("committed") is not True:
+            continue
+        lifecycle = case.get("verifier_lifecycle_summary")
+        if not isinstance(lifecycle, dict):
+            return False
+        if lifecycle.get("failure_reasons") != []:
+            return False
+    return True
+
+
 def _local_offline_boundary_present(packet: dict[str, Any]) -> bool:
     """Return whether packet-level local/offline boundary markers are present."""
     boundary_note = packet.get("boundary_note")
@@ -529,6 +593,15 @@ def _build_checks(
         ),
         "verifier_lifecycle_valid": _verifier_lifecycle_valid(generated_packet),
         "verifier_lifecycle_reasons": _verifier_lifecycle_reasons(generated_packet),
+        "verifier_lifecycle_snapshot_hashes_present": (
+            _verifier_lifecycle_snapshot_hashes_present(generated_packet)
+        ),
+        "verifier_lifecycle_snapshot_hashes_match": (
+            _verifier_lifecycle_snapshot_hashes_match(generated_packet)
+        ),
+        "committed_lifecycle_status_clean": _committed_lifecycle_status_clean(
+            generated_packet
+        ),
         "local_offline_boundary_present": _local_offline_boundary_present(
             generated_packet
         ),

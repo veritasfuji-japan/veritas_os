@@ -181,6 +181,7 @@
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "verifier_lifecycle_status": "rotated",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "verifier_policy_id": "human-approval-verifier-policy-v1",
@@ -808,6 +809,7 @@
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "verifier_lifecycle_status": "rotated",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "verifier_policy_id": "human-approval-verifier-policy-v1",
@@ -836,7 +838,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "37060999d4a4d934999f78208eb12333b4eba6c8a7c92f62b039ebe42c5ab252",
+  "packet_hash": "a2783c7eeaddad468a5fd5e1209d56b812bdc4e3796f4366de62fa54a1335163",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

@@ -90,6 +90,7 @@ REQUIRED_VERIFIER_LIFECYCLE_FIELDS = [
     "verifier_revoked_at",
     "verifier_revocation_reason",
     "verifier_lifecycle_policy_hash",
+    "verifier_lifecycle_snapshot_hash",
     "failure_reasons",
 ]
 
@@ -330,6 +331,7 @@ def _assert_verifier_lifecycle_shape(
         lifecycle["verifier_revocation_reason"], str
     )
     _assert_nullable_hash(lifecycle["verifier_lifecycle_policy_hash"])
+    _assert_nullable_hash(lifecycle["verifier_lifecycle_snapshot_hash"])
     _assert_string_array(lifecycle["failure_reasons"])
 
 
@@ -792,6 +794,9 @@ def test_committed_verified_approval_cases_have_valid_lifecycle() -> None:
             lifecycle = case["verifier_lifecycle_summary"]
             assert lifecycle is not None, packet_path
             assert lifecycle["failure_reasons"] == [], packet_path
+            assert SHA256_HEX_PATTERN.fullmatch(
+                lifecycle["verifier_lifecycle_snapshot_hash"]
+            ), packet_path
             verified_at = _parse_iso_timestamp(human_approval["verified_at"])
             valid_from = _parse_iso_timestamp(lifecycle["verifier_valid_from"])
             assert verified_at >= valid_from, packet_path
