@@ -84,6 +84,7 @@ def test_human_approval_summary_is_compact_and_deterministic() -> None:
         "verifier_policy_id": None,
         "verifier_policy_hash": None,
         "verification_proof_hash": None,
+        "verified_at": None,
         "failure_reasons": ["human_approval_missing"],
         "context_binding": {
             "request_ref": None,
