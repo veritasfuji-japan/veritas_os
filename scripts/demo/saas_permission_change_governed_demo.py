@@ -28,6 +28,11 @@ from veritas_os.governance.authority_evidence_ingestion import (
     ingest_authority_evidence_payload,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
+from scripts.demo.verifier_lifecycle_fixture import (
+    reviewer_packet_lifecycle_summary,
+    verifier_lifecycle_record,
+    verifier_policy_hash,
+)
 
 FIXED_NOW = datetime.fromisoformat("2026-04-26T00:00:00").replace(tzinfo=UTC)
 REQUESTED_SCOPE = ["saas:grant_admin"]
@@ -130,19 +135,7 @@ def _verified_human_approval_proof(
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_policy_id": "human-approval-verifier-policy-v1",
-        "verifier_policy_hash": sha256_of_canonical_json(
-            {
-                "approved_human_approval_verifiers": [
-                    {
-                        "verifier_id": "veritas-human-approval-verifier-v1",
-                        "trust_level": "production",
-                        "verifier_key_id": "local-demo-verifier-key",
-                        "policy_id": "human-approval-verifier-policy-v1",
-                    }
-                ],
-                "fixture_only": True,
-            }
-        ),
+        "verifier_policy_hash": verifier_policy_hash(),
         "signed_at": finalized.approved_at,
         "verified_at": FIXED_NOW.isoformat(),
         "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
@@ -264,8 +257,11 @@ def _evaluate_case(
     verified_human_approval = None
     if receipt is not None and human_approval_state.get("approved"):
         verified_human_approval = _verified_human_approval_proof(receipt)
+        lifecycle_snapshot = verifier_lifecycle_record()
         human_approval_state.update(
             {
+                **reviewer_packet_lifecycle_summary(lifecycle_snapshot),
+                "verifier_lifecycle_snapshot": lifecycle_snapshot,
                 "verifier_id": verified_human_approval.verifier_id,
                 "verifier_key_id": verified_human_approval.verifier_key_id,
                 "verifier_policy_id": verified_human_approval.verifier_policy_id,
@@ -275,6 +271,9 @@ def _evaluate_case(
                 ),
             }
         )
+
+    if verified_human_approval is None:
+        human_approval_state.update(reviewer_packet_lifecycle_summary(None))
 
     outcome_receipt = build_outcome_receipt(
         decision_id="decision-saas-001",

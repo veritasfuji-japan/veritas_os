@@ -123,6 +123,18 @@ def _human_approval_summary(
         "verification_proof_hash": human_approval_state.get(
             "verification_proof_hash"
         ),
+        "verifier_lifecycle_status": human_approval_state.get(
+            "verifier_lifecycle_status"
+        ),
+        "verifier_valid_from": human_approval_state.get("verifier_valid_from"),
+        "verifier_valid_until": human_approval_state.get("verifier_valid_until"),
+        "verifier_revoked_at": human_approval_state.get("verifier_revoked_at"),
+        "verifier_revocation_reason": human_approval_state.get(
+            "verifier_revocation_reason"
+        ),
+        "verifier_lifecycle_policy_hash": human_approval_state.get(
+            "verifier_lifecycle_policy_hash"
+        ),
         "failure_reasons": list(human_approval_state.get("failure_reasons", [])),
         "context_binding": _human_approval_context_binding(
             human_approval_state, case

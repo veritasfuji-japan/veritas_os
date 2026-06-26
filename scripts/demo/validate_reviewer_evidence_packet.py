@@ -14,6 +14,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.demo.verifier_lifecycle_fixture import (  # noqa: E402
+    validate_human_approval_verifier_lifecycle_snapshot,
+)
 from scripts.demo.export_reviewer_evidence_packet import (  # noqa: E402
     BOUNDARY_NOTE,
     PACKET_ID,
@@ -116,6 +119,9 @@ FAILURE_REASON_BY_CHECK = {
     "no_mismatched_links_in_demo": "demo_mismatched_links_present",
     "approval_proof_continuity_valid": (
         "reviewer_packet_human_approval_proof_continuity_invalid"
+    ),
+    "verifier_lifecycle_snapshots_valid": (
+        "reviewer_packet_verifier_lifecycle_invalid"
     ),
     "local_offline_boundary_present": "local_offline_boundary_missing",
 }
@@ -436,6 +442,63 @@ def _approval_proof_continuity_valid(packet: dict[str, Any]) -> bool:
     return not _approval_proof_continuity_reasons(packet)
 
 
+
+def _case_verifier_lifecycle_reasons(case: dict[str, Any]) -> list[str]:
+    """Return verifier lifecycle validation reasons for one packet case."""
+    summary = case.get("human_approval_summary", {})
+    if not isinstance(summary, dict):
+        return []
+    if not summary.get("verification_proof_hash"):
+        return []
+    proof = {
+        "verifier_id": summary.get("verifier_id"),
+        "verifier_key_id": summary.get("verifier_key_id"),
+        "verifier_policy_id": summary.get("verifier_policy_id"),
+        "verifier_policy_hash": summary.get("verifier_policy_hash"),
+        "verified_at": case.get("evidence_chain_verification_summary", {}).get(
+            "verified_at"
+        ),
+    }
+    if not summary.get("verifier_lifecycle_status"):
+        lifecycle_snapshot = None
+    else:
+        lifecycle_snapshot = {
+            "verifier_id": summary.get("verifier_id"),
+            "verifier_key_id": summary.get("verifier_key_id"),
+            "verifier_policy_id": summary.get("verifier_policy_id"),
+            "verifier_policy_hash": summary.get("verifier_lifecycle_policy_hash"),
+            "valid_from": summary.get("verifier_valid_from"),
+            "valid_until": summary.get("verifier_valid_until"),
+            "revoked_at": summary.get("verifier_revoked_at"),
+            "revocation_reason": summary.get("verifier_revocation_reason"),
+            "lifecycle_status": summary.get("verifier_lifecycle_status"),
+        }
+    return validate_human_approval_verifier_lifecycle_snapshot(
+        proof=proof,
+        lifecycle_snapshot=lifecycle_snapshot,
+    )
+
+
+def _verifier_lifecycle_reasons(packet: dict[str, Any]) -> list[str]:
+    """Return deterministic verifier lifecycle reasons for all cases."""
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return ["required_case_fields_missing"]
+    reasons: list[str] = []
+    for case in cases:
+        if not isinstance(case, dict):
+            reasons.append("required_case_fields_missing")
+            continue
+        for reason in _case_verifier_lifecycle_reasons(case):
+            if reason not in reasons:
+                reasons.append(reason)
+    return reasons
+
+
+def _verifier_lifecycle_snapshots_valid(packet: dict[str, Any]) -> bool:
+    """Return whether proof-bearing cases have valid lifecycle snapshots."""
+    return not _verifier_lifecycle_reasons(packet)
+
 def _local_offline_boundary_present(packet: dict[str, Any]) -> bool:
     """Return whether packet-level local/offline boundary markers are present."""
     boundary_note = packet.get("boundary_note")
@@ -492,6 +555,15 @@ def _build_checks(
         "approval_proof_continuity_valid": _approval_proof_continuity_valid(
             generated_packet
         ),
+        "approval_proof_continuity_reasons": (
+            _approval_proof_continuity_reasons(generated_packet)
+        ),
+        "verifier_lifecycle_snapshots_valid": (
+            _verifier_lifecycle_snapshots_valid(generated_packet)
+        ),
+        "verifier_lifecycle_reasons": _verifier_lifecycle_reasons(
+            generated_packet
+        ),
         "local_offline_boundary_present": _local_offline_boundary_present(
             generated_packet
         ),
@@ -509,6 +581,9 @@ def _failure_reasons(checks: dict[str, Any]) -> list[str]:
         if failed:
             reasons.append(reason)
     for reason in checks.get("approval_proof_continuity_reasons", []):
+        if reason not in reasons:
+            reasons.append(reason)
+    for reason in checks.get("verifier_lifecycle_reasons", []):
         if reason not in reasons:
             reasons.append(reason)
     return reasons

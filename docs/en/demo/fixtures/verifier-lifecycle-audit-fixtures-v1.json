@@ -1,0 +1,90 @@
+{
+  "cases": [
+    {
+      "case_id": "valid_at_verification_time",
+      "expected_reasons": [],
+      "later_lifecycle_event": {
+        "event_type": "rotated",
+        "rotated_at": "2026-05-01T00:00:00+00:00",
+        "verifier_key_id": "local-demo-verifier-key-rotated",
+        "verifier_policy_hash": "5c515f36ab1333a9473147536105919bfe420646b9393fb7f4d224f7c69ed0f0",
+        "verifier_policy_id": "human-approval-verifier-policy-v2"
+      },
+      "lifecycle_snapshot": {
+        "lifecycle_status": "rotated",
+        "revocation_reason": null,
+        "revoked_at": null,
+        "valid_from": "2026-04-01T00:00:00+00:00",
+        "valid_until": "2026-04-30T00:00:00+00:00",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
+      },
+      "proof": {
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
+      }
+    },
+    {
+      "case_id": "revoked_before_verification",
+      "expected_reasons": [
+        "reviewer_packet_verifier_revoked_before_verification"
+      ],
+      "lifecycle_snapshot": {
+        "lifecycle_status": "revoked",
+        "revocation_reason": "demo_compromise_drill",
+        "revoked_at": "2026-04-24T00:00:00+00:00",
+        "valid_from": "2026-04-01T00:00:00+00:00",
+        "valid_until": "2026-04-30T00:00:00+00:00",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
+      },
+      "proof": {
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
+      }
+    },
+    {
+      "case_id": "policy_hash_mismatch_after_rotation",
+      "expected_reasons": [
+        "reviewer_packet_verifier_lifecycle_key_mismatch",
+        "reviewer_packet_verifier_lifecycle_policy_hash_mismatch"
+      ],
+      "lifecycle_snapshot": {
+        "lifecycle_status": "active",
+        "revocation_reason": null,
+        "revoked_at": null,
+        "valid_from": "2026-04-01T00:00:00+00:00",
+        "valid_until": "2026-04-30T00:00:00+00:00",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key-rotated",
+        "verifier_policy_hash": "5c515f36ab1333a9473147536105919bfe420646b9393fb7f4d224f7c69ed0f0",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
+      },
+      "proof": {
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
+      }
+    },
+    {
+      "case_id": "no_approval_required",
+      "expected_reasons": [],
+      "lifecycle_snapshot": null,
+      "proof": null
+    }
+  ],
+  "fixture_id": "human-approval-verifier-lifecycle-audit-v1",
+  "generated_at": "2026-04-26T00:00:00+00:00"
+}

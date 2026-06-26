@@ -215,6 +215,12 @@
         "verifier_policy_id",
         "verifier_policy_hash",
         "verification_proof_hash",
+        "verifier_lifecycle_status",
+        "verifier_valid_from",
+        "verifier_valid_until",
+        "verifier_revoked_at",
+        "verifier_revocation_reason",
+        "verifier_lifecycle_policy_hash",
         "failure_reasons",
         "context_binding"
       ],
@@ -336,6 +342,46 @@
               ]
             }
           }
+        },
+        "verifier_lifecycle_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "active",
+            "rotated",
+            "revoked",
+            "expired",
+            null
+          ]
+        },
+        "verifier_valid_from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_valid_until": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_revoked_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_revocation_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verifier_lifecycle_policy_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
         }
       }
     },
