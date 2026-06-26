@@ -64,6 +64,50 @@ def _parse_timestamp(value: Any) -> datetime | None:
         return None
 
 
+def verifier_lifecycle_summary_from_human_approval(
+    human_approval_summary: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Build reviewer packet lifecycle summary from Human Approval evidence.
+
+    Returns ``None`` for cases without a verified approval proof. For proof
+    cases, the deterministic fixture lifecycle mirrors the proof's verifier
+    identity and policy fields and includes validation failure reasons.
+    """
+    if not human_approval_summary.get("verification_proof_hash"):
+        return None
+
+    lifecycle = verifier_lifecycle_snapshot(
+        verifier_id=str(human_approval_summary.get("verifier_id") or VERIFIER_ID),
+        verifier_key_id=human_approval_summary.get("verifier_key_id")
+        or VERIFIER_KEY_ID,
+        verifier_policy_id=str(
+            human_approval_summary.get("verifier_policy_id") or VERIFIER_POLICY_ID
+        ),
+        verifier_policy_hash=str(
+            human_approval_summary.get("verifier_policy_hash")
+            or VERIFIER_POLICY_HASH
+        ),
+    )
+    failure_reasons = validate_human_approval_verifier_lifecycle_snapshot(
+        human_approval_summary=human_approval_summary,
+        lifecycle_snapshot=lifecycle,
+        proof_verified_at=human_approval_summary.get("verified_at"),
+    )
+    return {
+        "verifier_id": lifecycle["verifier_id"],
+        "verifier_key_id": lifecycle["verifier_key_id"],
+        "verifier_policy_id": lifecycle["verifier_policy_id"],
+        "verifier_policy_hash": lifecycle["verifier_policy_hash"],
+        "verifier_lifecycle_status": lifecycle["lifecycle_status"],
+        "verifier_valid_from": lifecycle["valid_from"],
+        "verifier_valid_until": lifecycle["valid_until"],
+        "verifier_revoked_at": lifecycle["revoked_at"],
+        "verifier_revocation_reason": lifecycle["revocation_reason"],
+        "verifier_lifecycle_policy_hash": lifecycle["verifier_policy_hash"],
+        "failure_reasons": failure_reasons,
+    }
+
+
 def validate_human_approval_verifier_lifecycle_snapshot(
     *,
     human_approval_summary: dict[str, Any],

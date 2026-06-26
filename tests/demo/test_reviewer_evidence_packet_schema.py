@@ -53,6 +53,7 @@ REQUIRED_CASE_FIELDS = [
     "authority_validation_status",
     "runtime_recommended_outcome",
     "human_approval_summary",
+    "verifier_lifecycle_summary",
     "refusal_basis",
     "failure_reasons",
     "outcome_receipt_summary",
@@ -73,9 +74,24 @@ REQUIRED_HUMAN_APPROVAL_FIELDS = [
     "verifier_policy_id",
     "verifier_policy_hash",
     "verification_proof_hash",
+    "verified_at",
     "failure_reasons",
     "context_binding",
 ]
+REQUIRED_VERIFIER_LIFECYCLE_FIELDS = [
+    "verifier_id",
+    "verifier_key_id",
+    "verifier_policy_id",
+    "verifier_policy_hash",
+    "verifier_lifecycle_status",
+    "verifier_valid_from",
+    "verifier_valid_until",
+    "verifier_revoked_at",
+    "verifier_revocation_reason",
+    "verifier_lifecycle_policy_hash",
+    "failure_reasons",
+]
+
 REQUIRED_HUMAN_APPROVAL_CONTEXT_BINDING_FIELDS = [
     "request_ref",
     "ai_output_ref",
@@ -244,6 +260,9 @@ def _assert_case_shape(case: dict[str, Any]) -> None:
     _assert_string_array(case["failure_reasons"])
     assert isinstance(case["boundary_note"], str)
     _assert_human_approval_shape(case["human_approval_summary"])
+    _assert_verifier_lifecycle_shape(
+        case["verifier_lifecycle_summary"], case["human_approval_summary"]
+    )
     _assert_outcome_receipt_shape(case["outcome_receipt_summary"])
     _assert_manifest_shape(case["evidence_chain_manifest_summary"])
     _assert_verification_shape(case["evidence_chain_verification_summary"])
@@ -261,6 +280,7 @@ def _assert_human_approval_shape(summary: dict[str, Any]) -> None:
     assert summary["approver_role"] is None or isinstance(summary["approver_role"], str)
     _assert_string_array(summary["approved_scope"])
     assert isinstance(summary["receipt_hash_present"], bool)
+    assert summary["verified_at"] is None or isinstance(summary["verified_at"], str)
     _assert_string_array(summary["failure_reasons"])
     context_binding = summary["context_binding"]
     assert isinstance(context_binding, dict)
@@ -272,6 +292,40 @@ def _assert_human_approval_shape(summary: dict[str, Any]) -> None:
         value is None or isinstance(value, str)
         for value in context_binding.values()
     )
+
+
+def _assert_verifier_lifecycle_shape(
+    lifecycle: dict[str, Any] | None, human_approval: dict[str, Any]
+) -> None:
+    proof_hash = human_approval.get("verification_proof_hash")
+    if not proof_hash:
+        assert lifecycle is None
+        return
+
+    assert isinstance(lifecycle, dict)
+    _assert_required_fields(lifecycle, REQUIRED_VERIFIER_LIFECYCLE_FIELDS)
+    assert lifecycle["verifier_id"] == human_approval["verifier_id"]
+    assert lifecycle["verifier_key_id"] == human_approval["verifier_key_id"]
+    assert lifecycle["verifier_policy_id"] == human_approval["verifier_policy_id"]
+    assert lifecycle["verifier_policy_hash"] == human_approval["verifier_policy_hash"]
+    assert lifecycle["verifier_lifecycle_status"] in {
+        "active",
+        "rotated",
+        "revoked",
+        "expired",
+    }
+    assert isinstance(lifecycle["verifier_valid_from"], str)
+    assert lifecycle["verifier_valid_until"] is None or isinstance(
+        lifecycle["verifier_valid_until"], str
+    )
+    assert lifecycle["verifier_revoked_at"] is None or isinstance(
+        lifecycle["verifier_revoked_at"], str
+    )
+    assert lifecycle["verifier_revocation_reason"] is None or isinstance(
+        lifecycle["verifier_revocation_reason"], str
+    )
+    _assert_nullable_hash(lifecycle["verifier_lifecycle_policy_hash"])
+    _assert_string_array(lifecycle["failure_reasons"])
 
 
 def _assert_outcome_receipt_shape(summary: dict[str, Any]) -> None:
@@ -449,6 +503,40 @@ def test_schema_constrains_local_offline_only_to_true() -> None:
 def test_schema_requires_nested_case_summaries(field: str) -> None:
     schema = _load_json(SCHEMA_PATH)
     assert field in schema["$defs"]["case"]["required"]
+
+
+def test_schema_requires_lifecycle_summary_and_verified_at() -> None:
+    schema = _load_json(SCHEMA_PATH)
+
+    assert "verifier_lifecycle_summary" in schema["$defs"]["case"]["required"]
+    assert "verified_at" in schema["$defs"]["human_approval_summary"]["required"]
+
+
+def test_checked_in_reviewer_packets_have_lifecycle_fields() -> None:
+    packet_paths = [
+        FIXTURE_PATH,
+        DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH,
+        EVALUATION_GOVERNANCE_EXAMPLE_PATH,
+        CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH,
+        Path(
+            "docs/en/demo/examples/evaluation-governance-chain-reviewer-packet-v1/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path(
+            "docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path("samples/evidence_bundle/key_provenance_review/reviewer-evidence-packet.json"),
+    ]
+    for packet_path in packet_paths:
+        packet = _load_json(packet_path)
+        for case in packet["cases"]:
+            assert "verifier_lifecycle_summary" in case, packet_path
+            assert "verified_at" in case["human_approval_summary"], packet_path
+            _assert_verifier_lifecycle_shape(
+                case["verifier_lifecycle_summary"],
+                case["human_approval_summary"],
+            )
 
 
 def test_schema_requires_aggregate_summary() -> None:
@@ -641,3 +729,26 @@ def test_failed_context_bound_replay_cases_do_not_claim_verified_receipts() -> N
         assert manifest["human_approval_receipt_hash"] is None
         assert summary["verifier_id"] is None
         assert manifest["human_approval_verifier_id"] is None
+
+
+def test_schema_rejects_or_fallback_detects_missing_lifecycle_summary() -> None:
+    packet = copy.deepcopy(_load_json(FIXTURE_PATH))
+    packet["cases"][0].pop("verifier_lifecycle_summary")
+
+    assert _is_rejected_or_fallback_detected(packet, _load_json(SCHEMA_PATH))
+
+
+def test_schema_rejects_or_fallback_detects_missing_verified_at() -> None:
+    packet = copy.deepcopy(_load_json(FIXTURE_PATH))
+    packet["cases"][0]["human_approval_summary"].pop("verified_at")
+
+    assert _is_rejected_or_fallback_detected(packet, _load_json(SCHEMA_PATH))
+
+
+def test_lifecycle_summary_matches_proof_presence_in_generated_packet() -> None:
+    packet = _load_json(FIXTURE_PATH)
+    for case in packet["cases"]:
+        proof_present = bool(case["human_approval_summary"]["verification_proof_hash"])
+        lifecycle_present = case["verifier_lifecycle_summary"] is not None
+
+        assert lifecycle_present is proof_present

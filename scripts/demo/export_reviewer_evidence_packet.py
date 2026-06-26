@@ -15,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.demo.reviewer_key_provenance_metadata import key_provenance_metadata
 from scripts.demo.verifier_lifecycle import (
-    validate_human_approval_verifier_lifecycle_snapshot,
+    verifier_lifecycle_summary_from_human_approval,
 )
 from scripts.demo.saas_permission_change_governed_demo import (
     BOUNDARY_NOTE,
@@ -136,28 +136,8 @@ def _human_approval_summary(
 
 def _verifier_lifecycle_summary(case: dict[str, Any]) -> dict[str, Any] | None:
     """Return reviewer-facing verifier lifecycle evidence for one case."""
-    lifecycle = case.get("verifier_lifecycle_snapshot")
-    if not isinstance(lifecycle, dict):
-        return None
     human_approval = _human_approval_summary(case["human_approval_state"], case)
-    failure_reasons = validate_human_approval_verifier_lifecycle_snapshot(
-        human_approval_summary=human_approval,
-        lifecycle_snapshot=lifecycle,
-        proof_verified_at=human_approval.get("verified_at"),
-    )
-    return {
-        "verifier_id": lifecycle.get("verifier_id"),
-        "verifier_key_id": lifecycle.get("verifier_key_id"),
-        "verifier_policy_id": lifecycle.get("verifier_policy_id"),
-        "verifier_policy_hash": lifecycle.get("verifier_policy_hash"),
-        "verifier_lifecycle_status": lifecycle.get("lifecycle_status"),
-        "verifier_valid_from": lifecycle.get("valid_from"),
-        "verifier_valid_until": lifecycle.get("valid_until"),
-        "verifier_revoked_at": lifecycle.get("revoked_at"),
-        "verifier_revocation_reason": lifecycle.get("revocation_reason"),
-        "verifier_lifecycle_policy_hash": lifecycle.get("verifier_policy_hash"),
-        "failure_reasons": failure_reasons,
-    }
+    return verifier_lifecycle_summary_from_human_approval(human_approval)
 
 
 def _reviewer_interpretation(case: dict[str, Any]) -> str:

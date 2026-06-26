@@ -115,6 +115,7 @@
         "failure_reasons": [],
         "receipt_hash_present": true,
         "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verified_at": "2026-04-26T00:00:00+00:00",
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
@@ -174,7 +175,20 @@
       "reviewer_interpretation": "The local/offline fixture blocked because AuthorityEvidence was missing.",
       "runtime_recommended_outcome": "block",
       "target_resource": "contractor:external.user@example.test",
-      "target_system": "mock_saas_directory"
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": {
+        "failure_reasons": [],
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_status": "rotated",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1",
+        "verifier_revocation_reason": null,
+        "verifier_revoked_at": null,
+        "verifier_valid_from": "2026-04-01T00:00:00+00:00",
+        "verifier_valid_until": "2026-05-01T00:00:00+00:00"
+      }
     },
     {
       "actual_outcome": "block",
@@ -274,6 +288,7 @@
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
+        "verified_at": null,
         "verifier_id": null,
         "verifier_key_id": null,
         "verifier_policy_hash": null,
@@ -322,7 +337,8 @@
       "reviewer_interpretation": "The local/offline fixture blocked because HumanApprovalReceipt was missing.",
       "runtime_recommended_outcome": "block",
       "target_resource": "contractor:external.user@example.test",
-      "target_system": "mock_saas_directory"
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": null
     },
     {
       "actual_outcome": "block",
@@ -422,6 +438,7 @@
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
+        "verified_at": null,
         "verifier_id": null,
         "verifier_key_id": null,
         "verifier_policy_hash": null,
@@ -470,7 +487,8 @@
       "reviewer_interpretation": "The local/offline fixture blocked because HumanApprovalReceipt was expired.",
       "runtime_recommended_outcome": "block",
       "target_resource": "contractor:external.user@example.test",
-      "target_system": "mock_saas_directory"
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": null
     },
     {
       "actual_outcome": "block",
@@ -572,6 +590,7 @@
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
+        "verified_at": null,
         "verifier_id": null,
         "verifier_key_id": null,
         "verifier_policy_hash": null,
@@ -622,7 +641,8 @@
       "reviewer_interpretation": "The local/offline fixture blocked because approved authority or approval scope was insufficient.",
       "runtime_recommended_outcome": "block",
       "target_resource": "contractor:external.user@example.test",
-      "target_system": "mock_saas_directory"
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": null
     },
     {
       "actual_outcome": "commit",
@@ -723,6 +743,7 @@
         "failure_reasons": [],
         "receipt_hash_present": true,
         "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verified_at": "2026-04-26T00:00:00+00:00",
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
@@ -781,7 +802,20 @@
       "reviewer_interpretation": "AuthorityEvidence and HumanApprovalReceipt were sufficient for the local/offline fixture to reach a commit outcome.",
       "runtime_recommended_outcome": "commit",
       "target_resource": "contractor:external.user@example.test",
-      "target_system": "mock_saas_directory"
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": {
+        "failure_reasons": [],
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_status": "rotated",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1",
+        "verifier_revocation_reason": null,
+        "verifier_revoked_at": null,
+        "verifier_valid_from": "2026-04-01T00:00:00+00:00",
+        "verifier_valid_until": "2026-05-01T00:00:00+00:00"
+      }
     }
   ],
   "decision_candidate_refusal_artifacts": [
@@ -834,7 +868,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "d98a1924ff9a25ce548cc2decef2d47b4f6f6af9be02847797f40160a8735bac",
+  "packet_hash": "9d2fee61f0f9048a709706ea1992445913dfbdc6dcb491653eb7596556a52cfe",
   "packet_id": "reviewer-evidence-packet-decision-candidate-refusal-v1",
   "packet_version": "v1",
   "reviewer_notes": [

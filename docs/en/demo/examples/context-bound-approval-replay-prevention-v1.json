@@ -98,6 +98,7 @@
         "failure_reasons": [],
         "receipt_hash_present": true,
         "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verified_at": "2026-05-10T00:00:00+00:00",
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
@@ -144,7 +145,22 @@
       "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
       "runtime_recommended_outcome": "commit",
       "target_resource": "workspace:demo",
-      "target_system": "local-demo-iam"
+      "target_system": "local-demo-iam",
+      "verifier_lifecycle_summary": {
+        "failure_reasons": [
+          "reviewer_packet_verifier_expired_before_verification"
+        ],
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_status": "rotated",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1",
+        "verifier_revocation_reason": null,
+        "verifier_revoked_at": null,
+        "verifier_valid_from": "2026-04-01T00:00:00+00:00",
+        "verifier_valid_until": "2026-05-01T00:00:00+00:00"
+      }
     },
     {
       "actual_outcome": "block",
@@ -241,6 +257,7 @@
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
+        "verified_at": null,
         "verifier_id": null,
         "verifier_key_id": null,
         "verifier_policy_hash": null,
@@ -284,7 +301,8 @@
       "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
       "runtime_recommended_outcome": "block",
       "target_resource": "workspace:demo",
-      "target_system": "local-demo-iam"
+      "target_system": "local-demo-iam",
+      "verifier_lifecycle_summary": null
     },
     {
       "actual_outcome": "block",
@@ -381,6 +399,7 @@
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
+        "verified_at": null,
         "verifier_id": null,
         "verifier_key_id": null,
         "verifier_policy_hash": null,
@@ -424,7 +443,8 @@
       "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
       "runtime_recommended_outcome": "block",
       "target_resource": "workspace:demo",
-      "target_system": "local-demo-iam"
+      "target_system": "local-demo-iam",
+      "verifier_lifecycle_summary": null
     },
     {
       "actual_outcome": "block",
@@ -521,6 +541,7 @@
         ],
         "receipt_hash_present": false,
         "verification_proof_hash": null,
+        "verified_at": null,
         "verifier_id": null,
         "verifier_key_id": null,
         "verifier_policy_hash": null,
@@ -564,13 +585,14 @@
       "reviewer_interpretation": "The signed approval is accepted only when the governed context matches; replayed context values fail closed deterministically.",
       "runtime_recommended_outcome": "block",
       "target_resource": "workspace:demo",
-      "target_system": "local-demo-iam"
+      "target_system": "local-demo-iam",
+      "verifier_lifecycle_summary": null
     }
   ],
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "6c621f1ae48a7db0d7fc7c9c444fe3aea2e1cb4ea1ae7ce834f3435801bf5972",
+  "packet_hash": "db160943f821965cd3515c3e6c9153e948e5912ad9c4d33ef8b2920a9821f373",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [
