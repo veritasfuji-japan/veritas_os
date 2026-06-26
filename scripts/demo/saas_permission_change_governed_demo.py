@@ -264,6 +264,17 @@ def _evaluate_case(
     verified_human_approval = None
     if receipt is not None and human_approval_state.get("approved"):
         verified_human_approval = _verified_human_approval_proof(receipt)
+        human_approval_state.update(
+            {
+                "verifier_id": verified_human_approval.verifier_id,
+                "verifier_key_id": verified_human_approval.verifier_key_id,
+                "verifier_policy_id": verified_human_approval.verifier_policy_id,
+                "verifier_policy_hash": verified_human_approval.verifier_policy_hash,
+                "verification_proof_hash": (
+                    verified_human_approval.verification_proof_hash
+                ),
+            }
+        )
 
     outcome_receipt = build_outcome_receipt(
         decision_id="decision-saas-001",
@@ -328,6 +339,26 @@ def _evaluate_case(
         metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
         verified_human_approval_proof_hash=(
             verified_human_approval.verification_proof_hash
+            if verified_human_approval is not None
+            else None
+        ),
+        human_approval_verifier_id=(
+            verified_human_approval.verifier_id
+            if verified_human_approval is not None
+            else None
+        ),
+        human_approval_verifier_key_id=(
+            verified_human_approval.verifier_key_id
+            if verified_human_approval is not None
+            else None
+        ),
+        human_approval_verifier_policy_id=(
+            verified_human_approval.verifier_policy_id
+            if verified_human_approval is not None
+            else None
+        ),
+        human_approval_verifier_policy_hash=(
+            verified_human_approval.verifier_policy_hash
             if verified_human_approval is not None
             else None
         ),

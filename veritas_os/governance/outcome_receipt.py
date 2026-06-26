@@ -194,6 +194,18 @@ def build_outcome_receipt(
                 "human_approval_verification_source": (
                     verified_human_approval.verification_source
                 ),
+                "human_approval_verifier_id": (
+                    verified_human_approval.verifier_id
+                ),
+                "human_approval_verifier_key_id": (
+                    verified_human_approval.verifier_key_id
+                ),
+                "human_approval_verifier_policy_id": (
+                    verified_human_approval.verifier_policy_id
+                ),
+                "human_approval_verifier_policy_hash": (
+                    verified_human_approval.verifier_policy_hash
+                ),
             }
         )
 

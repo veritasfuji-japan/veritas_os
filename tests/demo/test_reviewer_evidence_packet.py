@@ -79,6 +79,11 @@ def test_human_approval_summary_is_compact_and_deterministic() -> None:
         "approver_role": None,
         "approved_scope": [],
         "receipt_hash_present": False,
+        "verifier_id": None,
+        "verifier_key_id": None,
+        "verifier_policy_id": None,
+        "verifier_policy_hash": None,
+        "verification_proof_hash": None,
         "failure_reasons": ["human_approval_missing"],
         "context_binding": {
             "request_ref": None,
@@ -227,4 +232,22 @@ def test_context_bound_approval_replay_packet_failure_reasons() -> None:
     assert cases["replay_different_bind_context_hash"]["actual_outcome"] == "block"
     assert cases["replay_different_bind_context_hash"]["failure_reasons"] == [
         "human_approval_bind_context_hash_mismatch"
+    ]
+
+
+def test_valid_reviewer_packet_includes_verifier_policy_fields() -> None:
+    packet = build_reviewer_evidence_packet()
+    case = _case_by_id(packet, "valid_authority_and_approval")
+    summary = case["human_approval_summary"]
+    manifest = case["evidence_chain_manifest_summary"]
+    outcome_metadata = case["outcome_receipt_summary"]["metadata"]
+
+    assert summary["verifier_id"] == "veritas-human-approval-verifier-v1"
+    assert summary["verifier_policy_id"] == "human-approval-verifier-policy-v1"
+    assert summary["verifier_policy_hash"]
+    assert manifest["human_approval_verifier_policy_hash"] == summary[
+        "verifier_policy_hash"
+    ]
+    assert outcome_metadata["human_approval_verifier_policy_hash"] == summary[
+        "verifier_policy_hash"
     ]

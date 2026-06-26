@@ -116,6 +116,13 @@ def _human_approval_summary(
         "approver_role": human_approval_state.get("approver_role"),
         "approved_scope": list(human_approval_state.get("approved_scope", [])),
         "receipt_hash_present": bool(receipt_hash),
+        "verifier_id": human_approval_state.get("verifier_id"),
+        "verifier_key_id": human_approval_state.get("verifier_key_id"),
+        "verifier_policy_id": human_approval_state.get("verifier_policy_id"),
+        "verifier_policy_hash": human_approval_state.get("verifier_policy_hash"),
+        "verification_proof_hash": human_approval_state.get(
+            "verification_proof_hash"
+        ),
         "failure_reasons": list(human_approval_state.get("failure_reasons", [])),
         "context_binding": _human_approval_context_binding(
             human_approval_state, case
