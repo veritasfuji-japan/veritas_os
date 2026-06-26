@@ -1029,6 +1029,7 @@
             "verifier_revoked_at",
             "verifier_revocation_reason",
             "verifier_lifecycle_policy_hash",
+            "verifier_lifecycle_snapshot_hash",
             "failure_reasons"
           ],
           "properties": {
@@ -1080,6 +1081,9 @@
               ]
             },
             "verifier_lifecycle_policy_hash": {
+              "$ref": "#/$defs/sha256_hex"
+            },
+            "verifier_lifecycle_snapshot_hash": {
               "$ref": "#/$defs/sha256_hex"
             },
             "failure_reasons": {

@@ -162,6 +162,7 @@
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "verifier_lifecycle_status": "rotated",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "verifier_policy_id": "human-approval-verifier-policy-v1",
@@ -190,7 +191,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "a4507a97c956fe19eab9a09891723df0dcf8d941103effb13ecd1d9b7b64ee35",
+  "packet_hash": "d02fc7e2efc97a8922ed5abf5966e11f9d0821b664258dcb0ffa7468d672135f",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

@@ -181,6 +181,7 @@
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "verifier_lifecycle_status": "rotated",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "verifier_policy_id": "human-approval-verifier-policy-v1",
@@ -808,6 +809,7 @@
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "verifier_lifecycle_status": "rotated",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "verifier_policy_id": "human-approval-verifier-policy-v1",
@@ -868,7 +870,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "fb2068e78b119139de8c919c836b1fb13345fa0731e4be5026a087358935463b",
+  "packet_hash": "1990eecea8d17d26b1eddbb819a64bbd176a2e84daa8016626f9c1b277eb0cfe",
   "packet_id": "reviewer-evidence-packet-decision-candidate-refusal-v1",
   "packet_version": "v1",
   "reviewer_notes": [
