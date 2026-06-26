@@ -14,6 +14,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo.reviewer_key_provenance_metadata import key_provenance_metadata
+from scripts.demo.verifier_lifecycle import (
+    verifier_lifecycle_summary_from_human_approval,
+)
 from scripts.demo.saas_permission_change_governed_demo import (
     BOUNDARY_NOTE,
     run_saas_permission_change_governed_demo,
@@ -123,11 +126,18 @@ def _human_approval_summary(
         "verification_proof_hash": human_approval_state.get(
             "verification_proof_hash"
         ),
+        "verified_at": human_approval_state.get("verified_at"),
         "failure_reasons": list(human_approval_state.get("failure_reasons", [])),
         "context_binding": _human_approval_context_binding(
             human_approval_state, case
         ),
     }
+
+
+def _verifier_lifecycle_summary(case: dict[str, Any]) -> dict[str, Any] | None:
+    """Return reviewer-facing verifier lifecycle evidence for one case."""
+    human_approval = _human_approval_summary(case["human_approval_state"], case)
+    return verifier_lifecycle_summary_from_human_approval(human_approval)
 
 
 def _reviewer_interpretation(case: dict[str, Any]) -> str:
@@ -171,6 +181,7 @@ def _case_summary(case: dict[str, Any]) -> dict[str, Any]:
         "human_approval_summary": _human_approval_summary(
             case["human_approval_state"], case
         ),
+        "verifier_lifecycle_summary": _verifier_lifecycle_summary(case),
         "refusal_basis": case["refusal_basis"],
         "failure_reasons": list(case["failure_reasons"]),
         "outcome_receipt_summary": copy.deepcopy(case["outcome_receipt_summary"]),

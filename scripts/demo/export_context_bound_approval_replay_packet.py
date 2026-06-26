@@ -18,6 +18,9 @@ from scripts.demo.export_reviewer_evidence_packet import (  # noqa: E402
     PACKET_VERSION,
     with_packet_hash,
 )
+from scripts.demo.verifier_lifecycle import (  # noqa: E402
+    verifier_lifecycle_summary_from_human_approval,
+)
 from veritas_os.governance.human_approval_receipt import (  # noqa: E402
     HumanApprovalReceipt,
     validate_human_approval_context_binding,
@@ -217,6 +220,26 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "verified_at": GENERATED_AT,
         "metadata": {"context_binding_valid": validation.is_valid},
     }
+    human_approval_summary = {
+        "approved": validation.is_valid,
+        "approval_receipt_id": receipt.approval_receipt_id,
+        "approver_identity": receipt.approver_identity,
+        "approver_role": receipt.approver_role,
+        "approved_scope": list(receipt.approved_scope),
+        "receipt_hash_present": validation.is_valid,
+        "verifier_id": VERIFIER_ID if validation.is_valid else None,
+        "verifier_key_id": VERIFIER_KEY_ID if validation.is_valid else None,
+        "verifier_policy_id": VERIFIER_POLICY_ID if validation.is_valid else None,
+        "verifier_policy_hash": (
+            VERIFIER_POLICY_HASH if validation.is_valid else None
+        ),
+        "verification_proof_hash": (
+            VERIFIED_APPROVAL_PROOF_HASH if validation.is_valid else None
+        ),
+        "verified_at": GENERATED_AT if validation.is_valid else None,
+        "failure_reasons": list(failure_reasons),
+        "context_binding": copy.deepcopy(expected_context),
+    }
     return {
         "case_id": case_id,
         "expected_outcome": actual_outcome,
@@ -227,25 +250,10 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "target_resource": outcome["target_resource"],
         "authority_validation_status": "valid",
         "runtime_recommended_outcome": "commit" if validation.is_valid else "block",
-        "human_approval_summary": {
-            "approved": validation.is_valid,
-            "approval_receipt_id": receipt.approval_receipt_id,
-            "approver_identity": receipt.approver_identity,
-            "approver_role": receipt.approver_role,
-            "approved_scope": list(receipt.approved_scope),
-            "receipt_hash_present": validation.is_valid,
-            "verifier_id": VERIFIER_ID if validation.is_valid else None,
-            "verifier_key_id": VERIFIER_KEY_ID if validation.is_valid else None,
-            "verifier_policy_id": VERIFIER_POLICY_ID if validation.is_valid else None,
-            "verifier_policy_hash": (
-                VERIFIER_POLICY_HASH if validation.is_valid else None
-            ),
-            "verification_proof_hash": (
-                VERIFIED_APPROVAL_PROOF_HASH if validation.is_valid else None
-            ),
-            "failure_reasons": list(failure_reasons),
-            "context_binding": copy.deepcopy(expected_context),
-        },
+        "human_approval_summary": human_approval_summary,
+        "verifier_lifecycle_summary": (
+            verifier_lifecycle_summary_from_human_approval(human_approval_summary)
+        ),
         "refusal_basis": list(failure_reasons),
         "failure_reasons": list(failure_reasons),
         "outcome_receipt_summary": outcome,

@@ -35,6 +35,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo.reviewer_key_provenance_metadata import key_provenance_metadata  # noqa: E402
+from scripts.demo.verifier_lifecycle import (  # noqa: E402
+    verifier_lifecycle_summary_from_human_approval,
+)
 
 SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
@@ -72,6 +75,7 @@ HUMAN_APPROVAL_SUMMARY_VERIFIER_FIELDS = (
     "verifier_policy_id",
     "verifier_policy_hash",
     "verification_proof_hash",
+    "verified_at",
 )
 SYNTHETIC_VERIFIED_APPROVAL_VERIFIER_EVIDENCE = {
     "verifier_id": "veritas-human-approval-verifier-v1",
@@ -341,6 +345,7 @@ def _ensure_human_approval_context_binding(packet: dict[str, Any]) -> None:
             summary["context_binding"].setdefault(field, None)
         for field in HUMAN_APPROVAL_SUMMARY_VERIFIER_FIELDS:
             summary.setdefault(field, None)
+        case.setdefault("verifier_lifecycle_summary", None)
 
 
 def _is_verified_approval_case(
@@ -417,6 +422,7 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
             summary.setdefault(field, None)
 
         if not _is_verified_approval_case(summary, manifest, outcome):
+            case["verifier_lifecycle_summary"] = None
             continue
 
         metadata = outcome.setdefault("metadata", {})
@@ -459,6 +465,11 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
             ]
         )
 
+        verified_at = (
+            summary.get("verified_at")
+            or verification.get("verified_at")
+            or packet.get("generated_at")
+        )
         summary.update(
             {
                 "verifier_id": verifier_id,
@@ -466,6 +477,7 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
                 "verifier_policy_id": verifier_policy_id,
                 "verifier_policy_hash": verifier_policy_hash,
                 "verification_proof_hash": proof_hash,
+                "verified_at": verified_at,
             }
         )
         manifest.update(
@@ -491,6 +503,9 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
                 "human_approval_verifier_policy_id": verifier_policy_id,
                 "human_approval_verifier_policy_hash": verifier_policy_hash,
             }
+        )
+        case["verifier_lifecycle_summary"] = (
+            verifier_lifecycle_summary_from_human_approval(summary)
         )
         _recompute_nested_hashes(manifest, outcome, verification)
 
