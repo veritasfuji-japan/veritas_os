@@ -14,6 +14,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo.reviewer_key_provenance_metadata import key_provenance_metadata
+from scripts.demo.verifier_lifecycle import (
+    validate_human_approval_verifier_lifecycle_snapshot,
+)
 from scripts.demo.saas_permission_change_governed_demo import (
     BOUNDARY_NOTE,
     run_saas_permission_change_governed_demo,
@@ -123,10 +126,37 @@ def _human_approval_summary(
         "verification_proof_hash": human_approval_state.get(
             "verification_proof_hash"
         ),
+        "verified_at": human_approval_state.get("verified_at"),
         "failure_reasons": list(human_approval_state.get("failure_reasons", [])),
         "context_binding": _human_approval_context_binding(
             human_approval_state, case
         ),
+    }
+
+
+def _verifier_lifecycle_summary(case: dict[str, Any]) -> dict[str, Any] | None:
+    """Return reviewer-facing verifier lifecycle evidence for one case."""
+    lifecycle = case.get("verifier_lifecycle_snapshot")
+    if not isinstance(lifecycle, dict):
+        return None
+    human_approval = _human_approval_summary(case["human_approval_state"], case)
+    failure_reasons = validate_human_approval_verifier_lifecycle_snapshot(
+        human_approval_summary=human_approval,
+        lifecycle_snapshot=lifecycle,
+        proof_verified_at=human_approval.get("verified_at"),
+    )
+    return {
+        "verifier_id": lifecycle.get("verifier_id"),
+        "verifier_key_id": lifecycle.get("verifier_key_id"),
+        "verifier_policy_id": lifecycle.get("verifier_policy_id"),
+        "verifier_policy_hash": lifecycle.get("verifier_policy_hash"),
+        "verifier_lifecycle_status": lifecycle.get("lifecycle_status"),
+        "verifier_valid_from": lifecycle.get("valid_from"),
+        "verifier_valid_until": lifecycle.get("valid_until"),
+        "verifier_revoked_at": lifecycle.get("revoked_at"),
+        "verifier_revocation_reason": lifecycle.get("revocation_reason"),
+        "verifier_lifecycle_policy_hash": lifecycle.get("verifier_policy_hash"),
+        "failure_reasons": failure_reasons,
     }
 
 
@@ -171,6 +201,7 @@ def _case_summary(case: dict[str, Any]) -> dict[str, Any]:
         "human_approval_summary": _human_approval_summary(
             case["human_approval_state"], case
         ),
+        "verifier_lifecycle_summary": _verifier_lifecycle_summary(case),
         "refusal_basis": case["refusal_basis"],
         "failure_reasons": list(case["failure_reasons"]),
         "outcome_receipt_summary": copy.deepcopy(case["outcome_receipt_summary"]),

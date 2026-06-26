@@ -124,6 +124,7 @@
         "authority_validation_status",
         "runtime_recommended_outcome",
         "human_approval_summary",
+        "verifier_lifecycle_summary",
         "refusal_basis",
         "failure_reasons",
         "outcome_receipt_summary",
@@ -197,6 +198,9 @@
         "boundary_note": {
           "type": "string",
           "minLength": 1
+        },
+        "verifier_lifecycle_summary": {
+          "$ref": "#/$defs/verifier_lifecycle_summary"
         }
       }
     },
@@ -215,6 +219,7 @@
         "verifier_policy_id",
         "verifier_policy_hash",
         "verification_proof_hash",
+        "verified_at",
         "failure_reasons",
         "context_binding"
       ],
@@ -336,6 +341,12 @@
               ]
             }
           }
+        },
+        "verified_at": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -998,6 +1009,85 @@
           "$ref": "#/$defs/key_provenance_result_validation_report_reference"
         }
       }
+    },
+    "verifier_lifecycle_summary": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "verifier_id",
+            "verifier_key_id",
+            "verifier_policy_id",
+            "verifier_policy_hash",
+            "verifier_lifecycle_status",
+            "verifier_valid_from",
+            "verifier_valid_until",
+            "verifier_revoked_at",
+            "verifier_revocation_reason",
+            "verifier_lifecycle_policy_hash",
+            "failure_reasons"
+          ],
+          "properties": {
+            "verifier_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "verifier_key_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "verifier_policy_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "verifier_policy_hash": {
+              "$ref": "#/$defs/sha256_hex"
+            },
+            "verifier_lifecycle_status": {
+              "enum": [
+                "active",
+                "rotated",
+                "revoked",
+                "expired"
+              ]
+            },
+            "verifier_valid_from": {
+              "type": "string",
+              "minLength": 1
+            },
+            "verifier_valid_until": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "verifier_revoked_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "verifier_revocation_reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "verifier_lifecycle_policy_hash": {
+              "$ref": "#/$defs/sha256_hex"
+            },
+            "failure_reasons": {
+              "$ref": "#/$defs/string_array"
+            }
+          }
+        }
+      ]
     }
   }
 }

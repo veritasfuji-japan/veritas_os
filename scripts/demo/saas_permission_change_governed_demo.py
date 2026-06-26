@@ -27,6 +27,13 @@ from veritas_os.governance.human_approval_receipt import (
 from veritas_os.governance.authority_evidence_ingestion import (
     ingest_authority_evidence_payload,
 )
+from scripts.demo.verifier_lifecycle import (
+    VERIFIER_ID,
+    VERIFIER_KEY_ID,
+    VERIFIER_POLICY_HASH,
+    VERIFIER_POLICY_ID,
+    verifier_lifecycle_snapshot,
+)
 from veritas_os.security.hash import sha256_of_canonical_json
 
 FIXED_NOW = datetime.fromisoformat("2026-04-26T00:00:00").replace(tzinfo=UTC)
@@ -127,22 +134,10 @@ def _verified_human_approval_proof(
         ),
         "signature_verification_reason": "local_offline_fixture_verified",
         "verifier_trust_level": "production",
-        "verifier_id": "veritas-human-approval-verifier-v1",
-        "verifier_key_id": "local-demo-verifier-key",
-        "verifier_policy_id": "human-approval-verifier-policy-v1",
-        "verifier_policy_hash": sha256_of_canonical_json(
-            {
-                "approved_human_approval_verifiers": [
-                    {
-                        "verifier_id": "veritas-human-approval-verifier-v1",
-                        "trust_level": "production",
-                        "verifier_key_id": "local-demo-verifier-key",
-                        "policy_id": "human-approval-verifier-policy-v1",
-                    }
-                ],
-                "fixture_only": True,
-            }
-        ),
+        "verifier_id": VERIFIER_ID,
+        "verifier_key_id": VERIFIER_KEY_ID,
+        "verifier_policy_id": VERIFIER_POLICY_ID,
+        "verifier_policy_hash": VERIFIER_POLICY_HASH,
         "signed_at": finalized.approved_at,
         "verified_at": FIXED_NOW.isoformat(),
         "verification_source": VERIFICATION_SOURCE_SIGNED_ARTIFACT,
@@ -273,6 +268,7 @@ def _evaluate_case(
                 "verification_proof_hash": (
                     verified_human_approval.verification_proof_hash
                 ),
+                "verified_at": verified_human_approval.verified_at,
             }
         )
 
@@ -397,6 +393,11 @@ def _evaluate_case(
         "outcome_receipt_summary": outcome_receipt.to_dict(),
         "evidence_chain_manifest_summary": evidence_chain_manifest.to_dict(),
         "evidence_chain_verification_summary": evidence_chain_verification.to_dict(),
+        "verifier_lifecycle_snapshot": (
+            verifier_lifecycle_snapshot()
+            if verified_human_approval is not None
+            else None
+        ),
     }
 
 
