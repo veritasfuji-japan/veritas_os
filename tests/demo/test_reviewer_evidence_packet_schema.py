@@ -6,6 +6,7 @@ import copy
 import importlib.util
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -207,6 +208,10 @@ def _jsonschema_module() -> Any | None:
     import jsonschema
 
     return jsonschema
+
+
+def _parse_iso_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _assert_required_fields(payload: dict[str, Any], fields: list[str]) -> None:
@@ -752,3 +757,47 @@ def test_lifecycle_summary_matches_proof_presence_in_generated_packet() -> None:
         lifecycle_present = case["verifier_lifecycle_summary"] is not None
 
         assert lifecycle_present is proof_present
+
+
+def test_committed_verified_approval_cases_have_valid_lifecycle() -> None:
+    packet_paths = [
+        FIXTURE_PATH,
+        DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH,
+        EVALUATION_GOVERNANCE_EXAMPLE_PATH,
+        CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH,
+        Path(
+            "docs/en/demo/examples/evaluation-governance-chain-reviewer-packet-v1/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path(
+            "docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path("samples/evidence_bundle/key_provenance_review/reviewer-evidence-packet.json"),
+    ]
+
+    for packet_path in packet_paths:
+        packet = _load_json(packet_path)
+        for case in packet["cases"]:
+            human_approval = case["human_approval_summary"]
+            proof_hash = human_approval.get("verification_proof_hash")
+            successful = (
+                case.get("actual_outcome") == "commit"
+                or case.get("runtime_recommended_outcome") == "commit"
+                or case.get("expected_outcome") == "commit_eligible"
+            )
+            if not successful or not proof_hash:
+                continue
+
+            lifecycle = case["verifier_lifecycle_summary"]
+            assert lifecycle is not None, packet_path
+            assert lifecycle["failure_reasons"] == [], packet_path
+            verified_at = _parse_iso_timestamp(human_approval["verified_at"])
+            valid_from = _parse_iso_timestamp(lifecycle["verifier_valid_from"])
+            assert verified_at >= valid_from, packet_path
+            valid_until = lifecycle["verifier_valid_until"]
+            if valid_until is not None:
+                assert verified_at < _parse_iso_timestamp(valid_until), packet_path
+            revoked_at = lifecycle["verifier_revoked_at"]
+            if revoked_at is not None:
+                assert verified_at < _parse_iso_timestamp(revoked_at), packet_path

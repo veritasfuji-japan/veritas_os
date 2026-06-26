@@ -158,9 +158,7 @@
       "target_resource": "sample-evidence-bundle",
       "target_system": "sample-review-system",
       "verifier_lifecycle_summary": {
-        "failure_reasons": [
-          "reviewer_packet_verifier_not_yet_valid"
-        ],
+        "failure_reasons": [],
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
@@ -169,8 +167,8 @@
         "verifier_policy_id": "human-approval-verifier-policy-v1",
         "verifier_revocation_reason": null,
         "verifier_revoked_at": null,
-        "verifier_valid_from": "2026-04-01T00:00:00+00:00",
-        "verifier_valid_until": "2026-05-01T00:00:00+00:00"
+        "verifier_valid_from": "2026-01-01T00:00:00+00:00",
+        "verifier_valid_until": "2026-12-31T00:00:00+00:00"
       }
     }
   ],
@@ -192,7 +190,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "80c7a07d559f9a167bc5106d3aecc950faecf3f02d78ec7a847df738cc88d842",
+  "packet_hash": "a4507a97c956fe19eab9a09891723df0dcf8d941103effb13ecd1d9b7b64ee35",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [

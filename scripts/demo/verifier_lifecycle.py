@@ -32,8 +32,8 @@ VERIFIER_POLICY_HASH = sha256_of_canonical_json(
 def verifier_lifecycle_snapshot(
     *,
     lifecycle_status: str = "rotated",
-    valid_from: str = "2026-04-01T00:00:00+00:00",
-    valid_until: str | None = "2026-05-01T00:00:00+00:00",
+    valid_from: str = "2026-01-01T00:00:00+00:00",
+    valid_until: str | None = "2026-12-31T00:00:00+00:00",
     revoked_at: str | None = None,
     revocation_reason: str | None = None,
     verifier_id: str = VERIFIER_ID,

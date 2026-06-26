@@ -186,8 +186,8 @@
         "verifier_policy_id": "human-approval-verifier-policy-v1",
         "verifier_revocation_reason": null,
         "verifier_revoked_at": null,
-        "verifier_valid_from": "2026-04-01T00:00:00+00:00",
-        "verifier_valid_until": "2026-05-01T00:00:00+00:00"
+        "verifier_valid_from": "2026-01-01T00:00:00+00:00",
+        "verifier_valid_until": "2026-12-31T00:00:00+00:00"
       }
     },
     {
@@ -813,8 +813,8 @@
         "verifier_policy_id": "human-approval-verifier-policy-v1",
         "verifier_revocation_reason": null,
         "verifier_revoked_at": null,
-        "verifier_valid_from": "2026-04-01T00:00:00+00:00",
-        "verifier_valid_until": "2026-05-01T00:00:00+00:00"
+        "verifier_valid_from": "2026-01-01T00:00:00+00:00",
+        "verifier_valid_until": "2026-12-31T00:00:00+00:00"
       }
     }
   ],
@@ -868,7 +868,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "9d2fee61f0f9048a709706ea1992445913dfbdc6dcb491653eb7596556a52cfe",
+  "packet_hash": "fb2068e78b119139de8c919c836b1fb13345fa0731e4be5026a087358935463b",
   "packet_id": "reviewer-evidence-packet-decision-candidate-refusal-v1",
   "packet_version": "v1",
   "reviewer_notes": [

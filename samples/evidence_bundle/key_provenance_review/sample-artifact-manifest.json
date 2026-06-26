@@ -28,7 +28,7 @@
       "artifact_name": "reviewer-evidence-packet.json",
       "role": "reviewer_evidence_packet",
       "schema_id": "docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json",
-      "sha256": "1613a572229f99ac05aff2d2b96afe20d4a9b146b4f7adeeffb8aa6c0018e9ec"
+      "sha256": "1064b1652e7c163b6101c73b3edb933445bd47c0be9a4540db3b1f4902826b8b"
     },
     {
       "artifact_name": "reviewer-handoff-review-result.json",
