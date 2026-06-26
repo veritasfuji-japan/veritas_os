@@ -34,9 +34,10 @@
         "human_approval_required": true,
         "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
         "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
-        "manifest_hash": "abdeea27ee17193835115426219c172d4074a97c50954bf74f59022506c4fd40",
+        "manifest_hash": "229049ea9bc2553276ad38c1a57d24932fc4b82d19488b9e26580df8e3a9d482",
         "manifest_id": "manifest-valid_same_context",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -44,7 +45,7 @@
         "missing_links": [],
         "observed_effects_summary": [],
         "operation_id": "operation-valid_same_context",
-        "outcome_receipt_hash": "6f99cb13661b325565519e428cbf09b762d3d3921b5aa1717e4bb53193565348",
+        "outcome_receipt_hash": "860c0f91b44c750913d5e738946358764f689caf87f8258187c4541561e61f61",
         "outcome_receipt_id": "outcome-valid_same_context",
         "refusal_basis": [],
         "requested_scope": [
@@ -67,7 +68,7 @@
         "mismatched_links": [],
         "missing_links": [],
         "operation_id": "operation-valid_same_context",
-        "recomputed_manifest_hash": "abdeea27ee17193835115426219c172d4074a97c50954bf74f59022506c4fd40",
+        "recomputed_manifest_hash": "229049ea9bc2553276ad38c1a57d24932fc4b82d19488b9e26580df8e3a9d482",
         "verification_status": "verified",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -120,6 +121,7 @@
           "human_approval_verification_source": "signed_human_approval_artifact",
           "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
           "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
           "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
           "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
           "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
@@ -127,7 +129,7 @@
         },
         "observed_effects": [],
         "operation_id": "operation-valid_same_context",
-        "outcome_hash": "6f99cb13661b325565519e428cbf09b762d3d3921b5aa1717e4bb53193565348",
+        "outcome_hash": "860c0f91b44c750913d5e738946358764f689caf87f8258187c4541561e61f61",
         "outcome_receipt_id": "outcome-valid_same_context",
         "postcondition_status": "passed",
         "requested_scope": [
@@ -183,9 +185,10 @@
         "human_approval_required": true,
         "human_approval_verifier_id": null,
         "human_approval_verifier_key_id": null,
+        "human_approval_verifier_lifecycle_snapshot_hash": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "78f2eb2def66fc1ef2c248be23e96a610e83a64e1a3a2018ff9d2a259671b543",
+        "manifest_hash": "31492f955dc7f0e786ed2b0398edbba1032b25235f76c9f406ed09da003ebcf4",
         "manifest_id": "manifest-replay_different_request_ref",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -222,7 +225,7 @@
         ],
         "missing_links": [],
         "operation_id": "operation-replay_different_request_ref",
-        "recomputed_manifest_hash": "78f2eb2def66fc1ef2c248be23e96a610e83a64e1a3a2018ff9d2a259671b543",
+        "recomputed_manifest_hash": "31492f955dc7f0e786ed2b0398edbba1032b25235f76c9f406ed09da003ebcf4",
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -325,9 +328,10 @@
         "human_approval_required": true,
         "human_approval_verifier_id": null,
         "human_approval_verifier_key_id": null,
+        "human_approval_verifier_lifecycle_snapshot_hash": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "ffe687e6cb23e6f23e3bef24bfd50cff17b6a1336bea03cf3b0bbe871d325840",
+        "manifest_hash": "14a99193e34ffb7cd487116b1c6591f6a647f2d6cc73f311f22f5fa87058c236",
         "manifest_id": "manifest-replay_different_action_class",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -364,7 +368,7 @@
         ],
         "missing_links": [],
         "operation_id": "operation-replay_different_action_class",
-        "recomputed_manifest_hash": "ffe687e6cb23e6f23e3bef24bfd50cff17b6a1336bea03cf3b0bbe871d325840",
+        "recomputed_manifest_hash": "14a99193e34ffb7cd487116b1c6591f6a647f2d6cc73f311f22f5fa87058c236",
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -467,9 +471,10 @@
         "human_approval_required": true,
         "human_approval_verifier_id": null,
         "human_approval_verifier_key_id": null,
+        "human_approval_verifier_lifecycle_snapshot_hash": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "08e9d65f926a930af825dd00b0f75fd1ee7cd7748bddc781cc05ac2d339ee2c0",
+        "manifest_hash": "151ee7c95baae04c07d04786d1c8b178e4727857dda2f89eaa9e636730f96ba8",
         "manifest_id": "manifest-replay_different_bind_context_hash",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -506,7 +511,7 @@
         ],
         "missing_links": [],
         "operation_id": "operation-replay_different_bind_context_hash",
-        "recomputed_manifest_hash": "08e9d65f926a930af825dd00b0f75fd1ee7cd7748bddc781cc05ac2d339ee2c0",
+        "recomputed_manifest_hash": "151ee7c95baae04c07d04786d1c8b178e4727857dda2f89eaa9e636730f96ba8",
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -591,7 +596,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "08de1927366a5a09ba72fd233df86ed63bc2fc7e8b4fd27fb48497e4424e2680",
+  "packet_hash": "cfd8e6bd79b8afaf9e3ff80c8566f9b2f051cec536438b00ad5a53a03d365951",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [

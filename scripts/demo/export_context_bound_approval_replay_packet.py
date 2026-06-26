@@ -110,6 +110,34 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
     failure_reasons = validation.failure_reasons
     actual_outcome = "commit_eligible" if validation.is_valid else "block"
     operation_id = f"operation-{case_id}"
+    human_approval_summary = {
+        "approved": validation.is_valid,
+        "approval_receipt_id": receipt.approval_receipt_id,
+        "approver_identity": receipt.approver_identity,
+        "approver_role": receipt.approver_role,
+        "approved_scope": list(receipt.approved_scope),
+        "receipt_hash_present": validation.is_valid,
+        "verifier_id": VERIFIER_ID if validation.is_valid else None,
+        "verifier_key_id": VERIFIER_KEY_ID if validation.is_valid else None,
+        "verifier_policy_id": VERIFIER_POLICY_ID if validation.is_valid else None,
+        "verifier_policy_hash": (
+            VERIFIER_POLICY_HASH if validation.is_valid else None
+        ),
+        "verification_proof_hash": (
+            VERIFIED_APPROVAL_PROOF_HASH if validation.is_valid else None
+        ),
+        "verified_at": GENERATED_AT if validation.is_valid else None,
+        "failure_reasons": list(failure_reasons),
+        "context_binding": copy.deepcopy(expected_context),
+    }
+    lifecycle_summary = verifier_lifecycle_summary_from_human_approval(
+        human_approval_summary
+    )
+    lifecycle_hash = (
+        lifecycle_summary.get("verifier_lifecycle_snapshot_hash")
+        if lifecycle_summary is not None
+        else None
+    )
     outcome = {
         "outcome_receipt_id": f"outcome-{case_id}",
         "decision_id": expected_context["decision_id"],
@@ -148,6 +176,7 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
                 "human_approval_verifier_key_id": VERIFIER_KEY_ID,
                 "human_approval_verifier_policy_id": VERIFIER_POLICY_ID,
                 "human_approval_verifier_policy_hash": VERIFIER_POLICY_HASH,
+                "human_approval_verifier_lifecycle_snapshot_hash": lifecycle_hash,
             }
         )
     outcome["outcome_hash"] = _hash_payload(outcome)
@@ -180,6 +209,9 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         ),
         "human_approval_verifier_policy_hash": (
             VERIFIER_POLICY_HASH if validation.is_valid else None
+        ),
+        "human_approval_verifier_lifecycle_snapshot_hash": (
+            lifecycle_hash if validation.is_valid else None
         ),
         "human_approval_required": True,
         "bind_receipt_id": f"bind-{case_id}",
@@ -220,26 +252,6 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "verified_at": GENERATED_AT,
         "metadata": {"context_binding_valid": validation.is_valid},
     }
-    human_approval_summary = {
-        "approved": validation.is_valid,
-        "approval_receipt_id": receipt.approval_receipt_id,
-        "approver_identity": receipt.approver_identity,
-        "approver_role": receipt.approver_role,
-        "approved_scope": list(receipt.approved_scope),
-        "receipt_hash_present": validation.is_valid,
-        "verifier_id": VERIFIER_ID if validation.is_valid else None,
-        "verifier_key_id": VERIFIER_KEY_ID if validation.is_valid else None,
-        "verifier_policy_id": VERIFIER_POLICY_ID if validation.is_valid else None,
-        "verifier_policy_hash": (
-            VERIFIER_POLICY_HASH if validation.is_valid else None
-        ),
-        "verification_proof_hash": (
-            VERIFIED_APPROVAL_PROOF_HASH if validation.is_valid else None
-        ),
-        "verified_at": GENERATED_AT if validation.is_valid else None,
-        "failure_reasons": list(failure_reasons),
-        "context_binding": copy.deepcopy(expected_context),
-    }
     return {
         "case_id": case_id,
         "expected_outcome": actual_outcome,
@@ -251,9 +263,7 @@ def _case_summary(case_id: str, expected_context: dict[str, str]) -> dict[str, A
         "authority_validation_status": "valid",
         "runtime_recommended_outcome": "commit" if validation.is_valid else "block",
         "human_approval_summary": human_approval_summary,
-        "verifier_lifecycle_summary": (
-            verifier_lifecycle_summary_from_human_approval(human_approval_summary)
-        ),
+        "verifier_lifecycle_summary": lifecycle_summary,
         "refusal_basis": list(failure_reasons),
         "failure_reasons": list(failure_reasons),
         "outcome_receipt_summary": outcome,
