@@ -754,8 +754,16 @@ def test_all_manifest_summaries_include_lifecycle_snapshot_hash_field() -> None:
         for case in packet["cases"]:
             manifest = case["evidence_chain_manifest_summary"]
             lifecycle = case["verifier_lifecycle_summary"]
+            verification = case["evidence_chain_verification_summary"]
 
             assert "human_approval_verifier_lifecycle_snapshot_hash" in manifest
+            if (
+                verification[
+                    "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified"
+                ]
+                is False
+            ):
+                continue
             if lifecycle is None:
                 assert (
                     manifest["human_approval_verifier_lifecycle_snapshot_hash"]

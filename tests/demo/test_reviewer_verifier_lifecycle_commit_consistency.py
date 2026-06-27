@@ -120,3 +120,35 @@ def test_lifecycle_failure_reasons_are_never_commit_eligible(
         assert case.get("expected_outcome") != "commit_eligible", (
             f"{packet_path}:{case_id} lifecycle failure must not be commit eligible"
         )
+
+
+@pytest.mark.parametrize("packet_path", REVIEWER_PACKET_PATHS)
+def test_lifecycle_continuity_failures_are_never_commit_eligible(
+    packet_path: Path,
+) -> None:
+    """Lifecycle hash continuity failures are allowed only on block cases."""
+    for case in _load_reviewer_cases(packet_path):
+        verification = case.get("evidence_chain_verification_summary")
+        if not isinstance(verification, dict):
+            continue
+        continuity_verified = verification.get(
+            "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified"
+        )
+        failure_reasons = verification.get(
+            "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons"
+        )
+        if continuity_verified is True and failure_reasons == []:
+            continue
+
+        case_id = case.get("case_id", "<unknown>")
+        assert case.get("actual_outcome") != "commit", (
+            f"{packet_path}:{case_id} lifecycle continuity failure must not commit"
+        )
+        assert case.get("runtime_recommended_outcome") != "commit", (
+            f"{packet_path}:{case_id} lifecycle continuity failure must not "
+            "recommend commit"
+        )
+        assert case.get("expected_outcome") != "commit_eligible", (
+            f"{packet_path}:{case_id} lifecycle continuity failure must not be "
+            "commit eligible"
+        )

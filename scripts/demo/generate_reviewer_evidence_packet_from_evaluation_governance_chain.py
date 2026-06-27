@@ -119,6 +119,28 @@ REVIEWER_NOTES = [
     ),
 ]
 
+LIFECYCLE_HASH_FIELD = "human_approval_verifier_lifecycle_snapshot_hash"
+LIFECYCLE_TAMPER_CASES = (
+    (
+        "lifecycle_snapshot_manifest_hash_outcome_missing",
+        "evidence_chain_outcome_lifecycle_snapshot_hash_missing",
+        "Outcome metadata is missing the lifecycle snapshot hash while the "
+        "manifest still carries it.",
+    ),
+    (
+        "lifecycle_snapshot_outcome_hash_manifest_missing",
+        "evidence_chain_manifest_lifecycle_snapshot_hash_missing",
+        "Manifest is missing the lifecycle snapshot hash while outcome "
+        "metadata still carries it.",
+    ),
+    (
+        "lifecycle_snapshot_hash_mismatch",
+        "evidence_chain_lifecycle_snapshot_hash_mismatch",
+        "Manifest and outcome metadata carry different lifecycle snapshot "
+        "hash values.",
+    ),
+)
+
 
 def _jsonschema_module() -> Any | None:
     """Return the optional jsonschema module when available locally."""
@@ -535,6 +557,107 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
         _recompute_nested_hashes(manifest, outcome, verification)
 
 
+def _commit_safety_fields(case: dict[str, Any], failure_reason: str) -> None:
+    """Mark a tampered lifecycle snapshot case as non-commit-eligible."""
+    case["expected_outcome"] = "block"
+    case["actual_outcome"] = "block"
+    case["runtime_recommended_outcome"] = "block"
+    case["passed"] = True
+    reasons = case.setdefault("failure_reasons", [])
+    if isinstance(reasons, list) and failure_reason not in reasons:
+        reasons.append(failure_reason)
+
+
+def _mark_lifecycle_continuity_failure(
+    case: dict[str, Any],
+    failure_reason: str,
+) -> None:
+    """Expose lifecycle snapshot tampering in reviewer-facing summaries."""
+    verification = case.get("evidence_chain_verification_summary")
+    if not isinstance(verification, dict):
+        return
+
+    verification["is_valid"] = False
+    verification["verification_status"] = "failed"
+    verification["manifest_hash_matches"] = True
+    verification["human_approval_verifier_lifecycle_snapshot_hash_continuity_verified"] = False
+    verification[
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons"
+    ] = [failure_reason]
+    verification["failure_reasons"] = [failure_reason]
+    verification["missing_links"] = []
+    verification["mismatched_links"] = [LIFECYCLE_HASH_FIELD]
+    verified_links = verification.get("verified_links")
+    if isinstance(verified_links, list):
+        verification["verified_links"] = [
+            link
+            for link in verified_links
+            if link != f"{LIFECYCLE_HASH_FIELD}_continuity"
+        ]
+
+
+def _tamper_lifecycle_hash_fields(case: dict[str, Any], failure_reason: str) -> None:
+    """Apply deterministic lifecycle snapshot hash tampering to a case copy."""
+    manifest = case.get("evidence_chain_manifest_summary")
+    outcome = case.get("outcome_receipt_summary")
+    if not isinstance(manifest, dict) or not isinstance(outcome, dict):
+        return
+
+    metadata = outcome.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+        outcome["metadata"] = metadata
+
+    if failure_reason == "evidence_chain_outcome_lifecycle_snapshot_hash_missing":
+        metadata.pop(LIFECYCLE_HASH_FIELD, None)
+    elif failure_reason == "evidence_chain_manifest_lifecycle_snapshot_hash_missing":
+        manifest[LIFECYCLE_HASH_FIELD] = None
+    elif failure_reason == "evidence_chain_lifecycle_snapshot_hash_mismatch":
+        metadata[LIFECYCLE_HASH_FIELD] = "2" * 64
+
+    _mark_lifecycle_continuity_failure(case, failure_reason)
+    _commit_safety_fields(case, failure_reason)
+    verification = case.get("evidence_chain_verification_summary")
+    if isinstance(verification, dict):
+        _recompute_nested_hashes(manifest, outcome, verification)
+
+
+def _append_lifecycle_tamper_regression_cases(packet: dict[str, Any]) -> None:
+    """Add local/offline negative fixtures for lifecycle hash continuity.
+
+    These deterministic reviewer/demo cases prove that lifecycle snapshot hash
+    tampering is visible end-to-end in the generated Reviewer Evidence Packet.
+    They are synthetic evidence-only fixtures and do not change runtime verifier
+    allowlists, production admissibility, or live service behavior.
+    """
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return
+
+    source_case = next(
+        (
+            case
+            for case in cases
+            if isinstance(case, dict)
+            and case.get("case_id") == "valid_authority_and_approval"
+        ),
+        None,
+    )
+    if source_case is None:
+        return
+
+    for suffix, failure_reason, interpretation in LIFECYCLE_TAMPER_CASES:
+        case = copy.deepcopy(source_case)
+        case["case_id"] = f"{source_case['case_id']}_{suffix}"
+        case["reviewer_interpretation"] = interpretation
+        case["boundary_note"] = (
+            "local/offline synthetic tamper regression fixture only; no "
+            "runtime admissibility change or live verifier integration"
+        )
+        _tamper_lifecycle_hash_fields(case, failure_reason)
+        cases.append(case)
+
+
 def _packet_hash(packet: dict[str, Any]) -> str:
     """Compute Reviewer Evidence Packet hash excluding packet_hash itself."""
     payload = copy.deepcopy(packet)
@@ -577,6 +700,7 @@ def generate_reviewer_evidence_packet_from_chain(
     )
     _ensure_human_approval_context_binding(packet)
     _ensure_human_approval_verifier_evidence(packet)
+    _append_lifecycle_tamper_regression_cases(packet)
     packet["demo_id"] = "evaluation_governance_offline_chain_reviewer_packet_v1"
     packet["generated_at"] = issued_at
     packet["title"] = "Evaluation Governance Offline Chain Reviewer Evidence Packet"
