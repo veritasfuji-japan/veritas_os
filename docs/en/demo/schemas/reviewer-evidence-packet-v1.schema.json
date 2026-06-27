@@ -664,7 +664,9 @@
         "recomputed_manifest_hash",
         "manifest_hash_matches",
         "verified_at",
-        "metadata"
+        "metadata",
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified",
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons"
       ],
       "properties": {
         "is_valid": {
@@ -718,6 +720,12 @@
         },
         "metadata": {
           "type": "object"
+        },
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": {
+          "type": "boolean"
+        },
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": {
+          "$ref": "#/$defs/string_array"
         }
       }
     },

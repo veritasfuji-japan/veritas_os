@@ -20,6 +20,7 @@ AUTHORITY_HASH = "a" * 64
 APPROVAL_HASH = "b" * 64
 OUTCOME_HASH = "c" * 64
 PROOF_HASH = "p" * 64
+LIFECYCLE_HASH = "1" * 64
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ def _complete_manifest() -> EvidenceChainManifest:
         human_approval_receipt_id="har-1",
         human_approval_receipt_hash=APPROVAL_HASH,
         verified_human_approval_proof_hash=PROOF_HASH,
+        human_approval_verifier_lifecycle_snapshot_hash=LIFECYCLE_HASH,
         outcome_receipt_id="outcome-1",
         outcome_receipt_hash=OUTCOME_HASH,
         bind_coverage_operation_id="saas_permission_change_demo",
@@ -67,7 +69,10 @@ def _verify_complete(**overrides: object) -> EvidenceChainVerificationResult:
         "human_approval_receipt": {"receipt_hash": APPROVAL_HASH},
         "outcome_receipt": {
             "outcome_hash": OUTCOME_HASH,
-            "metadata": {"verified_human_approval_proof_hash": PROOF_HASH},
+            "metadata": {
+                "verified_human_approval_proof_hash": PROOF_HASH,
+                "human_approval_verifier_lifecycle_snapshot_hash": LIFECYCLE_HASH,
+            },
         },
         "verified_human_approval": SimpleNamespace(verification_proof_hash=PROOF_HASH),
         "approval_required": True,
@@ -94,11 +99,20 @@ def test_valid_complete_chain_verifies_successfully() -> None:
         "authority_evidence_hash",
         "bind_coverage_operation_id",
         "human_approval_receipt_hash",
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity",
         "manifest_hash",
         "outcome_receipt_hash",
         "verified_human_approval_proof_hash",
     ]
     assert result.failure_reasons == []
+    assert (
+        result.human_approval_verifier_lifecycle_snapshot_hash_continuity_verified
+        is True
+    )
+    assert (
+        result.human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons
+        == []
+    )
 
 
 def test_manifest_hash_mismatch_fails_verification() -> None:
@@ -189,7 +203,14 @@ def test_approval_required_verifies_proof_hash_continuity() -> None:
 
 
 def test_approval_required_fails_when_outcome_proof_hash_missing() -> None:
-    result = _verify_complete(outcome_receipt={"outcome_hash": OUTCOME_HASH})
+    result = _verify_complete(
+        outcome_receipt={
+            "outcome_hash": OUTCOME_HASH,
+            "metadata": {
+                "human_approval_verifier_lifecycle_snapshot_hash": LIFECYCLE_HASH,
+            },
+        }
+    )
     assert result.verification_status == "incomplete"
     assert "human_approval_proof_hash_missing" in result.failure_reasons
 
@@ -208,7 +229,10 @@ def test_outcome_proof_hash_mismatch_fails_verification() -> None:
     result = _verify_complete(
         outcome_receipt={
             "outcome_hash": OUTCOME_HASH,
-            "metadata": {"verified_human_approval_proof_hash": "x" * 64},
+            "metadata": {
+                "verified_human_approval_proof_hash": "x" * 64,
+                "human_approval_verifier_lifecycle_snapshot_hash": LIFECYCLE_HASH,
+            },
         }
     )
     assert result.verification_status == "failed"
@@ -248,3 +272,88 @@ def test_no_approval_required_path_allows_missing_proof_hash() -> None:
         verified_at=VERIFIED_AT,
     )
     assert result.verification_status == "verified"
+
+
+def test_lifecycle_snapshot_hash_missing_from_outcome_fails_verification() -> None:
+    result = _verify_complete(
+        outcome_receipt={
+            "outcome_hash": OUTCOME_HASH,
+            "metadata": {"verified_human_approval_proof_hash": PROOF_HASH},
+        }
+    )
+    assert result.verification_status == "failed"
+    assert "human_approval_verifier_lifecycle_snapshot_hash" in result.mismatched_links
+    assert (
+        "evidence_chain_outcome_lifecycle_snapshot_hash_missing"
+        in result.failure_reasons
+    )
+    assert (
+        result.human_approval_verifier_lifecycle_snapshot_hash_continuity_verified
+        is False
+    )
+
+
+def test_lifecycle_snapshot_hash_missing_from_manifest_fails_verification() -> None:
+    manifest = _complete_manifest()
+    manifest = type(manifest)(
+        **{
+            **manifest.to_dict(),
+            "human_approval_verifier_lifecycle_snapshot_hash": None,
+        }
+    )
+    result = _verify_complete(manifest=manifest)
+    assert result.verification_status == "failed"
+    assert "human_approval_verifier_lifecycle_snapshot_hash" in result.mismatched_links
+    assert (
+        "evidence_chain_manifest_lifecycle_snapshot_hash_missing"
+        in result.failure_reasons
+    )
+
+
+def test_lifecycle_snapshot_hash_mismatch_fails_verification() -> None:
+    result = _verify_complete(
+        outcome_receipt={
+            "outcome_hash": OUTCOME_HASH,
+            "metadata": {
+                "verified_human_approval_proof_hash": PROOF_HASH,
+                "human_approval_verifier_lifecycle_snapshot_hash": "2" * 64,
+            },
+        }
+    )
+    assert result.verification_status == "failed"
+    assert "human_approval_verifier_lifecycle_snapshot_hash" in result.mismatched_links
+    assert "evidence_chain_lifecycle_snapshot_hash_mismatch" in result.failure_reasons
+    assert result.to_dict()[
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons"
+    ] == ["evidence_chain_lifecycle_snapshot_hash_mismatch"]
+
+
+def test_no_approval_path_allows_absent_lifecycle_snapshot_hashes() -> None:
+    manifest = build_evidence_chain_manifest(
+        decision_id="decision-1",
+        execution_intent_id="intent-1",
+        operation_id="operation-1",
+        action_class="read_only",
+        target_system="mock_saas",
+        target_resource="user:alice",
+        requested_scope=["saas:read"],
+        final_outcome="commit",
+        authority_evidence_hash=AUTHORITY_HASH,
+        outcome_receipt_hash=OUTCOME_HASH,
+        bind_coverage_operation_id="saas_read_demo",
+        human_approval_required=False,
+        generated_at=VERIFIED_AT,
+    )
+    result = verify_evidence_chain_manifest(
+        manifest=manifest,
+        authority_evidence={"evidence_hash": AUTHORITY_HASH},
+        outcome_receipt={"outcome_hash": OUTCOME_HASH},
+        bind_coverage_operation_id="saas_read_demo",
+        approval_required=False,
+        verified_at=VERIFIED_AT,
+    )
+    assert result.verification_status == "verified"
+    assert (
+        result.human_approval_verifier_lifecycle_snapshot_hash_continuity_verified
+        is True
+    )

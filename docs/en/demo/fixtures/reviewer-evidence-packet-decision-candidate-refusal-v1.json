@@ -84,10 +84,13 @@
         "verified_links": [
           "bind_coverage_operation_id",
           "human_approval_receipt_hash",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity",
           "manifest_hash",
           "outcome_receipt_hash",
           "verified_human_approval_proof_hash"
-        ]
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "block",
       "failure_reasons": [
@@ -263,9 +266,12 @@
         "verified_links": [
           "authority_evidence_hash",
           "bind_coverage_operation_id",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity",
           "manifest_hash",
           "outcome_receipt_hash"
-        ]
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "block",
       "failure_reasons": [
@@ -414,9 +420,12 @@
         "verified_links": [
           "authority_evidence_hash",
           "bind_coverage_operation_id",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity",
           "manifest_hash",
           "outcome_receipt_hash"
-        ]
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "block",
       "failure_reasons": [
@@ -566,9 +575,12 @@
         "verified_links": [
           "authority_evidence_hash",
           "bind_coverage_operation_id",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity",
           "manifest_hash",
           "outcome_receipt_hash"
-        ]
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "block",
       "failure_reasons": [
@@ -722,10 +734,13 @@
           "authority_evidence_hash",
           "bind_coverage_operation_id",
           "human_approval_receipt_hash",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity",
           "manifest_hash",
           "outcome_receipt_hash",
           "verified_human_approval_proof_hash"
-        ]
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "commit",
       "failure_reasons": [],
@@ -877,7 +892,7 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "44a4b5bbc23218bc268702f0ffdf4f514a1611bc1bd8f875b89b1a292451aacc",
+  "packet_hash": "de124ce235fab93ea9e277fa76537145d3b30ca76aa614ea54f3d0aead9a8ed0",
   "packet_id": "reviewer-evidence-packet-decision-candidate-refusal-v1",
   "packet_version": "v1",
   "reviewer_notes": [
