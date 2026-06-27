@@ -15,6 +15,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo.reviewer_failure_reasons import (  # noqa: E402
+    REVIEWER_FAILURE_REASON_TAXONOMY_UNKNOWN,
+    REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH,
     unknown_failure_reasons,
 )
 from scripts.demo.verifier_lifecycle import (  # noqa: E402
@@ -142,7 +144,7 @@ FAILURE_REASON_BY_CHECK = {
     ),
     "local_offline_boundary_present": "local_offline_boundary_missing",
     "reviewer_failure_reason_taxonomy_valid": (
-        "reviewer_failure_reason_taxonomy_unknown"
+        REVIEWER_FAILURE_REASON_TAXONOMY_UNKNOWN
     ),
 }
 
@@ -392,13 +394,13 @@ def _case_approval_proof_continuity_reasons(case: dict[str, Any]) -> list[str]:
         and manifest_policy_hash
         and proof_policy_hash != manifest_policy_hash
     ):
-        reasons.append("reviewer_packet_verifier_policy_hash_mismatch")
+        reasons.append(REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH)
     if (
         outcome_policy_hash
         and manifest_policy_hash
         and outcome_policy_hash != manifest_policy_hash
     ):
-        reasons.append("reviewer_packet_verifier_policy_hash_mismatch")
+        reasons.append(REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH)
 
     if isinstance(verification, dict):
         status = verification.get("verification_status")
