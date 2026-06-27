@@ -533,7 +533,10 @@ def test_checked_in_reviewer_packets_have_lifecycle_fields() -> None:
             "docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated/"
             "reviewer-evidence-packet.generated.example.json"
         ),
-        Path("samples/evidence_bundle/key_provenance_review/reviewer-evidence-packet.json"),
+        Path(
+            "samples/evidence_bundle/key_provenance_review/"
+            "reviewer-evidence-packet.json"
+        ),
     ]
     for packet_path in packet_paths:
         packet = _load_json(packet_path)
@@ -697,7 +700,10 @@ def test_approval_proof_present_cases_carry_verifier_policy_fields() -> None:
         DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH,
         EVALUATION_GOVERNANCE_EXAMPLE_PATH,
         CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH,
-        Path("samples/evidence_bundle/key_provenance_review/reviewer-evidence-packet.json"),
+        Path(
+            "samples/evidence_bundle/key_provenance_review/"
+            "reviewer-evidence-packet.json"
+        ),
     ]
     for packet_path in packet_paths:
         packet = _load_json(packet_path)
@@ -720,6 +726,46 @@ def test_approval_proof_present_cases_carry_verifier_policy_fields() -> None:
             assert outcome_metadata["human_approval_verifier_policy_hash"] == summary[
                 "verifier_policy_hash"
             ]
+
+
+def test_all_manifest_summaries_include_lifecycle_snapshot_hash_field() -> None:
+    """Require explicit lifecycle hash nulls for no-proof manifest summaries."""
+    packet_paths = [
+        FIXTURE_PATH,
+        DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH,
+        EVALUATION_GOVERNANCE_EXAMPLE_PATH,
+        CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH,
+        Path(
+            "docs/en/demo/examples/evaluation-governance-chain-reviewer-packet-v1/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path(
+            "docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path(
+            "samples/evidence_bundle/key_provenance_review/"
+            "reviewer-evidence-packet.json"
+        ),
+    ]
+
+    for packet_path in packet_paths:
+        packet = _load_json(packet_path)
+        for case in packet["cases"]:
+            manifest = case["evidence_chain_manifest_summary"]
+            lifecycle = case["verifier_lifecycle_summary"]
+
+            assert "human_approval_verifier_lifecycle_snapshot_hash" in manifest
+            if lifecycle is None:
+                assert (
+                    manifest["human_approval_verifier_lifecycle_snapshot_hash"]
+                    is None
+                )
+            else:
+                assert (
+                    manifest["human_approval_verifier_lifecycle_snapshot_hash"]
+                    == lifecycle["verifier_lifecycle_snapshot_hash"]
+                )
 
 
 def test_failed_context_bound_replay_cases_do_not_claim_verified_receipts() -> None:

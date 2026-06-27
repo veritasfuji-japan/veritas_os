@@ -52,6 +52,11 @@ SNAPSHOT_FIELD_MAPPINGS = (
         "verified_human_approval_proof_hash",
         "verified_human_approval_proof_hash",
     ),
+    (
+        "verifier_lifecycle_snapshot_hash",
+        "human_approval_verifier_lifecycle_snapshot_hash",
+        "human_approval_verifier_lifecycle_snapshot_hash",
+    ),
 )
 
 
@@ -117,12 +122,18 @@ def test_verifier_policy_snapshot_continuity_across_reviewer_packets(
             continue
 
         human_approval = case["human_approval_summary"]
+        lifecycle = case["verifier_lifecycle_summary"]
         manifest = case["evidence_chain_manifest_summary"]
         metadata = case["outcome_receipt_summary"]["metadata"]
         case_label = f"{fixture_path}:{_case_id(case)}"
 
         for approval_field, manifest_field, metadata_field in SNAPSHOT_FIELD_MAPPINGS:
-            approval_value = human_approval.get(approval_field)
+            approval_source = (
+                lifecycle
+                if approval_field == "verifier_lifecycle_snapshot_hash"
+                else human_approval
+            )
+            approval_value = approval_source.get(approval_field)
             manifest_value = manifest.get(manifest_field)
             metadata_value = metadata.get(metadata_field)
 

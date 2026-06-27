@@ -498,6 +498,7 @@
         "human_approval_verifier_key_id",
         "human_approval_verifier_policy_id",
         "human_approval_verifier_policy_hash",
+        "human_approval_verifier_lifecycle_snapshot_hash",
         "human_approval_required",
         "bind_receipt_id",
         "bind_receipt_hash",
@@ -636,6 +637,9 @@
           ]
         },
         "human_approval_verifier_policy_hash": {
+          "$ref": "#/$defs/nullable_sha256_hex"
+        },
+        "human_approval_verifier_lifecycle_snapshot_hash": {
           "$ref": "#/$defs/nullable_sha256_hex"
         },
         "human_approval_required": {

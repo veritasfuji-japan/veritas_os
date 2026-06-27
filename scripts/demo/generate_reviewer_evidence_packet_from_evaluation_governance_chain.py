@@ -366,6 +366,8 @@ def _recompute_nested_hashes(
     manifest: dict[str, Any],
     outcome: dict[str, Any],
     verification: dict[str, Any],
+    *,
+    include_verified_proof_link: bool = True,
 ) -> None:
     """Refresh nested fixture hashes after verifier evidence backfill."""
     outcome_payload = copy.deepcopy(outcome)
@@ -381,7 +383,8 @@ def _recompute_nested_hashes(
     verification["manifest_hash_matches"] = True
     verified_links = verification.setdefault("verified_links", [])
     if (
-        isinstance(verified_links, list)
+        include_verified_proof_link
+        and isinstance(verified_links, list)
         and "verified_human_approval_proof_hash" not in verified_links
     ):
         verified_links.append("verified_human_approval_proof_hash")
@@ -423,6 +426,16 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
 
         if not _is_verified_approval_case(summary, manifest, outcome):
             case["verifier_lifecycle_summary"] = None
+            manifest.setdefault(
+                "human_approval_verifier_lifecycle_snapshot_hash",
+                None,
+            )
+            _recompute_nested_hashes(
+                manifest,
+                outcome,
+                verification,
+                include_verified_proof_link=False,
+            )
             continue
 
         metadata = outcome.setdefault("metadata", {})
@@ -507,6 +520,18 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
         case["verifier_lifecycle_summary"] = (
             verifier_lifecycle_summary_from_human_approval(summary)
         )
+        lifecycle_summary = case["verifier_lifecycle_summary"]
+        lifecycle_hash = (
+            lifecycle_summary.get("verifier_lifecycle_snapshot_hash")
+            if isinstance(lifecycle_summary, dict)
+            else None
+        )
+        manifest[
+            "human_approval_verifier_lifecycle_snapshot_hash"
+        ] = lifecycle_hash
+        metadata[
+            "human_approval_verifier_lifecycle_snapshot_hash"
+        ] = lifecycle_hash
         _recompute_nested_hashes(manifest, outcome, verification)
 
 

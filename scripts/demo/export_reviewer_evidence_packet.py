@@ -168,6 +168,17 @@ def _reviewer_interpretation(case: dict[str, Any]) -> str:
 
 def _case_summary(case: dict[str, Any]) -> dict[str, Any]:
     """Return a compact reviewer-facing case summary with nested evidence details."""
+    verifier_lifecycle = _verifier_lifecycle_summary(case)
+    lifecycle_hash = (
+        verifier_lifecycle.get("verifier_lifecycle_snapshot_hash")
+        if verifier_lifecycle is not None
+        else None
+    )
+    manifest_summary = copy.deepcopy(case["evidence_chain_manifest_summary"])
+    manifest_summary.setdefault(
+        "human_approval_verifier_lifecycle_snapshot_hash",
+        lifecycle_hash,
+    )
     return {
         "case_id": case["case_id"],
         "expected_outcome": case["expected_outcome"],
@@ -181,13 +192,11 @@ def _case_summary(case: dict[str, Any]) -> dict[str, Any]:
         "human_approval_summary": _human_approval_summary(
             case["human_approval_state"], case
         ),
-        "verifier_lifecycle_summary": _verifier_lifecycle_summary(case),
+        "verifier_lifecycle_summary": verifier_lifecycle,
         "refusal_basis": case["refusal_basis"],
         "failure_reasons": list(case["failure_reasons"]),
         "outcome_receipt_summary": copy.deepcopy(case["outcome_receipt_summary"]),
-        "evidence_chain_manifest_summary": copy.deepcopy(
-            case["evidence_chain_manifest_summary"]
-        ),
+        "evidence_chain_manifest_summary": manifest_summary,
         "evidence_chain_verification_summary": copy.deepcopy(
             case["evidence_chain_verification_summary"]
         ),

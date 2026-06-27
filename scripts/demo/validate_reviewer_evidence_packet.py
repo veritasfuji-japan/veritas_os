@@ -134,6 +134,9 @@ FAILURE_REASON_BY_CHECK = {
     "committed_lifecycle_status_clean": (
         "reviewer_packet_committed_lifecycle_status_not_clean"
     ),
+    "verifier_lifecycle_snapshot_hash_continuity_valid": (
+        "reviewer_packet_verifier_lifecycle_snapshot_hash_mismatch"
+    ),
     "local_offline_boundary_present": "local_offline_boundary_missing",
 }
 
@@ -516,6 +519,61 @@ def _verifier_lifecycle_snapshot_hashes_match(packet: dict[str, Any]) -> bool:
     )
 
 
+def _verifier_lifecycle_snapshot_hash_continuity_reasons(
+    packet: dict[str, Any],
+) -> list[str]:
+    """Return lifecycle snapshot hash continuity failures across artifacts."""
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return ["required_case_fields_missing"]
+    reasons: list[str] = []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        lifecycle = case.get("verifier_lifecycle_summary")
+        if not isinstance(lifecycle, dict):
+            continue
+        lifecycle_hash = str(
+            lifecycle.get("verifier_lifecycle_snapshot_hash") or ""
+        ).strip()
+        if not lifecycle_hash:
+            reason = "reviewer_packet_verifier_lifecycle_snapshot_hash_missing"
+            if reason not in reasons:
+                reasons.append(reason)
+            continue
+
+        manifest = case.get("evidence_chain_manifest_summary", {})
+        if not isinstance(manifest, dict):
+            manifest = {}
+        manifest_hash = str(
+            manifest.get("human_approval_verifier_lifecycle_snapshot_hash") or ""
+        ).strip()
+        if manifest_hash != lifecycle_hash:
+            reason = "reviewer_packet_manifest_lifecycle_snapshot_hash_mismatch"
+            if reason not in reasons:
+                reasons.append(reason)
+
+        outcome = case.get("outcome_receipt_summary", {})
+        metadata = outcome.get("metadata", {}) if isinstance(outcome, dict) else {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+        outcome_hash = str(
+            metadata.get("human_approval_verifier_lifecycle_snapshot_hash") or ""
+        ).strip()
+        if outcome_hash != lifecycle_hash:
+            reason = "reviewer_packet_outcome_lifecycle_snapshot_hash_mismatch"
+            if reason not in reasons:
+                reasons.append(reason)
+    return reasons
+
+
+def _verifier_lifecycle_snapshot_hash_continuity_valid(
+    packet: dict[str, Any],
+) -> bool:
+    """Return whether lifecycle hash is bound consistently in chain artifacts."""
+    return not _verifier_lifecycle_snapshot_hash_continuity_reasons(packet)
+
+
 def _committed_lifecycle_status_clean(packet: dict[str, Any]) -> bool:
     """Return whether committed cases carry clean lifecycle evidence."""
     cases = packet.get("cases")
@@ -602,6 +660,12 @@ def _build_checks(
         "committed_lifecycle_status_clean": _committed_lifecycle_status_clean(
             generated_packet
         ),
+        "verifier_lifecycle_snapshot_hash_continuity_valid": (
+            _verifier_lifecycle_snapshot_hash_continuity_valid(generated_packet)
+        ),
+        "verifier_lifecycle_snapshot_hash_continuity_reasons": (
+            _verifier_lifecycle_snapshot_hash_continuity_reasons(generated_packet)
+        ),
         "local_offline_boundary_present": _local_offline_boundary_present(
             generated_packet
         ),
@@ -622,6 +686,11 @@ def _failure_reasons(checks: dict[str, Any]) -> list[str]:
         if reason not in reasons:
             reasons.append(reason)
     for reason in checks.get("verifier_lifecycle_reasons", []):
+        if reason not in reasons:
+            reasons.append(reason)
+    for reason in checks.get(
+        "verifier_lifecycle_snapshot_hash_continuity_reasons", []
+    ):
         if reason not in reasons:
             reasons.append(reason)
     return reasons

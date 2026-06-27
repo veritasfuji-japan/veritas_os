@@ -29,6 +29,7 @@ def _base_manifest() -> EvidenceChainManifest:
         human_approval_verifier_key_id="verifier-key-1",
         human_approval_verifier_policy_id="verifier-policy-1",
         human_approval_verifier_policy_hash="v" * 64,
+        human_approval_verifier_lifecycle_snapshot_hash="l" * 64,
         human_approval_required=True,
         bind_receipt_id=None,
         bind_receipt_hash=None,

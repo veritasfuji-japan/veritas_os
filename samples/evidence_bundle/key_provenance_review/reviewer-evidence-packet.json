@@ -1,162 +1,816 @@
 {
   "aggregate_summary": {
-    "blocked_cases": 0,
+    "blocked_cases": 4,
     "committed_cases": 1,
     "failed_chains": 0,
     "incomplete_chains": 0,
     "indeterminate_chains": 0,
     "local_offline_only": true,
-    "passed_cases": 1,
-    "total_cases": 1,
-    "verified_chains": 1
+    "passed_cases": 5,
+    "total_cases": 5,
+    "verified_chains": 5
   },
-  "boundary_note": "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval. The packet references artifacts for reviewer navigation only; it does not create trust, replace out-of-band public key trust, or prove certification.",
+  "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
   "cases": [
     {
-      "actual_outcome": "commit",
-      "authority_validation_status": "sample_authority_present",
-      "boundary_note": "Illustrative local/offline case summary only; not production evidence or audit approval.",
-      "case_id": "sample_key_provenance_review",
+      "actual_outcome": "block",
+      "authority_validation_status": "fail",
+      "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+      "case_id": "missing_authority",
       "evidence_chain_manifest_summary": {
-        "action_class": "sample.review",
-        "authority_evidence_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "authority_evidence_id": "sample-authority-evidence",
-        "bind_coverage_operation_id": "sample-operation",
-        "bind_receipt_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "bind_receipt_id": "sample-bind-receipt",
-        "chain_status": "complete",
-        "decision_id": "sample-decision",
-        "execution_intent_id": "sample-execution-intent",
-        "final_outcome": "commit",
-        "generated_at": "2026-01-15T12:05:00Z",
-        "human_approval_receipt_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "human_approval_receipt_id": "sample-human-approval",
+        "action_class": "permission_change",
+        "authority_evidence_hash": null,
+        "authority_evidence_id": null,
+        "bind_coverage_operation_id": "saas_permission_change_demo",
+        "bind_receipt_hash": null,
+        "bind_receipt_id": null,
+        "chain_status": "blocked",
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "final_outcome": "block",
+        "generated_at": "2026-04-26T00:00:00+00:00",
+        "human_approval_receipt_hash": "55db4aa2686f01d6e1133b880ee85e82572957b3e0e3dd63bce692a8be4d38ba",
+        "human_approval_receipt_id": "har-saas-001",
         "human_approval_required": true,
         "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
         "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
-        "manifest_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        "manifest_id": "sample-evidence-chain-manifest",
+        "manifest_hash": "e516075e6cfbb5cac895d225799df60113eddc36465d688e08968e3e6f93e1f4",
+        "manifest_id": "ecm-saas-permission-change-missing_authority",
         "metadata": {
-          "sample_context": "key provenance reviewer walkthrough"
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
         },
-        "missing_links": [],
-        "observed_effects_summary": [
-          {
-            "effect": "sample reference packet assembled"
-          }
+        "missing_links": [
+          "authority_evidence_hash"
         ],
-        "operation_id": "sample-operation",
-        "outcome_receipt_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        "outcome_receipt_id": "sample-outcome-receipt",
-        "refusal_basis": [],
+        "observed_effects_summary": [],
+        "operation_id": "saas-permission-change-missing_authority",
+        "outcome_receipt_hash": "54a4b593be499ee0f5fe62274189479d00352646cc6676d196d07ed483b50a90",
+        "outcome_receipt_id": "outcome-saas-permission-change-missing_authority",
+        "refusal_basis": [
+          "authority_expired_or_missing",
+          "authority_invalid",
+          "authority_missing"
+        ],
         "requested_scope": [
-          "sample:review"
+          "saas:grant_admin"
         ],
-        "target_resource": "sample-evidence-bundle",
-        "target_system": "sample-review-system",
-        "verified_human_approval_proof_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c"
       },
       "evidence_chain_verification_summary": {
-        "decision_id": "sample-decision",
-        "execution_intent_id": "sample-execution-intent",
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
         "failure_reasons": [],
         "is_valid": true,
         "manifest_hash_matches": true,
-        "manifest_id": "sample-evidence-chain-manifest",
+        "manifest_id": "ecm-saas-permission-change-missing_authority",
         "metadata": {
-          "sample_context": "key provenance reviewer walkthrough"
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
         },
         "mismatched_links": [],
-        "missing_links": [],
-        "operation_id": "sample-operation",
-        "recomputed_manifest_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "missing_links": [
+          "authority_evidence_hash"
+        ],
+        "operation_id": "saas-permission-change-missing_authority",
+        "recomputed_manifest_hash": "e516075e6cfbb5cac895d225799df60113eddc36465d688e08968e3e6f93e1f4",
         "verification_status": "verified",
-        "verified_at": "2026-01-15T12:06:00Z",
+        "verified_at": "2026-04-26T00:00:00+00:00",
         "verified_links": [
-          "authority_evidence",
-          "human_approval_receipt",
-          "bind_receipt",
-          "outcome_receipt",
+          "bind_coverage_operation_id",
+          "human_approval_receipt_hash",
+          "manifest_hash",
+          "outcome_receipt_hash",
           "verified_human_approval_proof_hash"
         ]
       },
-      "expected_outcome": "Reviewer can follow illustrative key provenance artifact references.",
-      "failure_reasons": [],
+      "expected_outcome": "block",
+      "failure_reasons": [
+        "authority_expired_or_missing",
+        "authority_invalid",
+        "authority_missing"
+      ],
       "human_approval_summary": {
-        "approval_receipt_id": "sample-human-approval",
+        "approval_receipt_id": "har-saas-001",
         "approved": true,
         "approved_scope": [
-          "sample:review"
+          "saas:grant_admin"
         ],
-        "approver_identity": "sample-reviewer",
-        "approver_role": "sample-review-role",
+        "approver_identity": "human:synthetic_reviewer",
+        "approver_role": "synthetic_reviewer",
         "context_binding": {
-          "action_class": "sample.review",
+          "action_class": "permission_change",
           "ai_output_ref": null,
-          "authority_evidence_id": "sample-authority-evidence",
+          "authority_evidence_id": null,
           "bind_context_hash": null,
-          "decision_id": "sample-decision",
-          "execution_intent_id": "sample-execution-intent",
-          "policy_snapshot_id": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": "policy-snapshot-saas-001",
           "request_ref": null
         },
         "failure_reasons": [],
         "receipt_hash_present": true,
-        "verification_proof_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-        "verified_at": "2026-01-15T12:06:00Z",
+        "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verified_at": "2026-04-26T00:00:00+00:00",
         "verifier_id": "veritas-human-approval-verifier-v1",
         "verifier_key_id": "local-demo-verifier-key",
         "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "verifier_policy_id": "human-approval-verifier-policy-v1"
       },
       "outcome_receipt_summary": {
-        "action_class": "sample.review",
-        "blocked": false,
-        "committed": true,
-        "decision_id": "sample-decision",
+        "action_class": "permission_change",
+        "bind_receipt_id": null,
+        "blocked": true,
+        "committed": false,
+        "decision_id": "decision-saas-001",
         "escalated": false,
-        "evaluated_at": "2026-01-15T12:04:00Z",
-        "execution_intent_id": "sample-execution-intent",
-        "failure_reasons": [],
-        "final_outcome": "commit",
-        "intended_action": "assemble illustrative reviewer evidence packet",
+        "evaluated_at": "2026-04-26T00:00:00+00:00",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [
+          "authority_expired_or_missing",
+          "authority_invalid",
+          "authority_missing"
+        ],
+        "final_outcome": "block",
+        "intended_action": "grant_admin_permission",
         "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true,
           "human_approval_verification_source": "signed_human_approval_artifact",
           "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
           "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
           "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
           "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
-          "sample_context": "key provenance reviewer walkthrough",
-          "verified_human_approval_proof_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-          "verified_human_approval_receipt_id": "sample-human-approval"
+          "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+          "verified_human_approval_receipt_id": "har-saas-001"
+        },
+        "observed_effects": [],
+        "operation_id": "saas-permission-change-missing_authority",
+        "outcome_hash": "54a4b593be499ee0f5fe62274189479d00352646cc6676d196d07ed483b50a90",
+        "outcome_receipt_id": "outcome-saas-permission-change-missing_authority",
+        "post_state_fingerprint": null,
+        "postcondition_status": "skipped",
+        "pre_state_fingerprint": null,
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "rollback_status": null,
+        "rolled_back": false,
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory"
+      },
+      "passed": true,
+      "refusal_basis": [
+        "authority_expired_or_missing",
+        "authority_invalid",
+        "authority_missing"
+      ],
+      "requested_scope": [
+        "saas:grant_admin"
+      ],
+      "reviewer_interpretation": "The local/offline fixture blocked because AuthorityEvidence was missing.",
+      "runtime_recommended_outcome": "block",
+      "target_resource": "synthetic_offline_resource",
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": {
+        "failure_reasons": [],
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_lifecycle_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
+        "verifier_lifecycle_status": "rotated",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1",
+        "verifier_revocation_reason": null,
+        "verifier_revoked_at": null,
+        "verifier_valid_from": "2026-01-01T00:00:00+00:00",
+        "verifier_valid_until": "2026-12-31T00:00:00+00:00"
+      }
+    },
+    {
+      "actual_outcome": "block",
+      "authority_validation_status": "fail",
+      "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+      "case_id": "missing_human_approval",
+      "evidence_chain_manifest_summary": {
+        "action_class": "permission_change",
+        "authority_evidence_hash": "86bd3a69cb781db382f94e0a87e6a36aaa203d934403a23ac36e8856a9d5e940",
+        "authority_evidence_id": "aev-saas-001",
+        "bind_coverage_operation_id": "saas_permission_change_demo",
+        "bind_receipt_hash": null,
+        "bind_receipt_id": null,
+        "chain_status": "blocked",
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "final_outcome": "block",
+        "generated_at": "2026-04-26T00:00:00+00:00",
+        "human_approval_receipt_hash": null,
+        "human_approval_receipt_id": null,
+        "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_lifecycle_snapshot_hash": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
+        "manifest_hash": "20b395802fcdf88e4f81bb867b0f810dcc4182530e444fdcebbe1171a4be3612",
+        "manifest_id": "ecm-saas-permission-change-missing_human_approval",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "missing_links": [
+          "human_approval_receipt_hash"
+        ],
+        "observed_effects_summary": [],
+        "operation_id": "saas-permission-change-missing_human_approval",
+        "outcome_receipt_hash": "f94d52a89c6aafd19bd2a19bba13d51e49fee1080a804d822a8699b8330c0dce",
+        "outcome_receipt_id": "outcome-saas-permission-change-missing_human_approval",
+        "refusal_basis": [
+          "human_approval_missing"
+        ],
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [],
+        "is_valid": true,
+        "manifest_hash_matches": true,
+        "manifest_id": "ecm-saas-permission-change-missing_human_approval",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "mismatched_links": [],
+        "missing_links": [
+          "human_approval_receipt_hash"
+        ],
+        "operation_id": "saas-permission-change-missing_human_approval",
+        "recomputed_manifest_hash": "20b395802fcdf88e4f81bb867b0f810dcc4182530e444fdcebbe1171a4be3612",
+        "verification_status": "verified",
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verified_links": [
+          "authority_evidence_hash",
+          "bind_coverage_operation_id",
+          "manifest_hash",
+          "outcome_receipt_hash"
+        ]
+      },
+      "expected_outcome": "block",
+      "failure_reasons": [
+        "human_approval_missing"
+      ],
+      "human_approval_summary": {
+        "approval_receipt_id": null,
+        "approved": false,
+        "approved_scope": [],
+        "approver_identity": null,
+        "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
+        "failure_reasons": [
+          "human_approval_missing"
+        ],
+        "receipt_hash_present": false,
+        "verification_proof_hash": null,
+        "verified_at": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
+      },
+      "outcome_receipt_summary": {
+        "action_class": "permission_change",
+        "bind_receipt_id": null,
+        "blocked": true,
+        "committed": false,
+        "decision_id": "decision-saas-001",
+        "escalated": false,
+        "evaluated_at": "2026-04-26T00:00:00+00:00",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [
+          "human_approval_missing"
+        ],
+        "final_outcome": "block",
+        "intended_action": "grant_admin_permission",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "observed_effects": [],
+        "operation_id": "saas-permission-change-missing_human_approval",
+        "outcome_hash": "f94d52a89c6aafd19bd2a19bba13d51e49fee1080a804d822a8699b8330c0dce",
+        "outcome_receipt_id": "outcome-saas-permission-change-missing_human_approval",
+        "post_state_fingerprint": null,
+        "postcondition_status": "skipped",
+        "pre_state_fingerprint": null,
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "rollback_status": null,
+        "rolled_back": false,
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory"
+      },
+      "passed": true,
+      "refusal_basis": [
+        "human_approval_missing"
+      ],
+      "requested_scope": [
+        "saas:grant_admin"
+      ],
+      "reviewer_interpretation": "The local/offline fixture blocked because HumanApprovalReceipt was missing.",
+      "runtime_recommended_outcome": "block",
+      "target_resource": "synthetic_offline_resource",
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": null
+    },
+    {
+      "actual_outcome": "block",
+      "authority_validation_status": "fail",
+      "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+      "case_id": "expired_human_approval",
+      "evidence_chain_manifest_summary": {
+        "action_class": "permission_change",
+        "authority_evidence_hash": "86bd3a69cb781db382f94e0a87e6a36aaa203d934403a23ac36e8856a9d5e940",
+        "authority_evidence_id": "aev-saas-001",
+        "bind_coverage_operation_id": "saas_permission_change_demo",
+        "bind_receipt_hash": null,
+        "bind_receipt_id": null,
+        "chain_status": "blocked",
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "final_outcome": "block",
+        "generated_at": "2026-04-26T00:00:00+00:00",
+        "human_approval_receipt_hash": null,
+        "human_approval_receipt_id": null,
+        "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_lifecycle_snapshot_hash": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
+        "manifest_hash": "14271a0d3fa310746804e3778f5f0913defe68326e1a3a63a7a0803968c6b4cf",
+        "manifest_id": "ecm-saas-permission-change-expired_human_approval",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "missing_links": [
+          "human_approval_receipt_hash"
+        ],
+        "observed_effects_summary": [],
+        "operation_id": "saas-permission-change-expired_human_approval",
+        "outcome_receipt_hash": "ee446644e9169ec5bd718a553ec6011e1f7fc2935eab44b135c610fa79206a01",
+        "outcome_receipt_id": "outcome-saas-permission-change-expired_human_approval",
+        "refusal_basis": [
+          "human_approval_expired"
+        ],
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [],
+        "is_valid": true,
+        "manifest_hash_matches": true,
+        "manifest_id": "ecm-saas-permission-change-expired_human_approval",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "mismatched_links": [],
+        "missing_links": [
+          "human_approval_receipt_hash"
+        ],
+        "operation_id": "saas-permission-change-expired_human_approval",
+        "recomputed_manifest_hash": "14271a0d3fa310746804e3778f5f0913defe68326e1a3a63a7a0803968c6b4cf",
+        "verification_status": "verified",
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verified_links": [
+          "authority_evidence_hash",
+          "bind_coverage_operation_id",
+          "manifest_hash",
+          "outcome_receipt_hash"
+        ]
+      },
+      "expected_outcome": "block",
+      "failure_reasons": [
+        "human_approval_expired"
+      ],
+      "human_approval_summary": {
+        "approval_receipt_id": null,
+        "approved": false,
+        "approved_scope": [],
+        "approver_identity": null,
+        "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
+        "failure_reasons": [
+          "human_approval_expired"
+        ],
+        "receipt_hash_present": false,
+        "verification_proof_hash": null,
+        "verified_at": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
+      },
+      "outcome_receipt_summary": {
+        "action_class": "permission_change",
+        "bind_receipt_id": null,
+        "blocked": true,
+        "committed": false,
+        "decision_id": "decision-saas-001",
+        "escalated": false,
+        "evaluated_at": "2026-04-26T00:00:00+00:00",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [
+          "human_approval_expired"
+        ],
+        "final_outcome": "block",
+        "intended_action": "grant_admin_permission",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "observed_effects": [],
+        "operation_id": "saas-permission-change-expired_human_approval",
+        "outcome_hash": "ee446644e9169ec5bd718a553ec6011e1f7fc2935eab44b135c610fa79206a01",
+        "outcome_receipt_id": "outcome-saas-permission-change-expired_human_approval",
+        "post_state_fingerprint": null,
+        "postcondition_status": "skipped",
+        "pre_state_fingerprint": null,
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "rollback_status": null,
+        "rolled_back": false,
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory"
+      },
+      "passed": true,
+      "refusal_basis": [
+        "human_approval_expired"
+      ],
+      "requested_scope": [
+        "saas:grant_admin"
+      ],
+      "reviewer_interpretation": "The local/offline fixture blocked because HumanApprovalReceipt was expired.",
+      "runtime_recommended_outcome": "block",
+      "target_resource": "synthetic_offline_resource",
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": null
+    },
+    {
+      "actual_outcome": "block",
+      "authority_validation_status": "fail",
+      "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+      "case_id": "scope_mismatch",
+      "evidence_chain_manifest_summary": {
+        "action_class": "permission_change",
+        "authority_evidence_hash": "f3ef007f0aa8236117004edd91c0abd105762b8f4d02f8b2572a5988c6c0647a",
+        "authority_evidence_id": "aev-saas-001",
+        "bind_coverage_operation_id": "saas_permission_change_demo",
+        "bind_receipt_hash": null,
+        "bind_receipt_id": null,
+        "chain_status": "blocked",
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "final_outcome": "block",
+        "generated_at": "2026-04-26T00:00:00+00:00",
+        "human_approval_receipt_hash": null,
+        "human_approval_receipt_id": null,
+        "human_approval_required": true,
+        "human_approval_verifier_id": null,
+        "human_approval_verifier_key_id": null,
+        "human_approval_verifier_lifecycle_snapshot_hash": null,
+        "human_approval_verifier_policy_hash": null,
+        "human_approval_verifier_policy_id": null,
+        "manifest_hash": "5b1329d818b576d3d8e7d8985f4fbc358776e059c0011c10cbcea8d417531f17",
+        "manifest_id": "ecm-saas-permission-change-scope_mismatch",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "missing_links": [
+          "human_approval_receipt_hash"
+        ],
+        "observed_effects_summary": [],
+        "operation_id": "saas-permission-change-scope_mismatch",
+        "outcome_receipt_hash": "95a4f24da2b9b02e20935967ce0a5bbda64c5e904e0ef6db3778b0ee14508c22",
+        "outcome_receipt_id": "outcome-saas-permission-change-scope_mismatch",
+        "refusal_basis": [
+          "authority_invalid",
+          "human_approval_scope_not_granted"
+        ],
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": null
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [],
+        "is_valid": true,
+        "manifest_hash_matches": true,
+        "manifest_id": "ecm-saas-permission-change-scope_mismatch",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "mismatched_links": [],
+        "missing_links": [
+          "human_approval_receipt_hash"
+        ],
+        "operation_id": "saas-permission-change-scope_mismatch",
+        "recomputed_manifest_hash": "5b1329d818b576d3d8e7d8985f4fbc358776e059c0011c10cbcea8d417531f17",
+        "verification_status": "verified",
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verified_links": [
+          "authority_evidence_hash",
+          "bind_coverage_operation_id",
+          "manifest_hash",
+          "outcome_receipt_hash"
+        ]
+      },
+      "expected_outcome": "block",
+      "failure_reasons": [
+        "authority_invalid",
+        "human_approval_scope_not_granted"
+      ],
+      "human_approval_summary": {
+        "approval_receipt_id": null,
+        "approved": false,
+        "approved_scope": [],
+        "approver_identity": null,
+        "approver_role": null,
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": null,
+          "request_ref": null
+        },
+        "failure_reasons": [
+          "human_approval_scope_not_granted"
+        ],
+        "receipt_hash_present": false,
+        "verification_proof_hash": null,
+        "verified_at": null,
+        "verifier_id": null,
+        "verifier_key_id": null,
+        "verifier_policy_hash": null,
+        "verifier_policy_id": null
+      },
+      "outcome_receipt_summary": {
+        "action_class": "permission_change",
+        "bind_receipt_id": null,
+        "blocked": true,
+        "committed": false,
+        "decision_id": "decision-saas-001",
+        "escalated": false,
+        "evaluated_at": "2026-04-26T00:00:00+00:00",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [
+          "authority_invalid",
+          "human_approval_scope_not_granted"
+        ],
+        "final_outcome": "block",
+        "intended_action": "grant_admin_permission",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "observed_effects": [],
+        "operation_id": "saas-permission-change-scope_mismatch",
+        "outcome_hash": "95a4f24da2b9b02e20935967ce0a5bbda64c5e904e0ef6db3778b0ee14508c22",
+        "outcome_receipt_id": "outcome-saas-permission-change-scope_mismatch",
+        "post_state_fingerprint": null,
+        "postcondition_status": "skipped",
+        "pre_state_fingerprint": null,
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "rollback_status": null,
+        "rolled_back": false,
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory"
+      },
+      "passed": true,
+      "refusal_basis": [
+        "authority_invalid",
+        "human_approval_scope_not_granted"
+      ],
+      "requested_scope": [
+        "saas:grant_admin"
+      ],
+      "reviewer_interpretation": "The local/offline fixture blocked because approved authority or approval scope was insufficient.",
+      "runtime_recommended_outcome": "block",
+      "target_resource": "synthetic_offline_resource",
+      "target_system": "mock_saas_directory",
+      "verifier_lifecycle_summary": null
+    },
+    {
+      "actual_outcome": "commit",
+      "authority_validation_status": "pass",
+      "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+      "case_id": "valid_authority_and_approval",
+      "evidence_chain_manifest_summary": {
+        "action_class": "permission_change",
+        "authority_evidence_hash": "6879ecdcdeded375a2e81832fe8819a698c9c5df151d7819224420f21a7a53a0",
+        "authority_evidence_id": "aev-saas-001",
+        "bind_coverage_operation_id": "saas_permission_change_demo",
+        "bind_receipt_hash": null,
+        "bind_receipt_id": null,
+        "chain_status": "complete",
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "final_outcome": "commit",
+        "generated_at": "2026-04-26T00:00:00+00:00",
+        "human_approval_receipt_hash": "55db4aa2686f01d6e1133b880ee85e82572957b3e0e3dd63bce692a8be4d38ba",
+        "human_approval_receipt_id": "har-saas-001",
+        "human_approval_required": true,
+        "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+        "human_approval_verifier_key_id": "local-demo-verifier-key",
+        "human_approval_verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
+        "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+        "manifest_hash": "f952b300fd698a17ca84471792364c9862560254e74bb681b05ea12fe8264a41",
+        "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "missing_links": [],
+        "observed_effects_summary": [
+          {
+            "effect_type": "permission_grant",
+            "fixture_only": true,
+            "permission": "saas:grant_admin",
+            "target_resource": "synthetic_offline_resource"
+          }
+        ],
+        "operation_id": "saas-permission-change-valid_authority_and_approval",
+        "outcome_receipt_hash": "b29ecfff49a64dba77185fac997e4a543045f76e2e332274162d2781ab7587e9",
+        "outcome_receipt_id": "outcome-saas-permission-change-valid_authority_and_approval",
+        "refusal_basis": [],
+        "requested_scope": [
+          "saas:grant_admin"
+        ],
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory",
+        "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c"
+      },
+      "evidence_chain_verification_summary": {
+        "decision_id": "decision-saas-001",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [],
+        "is_valid": true,
+        "manifest_hash_matches": true,
+        "manifest_id": "ecm-saas-permission-change-valid_authority_and_approval",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true
+        },
+        "mismatched_links": [],
+        "missing_links": [],
+        "operation_id": "saas-permission-change-valid_authority_and_approval",
+        "recomputed_manifest_hash": "f952b300fd698a17ca84471792364c9862560254e74bb681b05ea12fe8264a41",
+        "verification_status": "verified",
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verified_links": [
+          "authority_evidence_hash",
+          "bind_coverage_operation_id",
+          "human_approval_receipt_hash",
+          "manifest_hash",
+          "outcome_receipt_hash",
+          "verified_human_approval_proof_hash"
+        ]
+      },
+      "expected_outcome": "commit",
+      "failure_reasons": [],
+      "human_approval_summary": {
+        "approval_receipt_id": "har-saas-001",
+        "approved": true,
+        "approved_scope": [
+          "saas:grant_admin"
+        ],
+        "approver_identity": "human:synthetic_reviewer",
+        "approver_role": "synthetic_reviewer",
+        "context_binding": {
+          "action_class": "permission_change",
+          "ai_output_ref": null,
+          "authority_evidence_id": "aev-saas-001",
+          "bind_context_hash": null,
+          "decision_id": "decision-saas-001",
+          "execution_intent_id": "intent-saas-001",
+          "policy_snapshot_id": "policy-snapshot-saas-001",
+          "request_ref": null
+        },
+        "failure_reasons": [],
+        "receipt_hash_present": true,
+        "verification_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+        "verified_at": "2026-04-26T00:00:00+00:00",
+        "verifier_id": "veritas-human-approval-verifier-v1",
+        "verifier_key_id": "local-demo-verifier-key",
+        "verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+        "verifier_policy_id": "human-approval-verifier-policy-v1"
+      },
+      "outcome_receipt_summary": {
+        "action_class": "permission_change",
+        "bind_receipt_id": null,
+        "blocked": false,
+        "committed": true,
+        "decision_id": "decision-saas-001",
+        "escalated": false,
+        "evaluated_at": "2026-04-26T00:00:00+00:00",
+        "execution_intent_id": "intent-saas-001",
+        "failure_reasons": [],
+        "final_outcome": "commit",
+        "intended_action": "grant_admin_permission",
+        "metadata": {
+          "boundary_note": "local/offline fixture only; no live SaaS/IAM/IdP integration",
+          "fixture_only": true,
+          "human_approval_verification_source": "signed_human_approval_artifact",
+          "human_approval_verifier_id": "veritas-human-approval-verifier-v1",
+          "human_approval_verifier_key_id": "local-demo-verifier-key",
+          "human_approval_verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
+          "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
+          "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
+          "verified_human_approval_proof_hash": "4c5825bb7e0f647e705ca280a411695d052bfb8e65382f13804e86c0f485ef0c",
+          "verified_human_approval_receipt_id": "har-saas-001"
         },
         "observed_effects": [
           {
-            "effect": "sample artifacts referenced"
+            "effect_type": "permission_grant",
+            "fixture_only": true,
+            "permission": "saas:grant_admin",
+            "target_resource": "synthetic_offline_resource"
           }
         ],
-        "operation_id": "sample-operation",
-        "outcome_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        "outcome_receipt_id": "sample-outcome-receipt",
+        "operation_id": "saas-permission-change-valid_authority_and_approval",
+        "outcome_hash": "b29ecfff49a64dba77185fac997e4a543045f76e2e332274162d2781ab7587e9",
+        "outcome_receipt_id": "outcome-saas-permission-change-valid_authority_and_approval",
+        "post_state_fingerprint": null,
         "postcondition_status": "passed",
+        "pre_state_fingerprint": null,
         "requested_scope": [
-          "sample:review"
+          "saas:grant_admin"
         ],
+        "rollback_status": null,
         "rolled_back": false,
-        "target_resource": "sample-evidence-bundle",
-        "target_system": "sample-review-system"
+        "target_resource": "synthetic_offline_resource",
+        "target_system": "mock_saas_directory"
       },
       "passed": true,
       "refusal_basis": [],
       "requested_scope": [
-        "sample:review"
+        "saas:grant_admin"
       ],
-      "reviewer_interpretation": "The packet points to the key provenance artifacts; reviewers still need independent public key trust.",
-      "runtime_recommended_outcome": "sample_commit_eligible",
-      "target_resource": "sample-evidence-bundle",
-      "target_system": "sample-review-system",
+      "reviewer_interpretation": "AuthorityEvidence and HumanApprovalReceipt were sufficient for the local/offline fixture to reach a commit outcome.",
+      "runtime_recommended_outcome": "commit",
+      "target_resource": "synthetic_offline_resource",
+      "target_system": "mock_saas_directory",
       "verifier_lifecycle_summary": {
         "failure_reasons": [],
         "verifier_id": "veritas-human-approval-verifier-v1",
@@ -173,8 +827,8 @@
       }
     }
   ],
-  "demo_id": "sample-key-provenance-review",
-  "generated_at": "2026-01-15T12:07:00Z",
+  "demo_id": "saas_permission_change_governed_execution_v1",
+  "generated_at": "2026-04-26T00:00:00+00:00",
   "key_provenance": {
     "key_provenance_result_validation_report": {
       "artifact_name": "key-provenance-result-validation.json",
@@ -191,14 +845,15 @@
     }
   },
   "local_offline_only": true,
-  "packet_hash": "d02fc7e2efc97a8922ed5abf5966e11f9d0821b664258dcb0ffa7468d672135f",
+  "packet_hash": "bc311d8a56bc5e2ebd926b1b1763072cad51f0f92a7b6cadea3316a907b508b2",
   "packet_id": "reviewer-evidence-packet-saas-permission-change-v1",
   "packet_version": "v1",
   "reviewer_notes": [
-    "Illustrative sample only. Not production evidence, not regulatory certification, and not completed third-party audit approval.",
-    "This sample demonstrates verification-result.json to trusted-public-key-provenance.json to key-provenance-validation.json to key-provenance-result-validation.json to reviewer-evidence-packet.json relationships.",
-    "Samples do not create trust, do not replace out-of-band public key trust, and matching fingerprints support correlation only."
+    "This packet is generated from a local/offline fixture demo.",
+    "It does not connect to live SaaS, IAM, IdP, SSO, synthetic directory, bank, sanctions, or production approval systems.",
+    "It demonstrates bind-time governance and evidence-chain verification using deterministic artifacts.",
+    "It is not legal advice, regulatory approval, third-party certification, production audit certification, or proof of live deployment."
   ],
-  "summary": "Illustrative sample packet showing key provenance artifact references for reviewer walkthroughs.",
-  "title": "Illustrative Trusted Public Key Provenance Reviewer Evidence Packet"
+  "summary": "Deterministic local/offline reviewer packet for the SaaS permission-change governed execution demo.",
+  "title": "SaaS Permission-Change Governed Execution Reviewer Evidence Packet"
 }
