@@ -9,6 +9,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+EVIDENCE_CHAIN_MANIFEST_LIFECYCLE_SNAPSHOT_HASH_MISSING = (
+    "evidence_chain_manifest_lifecycle_snapshot_hash_missing"
+)
+EVIDENCE_CHAIN_OUTCOME_LIFECYCLE_SNAPSHOT_HASH_MISSING = (
+    "evidence_chain_outcome_lifecycle_snapshot_hash_missing"
+)
+EVIDENCE_CHAIN_LIFECYCLE_SNAPSHOT_HASH_MISMATCH = (
+    "evidence_chain_lifecycle_snapshot_hash_mismatch"
+)
+REVIEWER_PACKET_VERIFIER_ID_MISMATCH = "reviewer_packet_verifier_id_mismatch"
+REVIEWER_PACKET_VERIFIER_KEY_ID_MISMATCH = (
+    "reviewer_packet_verifier_key_id_mismatch"
+)
+REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH = (
+    "reviewer_packet_verifier_policy_hash_mismatch"
+)
+REVIEWER_PACKET_VERIFICATION_PROOF_HASH_MISMATCH = (
+    "reviewer_packet_verification_proof_hash_mismatch"
+)
+REVIEWER_PACKET_VERIFIED_AT_MISMATCH = "reviewer_packet_verified_at_mismatch"
+REVIEWER_FAILURE_REASON_TAXONOMY_UNKNOWN = (
+    "reviewer_failure_reason_taxonomy_unknown"
+)
+
 _FAILURE_REASON_FIELDS = frozenset(
     {
         "failure_reasons",
@@ -33,9 +57,9 @@ REVIEWER_FAILURE_REASONS = frozenset(
         "blocked_case_refusal_basis_missing",
         "case_expectations_failed",
         "demo_mismatched_links_present",
-        "evidence_chain_lifecycle_snapshot_hash_mismatch",
-        "evidence_chain_manifest_lifecycle_snapshot_hash_missing",
-        "evidence_chain_outcome_lifecycle_snapshot_hash_missing",
+        EVIDENCE_CHAIN_LIFECYCLE_SNAPSHOT_HASH_MISMATCH,
+        EVIDENCE_CHAIN_MANIFEST_LIFECYCLE_SNAPSHOT_HASH_MISSING,
+        EVIDENCE_CHAIN_OUTCOME_LIFECYCLE_SNAPSHOT_HASH_MISSING,
         "evidence_chain_verification_missing",
         "generated_packet_mismatch",
         "golden_fixture_json_unparseable",
@@ -53,23 +77,23 @@ REVIEWER_FAILURE_REASONS = frozenset(
         "required_case_fields_missing",
         "required_top_level_fields_missing",
         "reviewer_evidence_bundle_output_dir_invalid",
-        "reviewer_failure_reason_taxonomy_unknown",
+        REVIEWER_FAILURE_REASON_TAXONOMY_UNKNOWN,
         "reviewer_packet_committed_lifecycle_status_not_clean",
         "reviewer_packet_human_approval_proof_continuity_invalid",
         "reviewer_packet_manifest_lifecycle_snapshot_hash_mismatch",
         "reviewer_packet_outcome_lifecycle_snapshot_hash_mismatch",
-        "reviewer_packet_verification_proof_hash_mismatch",
-        "reviewer_packet_verified_at_mismatch",
+        REVIEWER_PACKET_VERIFICATION_PROOF_HASH_MISMATCH,
+        REVIEWER_PACKET_VERIFIED_AT_MISMATCH,
         "reviewer_packet_verifier_expired_before_verification",
-        "reviewer_packet_verifier_id_mismatch",
+        REVIEWER_PACKET_VERIFIER_ID_MISMATCH,
         "reviewer_packet_verifier_id_missing",
-        "reviewer_packet_verifier_key_id_mismatch",
+        REVIEWER_PACKET_VERIFIER_KEY_ID_MISMATCH,
         "reviewer_packet_verifier_lifecycle_invalid",
         "reviewer_packet_verifier_lifecycle_policy_hash_mismatch",
         "reviewer_packet_verifier_lifecycle_snapshot_hash_missing",
         "reviewer_packet_verifier_lifecycle_snapshot_hash_mismatch",
         "reviewer_packet_verifier_not_yet_valid",
-        "reviewer_packet_verifier_policy_hash_mismatch",
+        REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH,
         "reviewer_packet_verifier_policy_hash_missing",
         "reviewer_packet_verifier_policy_id_missing",
         "reviewer_packet_verifier_revoked_before_verification",

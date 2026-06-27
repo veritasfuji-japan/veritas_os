@@ -34,6 +34,16 @@ REVIEWER_PACKET_TEMPLATE_PATH = (
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.demo.reviewer_failure_reasons import (  # noqa: E402
+    EVIDENCE_CHAIN_LIFECYCLE_SNAPSHOT_HASH_MISMATCH,
+    EVIDENCE_CHAIN_MANIFEST_LIFECYCLE_SNAPSHOT_HASH_MISSING,
+    EVIDENCE_CHAIN_OUTCOME_LIFECYCLE_SNAPSHOT_HASH_MISSING,
+    REVIEWER_PACKET_VERIFICATION_PROOF_HASH_MISMATCH,
+    REVIEWER_PACKET_VERIFIED_AT_MISMATCH,
+    REVIEWER_PACKET_VERIFIER_ID_MISMATCH,
+    REVIEWER_PACKET_VERIFIER_KEY_ID_MISMATCH,
+    REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH,
+)
 from scripts.demo.reviewer_key_provenance_metadata import key_provenance_metadata  # noqa: E402
 from scripts.demo.verifier_lifecycle import (  # noqa: E402
     verifier_lifecycle_summary_from_human_approval,
@@ -123,19 +133,19 @@ LIFECYCLE_HASH_FIELD = "human_approval_verifier_lifecycle_snapshot_hash"
 LIFECYCLE_TAMPER_CASES = (
     (
         "lifecycle_snapshot_manifest_hash_outcome_missing",
-        "evidence_chain_outcome_lifecycle_snapshot_hash_missing",
+        EVIDENCE_CHAIN_OUTCOME_LIFECYCLE_SNAPSHOT_HASH_MISSING,
         "Outcome metadata is missing the lifecycle snapshot hash while the "
         "manifest still carries it.",
     ),
     (
         "lifecycle_snapshot_outcome_hash_manifest_missing",
-        "evidence_chain_manifest_lifecycle_snapshot_hash_missing",
+        EVIDENCE_CHAIN_MANIFEST_LIFECYCLE_SNAPSHOT_HASH_MISSING,
         "Manifest is missing the lifecycle snapshot hash while outcome "
         "metadata still carries it.",
     ),
     (
         "lifecycle_snapshot_hash_mismatch",
-        "evidence_chain_lifecycle_snapshot_hash_mismatch",
+        EVIDENCE_CHAIN_LIFECYCLE_SNAPSHOT_HASH_MISMATCH,
         "Manifest and outcome metadata carry different lifecycle snapshot "
         "hash values.",
     ),
@@ -143,7 +153,7 @@ LIFECYCLE_TAMPER_CASES = (
 VERIFIER_CONTINUITY_TAMPER_CASES = (
     (
         "verifier_id_mismatch",
-        "reviewer_packet_verifier_id_mismatch",
+        REVIEWER_PACKET_VERIFIER_ID_MISMATCH,
         "human_approval_verifier_id",
         "verifier_id",
         "Human approval summary carries a different verifier identity than "
@@ -151,7 +161,7 @@ VERIFIER_CONTINUITY_TAMPER_CASES = (
     ),
     (
         "verifier_key_id_mismatch",
-        "reviewer_packet_verifier_key_id_mismatch",
+        REVIEWER_PACKET_VERIFIER_KEY_ID_MISMATCH,
         "human_approval_verifier_key_id",
         "verifier_key_id",
         "Human approval summary carries a different verifier key identity "
@@ -159,7 +169,7 @@ VERIFIER_CONTINUITY_TAMPER_CASES = (
     ),
     (
         "verifier_policy_hash_mismatch",
-        "reviewer_packet_verifier_policy_hash_mismatch",
+        REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH,
         "human_approval_verifier_policy_hash",
         "verifier_policy_hash",
         "Human approval summary carries a different verifier policy hash "
@@ -167,7 +177,7 @@ VERIFIER_CONTINUITY_TAMPER_CASES = (
     ),
     (
         "verification_proof_hash_mismatch",
-        "reviewer_packet_verification_proof_hash_mismatch",
+        REVIEWER_PACKET_VERIFICATION_PROOF_HASH_MISMATCH,
         "verification_proof_hash",
         "verification_proof_hash",
         "Human approval summary carries a different proof hash than the "
@@ -175,7 +185,7 @@ VERIFIER_CONTINUITY_TAMPER_CASES = (
     ),
     (
         "verified_at_mismatch",
-        "reviewer_packet_verified_at_mismatch",
+        REVIEWER_PACKET_VERIFIED_AT_MISMATCH,
         "verified_at",
         "verified_at",
         "Human approval summary carries a different verified_at timestamp "
@@ -651,11 +661,11 @@ def _tamper_lifecycle_hash_fields(case: dict[str, Any], failure_reason: str) -> 
         metadata = {}
         outcome["metadata"] = metadata
 
-    if failure_reason == "evidence_chain_outcome_lifecycle_snapshot_hash_missing":
+    if failure_reason == EVIDENCE_CHAIN_OUTCOME_LIFECYCLE_SNAPSHOT_HASH_MISSING:
         metadata.pop(LIFECYCLE_HASH_FIELD, None)
-    elif failure_reason == "evidence_chain_manifest_lifecycle_snapshot_hash_missing":
+    elif failure_reason == EVIDENCE_CHAIN_MANIFEST_LIFECYCLE_SNAPSHOT_HASH_MISSING:
         manifest[LIFECYCLE_HASH_FIELD] = None
-    elif failure_reason == "evidence_chain_lifecycle_snapshot_hash_mismatch":
+    elif failure_reason == EVIDENCE_CHAIN_LIFECYCLE_SNAPSHOT_HASH_MISMATCH:
         metadata[LIFECYCLE_HASH_FIELD] = "2" * 64
 
     _mark_lifecycle_continuity_failure(case, failure_reason)
