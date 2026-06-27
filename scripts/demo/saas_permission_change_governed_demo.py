@@ -33,6 +33,7 @@ from scripts.demo.verifier_lifecycle import (
     VERIFIER_POLICY_HASH,
     VERIFIER_POLICY_ID,
     verifier_lifecycle_snapshot,
+    verifier_lifecycle_summary_from_human_approval,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
 
@@ -272,6 +273,22 @@ def _evaluate_case(
             }
         )
 
+    verifier_lifecycle_summary = (
+        verifier_lifecycle_summary_from_human_approval(human_approval_state)
+        if verified_human_approval is not None
+        else None
+    )
+    verifier_lifecycle_snapshot_hash = (
+        verifier_lifecycle_summary.get("verifier_lifecycle_snapshot_hash")
+        if verifier_lifecycle_summary is not None
+        else None
+    )
+    outcome_metadata = {"fixture_only": True, "boundary_note": BOUNDARY_NOTE}
+    if verifier_lifecycle_snapshot_hash:
+        outcome_metadata[
+            "human_approval_verifier_lifecycle_snapshot_hash"
+        ] = verifier_lifecycle_snapshot_hash
+
     outcome_receipt = build_outcome_receipt(
         decision_id="decision-saas-001",
         execution_intent_id="intent-saas-001",
@@ -288,7 +305,7 @@ def _evaluate_case(
         failure_reasons=failure_reasons,
         rollback_status=None,
         evaluated_at=FIXED_NOW.isoformat(),
-        metadata={"fixture_only": True, "boundary_note": BOUNDARY_NOTE},
+        metadata=outcome_metadata,
         verified_human_approval=verified_human_approval,
     )
     authority_evidence_id = (
@@ -357,6 +374,9 @@ def _evaluate_case(
             verified_human_approval.verifier_policy_hash
             if verified_human_approval is not None
             else None
+        ),
+        human_approval_verifier_lifecycle_snapshot_hash=(
+            verifier_lifecycle_snapshot_hash
         ),
     )
 

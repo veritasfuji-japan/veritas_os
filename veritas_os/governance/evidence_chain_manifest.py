@@ -39,6 +39,7 @@ class EvidenceChainManifest:
     human_approval_verifier_key_id: str | None
     human_approval_verifier_policy_id: str | None
     human_approval_verifier_policy_hash: str | None
+    human_approval_verifier_lifecycle_snapshot_hash: str | None
     human_approval_required: bool
     bind_receipt_id: str | None
     bind_receipt_hash: str | None
@@ -79,6 +80,9 @@ class EvidenceChainManifest:
             ),
             "human_approval_verifier_policy_hash": (
                 self.human_approval_verifier_policy_hash
+            ),
+            "human_approval_verifier_lifecycle_snapshot_hash": (
+                self.human_approval_verifier_lifecycle_snapshot_hash
             ),
             "human_approval_required": self.human_approval_required,
             "bind_receipt_id": self.bind_receipt_id,
@@ -204,6 +208,7 @@ def build_evidence_chain_manifest(
     human_approval_verifier_key_id: str | None = None,
     human_approval_verifier_policy_id: str | None = None,
     human_approval_verifier_policy_hash: str | None = None,
+    human_approval_verifier_lifecycle_snapshot_hash: str | None = None,
     human_approval_required: bool = True,
     bind_receipt_id: str | None = None,
     bind_receipt_hash: str | None = None,
@@ -256,6 +261,9 @@ def build_evidence_chain_manifest(
         human_approval_verifier_key_id=human_approval_verifier_key_id,
         human_approval_verifier_policy_id=human_approval_verifier_policy_id,
         human_approval_verifier_policy_hash=human_approval_verifier_policy_hash,
+        human_approval_verifier_lifecycle_snapshot_hash=(
+            human_approval_verifier_lifecycle_snapshot_hash
+        ),
         human_approval_required=human_approval_required,
         bind_receipt_id=bind_receipt_id,
         bind_receipt_hash=bind_receipt_hash,

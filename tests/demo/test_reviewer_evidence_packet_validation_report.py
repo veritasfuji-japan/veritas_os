@@ -158,6 +158,67 @@ def test_approval_required_packet_passes_with_matching_proof_hashes() -> None:
 
     assert report["checks"]["approval_proof_continuity_valid"] is True
     assert report["checks"]["approval_proof_continuity_reasons"] == []
+    assert (
+        report["checks"]["verifier_lifecycle_snapshot_hash_continuity_valid"]
+        is True
+    )
+    assert (
+        report["checks"][
+            "verifier_lifecycle_snapshot_hash_continuity_reasons"
+        ]
+        == []
+    )
+
+
+def test_committed_verified_approval_packet_binds_lifecycle_hash() -> None:
+    packet = _valid_case_packet()
+    case = packet["cases"][0]
+    lifecycle_hash = case["verifier_lifecycle_summary"][
+        "verifier_lifecycle_snapshot_hash"
+    ]
+
+    assert (
+        case["evidence_chain_manifest_summary"][
+            "human_approval_verifier_lifecycle_snapshot_hash"
+        ]
+        == lifecycle_hash
+    )
+    assert (
+        case["outcome_receipt_summary"]["metadata"][
+            "human_approval_verifier_lifecycle_snapshot_hash"
+        ]
+        == lifecycle_hash
+    )
+
+
+def test_validation_report_fails_when_manifest_lifecycle_hash_differs() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["evidence_chain_manifest_summary"][
+        "human_approval_verifier_lifecycle_snapshot_hash"
+    ] = "f" * 64
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert (
+        "reviewer_packet_manifest_lifecycle_snapshot_hash_mismatch"
+        in report["failure_reasons"]
+    )
+
+
+def test_validation_report_fails_when_outcome_lifecycle_hash_differs() -> None:
+    packet = _valid_case_packet()
+    packet["cases"][0]["outcome_receipt_summary"]["metadata"][
+        "human_approval_verifier_lifecycle_snapshot_hash"
+    ] = "f" * 64
+
+    report = _report_for_mutated_packet(packet)
+
+    assert report["status"] == "fail"
+    assert (
+        "reviewer_packet_outcome_lifecycle_snapshot_hash_mismatch"
+        in report["failure_reasons"]
+    )
 
 
 def test_approval_required_packet_fails_when_manifest_proof_hash_missing() -> None:

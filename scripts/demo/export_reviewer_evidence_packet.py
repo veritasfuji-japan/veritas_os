@@ -166,8 +166,45 @@ def _reviewer_interpretation(case: dict[str, Any]) -> str:
     )
 
 
+def _manifest_summary_with_lifecycle_hash(
+    case: dict[str, Any],
+    lifecycle_snapshot_hash: str | None,
+) -> dict[str, Any]:
+    """Return manifest summary with required lifecycle hash field populated."""
+    manifest = copy.deepcopy(case["evidence_chain_manifest_summary"])
+    if (
+        manifest.get("human_approval_verifier_lifecycle_snapshot_hash")
+        == lifecycle_snapshot_hash
+    ):
+        return manifest
+
+    manifest["human_approval_verifier_lifecycle_snapshot_hash"] = (
+        lifecycle_snapshot_hash
+    )
+    manifest_payload = copy.deepcopy(manifest)
+    manifest_payload.pop("manifest_hash", None)
+    manifest["manifest_hash"] = sha256_of_canonical_json(manifest_payload)
+    return manifest
+
+
 def _case_summary(case: dict[str, Any]) -> dict[str, Any]:
     """Return a compact reviewer-facing case summary with nested evidence details."""
+    verifier_lifecycle_summary = _verifier_lifecycle_summary(case)
+    verifier_lifecycle_snapshot_hash = (
+        verifier_lifecycle_summary.get("verifier_lifecycle_snapshot_hash")
+        if verifier_lifecycle_summary is not None
+        else None
+    )
+    evidence_chain_manifest_summary = _manifest_summary_with_lifecycle_hash(
+        case,
+        verifier_lifecycle_snapshot_hash,
+    )
+    evidence_chain_verification_summary = copy.deepcopy(
+        case["evidence_chain_verification_summary"]
+    )
+    evidence_chain_verification_summary["recomputed_manifest_hash"] = (
+        evidence_chain_manifest_summary.get("manifest_hash")
+    )
     return {
         "case_id": case["case_id"],
         "expected_outcome": case["expected_outcome"],
@@ -181,16 +218,12 @@ def _case_summary(case: dict[str, Any]) -> dict[str, Any]:
         "human_approval_summary": _human_approval_summary(
             case["human_approval_state"], case
         ),
-        "verifier_lifecycle_summary": _verifier_lifecycle_summary(case),
+        "verifier_lifecycle_summary": verifier_lifecycle_summary,
         "refusal_basis": case["refusal_basis"],
         "failure_reasons": list(case["failure_reasons"]),
         "outcome_receipt_summary": copy.deepcopy(case["outcome_receipt_summary"]),
-        "evidence_chain_manifest_summary": copy.deepcopy(
-            case["evidence_chain_manifest_summary"]
-        ),
-        "evidence_chain_verification_summary": copy.deepcopy(
-            case["evidence_chain_verification_summary"]
-        ),
+        "evidence_chain_manifest_summary": evidence_chain_manifest_summary,
+        "evidence_chain_verification_summary": evidence_chain_verification_summary,
         "reviewer_interpretation": _reviewer_interpretation(case),
         "boundary_note": case.get("boundary_note", BOUNDARY_NOTE),
     }

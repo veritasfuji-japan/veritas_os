@@ -72,10 +72,11 @@ Reviewer Evidence Packet validation now checks human approval proof continuity f
 - `outcome_receipt_summary.metadata.verified_human_approval_proof_hash` is present;
 - both proof hashes match;
 - reviewer summaries expose the approver, verifier, `verifier_policy_id`, `verifier_policy_hash`, and proof hash;
-- the verifier policy hash in the reviewer summary, manifest summary, and outcome metadata match; and
+- the verifier policy hash in the reviewer summary, manifest summary, and outcome metadata match;
+- when `verifier_lifecycle_summary` is non-null, `verifier_lifecycle_summary.verifier_lifecycle_snapshot_hash`, `evidence_chain_manifest_summary.human_approval_verifier_lifecycle_snapshot_hash`, and `outcome_receipt_summary.metadata.human_approval_verifier_lifecycle_snapshot_hash` match; and
 - a verified `evidence_chain_verification_summary` includes `verified_human_approval_proof_hash` in `verified_links`.
 
-For failed or incomplete evidence-chain verification caused by approval proof continuity, reviewer validation expects deterministic failure reasons from the evidence-chain verifier. This prevents reviewer-facing artifacts from presenting a committed outcome with a substituted, missing, or unverified human approval proof, or with a missing/mismatched verifier policy snapshot. No-approval-required flows may keep the proof hash and verifier policy fields absent and do not need the proof hash link in `verified_links`.
+For failed or incomplete evidence-chain verification caused by approval proof continuity, reviewer validation expects deterministic failure reasons from the evidence-chain verifier. This prevents reviewer-facing artifacts from presenting a committed outcome with a substituted, missing, or unverified human approval proof, or with a missing/mismatched verifier policy or lifecycle snapshot. No-approval-required flows may keep the proof hash, verifier policy fields, and lifecycle snapshot hash absent and do not need the proof hash link in `verified_links`.
 
 ## Local/offline boundary
 
@@ -112,4 +113,3 @@ Reviewer Evidence Packet v1 has a checked-in schema at:
 The schema documents the required packet fields, case summaries, nested evidence summaries, aggregate summary, reviewer notes, packet hash format, and optional `evaluation_governance_artifacts` reference shape. The golden fixture and generated packet are tested against this schema. Future intentional packet-shape changes should update the schema, exporter, tests, and golden fixture in the same PR.
 
 This schema is for a local/offline reviewer packet. It is not a production audit certification, regulatory approval, or proof of live deployment.
-

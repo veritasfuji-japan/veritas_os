@@ -345,6 +345,7 @@ def _ensure_human_approval_context_binding(packet: dict[str, Any]) -> None:
             summary["context_binding"].setdefault(field, None)
         for field in HUMAN_APPROVAL_SUMMARY_VERIFIER_FIELDS:
             summary.setdefault(field, None)
+        manifest.setdefault("human_approval_verifier_lifecycle_snapshot_hash", None)
         case.setdefault("verifier_lifecycle_summary", None)
 
 
@@ -420,9 +421,11 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
 
         for field in HUMAN_APPROVAL_SUMMARY_VERIFIER_FIELDS:
             summary.setdefault(field, None)
+        manifest.setdefault("human_approval_verifier_lifecycle_snapshot_hash", None)
 
         if not _is_verified_approval_case(summary, manifest, outcome):
             case["verifier_lifecycle_summary"] = None
+            manifest["human_approval_verifier_lifecycle_snapshot_hash"] = None
             continue
 
         metadata = outcome.setdefault("metadata", {})
@@ -480,6 +483,16 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
                 "verified_at": verified_at,
             }
         )
+        case["verifier_lifecycle_summary"] = (
+            verifier_lifecycle_summary_from_human_approval(summary)
+        )
+        lifecycle = case["verifier_lifecycle_summary"]
+        lifecycle_hash = (
+            lifecycle.get("verifier_lifecycle_snapshot_hash")
+            if isinstance(lifecycle, dict)
+            else None
+        )
+
         manifest.update(
             {
                 "verified_human_approval_proof_hash": proof_hash,
@@ -487,6 +500,7 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
                 "human_approval_verifier_key_id": verifier_key_id,
                 "human_approval_verifier_policy_id": verifier_policy_id,
                 "human_approval_verifier_policy_hash": verifier_policy_hash,
+                "human_approval_verifier_lifecycle_snapshot_hash": lifecycle_hash,
             }
         )
         metadata.update(
@@ -502,10 +516,8 @@ def _ensure_human_approval_verifier_evidence(packet: dict[str, Any]) -> None:
                 "human_approval_verifier_key_id": verifier_key_id,
                 "human_approval_verifier_policy_id": verifier_policy_id,
                 "human_approval_verifier_policy_hash": verifier_policy_hash,
+                "human_approval_verifier_lifecycle_snapshot_hash": lifecycle_hash,
             }
-        )
-        case["verifier_lifecycle_summary"] = (
-            verifier_lifecycle_summary_from_human_approval(summary)
         )
         _recompute_nested_hashes(manifest, outcome, verification)
 
