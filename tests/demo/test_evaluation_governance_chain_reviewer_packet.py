@@ -260,3 +260,85 @@ def test_valid_approval_case_carries_verifier_policy_evidence() -> None:
     assert outcome_metadata["verified_human_approval_proof_hash"] == summary[
         "verification_proof_hash"
     ]
+
+
+def _cases_by_id(packet: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Return reviewer packet cases keyed by case_id for fixture assertions."""
+    return {
+        case["case_id"]: case
+        for case in packet["cases"]
+        if isinstance(case, dict) and isinstance(case.get("case_id"), str)
+    }
+
+
+@pytest.mark.parametrize(
+    ("case_suffix", "failure_reason"),
+    [
+        (
+            "lifecycle_snapshot_manifest_hash_outcome_missing",
+            "evidence_chain_outcome_lifecycle_snapshot_hash_missing",
+        ),
+        (
+            "lifecycle_snapshot_outcome_hash_manifest_missing",
+            "evidence_chain_manifest_lifecycle_snapshot_hash_missing",
+        ),
+        (
+            "lifecycle_snapshot_hash_mismatch",
+            "evidence_chain_lifecycle_snapshot_hash_mismatch",
+        ),
+    ],
+)
+def test_lifecycle_snapshot_tamper_cases_are_reviewer_visible(
+    case_suffix: str,
+    failure_reason: str,
+) -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+
+    case = _cases_by_id(packet)[f"valid_authority_and_approval_{case_suffix}"]
+    verification = case["evidence_chain_verification_summary"]
+
+    assert verification["verification_status"] in {"failed", "incomplete"}
+    assert verification[
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified"
+    ] is False
+    assert verification[
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons"
+    ] == [failure_reason]
+    assert failure_reason in verification["failure_reasons"]
+    assert (
+        "human_approval_verifier_lifecycle_snapshot_hash"
+        in verification["mismatched_links"]
+    )
+
+
+@pytest.mark.parametrize(
+    "case_suffix",
+    [
+        "lifecycle_snapshot_manifest_hash_outcome_missing",
+        "lifecycle_snapshot_outcome_hash_manifest_missing",
+        "lifecycle_snapshot_hash_mismatch",
+    ],
+)
+def test_lifecycle_snapshot_tamper_cases_are_not_commit_eligible(
+    case_suffix: str,
+) -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+
+    case = _cases_by_id(packet)[f"valid_authority_and_approval_{case_suffix}"]
+    verification = case["evidence_chain_verification_summary"]
+
+    assert verification[
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified"
+    ] is False
+    assert verification[
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons"
+    ]
+    assert case["actual_outcome"] != "commit"
+    assert case["runtime_recommended_outcome"] != "commit"
+    assert case["expected_outcome"] != "commit_eligible"
