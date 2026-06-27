@@ -78,6 +78,8 @@ Reviewer Evidence Packet validation now checks human approval proof continuity f
 
 For failed or incomplete evidence-chain verification caused by approval proof continuity, reviewer validation expects deterministic failure reasons from the evidence-chain verifier. This prevents reviewer-facing artifacts from presenting a committed outcome with a substituted, missing, or unverified human approval proof, or with a missing/mismatched verifier policy or lifecycle snapshot. No-approval-required flows may keep the proof hash, verifier policy fields, and lifecycle snapshot hash absent and do not need the proof hash link in `verified_links`.
 
+Reviewer-facing failure reasons are stable machine-readable strings intended for audit and reviewer automation. The deterministic taxonomy in `scripts/demo/reviewer_failure_reasons.py` allowlists the strings that may appear in reviewer packet cases, evidence-chain verification summaries, verifier lifecycle summaries, tamper fixtures, and validation reports; unknown or misspelled strings fail the local taxonomy guard.
+
 ## Local/offline boundary
 
 Reviewer Evidence Packet v1 is a local/offline fixture export only.

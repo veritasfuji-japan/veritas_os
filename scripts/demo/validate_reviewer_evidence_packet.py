@@ -14,6 +14,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.demo.reviewer_failure_reasons import (  # noqa: E402
+    unknown_failure_reasons,
+)
 from scripts.demo.verifier_lifecycle import (  # noqa: E402
     compute_verifier_lifecycle_snapshot_hash,
     validate_human_approval_verifier_lifecycle_snapshot,
@@ -138,6 +141,9 @@ FAILURE_REASON_BY_CHECK = {
         "reviewer_packet_verifier_lifecycle_snapshot_hash_mismatch"
     ),
     "local_offline_boundary_present": "local_offline_boundary_missing",
+    "reviewer_failure_reason_taxonomy_valid": (
+        "reviewer_failure_reason_taxonomy_unknown"
+    ),
 }
 
 
@@ -668,6 +674,9 @@ def _build_checks(
         ),
         "local_offline_boundary_present": _local_offline_boundary_present(
             generated_packet
+        ),
+        "reviewer_failure_reason_taxonomy_valid": (
+            not unknown_failure_reasons(generated_packet)
         ),
     }
 

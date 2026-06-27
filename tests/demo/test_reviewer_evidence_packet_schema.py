@@ -12,6 +12,10 @@ from typing import Any
 
 import pytest
 
+from scripts.demo.reviewer_failure_reasons import (
+    assert_known_failure_reasons,
+    unknown_failure_reasons,
+)
 
 SCHEMA_PATH = Path("docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json")
 FIXTURE_PATH = Path(
@@ -852,7 +856,10 @@ def test_committed_verified_approval_cases_have_valid_lifecycle() -> None:
             "docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated/"
             "reviewer-evidence-packet.generated.example.json"
         ),
-        Path("samples/evidence_bundle/key_provenance_review/reviewer-evidence-packet.json"),
+        Path(
+            "samples/evidence_bundle/key_provenance_review/"
+            "reviewer-evidence-packet.json"
+        ),
     ]
 
     for packet_path in packet_paths:
@@ -883,3 +890,70 @@ def test_committed_verified_approval_cases_have_valid_lifecycle() -> None:
             revoked_at = lifecycle["verifier_revoked_at"]
             if revoked_at is not None:
                 assert verified_at < _parse_iso_timestamp(revoked_at), packet_path
+
+
+def _reviewer_packet_paths() -> list[Path]:
+    return [
+        FIXTURE_PATH,
+        DECISION_CANDIDATE_REFUSAL_FIXTURE_PATH,
+        EVALUATION_GOVERNANCE_EXAMPLE_PATH,
+        CONTEXT_BOUND_APPROVAL_REPLAY_EXAMPLE_PATH,
+        Path(
+            "docs/en/demo/examples/evaluation-governance-chain-reviewer-packet-v1/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path(
+            "docs/en/demo/examples/evaluation-governance-reviewer-demo-v1/generated/"
+            "reviewer-evidence-packet.generated.example.json"
+        ),
+        Path(
+            "samples/evidence_bundle/key_provenance_review/"
+            "reviewer-evidence-packet.json"
+        ),
+    ]
+
+
+def test_checked_in_reviewer_packets_use_known_failure_reasons() -> None:
+    for packet_path in _reviewer_packet_paths():
+        assert unknown_failure_reasons(_load_json(packet_path)) == (), packet_path
+
+
+def test_generated_evaluation_governance_cases_use_known_failure_reasons() -> None:
+    from scripts.demo import (
+        generate_reviewer_evidence_packet_from_evaluation_governance_chain as helper,
+    )
+
+    example_dir = Path("docs/en/demo/examples/evaluation-governance-offline-chain-v1")
+    chain_manifest = helper.load_json(
+        example_dir / "generated/chain-manifest.generated.example.json"
+    )
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        chain_manifest,
+        example_dir,
+    )
+
+    assert unknown_failure_reasons(packet) == ()
+
+
+def test_validation_report_uses_known_failure_reasons() -> None:
+    from scripts.demo.validate_reviewer_evidence_packet import (
+        build_reviewer_evidence_packet_validation_report,
+    )
+
+    report = build_reviewer_evidence_packet_validation_report()
+
+    assert unknown_failure_reasons(report) == ()
+
+
+def test_unknown_failure_reason_fails_taxonomy_guard() -> None:
+    packet = copy.deepcopy(_load_json(FIXTURE_PATH))
+    packet["cases"][0]["failure_reasons"].append(
+        "reviewer_packet_verifier_polciy_hash_mismatch"
+    )
+
+    unknown = unknown_failure_reasons(packet)
+
+    assert len(unknown) == 1
+    assert unknown[0].reason == "reviewer_packet_verifier_polciy_hash_mismatch"
+    with pytest.raises(AssertionError, match="Unknown reviewer/demo failure reasons"):
+        assert_known_failure_reasons(packet)
