@@ -37,7 +37,7 @@
         "human_approval_verifier_lifecycle_snapshot_hash": "f48b71ec17e99dbf4785defcd6a7f2de3a51333adcb47c5739a81a969f7430fa",
         "human_approval_verifier_policy_hash": "b625a813408d3a1d6c55ff59e9661ac21c4a9017fda76e4369bd9407a743a2cd",
         "human_approval_verifier_policy_id": "human-approval-verifier-policy-v1",
-        "manifest_hash": "229049ea9bc2553276ad38c1a57d24932fc4b82d19488b9e26580df8e3a9d482",
+        "manifest_hash": "e6005e60ed20b1dfc0c6c3df49c6359f01935240780ca64aeeb8d9726931098f",
         "manifest_id": "manifest-valid_same_context",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -45,7 +45,7 @@
         "missing_links": [],
         "observed_effects_summary": [],
         "operation_id": "operation-valid_same_context",
-        "outcome_receipt_hash": "860c0f91b44c750913d5e738946358764f689caf87f8258187c4541561e61f61",
+        "outcome_receipt_hash": "ef0a9acfd135902e7abbc3cf9ff6cb788f0a29ee3aac617c9388c98ad100d7b0",
         "outcome_receipt_id": "outcome-valid_same_context",
         "refusal_basis": [],
         "requested_scope": [
@@ -68,7 +68,7 @@
         "mismatched_links": [],
         "missing_links": [],
         "operation_id": "operation-valid_same_context",
-        "recomputed_manifest_hash": "229049ea9bc2553276ad38c1a57d24932fc4b82d19488b9e26580df8e3a9d482",
+        "recomputed_manifest_hash": "e6005e60ed20b1dfc0c6c3df49c6359f01935240780ca64aeeb8d9726931098f",
         "verification_status": "verified",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -129,7 +129,7 @@
         },
         "observed_effects": [],
         "operation_id": "operation-valid_same_context",
-        "outcome_hash": "860c0f91b44c750913d5e738946358764f689caf87f8258187c4541561e61f61",
+        "outcome_hash": "ef0a9acfd135902e7abbc3cf9ff6cb788f0a29ee3aac617c9388c98ad100d7b0",
         "outcome_receipt_id": "outcome-valid_same_context",
         "postcondition_status": "passed",
         "requested_scope": [
@@ -188,7 +188,7 @@
         "human_approval_verifier_lifecycle_snapshot_hash": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "31492f955dc7f0e786ed2b0398edbba1032b25235f76c9f406ed09da003ebcf4",
+        "manifest_hash": "66b26630eca872d5f2b9480d0beedad3d733ff25ebd05f6ff76dd3098cc0df38",
         "manifest_id": "manifest-replay_different_request_ref",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -196,7 +196,7 @@
         "missing_links": [],
         "observed_effects_summary": [],
         "operation_id": "operation-replay_different_request_ref",
-        "outcome_receipt_hash": "ec37e4aca9d80eae84e91360dd9a7e0ac9619a7bcca65f35b15dbc276b844a4d",
+        "outcome_receipt_hash": "be348b0e7a9a0e5be0440df7150853817de5313544d46504ee10390705324974",
         "outcome_receipt_id": "outcome-replay_different_request_ref",
         "refusal_basis": [
           "human_approval_request_ref_mismatch"
@@ -225,7 +225,7 @@
         ],
         "missing_links": [],
         "operation_id": "operation-replay_different_request_ref",
-        "recomputed_manifest_hash": "31492f955dc7f0e786ed2b0398edbba1032b25235f76c9f406ed09da003ebcf4",
+        "recomputed_manifest_hash": "66b26630eca872d5f2b9480d0beedad3d733ff25ebd05f6ff76dd3098cc0df38",
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -283,7 +283,7 @@
         },
         "observed_effects": [],
         "operation_id": "operation-replay_different_request_ref",
-        "outcome_hash": "ec37e4aca9d80eae84e91360dd9a7e0ac9619a7bcca65f35b15dbc276b844a4d",
+        "outcome_hash": "be348b0e7a9a0e5be0440df7150853817de5313544d46504ee10390705324974",
         "outcome_receipt_id": "outcome-replay_different_request_ref",
         "postcondition_status": "skipped",
         "requested_scope": [
@@ -331,7 +331,7 @@
         "human_approval_verifier_lifecycle_snapshot_hash": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "14a99193e34ffb7cd487116b1c6591f6a647f2d6cc73f311f22f5fa87058c236",
+        "manifest_hash": "c5283dace06598cf5ca5e1e153ee7c8d8fa00b14d472e439766668ddf6a6af4d",
         "manifest_id": "manifest-replay_different_action_class",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -339,7 +339,7 @@
         "missing_links": [],
         "observed_effects_summary": [],
         "operation_id": "operation-replay_different_action_class",
-        "outcome_receipt_hash": "b006d62316529d82228822d55bb4c7b452c630746caf6af5d335681bc4211bdf",
+        "outcome_receipt_hash": "c4fde9b7603a8ecc7b9c549eda1171137964e3d444c7ea7144859c46ef8a2b53",
         "outcome_receipt_id": "outcome-replay_different_action_class",
         "refusal_basis": [
           "human_approval_action_class_mismatch"
@@ -368,7 +368,7 @@
         ],
         "missing_links": [],
         "operation_id": "operation-replay_different_action_class",
-        "recomputed_manifest_hash": "14a99193e34ffb7cd487116b1c6591f6a647f2d6cc73f311f22f5fa87058c236",
+        "recomputed_manifest_hash": "c5283dace06598cf5ca5e1e153ee7c8d8fa00b14d472e439766668ddf6a6af4d",
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -426,7 +426,7 @@
         },
         "observed_effects": [],
         "operation_id": "operation-replay_different_action_class",
-        "outcome_hash": "b006d62316529d82228822d55bb4c7b452c630746caf6af5d335681bc4211bdf",
+        "outcome_hash": "c4fde9b7603a8ecc7b9c549eda1171137964e3d444c7ea7144859c46ef8a2b53",
         "outcome_receipt_id": "outcome-replay_different_action_class",
         "postcondition_status": "skipped",
         "requested_scope": [
@@ -474,7 +474,7 @@
         "human_approval_verifier_lifecycle_snapshot_hash": null,
         "human_approval_verifier_policy_hash": null,
         "human_approval_verifier_policy_id": null,
-        "manifest_hash": "151ee7c95baae04c07d04786d1c8b178e4727857dda2f89eaa9e636730f96ba8",
+        "manifest_hash": "7cdba51e92fed99f61c00f590875a1b81e645a8aceb2fe3b823a3fb5c4a52be9",
         "manifest_id": "manifest-replay_different_bind_context_hash",
         "metadata": {
           "signature_validity_alone_is_insufficient": true
@@ -482,7 +482,7 @@
         "missing_links": [],
         "observed_effects_summary": [],
         "operation_id": "operation-replay_different_bind_context_hash",
-        "outcome_receipt_hash": "41a9bf20fb5f8603f01c85e54cbe8375a25f1062b84f710a20601a56255e5470",
+        "outcome_receipt_hash": "c479f9f527706465741daf8a72f442ef4814651e54ed4e58c83481d90d30a88b",
         "outcome_receipt_id": "outcome-replay_different_bind_context_hash",
         "refusal_basis": [
           "human_approval_bind_context_hash_mismatch"
@@ -511,7 +511,7 @@
         ],
         "missing_links": [],
         "operation_id": "operation-replay_different_bind_context_hash",
-        "recomputed_manifest_hash": "151ee7c95baae04c07d04786d1c8b178e4727857dda2f89eaa9e636730f96ba8",
+        "recomputed_manifest_hash": "7cdba51e92fed99f61c00f590875a1b81e645a8aceb2fe3b823a3fb5c4a52be9",
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
@@ -569,7 +569,7 @@
         },
         "observed_effects": [],
         "operation_id": "operation-replay_different_bind_context_hash",
-        "outcome_hash": "41a9bf20fb5f8603f01c85e54cbe8375a25f1062b84f710a20601a56255e5470",
+        "outcome_hash": "c479f9f527706465741daf8a72f442ef4814651e54ed4e58c83481d90d30a88b",
         "outcome_receipt_id": "outcome-replay_different_bind_context_hash",
         "postcondition_status": "skipped",
         "requested_scope": [
@@ -596,7 +596,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "cfd8e6bd79b8afaf9e3ff80c8566f9b2f051cec536438b00ad5a53a03d365951",
+  "packet_hash": "bc935111791a65c80840d20ae1ceb6349e695e9984a276dd4e64463c265815d6",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [
