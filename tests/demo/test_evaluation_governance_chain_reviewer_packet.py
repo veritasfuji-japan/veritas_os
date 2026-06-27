@@ -342,3 +342,101 @@ def test_lifecycle_snapshot_tamper_cases_are_not_commit_eligible(
     assert case["actual_outcome"] != "commit"
     assert case["runtime_recommended_outcome"] != "commit"
     assert case["expected_outcome"] != "commit_eligible"
+
+
+@pytest.mark.parametrize(
+    ("case_suffix", "failure_reason", "affected_field"),
+    [
+        (
+            "verifier_id_mismatch",
+            "reviewer_packet_verifier_id_mismatch",
+            "human_approval_verifier_id",
+        ),
+        (
+            "verifier_key_id_mismatch",
+            "reviewer_packet_verifier_key_id_mismatch",
+            "human_approval_verifier_key_id",
+        ),
+        (
+            "verifier_policy_hash_mismatch",
+            "reviewer_packet_verifier_policy_hash_mismatch",
+            "human_approval_verifier_policy_hash",
+        ),
+        (
+            "verification_proof_hash_mismatch",
+            "reviewer_packet_verification_proof_hash_mismatch",
+            "verification_proof_hash",
+        ),
+        (
+            "verified_at_mismatch",
+            "reviewer_packet_verified_at_mismatch",
+            "verified_at",
+        ),
+    ],
+)
+def test_verifier_continuity_tamper_cases_are_reviewer_visible(
+    case_suffix: str,
+    failure_reason: str,
+    affected_field: str,
+) -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+
+    case = _cases_by_id(packet)[f"valid_authority_and_approval_{case_suffix}"]
+    verification = case["evidence_chain_verification_summary"]
+
+    assert verification["verification_status"] in {"failed", "incomplete"}
+    assert verification["is_valid"] is False
+    assert verification["failure_reasons"] == [failure_reason]
+    assert affected_field in verification["mismatched_links"]
+    assert case["reviewer_interpretation"]
+
+
+@pytest.mark.parametrize(
+    "case_suffix",
+    [
+        "verifier_id_mismatch",
+        "verifier_key_id_mismatch",
+        "verifier_policy_hash_mismatch",
+        "verification_proof_hash_mismatch",
+        "verified_at_mismatch",
+    ],
+)
+def test_verifier_continuity_tamper_cases_are_not_commit_eligible(
+    case_suffix: str,
+) -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+
+    case = _cases_by_id(packet)[f"valid_authority_and_approval_{case_suffix}"]
+
+    assert case["actual_outcome"] != "commit"
+    assert case["runtime_recommended_outcome"] != "commit"
+    assert case["expected_outcome"] != "commit_eligible"
+
+
+def test_valid_and_no_proof_cases_keep_existing_commit_eligibility() -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+    cases = _cases_by_id(packet)
+
+    valid_case = cases["valid_authority_and_approval"]
+    assert valid_case["actual_outcome"] == "commit"
+    assert valid_case["runtime_recommended_outcome"] == "commit"
+    assert valid_case["expected_outcome"] in {"commit", "commit_eligible"}
+    assert valid_case["evidence_chain_verification_summary"]["is_valid"] is True
+
+    no_proof_cases = [
+        case
+        for case in cases.values()
+        if not case["human_approval_summary"].get("verification_proof_hash")
+    ]
+    assert no_proof_cases
+    for case in no_proof_cases:
+        assert case["verifier_lifecycle_summary"] is None

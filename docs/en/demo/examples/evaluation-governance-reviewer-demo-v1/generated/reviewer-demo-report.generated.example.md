@@ -60,25 +60,29 @@ Boundary statements:
 - evaluation_governance_artifacts exists: `true`
 - Evaluation Governance attachment count: `10`
 - attachment types:
-  - `evaluation_receipt`
+  - `root_authority_manifest`
+  - `evaluation_function_manifest`
   - `manifest_change_receipt`
+  - `evaluation_receipt`
   - `outcome_delta_attribution`
   - `evaluation_drift_detection`
   - `trajectory_admissibility_monitor`
   - `legitimacy_impact_review`
+  - `adversarial_architecture_test_matrix`
+  - `adversarial_scenario_fixtures`
 
 | Attachment type | Required for review | Schema ref |
 | --- | --- | --- |
-| evaluation_receipt | false | docs/en/demo/schemas/evaluation-receipt-v1.schema.json |
-| evaluation_receipt | false | docs/en/demo/schemas/evaluation-receipt-v1.schema.json |
-| evaluation_receipt | false | docs/en/demo/schemas/evaluation-receipt-v1.schema.json |
+| root_authority_manifest | false | docs/en/demo/schemas/root-authority-manifest-v1.schema.json |
+| evaluation_function_manifest | false | docs/en/demo/schemas/evaluation-function-manifest-v1.schema.json |
 | manifest_change_receipt | false | docs/en/demo/schemas/manifest-change-receipt-v1.schema.json |
+| evaluation_receipt | false | docs/en/demo/schemas/evaluation-receipt-v1.schema.json |
 | outcome_delta_attribution | false | docs/en/demo/schemas/outcome-delta-attribution-v1.schema.json |
-| outcome_delta_attribution | false | docs/en/demo/schemas/outcome-delta-attribution-v1.schema.json |
-| evaluation_drift_detection | false | docs/en/demo/schemas/evaluation-drift-detection-v1.schema.json |
 | evaluation_drift_detection | false | docs/en/demo/schemas/evaluation-drift-detection-v1.schema.json |
 | trajectory_admissibility_monitor | false | docs/en/demo/schemas/trajectory-admissibility-monitor-v1.schema.json |
 | legitimacy_impact_review | false | docs/en/demo/schemas/legitimacy-impact-review-v1.schema.json |
+| adversarial_architecture_test_matrix | false | docs/en/demo/schemas/adversarial-architecture-test-matrix-v1.schema.json |
+| adversarial_scenario_fixtures | false | docs/en/demo/schemas/adversarial-scenario-fixtures-v1.schema.json |
 
 These are optional reviewer evidence attachments in v1, not mandatory runtime outputs.
 
@@ -121,6 +125,8 @@ The reviewer demo validator confirmed:
 - schema shape validated where schemas exist
 - safety boundaries checked
 - reviewer packet attachments checked
+- Local hash consistency: PASS
+- Local hash checks: 18 passed, 10 skipped
 
 ## 8. Reviewer inspection order
 

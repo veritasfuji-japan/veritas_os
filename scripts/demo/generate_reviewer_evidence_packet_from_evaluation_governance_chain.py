@@ -140,6 +140,49 @@ LIFECYCLE_TAMPER_CASES = (
         "hash values.",
     ),
 )
+VERIFIER_CONTINUITY_TAMPER_CASES = (
+    (
+        "verifier_id_mismatch",
+        "reviewer_packet_verifier_id_mismatch",
+        "human_approval_verifier_id",
+        "verifier_id",
+        "Human approval summary carries a different verifier identity than "
+        "the manifest and outcome metadata.",
+    ),
+    (
+        "verifier_key_id_mismatch",
+        "reviewer_packet_verifier_key_id_mismatch",
+        "human_approval_verifier_key_id",
+        "verifier_key_id",
+        "Human approval summary carries a different verifier key identity "
+        "than the manifest and outcome metadata.",
+    ),
+    (
+        "verifier_policy_hash_mismatch",
+        "reviewer_packet_verifier_policy_hash_mismatch",
+        "human_approval_verifier_policy_hash",
+        "verifier_policy_hash",
+        "Human approval summary carries a different verifier policy hash "
+        "than the manifest and outcome metadata.",
+    ),
+    (
+        "verification_proof_hash_mismatch",
+        "reviewer_packet_verification_proof_hash_mismatch",
+        "verification_proof_hash",
+        "verification_proof_hash",
+        "Human approval summary carries a different proof hash than the "
+        "manifest and outcome metadata.",
+    ),
+    (
+        "verified_at_mismatch",
+        "reviewer_packet_verified_at_mismatch",
+        "verified_at",
+        "verified_at",
+        "Human approval summary carries a different verified_at timestamp "
+        "than the lifecycle and evidence-chain verification summaries.",
+    ),
+)
+TAMPERED_HEX = "3" * 64
 
 
 def _jsonschema_module() -> Any | None:
@@ -622,6 +665,120 @@ def _tamper_lifecycle_hash_fields(case: dict[str, Any], failure_reason: str) -> 
         _recompute_nested_hashes(manifest, outcome, verification)
 
 
+def _mark_verifier_continuity_failure(
+    case: dict[str, Any],
+    failure_reason: str,
+    affected_field: str,
+) -> None:
+    """Expose verifier continuity tampering in reviewer-facing summaries."""
+    verification = case.get("evidence_chain_verification_summary")
+    if not isinstance(verification, dict):
+        return
+
+    verification["is_valid"] = False
+    verification["verification_status"] = "failed"
+    verification["manifest_hash_matches"] = True
+    verification["failure_reasons"] = [failure_reason]
+    verification["missing_links"] = []
+    verification["mismatched_links"] = [affected_field]
+
+
+def _tampered_value(summary_field: str) -> str:
+    """Return a deterministic local/offline tamper value for a proof field."""
+    if summary_field == "verified_at":
+        return "2027-01-01T00:00:00+00:00"
+    if summary_field == "verifier_id":
+        return "tampered-human-approval-verifier-v1"
+    if summary_field == "verifier_key_id":
+        return "tampered-local-demo-verifier-key"
+    return TAMPERED_HEX
+
+
+def _tamper_verifier_continuity_fields(
+    case: dict[str, Any],
+    failure_reason: str,
+    affected_field: str,
+    summary_field: str,
+) -> None:
+    """Apply deterministic verifier continuity tampering to a case copy."""
+    summary = case.get("human_approval_summary")
+    manifest = case.get("evidence_chain_manifest_summary")
+    outcome = case.get("outcome_receipt_summary")
+    verification = case.get("evidence_chain_verification_summary")
+    if not isinstance(summary, dict):
+        return
+    if not isinstance(manifest, dict):
+        manifest = {}
+    if not isinstance(outcome, dict):
+        outcome = {}
+    if not isinstance(verification, dict):
+        verification = {}
+
+    summary[summary_field] = _tampered_value(summary_field)
+    if summary_field != "verified_at":
+        case["verifier_lifecycle_summary"] = (
+            verifier_lifecycle_summary_from_human_approval(summary)
+        )
+    _mark_verifier_continuity_failure(case, failure_reason, affected_field)
+    _commit_safety_fields(case, failure_reason)
+
+    if isinstance(manifest, dict) and isinstance(outcome, dict):
+        _recompute_nested_hashes(
+            manifest,
+            outcome,
+            verification,
+            include_verified_proof_link=summary_field != "verification_proof_hash",
+        )
+
+
+def _append_verifier_continuity_tamper_regression_cases(
+    packet: dict[str, Any],
+) -> None:
+    """Add local/offline negative fixtures for verifier proof continuity.
+
+    These synthetic cases make verifier identity, key, policy, proof hash, and
+    proof timestamp tampering visible to reviewers without changing production
+    verifier allowlists, runtime admissibility behavior, or live integrations.
+    """
+    cases = packet.get("cases")
+    if not isinstance(cases, list):
+        return
+
+    source_case = next(
+        (
+            case
+            for case in cases
+            if isinstance(case, dict)
+            and case.get("case_id") == "valid_authority_and_approval"
+        ),
+        None,
+    )
+    if source_case is None:
+        return
+
+    for (
+        suffix,
+        failure_reason,
+        affected_field,
+        summary_field,
+        interpretation,
+    ) in VERIFIER_CONTINUITY_TAMPER_CASES:
+        case = copy.deepcopy(source_case)
+        case["case_id"] = f"{source_case['case_id']}_{suffix}"
+        case["reviewer_interpretation"] = interpretation
+        case["boundary_note"] = (
+            "local/offline synthetic tamper regression fixture only; no "
+            "runtime admissibility change or live verifier integration"
+        )
+        _tamper_verifier_continuity_fields(
+            case,
+            failure_reason,
+            affected_field,
+            summary_field,
+        )
+        cases.append(case)
+
+
 def _append_lifecycle_tamper_regression_cases(packet: dict[str, Any]) -> None:
     """Add local/offline negative fixtures for lifecycle hash continuity.
 
@@ -701,6 +858,7 @@ def generate_reviewer_evidence_packet_from_chain(
     _ensure_human_approval_context_binding(packet)
     _ensure_human_approval_verifier_evidence(packet)
     _append_lifecycle_tamper_regression_cases(packet)
+    _append_verifier_continuity_tamper_regression_cases(packet)
     packet["demo_id"] = "evaluation_governance_offline_chain_reviewer_packet_v1"
     packet["generated_at"] = issued_at
     packet["title"] = "Evaluation Governance Offline Chain Reviewer Evidence Packet"
