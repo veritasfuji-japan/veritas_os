@@ -20,7 +20,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.demo.reviewer_failure_reasons import unknown_failure_reasons  # noqa: E402
 SCHEMA_DIR = REPO_ROOT / "docs/en/demo/schemas"
 SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 DATE_TIME_PATTERN = re.compile(
@@ -875,6 +880,18 @@ def verify_local_hash_consistency(
     return result
 
 
+def validate_reviewer_failure_reason_taxonomy(path: Path) -> None:
+    """Validate reviewer packet failure reasons against the stable taxonomy."""
+    unknown = unknown_failure_reasons(load_json(path))
+    if unknown:
+        details = ", ".join(f"{item.path}={item.reason}" for item in unknown)
+        raise ReviewerDemoValidationError(
+            "reviewer failure reason taxonomy",
+            path,
+            f"unknown reviewer/demo failure reason strings: {details}",
+        )
+
+
 def validate_reviewer_demo(
     demo_dir: Path,
     verify_local_hashes: bool = False,
@@ -911,9 +928,11 @@ def validate_reviewer_demo(
     validate_chain_manifest(
         resolved_demo_dir / "chain-manifest.generated.example.json"
     )
-    attachment_count = validate_reviewer_packet_attachments(
+    reviewer_packet_path = (
         resolved_demo_dir / "reviewer-evidence-packet.generated.example.json"
     )
+    attachment_count = validate_reviewer_packet_attachments(reviewer_packet_path)
+    validate_reviewer_failure_reason_taxonomy(reviewer_packet_path)
     validate_demo_summary(resolved_demo_dir / "demo-summary.generated.example.json")
 
     hash_result = LocalHashCheckResult()
