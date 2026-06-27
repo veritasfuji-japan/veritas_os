@@ -73,8 +73,11 @@
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
           "human_approval_receipt_signature",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity",
           "verified_human_approval_proof_hash"
-        ]
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "commit_eligible",
       "failure_reasons": [],
@@ -229,8 +232,11 @@
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
-          "human_approval_receipt_signature"
-        ]
+          "human_approval_receipt_signature",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity"
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "block",
       "failure_reasons": [
@@ -372,8 +378,11 @@
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
-          "human_approval_receipt_signature"
-        ]
+          "human_approval_receipt_signature",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity"
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "block",
       "failure_reasons": [
@@ -515,8 +524,11 @@
         "verification_status": "failed",
         "verified_at": "2026-05-10T00:00:00+00:00",
         "verified_links": [
-          "human_approval_receipt_signature"
-        ]
+          "human_approval_receipt_signature",
+          "human_approval_verifier_lifecycle_snapshot_hash_continuity"
+        ],
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": true,
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": []
       },
       "expected_outcome": "block",
       "failure_reasons": [
@@ -596,7 +608,7 @@
   "demo_id": "context-bound-approval-replay-prevention-v1",
   "generated_at": "2026-05-10T00:00:00+00:00",
   "local_offline_only": true,
-  "packet_hash": "bc935111791a65c80840d20ae1ceb6349e695e9984a276dd4e64463c265815d6",
+  "packet_hash": "afaafa6d6c23080d469933a73108ba6b4e080546676e17aa14479102795b447f",
   "packet_id": "reviewer-evidence-packet-approval-replay-prevention-v1",
   "packet_version": "v1",
   "reviewer_notes": [

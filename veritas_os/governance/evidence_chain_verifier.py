@@ -41,6 +41,10 @@ class EvidenceChainVerificationResult:
     manifest_hash_matches: bool = False
     verified_at: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    human_approval_verifier_lifecycle_snapshot_hash_continuity_verified: bool = False
+    human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons: (
+        list[str]
+    ) = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic JSON-friendly verification summary."""
@@ -59,6 +63,14 @@ class EvidenceChainVerificationResult:
             "manifest_hash_matches": self.manifest_hash_matches,
             "verified_at": self.verified_at,
             "metadata": dict(self.metadata),
+            "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified": (
+                self.human_approval_verifier_lifecycle_snapshot_hash_continuity_verified
+            ),
+            "human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons": (
+                sorted(
+                    self.human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons
+                )
+            ),
         }
 
 
@@ -107,6 +119,12 @@ def verify_evidence_chain_manifest(
             manifest_hash_matches=False,
             verified_at=verified_at,
             metadata=dict(metadata or {}),
+            human_approval_verifier_lifecycle_snapshot_hash_continuity_verified=(
+                False
+            ),
+            human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons=(
+                []
+            ),
         )
 
     missing_links.extend(str(link) for link in manifest.missing_links if str(link).strip())
@@ -158,6 +176,20 @@ def verify_evidence_chain_manifest(
         indeterminate_links=indeterminate_links,
         failure_reasons=failure_reasons,
     )
+
+    lifecycle_failure_reasons = (
+        _human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons(
+            manifest=manifest,
+            outcome_receipt=outcome_receipt,
+        )
+    )
+    if lifecycle_failure_reasons:
+        failure_reasons.extend(lifecycle_failure_reasons)
+        mismatched_links.append("human_approval_verifier_lifecycle_snapshot_hash")
+    else:
+        verified_links.append(
+            "human_approval_verifier_lifecycle_snapshot_hash_continuity"
+        )
 
     _verify_human_approval_proof_hash_binding(
         approval_required=approval_required,
@@ -221,7 +253,51 @@ def verify_evidence_chain_manifest(
         manifest_hash_matches=manifest_hash_matches,
         verified_at=verified_at,
         metadata=dict(metadata or {}),
+        human_approval_verifier_lifecycle_snapshot_hash_continuity_verified=(
+            not lifecycle_failure_reasons
+        ),
+        human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons=(
+            sorted(set(lifecycle_failure_reasons))
+        ),
     )
+
+
+def _human_approval_verifier_lifecycle_snapshot_hash_continuity_failure_reasons(
+    *,
+    manifest: EvidenceChainManifest,
+    outcome_receipt: Any | None,
+) -> list[str]:
+    """Return lifecycle snapshot hash continuity failures for manifest/outcome.
+
+    Evidence-chain verification treats both absent values as valid for
+    no-approval and no-proof paths, but fails deterministically when exactly
+    one side is present or when both present values differ.
+    """
+    manifest_hash = str(
+        getattr(
+            manifest,
+            "human_approval_verifier_lifecycle_snapshot_hash",
+            "",
+        )
+        or ""
+    ).strip()
+    outcome_hash = str(
+        _metadata_value(
+            outcome_receipt,
+            "human_approval_verifier_lifecycle_snapshot_hash",
+        )
+        or ""
+    ).strip()
+
+    if not manifest_hash and not outcome_hash:
+        return []
+    if manifest_hash and not outcome_hash:
+        return ["evidence_chain_outcome_lifecycle_snapshot_hash_missing"]
+    if outcome_hash and not manifest_hash:
+        return ["evidence_chain_manifest_lifecycle_snapshot_hash_missing"]
+    if manifest_hash != outcome_hash:
+        return ["evidence_chain_lifecycle_snapshot_hash_mismatch"]
+    return []
 
 
 def _extract_artifact_hash(artifact: Any) -> str | None:
