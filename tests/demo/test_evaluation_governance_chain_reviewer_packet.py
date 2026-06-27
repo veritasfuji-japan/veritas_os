@@ -419,6 +419,49 @@ def test_verifier_continuity_tamper_cases_are_not_commit_eligible(
     assert case["expected_outcome"] != "commit_eligible"
 
 
+@pytest.mark.parametrize(
+    "case_suffix",
+    [
+        "verifier_id_mismatch",
+        "verifier_key_id_mismatch",
+        "verifier_policy_hash_mismatch",
+        "verification_proof_hash_mismatch",
+        "verified_at_mismatch",
+    ],
+)
+def test_verifier_continuity_tamper_cases_keep_lifecycle_snapshot_stable(
+    case_suffix: str,
+) -> None:
+    packet = helper.generate_reviewer_evidence_packet_from_chain(
+        helper.load_json(CHAIN_MANIFEST_PATH),
+        EXAMPLE_DIR,
+    )
+    cases = _cases_by_id(packet)
+    valid_case = cases["valid_authority_and_approval"]
+    tamper_case = cases[f"valid_authority_and_approval_{case_suffix}"]
+
+    valid_lifecycle = valid_case["verifier_lifecycle_summary"]
+    tamper_lifecycle = tamper_case["verifier_lifecycle_summary"]
+    tamper_manifest = tamper_case["evidence_chain_manifest_summary"]
+    tamper_outcome_metadata = tamper_case["outcome_receipt_summary"]["metadata"]
+    tamper_verification = tamper_case["evidence_chain_verification_summary"]
+
+    assert tamper_lifecycle == valid_lifecycle
+    assert tamper_manifest[
+        "human_approval_verifier_lifecycle_snapshot_hash"
+    ] == tamper_lifecycle["verifier_lifecycle_snapshot_hash"]
+    assert tamper_outcome_metadata[
+        "human_approval_verifier_lifecycle_snapshot_hash"
+    ] == tamper_lifecycle["verifier_lifecycle_snapshot_hash"]
+    assert tamper_verification[
+        "human_approval_verifier_lifecycle_snapshot_hash_continuity_verified"
+    ] is True
+    assert (
+        "human_approval_verifier_lifecycle_snapshot_hash"
+        not in tamper_verification["mismatched_links"]
+    )
+
+
 def test_valid_and_no_proof_cases_keep_existing_commit_eligibility() -> None:
     packet = helper.generate_reviewer_evidence_packet_from_chain(
         helper.load_json(CHAIN_MANIFEST_PATH),

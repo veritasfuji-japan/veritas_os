@@ -300,8 +300,20 @@ def _assert_human_approval_shape(summary: dict[str, Any]) -> None:
     )
 
 
+VERIFIER_CONTINUITY_TAMPER_FAILURE_REASONS = {
+    "reviewer_packet_verifier_id_mismatch",
+    "reviewer_packet_verifier_key_id_mismatch",
+    "reviewer_packet_verifier_policy_hash_mismatch",
+    "reviewer_packet_verification_proof_hash_mismatch",
+    "reviewer_packet_verified_at_mismatch",
+}
+
+
 def _assert_verifier_lifecycle_shape(
-    lifecycle: dict[str, Any] | None, human_approval: dict[str, Any]
+    lifecycle: dict[str, Any] | None,
+    human_approval: dict[str, Any],
+    *,
+    allow_verifier_continuity_mismatch: bool = False,
 ) -> None:
     proof_hash = human_approval.get("verification_proof_hash")
     if not proof_hash:
@@ -310,10 +322,15 @@ def _assert_verifier_lifecycle_shape(
 
     assert isinstance(lifecycle, dict)
     _assert_required_fields(lifecycle, REQUIRED_VERIFIER_LIFECYCLE_FIELDS)
-    assert lifecycle["verifier_id"] == human_approval["verifier_id"]
-    assert lifecycle["verifier_key_id"] == human_approval["verifier_key_id"]
-    assert lifecycle["verifier_policy_id"] == human_approval["verifier_policy_id"]
-    assert lifecycle["verifier_policy_hash"] == human_approval["verifier_policy_hash"]
+    if not allow_verifier_continuity_mismatch:
+        assert lifecycle["verifier_id"] == human_approval["verifier_id"]
+        assert lifecycle["verifier_key_id"] == human_approval["verifier_key_id"]
+        assert lifecycle["verifier_policy_id"] == human_approval[
+            "verifier_policy_id"
+        ]
+        assert lifecycle["verifier_policy_hash"] == human_approval[
+            "verifier_policy_hash"
+        ]
     assert lifecycle["verifier_lifecycle_status"] in {
         "active",
         "rotated",
@@ -543,9 +560,15 @@ def test_checked_in_reviewer_packets_have_lifecycle_fields() -> None:
         for case in packet["cases"]:
             assert "verifier_lifecycle_summary" in case, packet_path
             assert "verified_at" in case["human_approval_summary"], packet_path
+            failure_reasons = set(
+                case["evidence_chain_verification_summary"]["failure_reasons"]
+            )
             _assert_verifier_lifecycle_shape(
                 case["verifier_lifecycle_summary"],
                 case["human_approval_summary"],
+                allow_verifier_continuity_mismatch=bool(
+                    failure_reasons & VERIFIER_CONTINUITY_TAMPER_FAILURE_REASONS
+                ),
             )
 
 

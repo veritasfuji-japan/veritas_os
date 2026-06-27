@@ -715,10 +715,6 @@ def _tamper_verifier_continuity_fields(
         verification = {}
 
     summary[summary_field] = _tampered_value(summary_field)
-    if summary_field != "verified_at":
-        case["verifier_lifecycle_summary"] = (
-            verifier_lifecycle_summary_from_human_approval(summary)
-        )
     _mark_verifier_continuity_failure(case, failure_reason, affected_field)
     _commit_safety_fields(case, failure_reason)
 
