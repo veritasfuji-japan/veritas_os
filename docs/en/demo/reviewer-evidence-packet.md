@@ -80,6 +80,12 @@ For failed or incomplete evidence-chain verification caused by approval proof co
 
 Reviewer-facing failure reasons are stable machine-readable strings intended for audit and reviewer automation. The deterministic taxonomy in `scripts/demo/reviewer_failure_reasons.py` allowlists the strings that may appear in reviewer packet cases, evidence-chain verification summaries, verifier lifecycle summaries, tamper fixtures, and validation reports; unknown or misspelled strings fail the local taxonomy guard.
 
+### Failure reason metadata catalog
+
+The local/offline catalog in `scripts/demo/reviewer_failure_reasons.py` maps each stable failure reason code to reviewer-facing metadata: category, severity, label, explanation, remediation hint, and affected artifacts. Reviewer UI, audit reports, and deterministic automation can use this catalog to explain why a packet, fixture, or validation report failed without changing the underlying machine-readable reason string.
+
+The catalog is demo/reviewer validation scope only. It does not change runtime admissibility, bind/admissibility logic, governance policy behavior, FUJI fail-closed behavior, TrustLog persistence, or the Reviewer Evidence Packet schema.
+
 ## Local/offline boundary
 
 Reviewer Evidence Packet v1 is a local/offline fixture export only.

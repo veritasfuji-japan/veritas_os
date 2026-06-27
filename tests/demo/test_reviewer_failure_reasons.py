@@ -37,6 +37,45 @@ def test_reviewer_failure_reasons_have_no_duplicate_equivalent_values() -> None:
     assert len(values) == len(set(values))
 
 
+def test_failure_reason_metadata_catalog_covers_taxonomy() -> None:
+    """Every stable failure reason must have reviewer-facing metadata."""
+    assert (
+        frozenset(taxonomy.REVIEWER_FAILURE_REASON_METADATA)
+        == taxonomy.REVIEWER_FAILURE_REASONS
+    )
+
+
+def test_failure_reason_metadata_catalog_has_allowed_values() -> None:
+    """Metadata entries must be complete and use allowlisted facets."""
+    for reason, metadata in taxonomy.REVIEWER_FAILURE_REASON_METADATA.items():
+        assert metadata.reason == reason
+        assert metadata.category in taxonomy.REVIEWER_FAILURE_REASON_CATEGORIES
+        assert metadata.severity in taxonomy.REVIEWER_FAILURE_REASON_SEVERITIES
+        assert metadata.reviewer_label
+        assert metadata.reviewer_explanation
+        assert metadata.remediation_hint
+        assert metadata.affected_artifacts
+
+
+def test_failure_reason_metadata_lookup_helpers_are_deterministic() -> None:
+    """Lookup helpers expose metadata only for known taxonomy reasons."""
+    payload = {
+        "cases": [
+            {"failure_reasons": ["human_approval_missing"]},
+            {"expected_failure_reasons": ["authority_missing"]},
+        ]
+    }
+
+    metadata = taxonomy.get_failure_reason_metadata("human_approval_missing")
+    assert metadata is not None
+    assert metadata.reason == "human_approval_missing"
+    assert taxonomy.get_failure_reason_metadata("not_in_taxonomy") is None
+    assert tuple(taxonomy.failure_reason_metadata_for_payload(payload)) == (
+        "authority_missing",
+        "human_approval_missing",
+    )
+
+
 def test_centralized_failure_reason_literals_stay_in_taxonomy_module() -> None:
     """Prevent reintroducing centralized reviewer/demo reason literals."""
     taxonomy_path = Path(taxonomy.__file__).resolve()

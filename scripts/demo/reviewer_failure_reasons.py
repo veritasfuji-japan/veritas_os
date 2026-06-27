@@ -6,7 +6,7 @@ reviewer/demo artifacts. It does not change runtime admissibility behavior.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
 EVIDENCE_CHAIN_MANIFEST_LIFECYCLE_SNAPSHOT_HASH_MISSING = (
@@ -105,6 +105,25 @@ REVIEWER_FAILURE_REASONS = frozenset(
     }
 )
 
+REVIEWER_FAILURE_REASON_CATEGORIES = frozenset(
+    {
+        "schema",
+        "artifact_manifest",
+        "authority",
+        "human_approval",
+        "verifier_lifecycle",
+        "verifier_continuity",
+        "lifecycle_snapshot_continuity",
+        "packet_integrity",
+        "demo_generation",
+        "taxonomy",
+    }
+)
+
+REVIEWER_FAILURE_REASON_SEVERITIES = frozenset(
+    {"info", "warning", "error", "critical"}
+)
+
 
 @dataclass(frozen=True, order=True)
 class UnknownFailureReason:
@@ -112,6 +131,145 @@ class UnknownFailureReason:
 
     path: str
     reason: str
+
+
+@dataclass(frozen=True)
+class FailureReasonMetadata:
+    """Reviewer-facing metadata for a stable demo failure reason code."""
+
+    reason: str
+    category: str
+    severity: str
+    reviewer_label: str
+    reviewer_explanation: str
+    remediation_hint: str
+    affected_artifacts: tuple[str, ...]
+
+
+_CATEGORY_BY_PREFIX = {
+    "artifact_manifest_": "artifact_manifest",
+    "authority_": "authority",
+    "blocked_case_": "demo_generation",
+    "case_expectations_": "demo_generation",
+    "demo_": "demo_generation",
+    "evidence_chain_lifecycle_snapshot_": "lifecycle_snapshot_continuity",
+    "evidence_chain_manifest_lifecycle_snapshot_": (
+        "lifecycle_snapshot_continuity"
+    ),
+    "evidence_chain_outcome_lifecycle_snapshot_": (
+        "lifecycle_snapshot_continuity"
+    ),
+    "evidence_chain_": "packet_integrity",
+    "generated_packet_": "demo_generation",
+    "golden_fixture_": "demo_generation",
+    "human_approval_": "human_approval",
+    "local_offline_": "demo_generation",
+    "packet_hash_": "packet_integrity",
+    "required_case_fields_": "schema",
+    "required_top_level_fields_": "schema",
+    "reviewer_evidence_bundle_": "demo_generation",
+    "reviewer_failure_reason_taxonomy_": "taxonomy",
+    "reviewer_packet_committed_lifecycle_": "verifier_lifecycle",
+    "reviewer_packet_human_approval_proof_": "verifier_continuity",
+    "reviewer_packet_manifest_lifecycle_snapshot_": (
+        "lifecycle_snapshot_continuity"
+    ),
+    "reviewer_packet_outcome_lifecycle_snapshot_": (
+        "lifecycle_snapshot_continuity"
+    ),
+    "reviewer_packet_verification_proof_": "packet_integrity",
+    "reviewer_packet_verified_at_": "verifier_continuity",
+    "reviewer_packet_verifier_lifecycle_snapshot_": (
+        "lifecycle_snapshot_continuity"
+    ),
+    "reviewer_packet_verifier_lifecycle_": "verifier_lifecycle",
+    "reviewer_packet_verifier_": "verifier_continuity",
+    "schema_": "schema",
+    "valid_case_chain_": "packet_integrity",
+}
+
+_AFFECTED_ARTIFACTS_BY_CATEGORY = {
+    "schema": ("reviewer_packet_schema", "validation_report"),
+    "artifact_manifest": ("artifact_manifest", "reviewer_evidence_bundle"),
+    "authority": ("reviewer_packet", "authority_summary"),
+    "human_approval": ("reviewer_packet", "human_approval_summary"),
+    "verifier_lifecycle": ("reviewer_packet", "verifier_lifecycle_summary"),
+    "verifier_continuity": (
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt",
+    ),
+    "lifecycle_snapshot_continuity": (
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt",
+    ),
+    "packet_integrity": (
+        "reviewer_packet",
+        "evidence_chain_manifest",
+        "outcome_receipt",
+    ),
+    "demo_generation": ("demo_fixture", "validation_report"),
+    "taxonomy": ("reviewer_packet", "validation_report"),
+}
+
+
+def _category_for_reason(reason: str) -> str:
+    """Return the reviewer metadata category for a taxonomy reason."""
+    for prefix, category in _CATEGORY_BY_PREFIX.items():
+        if reason.startswith(prefix):
+            return category
+    return "taxonomy"
+
+
+def _severity_for_reason(reason: str, category: str) -> str:
+    """Return a deterministic reviewer severity for a taxonomy reason."""
+    if "taxonomy_unknown" in reason:
+        return "critical"
+    if any(token in reason for token in ("mismatch", "invalid", "failed")):
+        return "error"
+    if any(token in reason for token in ("missing", "unparseable")):
+        return "error"
+    if category in {"verifier_lifecycle", "verifier_continuity"} and any(
+        token in reason for token in ("expired", "revoked", "not_yet_valid")
+    ):
+        return "critical"
+    return "warning"
+
+
+def _label_for_reason(reason: str) -> str:
+    """Return a compact title-case reviewer label for a taxonomy reason."""
+    return reason.replace("_", " ").capitalize()
+
+
+def _metadata_for_reason(reason: str) -> FailureReasonMetadata:
+    """Build metadata for a stable reviewer/demo failure reason."""
+    category = _category_for_reason(reason)
+    severity = _severity_for_reason(reason, category)
+    label = _label_for_reason(reason)
+    return FailureReasonMetadata(
+        reason=reason,
+        category=category,
+        severity=severity,
+        reviewer_label=label,
+        reviewer_explanation=(
+            f"{label} indicates a {category.replace('_', ' ')} validation "
+            "condition failed in the local/offline reviewer demo artifacts."
+        ),
+        remediation_hint=(
+            "Regenerate or repair the affected local demo artifact, then rerun "
+            "the reviewer validation commands before review."
+        ),
+        affected_artifacts=_AFFECTED_ARTIFACTS_BY_CATEGORY[category],
+    )
+
+
+REVIEWER_FAILURE_REASON_METADATA = {
+    reason: _metadata_for_reason(reason)
+    for reason in sorted(REVIEWER_FAILURE_REASONS)
+}
 
 
 def _format_path(path: Iterable[str]) -> str:
@@ -153,3 +311,42 @@ def assert_known_failure_reasons(payload: Any) -> None:
     if unknown:
         details = ", ".join(f"{item.path}={item.reason}" for item in unknown)
         raise AssertionError(f"Unknown reviewer/demo failure reasons: {details}")
+
+
+def get_failure_reason_metadata(reason: str) -> FailureReasonMetadata | None:
+    """Return reviewer-facing metadata for a stable failure reason code."""
+    return REVIEWER_FAILURE_REASON_METADATA.get(reason)
+
+
+def failure_reason_metadata_for_payload(
+    payload: Any,
+) -> dict[str, FailureReasonMetadata]:
+    """Return metadata for known failure reasons found in a payload."""
+    reasons_seen = {
+        reason
+        for _, reason in iter_failure_reasons(payload)
+        if reason in REVIEWER_FAILURE_REASON_METADATA
+    }
+    return {
+        reason: REVIEWER_FAILURE_REASON_METADATA[reason]
+        for reason in sorted(reasons_seen)
+    }
+
+
+def failure_reason_metadata_summary_for_payload(payload: Any) -> dict[str, Any]:
+    """Return a compact reviewer metadata summary for reasons in a payload."""
+    metadata = failure_reason_metadata_for_payload(payload)
+    unknown = unknown_failure_reasons(payload)
+    categories_seen = sorted({item.category for item in metadata.values()})
+    severities_seen = sorted({item.severity for item in metadata.values()})
+    return {
+        "unknown_reasons": [
+            {"path": item.path, "reason": item.reason} for item in unknown
+        ],
+        "known_reasons_seen": sorted(metadata),
+        "categories_seen": categories_seen,
+        "severities_seen": severities_seen,
+        "metadata": {
+            reason: asdict(entry) for reason, entry in metadata.items()
+        },
+    }
