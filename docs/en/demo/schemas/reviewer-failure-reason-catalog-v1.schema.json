@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.local/schemas/reviewer-failure-reason-catalog-v1.schema.json",
+  "title": "Reviewer Failure Reason Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "catalog_version",
+    "generated_at",
+    "total_reasons",
+    "categories",
+    "severities",
+    "reasons"
+  ],
+  "properties": {
+    "catalog_version": {
+      "const": "reviewer-failure-reason-catalog-v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "total_reasons": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "severities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "category",
+          "severity",
+          "reviewer_label",
+          "reviewer_explanation",
+          "remediation_hint",
+          "affected_artifacts"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reviewer_label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reviewer_explanation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "remediation_hint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affected_artifacts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

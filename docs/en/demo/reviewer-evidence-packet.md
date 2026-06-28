@@ -86,7 +86,9 @@ Reviewer-facing failure reasons are stable machine-readable codes. The local/off
 
 Generated reviewer documentation is checked in at `docs/en/demo/examples/reviewer-failure-reason-catalog-v1/reviewer-failure-reason-catalog.generated.example.json` and `docs/en/demo/examples/reviewer-failure-reason-catalog-v1/reviewer-failure-reason-catalog.generated.example.md`. These artifacts are derived from the Python metadata source of truth by `scripts/demo/generate_reviewer_failure_reason_catalog.py`, are deterministic, and can be regenerated locally/offline without credentials or network access.
 
-The generated catalog is demo/reviewer documentation only. It does not change runtime admissibility, bind/admissibility logic, governance policy behavior, FUJI fail-closed behavior, TrustLog persistence, emitted failure reason strings, or the Reviewer Evidence Packet schema.
+The generated catalog JSON has a checked-in schema at `docs/en/demo/schemas/reviewer-failure-reason-catalog-v1.schema.json`. The local/offline validator at `scripts/demo/validate_reviewer_failure_reason_catalog.py` checks schema validity, deterministic artifact freshness, taxonomy coverage, one-entry-per-reason uniqueness, stable sorting, and exact metadata fidelity against the Python source of truth.
+
+The generated catalog remains demo/reviewer documentation only. It does not change runtime admissibility, bind/admissibility logic, governance policy behavior, FUJI fail-closed behavior, TrustLog persistence, emitted failure reason strings, or the Reviewer Evidence Packet schema.
 
 ## Local/offline boundary
 
