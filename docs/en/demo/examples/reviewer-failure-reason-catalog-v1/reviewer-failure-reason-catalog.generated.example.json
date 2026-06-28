@@ -1,0 +1,775 @@
+{
+  "catalog_version": "reviewer-failure-reason-catalog-v1",
+  "categories": [
+    "artifact_manifest",
+    "authority",
+    "demo_generation",
+    "human_approval",
+    "lifecycle_snapshot_continuity",
+    "packet_integrity",
+    "schema",
+    "taxonomy",
+    "verifier_continuity",
+    "verifier_lifecycle"
+  ],
+  "generated_at": "2026-01-01T00:00:00Z",
+  "reasons": [
+    {
+      "affected_artifacts": [
+        "artifact_manifest",
+        "reviewer_evidence_bundle"
+      ],
+      "category": "artifact_manifest",
+      "reason": "artifact_manifest_artifact_name_invalid",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Artifact manifest artifact name invalid indicates a artifact manifest validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Artifact manifest artifact name invalid",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "artifact_manifest",
+        "reviewer_evidence_bundle"
+      ],
+      "category": "artifact_manifest",
+      "reason": "artifact_manifest_file_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Artifact manifest file hash mismatch indicates a artifact manifest validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Artifact manifest file hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "artifact_manifest",
+        "reviewer_evidence_bundle"
+      ],
+      "category": "artifact_manifest",
+      "reason": "artifact_manifest_file_size_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Artifact manifest file size mismatch indicates a artifact manifest validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Artifact manifest file size mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "artifact_manifest",
+        "reviewer_evidence_bundle"
+      ],
+      "category": "artifact_manifest",
+      "reason": "artifact_manifest_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Artifact manifest hash mismatch indicates a artifact manifest validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Artifact manifest hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "artifact_manifest",
+        "reviewer_evidence_bundle"
+      ],
+      "category": "artifact_manifest",
+      "reason": "artifact_manifest_json_unparseable",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Artifact manifest json unparseable indicates a artifact manifest validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Artifact manifest json unparseable",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "artifact_manifest",
+        "reviewer_evidence_bundle"
+      ],
+      "category": "artifact_manifest",
+      "reason": "artifact_manifest_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Artifact manifest missing indicates a artifact manifest validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Artifact manifest missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "artifact_manifest",
+        "reviewer_evidence_bundle"
+      ],
+      "category": "artifact_manifest",
+      "reason": "artifact_manifest_required_file_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Artifact manifest required file missing indicates a artifact manifest validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Artifact manifest required file missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "authority_summary"
+      ],
+      "category": "authority",
+      "reason": "authority_expired_or_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Authority expired or missing indicates a authority validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Authority expired or missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "authority_summary"
+      ],
+      "category": "authority",
+      "reason": "authority_invalid",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Authority invalid indicates a authority validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Authority invalid",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "authority_summary"
+      ],
+      "category": "authority",
+      "reason": "authority_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Authority missing indicates a authority validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Authority missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "blocked_case_outcome_failure_reasons_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Blocked case outcome failure reasons missing indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Blocked case outcome failure reasons missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "blocked_case_refusal_basis_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Blocked case refusal basis missing indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Blocked case refusal basis missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "case_expectations_failed",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Case expectations failed indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Case expectations failed",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "demo_mismatched_links_present",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Demo mismatched links present indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Demo mismatched links present",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "lifecycle_snapshot_continuity",
+      "reason": "evidence_chain_lifecycle_snapshot_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Evidence chain lifecycle snapshot hash mismatch indicates a lifecycle snapshot continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Evidence chain lifecycle snapshot hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "lifecycle_snapshot_continuity",
+      "reason": "evidence_chain_manifest_lifecycle_snapshot_hash_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Evidence chain manifest lifecycle snapshot hash missing indicates a lifecycle snapshot continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Evidence chain manifest lifecycle snapshot hash missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "lifecycle_snapshot_continuity",
+      "reason": "evidence_chain_outcome_lifecycle_snapshot_hash_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Evidence chain outcome lifecycle snapshot hash missing indicates a lifecycle snapshot continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Evidence chain outcome lifecycle snapshot hash missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "packet_integrity",
+      "reason": "evidence_chain_verification_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Evidence chain verification missing indicates a packet integrity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Evidence chain verification missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "generated_packet_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Generated packet mismatch indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Generated packet mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "golden_fixture_json_unparseable",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Golden fixture json unparseable indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Golden fixture json unparseable",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "golden_fixture_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Golden fixture missing indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Golden fixture missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary"
+      ],
+      "category": "human_approval",
+      "reason": "human_approval_action_class_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Human approval action class mismatch indicates a human approval validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Human approval action class mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary"
+      ],
+      "category": "human_approval",
+      "reason": "human_approval_bind_context_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Human approval bind context hash mismatch indicates a human approval validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Human approval bind context hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary"
+      ],
+      "category": "human_approval",
+      "reason": "human_approval_expired",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Human approval expired indicates a human approval validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Human approval expired",
+      "severity": "warning"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary"
+      ],
+      "category": "human_approval",
+      "reason": "human_approval_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Human approval missing indicates a human approval validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Human approval missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary"
+      ],
+      "category": "human_approval",
+      "reason": "human_approval_request_ref_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Human approval request ref mismatch indicates a human approval validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Human approval request ref mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary"
+      ],
+      "category": "human_approval",
+      "reason": "human_approval_scope_not_granted",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Human approval scope not granted indicates a human approval validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Human approval scope not granted",
+      "severity": "warning"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "local_offline_boundary_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Local offline boundary missing indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Local offline boundary missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "packet_integrity",
+      "reason": "packet_hash_length_invalid",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Packet hash length invalid indicates a packet integrity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Packet hash length invalid",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "packet_integrity",
+      "reason": "packet_hash_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Packet hash missing indicates a packet integrity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Packet hash missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "packet_integrity",
+      "reason": "packet_hash_recompute_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Packet hash recompute mismatch indicates a packet integrity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Packet hash recompute mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet_schema",
+        "validation_report"
+      ],
+      "category": "schema",
+      "reason": "required_case_fields_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Required case fields missing indicates a schema validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Required case fields missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet_schema",
+        "validation_report"
+      ],
+      "category": "schema",
+      "reason": "required_top_level_fields_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Required top level fields missing indicates a schema validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Required top level fields missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "demo_fixture",
+        "validation_report"
+      ],
+      "category": "demo_generation",
+      "reason": "reviewer_evidence_bundle_output_dir_invalid",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer evidence bundle output dir invalid indicates a demo generation validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer evidence bundle output dir invalid",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "validation_report"
+      ],
+      "category": "taxonomy",
+      "reason": "reviewer_failure_reason_taxonomy_unknown",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer failure reason taxonomy unknown indicates a taxonomy validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer failure reason taxonomy unknown",
+      "severity": "critical"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary"
+      ],
+      "category": "verifier_lifecycle",
+      "reason": "reviewer_packet_committed_lifecycle_status_not_clean",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet committed lifecycle status not clean indicates a verifier lifecycle validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet committed lifecycle status not clean",
+      "severity": "warning"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_human_approval_proof_continuity_invalid",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet human approval proof continuity invalid indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet human approval proof continuity invalid",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "lifecycle_snapshot_continuity",
+      "reason": "reviewer_packet_manifest_lifecycle_snapshot_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet manifest lifecycle snapshot hash mismatch indicates a lifecycle snapshot continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet manifest lifecycle snapshot hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "lifecycle_snapshot_continuity",
+      "reason": "reviewer_packet_outcome_lifecycle_snapshot_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet outcome lifecycle snapshot hash mismatch indicates a lifecycle snapshot continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet outcome lifecycle snapshot hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "packet_integrity",
+      "reason": "reviewer_packet_verification_proof_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verification proof hash mismatch indicates a packet integrity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verification proof hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verified_at_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verified at mismatch indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verified at mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_expired_before_verification",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier expired before verification indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier expired before verification",
+      "severity": "critical"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_id_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier id mismatch indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier id mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_id_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier id missing indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier id missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_key_id_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier key id mismatch indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier key id mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary"
+      ],
+      "category": "verifier_lifecycle",
+      "reason": "reviewer_packet_verifier_lifecycle_invalid",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier lifecycle invalid indicates a verifier lifecycle validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier lifecycle invalid",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary"
+      ],
+      "category": "verifier_lifecycle",
+      "reason": "reviewer_packet_verifier_lifecycle_policy_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier lifecycle policy hash mismatch indicates a verifier lifecycle validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier lifecycle policy hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "lifecycle_snapshot_continuity",
+      "reason": "reviewer_packet_verifier_lifecycle_snapshot_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier lifecycle snapshot hash mismatch indicates a lifecycle snapshot continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier lifecycle snapshot hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "verifier_lifecycle_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "lifecycle_snapshot_continuity",
+      "reason": "reviewer_packet_verifier_lifecycle_snapshot_hash_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier lifecycle snapshot hash missing indicates a lifecycle snapshot continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier lifecycle snapshot hash missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_not_yet_valid",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier not yet valid indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier not yet valid",
+      "severity": "critical"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_policy_hash_mismatch",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier policy hash mismatch indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier policy hash mismatch",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_policy_hash_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier policy hash missing indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier policy hash missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_policy_id_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier policy id missing indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier policy id missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "human_approval_summary",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "verifier_continuity",
+      "reason": "reviewer_packet_verifier_revoked_before_verification",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Reviewer packet verifier revoked before verification indicates a verifier continuity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Reviewer packet verifier revoked before verification",
+      "severity": "critical"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet_schema",
+        "validation_report"
+      ],
+      "category": "schema",
+      "reason": "schema_file_json_unparseable",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Schema file json unparseable indicates a schema validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Schema file json unparseable",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet_schema",
+        "validation_report"
+      ],
+      "category": "schema",
+      "reason": "schema_file_missing",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Schema file missing indicates a schema validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Schema file missing",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet_schema",
+        "validation_report"
+      ],
+      "category": "schema",
+      "reason": "schema_json_unparseable",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Schema json unparseable indicates a schema validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Schema json unparseable",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet_schema",
+        "validation_report"
+      ],
+      "category": "schema",
+      "reason": "schema_validation_failed",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Schema validation failed indicates a schema validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Schema validation failed",
+      "severity": "error"
+    },
+    {
+      "affected_artifacts": [
+        "reviewer_packet",
+        "evidence_chain_manifest",
+        "outcome_receipt"
+      ],
+      "category": "packet_integrity",
+      "reason": "valid_case_chain_not_verified",
+      "remediation_hint": "Regenerate or repair the affected local demo artifact, then rerun the reviewer validation commands before review.",
+      "reviewer_explanation": "Valid case chain not verified indicates a packet integrity validation condition failed in the local/offline reviewer demo artifacts.",
+      "reviewer_label": "Valid case chain not verified",
+      "severity": "warning"
+    }
+  ],
+  "severities": [
+    "critical",
+    "error",
+    "info",
+    "warning"
+  ],
+  "total_reasons": 59
+}

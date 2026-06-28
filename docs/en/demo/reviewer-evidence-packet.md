@@ -82,9 +82,11 @@ Reviewer-facing failure reasons are stable machine-readable strings intended for
 
 ### Failure reason metadata catalog
 
-The local/offline catalog in `scripts/demo/reviewer_failure_reasons.py` maps each stable failure reason code to reviewer-facing metadata: category, severity, label, explanation, remediation hint, and affected artifacts. Reviewer UI, audit reports, and deterministic automation can use this catalog to explain why a packet, fixture, or validation report failed without changing the underlying machine-readable reason string.
+Reviewer-facing failure reasons are stable machine-readable codes. The local/offline catalog in `scripts/demo/reviewer_failure_reasons.py` maps each stable code to reviewer-facing metadata: category, severity, label, explanation, remediation hint, and affected artifacts. Reviewer UI, audit reports, and deterministic automation can use this catalog to explain why a packet, fixture, or validation report failed without changing the underlying machine-readable reason string.
 
-The catalog is demo/reviewer validation scope only. It does not change runtime admissibility, bind/admissibility logic, governance policy behavior, FUJI fail-closed behavior, TrustLog persistence, or the Reviewer Evidence Packet schema.
+Generated reviewer documentation is checked in at `docs/en/demo/examples/reviewer-failure-reason-catalog-v1/reviewer-failure-reason-catalog.generated.example.json` and `docs/en/demo/examples/reviewer-failure-reason-catalog-v1/reviewer-failure-reason-catalog.generated.example.md`. These artifacts are derived from the Python metadata source of truth by `scripts/demo/generate_reviewer_failure_reason_catalog.py`, are deterministic, and can be regenerated locally/offline without credentials or network access.
+
+The generated catalog is demo/reviewer documentation only. It does not change runtime admissibility, bind/admissibility logic, governance policy behavior, FUJI fail-closed behavior, TrustLog persistence, emitted failure reason strings, or the Reviewer Evidence Packet schema.
 
 ## Local/offline boundary
 
