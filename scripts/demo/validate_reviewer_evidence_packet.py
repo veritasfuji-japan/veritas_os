@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.demo.reviewer_failure_reasons import (  # noqa: E402
     REVIEWER_FAILURE_REASON_TAXONOMY_UNKNOWN,
     REVIEWER_PACKET_VERIFIER_POLICY_HASH_MISMATCH,
+    failure_reason_metadata_summary_for_payload,
     unknown_failure_reasons,
 )
 from scripts.demo.verifier_lifecycle import (  # noqa: E402
@@ -747,6 +748,10 @@ def _build_report_for_packet(
         _approval_proof_continuity_reasons(packet)
     )
     failure_reasons = _failure_reasons(checks)
+    failure_reason_payload = {
+        "packet": copy.deepcopy(packet),
+        "failure_reasons": failure_reasons,
+    }
     return {
         "report_id": REPORT_ID,
         "report_version": REPORT_VERSION,
@@ -758,6 +763,9 @@ def _build_report_for_packet(
         "checks": checks,
         "aggregate_summary": _aggregate_summary(packet),
         "failure_reasons": failure_reasons,
+        "failure_reason_metadata_summary": (
+            failure_reason_metadata_summary_for_payload(failure_reason_payload)
+        ),
         "reviewer_notes": list(REVIEWER_NOTES),
         "boundary_note": packet.get("boundary_note", BOUNDARY_NOTE),
     }
