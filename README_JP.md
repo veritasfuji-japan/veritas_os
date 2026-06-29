@@ -27,6 +27,14 @@ VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agen
 
 外部レビュー担当者向けの入口は `docs/REVIEWER_ENTRYPOINT.md` を参照してください。
 
+## Reviewer Evidence Documentation
+
+Reviewer向けの証跡保証、検証、failure reason taxonomy、生成catalog、demo validation reportについては、以下から確認できます。
+
+- [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
+- [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
+- [Reviewer Evidence Packet](docs/en/demo/reviewer-evidence-packet.md)
+
 - **性能メトリクス**: [日本語補助](docs/ja/benchmarks/performance-metrics.md) / [英語正本](docs/en/benchmarks/performance-metrics.md)
 - **最新ローカル性能メトリクスartifact**: [日本語補助](docs/ja/benchmarks/local-performance-metrics.latest.md) / [英語正本](docs/en/benchmarks/local-performance-metrics.latest.md) / [JSON](docs/en/benchmarks/local-performance-metrics.latest.json)
 - **One-Day PoC証跡パック**: [日本語補助](docs/ja/poc/one-day-poc-evidence-pack.md) / [英語正本](docs/en/poc/one-day-poc-evidence-pack.md)
