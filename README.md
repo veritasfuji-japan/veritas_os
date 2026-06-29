@@ -19,6 +19,44 @@
 VERITAS OS is a **Decision Governance and Bind-Boundary Control Plane** for AI agents.
 Instead of passing model output directly to execution, VERITAS routes each decision through a **reproducible, fail-closed, safety-gated, hash-chained governance pipeline** with an operator-facing governance surface in **Mission Control** and governance APIs.
 
+## Architecture at a Glance
+
+```text
+AI / Agent Output
+  ↓
+Decision Candidate
+  ↓
+Governance Evaluation
+  ↓
+Human Approval / Authority Evidence
+  ↓
+Evidence Chain
+  ↓
+Bind Boundary
+  ↓
+Execution Intent
+  ↓
+Outcome Receipt
+  ↓
+Reviewer Evidence Packet
+  ↓
+Validation Report
+```
+
+| Layer | Purpose |
+| --- | --- |
+| Decision Candidate | Structured pre-execution decision object. |
+| Governance Evaluation | Policy, authority, evidence, and approval checks. |
+| Human Approval / Authority Evidence | Binds human authority and approval proof. |
+| Evidence Chain | Preserves hashes, manifests, and verification links. |
+| Bind Boundary | Final pre-execution control point. |
+| Execution Intent | Allowed action after governance checks. |
+| Outcome Receipt | Records the observed outcome. |
+| Reviewer Evidence Packet | Reviewer-facing evidence bundle. |
+| Validation Report | Deterministic validation result and failure reasons. |
+
+For deeper reviewer evidence context, see the [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md), [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md), and [Reviewer Evidence Packet](docs/en/demo/reviewer-evidence-packet.md).
+
 Official Website: https://veritas-website-navy.vercel.app/
 
 This project is not only about running agents.

@@ -21,6 +21,44 @@
 VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agents**（AIエージェント向け意思決定ガバナンス / bind-boundary 制御プレーン）です。
 エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。これは、AIエージェントの意思決定と実行境界を統治するコントロールプレーンという現在のプロダクトポジショニングを示します。
 
+## アーキテクチャ概要
+
+```text
+AI / Agent Output
+  ↓
+Decision Candidate
+  ↓
+Governance Evaluation
+  ↓
+Human Approval / Authority Evidence
+  ↓
+Evidence Chain
+  ↓
+Bind Boundary
+  ↓
+Execution Intent
+  ↓
+Outcome Receipt
+  ↓
+Reviewer Evidence Packet
+  ↓
+Validation Report
+```
+
+| レイヤー | 目的 |
+| --- | --- |
+| Decision Candidate | 実行前の構造化された意思決定オブジェクト。 |
+| Governance Evaluation | ポリシー、権限、証跡、承認を確認する。 |
+| Human Approval / Authority Evidence | 人間の権限と承認証明を bind する。 |
+| Evidence Chain | ハッシュ、manifest、検証リンクを保持する。 |
+| Bind Boundary | 実行前の最終制御点。 |
+| Execution Intent | ガバナンス確認後に許可されたアクション。 |
+| Outcome Receipt | 観測された結果を記録する。 |
+| Reviewer Evidence Packet | レビュアー向けの証跡 bundle。 |
+| Validation Report | 決定論的な検証結果と failure reason。 |
+
+レビュアー向け証跡の詳細は、[Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)、[Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)、[Reviewer Evidence Packet](docs/en/demo/reviewer-evidence-packet.md) を参照してください。
+
 公式Webサイト: https://veritas-website-navy.vercel.app/
 
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
