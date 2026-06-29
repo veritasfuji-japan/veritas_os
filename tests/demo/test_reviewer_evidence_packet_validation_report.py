@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import subprocess
 import sys
 
@@ -14,6 +15,8 @@ from scripts.demo.validate_reviewer_evidence_packet import (
     _build_report_for_packet,
     build_reviewer_evidence_packet_validation_report,
 )
+
+SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def test_build_reviewer_evidence_packet_validation_report_returns_dict() -> None:
@@ -64,6 +67,16 @@ def test_validation_report_failure_reasons_and_notes() -> None:
 
     assert report["failure_reasons"] == []
     assert report["reviewer_notes"]
+
+
+def test_validation_report_includes_failure_reason_catalog_provenance() -> None:
+    report = build_reviewer_evidence_packet_validation_report()
+    provenance = report["failure_reason_catalog_provenance"]
+
+    assert provenance["catalog_version"] == "reviewer-failure-reason-catalog-v1"
+    assert provenance["total_reasons"] > 0
+    assert SHA256_HEX_RE.fullmatch(provenance["catalog_json_sha256"])
+    assert SHA256_HEX_RE.fullmatch(provenance["catalog_schema_sha256"])
 
 
 def test_validation_report_output_is_deterministic_across_calls() -> None:

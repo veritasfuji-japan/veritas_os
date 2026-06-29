@@ -10,6 +10,7 @@ It does not change runtime admissibility or emitted failure reason strings.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from dataclasses import asdict
@@ -21,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.demo.generate_reviewer_failure_reason_catalog import (  # noqa: E402
+    CATALOG_VERSION,
     JSON_OUTPUT_PATH,
     MARKDOWN_OUTPUT_PATH,
     build_catalog,
@@ -66,6 +68,17 @@ def _load_json_object(path: Path) -> dict[str, Any]:
             f"expected JSON object in {_display_path(path)}"
         )
     return payload
+
+
+def _sha256_file(path: Path) -> str:
+    """Return the lowercase SHA-256 hex digest for a local file."""
+    if not path.is_file():
+        raise CatalogValidationError(f"missing file: {_display_path(path)}")
+    digest = hashlib.sha256()
+    with path.open("rb") as file_obj:
+        for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _validate_schema_subset(
@@ -212,6 +225,29 @@ def validate_catalog_files() -> None:
         raise CatalogValidationError("generated JSON catalog is stale")
     if markdown != render_markdown(expected_catalog):
         raise CatalogValidationError("generated Markdown catalog is stale")
+
+
+def build_failure_reason_catalog_provenance() -> dict[str, Any]:
+    """Return validated local/offline failure reason catalog provenance.
+
+    The checked-in catalog artifacts are fully validated before hashes and
+    summary metadata are returned, preventing stale or invalid explanation-layer
+    artifacts from being trusted by reviewer validation reports.
+    """
+    validate_catalog_files()
+    catalog = _load_json_object(JSON_OUTPUT_PATH)
+    return {
+        "catalog_version": CATALOG_VERSION,
+        "catalog_json_path": _display_path(JSON_OUTPUT_PATH),
+        "catalog_markdown_path": _display_path(MARKDOWN_OUTPUT_PATH),
+        "catalog_schema_path": _display_path(SCHEMA_PATH),
+        "catalog_json_sha256": _sha256_file(JSON_OUTPUT_PATH),
+        "catalog_markdown_sha256": _sha256_file(MARKDOWN_OUTPUT_PATH),
+        "catalog_schema_sha256": _sha256_file(SCHEMA_PATH),
+        "total_reasons": catalog["total_reasons"],
+        "categories": list(catalog["categories"]),
+        "severities": list(catalog["severities"]),
+    }
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
