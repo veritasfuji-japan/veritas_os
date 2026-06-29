@@ -88,6 +88,8 @@ Generated reviewer documentation is checked in at `docs/en/demo/examples/reviewe
 
 The generated catalog JSON has a checked-in schema at `docs/en/demo/schemas/reviewer-failure-reason-catalog-v1.schema.json`. The local/offline validator at `scripts/demo/validate_reviewer_failure_reason_catalog.py` checks schema validity, deterministic artifact freshness, taxonomy coverage, one-entry-per-reason uniqueness, stable sorting, and exact metadata fidelity against the Python source of truth.
 
+Reviewer Evidence Packet validation reports include `failure_reason_catalog_provenance`, which records the catalog version, catalog/schema paths, local SHA-256 digests, total reason count, categories, and severities used to explain failure reasons. Reviewers can use this provenance to verify exactly which catalog and schema version explained the report without changing the packet schema.
+
 The generated catalog remains demo/reviewer documentation only. It does not change runtime admissibility, bind/admissibility logic, governance policy behavior, FUJI fail-closed behavior, TrustLog persistence, emitted failure reason strings, or the Reviewer Evidence Packet schema.
 
 ## Local/offline boundary

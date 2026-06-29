@@ -20,6 +20,9 @@ from scripts.demo.reviewer_failure_reasons import (  # noqa: E402
     failure_reason_metadata_summary_for_payload,
     unknown_failure_reasons,
 )
+from scripts.demo.validate_reviewer_failure_reason_catalog import (  # noqa: E402
+    build_failure_reason_catalog_provenance,
+)
 from scripts.demo.verifier_lifecycle import (  # noqa: E402
     compute_verifier_lifecycle_snapshot_hash,
     validate_human_approval_verifier_lifecycle_snapshot,
@@ -765,6 +768,9 @@ def _build_report_for_packet(
         "failure_reasons": failure_reasons,
         "failure_reason_metadata_summary": (
             failure_reason_metadata_summary_for_payload(failure_reason_payload)
+        ),
+        "failure_reason_catalog_provenance": (
+            build_failure_reason_catalog_provenance()
         ),
         "reviewer_notes": list(REVIEWER_NOTES),
         "boundary_note": packet.get("boundary_note", BOUNDARY_NOTE),

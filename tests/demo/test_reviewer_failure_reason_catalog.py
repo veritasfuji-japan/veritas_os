@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 
 import pytest
 
@@ -19,10 +20,15 @@ from scripts.demo.validate_reviewer_failure_reason_catalog import (
     CatalogValidationError,
     SCHEMA_PATH,
     _load_json_object,
+    _sha256_file,
     _validate_schema_subset,
+    build_failure_reason_catalog_provenance,
     main,
     validate_catalog_payload,
+    validate_catalog_files,
 )
+
+SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _catalog_with_json_shapes() -> dict[str, object]:
@@ -41,6 +47,53 @@ def test_checked_in_catalog_json_passes_schema_validation() -> None:
 def test_catalog_validator_succeeds_on_current_generated_artifacts() -> None:
     """CI-facing validator must pass for checked-in generated artifacts."""
     assert main([]) == 0
+
+
+def test_catalog_provenance_includes_artifact_hashes() -> None:
+    """Catalog provenance must identify all local explanation artifacts."""
+    provenance = build_failure_reason_catalog_provenance()
+
+    for field in (
+        "catalog_json_sha256",
+        "catalog_markdown_sha256",
+        "catalog_schema_sha256",
+    ):
+        assert SHA256_HEX_RE.fullmatch(provenance[field])
+    assert provenance["total_reasons"] == len(taxonomy.REVIEWER_FAILURE_REASONS)
+    assert provenance["catalog_json_path"].endswith(JSON_OUTPUT_PATH.name)
+
+
+def test_catalog_json_hash_changes_for_temp_content(tmp_path) -> None:
+    """Local SHA-256 provenance changes when catalog JSON bytes change."""
+    catalog_copy = tmp_path / JSON_OUTPUT_PATH.name
+    catalog_copy.write_text(
+        JSON_OUTPUT_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    original_hash = _sha256_file(catalog_copy)
+    catalog_copy.write_text(
+        JSON_OUTPUT_PATH.read_text(encoding="utf-8") + "\n",
+        encoding="utf-8",
+    )
+
+    assert _sha256_file(catalog_copy) != original_hash
+
+
+def test_stale_catalog_file_fails_validator(tmp_path, monkeypatch) -> None:
+    """Catalog provenance remains gated by the deterministic validator."""
+    stale_json = tmp_path / JSON_OUTPUT_PATH.name
+    stale_json.write_text(
+        JSON_OUTPUT_PATH.read_text(encoding="utf-8").replace(
+            '"total_reasons":', '"total_reasons_stale":', 1
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "scripts.demo.validate_reviewer_failure_reason_catalog.JSON_OUTPUT_PATH",
+        stale_json,
+    )
+
+    with pytest.raises(CatalogValidationError):
+        validate_catalog_files()
 
 
 def test_generated_json_matches_metadata_source_of_truth() -> None:
