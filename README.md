@@ -28,6 +28,14 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 
 For external reviewers, start with `docs/REVIEWER_ENTRYPOINT.md`.
 
+## Reviewer Evidence Documentation
+
+For reviewer-facing evidence assurance, validation, failure reason taxonomy, generated catalogs, and demo validation reports, start here:
+
+- [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
+- [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
+- [Reviewer Evidence Packet](docs/en/demo/reviewer-evidence-packet.md)
+
 ## External reviewer fast path
 
 For a 10-minute implementation snapshot, start here:
