@@ -2,6 +2,8 @@
 
 Key local/offline reviewer-facing artifacts:
 
+For the reviewer documentation landing page and suggested reading order, see the [Reviewer Evidence Index](reviewer-evidence-index.md).
+
 - `docs/en/demos/pre_boundary_collapse_demo.md#procedural-admissibility-vs-maneuverability-observables-v0`
   - Procedural Admissibility vs. Maneuverability Observables v0: a reviewer-facing note clarifying that a process can remain admissible, documented, inspectable, and procedurally coherent while practical maneuverability contracts upstream. The note frames visibility of that contraction as a governance function, without adding production claims or runtime behavior.
 - `docs/en/demos/pre_boundary_collapse_demo.md#governance-recognizability-conditions-v0`

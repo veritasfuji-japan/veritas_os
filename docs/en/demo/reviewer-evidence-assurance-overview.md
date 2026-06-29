@@ -1,5 +1,7 @@
 # Reviewer Evidence Assurance Overview
 
+See also: [Reviewer Evidence Index](reviewer-evidence-index.md).
+
 This document is the reviewer-facing map of the local/offline evidence assurance model implemented across the Reviewer Evidence Packet, Evidence Chain verification, verifier continuity checks, verifier lifecycle checks, and failure reason catalog artifacts.
 
 It explains how the existing demo/reviewer artifacts fit together. It does not introduce runtime behavior, schema changes, or new failure reasons.

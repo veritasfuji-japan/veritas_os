@@ -1,5 +1,7 @@
 # Reviewer Evidence Packet v1
 
+See also: [Reviewer Evidence Index](reviewer-evidence-index.md) and [Reviewer Evidence Assurance Overview](reviewer-evidence-assurance-overview.md).
+
 Reviewer Evidence Packet v1 is a deterministic local/offline JSON-friendly export for the SaaS permission-change governed execution demo.
 
 It packages the existing demo output into one reviewer-facing artifact so external reviewers, investors, and enterprise stakeholders can inspect the main governance evidence without opening every internal artifact separately.
