@@ -6,6 +6,8 @@ For external auditors and design partners who want to preview strict Evidence Bu
 
 This is useful for external reviewers, investors, enterprise stakeholders, and technical evaluators who want to reproduce the CI evidence bundle locally with one command.
 
+For the reviewer documentation landing page and suggested reading order, see the [Reviewer Evidence Index](reviewer-evidence-index.md).
+
 ## Usage
 
 ```text
