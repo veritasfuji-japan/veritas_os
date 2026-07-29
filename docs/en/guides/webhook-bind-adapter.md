@@ -16,6 +16,11 @@ The adapter uses three HTTPS endpoints:
 
 An optional compensation endpoint can be configured. Generic external effects may be irreversible. When compensation is absent, fails, or cannot be verified, rollback is not claimed.
 
+Drift-sensitive execution requires the `ExecutionIntent` to carry the
+decision-time `expected_state_fingerprint`. The adapter fingerprints the live
+snapshot with canonical JSON and SHA-256; a missing or mismatched expected
+fingerprint fails closed before the action endpoint is called.
+
 ## HMAC request format
 
 Action and compensation requests are JSON `POST` requests with redirects disabled and a bounded timeout. Receivers should expect:
@@ -67,6 +72,11 @@ With `expected_postcondition={"account": {"limit": 120}}`, the postcondition pas
 
 The adapter fails closed on timeout, connection failure, malformed JSON, non-object JSON, non-2xx responses, unverifiable postconditions, unsafe URLs, missing approval, constraint failure, or runtime-risk failure. BLOCKED and ESCALATED decisions do not execute the action webhook.
 
+Rollback is claimed only after a successful compensation response is followed
+by a fresh snapshot whose canonical fingerprint exactly matches the original
+pre-bind snapshot. A successful compensation HTTP response alone is not proof
+that an external effect was restored.
+
 Outbound URL validation is intentionally restrictive by default:
 
 - HTTPS only
@@ -75,7 +85,11 @@ Outbound URL validation is intentionally restrictive by default:
 - no fragments
 - malformed ports rejected
 - redirects disabled
-- localhost, loopback, link-local, multicast, unspecified, private, and reserved addresses rejected unless a narrowly scoped test/deployment option is enabled
+- localhost, loopback, link-local, multicast, unspecified, private, and reserved addresses rejected
+
+These controls reduce common outbound request and SSRF risks, but they are not
+a claim of complete SSRF resistance. Integrators must also enforce
+deployment-specific egress and DNS policy.
 
 ## What is not yet provided
 

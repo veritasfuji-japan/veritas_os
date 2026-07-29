@@ -75,8 +75,9 @@ class WebhookBindAdapter(BindAdapterContract):
     compensation_url: str | None = None
     compensation_payload: dict[str, Any] | None = None
     transport: WebhookTransport | None = field(default=None, repr=False, compare=False)
-    dns_resolver: Callable[[str], list[str]] | None = field(default=None, repr=False, compare=False)
-    allow_unsafe_test_addresses: bool = False
+    dns_resolver: Callable[[str], list[str]] | None = field(
+        default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "allowed_hosts", frozenset(self.allowed_hosts))
@@ -95,6 +96,10 @@ class WebhookBindAdapter(BindAdapterContract):
         )
 
     def snapshot(self) -> dict[str, Any]:
+        verified_snapshot = getattr(self, "_verified_revert_snapshot", None)
+        if isinstance(verified_snapshot, dict):
+            object.__setattr__(self, "_verified_revert_snapshot", None)
+            return dict(verified_snapshot)
         return self._get_json_object(self.snapshot_url, "BIND_WEBHOOK_SNAPSHOT_FAILED")
 
     def fingerprint_state(self, snapshot: Any) -> str:
@@ -116,7 +121,9 @@ class WebhookBindAdapter(BindAdapterContract):
         del intent
         results = {
             "action_payload_is_object": isinstance(self.action_payload, dict),
-            "expected_postcondition_is_object": isinstance(self.expected_postcondition, dict),
+            "expected_postcondition_is_object": isinstance(
+                self.expected_postcondition, dict
+            ),
             "snapshot_is_object": isinstance(snapshot, dict),
             "snapshot_url_allowed": self._url_allowed(self.snapshot_url),
             "action_url_allowed": self._url_allowed(self.action_url),
@@ -126,13 +133,18 @@ class WebhookBindAdapter(BindAdapterContract):
             and 0 < self.timeout_seconds <= 60,
         }
         if self.compensation_url is not None:
-            results["compensation_url_allowed"] = self._url_allowed(self.compensation_url)
-            results["compensation_payload_is_object"] = isinstance(
-                self.compensation_payload or {}, dict
+            results["compensation_url_allowed"] = self._url_allowed(
+                self.compensation_url
+            )
+            results["compensation_payload_is_object"] = (
+                self.compensation_payload is None
+                or isinstance(self.compensation_payload, dict)
             )
         return results
 
-    def assess_runtime_risk(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+    def assess_runtime_risk(
+        self, intent: ExecutionIntent, snapshot: Any
+    ) -> bool | None:
         del intent, snapshot
         urls = [self.snapshot_url, self.action_url, self.postcondition_url]
         if self.compensation_url:
@@ -162,8 +174,12 @@ class WebhookBindAdapter(BindAdapterContract):
         return _recursive_subset(self.expected_postcondition, actual)
 
     def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
-        del snapshot
-        if not self.compensation_url:
+        """Compensate and verify restoration of the exact pre-bind snapshot."""
+        if not self.compensation_url or not isinstance(snapshot, dict):
+            return False
+        if self.compensation_payload is not None and not isinstance(
+            self.compensation_payload, dict
+        ):
             return False
         try:
             self._post_json_object(
@@ -172,8 +188,19 @@ class WebhookBindAdapter(BindAdapterContract):
                 intent,
                 "BIND_WEBHOOK_COMPENSATION_FAILED",
             )
-        except RuntimeError:
+            restored_snapshot = self._get_json_object(
+                self.snapshot_url,
+                "BIND_WEBHOOK_COMPENSATION_VERIFICATION_FAILED",
+            )
+            restored_fingerprint = self.fingerprint_state(restored_snapshot)
+            original_fingerprint = self.fingerprint_state(snapshot)
+        except (RuntimeError, TypeError, ValueError):
             return False
+        if restored_fingerprint != original_fingerprint:
+            return False
+        # Bind core takes its own post-revert snapshot before reporting rollback.
+        # Reuse the exact state already verified to avoid a second network race.
+        object.__setattr__(self, "_verified_revert_snapshot", restored_snapshot)
         return True
 
     def describe_target(self) -> str:
@@ -187,10 +214,11 @@ class WebhookBindAdapter(BindAdapterContract):
         )
 
     def build_idempotency_key(self, intent: ExecutionIntent) -> str:
+        """Build a deterministic key without allowing malformed URLs to escape."""
         payload = {
             "execution_intent_id": intent.execution_intent_id,
             "decision_id": intent.decision_id,
-            "action_url": self._normalized_url(self.action_url),
+            "action_url": self._safe_normalized_url(self.action_url),
             "action_payload": self.action_payload,
         }
         return sha256_of_canonical_json(payload)
@@ -208,11 +236,15 @@ class WebhookBindAdapter(BindAdapterContract):
     ) -> dict[str, Any]:
         idempotency_key = self.build_idempotency_key(intent)
         canonical_body = canonical_json_dumps(body)
-        timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace(
-            "+00:00", "Z"
+        timestamp = (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
         )
         signature_input = f"{timestamp}.{canonical_body}".encode("utf-8")
-        signature = hmac.new(self.hmac_secret, signature_input, hashlib.sha256).hexdigest()
+        signature = hmac.new(
+            self.hmac_secret, signature_input, hashlib.sha256
+        ).hexdigest()
         headers = {
             "Content-Type": "application/json",
             "X-Veritas-Decision-Id": intent.decision_id,
@@ -248,7 +280,9 @@ class WebhookBindAdapter(BindAdapterContract):
             raise RuntimeError("BIND_WEBHOOK_REQUEST_FAILED") from exc
 
     @staticmethod
-    def _require_json_object(response: WebhookResponse, error_code: str) -> dict[str, Any]:
+    def _require_json_object(
+        response: WebhookResponse, error_code: str
+    ) -> dict[str, Any]:
         if not 200 <= int(response.status_code) <= 299:
             raise RuntimeError(error_code)
         if not isinstance(response.json_data, dict):
@@ -267,14 +301,20 @@ class WebhookBindAdapter(BindAdapterContract):
         hostname = parsed.hostname or ""
         if hostname not in self.allowed_hosts:
             return False
-        return self.allow_unsafe_test_addresses or self._hostname_addresses_are_safe(hostname)
+        return self._hostname_addresses_are_safe(hostname)
 
     def _hostname_addresses_are_safe(self, hostname: str) -> bool:
         try:
-            addresses = self.dns_resolver(hostname) if self.dns_resolver else _resolve_host(hostname)
+            addresses = (
+                self.dns_resolver(hostname)
+                if self.dns_resolver
+                else _resolve_host(hostname)
+            )
         except OSError:
             return False
-        return bool(addresses) and all(_address_is_safe(address) for address in addresses)
+        return bool(addresses) and all(
+            _address_is_safe(address) for address in addresses
+        )
 
     @staticmethod
     def _normalized_url(url: str) -> str:
@@ -282,6 +322,15 @@ class WebhookBindAdapter(BindAdapterContract):
         host = parsed.hostname or ""
         netloc = host if parsed.port in (None, 443) else f"{host}:{parsed.port}"
         return urlunparse(("https", netloc, parsed.path or "/", "", parsed.query, ""))
+
+    @staticmethod
+    def _safe_normalized_url(url: Any) -> str:
+        """Normalize a URL or return a non-sensitive deterministic sentinel."""
+        try:
+            return WebhookBindAdapter._normalized_url(url)
+        except (AttributeError, TypeError, ValueError):
+            raw_digest = sha256_of_canonical_json({"raw_url": str(url)})
+            return f"invalid-url:sha256:{raw_digest}"
 
     @staticmethod
     def _describe_url(url: str | None) -> str:
@@ -324,14 +373,21 @@ class _UrllibWebhookTransport:
             with opener.open(request, timeout=timeout) as response:
                 raw = response.read().decode("utf-8")
                 parsed = json.loads(raw) if raw else {}
-                return WebhookResponse(response.status, parsed, dict(response.headers.items()))
+                return WebhookResponse(
+                    response.status, parsed, dict(response.headers.items())
+                )
         except HTTPError as exc:
             try:
                 parsed = json.loads(exc.read().decode("utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 parsed = None
             return WebhookResponse(exc.code, parsed, dict(exc.headers.items()))
-        except (TimeoutError, URLError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        except (
+            TimeoutError,
+            URLError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+        ) as exc:
             raise RuntimeError("BIND_WEBHOOK_TRANSPORT_FAILED") from exc
 
 

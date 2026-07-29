@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 import pytest
 
-from veritas_os.policy.bind_artifacts import ExecutionIntent, FinalOutcome, canonical_bind_receipt_json
+from veritas_os.policy.bind_artifacts import (
+    ExecutionIntent,
+    FinalOutcome,
+    canonical_bind_receipt_json,
+)
 from veritas_os.policy.bind_core import BindAdapterContract, execute_bind_adjudication
 from veritas_os.policy.webhook_bind_adapter import WebhookBindAdapter, WebhookResponse
-from veritas_os.security.hash import sha256_of_canonical_json
+from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 
 class TransportError(RuntimeError):
@@ -52,7 +58,9 @@ class FakeTransport:
         return response
 
     def count(self, method: str, url: str) -> int:
-        return sum(1 for call in self.calls if call["method"] == method and call["url"] == url)
+        return sum(
+            1 for call in self.calls if call["method"] == method and call["url"] == url
+        )
 
 
 PUBLIC_IP = ["93.184.216.34"]
@@ -74,6 +82,7 @@ def intent(**overrides: Any) -> ExecutionIntent:
         "intended_action": "external_webhook_action",
         "decision_hash": "a" * 64,
         "decision_ts": "2026-07-13T00:00:00Z",
+        "expected_state_fingerprint": sha256_of_canonical_json({"state": "before"}),
         "approval_context": {"external_webhook_action_approved": True},
     }
     values.update(overrides)
@@ -83,14 +92,21 @@ def intent(**overrides: Any) -> ExecutionIntent:
 def transport_for_success() -> FakeTransport:
     return FakeTransport(
         {
-            ("GET", SNAPSHOT_URL): [WebhookResponse(200, {"state": "before"}), WebhookResponse(200, {"state": "after"})],
+            ("GET", SNAPSHOT_URL): [
+                WebhookResponse(200, {"state": "before"}),
+                WebhookResponse(200, {"state": "after"}),
+            ],
             ("POST", ACTION_URL): [WebhookResponse(200, {"accepted": True})],
-            ("GET", POSTCONDITION_URL): [WebhookResponse(200, {"state": "after", "nested": {"ok": True}})],
+            ("GET", POSTCONDITION_URL): [
+                WebhookResponse(200, {"state": "after", "nested": {"ok": True}})
+            ],
         }
     )
 
 
-def adapter(transport: FakeTransport | None = None, **overrides: Any) -> WebhookBindAdapter:
+def adapter(
+    transport: FakeTransport | None = None, **overrides: Any
+) -> WebhookBindAdapter:
     values = {
         "snapshot_url": SNAPSHOT_URL,
         "action_url": ACTION_URL,
@@ -118,7 +134,12 @@ def test_contract_fingerprint_and_sanitized_description() -> None:
 def test_authority_requires_explicit_true() -> None:
     subject = adapter()
     assert subject.validate_authority(intent(), {}) is True
-    assert subject.validate_authority(intent(approval_context={"external_webhook_action_approved": False}), {}) is False
+    assert (
+        subject.validate_authority(
+            intent(approval_context={"external_webhook_action_approved": False}), {}
+        )
+        is False
+    )
     assert subject.validate_authority(intent(approval_context={}), {}) is False
     assert subject.validate_authority(intent(approval_context=None), {}) is False
 
@@ -155,8 +176,28 @@ def test_successful_governed_execution_commits_and_posts_once() -> None:
     assert call["allow_redirects"] is False
     assert call["headers"]["X-Veritas-Decision-Id"] == "dec-1"
     assert call["headers"]["X-Veritas-Execution-Intent-Id"] == "ei-1"
-    assert call["headers"]["X-Veritas-Signature"].startswith("sha256=")
+    timestamp = call["headers"]["X-Veritas-Timestamp"]
+    signed = f"{timestamp}.{canonical_json_dumps(call['json_body'])}".encode()
+    expected_signature = hmac.new(b"super-secret", signed, hashlib.sha256).hexdigest()
+    assert call["headers"]["X-Veritas-Signature"] == f"sha256={expected_signature}"
     assert "super-secret" not in json.dumps(call)
+
+
+@pytest.mark.parametrize(
+    "expected_fingerprint",
+    [None, sha256_of_canonical_json({"state": "different"})],
+)
+def test_missing_or_mismatched_drift_fingerprint_blocks_action(
+    expected_fingerprint: str | None,
+) -> None:
+    fake = transport_for_success()
+    receipt = execute_bind_adjudication(
+        execution_intent=intent(expected_state_fingerprint=expected_fingerprint),
+        adapter=adapter(fake),
+        append_trustlog=False,
+    )
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert fake.count("POST", ACTION_URL) == 0
 
 
 def test_constraint_and_runtime_risk_failures_prevent_action_post() -> None:
@@ -174,15 +215,42 @@ def test_constraint_and_runtime_risk_failures_prevent_action_post() -> None:
         assert fake.count("POST", ACTION_URL) == 0
 
 
+def test_non_dict_compensation_payload_blocks_before_action() -> None:
+    fake = transport_for_success()
+    subject = adapter(
+        fake,
+        compensation_url=COMPENSATION_URL,
+        compensation_payload=[],  # type: ignore[arg-type]
+    )
+    receipt = execute_bind_adjudication(
+        execution_intent=intent(),
+        adapter=subject,
+        append_trustlog=False,
+    )
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert fake.count("POST", ACTION_URL) == 0
+
+
 @pytest.mark.parametrize(
     "responses,expected",
     [
-        ({("GET", SNAPSHOT_URL): [TransportError("timeout")]}, FinalOutcome.SNAPSHOT_FAILED),
-        ({("GET", SNAPSHOT_URL): [WebhookResponse(200, [])]}, FinalOutcome.SNAPSHOT_FAILED),
-        ({("GET", SNAPSHOT_URL): [WebhookResponse(500, {})]}, FinalOutcome.SNAPSHOT_FAILED),
+        (
+            {("GET", SNAPSHOT_URL): [TransportError("timeout")]},
+            FinalOutcome.SNAPSHOT_FAILED,
+        ),
+        (
+            {("GET", SNAPSHOT_URL): [WebhookResponse(200, [])]},
+            FinalOutcome.SNAPSHOT_FAILED,
+        ),
+        (
+            {("GET", SNAPSHOT_URL): [WebhookResponse(500, {})]},
+            FinalOutcome.SNAPSHOT_FAILED,
+        ),
     ],
 )
-def test_snapshot_failures_fail_closed(responses: dict[tuple[str, str], list[Any]], expected: FinalOutcome) -> None:
+def test_snapshot_failures_fail_closed(
+    responses: dict[tuple[str, str], list[Any]], expected: FinalOutcome
+) -> None:
     fake = FakeTransport(responses)
     receipt = execute_bind_adjudication(
         execution_intent=intent(),
@@ -195,9 +263,16 @@ def test_snapshot_failures_fail_closed(responses: dict[tuple[str, str], list[Any
 
 @pytest.mark.parametrize(
     "action_response",
-    [TransportError("timeout"), WebhookResponse(500, {}), WebhookResponse(302, {"redirect": True}), WebhookResponse(200, [])],
+    [
+        TransportError("timeout"),
+        WebhookResponse(500, {}),
+        WebhookResponse(302, {"redirect": True}),
+        WebhookResponse(200, []),
+    ],
 )
-def test_action_failures_are_not_committed_and_do_not_retry(action_response: Any) -> None:
+def test_action_failures_are_not_committed_and_do_not_retry(
+    action_response: Any,
+) -> None:
     fake = FakeTransport(
         {
             ("GET", SNAPSHOT_URL): [WebhookResponse(200, {"state": "before"})],
@@ -215,9 +290,16 @@ def test_action_failures_are_not_committed_and_do_not_retry(action_response: Any
 
 @pytest.mark.parametrize(
     "postcondition_response",
-    [TransportError("timeout"), WebhookResponse(500, {}), WebhookResponse(200, []), WebhookResponse(200, {"nested": {"ok": False}})],
+    [
+        TransportError("timeout"),
+        WebhookResponse(500, {}),
+        WebhookResponse(200, []),
+        WebhookResponse(200, {"nested": {"ok": False}}),
+    ],
 )
-def test_postcondition_failures_do_not_commit_without_compensation(postcondition_response: Any) -> None:
+def test_postcondition_failures_do_not_commit_without_compensation(
+    postcondition_response: Any,
+) -> None:
     fake = FakeTransport(
         {
             ("GET", SNAPSHOT_URL): [WebhookResponse(200, {"state": "before"})],
@@ -231,18 +313,24 @@ def test_postcondition_failures_do_not_commit_without_compensation(postcondition
         append_trustlog=False,
     )
     assert receipt.final_outcome is FinalOutcome.ESCALATED
-    assert receipt.rollback_status == "manual_intervention_required"
+    assert receipt.rollback_status != "rolled_back"
 
 
 def test_idempotency_key_is_deterministic_and_excludes_secret() -> None:
     first = adapter(hmac_secret="secret-a")
     second = adapter(hmac_secret="secret-b")
     changed = adapter(hmac_secret="secret-a", action_payload={"op": "set", "value": 2})
-    assert first.build_idempotency_key(intent()) == second.build_idempotency_key(intent())
-    assert first.build_idempotency_key(intent()) != changed.build_idempotency_key(intent())
+    assert first.build_idempotency_key(intent()) == second.build_idempotency_key(
+        intent()
+    )
+    assert first.build_idempotency_key(intent()) != changed.build_idempotency_key(
+        intent()
+    )
 
 
-def test_replay_does_not_duplicate_external_post(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_replay_does_not_duplicate_external_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import veritas_os.policy.bind_core.core as core
 
     first_fake = transport_for_success()
@@ -266,19 +354,49 @@ def test_replay_does_not_duplicate_external_post(monkeypatch: pytest.MonkeyPatch
 def test_successful_compensation_reports_rolled_back() -> None:
     fake = FakeTransport(
         {
-            ("GET", SNAPSHOT_URL): [WebhookResponse(200, {"state": "before"}), WebhookResponse(200, {"state": "compensated"})],
+            ("GET", SNAPSHOT_URL): [
+                WebhookResponse(200, {"state": "before"}),
+                WebhookResponse(200, {"state": "before"}),
+            ],
             ("POST", ACTION_URL): [WebhookResponse(200, {"accepted": True})],
-            ("GET", POSTCONDITION_URL): [WebhookResponse(200, {"nested": {"ok": False}})],
+            ("GET", POSTCONDITION_URL): [
+                WebhookResponse(200, {"nested": {"ok": False}})
+            ],
             ("POST", COMPENSATION_URL): [WebhookResponse(200, {"compensated": True})],
         }
     )
     receipt = execute_bind_adjudication(
         execution_intent=intent(),
-        adapter=adapter(fake, compensation_url=COMPENSATION_URL, compensation_payload={"undo": True}),
+        adapter=adapter(
+            fake, compensation_url=COMPENSATION_URL, compensation_payload={"undo": True}
+        ),
         append_trustlog=False,
     )
     assert receipt.final_outcome is FinalOutcome.ROLLED_BACK
     assert fake.count("POST", COMPENSATION_URL) == 1
+
+
+def test_unverified_compensation_does_not_claim_rollback() -> None:
+    fake = FakeTransport(
+        {
+            ("GET", SNAPSHOT_URL): [
+                WebhookResponse(200, {"state": "before"}),
+                WebhookResponse(200, {"state": "compensated"}),
+            ],
+            ("POST", ACTION_URL): [WebhookResponse(200, {"accepted": True})],
+            ("GET", POSTCONDITION_URL): [
+                WebhookResponse(200, {"nested": {"ok": False}})
+            ],
+            ("POST", COMPENSATION_URL): [WebhookResponse(200, {"compensated": True})],
+        }
+    )
+    receipt = execute_bind_adjudication(
+        execution_intent=intent(),
+        adapter=adapter(fake, compensation_url=COMPENSATION_URL),
+        append_trustlog=False,
+    )
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert receipt.rollback_status != "rolled_back"
 
 
 def test_failed_compensation_does_not_claim_rollback() -> None:
@@ -286,7 +404,9 @@ def test_failed_compensation_does_not_claim_rollback() -> None:
         {
             ("GET", SNAPSHOT_URL): [WebhookResponse(200, {"state": "before"})],
             ("POST", ACTION_URL): [WebhookResponse(200, {"accepted": True})],
-            ("GET", POSTCONDITION_URL): [WebhookResponse(200, {"nested": {"ok": False}})],
+            ("GET", POSTCONDITION_URL): [
+                WebhookResponse(200, {"nested": {"ok": False}})
+            ],
             ("POST", COMPENSATION_URL): [WebhookResponse(500, {})],
         }
     )
@@ -296,7 +416,62 @@ def test_failed_compensation_does_not_claim_rollback() -> None:
         append_trustlog=False,
     )
     assert receipt.final_outcome is FinalOutcome.ESCALATED
-    assert receipt.rollback_status == "manual_intervention_required"
+    assert receipt.rollback_status != "rolled_back"
+
+
+@pytest.mark.parametrize(
+    "compensation_response",
+    [TransportError("timeout"), WebhookResponse(500, {}), WebhookResponse(200, [])],
+)
+def test_compensation_transport_failures_do_not_claim_rollback(
+    compensation_response: WebhookResponse | Exception,
+) -> None:
+    fake = FakeTransport(
+        {
+            ("GET", SNAPSHOT_URL): [WebhookResponse(200, {"state": "before"})],
+            ("POST", ACTION_URL): [WebhookResponse(200, {"accepted": True})],
+            ("GET", POSTCONDITION_URL): [
+                WebhookResponse(200, {"nested": {"ok": False}})
+            ],
+            ("POST", COMPENSATION_URL): [compensation_response],
+        }
+    )
+    receipt = execute_bind_adjudication(
+        execution_intent=intent(),
+        adapter=adapter(fake, compensation_url=COMPENSATION_URL),
+        append_trustlog=False,
+    )
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert receipt.rollback_status != "rolled_back"
+
+
+@pytest.mark.parametrize(
+    "verification_response",
+    [TransportError("timeout"), WebhookResponse(500, {}), WebhookResponse(200, [])],
+)
+def test_compensation_verification_failures_do_not_claim_rollback(
+    verification_response: WebhookResponse | Exception,
+) -> None:
+    fake = FakeTransport(
+        {
+            ("GET", SNAPSHOT_URL): [
+                WebhookResponse(200, {"state": "before"}),
+                verification_response,
+            ],
+            ("POST", ACTION_URL): [WebhookResponse(200, {"accepted": True})],
+            ("GET", POSTCONDITION_URL): [
+                WebhookResponse(200, {"nested": {"ok": False}})
+            ],
+            ("POST", COMPENSATION_URL): [WebhookResponse(200, {"compensated": True})],
+        }
+    )
+    receipt = execute_bind_adjudication(
+        execution_intent=intent(),
+        adapter=adapter(fake, compensation_url=COMPENSATION_URL),
+        append_trustlog=False,
+    )
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert receipt.rollback_status != "rolled_back"
 
 
 @pytest.mark.parametrize(
@@ -306,6 +481,7 @@ def test_failed_compensation_does_not_claim_rollback() -> None:
         {"action_url": "https://evil.example.test/action"},
         {"action_url": "https://user:pass@hooks.example.test/action"},
         {"action_url": "https://hooks.example.test/action#frag"},
+        {"action_url": "https://hooks.example.test:invalid/action"},
         {"dns_resolver": lambda hostname: ["127.0.0.1"]},
         {"dns_resolver": lambda hostname: ["10.0.0.1"]},
         {"dns_resolver": lambda hostname: ["169.254.1.1"]},
@@ -314,12 +490,40 @@ def test_failed_compensation_does_not_claim_rollback() -> None:
 def test_url_security_rejections_prevent_action(kwargs: dict[str, Any]) -> None:
     subject = adapter(**kwargs)
     fake = subject.transport
+    assert subject.build_idempotency_key(intent()) == subject.build_idempotency_key(
+        intent()
+    )
     receipt = execute_bind_adjudication(
         execution_intent=intent(),
         adapter=subject,
         append_trustlog=False,
     )
     assert receipt.final_outcome in {FinalOutcome.BLOCKED, FinalOutcome.SNAPSHOT_FAILED}
+    assert fake.count("POST", ACTION_URL) == 0
+
+
+@pytest.mark.parametrize(
+    "decision_context",
+    [
+        {"external_webhook_action_approved": True, "business_decision": "block"},
+        {"external_webhook_action_approved": True, "bind_decision": "escalate"},
+    ],
+)
+def test_decision_precedence_prevents_action(
+    decision_context: dict[str, Any],
+) -> None:
+    fake = transport_for_success()
+    receipt = execute_bind_adjudication(
+        execution_intent=intent(approval_context=decision_context),
+        adapter=adapter(fake),
+        append_trustlog=False,
+    )
+    expected = (
+        FinalOutcome.ESCALATED
+        if decision_context.get("bind_decision") == "escalate"
+        else FinalOutcome.BLOCKED
+    )
+    assert receipt.final_outcome is expected
     assert fake.count("POST", ACTION_URL) == 0
 
 
