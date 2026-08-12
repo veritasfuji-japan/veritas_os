@@ -41,6 +41,7 @@ This entry point is organized around the current enterprise review path: busines
 15. [Provider Support Matrix](en/operations/provider-support-matrix.md)
 16. [Regulated Action Governance Kernel](en/architecture/regulated-action-governance-kernel.md)
 17. [Bind Boundary Governance Artifacts](en/architecture/bind-boundary-governance-artifacts.md)
+18. [External Bind Adapter: WebhookBindAdapter](en/guides/webhook-bind-adapter.md) — first reference adapter for reviewing how an external HTTPS side effect crosses the Bind Boundary; this is a reference integration pattern, not production certification.
 
 ## What VERITAS OS is
 
