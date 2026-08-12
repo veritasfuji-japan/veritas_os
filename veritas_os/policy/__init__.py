@@ -18,6 +18,7 @@ from .bind_artifacts import (
     hash_execution_intent,
 )
 from .bind_boundary_adapters import PolicyBundlePromotionAdapter
+from .webhook_bind_adapter import WebhookBindAdapter
 from .bind_core import (
     BIND_OUTCOME_VALUES,
     BindAdapterContract,
@@ -94,6 +95,7 @@ __all__ = [
     "BindBoundaryAdapter",
     "ReferenceBindAdapter",
     "PolicyBundlePromotionAdapter",
+    "WebhookBindAdapter",
     "promote_policy_bundle_with_bind_boundary",
     "execute_bind_boundary",
     "promote_decision_candidate_to_execution_intent",
