@@ -70,6 +70,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [AI-Assisted Development Guardrails](development/ai-assisted-development.md) — auditable workflow rules for using assistant tools during development.
 - [AI Review Matrix](development/ai-review-matrix.md) — role and authority matrix for AI-assisted development reviews.
 - [Recent Hardening Notes](development/recent-hardening.md) — compact summary of recent auditability, observability, CI gate, and compatibility hardening work.
+- [External Bind Integration Milestone](development/external-bind-integration-update.md) — reviewer-facing summary of the reference adapter, minimal Python SDK, AML/KYC example, traceable bind path, and explicit non-claims.
 
 ### Guides
 - [External Bind Integration Path](guides/external-bind-integration-path.md) — concise reviewer path from a Decision Candidate through `/v1/decide`, non-executing payload preparation, the Bind Boundary, and verified external outcomes.
