@@ -57,6 +57,12 @@ Validation Report
 
 For deeper reviewer evidence context, see the [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md), [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md), and [Reviewer Evidence Packet](docs/en/demo/reviewer-evidence-packet.md).
 
+### External bind adapter reference
+
+[WebhookBindAdapter](docs/en/guides/webhook-bind-adapter.md) is the first reference adapter for external bind execution. It demonstrates how VERITAS can treat AI output as a Decision Candidate and gate an external HTTPS side effect at the Bind Boundary through snapshot, governed action, postcondition verification, deterministic idempotency, HMAC signing, and fail-closed compensation semantics before claiming a committed outcome.
+
+This is a reference integration pattern, not production certification, regulatory approval, or proof of a production deployment. When compensation is absent or cannot be verified, the adapter does not claim rollback.
+
 Official Website: https://veritas-website-navy.vercel.app/
 
 This project is not only about running agents.
