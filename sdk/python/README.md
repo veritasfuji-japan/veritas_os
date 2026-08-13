@@ -69,6 +69,12 @@ The example is not a production-certified integration and does not define a
 new VERITAS endpoint. Use the deployed VERITAS contract and the documented
 `WebhookBindAdapter` controls when implementing a real bind path.
 
+For a domain-specific reference flow, see the import-safe
+[`examples/aml_kyc_webhook_bind.py`](examples/aml_kyc_webhook_bind.py). It
+builds a synthetic AML/KYC review request and prepares a non-executing bind
+payload; it does not contact a webhook target or use real identity, customer,
+bank, sanctions, or account data.
+
 ## Security notes
 
 - Do not commit API keys or include them in logs and error reports.
