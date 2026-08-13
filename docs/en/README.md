@@ -73,6 +73,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 
 ### Guides
 - [Minimal Python SDK reference](../../sdk/python/README.md) — dependency-free `/v1/decide` client with import-safe examples and non-executing bind payload preparation; a reference integration aid, not a production-certified SDK. AI output remains a Decision Candidate, and external side effects must still cross the Bind Boundary using the `WebhookBindAdapter` reference pattern.
+- [AML/KYC SDK to Webhook Bind example](guides/aml-kyc-sdk-webhook-example.md) — placeholder-only reference flow from `/v1/decide` to preparation of a non-executing bind payload; it does not authorize or perform an external action.
 - [External Bind Adapter: WebhookBindAdapter](guides/webhook-bind-adapter.md) — first reference adapter for gating an external HTTPS side effect at the Bind Boundary; an integration pattern, not production certification.
 - [3-Minute Demo Script](guides/demo-script.md)
 - [Financial PoC Pack (1-day quickstart, EN)](guides/poc-pack-financial-quickstart.md)
