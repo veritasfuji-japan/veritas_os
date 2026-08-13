@@ -63,6 +63,10 @@ For deeper reviewer evidence context, see the [Reviewer Evidence Index](docs/en/
 
 This is a reference integration pattern, not production certification, regulatory approval, or proof of a production deployment. When compensation is absent or cannot be verified, the adapter does not claim rollback.
 
+### Minimal Python SDK reference
+
+The [minimal Python SDK reference](sdk/python/README.md) is a dependency-free Python client for calling VERITAS `/v1/decide`, with import-safe examples and a non-executing bind payload preparation pattern. This is a reference integration aid, not a production-certified SDK: AI output remains a Decision Candidate, `/v1/decide` does not authorize external side effects, and external execution must still cross the Bind Boundary. `WebhookBindAdapter` remains the reference external bind adapter pattern.
+
 Official Website: https://veritas-website-navy.vercel.app/
 
 This project is not only about running agents.
