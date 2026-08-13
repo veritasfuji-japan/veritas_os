@@ -25,8 +25,10 @@ does not replace bind admissibility, authority, audit, or failure controls.
 
 ## Import-safe, non-executing example
 
-The following code defines the integration steps but does not call the API or
-an external system when imported or run. An application must explicitly call
+The import-safe
+[`aml_kyc_webhook_bind.py`](../../../sdk/python/examples/aml_kyc_webhook_bind.py)
+example defines the integration steps but does not call the API or an external
+system when imported or run. An application must explicitly call
 `request_review()` to contact its configured VERITAS deployment. The
 `prepare_bind_payload()` function only constructs application data for a later
 reviewed bind flow.
@@ -113,4 +115,3 @@ effect can occur.
   integrator's responsibility.
 - Follow the `WebhookBindAdapter` guidance for target allowlisting, signing,
   idempotency, postcondition verification, and fail-closed handling.
-
