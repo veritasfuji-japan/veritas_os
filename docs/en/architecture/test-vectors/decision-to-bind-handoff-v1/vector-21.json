@@ -4,7 +4,7 @@
   "input": {
     "format_version": "canonical-decision-handoff/v1",
     "handoff_id": "handoff-fixture-21",
-    "handoff_status": "INVALID",
+    "handoff_status": "INCOMPLETE",
     "source_decision": {
       "request_id": "req-fixture-001",
       "canonical_decision_id": "decision-fixture-001",
@@ -122,7 +122,7 @@
       "no external effect"
     ]
   },
-  "expected_handoff_status": "INVALID",
+  "expected_handoff_status": "INCOMPLETE",
   "expected_reason_codes": [
     "HANDOFF_AUTHORITY_EVIDENCE_MISSING"
   ],

@@ -38,6 +38,23 @@ flowchart TD
 ready, even if authority or approval is later attached. Formation refusal is
 not Bind `BLOCKED`.
 
+The status classification is normative. `INCOMPLETE` means a required
+canonical value or evidence is absent or unresolved and no supplied substitute
+is positively invalid. `REVIEW_REQUIRED` means human or policy review is
+explicitly required before readiness can be established. `INVALID` is reserved
+for supplied material that is positively malformed, mismatched, stale,
+expired, substituted, contradictory, or otherwise invalid.
+`STRUCTURALLY_REFUSED` means formation lineage is non-promotable and cannot be
+repaired by attaching later evidence. `READY_FOR_GUARDED_PROMOTION` requires
+all v1 prerequisites and trusted verification conditions.
+
+The mere presence of `ALLOW`, `APPROVE`, an authenticated identity, or similar
+non-authoritative metadata does not make a handoff `INVALID`. Those values MUST
+NOT satisfy authority, approval, action, target, policy, or state requirements.
+Consequently, missing required Authority Evidence is `INCOMPLETE`, while
+missing explicitly required Human Approval is `REVIEW_REQUIRED`. In both cases
+the handoff stops and is never ready.
+
 ## Provenance and field envelope
 
 Every security-relevant value uses a provenance record containing `value`,
@@ -115,6 +132,15 @@ typed, explicit, canonicalized, and bound to its target. Existing action
 contract IDs/versions should be referenced where applicable; prose from
 `chosen`, `next_action`, rationale, or completion text is never authoritative.
 
+The vector-level `forbidden_inference` field is test and documentation metadata,
+not part of the `CanonicalDecisionHandoff` runtime input. A runtime validator
+MUST NOT branch on it. Such a vector demonstrates that a tempting
+non-authoritative source exists but does not satisfy a required trusted field;
+it does not necessarily assert that the runtime artifact records an attempted
+inference. Representing an actual semantic-laundering attempt would require a
+separately specified typed artifact or provenance mechanism in a future
+version.
+
 ## Requirements, evidence, and validation
 
 `authority_requirement` states what authority is required. It does not show
@@ -190,6 +216,39 @@ hashing invalidates eligibility. `expected_state_fingerprint` is a trusted
 formation-time observation, never model output; Bind-time live state is a
 separate observation used to detect drift. Missing/stale required state fails
 closed.
+
+### Candidate-hash verification boundary
+
+The v1 `candidate_hash` is an opaque hash or reference value. This specification
+does not define a canonical production algorithm for hashing the handoff's
+candidate shape, which includes `candidate.canonical_action`. The existing
+`hash_decision_candidate(...)` function applies to the existing runtime
+`DecisionCandidate` schema and MUST NOT be reused unless a future contract
+explicitly establishes schema and hash-profile compatibility. In particular, a
+future validator MUST NOT assume that `SHA256(candidate JSON)` is the canonical
+candidate-hash contract.
+
+READY requires a trusted upstream verifier to assert that the supplied
+`candidate_hash` binds the exact supplied candidate under the verifier's
+declared hash/profile contract. A future trusted validation context will express
+this with a typed `CandidateHashBindingAssertion` containing at least:
+
+* `candidate_value_digest`;
+* `asserted_candidate_hash`;
+* `source_artifact_ref`;
+* `source_hash`;
+* `verification_mechanism`; and
+* the fixed semantic claim `CANDIDATE_HASH_BINDS_CANDIDATE`.
+
+An **assertion-value digest** is distinct from a domain or artifact hash. It is
+a deterministic local digest used only to bind a trusted assertion to the exact
+current JSON value, so an assertion about value A cannot be reused after a
+change to value B. It is not `candidate_hash`, `decision_hash`, Authority
+Evidence hash, or approval receipt hash, and MUST NOT redefine any of them.
+Those domain hashes remain governed by their producer/verifier contracts. A
+future validator may recompute the assertion-value digest to detect candidate
+substitution, but MUST NOT claim that doing so independently recomputes the
+canonical candidate hash.
 
 ## Formation invariant and reason codes
 
