@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/decision-to-bind-handoff-v1.schema.json",
+  "title": "CanonicalDecisionHandoff v1 (structural contract only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "handoff_id",
+    "handoff_status",
+    "source_decision",
+    "candidate",
+    "candidate_hash",
+    "decision_lineage",
+    "trustlog_lineage",
+    "replay_lineage",
+    "policy_lineage",
+    "authority_requirement",
+    "authority_evidence",
+    "human_approval_requirement",
+    "human_approval_evidence",
+    "target_context",
+    "expected_state",
+    "provenance",
+    "refusal_reason_codes",
+    "created_at",
+    "expires_at",
+    "non_claims"
+  ],
+  "properties": {
+    "format_version": {
+      "const": "canonical-decision-handoff/v1"
+    },
+    "handoff_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "handoff_status": {
+      "enum": [
+        "INCOMPLETE",
+        "REVIEW_REQUIRED",
+        "INVALID",
+        "STRUCTURALLY_REFUSED",
+        "READY_FOR_GUARDED_PROMOTION"
+      ]
+    },
+    "source_decision": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "candidate_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decision_lineage": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "trustlog_lineage": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "replay_lineage": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "policy_lineage": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "authority_requirement": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "authority_evidence": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "human_approval_requirement": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "human_approval_evidence": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "target_context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "expected_state": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/provenanceRecord"
+      },
+      "minItems": 1
+    },
+    "refusal_reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "HANDOFF_MISSING_CANONICAL_DECISION_ID",
+          "HANDOFF_MISSING_CANONICAL_DECISION_HASH",
+          "HANDOFF_MISSING_DECISION_TIMESTAMP",
+          "HANDOFF_TRUSTLOG_UNVERIFIED",
+          "HANDOFF_REPLAY_UNVERIFIED",
+          "HANDOFF_REQUEST_LINEAGE_MISMATCH",
+          "HANDOFF_CANDIDATE_HASH_MISMATCH",
+          "HANDOFF_LINEAGE_NON_PROMOTABLE",
+          "HANDOFF_TARGET_UNSPECIFIED",
+          "HANDOFF_ACTION_UNSPECIFIED",
+          "HANDOFF_ACTOR_UNSPECIFIED",
+          "HANDOFF_AUTHORITY_REQUIREMENT_UNRESOLVED",
+          "HANDOFF_AUTHORITY_EVIDENCE_MISSING",
+          "HANDOFF_AUTHORITY_EVIDENCE_INVALID",
+          "HANDOFF_AUTHORITY_EVIDENCE_EXPIRED",
+          "HANDOFF_APPROVAL_REQUIREMENT_UNRESOLVED",
+          "HANDOFF_APPROVAL_EVIDENCE_MISSING",
+          "HANDOFF_APPROVAL_EVIDENCE_INVALID",
+          "HANDOFF_APPROVAL_EVIDENCE_EXPIRED",
+          "HANDOFF_POLICY_LINEAGE_MISSING",
+          "HANDOFF_POLICY_LINEAGE_STALE",
+          "HANDOFF_EXPECTED_STATE_MISSING",
+          "HANDOFF_EXPECTED_STATE_STALE",
+          "HANDOFF_AMBIGUOUS_ACTION",
+          "HANDOFF_SOURCE_ARTIFACT_MISMATCH"
+        ]
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$defs": {
+    "provenanceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_path",
+        "value",
+        "provenance_class",
+        "source_artifact_type",
+        "source_artifact_ref",
+        "verification_status",
+        "verification_mechanism"
+      ],
+      "properties": {
+        "field_path": {
+          "type": "string"
+        },
+        "value": {},
+        "provenance_class": {
+          "enum": [
+            "VERIFIED_RUNTIME_EVIDENCE",
+            "VERIFIED_POLICY_ARTIFACT",
+            "VERIFIED_AUTHORITY_EVIDENCE",
+            "VERIFIED_HUMAN_APPROVAL",
+            "VERIFIED_LIVE_STATE",
+            "EXPLICIT_STRUCTURED_INPUT",
+            "UNVERIFIED_STRUCTURED_INPUT",
+            "DERIVED_CANONICALLY",
+            "UNAVAILABLE"
+          ]
+        },
+        "source_artifact_type": {
+          "type": "string"
+        },
+        "source_artifact_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verification_status": {
+          "enum": [
+            "VERIFIED",
+            "UNVERIFIED",
+            "UNAVAILABLE"
+          ]
+        },
+        "verification_mechanism": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "issued_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "freshness": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

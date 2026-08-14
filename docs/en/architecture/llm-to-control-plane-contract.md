@@ -1,5 +1,9 @@
 # LLM-to-Control-Plane Contract
 
+> The specification-only [Canonical Decision-to-Bind Handoff v1](canonical-decision-to-bind-handoff-v1.md)
+> defines the stronger provenance and lineage preconditions for any future
+> real handoff. It does not implement that connection.
+
 ## 1. Purpose
 
 This document defines the contract boundary between LLM-generated outputs and the non-LLM governance components in VERITAS.
