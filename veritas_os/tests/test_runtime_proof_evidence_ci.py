@@ -23,6 +23,16 @@ from scripts.demo.verify_runtime_proof_evidence import (
 )
 from scripts.demo.verify_runtime_proof_evidence_manifest import verify_manifest
 
+REPO_ROOT = Path.cwd()
+
+
+def test_workflow_installs_declared_signing_extra() -> None:
+    """Guard the signing dependency needed by the real Decision PoC imports."""
+    workflow = (
+        REPO_ROOT / ".github/workflows/runtime-proof-evidence.yml"
+    ).read_text(encoding="utf-8")
+    assert 'python -m pip install ".[signing]"' in workflow
+
 
 def decision() -> dict[str, object]:
     """Return a minimal valid synthetic Decision Pipeline report fixture."""

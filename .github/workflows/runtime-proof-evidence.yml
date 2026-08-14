@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements-core.txt
+          python -m pip install ".[signing]"
 
       - name: Clean proof artifact directories
         run: |
@@ -151,4 +152,3 @@ jobs:
           name: veritas-runtime-proof-evidence
           path: artifacts/runtime-proof-evidence/
           retention-days: 14
-
