@@ -34,6 +34,25 @@ def test_workflow_installs_declared_signing_extra() -> None:
     assert 'python -m pip install ".[signing]"' in workflow
 
 
+def test_workflow_smoke_imports_supported_server_path() -> None:
+    """Guard the clean-install server import regression check."""
+    workflow = (
+        REPO_ROOT / ".github/workflows/runtime-proof-evidence.yml"
+    ).read_text(encoding="utf-8")
+    assert 'python -c "import veritas_os.api.server"' in workflow
+
+
+def test_requests_pin_is_consistent_across_core_manifests() -> None:
+    """Keep the approved direct Requests runtime pin reproducible and aligned."""
+    manifests = (
+        REPO_ROOT / "pyproject.toml",
+        REPO_ROOT / "veritas_os/requirements-core.txt",
+        REPO_ROOT / "veritas_os/requirements.txt",
+    )
+    for manifest in manifests:
+        assert manifest.read_text(encoding="utf-8").count("requests==2.34.2") == 1
+
+
 def decision() -> dict[str, object]:
     """Return a minimal valid synthetic Decision Pipeline report fixture."""
     return {

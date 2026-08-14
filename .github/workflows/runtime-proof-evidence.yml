@@ -28,6 +28,9 @@ jobs:
           python -m pip install -r veritas_os/requirements-core.txt
           python -m pip install ".[signing]"
 
+      - name: Smoke import supported Decision Pipeline server path
+        run: python -c "import veritas_os.api.server"
+
       - name: Clean proof artifact directories
         run: |
           rm -rf artifacts/decide-pipeline-poc artifacts/external-bind-poc artifacts/runtime-proof-evidence
