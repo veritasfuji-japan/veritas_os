@@ -43,6 +43,7 @@ This entry point is organized around the current enterprise review path: busines
 17. [Bind Boundary Governance Artifacts](en/architecture/bind-boundary-governance-artifacts.md)
 18. [External Bind Integration Path](en/guides/external-bind-integration-path.md) — concise path from a Decision Candidate through SDK-assisted review and the Bind Boundary to a verified external outcome.
 19. [External Bind Adapter: WebhookBindAdapter](en/guides/webhook-bind-adapter.md) — first reference adapter for reviewing how an external HTTPS side effect crosses the Bind Boundary; this is a reference integration pattern, not production certification.
+20. [External Bind Boundary PoC Evidence](en/guides/external-bind-poc-evidence.md) — reproducible synthetic-input evidence for committed, blocked, and verified rollback outcomes; it starts after `/v1/decide`.
 
 ## What VERITAS OS is
 
