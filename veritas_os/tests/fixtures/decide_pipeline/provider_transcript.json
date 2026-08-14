@@ -1,0 +1,7 @@
+{
+  "provider_mode": "controlled_provider_fixture",
+  "response": {
+    "content": "{\"steps\":[{\"id\":\"review\",\"title\":\"Review synthetic evidence\",\"description\":\"Compare the supplied synthetic alternatives without taking action.\"}],\"text\":\"Review the synthetic evidence and retain the decision as non-executable.\"}",
+    "text": "{\"steps\":[{\"id\":\"review\",\"title\":\"Review synthetic evidence\",\"description\":\"Compare the supplied synthetic alternatives without taking action.\"}],\"text\":\"Review the synthetic evidence and retain the decision as non-executable.\"}"
+  }
+}
