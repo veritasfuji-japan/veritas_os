@@ -1,0 +1,154 @@
+name: Runtime Proof Evidence
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-proof-evidence:
+    name: runtime-proof-evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install proof runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements-core.txt
+
+      - name: Clean proof artifact directories
+        run: |
+          rm -rf artifacts/decide-pipeline-poc artifacts/external-bind-poc artifacts/runtime-proof-evidence
+          mkdir -p artifacts/decide-pipeline-poc artifacts/external-bind-poc artifacts/runtime-proof-evidence
+
+      - name: Run Decision Pipeline PoC
+        run: |
+          python scripts/run_decide_pipeline_poc.py
+          test -f artifacts/decide-pipeline-poc/report.json
+
+      - name: Run External Bind Boundary PoC
+        run: python scripts/demo/run_external_bind_poc.py
+
+      - name: Verify independent proof evidence
+        run: |
+          python scripts/demo/verify_runtime_proof_evidence.py \
+            --decision-report artifacts/decide-pipeline-poc/report.json \
+            --bind-dir artifacts/external-bind-poc \
+            --output artifacts/runtime-proof-evidence/verification-report.json
+
+      - name: Assemble Runtime Proof bundle
+        run: |
+          mkdir -p artifacts/runtime-proof-evidence/decision-pipeline artifacts/runtime-proof-evidence/external-bind
+          cp artifacts/decide-pipeline-poc/report.json artifacts/runtime-proof-evidence/decision-pipeline/report.json
+          cp artifacts/external-bind-poc/*.json artifacts/runtime-proof-evidence/external-bind/
+
+      - name: Write CI provenance context
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          context = {
+              "metadata_type": "ci_provenance_only",
+              "generated_by": "github_actions",
+              "repository": os.environ["REPOSITORY"],
+              "commit_sha": os.environ["COMMIT_SHA"],
+              "ref": os.environ["REF"],
+              "event_name": os.environ["EVENT_NAME"],
+              "workflow": os.environ["WORKFLOW"],
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+          }
+          Path("artifacts/runtime-proof-evidence/ci-context.json").write_text(
+              json.dumps(context, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Build reviewer summary
+        run: |
+          cat > artifacts/runtime-proof-evidence/reviewer-summary.md <<EOF
+          # VERITAS Runtime Proof Evidence
+
+          Commit: `${GITHUB_SHA}`
+
+          The Decision Pipeline and External Bind Boundary are independent proof paths.
+          No Decision Pipeline -> ExecutionIntent -> Bind handoff is claimed.
+
+          Decision: authenticated POST /v1/decide, controlled provider fixture, real
+          governance runtime, TrustLog/replay verified, then STOP. Bind: synthetic
+          decision fixture, real bind adjudication and WebhookBindAdapter, with
+          COMMITTED, BLOCKED, and ROLLED_BACK verified.
+
+          This local CI bundle does not prove live providers, production TrustLog,
+          PostgreSQL, KMS/WORM, execution authority, Human Approval, Authority Evidence,
+          decision-to-bind lineage, live financial integrations, customer deployment,
+          regulatory approval/certification, or production readiness.
+          EOF
+
+      - name: Run proof-bundle secret hygiene check
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.demo.verify_runtime_proof_evidence import verify_secret_hygiene
+
+          verify_secret_hygiene(Path("artifacts/runtime-proof-evidence"))
+          PY
+
+      - name: Build SHA-256 manifest
+        run: |
+          python scripts/demo/build_runtime_proof_evidence_manifest.py \
+            artifacts/runtime-proof-evidence --commit-sha "$GITHUB_SHA"
+
+      - name: Verify SHA-256 manifest
+        run: python scripts/demo/verify_runtime_proof_evidence_manifest.py artifacts/runtime-proof-evidence
+
+      - name: Build GitHub step summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # VERITAS Runtime Proof Evidence
+          Commit: `${GITHUB_SHA}`
+
+          ## Decision Pipeline Proof
+          - authenticated `/v1/decide`: PASS
+          - real decision/governance runtime: PASS
+          - provider mode: `controlled_provider_fixture`
+          - TrustLog and replay verification: PASS
+          - ExecutionIntent created / Bind invoked: NO / NO
+
+          ## External Bind Boundary Proof
+          - decision stage: `synthetic_fixture`
+          - COMMITTED / BLOCKED / ROLLED_BACK: PASS / PASS / PASS
+
+          ## Boundary
+          These are two independent proof paths. No Decision Pipeline -> ExecutionIntent -> Bind handoff is claimed.
+
+          Artifact: `veritas-runtime-proof-evidence`
+          EOF
+
+      - name: Upload Runtime Proof Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-runtime-proof-evidence
+          path: artifacts/runtime-proof-evidence/
+          retention-days: 14
+
