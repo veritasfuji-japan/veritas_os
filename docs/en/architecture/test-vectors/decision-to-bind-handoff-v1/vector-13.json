@@ -1,0 +1,144 @@
+{
+  "vector_id": "DTBH-V1-13",
+  "description": "approval receipt belongs to different action",
+  "input": {
+    "format_version": "canonical-decision-handoff/v1",
+    "handoff_id": "handoff-fixture-13",
+    "handoff_status": "INVALID",
+    "source_decision": {
+      "request_id": "req-fixture-001",
+      "canonical_decision_id": "decision-fixture-001",
+      "canonical_decision_hash": "sha256:decision-fixture-001",
+      "canonical_decision_ts": "2030-01-01T00:00:00Z",
+      "gate_decision": "ALLOW"
+    },
+    "candidate": {
+      "candidate_id": "candidate-fixture-001",
+      "actor_identity": "actor:fixture:alice",
+      "target_system": "ledger-fixture",
+      "target_resource": "account:fixture:A",
+      "canonical_action": {
+        "contract_id": "fixture.transfer",
+        "version": "1",
+        "parameters": {
+          "amount": "100.00",
+          "currency": "USD"
+        }
+      },
+      "lineage_promotability": "promotable"
+    },
+    "candidate_hash": "sha256:candidate-fixture-001",
+    "decision_lineage": {
+      "verified": true,
+      "decision_id": "decision-fixture-001"
+    },
+    "trustlog_lineage": {
+      "verified": true,
+      "request_id": "req-fixture-001",
+      "artifact_ref": "trustlog-fixture-001",
+      "chain_hash": "sha256:trustlog-fixture-001"
+    },
+    "replay_lineage": {
+      "verified": true,
+      "request_id": "req-fixture-001",
+      "artifact_ref": "replay-fixture-001",
+      "artifact_hash": "sha256:replay-fixture-001"
+    },
+    "policy_lineage": {
+      "verified": true,
+      "snapshot_id": "policy-fixture-001",
+      "version": "1",
+      "semantic_digest": "sha256:policy-fixture-001",
+      "policy_ids": [
+        "fixture-policy"
+      ],
+      "effective_at": "2029-01-01T00:00:00Z",
+      "expires_at": "2031-01-01T00:00:00Z",
+      "superseded": false
+    },
+    "authority_requirement": {
+      "resolved": true,
+      "required": true,
+      "authority_type": "fixture-transfer-operator"
+    },
+    "authority_evidence": {
+      "validation_result": "VALID",
+      "actor_identity": "actor:fixture:alice",
+      "action_contract_id": "fixture.transfer",
+      "target_system": "ledger-fixture",
+      "target_scope": "account:fixture:A",
+      "issuer": "fixture-iam",
+      "issued_at": "2029-12-31T00:00:00Z",
+      "expires_at": "2030-02-01T00:00:00Z",
+      "evidence_ref": "authority-fixture-001",
+      "evidence_hash": "sha256:authority-fixture-001"
+    },
+    "human_approval_requirement": {
+      "resolved": true,
+      "required": true,
+      "policy_ref": "fixture-policy"
+    },
+    "human_approval_evidence": {
+      "validation_result": "VALID",
+      "approver_identity": "approver:fixture:bob",
+      "approval_scope": "fixture.transfer:100.00:USD",
+      "candidate_ref": "candidate-fixture-001",
+      "action_contract_id": "fixture.delete",
+      "target_resource": "account:fixture:A",
+      "approved_at": "2029-12-31T12:00:00Z",
+      "expires_at": "2030-01-02T00:00:00Z",
+      "receipt_ref": "approval-fixture-001",
+      "receipt_hash": "sha256:approval-fixture-001"
+    },
+    "target_context": {
+      "target_system": "ledger-fixture",
+      "target_resource": "account:fixture:A",
+      "canonicalized": true
+    },
+    "expected_state": {
+      "fingerprint": "sha256:state-fixture-001",
+      "observed_at": "2029-12-31T23:59:00Z",
+      "source_ref": "state-fixture-001",
+      "verified": true
+    },
+    "provenance": [
+      {
+        "field_path": "candidate.canonical_action",
+        "value": {
+          "contract_id": "fixture.transfer"
+        },
+        "provenance_class": "EXPLICIT_STRUCTURED_INPUT",
+        "source_artifact_type": "synthetic_action_fixture",
+        "source_artifact_ref": "action-fixture-001",
+        "source_hash": "sha256:action-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      }
+    ],
+    "refusal_reason_codes": [
+      "HANDOFF_APPROVAL_EVIDENCE_INVALID"
+    ],
+    "created_at": "2030-01-01T00:00:01Z",
+    "expires_at": "2030-01-01T00:05:01Z",
+    "non_claims": [
+      "synthetic fixture only",
+      "no ExecutionIntent",
+      "no Bind invocation",
+      "no external effect"
+    ]
+  },
+  "expected_handoff_status": "INVALID",
+  "expected_reason_codes": [
+    "HANDOFF_APPROVAL_EVIDENCE_INVALID"
+  ],
+  "execution_intent_created": false,
+  "bind_invoked": false,
+  "external_effect": false,
+  "synthetic_fixture": true
+}
