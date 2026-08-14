@@ -18,6 +18,9 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 FIXTURE_PATH = (
     REPO_ROOT
     / "veritas_os/tests/fixtures/decide_pipeline/provider_transcript.json"
