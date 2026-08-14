@@ -89,7 +89,7 @@ def test_runner_controls_only_central_llm_seam_and_keeps_bind_separate() -> None
     source = RUNNER.read_text(encoding="utf-8")
 
     assert 'patch.object(llm_client, "chat", controlled_chat)' in source
-    assert "decision_pipeline, \"core_decide\", observed_kernel_decide" in source
+    assert "decision_kernel, \"decide\", observed_kernel_decide" in source
     assert "original_kernel_decide(*args, **kwargs)" in source
     assert "patch.object(server, \"get_decision_pipeline\"" not in source
     assert "WebhookBindAdapter" not in source

@@ -196,12 +196,12 @@ def run_proof(
 
         from veritas_os.api import server
         from veritas_os.api.schemas import DecideResponse
+        from veritas_os.core import kernel as decision_kernel
         from veritas_os.core import llm_client
-        from veritas_os.core import pipeline as decision_pipeline
         from veritas_os.logging import trust_log
 
         call_count = 0
-        original_kernel_decide = decision_pipeline.core_decide
+        original_kernel_decide = decision_kernel.decide
         kernel_available = callable(original_kernel_decide)
         kernel_calls = 0
 
@@ -218,7 +218,7 @@ def run_proof(
             return await original_kernel_decide(*args, **kwargs)
 
         with patch.object(llm_client, "chat", controlled_chat), patch.object(
-            decision_pipeline, "core_decide", observed_kernel_decide
+            decision_kernel, "decide", observed_kernel_decide
         ):
             with TestClient(server.app) as client:
                 invalid = client.post(
