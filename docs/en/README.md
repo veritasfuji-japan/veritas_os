@@ -73,7 +73,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [External Bind Integration Milestone](development/external-bind-integration-update.md) — reviewer-facing summary of the reference adapter, minimal Python SDK, AML/KYC example, traceable bind path, and explicit non-claims.
 
 ### Guides
-- [External Bind PoC Evidence](guides/external-bind-poc-evidence.md) — one-command, synthetic local evidence for committed, blocked, and verified rollback paths through the reference adapter.
+- [External Bind Boundary PoC Evidence](guides/external-bind-poc-evidence.md) — one-command, synthetic-input local evidence for committed, blocked, and verified rollback paths through the real bind adjudicator and reference adapter; it does not exercise `/v1/decide`.
 - [External Bind Integration Path](guides/external-bind-integration-path.md) — concise reviewer path from a Decision Candidate through `/v1/decide`, non-executing payload preparation, the Bind Boundary, and verified external outcomes.
 - [Minimal Python SDK reference](../../sdk/python/README.md) — dependency-free `/v1/decide` client with import-safe examples and non-executing bind payload preparation; a reference integration aid, not a production-certified SDK. AI output remains a Decision Candidate, and external side effects must still cross the Bind Boundary using the `WebhookBindAdapter` reference pattern.
 - [AML/KYC SDK to Webhook Bind example](guides/aml-kyc-sdk-webhook-example.md) — placeholder-only reference flow from `/v1/decide` to preparation of a non-executing bind payload; it does not authorize or perform an external action.

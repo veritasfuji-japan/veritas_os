@@ -1,4 +1,4 @@
-# External Bind PoC Evidence
+# External Bind Boundary PoC Evidence
 
 Run this repository-local, synthetic demonstration from the repository root:
 
@@ -32,13 +32,22 @@ public HTTPS host, while the **test-only** transport maps approved requests to
 the loopback fixture. This preserves the adapter request flow without weakening
 production SSRF protections. Do not reuse the fixture transport in production.
 
-The fixture's deterministic `/v1/decide` response isolates this proof from LLM
-providers and credentials. It exercises the HTTP decision-candidate boundary;
-it does not claim model/provider behavior or a production API deployment.
+## Decision-stage limitation
+
+This PoC **does not call the VERITAS `/v1/decide` runtime**. It starts with a
+deterministic synthetic Decision Candidate, recorded in every artifact as
+`"decision_stage":"synthetic_fixture"`. Running the real decision pipeline
+locally requires provider, TrustLog, and runtime configuration; replacing those
+dependencies with a hard-coded pipeline response would not prove that runtime.
+
+The real VERITAS runtime exercised here begins at `execute_bind_adjudication`
+and includes authority, constraint, drift, and risk adjudication, the real
+`WebhookBindAdapter` request flow, postcondition verification, compensation,
+rollback verification, and receipt construction. The external receiver and its
+transport mapping remain synthetic test fixtures.
 
 This PoC demonstrates the behavior of the reference bind path in a controlled local test environment. It is not evidence of a production deployment, regulatory certification, or integration with a live financial institution.
 
 It also does not prove production readiness, customer deployment, live bank
 connectivity, availability, or deployment-specific security controls. All data
 is synthetic and generated evidence contains no HMAC secret or API key.
-

@@ -41,9 +41,6 @@ class _Handler(BaseHTTPRequestHandler):
     state: FixtureState
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/v1/decide":
-            self._reply(405, {"error": "method_not_allowed"})
-            return
         if self.path == "/snapshot":
             self._record(None)
             self._reply(200, self.state.state)
@@ -61,17 +58,6 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         body = self._read_body()
-        if self.path == "/v1/decide":
-            self._record(body)
-            self._reply(
-                200,
-                {
-                    "decision_id": "decision-synthetic-001",
-                    "decision_status": "allow",
-                    "chosen": "create_human_review_task",
-                },
-            )
-            return
         if self.path == "/action":
             self._record(body)
             self.state.state = dict(AFTER)
@@ -159,20 +145,19 @@ class FixtureTransport:
             return WebhookResponse(response.status, body)
 
 
-def _post_decision_candidate(fixture: LocalFixture) -> dict[str, Any]:
-    payload = {
-        "query": "Select a synthetic case handling action",
-        "options": ["create_human_review_task", "take_no_action"],
-        "context": {"data_classification": "synthetic_only"},
+def _synthetic_decision_candidate() -> dict[str, Any]:
+    """Return deterministic input for the bind-only proof boundary.
+
+    This is deliberately not represented as a call to VERITAS ``/v1/decide``.
+    Exercising the production decision pipeline without provider, TrustLog, and
+    runtime configuration would require mocks that obscure that limitation.
+    """
+    return {
+        "decision_id": "decision-synthetic-001",
+        "decision_status": "allow",
+        "chosen": "create_human_review_task",
+        "data_classification": "synthetic_only",
     }
-    request = Request(
-        fixture.origin + "/v1/decide",
-        data=canonical_json_dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urlopen(request, timeout=2) as response:  # noqa: S310
-        return json.loads(response.read().decode("utf-8"))
 
 
 def _adapter(fixture: LocalFixture) -> WebhookBindAdapter:
@@ -195,7 +180,7 @@ def run_scenario(name: str) -> dict[str, Any]:
     """Run one deterministic scenario and return reviewer-facing evidence."""
     fail_postcondition = name == "rolled-back"
     with LocalFixture(fail_postcondition=fail_postcondition) as fixture:
-        decision = _post_decision_candidate(fixture)
+        decision = _synthetic_decision_candidate()
         prepared = {
             "decision_id": decision["decision_id"],
             "execution_status": "not_executed",
@@ -233,9 +218,13 @@ def run_scenario(name: str) -> dict[str, Any]:
         )
         return {
             "scenario": name,
+            "decision_stage": "synthetic_fixture",
+            "real_veritas_runtime": [
+                "execute_bind_adjudication",
+                "WebhookBindAdapter",
+            ],
             "path": [
-                "Decision Candidate",
-                "/v1/decide",
+                "synthetic Decision Candidate",
                 "non-executing bind preparation",
                 "Bind Boundary adjudication",
                 "WebhookBindAdapter",

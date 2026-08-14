@@ -10,6 +10,10 @@ from examples.external_bind_poc.poc import run_all
 
 def test_poc_scenarios_and_external_effect_counts(tmp_path: Path) -> None:
     evidence = run_all(tmp_path)
+    assert all(
+        item["decision_stage"] == "synthetic_fixture" for item in evidence.values()
+    )
+    assert all("/v1/decide" not in item["path"] for item in evidence.values())
     assert evidence["committed"]["final_outcome"] == "COMMITTED"
     assert evidence["committed"]["action_post_count"] == 1
     assert evidence["blocked"]["final_outcome"] == "BLOCKED"
@@ -34,4 +38,3 @@ def test_evidence_is_deterministic_and_contains_no_secret(tmp_path: Path) -> Non
     assert "test-only-external-bind-poc-secret" not in serialized
     assert "X-Veritas-Signature" not in serialized
     assert "api_key" not in serialized.lower()
-
