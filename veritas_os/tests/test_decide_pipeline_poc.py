@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import os
 import subprocess
 import sys
@@ -48,6 +49,8 @@ def test_real_decide_route_generates_strict_evidence(tmp_path: Path) -> None:
     assert report["permission_decide_exercised"]
     assert report["request_validation_exercised"]
     assert report["controlled_provider_calls"] > 0
+    assert report["kernel_decide_calls"] > 0
+    assert report["kernel_decide_successful_calls"] > 0
     assert report["outbound_provider_network_calls"] == 0
     assert report["trustlog_append_verified"]
     assert report["trustlog_chain_verified"]
@@ -84,13 +87,52 @@ def test_proof_fails_without_encryption_material(tmp_path: Path) -> None:
     assert not (tmp_path / "report.json").exists()
 
 
+@pytest.mark.integration
+def test_kernel_exception_and_pipeline_fallback_cannot_pass(tmp_path: Path) -> None:
+    """HTTP fallback must fail proof when the real kernel does not return."""
+    result = _run(tmp_path, "--force-kernel-failure")
+
+    assert result.returncode != 0
+    assert "HTTP_ROUTE               PASS" in result.stdout
+    assert "PIPELINE_KERNEL          FAIL" in result.stdout
+    assert "RESULT                   FAIL" in result.stdout
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_kernel_observer_preserves_signature_and_counts_success() -> None:
+    """The observer must be transparent to signature-based core dispatch."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("decide_poc_runner", RUNNER)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    async def kernel_decide(
+        context: dict[str, object],
+        query: str,
+        alternatives: list[dict[str, object]],
+        min_evidence: int = 1,
+    ) -> dict[str, object]:
+        return {"query": query, "min_evidence": min_evidence}
+
+    counters = {"calls": 0, "successful_calls": 0}
+    observer = module._observed_kernel_decide(kernel_decide, counters)
+
+    assert inspect.signature(observer) == inspect.signature(kernel_decide)
+    result = await observer({}, "query", [], 2)
+    assert result == {"query": "query", "min_evidence": 2}
+    assert counters == {"calls": 1, "successful_calls": 1}
+
+
 def test_runner_controls_only_central_llm_seam_and_keeps_bind_separate() -> None:
     """Static boundary guard prevents broad runtime mocks and bind imports."""
     source = RUNNER.read_text(encoding="utf-8")
 
     assert 'patch.object(llm_client, "chat", controlled_chat)' in source
     assert "decision_kernel, \"decide\", observed_kernel_decide" in source
-    assert "original_kernel_decide(*args, **kwargs)" in source
+    assert "result = await original_kernel_decide(*args, **kwargs)" in source
     assert "patch.object(server, \"get_decision_pipeline\"" not in source
     assert "WebhookBindAdapter" not in source
     assert "ExecutionIntent" not in source

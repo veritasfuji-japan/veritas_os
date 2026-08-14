@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from functools import wraps
 import hashlib
 import json
 import os
@@ -102,6 +103,8 @@ def _project_report(
     ledger_entry: dict[str, Any],
     replay_digest: str,
     calls: int,
+    kernel_calls: int,
+    kernel_successful_calls: int,
 ) -> dict[str, Any]:
     """Normalize nondeterministic runtime output into reviewer evidence."""
     gate = response.get("gate") if isinstance(response.get("gate"), dict) else {}
@@ -129,6 +132,8 @@ def _project_report(
         ],
         "controlled_components": ["veritas_os.core.llm_client.chat output"],
         "controlled_provider_calls": calls,
+        "kernel_decide_calls": kernel_calls,
+        "kernel_decide_successful_calls": kernel_successful_calls,
         "outbound_provider_network_calls": 0,
         "request_fixture_digest": _digest(fixture),
         "controlled_provider_transcript_digest": _digest(transcript),
@@ -162,11 +167,32 @@ def _project_report(
     }
 
 
+def _observed_kernel_decide(
+    original_kernel_decide: Any,
+    counters: dict[str, int],
+    *,
+    force_failure: bool = False,
+) -> Any:
+    """Wrap kernel.decide without changing its inspectable call signature."""
+
+    @wraps(original_kernel_decide)
+    async def observer(*args: Any, **kwargs: Any) -> Any:
+        counters["calls"] += 1
+        if force_failure:
+            raise RuntimeError("forced kernel failure for fail-closed proof test")
+        result = await original_kernel_decide(*args, **kwargs)
+        counters["successful_calls"] += 1
+        return result
+
+    return observer
+
+
 def run_proof(
     report_path: Path,
     *,
     force_verify_failure: bool = False,
     omit_encryption_key: bool = False,
+    force_kernel_failure: bool = False,
 ) -> int:
     """Execute the real route and independently enforce proof invariants.
 
@@ -174,6 +200,7 @@ def run_proof(
         report_path: Destination for normalized machine-readable evidence.
         force_verify_failure: Test-only fault injection after HTTP completion.
         omit_encryption_key: Test-only proof of mandatory encryption failure.
+        force_kernel_failure: Test-only proof that core fallback cannot pass.
 
     Returns:
         Zero only when every mandatory reviewer proof check passes.
@@ -203,7 +230,7 @@ def run_proof(
         call_count = 0
         original_kernel_decide = decision_kernel.decide
         kernel_available = callable(original_kernel_decide)
-        kernel_calls = 0
+        kernel_counters = {"calls": 0, "successful_calls": 0}
 
         def controlled_chat(*args: Any, **kwargs: Any) -> dict[str, Any]:
             """Supply the fixture exactly at the central provider seam."""
@@ -211,11 +238,11 @@ def run_proof(
             call_count += 1
             return dict(transcript["response"])
 
-        async def observed_kernel_decide(*args: Any, **kwargs: Any) -> Any:
-            """Count, without replacing, calls to the real kernel."""
-            nonlocal kernel_calls
-            kernel_calls += 1
-            return await original_kernel_decide(*args, **kwargs)
+        observed_kernel_decide = _observed_kernel_decide(
+            original_kernel_decide,
+            kernel_counters,
+            force_failure=force_kernel_failure,
+        )
 
         with patch.object(llm_client, "chat", controlled_chat), patch.object(
             decision_kernel, "decide", observed_kernel_decide
@@ -239,7 +266,11 @@ def run_proof(
         else:
             payload = DecideResponse.model_validate(response.json()).model_dump()
         statuses["request_validation"] = bool(payload)
-        statuses["pipeline"] = kernel_available and kernel_calls > 0
+        statuses["pipeline"] = bool(
+            kernel_available
+            and kernel_counters["calls"] > 0
+            and kernel_counters["successful_calls"] > 0
+        )
         statuses["controlled_provider"] = call_count > 0
 
         log_path = trust_log.LOG_JSONL
@@ -282,6 +313,8 @@ def run_proof(
                 ledger_entry,
                 _digest(replay),
                 call_count,
+                kernel_counters["calls"],
+                kernel_counters["successful_calls"],
             )
             serialized = _canonical_bytes(report)
             forbidden = (api_key, encryption_key)
@@ -316,11 +349,13 @@ def main() -> int:
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--force-verify-failure", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--omit-encryption-key", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--force-kernel-failure", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     return run_proof(
         args.report,
         force_verify_failure=args.force_verify_failure,
         omit_encryption_key=args.omit_encryption_key,
+        force_kernel_failure=args.force_kernel_failure,
     )
 
 
