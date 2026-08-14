@@ -38,7 +38,9 @@ manifest enumerates all other bundle files and excludes itself to avoid a
 recursive self-hash.
 
 Proof evidence retains the PoCs' existing deterministic behavior. CI provenance
-(`commit_sha`, ref, workflow run ID, and attempt) naturally varies, so the
+records `tested_sha` (the checked-out PR merge or push SHA) and
+`source_head_sha` (the PR head SHA, or the same SHA for non-PR events), plus the
+ref, workflow run ID, and attempt. This metadata naturally varies, so the
 downloaded ZIP is not claimed to be byte-identical across runs.
 
 ## Non-claims
@@ -49,4 +51,3 @@ or readiness; execution authority from `/v1/decide`; Human Approval or Authority
 Evidence; Decision Pipeline → Bind Boundary lineage; live bank or financial
 institution integration; customer deployment; or regulatory approval or
 certification.
-

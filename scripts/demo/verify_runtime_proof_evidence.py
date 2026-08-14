@@ -53,6 +53,24 @@ def verify_decision_report(report: dict[str, Any]) -> None:
     calls = report.get("controlled_provider_calls")
     if isinstance(calls, bool) or not isinstance(calls, int) or calls < 1:
         failures.append("controlled_provider_calls")
+    kernel_calls = report.get("kernel_decide_calls")
+    successful_kernel_calls = report.get("kernel_decide_successful_calls")
+    if (
+        isinstance(kernel_calls, bool)
+        or not isinstance(kernel_calls, int)
+        or kernel_calls < 1
+    ):
+        failures.append("kernel_decide_calls")
+    if (
+        isinstance(successful_kernel_calls, bool)
+        or not isinstance(successful_kernel_calls, int)
+        or successful_kernel_calls < 1
+        or (
+            isinstance(kernel_calls, int)
+            and successful_kernel_calls > kernel_calls
+        )
+    ):
+        failures.append("kernel_decide_successful_calls")
     components = report.get("real_runtime_components")
     if not isinstance(components, list) or not DECISION_COMPONENTS.issubset(components):
         failures.append("real_runtime_components")

@@ -14,6 +14,7 @@ from scripts.demo.build_runtime_proof_evidence_manifest import (
     build_manifest,
     canonical_bytes,
 )
+from scripts.demo.build_runtime_proof_summary import build_summary
 from scripts.demo.verify_runtime_proof_evidence import (
     DECISION_COMPONENTS,
     build_report,
@@ -53,6 +54,31 @@ def test_requests_pin_is_consistent_across_core_manifests() -> None:
         assert manifest.read_text(encoding="utf-8").count("requests==2.34.2") == 1
 
 
+def test_summary_has_literal_markdown_and_nonempty_provenance() -> None:
+    """Python summary generation must preserve backticks without shell parsing."""
+    summary = build_summary("tested-abc", "source-def")
+
+    assert "Tested checkout SHA: `tested-abc`" in summary
+    assert "Source head SHA: `source-def`" in summary
+    assert "authenticated `/v1/decide`: PASS" in summary
+    assert "`controlled_provider_fixture`" in summary
+
+
+def test_summary_rejects_empty_provenance() -> None:
+    """Reviewer summaries must never contain blank SHA provenance fields."""
+    with pytest.raises(ValueError, match="must be non-empty"):
+        build_summary("", "source-def")
+
+
+def test_workflow_avoids_unquoted_markdown_heredocs() -> None:
+    """Prevent shell command substitution from corrupting Markdown evidence."""
+    workflow = (
+        REPO_ROOT / ".github/workflows/runtime-proof-evidence.yml"
+    ).read_text(encoding="utf-8")
+    assert "<<EOF" not in workflow
+    assert "SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}" in workflow
+
+
 def decision() -> dict[str, object]:
     """Return a minimal valid synthetic Decision Pipeline report fixture."""
     return {
@@ -63,6 +89,8 @@ def decision() -> dict[str, object]:
         "permission_decide_exercised": True,
         "request_validation_exercised": True,
         "controlled_provider_calls": 1,
+        "kernel_decide_calls": 1,
+        "kernel_decide_successful_calls": 1,
         "outbound_provider_network_calls": 0,
         "trustlog_append_verified": True,
         "trustlog_chain_verified": True,
@@ -117,6 +145,7 @@ def test_valid_decision_report_passes() -> None:
         ("trustlog_append_verified", False),
         ("trustlog_chain_verified", False),
         ("replay_artifact_verified", False),
+        ("kernel_decide_successful_calls", 0),
     ],
 )
 def test_invalid_decision_invariants_fail(field: str, value: object) -> None:
@@ -185,6 +214,9 @@ def test_valid_manifest_and_ci_provenance_pass(tmp_path: Path) -> None:
     context = json.loads((root / "ci-context.json").read_text())
     assert context["commit_sha"] == "abc123"
     assert "secret" not in json.dumps(context).lower()
+    manifest = json.loads((root / MANIFEST_NAME).read_text())
+    assert manifest["tested_sha"] == "abc123"
+    assert manifest["source_head_sha"] == "abc123"
 
 
 def test_altered_file_fails_manifest_verification(tmp_path: Path) -> None:

@@ -59,7 +59,8 @@ jobs:
 
       - name: Write CI provenance context
         env:
-          COMMIT_SHA: ${{ github.sha }}
+          TESTED_SHA: ${{ github.sha }}
+          SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.ref }}
           EVENT_NAME: ${{ github.event_name }}
@@ -76,7 +77,9 @@ jobs:
               "metadata_type": "ci_provenance_only",
               "generated_by": "github_actions",
               "repository": os.environ["REPOSITORY"],
-              "commit_sha": os.environ["COMMIT_SHA"],
+              "commit_sha": os.environ["TESTED_SHA"],
+              "tested_sha": os.environ["TESTED_SHA"],
+              "source_head_sha": os.environ["SOURCE_HEAD_SHA"],
               "ref": os.environ["REF"],
               "event_name": os.environ["EVENT_NAME"],
               "workflow": os.environ["WORKFLOW"],
@@ -89,25 +92,14 @@ jobs:
           PY
 
       - name: Build reviewer summary
-        run: |
-          cat > artifacts/runtime-proof-evidence/reviewer-summary.md <<EOF
-          # VERITAS Runtime Proof Evidence
-
-          Commit: `${GITHUB_SHA}`
-
-          The Decision Pipeline and External Bind Boundary are independent proof paths.
-          No Decision Pipeline -> ExecutionIntent -> Bind handoff is claimed.
-
-          Decision: authenticated POST /v1/decide, controlled provider fixture, real
-          governance runtime, TrustLog/replay verified, then STOP. Bind: synthetic
-          decision fixture, real bind adjudication and WebhookBindAdapter, with
-          COMMITTED, BLOCKED, and ROLLED_BACK verified.
-
-          This local CI bundle does not prove live providers, production TrustLog,
-          PostgreSQL, KMS/WORM, execution authority, Human Approval, Authority Evidence,
-          decision-to-bind lineage, live financial integrations, customer deployment,
-          regulatory approval/certification, or production readiness.
-          EOF
+        env:
+          TESTED_SHA: ${{ github.sha }}
+          SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: >
+          python scripts/demo/build_runtime_proof_summary.py
+          --tested-sha "$TESTED_SHA"
+          --source-head-sha "$SOURCE_HEAD_SHA"
+          --output artifacts/runtime-proof-evidence/reviewer-summary.md
 
       - name: Run proof-bundle secret hygiene check
         run: |
@@ -121,33 +113,23 @@ jobs:
       - name: Build SHA-256 manifest
         run: |
           python scripts/demo/build_runtime_proof_evidence_manifest.py \
-            artifacts/runtime-proof-evidence --commit-sha "$GITHUB_SHA"
+            artifacts/runtime-proof-evidence \
+            --tested-sha "${{ github.sha }}" \
+            --source-head-sha "${{ github.event.pull_request.head.sha || github.sha }}"
 
       - name: Verify SHA-256 manifest
         run: python scripts/demo/verify_runtime_proof_evidence_manifest.py artifacts/runtime-proof-evidence
 
       - name: Build GitHub step summary
-        run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          # VERITAS Runtime Proof Evidence
-          Commit: `${GITHUB_SHA}`
-
-          ## Decision Pipeline Proof
-          - authenticated `/v1/decide`: PASS
-          - real decision/governance runtime: PASS
-          - provider mode: `controlled_provider_fixture`
-          - TrustLog and replay verification: PASS
-          - ExecutionIntent created / Bind invoked: NO / NO
-
-          ## External Bind Boundary Proof
-          - decision stage: `synthetic_fixture`
-          - COMMITTED / BLOCKED / ROLLED_BACK: PASS / PASS / PASS
-
-          ## Boundary
-          These are two independent proof paths. No Decision Pipeline -> ExecutionIntent -> Bind handoff is claimed.
-
-          Artifact: `veritas-runtime-proof-evidence`
-          EOF
+        env:
+          TESTED_SHA: ${{ github.sha }}
+          SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: >
+          python scripts/demo/build_runtime_proof_summary.py
+          --tested-sha "$TESTED_SHA"
+          --source-head-sha "$SOURCE_HEAD_SHA"
+          --output artifacts/runtime-proof-evidence/reviewer-summary.md
+          --github-summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Runtime Proof Evidence
         uses: actions/upload-artifact@v4

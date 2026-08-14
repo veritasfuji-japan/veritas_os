@@ -27,7 +27,11 @@ def file_role(path: str) -> str:
     return {"verification-report.json": "combined_verification", "ci-context.json": "ci_provenance", "reviewer-summary.md": "reviewer_summary"}.get(path, "supporting_evidence")
 
 
-def build_manifest(root: Path, commit_sha: str) -> dict[str, Any]:
+def build_manifest(
+    root: Path,
+    tested_sha: str,
+    source_head_sha: str | None = None,
+) -> dict[str, Any]:
     """Hash every regular bundled file except the self-referential manifest."""
     files = []
     for path in sorted(item for item in root.rglob("*") if item.is_file() and item.name != MANIFEST_NAME):
@@ -38,7 +42,9 @@ def build_manifest(root: Path, commit_sha: str) -> dict[str, Any]:
         "format_version": 1,
         "manifest_id": "veritas-runtime-proof-evidence-v1",
         "artifact_name": ARTIFACT_NAME,
-        "commit_sha": commit_sha,
+        "commit_sha": tested_sha,
+        "tested_sha": tested_sha,
+        "source_head_sha": source_head_sha or tested_sha,
         "local_ci_proof_only": True,
         "proofs_independent": True,
         "decision_to_bind_connection_claimed": False,
@@ -54,9 +60,10 @@ def main() -> int:
     """Write a manifest for a bundle directory."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", type=Path)
-    parser.add_argument("--commit-sha", required=True)
+    parser.add_argument("--tested-sha", required=True)
+    parser.add_argument("--source-head-sha")
     args = parser.parse_args()
-    manifest = build_manifest(args.bundle, args.commit_sha)
+    manifest = build_manifest(args.bundle, args.tested_sha, args.source_head_sha)
     (args.bundle / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 
