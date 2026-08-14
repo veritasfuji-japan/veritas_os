@@ -103,16 +103,333 @@
     },
     "provenance": [
       {
+        "field_path": "source_decision.request_id",
+        "value": "req-fixture-001",
+        "provenance_class": "VERIFIED_RUNTIME_EVIDENCE",
+        "source_artifact_type": "synthetic_decide_fixture",
+        "source_artifact_ref": "decide-fixture-001",
+        "source_hash": "sha256:decide-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "source_decision.canonical_decision_id",
+        "value": "decision-fixture-001",
+        "provenance_class": "VERIFIED_RUNTIME_EVIDENCE",
+        "source_artifact_type": "synthetic_decision_lineage_fixture",
+        "source_artifact_ref": "decision-fixture-001",
+        "source_hash": "sha256:decision-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "source_decision.canonical_decision_hash",
+        "value": "sha256:decision-fixture-001",
+        "provenance_class": "DERIVED_CANONICALLY",
+        "source_artifact_type": "synthetic_decision_lineage_fixture",
+        "source_artifact_ref": "decision-fixture-001",
+        "source_hash": "sha256:decision-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "source_decision.canonical_decision_ts",
+        "value": "2030-01-01T00:00:00Z",
+        "provenance_class": "VERIFIED_RUNTIME_EVIDENCE",
+        "source_artifact_type": "synthetic_decision_lineage_fixture",
+        "source_artifact_ref": "decision-fixture-001",
+        "source_hash": "sha256:decision-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "candidate.actor_identity",
+        "value": "actor:fixture:alice",
+        "provenance_class": "EXPLICIT_STRUCTURED_INPUT",
+        "source_artifact_type": "synthetic_candidate_fixture",
+        "source_artifact_ref": "candidate-fixture-001",
+        "source_hash": "sha256:candidate-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "candidate.target_system",
+        "value": "ledger-fixture",
+        "provenance_class": "EXPLICIT_STRUCTURED_INPUT",
+        "source_artifact_type": "synthetic_candidate_fixture",
+        "source_artifact_ref": "candidate-fixture-001",
+        "source_hash": "sha256:candidate-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "candidate.target_resource",
+        "value": "account:fixture:A",
+        "provenance_class": "EXPLICIT_STRUCTURED_INPUT",
+        "source_artifact_type": "synthetic_candidate_fixture",
+        "source_artifact_ref": "candidate-fixture-001",
+        "source_hash": "sha256:candidate-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
         "field_path": "candidate.canonical_action",
         "value": {
-          "contract_id": "fixture.transfer"
+          "contract_id": "fixture.transfer",
+          "version": "1",
+          "parameters": {
+            "amount": "100.00",
+            "currency": "USD"
+          }
         },
         "provenance_class": "EXPLICIT_STRUCTURED_INPUT",
         "source_artifact_type": "synthetic_action_fixture",
         "source_artifact_ref": "action-fixture-001",
         "source_hash": "sha256:action-fixture-001",
         "verification_status": "VERIFIED",
-        "verification_mechanism": "fixture-contract-check",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "candidate_hash",
+        "value": "sha256:candidate-fixture-001",
+        "provenance_class": "DERIVED_CANONICALLY",
+        "source_artifact_type": "synthetic_candidate_fixture",
+        "source_artifact_ref": "candidate-fixture-001",
+        "source_hash": "sha256:candidate-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "trustlog_lineage",
+        "value": {
+          "verified": true,
+          "request_id": "req-fixture-001",
+          "artifact_ref": "trustlog-fixture-001",
+          "chain_hash": "sha256:trustlog-fixture-001"
+        },
+        "provenance_class": "VERIFIED_RUNTIME_EVIDENCE",
+        "source_artifact_type": "synthetic_trustlog_fixture",
+        "source_artifact_ref": "trustlog-fixture-001",
+        "source_hash": "sha256:trustlog-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "replay_lineage",
+        "value": {
+          "verified": true,
+          "request_id": "req-fixture-001",
+          "artifact_ref": "replay-fixture-001",
+          "artifact_hash": "sha256:replay-fixture-001"
+        },
+        "provenance_class": "VERIFIED_RUNTIME_EVIDENCE",
+        "source_artifact_type": "synthetic_replay_fixture",
+        "source_artifact_ref": "replay-fixture-001",
+        "source_hash": "sha256:replay-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "policy_lineage",
+        "value": {
+          "verified": true,
+          "snapshot_id": "policy-fixture-001",
+          "version": "1",
+          "semantic_digest": "sha256:policy-fixture-001",
+          "policy_ids": [
+            "fixture-policy"
+          ],
+          "effective_at": "2029-01-01T00:00:00Z",
+          "expires_at": "2031-01-01T00:00:00Z",
+          "superseded": false
+        },
+        "provenance_class": "VERIFIED_POLICY_ARTIFACT",
+        "source_artifact_type": "synthetic_policy_fixture",
+        "source_artifact_ref": "policy-fixture-001",
+        "source_hash": "sha256:policy-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "authority_requirement",
+        "value": {
+          "resolved": true,
+          "required": true,
+          "authority_type": "fixture-transfer-operator"
+        },
+        "provenance_class": "VERIFIED_POLICY_ARTIFACT",
+        "source_artifact_type": "synthetic_policy_fixture",
+        "source_artifact_ref": "policy-fixture-001",
+        "source_hash": "sha256:policy-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "authority_evidence",
+        "value": {
+          "validation_result": "VALID",
+          "actor_identity": "actor:fixture:alice",
+          "action_contract_id": "fixture.transfer",
+          "target_system": "ledger-fixture",
+          "target_scope": "account:fixture:A",
+          "issuer": "fixture-iam",
+          "issued_at": "2029-12-31T00:00:00Z",
+          "expires_at": "2030-02-01T00:00:00Z",
+          "evidence_ref": "authority-fixture-001",
+          "evidence_hash": "sha256:authority-fixture-001"
+        },
+        "provenance_class": "VERIFIED_AUTHORITY_EVIDENCE",
+        "source_artifact_type": "synthetic_authority_fixture",
+        "source_artifact_ref": "authority-fixture-001",
+        "source_hash": "sha256:authority-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "human_approval_requirement",
+        "value": {
+          "resolved": true,
+          "required": true,
+          "policy_ref": "fixture-policy"
+        },
+        "provenance_class": "VERIFIED_POLICY_ARTIFACT",
+        "source_artifact_type": "synthetic_policy_fixture",
+        "source_artifact_ref": "policy-fixture-001",
+        "source_hash": "sha256:policy-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "human_approval_evidence",
+        "value": {
+          "validation_result": "VALID",
+          "approver_identity": "approver:fixture:bob",
+          "approval_scope": "fixture.transfer:100.00:USD",
+          "candidate_ref": "candidate-fixture-001",
+          "action_contract_id": "fixture.transfer",
+          "target_resource": "account:fixture:A",
+          "approved_at": "2029-12-31T12:00:00Z",
+          "expires_at": "2030-01-02T00:00:00Z",
+          "receipt_ref": "approval-fixture-001",
+          "receipt_hash": "sha256:approval-fixture-001"
+        },
+        "provenance_class": "VERIFIED_HUMAN_APPROVAL",
+        "source_artifact_type": "synthetic_approval_fixture",
+        "source_artifact_ref": "approval-fixture-001",
+        "source_hash": "sha256:approval-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
+        "observed_at": "2029-12-31T23:59:00Z",
+        "issued_at": null,
+        "expires_at": null,
+        "freshness": {
+          "synthetic": true
+        }
+      },
+      {
+        "field_path": "expected_state",
+        "value": {
+          "fingerprint": "sha256:state-fixture-001",
+          "observed_at": "2029-12-31T23:59:00Z",
+          "source_ref": "state-fixture-001",
+          "verified": true
+        },
+        "provenance_class": "VERIFIED_LIVE_STATE",
+        "source_artifact_type": "synthetic_state_fixture",
+        "source_artifact_ref": "state-fixture-001",
+        "source_hash": "sha256:state-fixture-001",
+        "verification_status": "VERIFIED",
+        "verification_mechanism": "synthetic-fixture-contract-check",
         "observed_at": "2029-12-31T23:59:00Z",
         "issued_at": null,
         "expires_at": null,

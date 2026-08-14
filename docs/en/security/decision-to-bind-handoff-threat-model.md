@@ -32,7 +32,7 @@ external effect.
 | Approval replay | Receipt authorizes another amount/user/target | Enforce exact scope, nonce/reference, time, and one-operation semantics. |
 | Authority replay | Credential is reused beyond scope/window | Bind evidence to operation and verify current validity. |
 | Reviewer/runtime mismatch | Offline reviewer fixture is called live evidence | Label synthetic provenance and verify runtime artifact identities. |
-| Decision-proof/Bind-proof false linkage | #2097/#2098 proof is paired with unrelated #2099 proof | Refuse connected-lineage claims absent shared canonical lineage. |
+| Decision-proof/Bind-proof false linkage | The independently verified #2098 Decision proof and #2097 Bind proof are presented as sharing canonical Decision → ExecutionIntent → Bind lineage merely because #2099 packages and verifies both. | Refuse connected-lineage claims absent shared canonical lineage evidence. |
 
 ## Security posture and residual risk
 
@@ -45,4 +45,6 @@ evidence.
 **Security warning:** this document defines controls but implements none. Until
 a separately reviewed future implementation establishes canonical decision
 lineage and live evidence validation, any claimed Decision-to-Bind connection
-is untrusted. #2097, #2098, and #2099 do not prove that connection.
+is untrusted. #2097 proves the separate external Bind boundary, #2098 proves the
+Decision pipeline through `DecideResponse` and STOP, and #2099 independently
+verifies and packages both proofs. None creates the lineage connection.

@@ -61,6 +61,39 @@ Canonical provenance classes are:
 `DERIVED_CANONICALLY` requires a versioned, deterministic derivation contract.
 It is not permission to infer meaning from prose.
 
+### Canonical READY coverage
+
+Provenance is field-level for scalar execution/security inputs and object-level
+at the named canonical boundary for compound evidence objects. Object-level
+coverage prevents a compound artifact from being misleadingly represented as
+independently verified fragments while retaining its canonical verification
+boundary. Every `READY_FOR_GUARDED_PROMOTION` handoff requires exactly one
+unique `field_path` record for, at minimum:
+
+* `source_decision.request_id`, `source_decision.canonical_decision_id`,
+  `source_decision.canonical_decision_hash`, and
+  `source_decision.canonical_decision_ts`;
+* `candidate.actor_identity`, `candidate.target_system`,
+  `candidate.target_resource`, `candidate.canonical_action`, and
+  `candidate_hash`;
+* the compound-object boundaries `trustlog_lineage`, `replay_lineage`, and
+  `policy_lineage`;
+* the compound-object boundaries `authority_requirement` and
+  `authority_evidence`;
+* the compound-object boundaries `human_approval_requirement` and
+  `human_approval_evidence`; and
+* the compound-object boundary `expected_state` when state binding is required
+  for the action.
+
+Every record explicitly carries `value`, even when an unavailable value is
+represented as `null` in a non-ready handoff. Every mandatory READY record has
+`verification_status=VERIFIED` and MUST NOT use provenance class `UNAVAILABLE`
+or `UNVERIFIED_STRUCTURED_INPUT`. Those classes and unverified statuses remain
+valid structural representations for non-ready states, but cannot satisfy a
+READY prerequisite. The JSON Schema enforces record structure; specification
+coherence tests enforce READY fixture coverage; a future separately reviewed
+runtime implementation would perform actual handoff validation.
+
 ## No-field-inference rule
 
 Execution-formation fields MUST NOT be inferred from plausible language. The
@@ -192,12 +225,22 @@ approval, verified/live state, fresh policy, or TrustLog/replay linkage. This
 handoff must establish those stronger preconditions before a future real flow
 may use the helper; this specification does not call or modify it.
 
-Proof A (#2097/#2098) ends after real `/v1/decide`, governance, controlled
-provider output, verified TrustLog/replay, and `DecideResponse`. Proof B (#2099)
-starts with a synthetic candidate and independently exercises Bind and the
-webhook adapter. CI verifies them separately. No canonical Decision →
-ExecutionIntent → Bind lineage is proven. #2100 specifies the missing boundary;
-it does not fill it.
+The current proof mapping is:
+
+* #2097, External Bind Boundary PoC: synthetic Decision Candidate → real Bind
+  adjudication → real `WebhookBindAdapter` → `COMMITTED` / `BLOCKED` /
+  `ROLLED_BACK`. It does not call real `/v1/decide`.
+* #2098, Decision Pipeline PoC: real authenticated `/v1/decide` → real
+  decision/governance runtime → controlled provider output → verified TrustLog
+  and replay → `DecideResponse` → STOP. It creates no `ExecutionIntent` and
+  does not invoke Bind.
+* #2099, Runtime Proof Evidence CI: independently executes and verifies the
+  #2098 Decision proof and #2097 Bind proof, then emits a SHA-256 manifest, CI
+  provenance, and downloadable reviewer artifact. Packaging both does not
+  create lineage between them.
+
+No canonical Decision → ExecutionIntent → Bind lineage is proven. #2100
+specifies the missing boundary; it does not fill it.
 
 ## Explicit non-claims
 

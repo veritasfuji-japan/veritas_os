@@ -172,6 +172,7 @@
       "additionalProperties": false,
       "required": [
         "field_path",
+        "value",
         "provenance_class",
         "source_artifact_type",
         "source_artifact_ref",
