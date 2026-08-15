@@ -1,0 +1,169 @@
+{
+  "vector_id": "CDA-V1-01",
+  "description": "Golden complete canonical decision",
+  "synthetic_fixture": true,
+  "source_projection": {
+    "request_id": "req-cda-synthetic-001",
+    "chosen": {
+      "id": "choice-stable-01",
+      "score": 0.875,
+      "title": "Hold for verified review"
+    },
+    "decision_status": "allow",
+    "rejection_reason": null,
+    "gate_decision": "hold",
+    "business_decision": "HOLD",
+    "next_action": "REQUEST_VERIFIED_REVIEW",
+    "actionability_status": "reviewable_only",
+    "requires_bind_before_execution": true,
+    "human_review_required": false,
+    "required_evidence": [
+      "authority_evidence",
+      "human_approval"
+    ],
+    "missing_evidence": [
+      "authority_evidence"
+    ],
+    "satisfied_evidence": [
+      "policy_evaluation"
+    ],
+    "rationale": "Synthetic decision requires separately verified authority.",
+    "refusal_reason": null,
+    "actionability_block_reason": "BIND_REQUIRED",
+    "actionability_refusal_type": null,
+    "governance_identity": {
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "policy_version": "synthetic-v7",
+      "signature_verified": true
+    },
+    "lineage_promotability": {
+      "promotability_family": "lineage_promotability",
+      "promotability_status": "restricted",
+      "promotability_version": "v1",
+      "reason_code": "AUTHORITY_PENDING",
+      "transformation_stable": true,
+      "invariant_id": "BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+      "source_participation_state": null,
+      "source_preservation_state": null,
+      "concise_rationale": null
+    },
+    "transition_refusal": {
+      "bind_receipt_created": false,
+      "execution_intent_created": false,
+      "reason_code": null,
+      "transition_status": "allowed",
+      "invariant_id": "BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+      "source_promotability_status": null,
+      "concise_rationale": null
+    }
+  },
+  "artifact": {
+    "format_version": "canonical-decision-artifact/v1",
+    "hash_profile": "veritas.canonical-decision/v1",
+    "decision_id": "cda:v1:sha256:1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
+    "decision_hash": "1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
+    "decision_ts": "2031-02-03T04:05:06.123456Z",
+    "request_id": "req-cda-synthetic-001",
+    "source_contract": {
+      "type": "DecideResponse",
+      "projection_version": "canonical-decision-projection/v1"
+    },
+    "decision": {
+      "formation_status": "COMPLETE",
+      "chosen_binding": {
+        "profile": "veritas.canonical-decision.chosen-value/v1",
+        "sha256": "f419527eddae068f9362c66ab338f54fb41d6f9f04adfb553294c59c5077e6f6"
+      },
+      "decision_status": "allow",
+      "rejection_reason": null,
+      "gate_decision": "hold",
+      "business_decision": "HOLD",
+      "next_action": "REQUEST_VERIFIED_REVIEW",
+      "actionability_status": "reviewable_only",
+      "requires_bind_before_execution": true,
+      "human_review_required": false,
+      "required_evidence": [
+        "authority_evidence",
+        "human_approval"
+      ],
+      "missing_evidence": [
+        "authority_evidence"
+      ],
+      "satisfied_evidence": [
+        "policy_evaluation"
+      ],
+      "rationale": "Synthetic decision requires separately verified authority.",
+      "refusal_reason": null,
+      "actionability_block_reason": "BIND_REQUIRED",
+      "actionability_refusal_type": null,
+      "governance_identity_binding": {
+        "profile": "veritas.canonical-decision.governance-identity/v1",
+        "sha256": "c3aa80f8117ede4fa868319513b8304193b5323e0f960d3069076d2217a4e9ec"
+      },
+      "lineage_promotability_binding": {
+        "profile": "veritas.canonical-decision.lineage-promotability/v1",
+        "sha256": "35c203c9baed4c3679bbcec66346bb97bd62d33dbd1fc5ff6339fed852500840"
+      },
+      "transition_refusal_binding": {
+        "profile": "veritas.canonical-decision.transition-refusal/v1",
+        "sha256": "42405ab6973875446269a4f3bdcc1e527e393a9f5e2f60e964f756f234029bc6"
+      }
+    }
+  },
+  "canonical_preimage": {
+    "profile": "veritas.canonical-decision/v1",
+    "format_version": "canonical-decision-artifact/v1",
+    "request_id": "req-cda-synthetic-001",
+    "decision_ts": "2031-02-03T04:05:06.123456Z",
+    "source_contract": {
+      "type": "DecideResponse",
+      "projection_version": "canonical-decision-projection/v1"
+    },
+    "decision": {
+      "formation_status": "COMPLETE",
+      "chosen_binding": {
+        "profile": "veritas.canonical-decision.chosen-value/v1",
+        "sha256": "f419527eddae068f9362c66ab338f54fb41d6f9f04adfb553294c59c5077e6f6"
+      },
+      "decision_status": "allow",
+      "rejection_reason": null,
+      "gate_decision": "hold",
+      "business_decision": "HOLD",
+      "next_action": "REQUEST_VERIFIED_REVIEW",
+      "actionability_status": "reviewable_only",
+      "requires_bind_before_execution": true,
+      "human_review_required": false,
+      "required_evidence": [
+        "authority_evidence",
+        "human_approval"
+      ],
+      "missing_evidence": [
+        "authority_evidence"
+      ],
+      "satisfied_evidence": [
+        "policy_evaluation"
+      ],
+      "rationale": "Synthetic decision requires separately verified authority.",
+      "refusal_reason": null,
+      "actionability_block_reason": "BIND_REQUIRED",
+      "actionability_refusal_type": null,
+      "governance_identity_binding": {
+        "profile": "veritas.canonical-decision.governance-identity/v1",
+        "sha256": "c3aa80f8117ede4fa868319513b8304193b5323e0f960d3069076d2217a4e9ec"
+      },
+      "lineage_promotability_binding": {
+        "profile": "veritas.canonical-decision.lineage-promotability/v1",
+        "sha256": "35c203c9baed4c3679bbcec66346bb97bd62d33dbd1fc5ff6339fed852500840"
+      },
+      "transition_refusal_binding": {
+        "profile": "veritas.canonical-decision.transition-refusal/v1",
+        "sha256": "42405ab6973875446269a4f3bdcc1e527e393a9f5e2f60e964f756f234029bc6"
+      }
+    }
+  },
+  "expected_canonical_serialized": "{\"decision\":{\"actionability_block_reason\":\"BIND_REQUIRED\",\"actionability_refusal_type\":null,\"actionability_status\":\"reviewable_only\",\"business_decision\":\"HOLD\",\"chosen_binding\":{\"profile\":\"veritas.canonical-decision.chosen-value/v1\",\"sha256\":\"f419527eddae068f9362c66ab338f54fb41d6f9f04adfb553294c59c5077e6f6\"},\"decision_status\":\"allow\",\"formation_status\":\"COMPLETE\",\"gate_decision\":\"hold\",\"governance_identity_binding\":{\"profile\":\"veritas.canonical-decision.governance-identity/v1\",\"sha256\":\"c3aa80f8117ede4fa868319513b8304193b5323e0f960d3069076d2217a4e9ec\"},\"human_review_required\":false,\"lineage_promotability_binding\":{\"profile\":\"veritas.canonical-decision.lineage-promotability/v1\",\"sha256\":\"35c203c9baed4c3679bbcec66346bb97bd62d33dbd1fc5ff6339fed852500840\"},\"missing_evidence\":[\"authority_evidence\"],\"next_action\":\"REQUEST_VERIFIED_REVIEW\",\"rationale\":\"Synthetic decision requires separately verified authority.\",\"refusal_reason\":null,\"rejection_reason\":null,\"required_evidence\":[\"authority_evidence\",\"human_approval\"],\"requires_bind_before_execution\":true,\"satisfied_evidence\":[\"policy_evaluation\"],\"transition_refusal_binding\":{\"profile\":\"veritas.canonical-decision.transition-refusal/v1\",\"sha256\":\"42405ab6973875446269a4f3bdcc1e527e393a9f5e2f60e964f756f234029bc6\"}},\"decision_ts\":\"2031-02-03T04:05:06.123456Z\",\"format_version\":\"canonical-decision-artifact/v1\",\"profile\":\"veritas.canonical-decision/v1\",\"request_id\":\"req-cda-synthetic-001\",\"source_contract\":{\"projection_version\":\"canonical-decision-projection/v1\",\"type\":\"DecideResponse\"}}",
+  "expected_decision_hash": "1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
+  "expected_decision_id": "cda:v1:sha256:1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
+  "expected_schema_valid": true,
+  "expected_production": "EMIT"
+}

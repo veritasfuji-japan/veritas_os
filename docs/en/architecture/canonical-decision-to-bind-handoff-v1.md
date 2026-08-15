@@ -13,6 +13,18 @@ canonical `decision_id`, `decision_hash`, or `decision_ts`. Those values remain
 `UNAVAILABLE`/`UNRESOLVED`; `request_id`, an HTTP response hash, arrival time,
 TrustLog retrieval time, CI time, and current time are not substitutes.
 
+The future canonical source for those values is a **verified**
+[`CanonicalDecisionArtifact v1`](canonical-decision-artifact-v1.md). Its
+allowed mapping is `artifact.request_id` to `source_decision.request_id`,
+`artifact.decision_id` to `source_decision.canonical_decision_id`,
+`artifact.decision_hash` to `source_decision.canonical_decision_hash`, and
+`artifact.decision_ts` to `source_decision.canonical_decision_ts`. Merely
+copying these four strings is insufficient for READY: provenance must bind the
+source artifact reference and hash, verification mechanism, and successful
+verification status. This is a future producer/consumer contract only; the v1
+runtime validator continues to accept an already formed handoff plus trusted
+validation context and does not yet depend on artifact production.
+
 ```mermaid
 flowchart TD
   A[LLM / Agent - EXISTING] -->|untrusted proposal| B[DecisionCandidate - EXISTING]

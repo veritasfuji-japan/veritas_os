@@ -1,0 +1,83 @@
+{
+  "vector_id": "CDA-V1-13",
+  "description": "Populated Bind lineage requires producer refusal",
+  "synthetic_fixture": true,
+  "source_projection": {
+    "request_id": "req-cda-synthetic-001",
+    "chosen": {
+      "id": "choice-stable-01",
+      "score": 0.875,
+      "title": "Hold for verified review"
+    },
+    "decision_status": "allow",
+    "rejection_reason": null,
+    "gate_decision": "hold",
+    "business_decision": "HOLD",
+    "next_action": "REQUEST_VERIFIED_REVIEW",
+    "actionability_status": "reviewable_only",
+    "requires_bind_before_execution": true,
+    "human_review_required": false,
+    "required_evidence": [
+      "authority_evidence",
+      "human_approval"
+    ],
+    "missing_evidence": [
+      "authority_evidence"
+    ],
+    "satisfied_evidence": [
+      "policy_evaluation"
+    ],
+    "rationale": "Synthetic decision requires separately verified authority.",
+    "refusal_reason": null,
+    "actionability_block_reason": "BIND_REQUIRED",
+    "actionability_refusal_type": null,
+    "governance_identity": {
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "policy_version": "synthetic-v7",
+      "signature_verified": true
+    },
+    "lineage_promotability": {
+      "promotability_family": "lineage_promotability",
+      "promotability_status": "restricted",
+      "promotability_version": "v1",
+      "reason_code": "AUTHORITY_PENDING",
+      "transformation_stable": true,
+      "invariant_id": "BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+      "source_participation_state": null,
+      "source_preservation_state": null,
+      "concise_rationale": null
+    },
+    "transition_refusal": {
+      "bind_receipt_created": false,
+      "execution_intent_created": false,
+      "reason_code": null,
+      "transition_status": "allowed",
+      "invariant_id": "BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+      "source_promotability_status": null,
+      "concise_rationale": null
+    },
+    "bind_receipt_id": "bind-synthetic-1",
+    "execution_intent_id": "intent-synthetic-1",
+    "bind_outcome": "COMMITTED"
+  },
+  "expected_schema_valid": null,
+  "expected_production": "REFUSE",
+  "expected_reason": "POST_BIND_SOURCE_REFUSED",
+  "post_bind_source_fields": [
+    "bind_outcome",
+    "bind_failure_reason",
+    "bind_reason_code",
+    "bind_receipt_id",
+    "execution_intent_id",
+    "bound_execution_intent_id",
+    "authority_check_result",
+    "constraint_check_result",
+    "drift_check_result",
+    "risk_check_result",
+    "bind_summary",
+    "bind_operator_summary",
+    "bind_operator_detail"
+  ],
+  "populated_definition": "JSON value is not null",
+  "blocked_and_rolled_back_are_post_bind": true
+}
