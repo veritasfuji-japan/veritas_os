@@ -253,7 +253,7 @@ def test_schema_statuses_and_reason_codes_cover_vectors() -> None:
 
 
 def test_candidate_mutation_and_target_context_substitution_are_distinct() -> None:
-    """Pin V05 candidate mutation separately from V24 context substitution."""
+    """Pin V05's two failures separately from V24 context substitution."""
     by_id = {vector["vector_id"]: vector for vector in _vectors()}
     vector_01 = by_id["DTBH-V1-01"]
     vector_05 = by_id["DTBH-V1-05"]
@@ -261,9 +261,22 @@ def test_candidate_mutation_and_target_context_substitution_are_distinct() -> No
 
     assert vector_05["expected_handoff_status"] == "INVALID"
     assert vector_05["expected_reason_codes"] == [
-        "HANDOFF_CANDIDATE_HASH_MISMATCH"
+        "HANDOFF_TARGET_CONTEXT_MISMATCH",
+        "HANDOFF_CANDIDATE_HASH_MISMATCH",
     ]
     assert vector_05["input"]["candidate"] != vector_01["input"]["candidate"]
+    assert vector_05["input"]["candidate"]["target_resource"] == (
+        "account:fixture:B"
+    )
+    assert vector_05["input"]["target_context"]["target_resource"] == (
+        "account:fixture:A"
+    )
+    assert vector_05["input"]["authority_evidence"]["target_scope"] == (
+        vector_05["input"]["candidate"]["target_resource"]
+    )
+    assert vector_05["input"]["human_approval_evidence"][
+        "target_resource"
+    ] == vector_05["input"]["candidate"]["target_resource"]
     assert (
         vector_05["input"]["candidate"]["target_resource"]
         != vector_01["input"]["candidate"]["target_resource"]
