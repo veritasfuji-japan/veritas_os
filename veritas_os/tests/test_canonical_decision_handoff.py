@@ -13,9 +13,11 @@ import pytest
 
 from veritas_os.policy.canonical_decision_handoff import (
     ASSERTION_VALUE_DIGEST_PROFILE,
+    AUTHORITY_SATISFIES_REQUIREMENT_CLAIM,
     CANONICAL_PROVENANCE_CLASSES,
     CANONICAL_VERIFICATION_STATUSES,
     HUMAN_APPROVAL_EXACT_OPERATION_CLAIM,
+    AuthorityEvidenceRequirementBindingAssertion,
     CandidateHashBindingAssertion,
     CanonicalDecisionHandoffReasonCode,
     CanonicalDecisionHandoffStatus,
@@ -65,6 +67,25 @@ def _complete_context(handoff: dict[str, object]) -> CanonicalDecisionHandoffVal
     return CanonicalDecisionHandoffValidationContext(
         value_assertions=assertions,
         candidate_hash_binding=_binding(handoff["candidate"], handoff["candidate_hash"]),
+        authority_requirement_binding=(
+            AuthorityEvidenceRequirementBindingAssertion(
+                authority_requirement_value_digest=(
+                    canonical_handoff_assertion_value_digest(
+                        handoff["authority_requirement"]
+                    )
+                ),
+                authority_evidence_value_digest=(
+                    canonical_handoff_assertion_value_digest(
+                        handoff["authority_evidence"]
+                    )
+                ),
+                source_artifact_ref="authority-fixture-001",
+                source_hash="sha256:authority-fixture-001",
+                verification_mechanism="synthetic-independent-test-verifier",
+                verified_at=EVALUATED_AT,
+                claim=AUTHORITY_SATISFIES_REQUIREMENT_CLAIM,
+            )
+        ),
     )
 
 
@@ -524,3 +545,159 @@ def test_handoff_id_is_required_artifact_identity(handoff_id: object) -> None:
     )
     assert result.status is CanonicalDecisionHandoffStatus.INVALID
     assert not result.structure_valid
+
+
+@pytest.mark.parametrize(
+    ("lineage", "field", "value", "reason"),
+    [
+        ("trustlog_lineage", "verified", "missing", "HANDOFF_SCHEMA_INVALID"),
+        ("trustlog_lineage", "verified", None, "HANDOFF_SCHEMA_INVALID"),
+        ("trustlog_lineage", "verified", "true", "HANDOFF_SCHEMA_INVALID"),
+        ("trustlog_lineage", "verified", False, "HANDOFF_TRUSTLOG_UNVERIFIED"),
+        ("trustlog_lineage", "artifact_ref", "", "HANDOFF_TRUSTLOG_UNVERIFIED"),
+        ("trustlog_lineage", "chain_hash", "", "HANDOFF_TRUSTLOG_UNVERIFIED"),
+        ("replay_lineage", "verified", "missing", "HANDOFF_SCHEMA_INVALID"),
+        ("replay_lineage", "verified", None, "HANDOFF_SCHEMA_INVALID"),
+        ("replay_lineage", "verified", "true", "HANDOFF_SCHEMA_INVALID"),
+        ("replay_lineage", "verified", False, "HANDOFF_REPLAY_UNVERIFIED"),
+        ("replay_lineage", "artifact_ref", "", "HANDOFF_REPLAY_UNVERIFIED"),
+        ("replay_lineage", "artifact_hash", "", "HANDOFF_REPLAY_UNVERIFIED"),
+    ],
+)
+def test_lineage_intrinsic_shape_is_required(
+    lineage: str, field: str, value: object, reason: str
+) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    if value == "missing":
+        del handoff[lineage][field]
+    else:
+        handoff[lineage][field] = value
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert not result.ready_for_guarded_promotion
+    assert reason in {item.value for item in result.reason_codes}
+
+
+@pytest.mark.parametrize("field", ["issuer", "evidence_ref", "evidence_hash"])
+def test_authority_required_identifiers_are_intrinsic(field: str) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff["authority_evidence"][field] = ""
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_AUTHORITY_EVIDENCE_INVALID,
+    )
+
+
+def test_authority_binding_cross_binds_requirement_and_evidence() -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    context = _complete_context(handoff)
+    assert validate_canonical_decision_handoff(
+        handoff, context, EVALUATED_AT
+    ).ready_for_guarded_promotion
+    assert validate_canonical_decision_handoff(
+        handoff,
+        replace(context, authority_requirement_binding=None),
+        EVALUATED_AT,
+    ).status is CanonicalDecisionHandoffStatus.INCOMPLETE
+    mismatch = replace(
+        context,
+        authority_requirement_binding=replace(
+            context.authority_requirement_binding,
+            authority_requirement_value_digest="stale-digest",
+        ),
+    )
+    assert validate_canonical_decision_handoff(
+        handoff, mismatch, EVALUATED_AT
+    ).reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_PROVENANCE_MISMATCH,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("superseded", "false"),
+        ("superseded", 0),
+        ("superseded", None),
+        ("superseded", "missing"),
+        ("policy_ids", [1]),
+        ("policy_ids", [""]),
+    ],
+)
+def test_policy_type_safety(field: str, value: object) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    if value == "missing":
+        del handoff["policy_lineage"][field]
+    else:
+        handoff["policy_lineage"][field] = value
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_SCHEMA_INVALID,
+    )
+
+
+def test_v05_aggregates_only_its_two_independent_failures() -> None:
+    vector = next(
+        vector for vector in _vectors() if vector["vector_id"] == "DTBH-V1-05"
+    )
+    handoff = deepcopy(vector["input"])
+    baseline = deepcopy(_vectors()[0]["input"])
+    context = CanonicalDecisionHandoffValidationContext(
+        candidate_hash_binding=_binding(
+            baseline["candidate"], baseline["candidate_hash"]
+        )
+    )
+    result = validate_canonical_decision_handoff(handoff, context, EVALUATED_AT)
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_TARGET_CONTEXT_MISMATCH,
+        CanonicalDecisionHandoffReasonCode.HANDOFF_CANDIDATE_HASH_MISMATCH,
+    )
+
+
+def test_v05_does_not_suppress_additional_independent_failures() -> None:
+    vector = next(
+        vector for vector in _vectors() if vector["vector_id"] == "DTBH-V1-05"
+    )
+    handoff = deepcopy(vector["input"])
+    handoff["authority_evidence"]["target_scope"] = "account:fixture:A"
+    handoff["human_approval_evidence"]["target_resource"] = "account:fixture:A"
+    baseline = deepcopy(_vectors()[0]["input"])
+    context = CanonicalDecisionHandoffValidationContext(
+        candidate_hash_binding=_binding(
+            baseline["candidate"], baseline["candidate_hash"]
+        )
+    )
+    result = validate_canonical_decision_handoff(handoff, context, EVALUATED_AT)
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_TARGET_CONTEXT_MISMATCH,
+        CanonicalDecisionHandoffReasonCode.HANDOFF_AUTHORITY_EVIDENCE_INVALID,
+        CanonicalDecisionHandoffReasonCode.HANDOFF_APPROVAL_EVIDENCE_INVALID,
+        CanonicalDecisionHandoffReasonCode.HANDOFF_CANDIDATE_HASH_MISMATCH,
+    )
+
+
+def test_missing_approval_outranks_later_candidate_mismatch() -> None:
+    vector = next(
+        vector for vector in _vectors() if vector["vector_id"] == "DTBH-V1-12"
+    )
+    handoff = deepcopy(vector["input"])
+    prior_candidate = deepcopy(handoff["candidate"])
+    prior_candidate["actor_identity"] = "actor:prior"
+    result = validate_canonical_decision_handoff(
+        handoff,
+        CanonicalDecisionHandoffValidationContext(
+            candidate_hash_binding=_binding(
+                prior_candidate, handoff["candidate_hash"]
+            )
+        ),
+        EVALUATED_AT,
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.REVIEW_REQUIRED
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_APPROVAL_EVIDENCE_MISSING,
+    )

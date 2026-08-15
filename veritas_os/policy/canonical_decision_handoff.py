@@ -16,6 +16,9 @@ from veritas_os.security.hash import sha256_of_canonical_json
 ASSERTION_VALUE_DIGEST_PROFILE = "veritas.canonical-handoff.assertion-value/v1"
 VALIDATION_VERSION = "canonical-decision-handoff-validator/v1"
 HUMAN_APPROVAL_EXACT_OPERATION_CLAIM = "HUMAN_APPROVAL_BINDS_EXACT_OPERATION"
+AUTHORITY_SATISFIES_REQUIREMENT_CLAIM = (
+    "AUTHORITY_EVIDENCE_SATISFIES_REQUIREMENT"
+)
 FORBIDDEN_READY_PROVENANCE_CLASSES = frozenset(
     {"UNAVAILABLE", "UNVERIFIED_STRUCTURED_INPUT"}
 )
@@ -110,11 +113,27 @@ class CandidateHashBindingAssertion:
 
 
 @dataclass(frozen=True)
+class AuthorityEvidenceRequirementBindingAssertion:
+    """Trusted cross-binding of exact Authority Evidence and requirement."""
+
+    authority_requirement_value_digest: str
+    authority_evidence_value_digest: str
+    source_artifact_ref: str | None
+    source_hash: str | None
+    verification_mechanism: str
+    verified_at: datetime
+    claim: str = AUTHORITY_SATISFIES_REQUIREMENT_CLAIM
+
+
+@dataclass(frozen=True)
 class CanonicalDecisionHandoffValidationContext:
     """Assertions supplied independently of the untrusted handoff."""
 
     value_assertions: tuple[TrustedValueAssertion, ...] = ()
     candidate_hash_binding: CandidateHashBindingAssertion | None = None
+    authority_requirement_binding: (
+        AuthorityEvidenceRequirementBindingAssertion | None
+    ) = None
 
 
 @dataclass(frozen=True)
@@ -322,6 +341,15 @@ def validate_canonical_decision_handoff(
         )
     if request_ids[0] != request_ids[1] or request_ids[0] != request_ids[2]:
         invalid.append(reason.HANDOFF_REQUEST_LINEAGE_MISMATCH)
+    trustlog_verified = trustlog.get("verified")
+    replay_verified = replay.get("verified")
+    if type(trustlog_verified) is not bool or type(replay_verified) is not bool:
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     target = handoff["target_context"]
     if all(_nonempty(candidate.get(key)) for key in ("target_system", "target_resource")) and (
         candidate.get("target_system") != target.get("target_system")
@@ -358,7 +386,10 @@ def validate_canonical_decision_handoff(
              authority.get("action_contract_id") != (action or {}).get("contract_id"),
              authority.get("target_system") != candidate.get("target_system"),
              authority.get("target_scope") != candidate.get("target_resource"),
-             authority.get("validation_result") != "VALID")
+             authority.get("validation_result") != "VALID",
+             not _nonempty(authority.get("issuer")),
+             not _nonempty(authority.get("evidence_ref")),
+             not _nonempty(authority.get("evidence_hash")))
         ):
             invalid.append(reason.HANDOFF_AUTHORITY_EVIDENCE_INVALID)
         expires = _timestamp(authority.get("expires_at"))
@@ -397,6 +428,18 @@ def validate_canonical_decision_handoff(
 
     policy = handoff.get("policy_lineage")
     if isinstance(policy, Mapping):
+        if (
+            type(policy.get("superseded")) is not bool
+            or not isinstance(policy.get("policy_ids"), list)
+            or not policy.get("policy_ids")
+            or not all(_nonempty(policy_id) for policy_id in policy["policy_ids"])
+        ):
+            return _result(
+                handoff,
+                CanonicalDecisionHandoffStatus.INVALID,
+                schema_reason,
+                structure_valid=False,
+            )
         effective = _timestamp(policy.get("effective_at"))
         expires = _timestamp(policy.get("expires_at"))
         if effective is None or expires is None:
@@ -441,13 +484,9 @@ def validate_canonical_decision_handoff(
         != canonical_handoff_assertion_value_digest(candidate)
         or binding.asserted_candidate_hash != handoff.get("candidate_hash")
     )
-    if binding_mismatch:
-        return _result(
-            handoff,
-            CanonicalDecisionHandoffStatus.INVALID,
-            (reason.HANDOFF_CANDIDATE_HASH_MISMATCH,),
-        )
     if invalid:
+        if binding_mismatch:
+            invalid.append(reason.HANDOFF_CANDIDATE_HASH_MISMATCH)
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, tuple(dict.fromkeys(invalid)))
 
     if approval_requirement.get("resolved") is not True:
@@ -506,9 +545,17 @@ def validate_canonical_decision_handoff(
             schema_reason,
             structure_valid=False,
         )
-    if trustlog.get("verified") is False:
+    if (
+        trustlog_verified is not True
+        or not _nonempty(trustlog.get("artifact_ref"))
+        or not _nonempty(trustlog.get("chain_hash"))
+    ):
         incomplete.append(reason.HANDOFF_TRUSTLOG_UNVERIFIED)
-    if replay.get("verified") is False:
+    if (
+        replay_verified is not True
+        or not _nonempty(replay.get("artifact_ref"))
+        or not _nonempty(replay.get("artifact_hash"))
+    ):
         incomplete.append(reason.HANDOFF_REPLAY_UNVERIFIED)
     expires_at = _timestamp(handoff.get("expires_at")) if handoff.get("expires_at") else None
     created_at = _timestamp(handoff.get("created_at"))
@@ -538,6 +585,39 @@ def validate_canonical_decision_handoff(
             CanonicalDecisionHandoffStatus.INCOMPLETE,
             (reason.HANDOFF_PROVENANCE_UNVERIFIED,),
         )
+    if binding_mismatch:
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            (reason.HANDOFF_CANDIDATE_HASH_MISMATCH,),
+        )
+
+    if authority_requirement["required"]:
+        authority_binding = trusted_context.authority_requirement_binding
+        if (
+            authority_binding is None
+            or not authority_binding.verification_mechanism
+            or not isinstance(authority_binding.verified_at, datetime)
+            or authority_binding.verified_at.tzinfo is None
+            or authority_binding.verified_at > evaluated_at
+            or authority_binding.claim != AUTHORITY_SATISFIES_REQUIREMENT_CLAIM
+        ):
+            return _result(
+                handoff,
+                CanonicalDecisionHandoffStatus.INCOMPLETE,
+                (reason.HANDOFF_PROVENANCE_UNVERIFIED,),
+            )
+        if (
+            authority_binding.authority_requirement_value_digest
+            != canonical_handoff_assertion_value_digest(authority_requirement)
+            or authority_binding.authority_evidence_value_digest
+            != canonical_handoff_assertion_value_digest(authority)
+        ):
+            return _result(
+                handoff,
+                CanonicalDecisionHandoffStatus.INVALID,
+                (reason.HANDOFF_PROVENANCE_MISMATCH,),
+            )
 
     mandatory = (
         "source_decision.request_id", "source_decision.canonical_decision_id",

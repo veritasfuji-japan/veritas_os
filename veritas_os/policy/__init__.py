@@ -5,6 +5,7 @@
 
 from .compiler import COMPILER_VERSION, CompileResult, compile_policy_to_bundle
 from .canonical_decision_handoff import (
+    AuthorityEvidenceRequirementBindingAssertion,
     CandidateHashBindingAssertion,
     CanonicalDecisionHandoffReasonCode,
     CanonicalDecisionHandoffStatus,
@@ -90,6 +91,7 @@ from .runtime_adapter import (
 from .schema import load_and_validate_policy, validate_source_policy
 
 __all__ = [
+    "AuthorityEvidenceRequirementBindingAssertion",
     "CandidateHashBindingAssertion",
     "CanonicalDecisionHandoffReasonCode",
     "CanonicalDecisionHandoffStatus",

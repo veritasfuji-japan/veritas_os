@@ -42,12 +42,22 @@ deny readiness.
 Candidate-binding trust quality is evaluated only after intrinsic handoff
 contradictions and explicit missing/review conditions, so an untrusted or
 future assertion cannot mask a positively invalid handoff.
+Intrinsic INVALID reasons are aggregated in validation order. A trustworthy
+candidate binding may add an independent candidate-hash mismatch to existing
+intrinsic reasons, but cannot replace them or bypass a missing/review result.
 
 When Human Approval is required, the independent assertion for
 `human_approval_evidence` must include
 `HUMAN_APPROVAL_BINDS_EXACT_OPERATION`. This states that its upstream verifier
 checked the exact candidate, action parameters, and target. The validator does
 not parse or assign semantics to the opaque `approval_scope` string.
+
+When Authority Evidence is required, READY also requires a typed
+`AuthorityEvidenceRequirementBindingAssertion` carrying
+`AUTHORITY_EVIDENCE_SATISFIES_REQUIREMENT`. It binds local digests of both the
+exact requirement and exact evidence, recording trusted upstream semantic
+verification without parsing roles or inferring authority from identity,
+ALLOW, authentication, business output, or prose.
 
 ## Explicit non-claims
 

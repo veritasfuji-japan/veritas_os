@@ -273,6 +273,10 @@ applicable policy, or expected state matches that candidate. Those are separate
 validation properties and MUST be checked independently. This separation is
 security-critical.
 
+Target-context consistency and candidate-hash binding are independent failure
+properties. When both fail, both reasons are reported deterministically, with
+`HANDOFF_TARGET_CONTEXT_MISMATCH` before `HANDOFF_CANDIDATE_HASH_MISMATCH`.
+
 ## Formation invariant and reason codes
 
 The handoff consumes existing `lineage_promotability` and
