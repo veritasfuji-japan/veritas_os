@@ -1150,6 +1150,15 @@ class DecideResponse(BaseModel):
             "trusted provenance or execution authority."
         ),
     )
+    canonical_decision_trust_receipt: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Receipt identifying the encrypted full-ledger TrustLog entry that "
+            "commits to the emitted Canonical Decision Artifact reference. "
+            "Presence confirms local append and exact returned-entry matching; "
+            "ledger-chain and signed-witness verification remain separate."
+        ),
+    )
 
     # Governance identity: which governance artifact was in force for this decision.
     governance_identity: Optional[Dict[str, Any]] = Field(
