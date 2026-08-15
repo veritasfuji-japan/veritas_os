@@ -2,13 +2,15 @@
 
 ## Status, purpose, and boundary
 
-This specification defines the **future**, immutable
+This specification defines the immutable
 `CanonicalDecisionArtifact` representation of one finalized, normalized
 VERITAS decision event. It supplies a stable `decision_id`, `decision_hash`,
 and `decision_ts` for the decision side. The current `/v1/decide` response has
 `request_id`, but does **not** emit any of those three authoritative canonical
-values. This milestone adds only a schema, synthetic vectors, documentation,
-and test-only coherence logic; it adds no producer, verifier, or consumer.
+values. A production standalone builder and integrity verifier now implement
+the v1 contract as a pure, independently testable runtime primitive. They are
+not yet wired to `/v1/decide`, pipeline finalization, persistence, TrustLog,
+replay, `CanonicalDecisionHandoff`, `ExecutionIntent`, or Bind.
 
 The processing boundary is exactly:
 
@@ -250,8 +252,8 @@ field stability vectors are `EMIT`; mutation vectors are hash-reference-only.
 
 ## Verification and independent domains
 
-A future verifier fails closed: (1) validate schema/version; (2) exclude the
-two identity outputs; (3) construct the exact v1 preimage; (4) canonicalize;
+The standalone verifier fails closed: (1) validate schema/version; (2) exclude
+the two identity outputs; (3) construct the exact v1 preimage; (4) canonicalize;
 (5) SHA-256; (6) compare `decision_hash`; (7) derive the expected full
 `decision_id`; (8) compare it; and (9) reject any mismatch. The artifact has no
 `verified: true` shortcut.
@@ -283,15 +285,16 @@ chosen/action laundering; ALLOW/APPROVE authority laundering; compatibility or
 volatile-field hash drift; alternate serialization; self-hash recursion;
 cross-domain digest confusion; cross-request substitution; reuse of one ID with
 modified state; governance substitution; and erasure of structural refusal.
-Residual risk remains until a separately reviewed producer and verifier capture
-the correct boundary and validate every binding; this PR must not be treated as
-runtime protection.
+The verifier proves internal structure and content integrity only. A party able
+to replace an entire artifact and recompute its hash and ID can produce an
+internally self-consistent artifact; trusted origin and provenance remain a
+separate future layer.
 
 ## Non-claims and remaining work
 
-This milestone provides no live `/v1/decide` emission, production builder or
-verifier, canonical candidate extraction, Authority Evidence, Human Approval
-verification, live policy verification, TrustLog verification, replay
+This milestone provides no live `/v1/decide` emission, canonical candidate
+extraction, Authority Evidence, Human Approval verification, live policy
+verification, TrustLog verification, replay
 verification, `CanonicalDecisionHandoff` creation, guarded promotion,
 `ExecutionIntent`, Bind, external effect, or production/customer/regulatory
 certification. A later PR must define and review the finalization capture,
