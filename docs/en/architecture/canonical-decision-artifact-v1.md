@@ -5,12 +5,11 @@
 This specification defines the immutable
 `CanonicalDecisionArtifact` representation of one finalized, normalized
 VERITAS decision event. It supplies a stable `decision_id`, `decision_hash`,
-and `decision_ts` for the decision side. The current `/v1/decide` response has
-`request_id`, but does **not** emit any of those three authoritative canonical
-values. A production standalone builder and integrity verifier now implement
-the v1 contract as a pure, independently testable runtime primitive. They are
-not yet wired to `/v1/decide`, pipeline finalization, persistence, TrustLog,
-replay, `CanonicalDecisionHandoff`, `ExecutionIntent`, or Bind.
+and `decision_ts` for the decision side. The `/v1/decide` pipeline emits the
+artifact only after its pre-persistence decision source passes canonical
+finalization and a post-persistence source-drift guard. The runtime integration
+does not link the artifact to TrustLog, replay, `CanonicalDecisionHandoff`,
+`ExecutionIntent`, or Bind.
 
 The processing boundary is exactly:
 
@@ -20,6 +19,23 @@ normalized pre-Bind DecideResponse snapshot
   -> versioned, domain-separated canonical serialization
   -> decision_hash -> decision_id -> CanonicalDecisionArtifact -> STOP
 ```
+
+The live pipeline sequence is exactly:
+
+```text
+Stage 7 source finalized
+  -> one decision_ts capture
+  -> CDA build + internal verification
+  -> Stage 8 receives no CDA field
+  -> full source-drift guard
+  -> attach CDA to outgoing response
+```
+
+The final drift guard rebuilds the artifact with the original `decision_ts`,
+independently verifies the rebuilt artifact, and requires exact JSON equality
+with the original artifact. The original artifact, not the rebuilt comparison
+value, is attached. Live CDA emission is not provenance proof, TrustLog proof,
+replay proof, handoff readiness, or execution authority.
 
 The artifact is not a `DecisionCandidate`, `CanonicalDecisionHandoff`,
 `ExecutionIntent`, Authority Evidence, Human Approval, `BindReceipt`, execution

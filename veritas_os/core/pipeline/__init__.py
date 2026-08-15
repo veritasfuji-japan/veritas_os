@@ -90,11 +90,6 @@ from ..utils import (  # noqa: F401 – _redact_text/redact_payload re-exported 
     utc_now_iso_z,
 )
 from .. import self_healing  # noqa: F401 - tests monkeypatch pipeline.self_healing
-from ...governance.canonical_decision_artifact import (
-    CanonicalDecisionArtifact,
-    build_canonical_decision_artifact,
-    verify_canonical_decision_artifact,
-)
 
 # ---- pipeline サブモジュール（分割済み） ----
 from .pipeline_helpers import (
@@ -232,6 +227,12 @@ from .pipeline_decide_stages import (
     stage_value_learning_ema,
     stage_compute_metrics,
     stage_evidence_hardening,
+)
+from .canonical_decision_finalization import (
+    attach_canonical_decision_artifact,
+    finalize_canonical_decision_artifact,
+    require_stage_8_payload_without_canonical_artifact,
+    verify_canonical_decision_source_unchanged,
 )
 from .pipeline_replay import (
     _safe_filename_id,  # noqa: F401 – backward compat
@@ -576,38 +577,6 @@ def _build_decision_payload(ctx: PipelineContext) -> Dict[str, Any]:
     res = assemble_response(ctx, load_persona_fn=load_persona, plan=plan)
     payload = coerce_to_decide_response(res, DecideResponse=DecideResponse)
     return payload
-
-
-def _build_verified_canonical_decision_artifact(
-    payload: Dict[str, Any],
-) -> CanonicalDecisionArtifact:
-    """Create and internally verify a CDA at the finalized decision boundary."""
-    source = DecideResponse.model_validate(payload)
-    artifact = build_canonical_decision_artifact(source, decision_ts=utc_now())
-    verification = verify_canonical_decision_artifact(artifact)
-    if not verification.is_valid:
-        reasons = ",".join(verification.reason_codes)
-        raise RuntimeError(f"canonical decision artifact verification failed: {reasons}")
-    return artifact
-
-
-def _attach_canonical_decision_artifact_without_drift(
-    payload: Dict[str, Any],
-    artifact: CanonicalDecisionArtifact,
-) -> None:
-    """Attach a CDA only if persistence did not alter its decision projection.
-
-    This comparison is fail-closed: a post-decision mutation must never result
-    in a response carrying a CDA that identifies different decision semantics.
-    """
-    current_source = DecideResponse.model_validate(payload)
-    current_artifact = build_canonical_decision_artifact(
-        current_source,
-        decision_ts=artifact.decision_ts,
-    )
-    if current_artifact.decision_hash != artifact.decision_hash:
-        raise RuntimeError("decision drift detected after CDA finalization")
-    payload["canonical_decision_artifact"] = artifact.model_dump(mode="json")
 
 
 def _run_post_decision_persistence_phase(
@@ -1014,14 +983,17 @@ async def run_decide_pipeline(
     # =================================================================
         with trace_session.stage("build_response"):
             payload = _build_decision_payload(ctx)
-            canonical_decision_artifact = (
-                _build_verified_canonical_decision_artifact(payload)
+            decision_finalized_at = utc_now()
+            canonical_decision_artifact = finalize_canonical_decision_artifact(
+                payload,
+                decision_ts=decision_finalized_at,
             )
 
     # =================================================================
     # Stage 8: Post-decision persistence phase  (-> pipeline_persist)
     # - best-effort side effects and artifact generation only
     # =================================================================
+        require_stage_8_payload_without_canonical_artifact(payload)
         with trace_session.stage("persist"):
             _stage_started_at = time.perf_counter()
             _run_post_decision_persistence_phase(
@@ -1030,11 +1002,16 @@ async def run_decide_pipeline(
                 effective_get_memory_store=effective_get_memory_store,
                 stage_failures=_stage_failures,
             )
-            _attach_canonical_decision_artifact_without_drift(
-                payload,
-                canonical_decision_artifact,
-            )
             observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
+
+        verify_canonical_decision_source_unchanged(
+            payload,
+            canonical_decision_artifact,
+        )
+        attach_canonical_decision_artifact(
+            payload,
+            canonical_decision_artifact,
+        )
 
     # =================================================================
     # Observability: record pipeline health summary

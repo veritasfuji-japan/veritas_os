@@ -33,10 +33,6 @@ from veritas_os.governance.canonical_decision_artifact import (
     strict_canonical_json_bytes,
     verify_canonical_decision_artifact,
 )
-from veritas_os.core.pipeline import (
-    _attach_canonical_decision_artifact_without_drift,
-    _build_verified_canonical_decision_artifact,
-)
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,28 +72,6 @@ def test_golden_runtime_artifact_is_exact() -> None:
         strict_canonical_json_bytes(canonical_decision_preimage(artifact)).decode()
         == vector["expected_canonical_serialized"]
     )
-
-
-def test_pipeline_attaches_cda_after_unchanged_decision() -> None:
-    payload = _source().model_dump(mode="json")
-    artifact = _build_verified_canonical_decision_artifact(payload)
-
-    _attach_canonical_decision_artifact_without_drift(payload, artifact)
-
-    attached = payload["canonical_decision_artifact"]
-    assert attached["decision_id"] == artifact.decision_id
-    assert verify_canonical_decision_artifact(attached).is_valid
-
-
-def test_pipeline_refuses_cda_attachment_after_decision_drift() -> None:
-    payload = _source().model_dump(mode="json")
-    artifact = _build_verified_canonical_decision_artifact(payload)
-    payload["chosen"]["title"] = "drifted decision"
-
-    with pytest.raises(RuntimeError, match="decision drift detected"):
-        _attach_canonical_decision_artifact_without_drift(payload, artifact)
-
-    assert "canonical_decision_artifact" not in payload
 
 
 def test_timestamp_normalization_and_refusal() -> None:

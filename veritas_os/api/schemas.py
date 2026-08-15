@@ -1143,8 +1143,11 @@ class DecideResponse(BaseModel):
     canonical_decision_artifact: Optional[Dict[str, Any]] = Field(
         default=None,
         description=(
-            "Verified Canonical Decision Artifact v1 attached only after "
-            "post-decision persistence completes without decision drift."
+            "Canonical Decision Artifact v1 captured at the pre-persistence "
+            "decision finalization boundary. The pipeline verifies its "
+            "internal structure, deterministic hash integrity, and "
+            "content-addressed identifier coherence. It does not establish "
+            "trusted provenance or execution authority."
         ),
     )
 

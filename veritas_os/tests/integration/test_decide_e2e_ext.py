@@ -20,11 +20,19 @@ pytestmark = pytest.mark.integration
 import json
 import sys
 import types
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import pytest
 
 from veritas_os.core import pipeline as api_pipeline
+from veritas_os.core.pipeline.canonical_decision_finalization import (
+    CanonicalDecisionFinalizationError,
+    CanonicalDecisionFinalizationReason,
+)
+from veritas_os.governance.canonical_decision_artifact import (
+    verify_canonical_decision_artifact,
+)
 
 # =========================================================
 # helper 関数のテスト
@@ -551,6 +559,9 @@ async def test_run_decide_pipeline_happy_path(patched_pipeline):
     assert isinstance(payload["evidence"], list) and payload["evidence"]
     assert "values" in payload and payload["values"]["scores"]
     assert payload["persona"]["name"] == "default"
+    assert verify_canonical_decision_artifact(
+        payload["canonical_decision_artifact"]
+    ).is_valid
 
     # metrics / extras contract（壊れやすいので最低限の存在を担保）
     extras = payload.get("extras") or {}
@@ -1150,6 +1161,8 @@ async def test_run_decide_pipeline_decision_boundary_calls_post_persist(
     pipeline = patched_pipeline
     call_order: List[str] = []
     persisted_payload: Dict[str, Any] = {}
+    finalized_at = datetime(2031, 2, 3, 4, 5, 6, tzinfo=timezone.utc)
+    clock_calls = 0
 
     def fake_build_decision_payload(ctx):
         call_order.append("build_decision")
@@ -1169,15 +1182,28 @@ async def test_run_decide_pipeline_decision_boundary_calls_post_persist(
 
     artifact = object()
 
-    def fake_build_cda(payload):
-        del payload
-        call_order.append("build_cda")
+    def fake_clock():
+        nonlocal clock_calls
+        clock_calls += 1
+        call_order.append("capture_timestamp")
+        return finalized_at
+
+    def fake_finalize_cda(payload, *, decision_ts):
+        assert decision_ts is finalized_at
+        assert "canonical_decision_artifact" not in payload
+        call_order.extend(["finalize_cda", "verify_cda"])
         return artifact
 
     def fake_post_persist(ctx, payload, *, effective_get_memory_store, stage_failures):
         del ctx, effective_get_memory_store, stage_failures
+        assert "canonical_decision_artifact" not in payload
         call_order.append("post_persist")
         persisted_payload.update(payload)
+
+    def fake_drift_check(payload, value):
+        assert value is artifact
+        assert "canonical_decision_artifact" not in payload
+        call_order.append("drift_check")
 
     def fake_attach_cda(payload, value):
         assert value is artifact
@@ -1198,13 +1224,25 @@ async def test_run_decide_pipeline_decision_boundary_calls_post_persist(
     )
     monkeypatch.setattr(
         pipeline,
-        "_build_verified_canonical_decision_artifact",
-        fake_build_cda,
+        "utc_now",
+        fake_clock,
         raising=False,
     )
     monkeypatch.setattr(
         pipeline,
-        "_attach_canonical_decision_artifact_without_drift",
+        "finalize_canonical_decision_artifact",
+        fake_finalize_cda,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "verify_canonical_decision_source_unchanged",
+        fake_drift_check,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "attach_canonical_decision_artifact",
         fake_attach_cda,
         raising=False,
     )
@@ -1214,13 +1252,107 @@ async def test_run_decide_pipeline_decision_boundary_calls_post_persist(
 
     assert call_order == [
         "build_decision",
-        "build_cda",
+        "capture_timestamp",
+        "finalize_cda",
+        "verify_cda",
         "post_persist",
+        "drift_check",
         "attach_cda",
     ]
+    assert clock_calls == 1
     assert persisted_payload["request_id"] == payload["request_id"]
     assert payload["query"] == "decision boundary test"
     assert payload["canonical_decision_artifact"] == {"decision_id": "test-cda"}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "reason",
+    [
+        CanonicalDecisionFinalizationReason.ARTIFACT_BUILD_FAILED,
+        CanonicalDecisionFinalizationReason.ARTIFACT_VERIFICATION_FAILED,
+    ],
+)
+async def test_cda_finalization_failure_blocks_persistence(
+    monkeypatch,
+    patched_pipeline,
+    reason,
+):
+    """Canonical build and verification failures stop before Stage 8."""
+    pipeline = patched_pipeline
+    persistence_calls = 0
+
+    def fail_finalization(payload, *, decision_ts):
+        del payload, decision_ts
+        raise CanonicalDecisionFinalizationError(reason)
+
+    def count_persistence(*args, **kwargs):
+        del args, kwargs
+        nonlocal persistence_calls
+        persistence_calls += 1
+
+    monkeypatch.setattr(
+        pipeline,
+        "finalize_canonical_decision_artifact",
+        fail_finalization,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_run_post_decision_persistence_phase",
+        count_persistence,
+    )
+
+    body = {"query": "finalization failure", "context": {"user_id": "u-fail"}}
+    with pytest.raises(CanonicalDecisionFinalizationError) as exc:
+        await pipeline.run_decide_pipeline(
+            DummyReqModel(body),
+            DummyRequest(),
+        )
+
+    assert exc.value.reason_code is reason
+    assert persistence_calls == 0
+
+
+@pytest.mark.anyio
+async def test_missing_request_id_blocks_persistence_before_compatibility_uuid(
+    monkeypatch,
+    patched_pipeline,
+):
+    """An empty raw request ID cannot become canonical through UUID fallback."""
+    pipeline = patched_pipeline
+    persistence_calls = 0
+
+    def empty_request_id_payload(ctx):
+        del ctx
+        return {"request_id": "", "canonical_decision_artifact": None}
+
+    def count_persistence(*args, **kwargs):
+        del args, kwargs
+        nonlocal persistence_calls
+        persistence_calls += 1
+
+    monkeypatch.setattr(
+        pipeline,
+        "_build_decision_payload",
+        empty_request_id_payload,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_run_post_decision_persistence_phase",
+        count_persistence,
+    )
+
+    body = {"query": "missing request id", "context": {"user_id": "u-empty"}}
+    with pytest.raises(CanonicalDecisionFinalizationError) as exc:
+        await pipeline.run_decide_pipeline(
+            DummyReqModel(body),
+            DummyRequest(),
+        )
+
+    assert exc.value.reason_code is (
+        CanonicalDecisionFinalizationReason.SOURCE_REQUEST_ID_MISSING
+    )
+    assert persistence_calls == 0
 
 
 # ============================================================
