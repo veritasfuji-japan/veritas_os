@@ -30,6 +30,7 @@ _PIPELINE_PRIVATE_PREFIXES = (
     "_world_sim_result",
 )
 _TEST_ONLY_PRE_BIND_SIGNAL_KEY = "pre_bind_participation_signal"
+_EXTERNAL_REPLAY_KEYS = {"_replay_mode", "_mock_external_apis"}
 
 
 def _to_bool(v: Any) -> bool:
@@ -92,7 +93,11 @@ def normalize_pipeline_inputs(
     injected = [
         k
         for k in list(context.keys())
-        if isinstance(k, str) and any(k.startswith(p) for p in _PIPELINE_PRIVATE_PREFIXES)
+        if isinstance(k, str)
+        and (
+            k in _EXTERNAL_REPLAY_KEYS
+            or any(k.startswith(p) for p in _PIPELINE_PRIVATE_PREFIXES)
+        )
     ]
     if injected:
         logger.warning(
@@ -102,8 +107,16 @@ def normalize_pipeline_inputs(
         for k in injected:
             context.pop(k, None)
 
-    replay_mode = bool(context.get("_replay_mode", False))
-    mock_external_apis = bool(context.get("_mock_external_apis", replay_mode))
+    from veritas_os.replay.canonical_replay import TRUSTED_REPLAY_MARKER
+
+    trusted_replay = (
+        getattr(request, "_veritas_replay_marker", None)
+        is TRUSTED_REPLAY_MARKER
+    )
+    replay_mode = trusted_replay
+    mock_external_apis = bool(
+        getattr(request, "_veritas_mock_external_apis", replay_mode)
+    ) if trusted_replay else False
     if replay_mode:
         body["temperature"] = body.get("temperature", 0)
 

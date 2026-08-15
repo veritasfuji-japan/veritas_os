@@ -67,6 +67,7 @@ async def test_run_replay_strict_mode_skips_tools_and_matches(monkeypatch, tmp_p
 
     async def _fake_run(req, _request, **_kw):
         body = req.model_dump()
+        captured["request_id"] = body.get("request_id")
         captured["temperature"] = body.get("temperature")
         captured["seed"] = body.get("seed")
         captured["mock_external"] = body.get("context", {}).get("_mock_external_apis")
@@ -87,6 +88,7 @@ async def test_run_replay_strict_mode_skips_tools_and_matches(monkeypatch, tmp_p
     assert result.match is True
     assert captured["temperature"] == 0
     assert captured["seed"] == 42
+    assert captured["request_id"] != "dec-100"
     assert captured["mock_external"] is True
     reports = list(tmp_path.glob("replay_dec-100_*.json"))
     assert len(reports) == 1

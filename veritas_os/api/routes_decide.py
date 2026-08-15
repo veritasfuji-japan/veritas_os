@@ -668,6 +668,9 @@ async def replay_endpoint(decision_id: str, request: Request):
         "severity": result.severity,
         "divergence_level": result.divergence_level,
         "audit_summary": result.audit_summary,
+        "replay_request_id": result.replay_request_id,
+        "replay_cda_id": result.replay_cda_id,
+        "canonical_replay_evidence": result.canonical_replay_evidence,
     }
 
 

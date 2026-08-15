@@ -73,7 +73,7 @@ async def test_replay_decision_handles_non_dict_replay_meta_and_save_error(
     assert result["replay_time_ms"] >= 1
 
     req = captured["req"]
-    assert req["request_id"] == "rid-42"
+    assert req["request_id"] != "rid-42"
     assert req["query"] == "What should we do?"
     assert req["seed"] == 3
     assert req["temperature"] == 0
