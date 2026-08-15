@@ -1140,6 +1140,16 @@ class DecideResponse(BaseModel):
         default=None,
         description="Snapshot for deterministic replay of this decision.",
     )
+    canonical_decision_artifact: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Canonical Decision Artifact v1 captured at the pre-persistence "
+            "decision finalization boundary. The pipeline verifies its "
+            "internal structure, deterministic hash integrity, and "
+            "content-addressed identifier coherence. It does not establish "
+            "trusted provenance or execution authority."
+        ),
+    )
 
     # Governance identity: which governance artifact was in force for this decision.
     governance_identity: Optional[Dict[str, Any]] = Field(

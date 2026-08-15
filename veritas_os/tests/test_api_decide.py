@@ -2,6 +2,9 @@
 from fastapi.testclient import TestClient
 
 from veritas_os.api.server import app
+from veritas_os.governance.canonical_decision_artifact import (
+    verify_canonical_decision_artifact,
+)
 
 
 def test_decide_minimal(monkeypatch):
@@ -31,4 +34,6 @@ def test_decide_minimal(monkeypatch):
     assert "fuji" in data
     assert "gate" in data
     assert "trust_log" in data
-
+    assert verify_canonical_decision_artifact(
+        data["canonical_decision_artifact"]
+    ).is_valid

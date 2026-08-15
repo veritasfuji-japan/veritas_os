@@ -228,6 +228,12 @@ from .pipeline_decide_stages import (
     stage_compute_metrics,
     stage_evidence_hardening,
 )
+from .canonical_decision_finalization import (
+    attach_canonical_decision_artifact,
+    finalize_canonical_decision_artifact,
+    require_stage_8_payload_without_canonical_artifact,
+    verify_canonical_decision_source_unchanged,
+)
 from .pipeline_replay import (
     _safe_filename_id,  # noqa: F401 – backward compat
     _sanitize_for_diff,  # noqa: F401 – backward compat
@@ -977,11 +983,17 @@ async def run_decide_pipeline(
     # =================================================================
         with trace_session.stage("build_response"):
             payload = _build_decision_payload(ctx)
+            decision_finalized_at = utc_now()
+            canonical_decision_artifact = finalize_canonical_decision_artifact(
+                payload,
+                decision_ts=decision_finalized_at,
+            )
 
     # =================================================================
     # Stage 8: Post-decision persistence phase  (-> pipeline_persist)
     # - best-effort side effects and artifact generation only
     # =================================================================
+        require_stage_8_payload_without_canonical_artifact(payload)
         with trace_session.stage("persist"):
             _stage_started_at = time.perf_counter()
             _run_post_decision_persistence_phase(
@@ -991,6 +1003,15 @@ async def run_decide_pipeline(
                 stage_failures=_stage_failures,
             )
             observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
+
+        verify_canonical_decision_source_unchanged(
+            payload,
+            canonical_decision_artifact,
+        )
+        attach_canonical_decision_artifact(
+            payload,
+            canonical_decision_artifact,
+        )
 
     # =================================================================
     # Observability: record pipeline health summary
