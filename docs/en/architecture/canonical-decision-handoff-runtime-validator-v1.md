@@ -15,6 +15,9 @@ policy freshness, expected-state presence and future timestamps, provenance
 values, trusted assertion bindings, and the separately trusted
 `CandidateHashBindingAssertion`. Expected state is conservatively mandatory
 for READY in validator v1 because no typed authoritative exemption exists.
+The exact v1 format version and boolean requirement fields are mandatory, and
+evidence, handoff, decision, and trusted-verification times cannot be in the
+future relative to the injected evaluation time.
 
 Assertion values use the domain-separated profile
 `veritas.canonical-handoff.assertion-value/v1`. This local digest prevents an
@@ -30,6 +33,12 @@ and finally READY. Declared `handoff_status` and `refusal_reason_codes` are read
 only to report whether they match the independently computed result. Positive
 self-asserted verification never creates trust; negative self-assertions may
 deny readiness.
+
+When Human Approval is required, the independent assertion for
+`human_approval_evidence` must include
+`HUMAN_APPROVAL_BINDS_EXACT_OPERATION`. This states that its upstream verifier
+checked the exact candidate, action parameters, and target. The validator does
+not parse or assign semantics to the opaque `approval_scope` string.
 
 ## Explicit non-claims
 

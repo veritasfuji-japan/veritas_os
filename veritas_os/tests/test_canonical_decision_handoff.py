@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import pytest
 
 from veritas_os.policy.canonical_decision_handoff import (
     ASSERTION_VALUE_DIGEST_PROFILE,
+    HUMAN_APPROVAL_EXACT_OPERATION_CLAIM,
     CandidateHashBindingAssertion,
     CanonicalDecisionHandoffReasonCode,
     CanonicalDecisionHandoffStatus,
@@ -52,6 +54,9 @@ def _complete_context(handoff: dict[str, object]) -> CanonicalDecisionHandoffVal
             source_hash=record.get("source_hash"),
             verification_mechanism="synthetic-independent-test-verifier",
             verified_at=EVALUATED_AT,
+            claims=(HUMAN_APPROVAL_EXACT_OPERATION_CLAIM,)
+            if record["field_path"] == "human_approval_evidence"
+            else (),
         )
         for record in handoff["provenance"]
     )
@@ -180,3 +185,208 @@ def test_module_has_no_effectful_or_forbidden_imports() -> None:
     assert not imported & {"requests", "httpx", "openai", "subprocess", "socket"}
     for forbidden in ("ExecutionIntent", "execute_bind", "WebhookBindAdapter", "open(", "write_text", "eval(", "exec(", "pickle"):
         assert forbidden not in source
+
+
+@pytest.mark.parametrize(
+    "format_version",
+    ["canonical-decision-handoff/v2", "", None, pytest.param("missing", id="missing")],
+)
+def test_format_version_confusion_is_structurally_invalid(format_version) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    if format_version == "missing":
+        del handoff["format_version"]
+    else:
+        handoff["format_version"] = format_version
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_SCHEMA_INVALID,
+    )
+
+
+@pytest.mark.parametrize(
+    "provenance_class", ["UNAVAILABLE", "UNVERIFIED_STRUCTURED_INPUT"]
+)
+def test_forbidden_ready_provenance_class_is_unverified(
+    provenance_class: str,
+) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    context = _complete_context(handoff)
+    handoff["provenance"][0]["provenance_class"] = provenance_class
+    result = validate_canonical_decision_handoff(handoff, context, EVALUATED_AT)
+    assert result.status is CanonicalDecisionHandoffStatus.INCOMPLETE
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_PROVENANCE_UNVERIFIED,
+    )
+
+
+@pytest.mark.parametrize(
+    ("parent", "field", "value", "reason"),
+    [
+        (
+            "authority_evidence",
+            "issued_at",
+            "2030-01-01T00:00:03Z",
+            "HANDOFF_AUTHORITY_EVIDENCE_INVALID",
+        ),
+        (
+            "human_approval_evidence",
+            "approved_at",
+            "2030-01-01T00:00:03Z",
+            "HANDOFF_APPROVAL_EVIDENCE_INVALID",
+        ),
+        (
+            "source_decision",
+            "canonical_decision_ts",
+            "2030-01-01T00:00:03Z",
+            "HANDOFF_SCHEMA_INVALID",
+        ),
+        (None, "created_at", "2030-01-01T00:00:03Z", "HANDOFF_SCHEMA_INVALID"),
+    ],
+)
+def test_future_security_material_is_not_yet_valid(parent, field, value, reason) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    context = _complete_context(handoff)
+    container = handoff if parent is None else handoff[parent]
+    container[field] = value
+    result = validate_canonical_decision_handoff(handoff, context, EVALUATED_AT)
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert reason in {item.value for item in result.reason_codes}
+
+
+def test_future_trusted_assertions_do_not_satisfy_readiness() -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    context = _complete_context(handoff)
+    future = datetime(2030, 1, 1, 0, 0, 3, tzinfo=timezone.utc)
+    value_context = replace(
+        context,
+        value_assertions=(
+            replace(context.value_assertions[0], verified_at=future),
+            *context.value_assertions[1:],
+        ),
+    )
+    binding_context = replace(
+        context,
+        candidate_hash_binding=replace(
+            context.candidate_hash_binding, verified_at=future
+        ),
+    )
+    for future_context in (value_context, binding_context):
+        result = validate_canonical_decision_handoff(
+            handoff, future_context, EVALUATED_AT
+        )
+        assert result.status is CanonicalDecisionHandoffStatus.INCOMPLETE
+        assert result.reason_codes == (
+            CanonicalDecisionHandoffReasonCode.HANDOFF_PROVENANCE_UNVERIFIED,
+        )
+
+
+@pytest.mark.parametrize("requirement", ["authority_requirement", "human_approval_requirement"])
+@pytest.mark.parametrize("field", ["resolved", "required"])
+@pytest.mark.parametrize("value", ["true", "false", 1, None, pytest.param("missing", id="missing")])
+def test_requirement_boolean_type_confusion_is_invalid(
+    requirement: str, field: str, value: object
+) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    if value == "missing":
+        del handoff[requirement][field]
+    else:
+        handoff[requirement][field] = value
+    if field == "required":
+        evidence = (
+            "authority_evidence"
+            if requirement == "authority_requirement"
+            else "human_approval_evidence"
+        )
+        handoff[evidence] = None
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_SCHEMA_INVALID,
+    )
+
+
+def test_human_approval_requires_trusted_exact_operation_claim() -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    context = _complete_context(handoff)
+    approval_index = next(
+        index
+        for index, assertion in enumerate(context.value_assertions)
+        if assertion.field_path == "human_approval_evidence"
+    )
+    assertions = list(context.value_assertions)
+    assertions[approval_index] = replace(assertions[approval_index], claims=())
+    missing_claim = replace(context, value_assertions=tuple(assertions))
+    result = validate_canonical_decision_handoff(
+        handoff, missing_claim, EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INCOMPLETE
+    assert validate_canonical_decision_handoff(
+        handoff, context, EVALUATED_AT
+    ).ready_for_guarded_promotion
+
+    handoff["human_approval_evidence"]["approval_scope"] = "opaque:changed"
+    result = validate_canonical_decision_handoff(handoff, context, EVALUATED_AT)
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_PROVENANCE_MISMATCH,
+    )
+
+
+@pytest.mark.parametrize(
+    ("parent", "field"),
+    [
+        ("source_decision", "request_id"),
+        (None, "candidate_hash"),
+        ("candidate", "candidate_id"),
+    ],
+)
+def test_empty_critical_identifiers_cannot_be_trusted(parent, field) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    container = handoff if parent is None else handoff[parent]
+    container[field] = ""
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+
+
+def test_candidate_binding_requires_nonempty_profile() -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    context = _complete_context(handoff)
+    context = replace(
+        context,
+        candidate_hash_binding=replace(
+            context.candidate_hash_binding, candidate_hash_profile=""
+        ),
+    )
+    result = validate_canonical_decision_handoff(handoff, context, EVALUATED_AT)
+    assert result.status is CanonicalDecisionHandoffStatus.INCOMPLETE
+
+
+def test_expired_handoff_is_invalid() -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff["expires_at"] = "2030-01-01T00:00:01Z"
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_EXPIRED,
+    )
+
+
+def test_invalid_evidence_outranks_stale_policy_review() -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff["authority_evidence"]["actor_identity"] = "actor:other"
+    handoff["policy_lineage"]["superseded"] = True
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_AUTHORITY_EVIDENCE_INVALID,
+    )

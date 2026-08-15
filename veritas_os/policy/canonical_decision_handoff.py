@@ -15,6 +15,10 @@ from veritas_os.security.hash import sha256_of_canonical_json
 
 ASSERTION_VALUE_DIGEST_PROFILE = "veritas.canonical-handoff.assertion-value/v1"
 VALIDATION_VERSION = "canonical-decision-handoff-validator/v1"
+HUMAN_APPROVAL_EXACT_OPERATION_CLAIM = "HUMAN_APPROVAL_BINDS_EXACT_OPERATION"
+FORBIDDEN_READY_PROVENANCE_CLASSES = frozenset(
+    {"UNAVAILABLE", "UNVERIFIED_STRUCTURED_INPUT"}
+)
 
 
 class CanonicalDecisionHandoffStatus(str, Enum):
@@ -211,6 +215,15 @@ def validate_canonical_decision_handoff(
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
     if not isinstance(trusted_context, CanonicalDecisionHandoffValidationContext):
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
+    if not isinstance(handoff, Mapping) or handoff.get("format_version") != (
+        "canonical-decision-handoff/v1"
+    ):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     required_objects = (
         "source_decision", "candidate", "decision_lineage", "trustlog_lineage",
         "replay_lineage", "authority_requirement", "human_approval_requirement",
@@ -242,10 +255,20 @@ def validate_canonical_decision_handoff(
 
     binding = trusted_context.candidate_hash_binding
     if binding is not None and (
-        binding.claim != "CANDIDATE_HASH_BINDS_CANDIDATE"
+        not binding.candidate_hash_profile
         or not binding.verification_mechanism
         or binding.verified_at.tzinfo is None
-        or binding.candidate_value_digest != canonical_handoff_assertion_value_digest(candidate)
+        or binding.verified_at > evaluated_at
+    ):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INCOMPLETE,
+            (reason.HANDOFF_PROVENANCE_UNVERIFIED,),
+        )
+    if binding is not None and (
+        binding.claim != "CANDIDATE_HASH_BINDS_CANDIDATE"
+        or binding.candidate_value_digest
+        != canonical_handoff_assertion_value_digest(candidate)
         or binding.asserted_candidate_hash != handoff.get("candidate_hash")
     ):
         return _result(
@@ -274,6 +297,18 @@ def validate_canonical_decision_handoff(
 
     authority = handoff.get("authority_evidence")
     authority_requirement = handoff["authority_requirement"]
+    approval_requirement = handoff["human_approval_requirement"]
+    if any(
+        type(requirement.get(key)) is not bool
+        for requirement in (authority_requirement, approval_requirement)
+        for key in ("resolved", "required")
+    ):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     candidate_fields_present = all(
         _nonempty(candidate.get(key))
         for key in ("actor_identity", "target_system", "target_resource")
@@ -295,11 +330,12 @@ def validate_canonical_decision_handoff(
         issued = _timestamp(authority.get("issued_at"))
         if expires is None or issued is None:
             return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
-        if issued > expires or evaluated_at > expires:
+        if evaluated_at > expires:
             invalid.append(reason.HANDOFF_AUTHORITY_EVIDENCE_EXPIRED)
+        elif issued > expires or issued > evaluated_at:
+            invalid.append(reason.HANDOFF_AUTHORITY_EVIDENCE_INVALID)
 
     approval = handoff.get("human_approval_evidence")
-    approval_requirement = handoff["human_approval_requirement"]
     if (
         isinstance(approval, Mapping)
         and isinstance(action, Mapping)
@@ -319,8 +355,10 @@ def validate_canonical_decision_handoff(
         approved = _timestamp(approval.get("approved_at"))
         if expires is None or approved is None:
             return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
-        if approved > expires or evaluated_at > expires:
+        if evaluated_at > expires:
             invalid.append(reason.HANDOFF_APPROVAL_EVIDENCE_EXPIRED)
+        elif approved > expires or approved > evaluated_at:
+            invalid.append(reason.HANDOFF_APPROVAL_EVIDENCE_INVALID)
 
     policy = handoff.get("policy_lineage")
     if isinstance(policy, Mapping):
@@ -334,8 +372,18 @@ def validate_canonical_decision_handoff(
             or not all(_nonempty(policy.get(key)) for key in ("snapshot_id", "version", "semantic_digest"))
             or not isinstance(policy.get("policy_ids"), list) or not policy.get("policy_ids")
         ):
-            # Canonical v1 classifies stale policy requiring human review.
-            return _result(handoff, CanonicalDecisionHandoffStatus.REVIEW_REQUIRED, (reason.HANDOFF_POLICY_LINEAGE_STALE,))
+            # INVALID semantic contradictions retain precedence over review.
+            if invalid:
+                return _result(
+                    handoff,
+                    CanonicalDecisionHandoffStatus.INVALID,
+                    tuple(dict.fromkeys(invalid)),
+                )
+            return _result(
+                handoff,
+                CanonicalDecisionHandoffStatus.REVIEW_REQUIRED,
+                (reason.HANDOFF_POLICY_LINEAGE_STALE,),
+            )
     expected_state = handoff.get("expected_state")
     if isinstance(expected_state, Mapping):
         observed = _timestamp(expected_state.get("observed_at"))
@@ -358,6 +406,13 @@ def validate_canonical_decision_handoff(
         incomplete.append(reason.HANDOFF_MISSING_DECISION_TIMESTAMP)
     elif _timestamp(source.get("canonical_decision_ts")) is None:
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
+    elif _timestamp(source.get("canonical_decision_ts")) > evaluated_at:
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     if not _nonempty(candidate.get("actor_identity")):
         incomplete.append(reason.HANDOFF_ACTOR_UNSPECIFIED)
     if not _nonempty(candidate.get("target_system")) or not _nonempty(candidate.get("target_resource")):
@@ -376,14 +431,41 @@ def validate_canonical_decision_handoff(
         incomplete.append(reason.HANDOFF_POLICY_LINEAGE_MISSING)
     if expected_state is None:
         incomplete.append(reason.HANDOFF_EXPECTED_STATE_MISSING)
+    if not _nonempty(source.get("request_id")) or not _nonempty(
+        handoff.get("candidate_hash")
+    ):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
+    if approval is not None and not _nonempty(candidate.get("candidate_id")):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     if trustlog.get("verified") is False:
         incomplete.append(reason.HANDOFF_TRUSTLOG_UNVERIFIED)
     if replay.get("verified") is False:
         incomplete.append(reason.HANDOFF_REPLAY_UNVERIFIED)
     expires_at = _timestamp(handoff.get("expires_at")) if handoff.get("expires_at") else None
     created_at = _timestamp(handoff.get("created_at"))
+    if created_at > evaluated_at:
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     if expires_at is not None and (created_at > expires_at or evaluated_at > expires_at):
-        incomplete.append(reason.HANDOFF_EXPIRED)
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            (reason.HANDOFF_EXPIRED,),
+        )
     if incomplete:
         status = CanonicalDecisionHandoffStatus.INVALID if any(
             item in {reason.HANDOFF_TARGET_UNSPECIFIED, reason.HANDOFF_ACTION_UNSPECIFIED, reason.HANDOFF_AMBIGUOUS_ACTION}
@@ -408,14 +490,38 @@ def validate_canonical_decision_handoff(
         present, value = _resolve(handoff, path)
         record = records.get(path)
         matches = assertions.get(path, [])
-        if not present or record is None or record.get("verification_status") != "VERIFIED" or len(matches) != 1:
+        if (
+            not present
+            or record is None
+            or record.get("verification_status") != "VERIFIED"
+            or record.get("provenance_class")
+            in FORBIDDEN_READY_PROVENANCE_CLASSES
+            or len(matches) != 1
+        ):
             return _result(handoff, CanonicalDecisionHandoffStatus.INCOMPLETE, (reason.HANDOFF_PROVENANCE_UNVERIFIED,), verified=tuple(verified))
         assertion = matches[0]
+        if assertion.verified_at.tzinfo is None or assertion.verified_at > evaluated_at:
+            return _result(
+                handoff,
+                CanonicalDecisionHandoffStatus.INCOMPLETE,
+                (reason.HANDOFF_PROVENANCE_UNVERIFIED,),
+                verified=tuple(verified),
+            )
+        if (
+            path == "human_approval_evidence"
+            and approval_requirement["required"]
+            and HUMAN_APPROVAL_EXACT_OPERATION_CLAIM not in assertion.claims
+        ):
+            return _result(
+                handoff,
+                CanonicalDecisionHandoffStatus.INCOMPLETE,
+                (reason.HANDOFF_PROVENANCE_UNVERIFIED,),
+                verified=tuple(verified),
+            )
         if (
             record.get("value") != value
             or assertion.value_digest != canonical_handoff_assertion_value_digest(value)
             or not assertion.verification_mechanism
-            or assertion.verified_at.tzinfo is None
             or (record.get("source_artifact_ref") is not None and record.get("source_artifact_ref") != assertion.source_artifact_ref)
             or (record.get("source_hash") is not None and record.get("source_hash") != assertion.source_hash)
         ):
