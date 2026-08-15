@@ -1167,10 +1167,22 @@ async def test_run_decide_pipeline_decision_boundary_calls_post_persist(
             "rejection_reason": None,
         }
 
+    artifact = object()
+
+    def fake_build_cda(payload):
+        del payload
+        call_order.append("build_cda")
+        return artifact
+
     def fake_post_persist(ctx, payload, *, effective_get_memory_store, stage_failures):
         del ctx, effective_get_memory_store, stage_failures
         call_order.append("post_persist")
         persisted_payload.update(payload)
+
+    def fake_attach_cda(payload, value):
+        assert value is artifact
+        call_order.append("attach_cda")
+        payload["canonical_decision_artifact"] = {"decision_id": "test-cda"}
 
     monkeypatch.setattr(
         pipeline,
@@ -1184,13 +1196,31 @@ async def test_run_decide_pipeline_decision_boundary_calls_post_persist(
         fake_post_persist,
         raising=False,
     )
+    monkeypatch.setattr(
+        pipeline,
+        "_build_verified_canonical_decision_artifact",
+        fake_build_cda,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_attach_canonical_decision_artifact_without_drift",
+        fake_attach_cda,
+        raising=False,
+    )
 
     body = {"query": "decision boundary test", "context": {"user_id": "u-boundary"}}
     payload = await pipeline.run_decide_pipeline(DummyReqModel(body), DummyRequest())
 
-    assert call_order == ["build_decision", "post_persist"]
+    assert call_order == [
+        "build_decision",
+        "build_cda",
+        "post_persist",
+        "attach_cda",
+    ]
     assert persisted_payload["request_id"] == payload["request_id"]
     assert payload["query"] == "decision boundary test"
+    assert payload["canonical_decision_artifact"] == {"decision_id": "test-cda"}
 
 
 # ============================================================

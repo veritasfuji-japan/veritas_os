@@ -90,6 +90,11 @@ from ..utils import (  # noqa: F401 – _redact_text/redact_payload re-exported 
     utc_now_iso_z,
 )
 from .. import self_healing  # noqa: F401 - tests monkeypatch pipeline.self_healing
+from ...governance.canonical_decision_artifact import (
+    CanonicalDecisionArtifact,
+    build_canonical_decision_artifact,
+    verify_canonical_decision_artifact,
+)
 
 # ---- pipeline サブモジュール（分割済み） ----
 from .pipeline_helpers import (
@@ -573,6 +578,38 @@ def _build_decision_payload(ctx: PipelineContext) -> Dict[str, Any]:
     return payload
 
 
+def _build_verified_canonical_decision_artifact(
+    payload: Dict[str, Any],
+) -> CanonicalDecisionArtifact:
+    """Create and internally verify a CDA at the finalized decision boundary."""
+    source = DecideResponse.model_validate(payload)
+    artifact = build_canonical_decision_artifact(source, decision_ts=utc_now())
+    verification = verify_canonical_decision_artifact(artifact)
+    if not verification.is_valid:
+        reasons = ",".join(verification.reason_codes)
+        raise RuntimeError(f"canonical decision artifact verification failed: {reasons}")
+    return artifact
+
+
+def _attach_canonical_decision_artifact_without_drift(
+    payload: Dict[str, Any],
+    artifact: CanonicalDecisionArtifact,
+) -> None:
+    """Attach a CDA only if persistence did not alter its decision projection.
+
+    This comparison is fail-closed: a post-decision mutation must never result
+    in a response carrying a CDA that identifies different decision semantics.
+    """
+    current_source = DecideResponse.model_validate(payload)
+    current_artifact = build_canonical_decision_artifact(
+        current_source,
+        decision_ts=artifact.decision_ts,
+    )
+    if current_artifact.decision_hash != artifact.decision_hash:
+        raise RuntimeError("decision drift detected after CDA finalization")
+    payload["canonical_decision_artifact"] = artifact.model_dump(mode="json")
+
+
 def _run_post_decision_persistence_phase(
     ctx: PipelineContext,
     payload: Dict[str, Any],
@@ -977,6 +1014,9 @@ async def run_decide_pipeline(
     # =================================================================
         with trace_session.stage("build_response"):
             payload = _build_decision_payload(ctx)
+            canonical_decision_artifact = (
+                _build_verified_canonical_decision_artifact(payload)
+            )
 
     # =================================================================
     # Stage 8: Post-decision persistence phase  (-> pipeline_persist)
@@ -989,6 +1029,10 @@ async def run_decide_pipeline(
                 payload,
                 effective_get_memory_store=effective_get_memory_store,
                 stage_failures=_stage_failures,
+            )
+            _attach_canonical_decision_artifact_without_drift(
+                payload,
+                canonical_decision_artifact,
             )
             observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
 
