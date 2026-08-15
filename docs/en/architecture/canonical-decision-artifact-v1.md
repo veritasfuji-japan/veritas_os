@@ -53,12 +53,14 @@ artifact. A future boundary may normalize an aware offset input to UTC before
 artifact construction; naive and invalid inputs are refused.
 
 The producer MUST consume a pre-Bind snapshot. It MUST refuse production if
-any populated Bind lineage/result field is present, including `bind_outcome`,
-`bind_receipt_id`, `execution_intent_id`, `bound_execution_intent_id`,
+any post-Bind field has a JSON value other than `null`. The complete v1 set is
+`bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `bind_receipt_id`,
+`execution_intent_id`, `bound_execution_intent_id`,
 `authority_check_result`, `constraint_check_result`, `drift_check_result`,
-`risk_check_result`, or `bind_summary`. It MUST NOT silently strip those values
-to reconstruct a decision post hoc. Later Bind augmentation cannot alter an
-already emitted artifact.
+`risk_check_result`, `bind_summary`, `bind_operator_summary`, and
+`bind_operator_detail`. It MUST NOT silently strip those values to reconstruct
+a decision post hoc. `BLOCKED` and `ROLLED_BACK` results are still post-Bind.
+Later Bind augmentation cannot alter an already emitted artifact.
 
 ## Exact artifact and projection
 
@@ -93,12 +95,38 @@ The `decision` projection includes exactly:
    present, without widening their schemas or repairing structural refusal.
 
 All keys are mandatory; genuine absence is represented by the schema-defined
-`null`, never omission. Missing `governance_identity` produces `null` plus
-`formation_status=INCOMPLETE`; it is structurally representable but not a
-complete canonical formation. No policy snapshot, lineage, signer, or
-authority is fabricated. Governance identity alone does not satisfy the
-handoff's full `policy_lineage`. A non-promotable/refused source remains bound
-as such and is never repaired by artifact construction.
+`null`, never omission. `COMPLETE` means only that the normalized source has a
+governance identity object and `governance_identity_binding` is non-null.
+`INCOMPLETE` means it is unavailable and that binding is null. Neither value
+asserts independent cryptographic verification. The schema rejects both
+contradictory combinations. No policy snapshot, lineage, signer, or authority
+is fabricated. Governance identity alone does not satisfy the handoff's full
+`policy_lineage`. A non-promotable/refused source remains bound as such and is
+never repaired by artifact construction.
+
+### Closed decision semantics
+
+The v1 vocabularies mirror normalized `DecideResponse`: `decision_status` is
+`allow`, `modify`, `rejected`, `block`, or `abstain`; `gate_decision` is
+`proceed`, `hold`, `block`, or `human_review_required`; `business_decision` is
+`APPROVE`, `DENY`, `HOLD`, `REVIEW_REQUIRED`,
+`POLICY_DEFINITION_REQUIRED`, or `EVIDENCE_REQUIRED`; and
+`actionability_status` is `reviewable_only`,
+`bind_required_before_execution`, `actionable_after_bind`, `blocked`,
+`human_review_required`, or `formation_transition_refused`. Compatibility
+aliases (`allow`, `deny`, `modify`, `rejected`, `abstain`) are never artifact
+gate values. Although `unknown` remains a compatibility/default input to the
+current response model, v1 refuses canonical production from that unresolved
+gate state rather than representing it.
+
+Schema semantic conditions mirror the source contract: `proceed` and
+`APPROVE` each require `human_review_required=false`; `REVIEW_REQUIRED` and
+`human_review_required` gate are bidirectionally coupled and require the
+boolean to be true; and `(block, APPROVE)`, `(hold, APPROVE)`, and
+`(proceed, DENY)` are forbidden. A future verifier MUST run schema validation,
+including these conditions, before hash verification. The existing
+`DecideResponse` remains the source of truth; this specification does not
+create a divergent runtime semantics system.
 
 ### Opaque-value bindings
 
@@ -174,7 +202,7 @@ decision is a new event; a future, separate contract may link supersession.
 
 The following normalized response values do not define v1 identity:
 
-* `ok`, `error`, `version`, response latency/meta, temporary paths, UI or
+* `ok`, `error`, `version`, response latency/`meta`, temporary paths, UI or
   reviewer summaries, `persona`, `memory_citations`, `memory_used_count`,
   `plan`, `planner`, `reason`, `critique`, `debate`, `values`, `evidence`,
   `telos_score`, `fuji`, `rsi_note`, `extras`, `gate`, `evo`, disclosure and
@@ -183,7 +211,7 @@ The following normalized response values do not define v1 identity:
 * `alternatives` and mirrored `options`: unselected compatibility surfaces
   whose generated/default alternative IDs are not stable decision identity;
   only the selected value is bound once;
-* `query`, `pipeline_steps`, raw TrustLog copies, and
+* `query`, `pipeline_steps`, `trust_log`, `user_summary`, and
   `deterministic_replay`: request/audit/replay material independently verified
   later, not canonical decision state;
 * participation, pre-Bind detection/preservation details, recovery guidance,
@@ -199,6 +227,12 @@ The following normalized response values do not define v1 identity:
 Changing an excluded response field does not change canonical identity;
 changing an included value does. There is no undocumented source-field
 fallback.
+
+Vectors marked `EMIT` are producer-eligible normalized source fixtures.
+`HASH_REFERENCE_ONLY` vectors intentionally isolate hash sensitivity and make
+no claim that the isolated tuple is reachable through coupled runtime
+semantics. `REFUSE` vectors document producer refusal. The golden and excluded
+field stability vectors are `EMIT`; mutation vectors are hash-reference-only.
 
 ## Verification and independent domains
 

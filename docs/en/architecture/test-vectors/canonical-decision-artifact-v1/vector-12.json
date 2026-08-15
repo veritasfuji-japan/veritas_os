@@ -11,12 +11,12 @@
     },
     "decision_status": "allow",
     "rejection_reason": null,
-    "gate_decision": "ALLOW",
+    "gate_decision": "hold",
     "business_decision": "HOLD",
     "next_action": "REQUEST_VERIFIED_REVIEW",
     "actionability_status": "reviewable_only",
     "requires_bind_before_execution": true,
-    "human_review_required": true,
+    "human_review_required": false,
     "required_evidence": [
       "authority_evidence",
       "human_approval"
@@ -41,13 +41,20 @@
       "promotability_status": "restricted",
       "promotability_version": "v1",
       "reason_code": "AUTHORITY_PENDING",
-      "transformation_stable": true
+      "transformation_stable": true,
+      "invariant_id": "BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+      "source_participation_state": null,
+      "source_preservation_state": null,
+      "concise_rationale": null
     },
     "transition_refusal": {
       "bind_receipt_created": false,
       "execution_intent_created": false,
       "reason_code": null,
-      "transition_status": "allowed"
+      "transition_status": "allowed",
+      "invariant_id": "BIND_ELIGIBLE_ARTIFACT_CANNOT_EMERGE_FROM_NON_PROMOTABLE_LINEAGE",
+      "source_promotability_status": null,
+      "concise_rationale": null
     },
     "meta": {
       "latency_ms": 999
@@ -55,21 +62,25 @@
     "persona": {
       "name": "volatile"
     },
-    "coercion_events": [
-      "synthetic"
-    ],
-    "ui_summary": "presentation only",
-    "options": [
+    "alternatives": [
       {
-        "id": "random-compatibility-id"
+        "id": "alt-stable",
+        "title": "Unselected"
       }
     ],
-    "trustlog": {
-      "copy": "not identity"
+    "options": [
+      {
+        "id": "alt-stable",
+        "title": "Unselected"
+      }
+    ],
+    "trust_log": {
+      "request_id": "req-cda-synthetic-001"
     },
     "deterministic_replay": {
       "copy": "not identity"
-    }
+    },
+    "user_summary": "Presentation only"
   },
   "excluded_source_mutations": {
     "meta": {
@@ -78,27 +89,31 @@
     "persona": {
       "name": "volatile"
     },
-    "coercion_events": [
-      "synthetic"
-    ],
-    "ui_summary": "presentation only",
-    "options": [
+    "alternatives": [
       {
-        "id": "random-compatibility-id"
+        "id": "alt-stable",
+        "title": "Unselected"
       }
     ],
-    "trustlog": {
-      "copy": "not identity"
+    "options": [
+      {
+        "id": "alt-stable",
+        "title": "Unselected"
+      }
+    ],
+    "trust_log": {
+      "request_id": "req-cda-synthetic-001"
     },
     "deterministic_replay": {
       "copy": "not identity"
-    }
+    },
+    "user_summary": "Presentation only"
   },
   "artifact": {
     "format_version": "canonical-decision-artifact/v1",
     "hash_profile": "veritas.canonical-decision/v1",
-    "decision_id": "cda:v1:sha256:aaa8bf9fac5a3b70ddf9bbea388228cf9b5e56f4a2575b8100d51d058e15bb0e",
-    "decision_hash": "aaa8bf9fac5a3b70ddf9bbea388228cf9b5e56f4a2575b8100d51d058e15bb0e",
+    "decision_id": "cda:v1:sha256:1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
+    "decision_hash": "1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
     "decision_ts": "2031-02-03T04:05:06.123456Z",
     "request_id": "req-cda-synthetic-001",
     "source_contract": {
@@ -113,12 +128,12 @@
       },
       "decision_status": "allow",
       "rejection_reason": null,
-      "gate_decision": "ALLOW",
+      "gate_decision": "hold",
       "business_decision": "HOLD",
       "next_action": "REQUEST_VERIFIED_REVIEW",
       "actionability_status": "reviewable_only",
       "requires_bind_before_execution": true,
-      "human_review_required": true,
+      "human_review_required": false,
       "required_evidence": [
         "authority_evidence",
         "human_approval"
@@ -139,16 +154,16 @@
       },
       "lineage_promotability_binding": {
         "profile": "veritas.canonical-decision.lineage-promotability/v1",
-        "sha256": "bfb740a44e9a7332445fa6e4255696df1454e78d5b1cbd913fad11f48504d19b"
+        "sha256": "35c203c9baed4c3679bbcec66346bb97bd62d33dbd1fc5ff6339fed852500840"
       },
       "transition_refusal_binding": {
         "profile": "veritas.canonical-decision.transition-refusal/v1",
-        "sha256": "5747ed3a654db328097d821eebd8a2474e795ff2ae74fccee734d6c1f7f9d97c"
+        "sha256": "42405ab6973875446269a4f3bdcc1e527e393a9f5e2f60e964f756f234029bc6"
       }
     }
   },
-  "expected_decision_hash": "aaa8bf9fac5a3b70ddf9bbea388228cf9b5e56f4a2575b8100d51d058e15bb0e",
-  "expected_decision_id": "cda:v1:sha256:aaa8bf9fac5a3b70ddf9bbea388228cf9b5e56f4a2575b8100d51d058e15bb0e",
+  "expected_decision_hash": "1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
+  "expected_decision_id": "cda:v1:sha256:1c6e265c50812c2b86eab04ef5523a7f1e56c45db4888ca527840ec94f0456a8",
   "expected_schema_valid": true,
   "expected_production": "EMIT"
 }

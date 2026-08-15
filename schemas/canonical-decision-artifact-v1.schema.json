@@ -23,11 +23,35 @@
     "decision": {"$ref": "#/$defs/decision"}
   },
   "$defs": {
-    "digestBinding": {
+    "chosenBinding": {
       "type": "object", "additionalProperties": false,
       "required": ["profile", "sha256"],
       "properties": {
-        "profile": {"type": "string", "minLength": 1},
+        "profile": {"const": "veritas.canonical-decision.chosen-value/v1"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "governanceIdentityBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "sha256"],
+      "properties": {
+        "profile": {"const": "veritas.canonical-decision.governance-identity/v1"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "lineagePromotabilityBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "sha256"],
+      "properties": {
+        "profile": {"const": "veritas.canonical-decision.lineage-promotability/v1"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "transitionRefusalBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "sha256"],
+      "properties": {
+        "profile": {"const": "veritas.canonical-decision.transition-refusal/v1"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
@@ -38,13 +62,13 @@
       "required": ["formation_status", "chosen_binding", "decision_status", "rejection_reason", "gate_decision", "business_decision", "next_action", "actionability_status", "requires_bind_before_execution", "human_review_required", "required_evidence", "missing_evidence", "satisfied_evidence", "rationale", "refusal_reason", "actionability_block_reason", "actionability_refusal_type", "governance_identity_binding", "lineage_promotability_binding", "transition_refusal_binding"],
       "properties": {
         "formation_status": {"enum": ["COMPLETE", "INCOMPLETE"]},
-        "chosen_binding": {"$ref": "#/$defs/digestBinding"},
-        "decision_status": {"type": "string"},
+        "chosen_binding": {"$ref": "#/$defs/chosenBinding"},
+        "decision_status": {"enum": ["allow", "modify", "rejected", "block", "abstain"]},
         "rejection_reason": {"$ref": "#/$defs/nullableString"},
-        "gate_decision": {"type": "string"},
-        "business_decision": {"type": "string"},
+        "gate_decision": {"enum": ["proceed", "hold", "block", "human_review_required"]},
+        "business_decision": {"enum": ["APPROVE", "DENY", "HOLD", "REVIEW_REQUIRED", "POLICY_DEFINITION_REQUIRED", "EVIDENCE_REQUIRED"]},
         "next_action": {"type": "string"},
-        "actionability_status": {"type": "string"},
+        "actionability_status": {"enum": ["reviewable_only", "bind_required_before_execution", "actionable_after_bind", "blocked", "human_review_required", "formation_transition_refused"]},
         "requires_bind_before_execution": {"type": "boolean"},
         "human_review_required": {"type": "boolean"},
         "required_evidence": {"$ref": "#/$defs/stringList"},
@@ -54,10 +78,21 @@
         "refusal_reason": {"$ref": "#/$defs/nullableString"},
         "actionability_block_reason": {"$ref": "#/$defs/nullableString"},
         "actionability_refusal_type": {"$ref": "#/$defs/nullableString"},
-        "governance_identity_binding": {"anyOf": [{"$ref": "#/$defs/digestBinding"}, {"type": "null"}]},
-        "lineage_promotability_binding": {"anyOf": [{"$ref": "#/$defs/digestBinding"}, {"type": "null"}]},
-        "transition_refusal_binding": {"anyOf": [{"$ref": "#/$defs/digestBinding"}, {"type": "null"}]}
-      }
+        "governance_identity_binding": {"anyOf": [{"$ref": "#/$defs/governanceIdentityBinding"}, {"type": "null"}]},
+        "lineage_promotability_binding": {"anyOf": [{"$ref": "#/$defs/lineagePromotabilityBinding"}, {"type": "null"}]},
+        "transition_refusal_binding": {"anyOf": [{"$ref": "#/$defs/transitionRefusalBinding"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"formation_status": {"const": "COMPLETE"}}}, "then": {"properties": {"governance_identity_binding": {"$ref": "#/$defs/governanceIdentityBinding"}}}},
+        {"if": {"properties": {"formation_status": {"const": "INCOMPLETE"}}}, "then": {"properties": {"governance_identity_binding": {"type": "null"}}}},
+        {"not": {"properties": {"gate_decision": {"const": "proceed"}, "human_review_required": {"const": true}}, "required": ["gate_decision", "human_review_required"]}},
+        {"not": {"properties": {"business_decision": {"const": "APPROVE"}, "human_review_required": {"const": true}}, "required": ["business_decision", "human_review_required"]}},
+        {"if": {"properties": {"business_decision": {"const": "REVIEW_REQUIRED"}}}, "then": {"properties": {"gate_decision": {"const": "human_review_required"}, "human_review_required": {"const": true}}}},
+        {"if": {"properties": {"gate_decision": {"const": "human_review_required"}}}, "then": {"properties": {"business_decision": {"const": "REVIEW_REQUIRED"}, "human_review_required": {"const": true}}}},
+        {"not": {"properties": {"gate_decision": {"const": "block"}, "business_decision": {"const": "APPROVE"}}, "required": ["gate_decision", "business_decision"]}},
+        {"not": {"properties": {"gate_decision": {"const": "hold"}, "business_decision": {"const": "APPROVE"}}, "required": ["gate_decision", "business_decision"]}},
+        {"not": {"properties": {"gate_decision": {"const": "proceed"}, "business_decision": {"const": "DENY"}}, "required": ["gate_decision", "business_decision"]}}
+      ]
     }
   }
 }

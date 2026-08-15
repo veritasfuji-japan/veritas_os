@@ -11,17 +11,19 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
+from veritas_os.api.schemas import DecideResponse
+from veritas_os.core.decision_semantics import (
+    CANONICAL_GATE_DECISION_VALUES,
+    FORBIDDEN_GATE_BUSINESS_COMBINATIONS,
+)
+
 
 SCHEMA_PATH = Path("schemas/canonical-decision-artifact-v1.schema.json")
-SPEC_PATH = Path(
-    "docs/en/architecture/canonical-decision-artifact-v1.md"
-)
+SPEC_PATH = Path("docs/en/architecture/canonical-decision-artifact-v1.md")
 HANDOFF_SPEC_PATH = Path(
     "docs/en/architecture/canonical-decision-to-bind-handoff-v1.md"
 )
-VECTOR_DIR = Path(
-    "docs/en/architecture/test-vectors/canonical-decision-artifact-v1"
-)
+VECTOR_DIR = Path("docs/en/architecture/test-vectors/canonical-decision-artifact-v1")
 FORMAT_VERSION = "canonical-decision-artifact/v1"
 HASH_PROFILE = "veritas.canonical-decision/v1"
 TOP_LEVEL_FIELDS = {
@@ -56,6 +58,39 @@ DECISION_FIELDS = {
     "lineage_promotability_binding",
     "transition_refusal_binding",
 }
+BIND_SOURCE_FIELDS = {
+    "bind_outcome",
+    "bind_failure_reason",
+    "bind_reason_code",
+    "bind_receipt_id",
+    "execution_intent_id",
+    "bound_execution_intent_id",
+    "authority_check_result",
+    "constraint_check_result",
+    "drift_check_result",
+    "risk_check_result",
+    "bind_summary",
+    "bind_operator_summary",
+    "bind_operator_detail",
+}
+BINDING_SOURCES = {
+    "chosen_binding": (
+        "veritas.canonical-decision.chosen-value/v1",
+        "chosen",
+    ),
+    "governance_identity_binding": (
+        "veritas.canonical-decision.governance-identity/v1",
+        "governance_identity",
+    ),
+    "lineage_promotability_binding": (
+        "veritas.canonical-decision.lineage-promotability/v1",
+        "lineage_promotability",
+    ),
+    "transition_refusal_binding": (
+        "veritas.canonical-decision.transition-refusal/v1",
+        "transition_refusal",
+    ),
+}
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -65,10 +100,7 @@ def _load_json(path: Path) -> dict[str, object]:
 
 def _vectors() -> list[dict[str, object]]:
     """Return canonical decision vectors in deterministic filename order."""
-    return [
-        _load_json(path)
-        for path in sorted(VECTOR_DIR.glob("vector-*.json"))
-    ]
+    return [_load_json(path) for path in sorted(VECTOR_DIR.glob("vector-*.json"))]
 
 
 def _reference_serialize_for_spec_fixture(value: object) -> str:
@@ -94,6 +126,67 @@ def _reference_hash_for_spec_fixture(artifact: dict[str, object]) -> str:
     }
     serialized = _reference_serialize_for_spec_fixture(preimage)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _reference_binding_digest_for_spec_fixture(
+    profile: str,
+    value: object,
+) -> str:
+    """Bind one normalized opaque source value in its documented domain."""
+    serialized = _reference_serialize_for_spec_fixture(
+        {"profile": profile, "value": value}
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _project_normalized_source_for_spec_fixture(
+    normalized: dict[str, object],
+) -> dict[str, object]:
+    """Build the declared v1 projection for source-coherence tests only."""
+    projected = {
+        field: normalized[field]
+        for field in (
+            "decision_status",
+            "rejection_reason",
+            "gate_decision",
+            "business_decision",
+            "next_action",
+            "actionability_status",
+            "requires_bind_before_execution",
+            "human_review_required",
+            "required_evidence",
+            "missing_evidence",
+            "satisfied_evidence",
+            "rationale",
+            "refusal_reason",
+            "actionability_block_reason",
+            "actionability_refusal_type",
+        )
+    }
+    projected["formation_status"] = (
+        "COMPLETE" if normalized["governance_identity"] is not None else "INCOMPLETE"
+    )
+    for binding_field, (profile, source_field) in BINDING_SOURCES.items():
+        value = normalized[source_field]
+        projected[binding_field] = (
+            {
+                "profile": profile,
+                "sha256": _reference_binding_digest_for_spec_fixture(
+                    profile,
+                    value,
+                ),
+            }
+            if value is not None or source_field == "chosen"
+            else None
+        )
+    return projected
+
+
+def _post_bind_source_is_refused_for_spec_fixture(
+    source: dict[str, object],
+) -> bool:
+    """Apply the documented test-only non-null post-Bind refusal rule."""
+    return any(source.get(field) is not None for field in BIND_SOURCE_FIELDS)
 
 
 def _normalize_aware_timestamp_for_spec_fixture(value: str) -> str:
@@ -145,9 +238,7 @@ def test_hash_and_id_shapes_and_golden_bytes_are_stable() -> None:
     """Pin golden serialization, full digest, and content-addressed ID."""
     golden = _vectors()[0]
     artifact = golden["artifact"]
-    serialized = _reference_serialize_for_spec_fixture(
-        golden["canonical_preimage"]
-    )
+    serialized = _reference_serialize_for_spec_fixture(golden["canonical_preimage"])
     digest = _reference_hash_for_spec_fixture(artifact)
 
     assert serialized == golden["expected_canonical_serialized"]
@@ -157,6 +248,69 @@ def test_hash_and_id_shapes_and_golden_bytes_are_stable() -> None:
     assert artifact["decision_id"] == golden["expected_decision_id"]
     assert len(digest) == 64
     assert artifact["request_id"] not in artifact["decision_id"]
+
+
+def test_golden_source_round_trips_without_hidden_canonicalization() -> None:
+    """Prove V01 is an actually normalized, producer-eligible source."""
+    golden = _vectors()[0]
+    source = golden["source_projection"]
+    normalized = DecideResponse.model_validate(source).model_dump(mode="json")
+
+    assert golden["expected_production"] == "EMIT"
+    assert source["gate_decision"] == normalized["gate_decision"] == "hold"
+    assert source["business_decision"] == normalized["business_decision"] == ("HOLD")
+    assert source["human_review_required"] is False
+    assert normalized["human_review_required"] is False
+    assert (
+        _project_normalized_source_for_spec_fixture(normalized)
+        == golden["artifact"]["decision"]
+    )
+
+
+def test_emit_vectors_are_normalized_and_hash_only_vectors_are_explicit() -> None:
+    """Separate producer eligibility from isolated hash sensitivity."""
+    vectors = _vectors()
+
+    assert {
+        vector["vector_id"]
+        for vector in vectors
+        if vector["expected_production"] == "EMIT"
+    } == {"CDA-V1-01", "CDA-V1-12"}
+    assert all(
+        vector["expected_production"] == "HASH_REFERENCE_ONLY"
+        for vector in vectors[1:11]
+    )
+    for vector in vectors:
+        if vector["expected_production"] != "EMIT":
+            continue
+        normalized = DecideResponse.model_validate(
+            vector["source_projection"]
+        ).model_dump(mode="json")
+        assert (
+            vector["source_projection"]["gate_decision"] == normalized["gate_decision"]
+        )
+        assert (
+            _project_normalized_source_for_spec_fixture(normalized)
+            == (vector["artifact"]["decision"])
+        )
+
+
+def test_golden_opaque_bindings_match_normalized_source_values() -> None:
+    """Recompute each V01 field-specific digest from normalized source."""
+    golden = _vectors()[0]
+    normalized = DecideResponse.model_validate(golden["source_projection"]).model_dump(
+        mode="json"
+    )
+
+    for binding_field, (profile, source_field) in BINDING_SOURCES.items():
+        binding = golden["artifact"]["decision"][binding_field]
+        assert binding["profile"] == profile
+        assert binding["sha256"] == (
+            _reference_binding_digest_for_spec_fixture(
+                profile,
+                normalized[source_field],
+            )
+        )
 
 
 def test_every_included_mutation_changes_hash_and_id() -> None:
@@ -180,9 +334,7 @@ def test_every_included_mutation_changes_hash_and_id() -> None:
     }
     for vector in mutation_vectors:
         artifact = vector["artifact"]
-        assert _reference_hash_for_spec_fixture(artifact) == artifact[
-            "decision_hash"
-        ]
+        assert _reference_hash_for_spec_fixture(artifact) == artifact["decision_hash"]
         assert vector["expected_decision_hash"] != golden_hash
         assert vector["expected_decision_id"] != golden_id
 
@@ -195,26 +347,77 @@ def test_excluded_fields_and_bind_retroactivity_contract() -> None:
     post_bind = vectors["CDA-V1-13"]
 
     assert excluded["excluded_source_mutations"]
-    assert excluded["expected_decision_hash"] == golden[
-        "expected_decision_hash"
-    ]
+    assert excluded["expected_decision_hash"] == golden["expected_decision_hash"]
     assert excluded["expected_decision_id"] == golden["expected_decision_id"]
     assert post_bind["expected_production"] == "REFUSE"
     assert post_bind["expected_reason"] == "POST_BIND_SOURCE_REFUSED"
     assert "artifact" not in post_bind
+    normalized = DecideResponse.model_validate(
+        excluded["source_projection"]
+    ).model_dump(mode="json")
+    assert normalized["trust_log"] is not None
+    assert normalized["user_summary"] == "Presentation only"
+    assert {
+        "meta",
+        "persona",
+        "alternatives",
+        "options",
+        "trust_log",
+        "deterministic_replay",
+        "user_summary",
+    } <= set(excluded["excluded_source_mutations"])
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("bind_outcome", "BLOCKED"),
+        ("bind_failure_reason", "synthetic"),
+        ("bind_reason_code", "SYNTHETIC"),
+        ("bind_receipt_id", "bind-synthetic"),
+        ("execution_intent_id", "intent-synthetic"),
+        ("bound_execution_intent_id", "intent-synthetic"),
+        ("authority_check_result", {"status": "synthetic"}),
+        ("constraint_check_result", {"status": "synthetic"}),
+        ("drift_check_result", {"status": "synthetic"}),
+        ("risk_check_result", {"status": "synthetic"}),
+        ("bind_summary", {"bind_outcome": "ROLLED_BACK"}),
+        ("bind_operator_summary", {"bind_outcome": "BLOCKED"}),
+        ("bind_operator_detail", {"bind_outcome": "ROLLED_BACK"}),
+    ),
+)
+def test_every_current_post_bind_source_field_is_refused(
+    field: str,
+    value: object,
+) -> None:
+    """Refuse every current non-null Bind result or operator surface."""
+    source = deepcopy(_vectors()[0]["source_projection"])
+    source[field] = value
+    normalized = DecideResponse.model_validate(source).model_dump(mode="json")
+
+    assert set(_vectors()[12]["post_bind_source_fields"]) == BIND_SOURCE_FIELDS
+    assert normalized[field] is not None
+    assert _post_bind_source_is_refused_for_spec_fixture(normalized)
+
+
+def test_null_post_bind_fields_are_not_populated() -> None:
+    """Define populated as non-null, while retaining fail-closed values."""
+    source = {field: None for field in BIND_SOURCE_FIELDS}
+
+    assert BIND_SOURCE_FIELDS <= set(DecideResponse.model_fields)
+    assert not _post_bind_source_is_refused_for_spec_fixture(source)
 
 
 def test_timestamp_contract_and_deterministic_normalization() -> None:
     """Require exact UTC microseconds and reject naive/invalid timestamps."""
     by_id = {vector["vector_id"]: vector for vector in _vectors()}
 
-    assert _normalize_aware_timestamp_for_spec_fixture(
-        "2031-02-03T05:05:06.123456+01:00"
-    ) == "2031-02-03T04:05:06.123456Z"
+    assert (
+        _normalize_aware_timestamp_for_spec_fixture("2031-02-03T05:05:06.123456+01:00")
+        == "2031-02-03T04:05:06.123456Z"
+    )
     with pytest.raises(ValueError, match="timezone-aware"):
-        _normalize_aware_timestamp_for_spec_fixture(
-            "2031-02-03T04:05:06.123456"
-        )
+        _normalize_aware_timestamp_for_spec_fixture("2031-02-03T04:05:06.123456")
     assert by_id["CDA-V1-14"]["expected_reason"] == "NAIVE_TIMESTAMP"
     assert by_id["CDA-V1-15"]["expected_reason"] == "INVALID_TIMESTAMP"
 
@@ -255,6 +458,126 @@ def test_schema_cannot_carry_execution_bind_or_self_declared_validity() -> None:
     assert all(term not in schema_text for term in forbidden)
 
 
+def test_closed_vocabularies_match_normalized_source_contract() -> None:
+    """Pin canonical vocabularies and exclude every legacy gate alias."""
+    schema = _load_json(SCHEMA_PATH)
+    decision = schema["$defs"]["decision"]["properties"]
+
+    assert set(decision["decision_status"]["enum"]) == {
+        "allow",
+        "modify",
+        "rejected",
+        "block",
+        "abstain",
+    }
+    assert set(decision["gate_decision"]["enum"]) == set(CANONICAL_GATE_DECISION_VALUES)
+    assert not {"allow", "deny", "modify", "rejected", "abstain"} & set(
+        decision["gate_decision"]["enum"]
+    )
+    assert "unknown" not in decision["gate_decision"]["enum"]
+    assert set(decision["business_decision"]["enum"]) == {
+        "APPROVE",
+        "DENY",
+        "HOLD",
+        "REVIEW_REQUIRED",
+        "POLICY_DEFINITION_REQUIRED",
+        "EVIDENCE_REQUIRED",
+    }
+    assert set(decision["actionability_status"]["enum"]) == {
+        "reviewable_only",
+        "bind_required_before_execution",
+        "actionable_after_bind",
+        "blocked",
+        "human_review_required",
+        "formation_transition_refused",
+    }
+
+
+def test_schema_mirrors_gate_business_human_review_invariants() -> None:
+    """Reject the same coupled semantic combinations as DecideResponse."""
+    schema = _load_json(SCHEMA_PATH)
+    validator = Draft202012Validator(schema)
+    artifact = deepcopy(_vectors()[0]["artifact"])
+    invalid_tuples = [
+        ("proceed", "HOLD", True),
+        ("hold", "APPROVE", False),
+        ("block", "APPROVE", False),
+        ("proceed", "DENY", False),
+        ("hold", "REVIEW_REQUIRED", True),
+        ("human_review_required", "HOLD", True),
+        ("human_review_required", "REVIEW_REQUIRED", False),
+    ]
+
+    assert FORBIDDEN_GATE_BUSINESS_COMBINATIONS == frozenset(
+        {
+            ("block", "APPROVE"),
+            ("hold", "APPROVE"),
+            ("proceed", "DENY"),
+        }
+    )
+    for gate, business, review_required in invalid_tuples:
+        candidate = deepcopy(artifact)
+        candidate["decision"].update(
+            gate_decision=gate,
+            business_decision=business,
+            human_review_required=review_required,
+        )
+        with pytest.raises(ValidationError):
+            validator.validate(candidate)
+        with pytest.raises(ValueError):
+            DecideResponse.model_validate(
+                {
+                    "gate_decision": gate,
+                    "business_decision": business,
+                    "human_review_required": review_required,
+                }
+            )
+
+
+@pytest.mark.parametrize(
+    ("binding_field", "wrong_profile"),
+    (
+        ("chosen_binding", "unknown-profile/v1"),
+        (
+            "governance_identity_binding",
+            "veritas.canonical-decision.chosen-value/v1",
+        ),
+        (
+            "transition_refusal_binding",
+            "veritas.canonical-decision.governance-identity/v1",
+        ),
+    ),
+)
+def test_wrong_or_swapped_binding_profiles_are_schema_invalid(
+    binding_field: str,
+    wrong_profile: str,
+) -> None:
+    """Prevent opaque binding digest domain substitution."""
+    artifact = deepcopy(_vectors()[0]["artifact"])
+    artifact["decision"][binding_field]["profile"] = wrong_profile
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(_load_json(SCHEMA_PATH)).validate(artifact)
+
+
+@pytest.mark.parametrize(
+    ("formation_status", "binding"),
+    (("COMPLETE", None), ("INCOMPLETE", "golden")),
+)
+def test_formation_status_and_governance_binding_cannot_contradict(
+    formation_status: str,
+    binding: str | None,
+) -> None:
+    """Pin formation completeness to governance binding presence only."""
+    artifact = deepcopy(_vectors()[0]["artifact"])
+    artifact["decision"]["formation_status"] = formation_status
+    if binding is None:
+        artifact["decision"]["governance_identity_binding"] = None
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(_load_json(SCHEMA_PATH)).validate(artifact)
+
+
 def test_non_authority_non_execution_and_incomplete_governance_are_explicit() -> None:
     """Pin semantic non-claims and absent-governance formation behavior."""
     specification = SPEC_PATH.read_text(encoding="utf-8")
@@ -265,7 +588,7 @@ def test_non_authority_non_execution_and_incomplete_governance_are_explicit() ->
         "`chosen != canonical executable action`",
         "`next_action != intended_action`",
         "`READY_FOR_GUARDED_PROMOTION != execution`",
-        "`formation_status=INCOMPLETE`",
+        "`INCOMPLETE` means it is unavailable",
     ):
         assert invariant in specification
 

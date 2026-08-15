@@ -6,8 +6,8 @@
   "artifact": {
     "format_version": "canonical-decision-artifact/v1",
     "hash_profile": "veritas.canonical-decision/v1",
-    "decision_id": "cda:v1:sha256:2bfe09f64337ea95d2772cd4a969ac7366571d65f2ff9b9830957deca445dd86",
-    "decision_hash": "2bfe09f64337ea95d2772cd4a969ac7366571d65f2ff9b9830957deca445dd86",
+    "decision_id": "cda:v1:sha256:a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
+    "decision_hash": "a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
     "decision_ts": "2031-02-03T04:05:06.123456Z",
     "request_id": "req-cda-synthetic-001",
     "source_contract": {
@@ -22,12 +22,12 @@
       },
       "decision_status": "allow",
       "rejection_reason": null,
-      "gate_decision": "ALLOW",
+      "gate_decision": "hold",
       "business_decision": "HOLD",
       "next_action": "REQUEST_VERIFIED_REVIEW",
       "actionability_status": "blocked",
       "requires_bind_before_execution": true,
-      "human_review_required": true,
+      "human_review_required": false,
       "required_evidence": [
         "authority_evidence",
         "human_approval"
@@ -48,16 +48,16 @@
       },
       "lineage_promotability_binding": {
         "profile": "veritas.canonical-decision.lineage-promotability/v1",
-        "sha256": "bfb740a44e9a7332445fa6e4255696df1454e78d5b1cbd913fad11f48504d19b"
+        "sha256": "35c203c9baed4c3679bbcec66346bb97bd62d33dbd1fc5ff6339fed852500840"
       },
       "transition_refusal_binding": {
         "profile": "veritas.canonical-decision.transition-refusal/v1",
-        "sha256": "5747ed3a654db328097d821eebd8a2474e795ff2ae74fccee734d6c1f7f9d97c"
+        "sha256": "42405ab6973875446269a4f3bdcc1e527e393a9f5e2f60e964f756f234029bc6"
       }
     }
   },
-  "expected_decision_hash": "2bfe09f64337ea95d2772cd4a969ac7366571d65f2ff9b9830957deca445dd86",
-  "expected_decision_id": "cda:v1:sha256:2bfe09f64337ea95d2772cd4a969ac7366571d65f2ff9b9830957deca445dd86",
+  "expected_decision_hash": "a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
+  "expected_decision_id": "cda:v1:sha256:a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
   "expected_schema_valid": true,
-  "expected_production": "EMIT"
+  "expected_production": "HASH_REFERENCE_ONLY"
 }
