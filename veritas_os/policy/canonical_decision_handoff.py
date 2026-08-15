@@ -19,6 +19,22 @@ HUMAN_APPROVAL_EXACT_OPERATION_CLAIM = "HUMAN_APPROVAL_BINDS_EXACT_OPERATION"
 FORBIDDEN_READY_PROVENANCE_CLASSES = frozenset(
     {"UNAVAILABLE", "UNVERIFIED_STRUCTURED_INPUT"}
 )
+CANONICAL_PROVENANCE_CLASSES = frozenset(
+    {
+        "VERIFIED_RUNTIME_EVIDENCE",
+        "VERIFIED_POLICY_ARTIFACT",
+        "VERIFIED_AUTHORITY_EVIDENCE",
+        "VERIFIED_HUMAN_APPROVAL",
+        "VERIFIED_LIVE_STATE",
+        "EXPLICIT_STRUCTURED_INPUT",
+        "UNVERIFIED_STRUCTURED_INPUT",
+        "DERIVED_CANONICALLY",
+        "UNAVAILABLE",
+    }
+)
+CANONICAL_VERIFICATION_STATUSES = frozenset(
+    {"VERIFIED", "UNVERIFIED", "UNAVAILABLE"}
+)
 
 
 class CanonicalDecisionHandoffStatus(str, Enum):
@@ -217,7 +233,7 @@ def validate_canonical_decision_handoff(
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
     if not isinstance(handoff, Mapping) or handoff.get("format_version") != (
         "canonical-decision-handoff/v1"
-    ):
+    ) or not _nonempty(handoff.get("handoff_id")):
         return _result(
             handoff,
             CanonicalDecisionHandoffStatus.INVALID,
@@ -233,6 +249,23 @@ def validate_canonical_decision_handoff(
         not isinstance(handoff.get(key), Mapping) for key in required_objects
     ) or not isinstance(handoff.get("provenance"), list):
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
+    nullable_objects = (
+        "policy_lineage",
+        "authority_evidence",
+        "human_approval_evidence",
+        "expected_state",
+    )
+    if any(
+        handoff.get(key) is not None
+        and not isinstance(handoff.get(key), Mapping)
+        for key in nullable_objects
+    ):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     candidate = handoff["candidate"]
     action = candidate.get("canonical_action")
     if action is not None and not isinstance(action, Mapping):
@@ -240,6 +273,20 @@ def validate_canonical_decision_handoff(
     provenance = handoff["provenance"]
     if any(not isinstance(record, Mapping) for record in provenance):
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
+    if any(
+        not isinstance(record.get("provenance_class"), str)
+        or record.get("provenance_class") not in CANONICAL_PROVENANCE_CLASSES
+        or not isinstance(record.get("verification_status"), str)
+        or record.get("verification_status")
+        not in CANONICAL_VERIFICATION_STATUSES
+        for record in provenance
+    ):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
     paths = [record.get("field_path") for record in provenance]
     if any(not _nonempty(path) for path in paths) or len(paths) != len(set(paths)):
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, schema_reason, structure_valid=False)
@@ -253,30 +300,6 @@ def validate_canonical_decision_handoff(
     if candidate.get("lineage_promotability") != "promotable":
         return _result(handoff, CanonicalDecisionHandoffStatus.STRUCTURALLY_REFUSED, (reason.HANDOFF_LINEAGE_NON_PROMOTABLE,))
 
-    binding = trusted_context.candidate_hash_binding
-    if binding is not None and (
-        not binding.candidate_hash_profile
-        or not binding.verification_mechanism
-        or binding.verified_at.tzinfo is None
-        or binding.verified_at > evaluated_at
-    ):
-        return _result(
-            handoff,
-            CanonicalDecisionHandoffStatus.INCOMPLETE,
-            (reason.HANDOFF_PROVENANCE_UNVERIFIED,),
-        )
-    if binding is not None and (
-        binding.claim != "CANDIDATE_HASH_BINDS_CANDIDATE"
-        or binding.candidate_value_digest
-        != canonical_handoff_assertion_value_digest(candidate)
-        or binding.asserted_candidate_hash != handoff.get("candidate_hash")
-    ):
-        return _result(
-            handoff,
-            CanonicalDecisionHandoffStatus.INVALID,
-            (reason.HANDOFF_CANDIDATE_HASH_MISMATCH,),
-        )
-
     invalid: list[CanonicalDecisionHandoffReasonCode] = []
     source = handoff["source_decision"]
     trustlog = handoff["trustlog_lineage"]
@@ -285,7 +308,19 @@ def validate_canonical_decision_handoff(
         invalid.append(reason.HANDOFF_SOURCE_ARTIFACT_MISMATCH)
     if handoff["decision_lineage"].get("bind_proof_ref"):
         invalid.append(reason.HANDOFF_SOURCE_ARTIFACT_MISMATCH)
-    if len({source.get("request_id"), trustlog.get("request_id"), replay.get("request_id")}) != 1:
+    request_ids = (
+        source.get("request_id"),
+        trustlog.get("request_id"),
+        replay.get("request_id"),
+    )
+    if not all(_nonempty(request_id) for request_id in request_ids):
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            schema_reason,
+            structure_valid=False,
+        )
+    if request_ids[0] != request_ids[1] or request_ids[0] != request_ids[2]:
         invalid.append(reason.HANDOFF_REQUEST_LINEAGE_MISMATCH)
     target = handoff["target_context"]
     if all(_nonempty(candidate.get(key)) for key in ("target_system", "target_resource")) and (
@@ -392,9 +427,35 @@ def validate_canonical_decision_handoff(
         if observed > evaluated_at or not all(_nonempty(expected_state.get(key)) for key in ("fingerprint", "source_ref")):
             invalid.append(reason.HANDOFF_EXPECTED_STATE_STALE)
 
+    binding = trusted_context.candidate_hash_binding
+    binding_trustworthy = binding is not None and (
+        bool(binding.candidate_hash_profile)
+        and bool(binding.verification_mechanism)
+        and isinstance(binding.verified_at, datetime)
+        and binding.verified_at.tzinfo is not None
+        and binding.verified_at <= evaluated_at
+    )
+    binding_mismatch = binding_trustworthy and (
+        binding.claim != "CANDIDATE_HASH_BINDS_CANDIDATE"
+        or binding.candidate_value_digest
+        != canonical_handoff_assertion_value_digest(candidate)
+        or binding.asserted_candidate_hash != handoff.get("candidate_hash")
+    )
+    if binding_mismatch:
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INVALID,
+            (reason.HANDOFF_CANDIDATE_HASH_MISMATCH,),
+        )
     if invalid:
         return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, tuple(dict.fromkeys(invalid)))
 
+    if approval_requirement.get("resolved") is not True:
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INCOMPLETE,
+            (reason.HANDOFF_APPROVAL_REQUIREMENT_UNRESOLVED,),
+        )
     if approval_requirement.get("required") is True and approval is None:
         return _result(handoff, CanonicalDecisionHandoffStatus.REVIEW_REQUIRED, (reason.HANDOFF_APPROVAL_EVIDENCE_MISSING,))
     incomplete: list[CanonicalDecisionHandoffReasonCode] = []
@@ -425,8 +486,6 @@ def validate_canonical_decision_handoff(
         incomplete.append(reason.HANDOFF_AUTHORITY_REQUIREMENT_UNRESOLVED)
     elif authority_requirement.get("required") is True and authority is None:
         incomplete.append(reason.HANDOFF_AUTHORITY_EVIDENCE_MISSING)
-    if approval_requirement.get("resolved") is not True:
-        incomplete.append(reason.HANDOFF_APPROVAL_REQUIREMENT_UNRESOLVED)
     if policy is None:
         incomplete.append(reason.HANDOFF_POLICY_LINEAGE_MISSING)
     if expected_state is None:
@@ -472,6 +531,13 @@ def validate_canonical_decision_handoff(
             for item in incomplete
         ) else CanonicalDecisionHandoffStatus.INCOMPLETE
         return _result(handoff, status, tuple(incomplete))
+
+    if not binding_trustworthy:
+        return _result(
+            handoff,
+            CanonicalDecisionHandoffStatus.INCOMPLETE,
+            (reason.HANDOFF_PROVENANCE_UNVERIFIED,),
+        )
 
     mandatory = (
         "source_decision.request_id", "source_decision.canonical_decision_id",
@@ -527,6 +593,4 @@ def validate_canonical_decision_handoff(
         ):
             return _result(handoff, CanonicalDecisionHandoffStatus.INVALID, (reason.HANDOFF_PROVENANCE_MISMATCH,), verified=tuple(verified))
         verified.append(path)
-    if binding is None:
-        return _result(handoff, CanonicalDecisionHandoffStatus.INCOMPLETE, (reason.HANDOFF_PROVENANCE_UNVERIFIED,), verified=tuple(verified))
     return _result(handoff, CanonicalDecisionHandoffStatus.READY_FOR_GUARDED_PROMOTION, (), verified=tuple(verified))

@@ -13,6 +13,8 @@ import pytest
 
 from veritas_os.policy.canonical_decision_handoff import (
     ASSERTION_VALUE_DIGEST_PROFILE,
+    CANONICAL_PROVENANCE_CLASSES,
+    CANONICAL_VERIFICATION_STATUSES,
     HUMAN_APPROVAL_EXACT_OPERATION_CLAIM,
     CandidateHashBindingAssertion,
     CanonicalDecisionHandoffReasonCode,
@@ -173,6 +175,13 @@ def test_runtime_schema_enums_are_coherent() -> None:
     schema = json.loads(Path("schemas/decision-to-bind-handoff-v1.schema.json").read_text())
     assert {item.value for item in CanonicalDecisionHandoffStatus} == set(schema["properties"]["handoff_status"]["enum"])
     assert {item.value for item in CanonicalDecisionHandoffReasonCode} == set(schema["properties"]["refusal_reason_codes"]["items"]["enum"])
+    provenance_properties = schema["$defs"]["provenanceRecord"]["properties"]
+    assert CANONICAL_PROVENANCE_CLASSES == frozenset(
+        provenance_properties["provenance_class"]["enum"]
+    )
+    assert CANONICAL_VERIFICATION_STATUSES == frozenset(
+        provenance_properties["verification_status"]["enum"]
+    )
     assert ASSERTION_VALUE_DIGEST_PROFILE == "veritas.canonical-handoff.assertion-value/v1"
 
 
@@ -390,3 +399,128 @@ def test_invalid_evidence_outranks_stale_policy_review() -> None:
     assert result.reason_codes == (
         CanonicalDecisionHandoffReasonCode.HANDOFF_AUTHORITY_EVIDENCE_INVALID,
     )
+
+
+@pytest.mark.parametrize(
+    ("field_path", "malformed_value"),
+    [
+        ("authority_evidence", "verified"),
+        ("human_approval_evidence", []),
+        ("policy_lineage", "policy"),
+        ("expected_state", 123),
+    ],
+)
+def test_trusted_context_cannot_legitimize_malformed_nullable_object(
+    field_path: str, malformed_value: object
+) -> None:
+    """Reject object-or-null violations before consulting trusted context."""
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff[field_path] = malformed_value
+    record = next(
+        record
+        for record in handoff["provenance"]
+        if record["field_path"] == field_path
+    )
+    record["value"] = malformed_value
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_SCHEMA_INVALID,
+    )
+    assert not result.structure_valid
+
+
+@pytest.mark.parametrize(
+    ("record_field", "value"),
+    [
+        ("provenance_class", "UNKNOWN_CLASS"),
+        ("provenance_class", 1),
+        ("verification_status", "UNKNOWN_STATUS"),
+        ("verification_status", []),
+    ],
+)
+def test_provenance_vocabularies_are_structurally_closed(
+    record_field: str, value: object
+) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff["provenance"][0][record_field] = value
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_SCHEMA_INVALID,
+    )
+    assert not result.structure_valid
+
+
+@pytest.mark.parametrize(
+    "request_path",
+    ["source_decision", "trustlog_lineage", "replay_lineage"],
+)
+@pytest.mark.parametrize("value", [[], {}, 1, None, ""])
+def test_malformed_request_ids_return_structured_invalid(
+    request_path: str, value: object
+) -> None:
+    """Never hash attacker-controlled request identifiers in a set."""
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff[request_path]["request_id"] = value
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_SCHEMA_INVALID,
+    )
+    assert not result.structure_valid
+
+
+def test_unresolved_approval_requirement_outranks_missing_evidence() -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff["human_approval_requirement"]["resolved"] = False
+    handoff["human_approval_evidence"] = None
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INCOMPLETE
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_APPROVAL_REQUIREMENT_UNRESOLVED,
+    )
+
+
+def test_intrinsic_target_invalid_is_not_masked_by_future_binding() -> None:
+    vector = next(
+        vector for vector in _vectors() if vector["vector_id"] == "DTBH-V1-24"
+    )
+    handoff = deepcopy(vector["input"])
+    future_binding = replace(
+        _binding(handoff["candidate"], handoff["candidate_hash"]),
+        verified_at=datetime(2030, 1, 1, 0, 0, 3, tzinfo=timezone.utc),
+    )
+    result = validate_canonical_decision_handoff(
+        handoff,
+        CanonicalDecisionHandoffValidationContext(
+            candidate_hash_binding=future_binding
+        ),
+        EVALUATED_AT,
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert result.reason_codes == (
+        CanonicalDecisionHandoffReasonCode.HANDOFF_TARGET_CONTEXT_MISMATCH,
+    )
+
+
+@pytest.mark.parametrize("handoff_id", ["", None, 1, pytest.param("missing")])
+def test_handoff_id_is_required_artifact_identity(handoff_id: object) -> None:
+    handoff = deepcopy(_vectors()[0]["input"])
+    if handoff_id == "missing":
+        del handoff["handoff_id"]
+    else:
+        handoff["handoff_id"] = handoff_id
+    result = validate_canonical_decision_handoff(
+        handoff, _complete_context(handoff), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert not result.structure_valid
