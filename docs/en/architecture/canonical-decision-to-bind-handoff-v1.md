@@ -296,7 +296,11 @@ Canonical specification-only reason codes are:
 `HANDOFF_APPROVAL_EVIDENCE_EXPIRED`, `HANDOFF_POLICY_LINEAGE_MISSING`,
 `HANDOFF_POLICY_LINEAGE_STALE`, `HANDOFF_EXPECTED_STATE_MISSING`,
 `HANDOFF_EXPECTED_STATE_STALE`, `HANDOFF_AMBIGUOUS_ACTION`, and
-`HANDOFF_SOURCE_ARTIFACT_MISMATCH`.
+`HANDOFF_SOURCE_ARTIFACT_MISMATCH`. Runtime validation additionally uses
+`HANDOFF_SCHEMA_INVALID` for malformed untrusted artifacts,
+`HANDOFF_PROVENANCE_UNVERIFIED` when independent verification is absent,
+`HANDOFF_PROVENANCE_MISMATCH` when an assertion does not bind the current
+value, and `HANDOFF_EXPIRED` for an expired top-level handoff.
 
 ## Compatibility and current proof architecture
 

@@ -59,8 +59,8 @@ def _vectors() -> list[dict[str, object]]:
 def _assert_ready_provenance(handoff: dict[str, object]) -> None:
     """Assert the documented READY fixture provenance contract.
 
-    This test-only coherence assertion is deliberately not a production handoff
-    validator. Runtime validation remains future, separately reviewed work.
+    This test-only coherence assertion is deliberately not the production
+    handoff validator; runtime behavior is tested in its dedicated test module.
     """
     provenance = handoff["provenance"]
     by_path = {record["field_path"]: record for record in provenance}
