@@ -17,11 +17,13 @@ from uuid import uuid4
 from veritas_os.api.schemas import DecideRequest
 from veritas_os.core import pipeline
 from veritas_os.replay.canonical_replay import (
+    CanonicalReplayError,
     ReplayControls,
     TRUSTED_REPLAY_MARKER,
     build_replay_evidence,
     load_replay_source,
 )
+from veritas_os.replay.semantic_profile import semantic_projection
 
 # ★ パストラバーサル防止: ファイル名に使用する ID から危険文字を除去
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_\-]")
@@ -29,7 +31,7 @@ _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_\-]")
 # ── Replay artifact schema version ──────────────────────────────────
 # Bump when the replay report JSON structure changes so that downstream
 # audit tooling can detect and handle schema evolution.
-REPLAY_SCHEMA_VERSION = "1.0.0"
+REPLAY_SCHEMA_VERSION = "1.1.0"
 
 # ── Diff severity constants ─────────────────────────────────────────
 SEVERITY_CRITICAL = "critical"
@@ -216,69 +218,8 @@ def _sort_evidence(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _normalized_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract stable fields for replay comparison."""
-    decision = payload.get("decision") if isinstance(payload.get("decision"), dict) else {}
-    fuji = payload.get("fuji") if isinstance(payload.get("fuji"), dict) else {}
-    extras = payload.get("extras") if isinstance(payload.get("extras"), dict) else {}
-
-    decision_output = decision.get("output")
-    decision_answer = decision.get("answer")
-    fuji_result = fuji.get("result")
-    value_scores = payload.get("value_scores")
-    evidence = payload.get("evidence")
-
-    if not isinstance(evidence, list):
-        evidence = extras.get("evidence") if isinstance(extras.get("evidence"), list) else []
-
-    stable_evidence = []
-    for item in evidence:
-        if not isinstance(item, dict):
-            continue
-        stable_evidence.append(
-            {
-                "id": item.get("id"),
-                "title": item.get("title"),
-                "url": item.get("url") or item.get("uri"),
-                "source": item.get("source"),
-                "snippet": item.get("snippet"),
-            }
-        )
-
-    # ── Continuation runtime (shadow/observe) ──────────────────────
-    # Extract concise continuation fields for replay comparison.
-    # When continuation is absent (flag off), these keys are omitted
-    # entirely so that replay diffs remain clean.
-    continuation_block = payload.get("continuation") if isinstance(payload.get("continuation"), dict) else None
-    result: Dict[str, Any] = {
-        "decision": {
-            "output": decision_output,
-            "answer": decision_answer,
-        },
-        "fuji": {
-            "result": fuji_result,
-            "status": fuji.get("status"),
-        },
-        "value_scores": value_scores,
-        "evidence": _sort_evidence(stable_evidence),
-    }
-    if continuation_block is not None:
-        c_state = continuation_block.get("state") if isinstance(continuation_block.get("state"), dict) else {}
-        c_receipt = continuation_block.get("receipt") if isinstance(continuation_block.get("receipt"), dict) else {}
-        result["continuation_state"] = {
-            "claim_lineage_id": c_state.get("claim_lineage_id"),
-            "claim_status": c_state.get("claim_status"),
-            "law_version": c_state.get("law_version"),
-            "snapshot_id": c_state.get("snapshot_id"),
-        }
-        result["continuation_receipt"] = {
-            "receipt_id": c_receipt.get("receipt_id"),
-            "revalidation_status": c_receipt.get("revalidation_status"),
-            "revalidation_outcome": c_receipt.get("revalidation_outcome"),
-            "divergence_flag": c_receipt.get("divergence_flag"),
-            "should_refuse_before_effect": c_receipt.get("should_refuse_before_effect"),
-            "reason_codes": c_receipt.get("revalidation_reason_codes"),
-        }
-    return result
+    """Compatibility wrapper for the canonical v1 semantic profile."""
+    return semantic_projection(payload)
 
 
 def _build_diff(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
@@ -471,6 +412,13 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
             temperature=float(req_body.get("temperature", 0) or 0),
         )
         evidence = build_replay_evidence(replay_source, replay_output, controls)
+        if (
+            evidence.semantic_match != match
+            or list(evidence.fields_changed) != diff["fields_changed"]
+            or evidence.severity != max_severity
+            or evidence.divergence_level != divergence
+        ):
+            raise CanonicalReplayError("REPLAY_SEMANTIC_COMPARISON_MISMATCH")
         canonical_evidence = evidence.model_dump(mode="json")
         replay_cda_id = evidence.replay_cda_id
         report_payload["canonical_replay_evidence"] = canonical_evidence

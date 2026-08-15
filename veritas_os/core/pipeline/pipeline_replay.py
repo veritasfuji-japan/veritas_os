@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional
 from ..utils import utc_now_iso_z
 from veritas_os.replay.canonical_replay import TRUSTED_REPLAY_MARKER
 from veritas_os.replay.canonical_replay import ReplayControls, build_replay_evidence
+from veritas_os.replay.semantic_profile import semantic_projection
 
 
 # ★ パストラバーサル防止
@@ -41,6 +42,7 @@ def _sanitize_for_diff(value: Any) -> Any:
             "canonical_decision_artifact",
             "canonical_decision_trust_receipt",
             "canonical_replay_source",
+            "canonical_replay_source_receipt",
         }
         return {
             str(k): _sanitize_for_diff(v)
@@ -75,6 +77,8 @@ def _build_replay_diff(
         "decision": "critical",
         "fuji": "critical",
         "value_scores": "warning",
+        "continuation_state": "warning",
+        "continuation_receipt": "warning",
     }
     field_severities = [_severity_map.get(k, "info") for k in changed_keys]
     max_severity = (
@@ -202,7 +206,10 @@ async def replay_decision(
     original_output = replay_meta.get("final_output") or {}
     if not isinstance(original_output, dict):
         original_output = {}
-    diff = _build_replay_diff(original_output, replay_output)
+    diff = _build_replay_diff(
+        semantic_projection(original_output),
+        semantic_projection(replay_output),
+    )
     match = not bool(diff.get("changed"))
 
     report = {
@@ -219,11 +226,19 @@ async def replay_decision(
             seed=int(req_body.get("seed", 0) or 0),
             temperature=float(req_body.get("temperature", 0) or 0),
         )
-        report["canonical_replay_evidence"] = build_replay_evidence(
+        evidence = build_replay_evidence(
             source,
             replay_output,
             controls,
-        ).model_dump(mode="json")
+        )
+        if (
+            evidence.semantic_match != match
+            or list(evidence.fields_changed) != diff["keys"]
+            or evidence.severity != diff["severity"]
+            or evidence.divergence_level != diff["divergence_level"]
+        ):
+            raise ValueError("canonical replay semantic comparison mismatch")
+        report["canonical_replay_evidence"] = evidence.model_dump(mode="json")
 
     try:
         Path(REPLAY_REPORT_DIR).mkdir(parents=True, exist_ok=True)

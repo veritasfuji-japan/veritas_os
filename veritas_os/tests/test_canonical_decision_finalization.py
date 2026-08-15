@@ -106,6 +106,7 @@ def test_null_canonical_fields_are_removed_before_stage_8() -> None:
     payload = _payload()
     payload["canonical_decision_artifact"] = None
     payload["canonical_decision_trust_receipt"] = None
+    payload["canonical_replay_source_receipt"] = None
 
     finalization.finalize_canonical_decision_artifact(
         payload,
@@ -115,6 +116,7 @@ def test_null_canonical_fields_are_removed_before_stage_8() -> None:
 
     assert "canonical_decision_artifact" not in payload
     assert "canonical_decision_trust_receipt" not in payload
+    assert "canonical_replay_source_receipt" not in payload
 
 
 def test_non_null_trust_receipt_is_refused_before_stage_8() -> None:
@@ -134,9 +136,30 @@ def test_non_null_trust_receipt_is_refused_before_stage_8() -> None:
     )
 
 
+def test_non_null_replay_source_receipt_is_refused_before_stage_8() -> None:
+    """A caller cannot inject a replay-source persistence receipt."""
+    payload = _payload()
+    payload["canonical_replay_source_receipt"] = {"unexpected": "receipt"}
+
+    with pytest.raises(finalization.CanonicalDecisionFinalizationError) as exc:
+        finalization.finalize_canonical_decision_artifact(
+            payload,
+            decision_ts=DECISION_TS,
+        )
+
+    _assert_reason(
+        exc,
+        finalization.CanonicalDecisionFinalizationReason.PREEXISTING_REPLAY_SOURCE_RECEIPT_REFUSED,
+    )
+
+
 @pytest.mark.parametrize(
     "field",
-    ["canonical_decision_artifact", "canonical_decision_trust_receipt"],
+    [
+        "canonical_decision_artifact",
+        "canonical_decision_trust_receipt",
+        "canonical_replay_source_receipt",
+    ],
 )
 def test_stage_8_guard_rejects_canonical_keys_even_when_null(field: str) -> None:
     """The explicit Stage 8 guard rejects presence, not merely non-null data."""

@@ -467,6 +467,29 @@ async def replay_decision(
     )
 
 
+def _persist_canonical_replay_source(
+    ctx: PipelineContext,
+    payload: Dict[str, Any],
+    stage_failures: List[str],
+) -> None:
+    """Persist an original-decision replay source, never a nested replay source."""
+    if ctx.replay_mode:
+        return
+    try:
+        replay_source = build_replay_source(payload)
+        receipt = persist_replay_source(replay_source, REPLAY_SOURCE_DIR)
+    except (KeyError, TypeError, ValueError, OSError, RuntimeError) as exc:
+        stage_failures.append(f"canonical_replay_source:{type(exc).__name__}")
+        logger.warning(
+            "[pipeline] canonical replay source unavailable: %s",
+            type(exc).__name__,
+        )
+    else:
+        payload["canonical_replay_source_receipt"] = receipt.model_dump(
+            mode="json"
+        )
+
+
 # =========================================================
 # Safe dataset writer (optional) -> pipeline_persistence.py に移動済み
 # =========================================================
@@ -1045,27 +1068,7 @@ async def run_decide_pipeline(
         )
         if trust_receipt_payload is not None:
             payload["canonical_decision_trust_receipt"] = trust_receipt_payload
-        try:
-            replay_source = build_replay_source(payload)
-            replay_source_path = persist_replay_source(
-                replay_source,
-                REPLAY_SOURCE_DIR,
-            )
-        except (KeyError, TypeError, ValueError, OSError, RuntimeError) as exc:
-            _stage_failures.append(
-                f"canonical_replay_source:{type(exc).__name__}"
-            )
-            logger.warning(
-                "[pipeline] canonical replay source unavailable: %s",
-                type(exc).__name__,
-            )
-        else:
-            payload["canonical_replay_source"] = {
-                "format_version": replay_source.format_version,
-                "source_id": replay_source.source_id,
-                "storage": "encrypted",
-                "path": str(replay_source_path),
-            }
+        _persist_canonical_replay_source(ctx, payload, _stage_failures)
 
     # =================================================================
     # Observability: record pipeline health summary

@@ -1159,6 +1159,13 @@ class DecideResponse(BaseModel):
             "ledger-chain and signed-witness verification remain separate."
         ),
     )
+    canonical_replay_source_receipt: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Canonical Replay Source v1 encrypted-persistence receipt. It "
+            "contains no filesystem location and grants no authority."
+        ),
+    )
 
     # Governance identity: which governance artifact was in force for this decision.
     governance_identity: Optional[Dict[str, Any]] = Field(

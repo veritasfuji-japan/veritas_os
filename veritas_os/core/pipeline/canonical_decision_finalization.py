@@ -31,6 +31,9 @@ class CanonicalDecisionFinalizationReason(str, Enum):
         "PREEXISTING_CANONICAL_ARTIFACT_REFUSED"
     )
     PREEXISTING_TRUST_RECEIPT_REFUSED = "PREEXISTING_TRUST_RECEIPT_REFUSED"
+    PREEXISTING_REPLAY_SOURCE_RECEIPT_REFUSED = (
+        "PREEXISTING_REPLAY_SOURCE_RECEIPT_REFUSED"
+    )
 
 
 class CanonicalDecisionFinalizationError(ValueError):
@@ -71,6 +74,7 @@ def finalize_canonical_decision_artifact(
 
     _remove_or_refuse_preexisting_artifact(payload)
     _remove_or_refuse_preexisting_receipt(payload)
+    _remove_or_refuse_preexisting_replay_source_receipt(payload)
 
     try:
         api_source = api_schemas.DecideResponse.model_validate(payload)
@@ -80,6 +84,7 @@ def finalize_canonical_decision_artifact(
 
     normalized.pop("canonical_decision_artifact", None)
     normalized.pop("canonical_decision_trust_receipt", None)
+    normalized.pop("canonical_replay_source_receipt", None)
     if api_source.request_id != raw_request_id:
         _fail(CanonicalDecisionFinalizationReason.REQUEST_ID_MISMATCH)
 
@@ -172,6 +177,10 @@ def attach_canonical_decision_artifact(
         )
     if "canonical_decision_trust_receipt" in payload:
         _fail(CanonicalDecisionFinalizationReason.PREEXISTING_TRUST_RECEIPT_REFUSED)
+    if "canonical_replay_source_receipt" in payload:
+        _fail(
+            CanonicalDecisionFinalizationReason.PREEXISTING_REPLAY_SOURCE_RECEIPT_REFUSED
+        )
     payload["canonical_decision_artifact"] = artifact.model_dump(mode="json")
 
 
@@ -185,6 +194,10 @@ def require_stage_8_payload_without_canonical_artifact(
         )
     if "canonical_decision_trust_receipt" in payload:
         _fail(CanonicalDecisionFinalizationReason.PREEXISTING_TRUST_RECEIPT_REFUSED)
+    if "canonical_replay_source_receipt" in payload:
+        _fail(
+            CanonicalDecisionFinalizationReason.PREEXISTING_REPLAY_SOURCE_RECEIPT_REFUSED
+        )
 
 
 def _remove_or_refuse_preexisting_artifact(
@@ -213,3 +226,17 @@ def _remove_or_refuse_preexisting_receipt(
         del payload["canonical_decision_trust_receipt"]
         return
     _fail(CanonicalDecisionFinalizationReason.PREEXISTING_TRUST_RECEIPT_REFUSED)
+
+
+def _remove_or_refuse_preexisting_replay_source_receipt(
+    payload: MutableMapping[str, Any],
+) -> None:
+    """Remove null source receipts and refuse non-null preexisting values."""
+    if "canonical_replay_source_receipt" not in payload:
+        return
+    if payload["canonical_replay_source_receipt"] is None:
+        del payload["canonical_replay_source_receipt"]
+        return
+    _fail(
+        CanonicalDecisionFinalizationReason.PREEXISTING_REPLAY_SOURCE_RECEIPT_REFUSED
+    )

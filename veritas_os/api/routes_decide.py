@@ -42,6 +42,7 @@ from veritas_os.security.wat_token import (
 from veritas_os.security.wat_verifier import validate_local
 from veritas_os.security.signing import Signer, build_trustlog_signer
 from veritas_os.logging.paths import LOG_DIR
+from veritas_os.replay.canonical_replay import CanonicalReplayError
 from veritas_os.api.utils import (
     _classify_decide_failure,
     _coerce_decide_payload,
@@ -645,10 +646,32 @@ async def replay_endpoint(decision_id: str, request: Request):
     )
     try:
         result = await srv.run_replay(decision_id=decision_id)
-    except ValueError:
+    except CanonicalReplayError:
         return JSONResponse(
-            status_code=404,
-            content={"ok": False, "decision_id": decision_id, "error": "decision_not_found"},
+            status_code=409,
+            content={
+                "ok": False,
+                "decision_id": decision_id,
+                "error": "canonical_replay_source_invalid",
+            },
+        )
+    except ValueError as exc:
+        reason = str(exc)
+        if reason.startswith("decision_not_found") or reason == "not found":
+            status_code = 404
+            error = "decision_not_found"
+        elif reason.startswith("replay_model_version"):
+            status_code = 409
+            error = "model_version_mismatch"
+        elif reason.startswith("replay_retrieval_snapshot_checksum"):
+            status_code = 409
+            error = "retrieval_checksum_mismatch"
+        else:
+            status_code = 500
+            error = "replay_internal_failure"
+        return JSONResponse(
+            status_code=status_code,
+            content={"ok": False, "decision_id": decision_id, "error": error},
         )
     except Exception as e:
         logger.error("replay endpoint failed: %s", _errstr(e))
