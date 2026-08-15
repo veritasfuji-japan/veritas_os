@@ -657,7 +657,12 @@ async def replay_endpoint(decision_id: str, request: Request):
         )
     except ValueError as exc:
         reason = str(exc)
-        if reason.startswith("decision_not_found") or reason == "not found":
+        normalized_reason = reason.strip().lower()
+        if (
+            normalized_reason.startswith("decision_not_found")
+            or normalized_reason.startswith("decision not found")
+            or normalized_reason == "not found"
+        ):
             status_code = 404
             error = "decision_not_found"
         elif reason.startswith("replay_model_version"):
@@ -691,9 +696,13 @@ async def replay_endpoint(decision_id: str, request: Request):
         "severity": result.severity,
         "divergence_level": result.divergence_level,
         "audit_summary": result.audit_summary,
-        "replay_request_id": result.replay_request_id,
-        "replay_cda_id": result.replay_cda_id,
-        "canonical_replay_evidence": result.canonical_replay_evidence,
+        "replay_request_id": getattr(result, "replay_request_id", ""),
+        "replay_cda_id": getattr(result, "replay_cda_id", ""),
+        "canonical_replay_evidence": getattr(
+            result,
+            "canonical_replay_evidence",
+            None,
+        ),
     }
 
 

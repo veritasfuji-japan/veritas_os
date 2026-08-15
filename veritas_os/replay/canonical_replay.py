@@ -124,7 +124,7 @@ class CanonicalReplayEvidence(_FrozenModel):
     replay_semantic_hash: str = Field(pattern=_DIGEST_PATTERN)
     replay_semantic_projection: dict[str, Any]
     semantic_match: bool
-    fields_changed: tuple[str, ...]
+    fields_changed: list[str]
     severity: Literal["info", "warning", "critical"]
     divergence_level: Literal[
         "no_divergence",
@@ -313,11 +313,11 @@ def load_replay_source(
 def _diff_metadata(
     original: dict[str, Any],
     replayed: dict[str, Any],
-) -> tuple[tuple[str, ...], str, str]:
-    fields = tuple(
+) -> tuple[list[str], str, str]:
+    fields = [
         key for key in sorted(set(original) | set(replayed))
         if original.get(key) != replayed.get(key)
-    )
+    ]
     severities = {
         "decision": "critical",
         "fuji": "critical",

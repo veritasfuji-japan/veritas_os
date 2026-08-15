@@ -420,7 +420,7 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
         ):
             raise CanonicalReplayError("REPLAY_SEMANTIC_COMPARISON_MISMATCH")
         canonical_evidence = evidence.model_dump(mode="json")
-        replay_cda_id = evidence.replay_cda_id
+        replay_cda_id = evidence.replay_cda.decision_id
         report_payload["canonical_replay_evidence"] = canonical_evidence
 
     pipeline.REPLAY_REPORT_DIR.mkdir(parents=True, exist_ok=True)

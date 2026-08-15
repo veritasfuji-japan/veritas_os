@@ -175,7 +175,7 @@ def test_semantic_match_and_independent_evidence_verification() -> None:
     )
 
     assert evidence.semantic_match is True
-    assert evidence.fields_changed == ()
+    assert evidence.fields_changed == []
     assert evidence.original_request_id != evidence.replay_request_id
     assert evidence.original_decision_id != evidence.replay_cda.decision_id
     assert verify_canonical_replay_evidence(source, evidence) == evidence
