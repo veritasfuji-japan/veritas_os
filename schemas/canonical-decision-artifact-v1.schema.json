@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/canonical-decision-artifact-v1.schema.json",
+  "title": "CanonicalDecisionArtifact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "hash_profile", "decision_id", "decision_hash", "decision_ts", "request_id", "source_contract", "decision"],
+  "properties": {
+    "format_version": {"const": "canonical-decision-artifact/v1"},
+    "hash_profile": {"const": "veritas.canonical-decision/v1"},
+    "decision_id": {"type": "string", "pattern": "^cda:v1:sha256:[0-9a-f]{64}$"},
+    "decision_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decision_ts": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{6}Z$", "format": "date-time"},
+    "request_id": {"type": "string", "minLength": 1},
+    "source_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "projection_version"],
+      "properties": {
+        "type": {"const": "DecideResponse"},
+        "projection_version": {"const": "canonical-decision-projection/v1"}
+      }
+    },
+    "decision": {"$ref": "#/$defs/decision"}
+  },
+  "$defs": {
+    "digestBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "sha256"],
+      "properties": {
+        "profile": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "nullableString": {"type": ["string", "null"]},
+    "stringList": {"type": "array", "items": {"type": "string"}},
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["formation_status", "chosen_binding", "decision_status", "rejection_reason", "gate_decision", "business_decision", "next_action", "actionability_status", "requires_bind_before_execution", "human_review_required", "required_evidence", "missing_evidence", "satisfied_evidence", "rationale", "refusal_reason", "actionability_block_reason", "actionability_refusal_type", "governance_identity_binding", "lineage_promotability_binding", "transition_refusal_binding"],
+      "properties": {
+        "formation_status": {"enum": ["COMPLETE", "INCOMPLETE"]},
+        "chosen_binding": {"$ref": "#/$defs/digestBinding"},
+        "decision_status": {"type": "string"},
+        "rejection_reason": {"$ref": "#/$defs/nullableString"},
+        "gate_decision": {"type": "string"},
+        "business_decision": {"type": "string"},
+        "next_action": {"type": "string"},
+        "actionability_status": {"type": "string"},
+        "requires_bind_before_execution": {"type": "boolean"},
+        "human_review_required": {"type": "boolean"},
+        "required_evidence": {"$ref": "#/$defs/stringList"},
+        "missing_evidence": {"$ref": "#/$defs/stringList"},
+        "satisfied_evidence": {"$ref": "#/$defs/stringList"},
+        "rationale": {"$ref": "#/$defs/nullableString"},
+        "refusal_reason": {"$ref": "#/$defs/nullableString"},
+        "actionability_block_reason": {"$ref": "#/$defs/nullableString"},
+        "actionability_refusal_type": {"$ref": "#/$defs/nullableString"},
+        "governance_identity_binding": {"anyOf": [{"$ref": "#/$defs/digestBinding"}, {"type": "null"}]},
+        "lineage_promotability_binding": {"anyOf": [{"$ref": "#/$defs/digestBinding"}, {"type": "null"}]},
+        "transition_refusal_binding": {"anyOf": [{"$ref": "#/$defs/digestBinding"}, {"type": "null"}]}
+      }
+    }
+  }
+}

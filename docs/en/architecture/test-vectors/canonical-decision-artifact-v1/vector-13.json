@@ -1,0 +1,59 @@
+{
+  "vector_id": "CDA-V1-13",
+  "description": "Populated Bind lineage requires producer refusal",
+  "synthetic_fixture": true,
+  "source_projection": {
+    "request_id": "req-cda-synthetic-001",
+    "chosen": {
+      "id": "choice-stable-01",
+      "score": 0.875,
+      "title": "Hold for verified review"
+    },
+    "decision_status": "allow",
+    "rejection_reason": null,
+    "gate_decision": "ALLOW",
+    "business_decision": "HOLD",
+    "next_action": "REQUEST_VERIFIED_REVIEW",
+    "actionability_status": "reviewable_only",
+    "requires_bind_before_execution": true,
+    "human_review_required": true,
+    "required_evidence": [
+      "authority_evidence",
+      "human_approval"
+    ],
+    "missing_evidence": [
+      "authority_evidence"
+    ],
+    "satisfied_evidence": [
+      "policy_evaluation"
+    ],
+    "rationale": "Synthetic decision requires separately verified authority.",
+    "refusal_reason": null,
+    "actionability_block_reason": "BIND_REQUIRED",
+    "actionability_refusal_type": null,
+    "governance_identity": {
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "policy_version": "synthetic-v7",
+      "signature_verified": true
+    },
+    "lineage_promotability": {
+      "promotability_family": "lineage_promotability",
+      "promotability_status": "restricted",
+      "promotability_version": "v1",
+      "reason_code": "AUTHORITY_PENDING",
+      "transformation_stable": true
+    },
+    "transition_refusal": {
+      "bind_receipt_created": false,
+      "execution_intent_created": false,
+      "reason_code": null,
+      "transition_status": "allowed"
+    },
+    "bind_receipt_id": "bind-synthetic-1",
+    "execution_intent_id": "intent-synthetic-1",
+    "bind_outcome": "COMMITTED"
+  },
+  "expected_schema_valid": null,
+  "expected_production": "REFUSE",
+  "expected_reason": "POST_BIND_SOURCE_REFUSED"
+}

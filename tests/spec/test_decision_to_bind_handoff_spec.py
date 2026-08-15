@@ -315,6 +315,24 @@ def test_target_context_mismatch_has_a_distinct_canonical_reason_code() -> None:
     assert target_context_reason in specification
 
 
+def test_future_canonical_decision_artifact_mapping_is_non_operational() -> None:
+    """Pin the future verified artifact source without changing readiness."""
+    specification = Path(
+        "docs/en/architecture/canonical-decision-to-bind-handoff-v1.md"
+    ).read_text(encoding="utf-8")
+
+    assert "CanonicalDecisionArtifact v1" in specification
+    for field_name in (
+        "canonical_decision_id",
+        "canonical_decision_hash",
+        "canonical_decision_ts",
+    ):
+        assert field_name in specification
+    assert "runtime validator continues to accept an already formed handoff" in (
+        specification
+    )
+
+
 def test_action_substitution_invalidates_authority_and_approval_bindings() -> None:
     """Pin V25's independently visible action-to-evidence mismatches."""
     by_id = {vector["vector_id"]: vector for vector in _vectors()}
