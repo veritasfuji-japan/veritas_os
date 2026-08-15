@@ -68,7 +68,7 @@
         "gate_decision": {"enum": ["proceed", "hold", "block", "human_review_required"]},
         "business_decision": {"enum": ["APPROVE", "DENY", "HOLD", "REVIEW_REQUIRED", "POLICY_DEFINITION_REQUIRED", "EVIDENCE_REQUIRED"]},
         "next_action": {"type": "string"},
-        "actionability_status": {"enum": ["reviewable_only", "bind_required_before_execution", "actionable_after_bind", "blocked", "human_review_required", "formation_transition_refused"]},
+        "actionability_status": {"enum": ["reviewable_only", "bind_required_before_execution", "blocked", "human_review_required", "formation_transition_refused"]},
         "requires_bind_before_execution": {"type": "boolean"},
         "human_review_required": {"type": "boolean"},
         "required_evidence": {"$ref": "#/$defs/stringList"},
@@ -91,7 +91,11 @@
         {"if": {"properties": {"gate_decision": {"const": "human_review_required"}}}, "then": {"properties": {"business_decision": {"const": "REVIEW_REQUIRED"}, "human_review_required": {"const": true}}}},
         {"not": {"properties": {"gate_decision": {"const": "block"}, "business_decision": {"const": "APPROVE"}}, "required": ["gate_decision", "business_decision"]}},
         {"not": {"properties": {"gate_decision": {"const": "hold"}, "business_decision": {"const": "APPROVE"}}, "required": ["gate_decision", "business_decision"]}},
-        {"not": {"properties": {"gate_decision": {"const": "proceed"}, "business_decision": {"const": "DENY"}}, "required": ["gate_decision", "business_decision"]}}
+        {"not": {"properties": {"gate_decision": {"const": "proceed"}, "business_decision": {"const": "DENY"}}, "required": ["gate_decision", "business_decision"]}},
+        {"if": {"properties": {"actionability_status": {"enum": ["reviewable_only", "bind_required_before_execution", "human_review_required"]}}}, "then": {"properties": {"requires_bind_before_execution": {"const": true}}}},
+        {"if": {"properties": {"actionability_status": {"enum": ["blocked", "formation_transition_refused"]}}}, "then": {"properties": {"requires_bind_before_execution": {"const": false}}}},
+        {"if": {"properties": {"actionability_status": {"const": "human_review_required"}}}, "then": {"properties": {"human_review_required": {"const": true}}}},
+        {"if": {"properties": {"actionability_status": {"const": "formation_transition_refused"}}}, "then": {"properties": {"human_review_required": {"const": true}}}}
       ]
     }
   }

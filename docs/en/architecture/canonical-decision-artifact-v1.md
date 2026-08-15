@@ -112,8 +112,12 @@ The v1 vocabularies mirror normalized `DecideResponse`: `decision_status` is
 `APPROVE`, `DENY`, `HOLD`, `REVIEW_REQUIRED`,
 `POLICY_DEFINITION_REQUIRED`, or `EVIDENCE_REQUIRED`; and
 `actionability_status` is `reviewable_only`,
-`bind_required_before_execution`, `actionable_after_bind`, `blocked`,
-`human_review_required`, or `formation_transition_refused`. Compatibility
+`bind_required_before_execution`, `blocked`, `human_review_required`, or
+`formation_transition_refused`. This is deliberately the strict pre-Bind
+subset of the wider `DecideResponse` vocabulary. Runtime
+`actionable_after_bind` requires a committed Bind outcome plus both Bind receipt
+and execution-intent lineage, so the pre-Bind CDA producer refuses rather than
+represents that state. Compatibility
 aliases (`allow`, `deny`, `modify`, `rejected`, `abstain`) are never artifact
 gate values. Although `unknown` remains a compatibility/default input to the
 current response model, v1 refuses canonical production from that unresolved
@@ -127,6 +131,16 @@ boolean to be true; and `(block, APPROVE)`, `(hold, APPROVE)`, and
 including these conditions, before hash verification. The existing
 `DecideResponse` remains the source of truth; this specification does not
 create a divergent runtime semantics system.
+
+The two bound actionability fields also preserve the pre-Bind execution
+boundary. `reviewable_only`, `bind_required_before_execution`, and
+`human_review_required` require `requires_bind_before_execution=true`;
+`blocked` and `formation_transition_refused` require it to be false. An
+`actionability_status` of `human_review_required` requires the review boolean
+to be true, but the reverse is intentionally not global because a more
+restrictive status may retain that signal. The stable structural-refusal
+runtime additionally requires `formation_transition_refused` to retain
+`human_review_required=true`.
 
 ### Opaque-value bindings
 

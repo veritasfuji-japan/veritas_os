@@ -6,8 +6,8 @@
   "artifact": {
     "format_version": "canonical-decision-artifact/v1",
     "hash_profile": "veritas.canonical-decision/v1",
-    "decision_id": "cda:v1:sha256:a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
-    "decision_hash": "a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
+    "decision_id": "cda:v1:sha256:842fc2dd2de291c8edda2a42f07081e8b6a4b2b4f6e952cfb0e0d48036f64db1",
+    "decision_hash": "842fc2dd2de291c8edda2a42f07081e8b6a4b2b4f6e952cfb0e0d48036f64db1",
     "decision_ts": "2031-02-03T04:05:06.123456Z",
     "request_id": "req-cda-synthetic-001",
     "source_contract": {
@@ -25,7 +25,7 @@
       "gate_decision": "hold",
       "business_decision": "HOLD",
       "next_action": "REQUEST_VERIFIED_REVIEW",
-      "actionability_status": "blocked",
+      "actionability_status": "bind_required_before_execution",
       "requires_bind_before_execution": true,
       "human_review_required": false,
       "required_evidence": [
@@ -56,8 +56,8 @@
       }
     }
   },
-  "expected_decision_hash": "a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
-  "expected_decision_id": "cda:v1:sha256:a90309336f270182dfa02f1a00723b0e3eef3215308a167785b129b2132b7259",
+  "expected_decision_hash": "842fc2dd2de291c8edda2a42f07081e8b6a4b2b4f6e952cfb0e0d48036f64db1",
+  "expected_decision_id": "cda:v1:sha256:842fc2dd2de291c8edda2a42f07081e8b6a4b2b4f6e952cfb0e0d48036f64db1",
   "expected_schema_valid": true,
   "expected_production": "HASH_REFERENCE_ONLY"
 }

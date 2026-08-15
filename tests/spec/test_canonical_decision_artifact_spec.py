@@ -17,7 +17,6 @@ from veritas_os.core.decision_semantics import (
     FORBIDDEN_GATE_BUSINESS_COMBINATIONS,
 )
 
-
 SCHEMA_PATH = Path("schemas/canonical-decision-artifact-v1.schema.json")
 SPEC_PATH = Path("docs/en/architecture/canonical-decision-artifact-v1.md")
 HANDOFF_SPEC_PATH = Path(
@@ -486,11 +485,66 @@ def test_closed_vocabularies_match_normalized_source_contract() -> None:
     assert set(decision["actionability_status"]["enum"]) == {
         "reviewable_only",
         "bind_required_before_execution",
-        "actionable_after_bind",
         "blocked",
         "human_review_required",
         "formation_transition_refused",
     }
+
+
+@pytest.mark.parametrize(
+    ("status", "requires_bind", "review_required"),
+    (
+        ("reviewable_only", False, False),
+        ("bind_required_before_execution", False, False),
+        ("human_review_required", False, True),
+        ("blocked", True, False),
+        ("formation_transition_refused", True, True),
+        ("human_review_required", True, False),
+    ),
+)
+def test_actionability_boundary_contradictions_are_schema_invalid(
+    status: str,
+    requires_bind: bool,
+    review_required: bool,
+) -> None:
+    """Reject contradictory pre-Bind actionability boundary combinations."""
+    artifact = deepcopy(_vectors()[0]["artifact"])
+    artifact["decision"].update(
+        actionability_status=status,
+        requires_bind_before_execution=requires_bind,
+        human_review_required=review_required,
+    )
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(_load_json(SCHEMA_PATH)).validate(artifact)
+
+
+def test_actionable_after_bind_is_post_bind_only_and_schema_invalid() -> None:
+    """Tie the excluded status to runtime's committed bound-lineage rule."""
+    artifact = deepcopy(_vectors()[0]["artifact"])
+    artifact["decision"]["actionability_status"] = "actionable_after_bind"
+    pipeline_contract = Path("veritas_os/core/pipeline/pipeline_response.py").read_text(
+        encoding="utf-8"
+    )
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(_load_json(SCHEMA_PATH)).validate(artifact)
+    for bound_lineage_requirement in (
+        'normalized_outcome == "COMMITTED"',
+        "normalized_bind_receipt_id is not None",
+        "normalized_execution_intent_id is not None",
+        'status = "actionable_after_bind"',
+    ):
+        assert bound_lineage_requirement in pipeline_contract
+
+
+def test_golden_actionability_boundary_remains_valid() -> None:
+    """Preserve V01's coherent pre-Bind reviewable-only boundary."""
+    golden = _vectors()[0]["artifact"]
+
+    assert golden["decision"]["actionability_status"] == "reviewable_only"
+    assert golden["decision"]["requires_bind_before_execution"] is True
+    Draft202012Validator(_load_json(SCHEMA_PATH)).validate(golden)
 
 
 def test_schema_mirrors_gate_business_human_review_invariants() -> None:
