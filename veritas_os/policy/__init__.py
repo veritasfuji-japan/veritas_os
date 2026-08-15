@@ -4,6 +4,17 @@
 # Not wired into runtime enforcement. See debate-safety-policy-yaml-plan.md.
 
 from .compiler import COMPILER_VERSION, CompileResult, compile_policy_to_bundle
+from .canonical_decision_handoff import (
+    AuthorityEvidenceRequirementBindingAssertion,
+    CandidateHashBindingAssertion,
+    CanonicalDecisionHandoffReasonCode,
+    CanonicalDecisionHandoffStatus,
+    CanonicalDecisionHandoffValidationContext,
+    CanonicalDecisionHandoffValidationResult,
+    TrustedValueAssertion,
+    canonical_handoff_assertion_value_digest,
+    validate_canonical_decision_handoff,
+)
 from .bind_artifacts import (
     BindReceipt,
     ExecutionIntent,
@@ -80,6 +91,15 @@ from .runtime_adapter import (
 from .schema import load_and_validate_policy, validate_source_policy
 
 __all__ = [
+    "AuthorityEvidenceRequirementBindingAssertion",
+    "CandidateHashBindingAssertion",
+    "CanonicalDecisionHandoffReasonCode",
+    "CanonicalDecisionHandoffStatus",
+    "CanonicalDecisionHandoffValidationContext",
+    "CanonicalDecisionHandoffValidationResult",
+    "TrustedValueAssertion",
+    "canonical_handoff_assertion_value_digest",
+    "validate_canonical_decision_handoff",
     "OutcomeAction",
     "ExecutionIntent",
     "DecisionCandidate",
