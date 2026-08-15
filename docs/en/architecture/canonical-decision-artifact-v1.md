@@ -308,12 +308,12 @@ separate future layer.
 
 ## Non-claims and remaining work
 
-This milestone provides no live `/v1/decide` emission, canonical candidate
-extraction, Authority Evidence, Human Approval verification, live policy
-verification, TrustLog verification, replay
-verification, `CanonicalDecisionHandoff` creation, guarded promotion,
-`ExecutionIntent`, Bind, external effect, or production/customer/regulatory
-certification. A later PR must define and review the finalization capture,
-pre-Bind producer, artifact persistence/reference, independent verification,
-TrustLog/replay matching, structured candidate/evidence inputs, and handoff
-consumer. It must not change the existing handoff validator implicitly.
+Live `/v1/decide` CDA emission exists. When its dedicated post-drift link append
+succeeds, the response also identifies the encrypted TrustLog row that commits
+to the exact compact CDA reference. Full-ledger chain and signed-witness
+verification remain independent operations, and receipt presence is not a
+trusted-provenance claim. Replay evidence linkage remains future work because a
+replay execution has its own CDA timestamp and identity. Authority Evidence,
+Human Approval, `CanonicalDecisionHandoff`, guarded promotion,
+`ExecutionIntent`, Bind, external effect, and production/customer/regulatory
+certification also remain outside this contract.

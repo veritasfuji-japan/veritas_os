@@ -101,6 +101,54 @@ def test_request_id_is_refused_before_model_validation(monkeypatch) -> None:
     assert validation_calls == 0
 
 
+def test_null_canonical_fields_are_removed_before_stage_8() -> None:
+    """Optional response nulls must not cross the persistence boundary."""
+    payload = _payload()
+    payload["canonical_decision_artifact"] = None
+    payload["canonical_decision_trust_receipt"] = None
+
+    finalization.finalize_canonical_decision_artifact(
+        payload,
+        decision_ts=DECISION_TS,
+    )
+    finalization.require_stage_8_payload_without_canonical_artifact(payload)
+
+    assert "canonical_decision_artifact" not in payload
+    assert "canonical_decision_trust_receipt" not in payload
+
+
+def test_non_null_trust_receipt_is_refused_before_stage_8() -> None:
+    """A preexisting receipt cannot be silently accepted or overwritten."""
+    payload = _payload()
+    payload["canonical_decision_trust_receipt"] = {"unexpected": "receipt"}
+
+    with pytest.raises(finalization.CanonicalDecisionFinalizationError) as exc:
+        finalization.finalize_canonical_decision_artifact(
+            payload,
+            decision_ts=DECISION_TS,
+        )
+
+    _assert_reason(
+        exc,
+        finalization.CanonicalDecisionFinalizationReason.PREEXISTING_TRUST_RECEIPT_REFUSED,
+    )
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["canonical_decision_artifact", "canonical_decision_trust_receipt"],
+)
+def test_stage_8_guard_rejects_canonical_keys_even_when_null(field: str) -> None:
+    """The explicit Stage 8 guard rejects presence, not merely non-null data."""
+    payload = _payload()
+    payload.pop("canonical_decision_artifact", None)
+    payload.pop("canonical_decision_trust_receipt", None)
+    payload[field] = None
+
+    with pytest.raises(finalization.CanonicalDecisionFinalizationError):
+        finalization.require_stage_8_payload_without_canonical_artifact(payload)
+
+
 def test_null_preexisting_artifact_is_removed_before_finalization() -> None:
     payload = _payload()
     assert payload["canonical_decision_artifact"] is None

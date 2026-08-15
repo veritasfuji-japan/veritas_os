@@ -234,6 +234,10 @@ from .canonical_decision_finalization import (
     require_stage_8_payload_without_canonical_artifact,
     verify_canonical_decision_source_unchanged,
 )
+from ...audit.canonical_decision_trust_link import (
+    CanonicalDecisionTrustLinkError,
+    record_canonical_decision_trust_link,
+)
 from .pipeline_replay import (
     _safe_filename_id,  # noqa: F401 – backward compat
     _sanitize_for_diff,  # noqa: F401 – backward compat
@@ -1008,10 +1012,29 @@ async def run_decide_pipeline(
             payload,
             canonical_decision_artifact,
         )
+        trust_receipt_payload = None
+        with trace_session.stage("canonical_trust_link"):
+            try:
+                trust_receipt = record_canonical_decision_trust_link(
+                    canonical_decision_artifact,
+                    append_trust_log_fn=append_trust_log,
+                )
+            except CanonicalDecisionTrustLinkError as exc:
+                _stage_failures.append(
+                    f"canonical_trust_link:{exc.reason_code.value}"
+                )
+                logger.warning(
+                    "[pipeline] canonical trust link unavailable: %s",
+                    exc.reason_code.value,
+                )
+            else:
+                trust_receipt_payload = trust_receipt.model_dump(mode="json")
         attach_canonical_decision_artifact(
             payload,
             canonical_decision_artifact,
         )
+        if trust_receipt_payload is not None:
+            payload["canonical_decision_trust_receipt"] = trust_receipt_payload
 
     # =================================================================
     # Observability: record pipeline health summary
