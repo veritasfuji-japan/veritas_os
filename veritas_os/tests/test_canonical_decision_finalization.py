@@ -66,7 +66,7 @@ def test_finalization_bridges_reloaded_response_class(monkeypatch) -> None:
     )
 
     assert observed == [True]
-    assert artifact.request_id == "req-cda-golden-001"
+    assert artifact.request_id == "req-cda-synthetic-001"
 
 
 def test_request_id_is_refused_before_model_validation(monkeypatch) -> None:
