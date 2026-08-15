@@ -180,11 +180,63 @@ def test_forbidden_inference_and_binding_vectors_fail_closed() -> None:
     for vector_id in ("DTBH-V1-09", "DTBH-V1-10", "DTBH-V1-13"):
         assert by_id[vector_id]["expected_handoff_status"] == "INVALID"
     for vector_id in ("DTBH-V1-21", "DTBH-V1-23"):
-        assert by_id[vector_id]["expected_handoff_status"] == "INVALID"
-        assert "HANDOFF_AUTHORITY_EVIDENCE_MISSING" in by_id[vector_id][
-            "expected_reason_codes"
+        assert by_id[vector_id]["expected_handoff_status"] == "INCOMPLETE"
+        assert by_id[vector_id]["expected_reason_codes"] == [
+            "HANDOFF_AUTHORITY_EVIDENCE_MISSING"
         ]
         assert by_id[vector_id]["forbidden_inference"]
+
+
+def test_missing_authority_vectors_have_equivalent_runtime_inputs() -> None:
+    """Prove untrusted declarations cannot distinguish vectors 08 and 21."""
+    by_id = {vector["vector_id"]: vector for vector in _vectors()}
+    ignored_fields = {
+        "handoff_id",
+        "handoff_status",
+        "refusal_reason_codes",
+    }
+
+    def substantive_input(vector_id: str) -> dict[str, object]:
+        handoff = by_id[vector_id]["input"]
+        return {
+            key: value
+            for key, value in handoff.items()
+            if key not in ignored_fields
+        }
+
+    vector_08 = by_id["DTBH-V1-08"]
+    vector_21 = by_id["DTBH-V1-21"]
+    assert substantive_input("DTBH-V1-08") == substantive_input("DTBH-V1-21")
+    assert vector_08["expected_handoff_status"] == "INCOMPLETE"
+    assert vector_21["expected_handoff_status"] == "INCOMPLETE"
+    assert vector_08["expected_reason_codes"] == vector_21[
+        "expected_reason_codes"
+    ] == ["HANDOFF_AUTHORITY_EVIDENCE_MISSING"]
+
+
+def test_non_authoritative_signals_do_not_satisfy_required_evidence() -> None:
+    """Pin missing-evidence outcomes independently of tempting source signals."""
+    by_id = {vector["vector_id"]: vector for vector in _vectors()}
+    identity_vector = by_id["DTBH-V1-23"]
+    approval_vector = by_id["DTBH-V1-22"]
+
+    assert identity_vector["input"]["source_decision"][
+        "authenticated_api_user"
+    ]
+    assert identity_vector["input"]["authority_evidence"] is None
+    assert identity_vector["expected_handoff_status"] == "INCOMPLETE"
+    assert identity_vector["expected_reason_codes"] == [
+        "HANDOFF_AUTHORITY_EVIDENCE_MISSING"
+    ]
+
+    assert approval_vector["input"]["source_decision"][
+        "business_decision"
+    ] == "APPROVE"
+    assert approval_vector["input"]["human_approval_evidence"] is None
+    assert approval_vector["expected_handoff_status"] == "REVIEW_REQUIRED"
+    assert approval_vector["expected_reason_codes"] == [
+        "HANDOFF_APPROVAL_EVIDENCE_MISSING"
+    ]
 
 
 def test_schema_statuses_and_reason_codes_cover_vectors() -> None:

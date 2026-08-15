@@ -13,7 +13,7 @@ external effect.
 
 | Threat | Example | Required control |
 |---|---|---|
-| Semantic laundering | `ALLOW` or `APPROVE` becomes authority | Separate requirement, evidence, and validation; prose/status is untrusted. |
+| Semantic laundering | `ALLOW` is accepted as authority, `APPROVE` as Human Approval, or authenticated identity as execution authority | Ignore non-authoritative sources when satisfying security requirements; separately validate requirement, evidence, and binding. Mere source-signal presence is not itself invalid. |
 | Action inference | `next_action` becomes executable | Require typed canonical action from explicit structured input. |
 | Confused deputy | Authenticated caller requests an out-of-scope effect | Verify exact actor/action/target/policy-scope authority. |
 | Identity/authority conflation | API identity is treated as authorization | Bind independent Authority Evidence. |
@@ -41,6 +41,13 @@ allow. `REVIEW_REQUIRED` is a stop, not permission. Structural refusal occurs
 before Bind and cannot be healed by attaching evidence. Bind remains a separate
 adjudication boundary and must revalidate live state and time-sensitive
 evidence.
+
+Semantic laundering occurs when a non-authoritative signal is accepted as
+satisfying a security requirement. The defensive behavior is to ignore or
+reject that source for that purpose. Its mere presence in a source decision
+does not prove that an inference was attempted and does not automatically make
+the whole handoff `INVALID`: the independently required field remains missing
+and receives its normal fail-closed status.
 
 **Security warning:** this document defines controls but implements none. Until
 a separately reviewed future implementation establishes canonical decision
