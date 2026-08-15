@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -198,6 +199,13 @@ class _UnsupportedPydanticValue(BaseModel):
     value: str
 
 
+@dataclass
+class _UnsupportedDataclassValue:
+    """Test-only dataclass that must not be converted into CDA identity."""
+
+    value: str
+
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -218,6 +226,35 @@ def test_python_specific_chosen_values_are_refused_before_coercion(value) -> Non
 def test_nested_non_string_mapping_key_is_refused_before_coercion() -> None:
     source = _source()
     source.chosen = {"nested": {1: "value"}}
+    _assert_build_reason(source, "NON_CANONICAL_JSON_VALUE")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        _UnsupportedPydanticValue(value="not-json"),
+        _UnsupportedDataclassValue(value="not-json"),
+    ],
+)
+def test_builder_rejects_nested_objects_before_pydantic_dump(value) -> None:
+    source = _source()
+    source.chosen = {"value": value}
+    _assert_build_reason(source, "NON_CANONICAL_JSON_VALUE")
+
+
+def test_governance_identity_rejects_nested_object_before_dump() -> None:
+    source = _source()
+    source.governance_identity = {"nested": _UnsupportedPydanticValue(value="not-json")}
+    _assert_build_reason(source, "NON_CANONICAL_JSON_VALUE")
+
+
+@pytest.mark.parametrize("field", ["lineage_promotability", "transition_refusal"])
+def test_typed_source_model_rejects_unsupported_extra(field: str) -> None:
+    source = _source()
+    typed_model = getattr(source, field)
+    typed_model.__pydantic_extra__["unsupported"] = _UnsupportedDataclassValue(
+        value="not-json"
+    )
     _assert_build_reason(source, "NON_CANONICAL_JSON_VALUE")
 
 

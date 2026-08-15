@@ -16,7 +16,11 @@ from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from veritas_os.api.schemas import DecideResponse
+from veritas_os.api.schemas import (
+    DecideResponse,
+    LineagePromotabilitySummary,
+    TransitionRefusal,
+)
 from veritas_os.core.decision_semantics import validate_gate_business_combination
 from veritas_os.security.hash import sha256_hex
 
@@ -419,6 +423,22 @@ def _validated_source_projection(source: DecideResponse) -> dict[str, Any]:
             CanonicalDecisionArtifactBuildReason.SOURCE_REQUEST_ID_MISSING
         )
     try:
+        _validate_canonical_json_value(source.chosen)
+        if source.governance_identity is not None:
+            _validate_canonical_json_value(source.governance_identity)
+        _validate_typed_source_model(
+            source.lineage_promotability,
+            LineagePromotabilitySummary,
+        )
+        _validate_typed_source_model(
+            source.transition_refusal,
+            TransitionRefusal,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CanonicalDecisionArtifactBuildError(
+            CanonicalDecisionArtifactBuildReason.NON_CANONICAL_JSON_VALUE
+        ) from exc
+    try:
         # JSON-mode dumping can coerce non-finite floats under Pydantic's
         # serialization policy.  Inspect the Python projection first so no
         # hash-relevant non-finite or unsupported value can be laundered.
@@ -484,6 +504,36 @@ def _validate_canonical_json_value(value: Any) -> None:
             _validate_canonical_json_value(item)
         return
     raise TypeError(f"unsupported canonical JSON value type: {value_type.__qualname__}")
+
+
+def _validate_typed_source_model(
+    value: BaseModel | None,
+    expected_type: type[BaseModel],
+) -> None:
+    """Validate raw contents of one explicitly allowed typed source model.
+
+    Only the declared top-level Pydantic source model may cross this boundary.
+    Its known fields and Pydantic extras are inspected before ``model_dump`` so
+    nested Python objects cannot be normalized into a CDA binding.
+
+    Args:
+        value: Current raw source-model value, or ``None``.
+        expected_type: Exact Pydantic model type allowed for this source field.
+
+    Raises:
+        TypeError: If the top-level type is unexpected or any contained value
+            is not an exact canonical JSON family.
+        ValueError: If a contained floating-point value is non-finite.
+    """
+    if value is None:
+        return
+    if type(value) is not expected_type:
+        raise TypeError(f"unexpected typed source model: {type(value).__qualname__}")
+    for field_name in expected_type.model_fields:
+        _validate_canonical_json_value(getattr(value, field_name))
+    extras = value.__pydantic_extra__
+    if extras is not None:
+        _validate_canonical_json_value(extras)
 
 
 def _normalize_builder_timestamp(value: datetime | str) -> str:
