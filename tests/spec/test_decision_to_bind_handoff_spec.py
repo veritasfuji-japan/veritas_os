@@ -250,3 +250,76 @@ def test_schema_statuses_and_reason_codes_cover_vectors() -> None:
     assert schema_statuses == ALLOWED_STATUSES
     for vector in _vectors():
         assert set(vector["expected_reason_codes"]) <= schema_reasons
+
+
+def test_candidate_mutation_and_target_context_substitution_are_distinct() -> None:
+    """Pin V05 candidate mutation separately from V24 context substitution."""
+    by_id = {vector["vector_id"]: vector for vector in _vectors()}
+    vector_01 = by_id["DTBH-V1-01"]
+    vector_05 = by_id["DTBH-V1-05"]
+    vector_24 = by_id["DTBH-V1-24"]
+
+    assert vector_05["expected_handoff_status"] == "INVALID"
+    assert vector_05["expected_reason_codes"] == [
+        "HANDOFF_CANDIDATE_HASH_MISMATCH"
+    ]
+    assert vector_05["input"]["candidate"] != vector_01["input"]["candidate"]
+    assert (
+        vector_05["input"]["candidate"]["target_resource"]
+        != vector_01["input"]["candidate"]["target_resource"]
+    )
+
+    assert vector_24["expected_handoff_status"] == "INVALID"
+    assert vector_24["expected_reason_codes"] == [
+        "HANDOFF_TARGET_CONTEXT_MISMATCH"
+    ]
+    assert (
+        vector_24["input"]["candidate"]["target_system"],
+        vector_24["input"]["candidate"]["target_resource"],
+    ) != (
+        vector_24["input"]["target_context"]["target_system"],
+        vector_24["input"]["target_context"]["target_resource"],
+    )
+    assert "HANDOFF_CANDIDATE_HASH_MISMATCH" not in vector_24[
+        "expected_reason_codes"
+    ]
+
+
+def test_target_context_mismatch_has_a_distinct_canonical_reason_code() -> None:
+    """Keep the cross-field target reason in schema and specification."""
+    schema = _load_json(SCHEMA_PATH)
+    schema_reasons = set(
+        schema["properties"]["refusal_reason_codes"]["items"]["enum"]
+    )
+    specification = Path(
+        "docs/en/architecture/canonical-decision-to-bind-handoff-v1.md"
+    ).read_text(encoding="utf-8")
+
+    candidate_reason = "HANDOFF_CANDIDATE_HASH_MISMATCH"
+    target_context_reason = "HANDOFF_TARGET_CONTEXT_MISMATCH"
+    assert candidate_reason != target_context_reason
+    assert target_context_reason in schema_reasons
+    assert target_context_reason in specification
+
+
+def test_action_substitution_invalidates_authority_and_approval_bindings() -> None:
+    """Pin V25's independently visible action-to-evidence mismatches."""
+    by_id = {vector["vector_id"]: vector for vector in _vectors()}
+    vector_25 = by_id["DTBH-V1-25"]
+    handoff = vector_25["input"]
+
+    assert (
+        handoff["candidate"]["canonical_action"]["contract_id"]
+        != handoff["authority_evidence"]["action_contract_id"]
+    )
+    assert (
+        handoff["candidate"]["canonical_action"]["contract_id"]
+        != handoff["human_approval_evidence"]["action_contract_id"]
+    )
+    assert vector_25["expected_reason_codes"] == [
+        "HANDOFF_AUTHORITY_EVIDENCE_INVALID",
+        "HANDOFF_APPROVAL_EVIDENCE_INVALID",
+    ]
+    assert "HANDOFF_CANDIDATE_HASH_MISMATCH" not in vector_25[
+        "expected_reason_codes"
+    ]
