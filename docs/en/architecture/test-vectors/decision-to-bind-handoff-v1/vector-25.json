@@ -122,6 +122,7 @@
       }
     ],
     "refusal_reason_codes": [
+      "HANDOFF_AUTHORITY_EVIDENCE_INVALID",
       "HANDOFF_APPROVAL_EVIDENCE_INVALID"
     ],
     "created_at": "2030-01-01T00:00:01Z",
@@ -135,6 +136,7 @@
   },
   "expected_handoff_status": "INVALID",
   "expected_reason_codes": [
+    "HANDOFF_AUTHORITY_EVIDENCE_INVALID",
     "HANDOFF_APPROVAL_EVIDENCE_INVALID"
   ],
   "execution_intent_created": false,

@@ -210,12 +210,21 @@ policy IDs, compiled governance identity where supported, effective/issued
 time, expiry, and supersession state. Missing, stale, or prose-derived policy
 lineage fails closed. Never fabricate `policy_snapshot_id`.
 
-Target identifiers are explicit, typed, canonicalized, action-bound, and
-included in candidate/handoff hashing. Candidate or target mutation after
-hashing invalidates eligibility. `expected_state_fingerprint` is a trusted
-formation-time observation, never model output; Bind-time live state is a
-separate observation used to detect drift. Missing/stale required state fails
-closed.
+Target identifiers are explicit, typed, canonicalized, and action-bound. The
+candidate target is covered by the candidate-hash binding described below;
+`target_context` is checked separately against that target. Candidate mutation
+after trusted candidate-hash verification invalidates eligibility.
+`expected_state_fingerprint` is a trusted formation-time observation, never
+model output; Bind-time live state is a separate observation used to detect
+drift. Missing/stale required state fails closed.
+
+For a `READY_FOR_GUARDED_PROMOTION` handoff, v1 requires exact equality between
+`candidate.target_system` and `target_context.target_system`, and between
+`candidate.target_resource` and `target_context.target_resource`. A difference
+is a cross-field target-binding failure: the handoff is `INVALID` with
+`HANDOFF_TARGET_CONTEXT_MISMATCH`. It does not by itself establish a candidate
+hash mismatch. V1 defines no wildcard, hierarchy, alias, or scope-expansion
+semantics; richer target equivalence requires a separate explicit contract.
 
 ### Candidate-hash verification boundary
 
@@ -250,6 +259,20 @@ future validator may recompute the assertion-value digest to detect candidate
 substitution, but MUST NOT claim that doing so independently recomputes the
 canonical candidate hash.
 
+`HANDOFF_CANDIDATE_HASH_MISMATCH` applies only when the exact current
+`candidate` object differs from the object bound by that trusted assertion.
+This includes mutation of its target, canonical action, actor, or any other
+candidate field covered by the assertion. A change outside `candidate`, such as
+substitution of `target_context`, does not produce this reason unless the
+candidate itself also fails its trusted binding.
+
+A valid `CandidateHashBindingAssertion` proves only that its trusted verifier
+verified the supplied `candidate_hash` as binding the exact current candidate.
+It does not prove that `target_context`, Authority Evidence, Human Approval,
+applicable policy, or expected state matches that candidate. Those are separate
+validation properties and MUST be checked independently. This separation is
+security-critical.
+
 ## Formation invariant and reason codes
 
 The handoff consumes existing `lineage_promotability` and
@@ -262,7 +285,8 @@ Canonical specification-only reason codes are:
 `HANDOFF_MISSING_CANONICAL_DECISION_HASH`,
 `HANDOFF_MISSING_DECISION_TIMESTAMP`, `HANDOFF_TRUSTLOG_UNVERIFIED`,
 `HANDOFF_REPLAY_UNVERIFIED`, `HANDOFF_REQUEST_LINEAGE_MISMATCH`,
-`HANDOFF_CANDIDATE_HASH_MISMATCH`, `HANDOFF_LINEAGE_NON_PROMOTABLE`,
+`HANDOFF_CANDIDATE_HASH_MISMATCH`, `HANDOFF_TARGET_CONTEXT_MISMATCH`,
+`HANDOFF_LINEAGE_NON_PROMOTABLE`,
 `HANDOFF_TARGET_UNSPECIFIED`, `HANDOFF_ACTION_UNSPECIFIED`,
 `HANDOFF_ACTOR_UNSPECIFIED`, `HANDOFF_AUTHORITY_REQUIREMENT_UNRESOLVED`,
 `HANDOFF_AUTHORITY_EVIDENCE_MISSING`, `HANDOFF_AUTHORITY_EVIDENCE_INVALID`,

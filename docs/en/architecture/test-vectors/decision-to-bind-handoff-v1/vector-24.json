@@ -122,8 +122,7 @@
       }
     ],
     "refusal_reason_codes": [
-      "HANDOFF_CANDIDATE_HASH_MISMATCH",
-      "HANDOFF_AUTHORITY_EVIDENCE_INVALID"
+      "HANDOFF_TARGET_CONTEXT_MISMATCH"
     ],
     "created_at": "2030-01-01T00:00:01Z",
     "expires_at": "2030-01-01T00:05:01Z",
@@ -136,8 +135,7 @@
   },
   "expected_handoff_status": "INVALID",
   "expected_reason_codes": [
-    "HANDOFF_CANDIDATE_HASH_MISMATCH",
-    "HANDOFF_AUTHORITY_EVIDENCE_INVALID"
+    "HANDOFF_TARGET_CONTEXT_MISMATCH"
   ],
   "execution_intent_created": false,
   "bind_invoked": false,
