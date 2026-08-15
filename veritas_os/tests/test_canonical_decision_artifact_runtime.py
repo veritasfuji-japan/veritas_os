@@ -6,11 +6,12 @@ import ast
 import json
 from copy import deepcopy
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from veritas_os.api.schemas import DecideResponse
 from veritas_os.governance.canonical_decision_artifact import (
@@ -187,6 +188,58 @@ def test_non_finite_values_are_refused(number: float) -> None:
     _assert_build_reason(source, "NON_CANONICAL_JSON_VALUE")
 
 
+class _UnsupportedChosenValue:
+    """Test-only Python object that must never be coerced into CDA identity."""
+
+
+class _UnsupportedPydanticValue(BaseModel):
+    """Test-only Pydantic value that strict CDA JSON must not auto-dump."""
+
+    value: str
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        (1, 2),
+        {1, 2},
+        frozenset({1, 2}),
+        b"bytes",
+        bytearray(b"bytes"),
+        _UnsupportedChosenValue(),
+    ],
+)
+def test_python_specific_chosen_values_are_refused_before_coercion(value) -> None:
+    source = _source()
+    source.chosen = {"values": value}
+    _assert_build_reason(source, "NON_CANONICAL_JSON_VALUE")
+
+
+def test_nested_non_string_mapping_key_is_refused_before_coercion() -> None:
+    source = _source()
+    source.chosen = {"nested": {1: "value"}}
+    _assert_build_reason(source, "NON_CANONICAL_JSON_VALUE")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        Decimal("1.0"),
+        datetime.fromisoformat("2031-02-03T04:05:06+00:00"),
+        _UnsupportedPydanticValue(value="not-json"),
+    ],
+)
+def test_strict_serializer_rejects_non_json_objects(value) -> None:
+    with pytest.raises(TypeError):
+        strict_canonical_json_bytes({"value": value})
+
+
+def test_missing_request_id_is_refused_before_response_revalidation() -> None:
+    source = _source()
+    source.request_id = ""
+    _assert_build_reason(source, "SOURCE_REQUEST_ID_MISSING")
+
+
 def test_source_type_is_strict() -> None:
     with pytest.raises(CanonicalDecisionArtifactBuildError) as exc:
         build_canonical_decision_artifact({}, decision_ts=TIMESTAMP)
@@ -258,6 +311,33 @@ def test_verifier_integrity_mutations_are_independent() -> None:
     wrong_id["decision_id"] = CDA_DECISION_ID_PREFIX + "0" * 64
     assert verify_canonical_decision_artifact(wrong_id).reason_codes == (
         "ARTIFACT_DECISION_ID_MISMATCH",
+    )
+
+
+def test_verifier_revalidates_validation_bypassing_model_instances() -> None:
+    artifact = _artifact()
+
+    invalid_timestamp = artifact.model_copy(update={"decision_ts": "invalid"})
+    assert verify_canonical_decision_artifact(invalid_timestamp).reason_codes == (
+        "ARTIFACT_SCHEMA_INVALID",
+    )
+
+    post_bind_decision = artifact.decision.model_copy(
+        update={"actionability_status": "actionable_after_bind"}
+    )
+    post_bind_artifact = artifact.model_copy(update={"decision": post_bind_decision})
+    assert verify_canonical_decision_artifact(post_bind_artifact).reason_codes == (
+        "ARTIFACT_SCHEMA_INVALID",
+    )
+
+    contradictory_decision = artifact.decision.model_copy(
+        update={"formation_status": "INCOMPLETE"}
+    )
+    contradictory_artifact = artifact.model_copy(
+        update={"decision": contradictory_decision}
+    )
+    assert verify_canonical_decision_artifact(contradictory_artifact).reason_codes == (
+        "ARTIFACT_SCHEMA_INVALID",
     )
 
 

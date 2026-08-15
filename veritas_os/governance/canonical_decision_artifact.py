@@ -9,6 +9,7 @@ human approval, handoff readiness, or execution authority.
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Mapping
@@ -264,6 +265,7 @@ class CanonicalDecisionArtifactVerificationResult(_FrozenModel):
 
 def strict_canonical_json_bytes(value: Any) -> bytes:
     """Return CDA-v1 canonical UTF-8 JSON, refusing non-JSON/non-finite data."""
+    _validate_canonical_json_value(value)
     return json.dumps(
         value,
         ensure_ascii=False,
@@ -303,14 +305,6 @@ def build_canonical_decision_artifact(
     """
     normalized = _validated_source_projection(source)
     request_id = normalized["request_id"]
-    if not isinstance(request_id, str) or not request_id:
-        raise CanonicalDecisionArtifactBuildError(
-            CanonicalDecisionArtifactBuildReason.SOURCE_REQUEST_ID_MISSING
-        )
-    if any(normalized[field] is not None for field in POST_BIND_SOURCE_FIELDS):
-        raise CanonicalDecisionArtifactBuildError(
-            CanonicalDecisionArtifactBuildReason.POST_BIND_SOURCE_REFUSED
-        )
     if normalized["gate_decision"] not in {
         "proceed",
         "hold",
@@ -380,11 +374,12 @@ def verify_canonical_decision_artifact(
     if artifact is None:
         return _verification_failure("ARTIFACT_MISSING")
     try:
-        parsed = (
-            artifact
+        raw = (
+            artifact.model_dump(mode="json")
             if isinstance(artifact, CanonicalDecisionArtifact)
-            else CanonicalDecisionArtifact.model_validate(artifact)
+            else artifact
         )
+        parsed = CanonicalDecisionArtifact.model_validate(raw)
         serialized = strict_canonical_json_bytes(canonical_decision_preimage(parsed))
         computed_hash = sha256_hex(serialized)
     except (TypeError, ValueError, ValidationError):
@@ -419,13 +414,25 @@ def _validated_source_projection(source: DecideResponse) -> dict[str, Any]:
         raise CanonicalDecisionArtifactBuildError(
             CanonicalDecisionArtifactBuildReason.SOURCE_NOT_DECIDE_RESPONSE
         )
+    if type(source.request_id) is not str or not source.request_id:
+        raise CanonicalDecisionArtifactBuildError(
+            CanonicalDecisionArtifactBuildReason.SOURCE_REQUEST_ID_MISSING
+        )
     try:
         # JSON-mode dumping can coerce non-finite floats under Pydantic's
         # serialization policy.  Inspect the Python projection first so no
         # hash-relevant non-finite or unsupported value can be laundered.
-        strict_canonical_json_bytes(
-            source.model_dump(mode="python", include=_SOURCE_FIELDS)
+        python_projection = source.model_dump(mode="python", include=_SOURCE_FIELDS)
+    except (TypeError, ValueError) as exc:
+        raise CanonicalDecisionArtifactBuildError(
+            CanonicalDecisionArtifactBuildReason.NON_CANONICAL_JSON_VALUE
+        ) from exc
+    if any(python_projection[field] is not None for field in POST_BIND_SOURCE_FIELDS):
+        raise CanonicalDecisionArtifactBuildError(
+            CanonicalDecisionArtifactBuildReason.POST_BIND_SOURCE_REFUSED
         )
+    try:
+        strict_canonical_json_bytes(python_projection)
     except (TypeError, ValueError) as exc:
         raise CanonicalDecisionArtifactBuildError(
             CanonicalDecisionArtifactBuildReason.NON_CANONICAL_JSON_VALUE
@@ -443,6 +450,40 @@ def _validated_source_projection(source: DecideResponse) -> dict[str, Any]:
             CanonicalDecisionArtifactBuildReason.SOURCE_NOT_NORMALIZED
         )
     return extracted
+
+
+def _validate_canonical_json_value(value: Any) -> None:
+    """Recursively require exact CDA-v1 canonical JSON value families.
+
+    Python containers and objects that ``json.dumps`` or Pydantic might coerce
+    are deliberately rejected rather than converted into canonical identity.
+
+    Args:
+        value: Candidate value to validate without normalization.
+
+    Raises:
+        TypeError: If a value, container, or mapping key is not an exact JSON
+            family supported by CDA v1.
+        ValueError: If a floating-point value is non-finite.
+    """
+    value_type = type(value)
+    if value is None or value_type is bool or value_type is int or value_type is str:
+        return
+    if value_type is float:
+        if not math.isfinite(value):
+            raise ValueError("canonical JSON numbers must be finite")
+        return
+    if value_type is list:
+        for item in value:
+            _validate_canonical_json_value(item)
+        return
+    if value_type is dict:
+        for key, item in value.items():
+            if type(key) is not str:
+                raise TypeError("canonical JSON object keys must be strings")
+            _validate_canonical_json_value(item)
+        return
+    raise TypeError(f"unsupported canonical JSON value type: {value_type.__qualname__}")
 
 
 def _normalize_builder_timestamp(value: datetime | str) -> str:
