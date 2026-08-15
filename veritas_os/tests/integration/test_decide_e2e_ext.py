@@ -342,9 +342,14 @@ def patched_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(api_pipeline, "build_dataset_record", fake_build_dataset_record, raising=False)
     monkeypatch.setattr(api_pipeline, "append_dataset_record", fake_append_dataset_record, raising=False)
 
-    # TrustLog → no-op
-    def fake_append_trust_log(entry: Dict[str, Any]) -> None:
-        return None
+    # TrustLog → deterministic returned-entry contract without filesystem I/O.
+    def fake_append_trust_log(entry: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            **entry,
+            "created_at": "2031-02-03T04:05:07+00:00",
+            "sha256_prev": None,
+            "sha256": "a" * 64,
+        }
 
     def fake_write_shadow_decide(
         request_id: str,
@@ -562,6 +567,12 @@ async def test_run_decide_pipeline_happy_path(patched_pipeline):
     assert verify_canonical_decision_artifact(
         payload["canonical_decision_artifact"]
     ).is_valid
+    receipt = payload["canonical_decision_trust_receipt"]
+    artifact = payload["canonical_decision_artifact"]
+    assert receipt["request_id"] == artifact["request_id"]
+    assert receipt["canonical_decision_id"] == artifact["decision_id"]
+    assert receipt["canonical_decision_hash"] == artifact["decision_hash"]
+    assert receipt["canonical_decision_ts"] == artifact["decision_ts"]
 
     # metrics / extras contract（壊れやすいので最低限の存在を担保）
     extras = payload.get("extras") or {}
@@ -1142,6 +1153,12 @@ async def test_run_decide_pipeline_trustlog_and_shadow_exception_swallowed(monke
 
     assert isinstance(payload, dict)
     assert payload.get("ok") is True
+    assert verify_canonical_decision_artifact(
+        payload["canonical_decision_artifact"]
+    ).is_valid
+    assert "canonical_decision_trust_receipt" not in payload
+    degraded = payload["extras"]["metrics"]["degraded_stages"]
+    assert "canonical_trust_link:TRUSTLOG_APPEND_FAILED" in degraded
 
     extras = payload.get("extras") or {}
     metrics = extras.get("metrics") or {}
@@ -1311,6 +1328,52 @@ async def test_cda_finalization_failure_blocks_persistence(
 
     assert exc.value.reason_code is reason
     assert persistence_calls == 0
+
+
+@pytest.mark.anyio
+async def test_cda_source_drift_blocks_canonical_trust_link(
+    monkeypatch,
+    patched_pipeline,
+):
+    """A failed post-persistence drift guard prevents every link attempt."""
+    pipeline = patched_pipeline
+    link_calls = 0
+
+    def fail_drift(payload, artifact):
+        del payload, artifact
+        raise CanonicalDecisionFinalizationError(
+            CanonicalDecisionFinalizationReason.DECISION_SOURCE_DRIFT
+        )
+
+    def count_link(*args, **kwargs):
+        del args, kwargs
+        nonlocal link_calls
+        link_calls += 1
+
+    monkeypatch.setattr(
+        pipeline,
+        "verify_canonical_decision_source_unchanged",
+        fail_drift,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "record_canonical_decision_trust_link",
+        count_link,
+    )
+
+    with pytest.raises(CanonicalDecisionFinalizationError) as exc:
+        await pipeline.run_decide_pipeline(
+            DummyReqModel(
+                {"query": "drift before link", "context": {"user_id": "u-drift"}}
+            ),
+            DummyRequest(),
+        )
+
+    assert (
+        exc.value.reason_code
+        is CanonicalDecisionFinalizationReason.DECISION_SOURCE_DRIFT
+    )
+    assert link_calls == 0
 
 
 @pytest.mark.anyio

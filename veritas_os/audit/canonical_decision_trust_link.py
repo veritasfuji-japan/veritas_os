@@ -166,7 +166,18 @@ def verify_canonical_decision_trust_entry(
         return _result(False, False, CanonicalDecisionTrustLinkReason.CDA_INVALID)
     verified = cda_result.artifact
     try:
-        parsed_receipt = CanonicalDecisionTrustReceipt.model_validate(receipt)
+        receipt_raw = (
+            receipt.model_dump(mode="json")
+            if isinstance(receipt, CanonicalDecisionTrustReceipt)
+            else receipt
+        )
+        parsed_receipt = CanonicalDecisionTrustReceipt.model_validate(receipt_raw)
+        if (
+            parsed_receipt.format_version != RECEIPT_VERSION
+            or parsed_receipt.ledger != FULL_LEDGER
+            or parsed_receipt.event_type != LINK_EVENT_TYPE
+        ):
+            _fail(CanonicalDecisionTrustLinkReason.TRUSTLOG_RECEIPT_INVALID)
         reference = build_canonical_decision_reference(verified)
         _validate_entry(trust_entry, verified, reference)
     except CanonicalDecisionTrustLinkError as exc:
