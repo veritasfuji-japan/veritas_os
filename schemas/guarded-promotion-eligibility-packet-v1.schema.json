@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.org/schemas/guarded-promotion-eligibility-packet-v1.schema.json",
+  "title": "Canonical Guarded Promotion Eligibility Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "eligibility_id", "eligibility_hash", "validation_mechanism", "handoff_validator_version", "issued_at", "evaluated_at", "validation_status", "ready_for_guarded_promotion", "fail_closed", "source_handoff", "source_handoff_hash", "trusted_validation_context", "trusted_validation_context_hash", "validation_result", "validation_result_hash", "verified_provenance_paths", "source_decision_identity", "candidate_identity", "evidence_lineage", "replay_summary", "scope_limitations"],
+  "properties": {
+    "format_version": {"const": "canonical-guarded-promotion-eligibility-packet/v1"},
+    "eligibility_id": {"type": "string", "pattern": "^gpe:v1:sha256:[0-9a-f]{64}$"},
+    "eligibility_hash": {"$ref": "#/$defs/digest"},
+    "validation_mechanism": {"const": "validate_canonical_decision_handoff/v1"},
+    "handoff_validator_version": {"type": "string", "minLength": 1},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "validation_status": {"const": "READY_FOR_GUARDED_PROMOTION"},
+    "ready_for_guarded_promotion": {"const": true},
+    "fail_closed": {"const": false},
+    "source_handoff": {"type": "object"},
+    "source_handoff_hash": {"$ref": "#/$defs/digest"},
+    "trusted_validation_context": {"type": "object"},
+    "trusted_validation_context_hash": {"$ref": "#/$defs/digest"},
+    "validation_result": {"type": "object"},
+    "validation_result_hash": {"$ref": "#/$defs/digest"},
+    "verified_provenance_paths": {"type": "array", "items": {"type": "string"}},
+    "source_decision_identity": {"$ref": "#/$defs/sourceIdentity"},
+    "candidate_identity": {"type": "object"},
+    "evidence_lineage": {"type": "object"},
+    "replay_summary": {"type": "object"},
+    "scope_limitations": {"type": "array", "minItems": 8, "uniqueItems": true, "items": {"type": "string"}}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sourceIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request_id", "canonical_decision_id", "canonical_decision_hash", "canonical_decision_ts"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1},
+        "canonical_decision_id": {"type": "string", "minLength": 1},
+        "canonical_decision_hash": {"type": "string", "minLength": 1},
+        "canonical_decision_ts": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}
