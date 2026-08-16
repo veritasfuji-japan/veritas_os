@@ -2,18 +2,18 @@
 
 ## Status and scope
 
-`CanonicalDecisionHandoff` is a **FUTURE**, reviewable, provenance-aware
+`CanonicalDecisionHandoff` is a reviewable, provenance-aware
 envelope between decision-side evidence and a possible guarded
 `DecisionCandidate` promotion. It is not an `ExecutionIntent`, `BindReceipt`,
-command, Authority Evidence, or permission to execute. This specification and
-its synthetic fixtures do not implement a validator or production bridge.
+command, Authority Evidence, or permission to execute. A deterministic runtime
+validator now implements this validation boundary and stops after classification.
 
-The current `/v1/decide` response exposes `request_id`, but does not expose a
-canonical `decision_id`, `decision_hash`, or `decision_ts`. Those values remain
-`UNAVAILABLE`/`UNRESOLVED`; `request_id`, an HTTP response hash, arrival time,
-TrustLog retrieval time, CI time, and current time are not substitutes.
+VERITAS now defines Canonical Decision Artifact v1, Canonical Decision Trust
+Link v1, and Canonical Replay Source/Evidence v1. An HTTP response hash, arrival
+time, TrustLog retrieval time, CI time, and current time are not substitutes
+for their canonical fields.
 
-The future canonical source for those values is a **verified**
+The canonical source for those values is a **verified**
 [`CanonicalDecisionArtifact v1`](canonical-decision-artifact-v1.md). Its
 allowed mapping is `artifact.request_id` to `source_decision.request_id`,
 `artifact.decision_id` to `source_decision.canonical_decision_id`,
@@ -21,15 +21,16 @@ allowed mapping is `artifact.request_id` to `source_decision.request_id`,
 `artifact.decision_ts` to `source_decision.canonical_decision_ts`. Merely
 copying these four strings is insufficient for READY: provenance must bind the
 source artifact reference and hash, verification mechanism, and successful
-verification status. This is a future producer/consumer contract only; the v1
-runtime validator continues to accept an already formed handoff plus trusted
-validation context and does not yet depend on artifact production.
+verification status. The validator accepts an already formed handoff plus
+trusted validation context; it does not infer or automatically produce one.
+Verified replay evidence can now be adapted into `replay_lineage` through
+[`Canonical Replay Handoff Binding v1`](canonical-replay-handoff-binding-v1.md).
 
 ```mermaid
 flowchart TD
   A[LLM / Agent - EXISTING] -->|untrusted proposal| B[DecisionCandidate - EXISTING]
   B -->|structured validation| C[Decision governance - EXISTING]
-  C -->|separately verified TrustLog + replay| D[CanonicalDecisionHandoff - FUTURE]
+  C -->|separately verified TrustLog + replay| D[CanonicalDecisionHandoff validator]
   D -->|provenance, authority, approval, policy, state checks| E[Guarded promotion - FUTURE]
   E --> F[ExecutionIntent - EXISTING artifact]
   F -->|STILL NOT EXECUTION| G[Bind Boundary - EXISTING]
