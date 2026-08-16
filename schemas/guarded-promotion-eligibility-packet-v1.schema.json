@@ -1,0 +1,618 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.org/schemas/guarded-promotion-eligibility-packet-v1.schema.json",
+  "title": "Canonical Guarded Promotion Eligibility Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "eligibility_id",
+    "eligibility_hash",
+    "validation_mechanism",
+    "handoff_validator_version",
+    "issued_at",
+    "evaluated_at",
+    "validation_status",
+    "ready_for_guarded_promotion",
+    "fail_closed",
+    "source_handoff",
+    "source_handoff_hash",
+    "trusted_validation_context",
+    "trusted_validation_context_hash",
+    "validation_result",
+    "validation_result_hash",
+    "verified_provenance_paths",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "scope_limitations"
+  ],
+  "properties": {
+    "format_version": {
+      "const": "canonical-guarded-promotion-eligibility-packet/v1"
+    },
+    "eligibility_id": {
+      "type": "string",
+      "pattern": "^gpe:v1:sha256:[0-9a-f]{64}$"
+    },
+    "eligibility_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "validation_mechanism": {
+      "const": "validate_canonical_decision_handoff/v1"
+    },
+    "handoff_validator_version": {
+      "type": "string"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "validation_status": {
+      "const": "READY_FOR_GUARDED_PROMOTION"
+    },
+    "ready_for_guarded_promotion": {
+      "const": true
+    },
+    "fail_closed": {
+      "const": false
+    },
+    "source_handoff": {
+      "type": "object"
+    },
+    "source_handoff_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "trusted_validation_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value_assertions",
+        "candidate_hash_binding",
+        "authority_requirement_binding"
+      ],
+      "properties": {
+        "value_assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/valueAssertion"
+          }
+        },
+        "candidate_hash_binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/candidateBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authority_requirement_binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/authorityBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "trusted_validation_context_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "validation_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason_codes",
+        "structure_valid",
+        "declared_status",
+        "declared_status_matches",
+        "declared_reason_codes",
+        "declared_reason_codes_match",
+        "verified_provenance_paths",
+        "validation_version",
+        "ready_for_guarded_promotion",
+        "fail_closed",
+        "requires_review"
+      ],
+      "properties": {
+        "status": {
+          "const": "READY_FOR_GUARDED_PROMOTION"
+        },
+        "reason_codes": {
+          "const": []
+        },
+        "structure_valid": {
+          "const": true
+        },
+        "declared_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "declared_status_matches": {
+          "type": "boolean"
+        },
+        "declared_reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "declared_reason_codes_match": {
+          "type": "boolean"
+        },
+        "verified_provenance_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "validation_version": {
+          "type": "string"
+        },
+        "ready_for_guarded_promotion": {
+          "const": true
+        },
+        "fail_closed": {
+          "const": false
+        },
+        "requires_review": {
+          "const": false
+        }
+      }
+    },
+    "validation_result_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "verified_provenance_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_decision_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "canonical_decision_id",
+        "canonical_decision_hash",
+        "canonical_decision_ts"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string"
+        },
+        "canonical_decision_id": {
+          "type": "string"
+        },
+        "canonical_decision_hash": {
+          "type": "string"
+        },
+        "canonical_decision_ts": {
+          "type": "string"
+        }
+      }
+    },
+    "candidate_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "candidate_hash",
+        "actor_identity",
+        "target_system",
+        "target_resource",
+        "action_contract_id",
+        "action_contract_version"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "candidate_hash": {
+          "type": "string"
+        },
+        "actor_identity": {
+          "type": "string"
+        },
+        "target_system": {
+          "type": "string"
+        },
+        "target_resource": {
+          "type": "string"
+        },
+        "action_contract_id": {
+          "type": "string"
+        },
+        "action_contract_version": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trustlog_artifact_ref",
+        "trustlog_chain_hash",
+        "replay_artifact_ref",
+        "replay_artifact_hash",
+        "authority_evidence_ref",
+        "authority_evidence_hash",
+        "human_approval_receipt_ref",
+        "human_approval_receipt_hash",
+        "policy_snapshot_id",
+        "policy_version",
+        "policy_semantic_digest",
+        "expected_state_fingerprint",
+        "expected_state_source_ref"
+      ],
+      "properties": {
+        "trustlog_artifact_ref": {
+          "type": "string"
+        },
+        "trustlog_chain_hash": {
+          "type": "string"
+        },
+        "replay_artifact_ref": {
+          "type": "string"
+        },
+        "replay_artifact_hash": {
+          "type": "string"
+        },
+        "authority_evidence_ref": {
+          "type": "string"
+        },
+        "authority_evidence_hash": {
+          "type": "string"
+        },
+        "human_approval_receipt_ref": {
+          "type": "string"
+        },
+        "human_approval_receipt_hash": {
+          "type": "string"
+        },
+        "policy_snapshot_id": {
+          "type": "string"
+        },
+        "policy_version": {
+          "type": "string"
+        },
+        "policy_semantic_digest": {
+          "type": "string"
+        },
+        "expected_state_fingerprint": {
+          "type": "string"
+        },
+        "expected_state_source_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "replay_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_decision_id",
+        "replay_decision_id",
+        "original_request_id",
+        "replay_request_id",
+        "semantic_profile",
+        "semantic_match",
+        "fields_changed",
+        "severity",
+        "divergence_level"
+      ],
+      "properties": {
+        "original_decision_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "replay_decision_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "original_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "replay_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "semantic_profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "semantic_match": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields_changed": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "divergence_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "scope_limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_EXECUTION_INTENT"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_EXTERNAL_EFFECT"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        },
+        {
+          "const": "NOT_TRUSTLOG_SUBSTITUTE"
+        }
+      ],
+      "items": false,
+      "minItems": 8,
+      "maxItems": 8
+    }
+  },
+  "$defs": {
+    "valueAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_path",
+        "value_digest",
+        "verification_mechanism",
+        "source_artifact_ref",
+        "source_hash",
+        "verified_at",
+        "claims"
+      ],
+      "properties": {
+        "field_path": {
+          "type": "string"
+        },
+        "value_digest": {
+          "type": "string"
+        },
+        "verification_mechanism": {
+          "type": "string"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_value_digest",
+        "asserted_candidate_hash",
+        "candidate_hash_profile",
+        "verification_mechanism",
+        "claim",
+        "source_artifact_ref",
+        "source_hash",
+        "verified_at"
+      ],
+      "properties": {
+        "candidate_value_digest": {
+          "type": "string"
+        },
+        "asserted_candidate_hash": {
+          "type": "string"
+        },
+        "candidate_hash_profile": {
+          "type": "string"
+        },
+        "verification_mechanism": {
+          "type": "string"
+        },
+        "claim": {
+          "type": "string"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "authorityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_requirement_value_digest",
+        "authority_evidence_value_digest",
+        "verification_mechanism",
+        "claim",
+        "source_artifact_ref",
+        "source_hash",
+        "verified_at"
+      ],
+      "properties": {
+        "authority_requirement_value_digest": {
+          "type": "string"
+        },
+        "authority_evidence_value_digest": {
+          "type": "string"
+        },
+        "verification_mechanism": {
+          "type": "string"
+        },
+        "claim": {
+          "type": "string"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
