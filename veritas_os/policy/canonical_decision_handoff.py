@@ -341,6 +341,23 @@ def validate_canonical_decision_handoff(
         )
     if request_ids[0] != request_ids[1] or request_ids[0] != request_ids[2]:
         invalid.append(reason.HANDOFF_REQUEST_LINEAGE_MISMATCH)
+    if replay.get("format_version") == (
+        "canonical-replay-handoff-lineage/v1"
+    ):
+        source_binding = (
+            replay.get("request_id") == source.get("request_id")
+            and replay.get("original_decision_id")
+            == source.get("canonical_decision_id")
+            and replay.get("original_decision_hash")
+            == source.get("canonical_decision_hash")
+            and replay.get("original_decision_ts")
+            == source.get("canonical_decision_ts")
+            and replay.get("replay_request_id") != source.get("request_id")
+            and replay.get("replay_decision_id")
+            != source.get("canonical_decision_id")
+        )
+        if not source_binding:
+            invalid.append(reason.HANDOFF_SOURCE_ARTIFACT_MISMATCH)
     trustlog_verified = trustlog.get("verified")
     replay_verified = replay.get("verified")
     if type(trustlog_verified) is not bool or type(replay_verified) is not bool:

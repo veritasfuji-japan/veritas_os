@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/canonical-replay-handoff-lineage-v1.schema.json",
+  "title": "Canonical Replay Handoff Lineage v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version", "request_id", "verified", "verification_mechanism",
+    "artifact_type", "artifact_ref", "artifact_hash", "replay_source_id",
+    "replay_source_hash", "original_decision_id", "original_decision_hash",
+    "original_decision_ts", "replay_request_id", "replay_decision_id",
+    "replay_decision_hash", "replay_decision_ts", "semantic_profile",
+    "original_semantic_hash", "replay_semantic_hash", "semantic_match",
+    "fields_changed", "severity", "divergence_level",
+    "replay_trust_receipt_present"
+  ],
+  "properties": {
+    "format_version": {"const": "canonical-replay-handoff-lineage/v1"},
+    "request_id": {"type": "string", "minLength": 1},
+    "verified": {"const": true},
+    "verification_mechanism": {"const": "verify_canonical_replay_evidence/v1"},
+    "artifact_type": {"const": "canonical-replay-evidence/v1"},
+    "artifact_ref": {"type": "string", "pattern": "^cre:v1:sha256:[0-9a-f]{64}$"},
+    "artifact_hash": {"$ref": "#/$defs/digest"},
+    "replay_source_id": {"type": "string", "pattern": "^crs:v1:sha256:[0-9a-f]{64}$"},
+    "replay_source_hash": {"$ref": "#/$defs/digest"},
+    "original_decision_id": {"$ref": "#/$defs/cdaId"},
+    "original_decision_hash": {"$ref": "#/$defs/digest"},
+    "original_decision_ts": {"type": "string", "format": "date-time"},
+    "replay_request_id": {"type": "string", "minLength": 1},
+    "replay_decision_id": {"$ref": "#/$defs/cdaId"},
+    "replay_decision_hash": {"$ref": "#/$defs/digest"},
+    "replay_decision_ts": {"type": "string", "format": "date-time"},
+    "semantic_profile": {"const": "veritas.replay-semantic/v1"},
+    "original_semantic_hash": {"$ref": "#/$defs/digest"},
+    "replay_semantic_hash": {"$ref": "#/$defs/digest"},
+    "semantic_match": {"type": "boolean"},
+    "fields_changed": {"type": "array", "items": {"type": "string"}},
+    "severity": {"enum": ["info", "warning", "critical"]},
+    "divergence_level": {"enum": ["no_divergence", "acceptable_divergence", "critical_divergence"]},
+    "replay_trust_receipt_present": {"type": "boolean"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "cdaId": {"type": "string", "pattern": "^cda:v1:sha256:[0-9a-f]{64}$"}
+  }
+}

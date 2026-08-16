@@ -29,6 +29,9 @@ from veritas_os.policy.canonical_decision_handoff import (
 
 VECTOR_DIR = Path("docs/en/architecture/test-vectors/decision-to-bind-handoff-v1")
 EVALUATED_AT = datetime(2030, 1, 1, 0, 0, 2, tzinfo=timezone.utc)
+REPLAY_INTEGRATION_EVALUATED_AT = datetime(
+    2031, 2, 3, 4, 6, tzinfo=timezone.utc
+)
 
 
 def _vectors() -> list[dict[str, object]]:
@@ -126,6 +129,130 @@ def test_ready_requires_independent_context_and_is_deterministic_and_immutable()
     assert first == second
     assert first.ready_for_guarded_promotion and not first.fail_closed
     assert handoff == before
+
+
+def test_real_replay_binding_reaches_ready_but_cannot_self_certify() -> None:
+    """Plug verified replay lineage into READY without creating authority."""
+    from veritas_os.tests.test_canonical_replay_handoff_binding import (
+        _artifacts,
+    )
+
+    source, _, binding = _artifacts(
+        verified_at=REPLAY_INTEGRATION_EVALUATED_AT
+    )
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff["created_at"] = "2031-02-03T04:05:07Z"
+    handoff["expires_at"] = "2031-02-03T04:10:07Z"
+    handoff["authority_evidence"]["expires_at"] = "2031-03-01T00:00:00Z"
+    handoff["human_approval_evidence"]["expires_at"] = (
+        "2031-03-01T00:00:00Z"
+    )
+    handoff["policy_lineage"]["expires_at"] = "2031-03-01T00:00:00Z"
+    handoff["expected_state"]["observed_at"] = "2031-02-03T04:05:30Z"
+    original = source.original_cda
+    source_values = {
+        "request_id": original.request_id,
+        "canonical_decision_id": original.decision_id,
+        "canonical_decision_hash": original.decision_hash,
+        "canonical_decision_ts": original.decision_ts,
+    }
+    handoff["source_decision"].update(source_values)
+    handoff["decision_lineage"]["decision_id"] = original.decision_id
+    handoff["trustlog_lineage"]["request_id"] = original.request_id
+    handoff["replay_lineage"] = binding.replay_lineage.model_dump(mode="json")
+    for record in handoff["provenance"]:
+        path = record["field_path"]
+        if path.startswith("source_decision."):
+            record["value"] = source_values[path.rsplit(".", 1)[1]]
+        elif path == "trustlog_lineage":
+            record["value"] = handoff["trustlog_lineage"]
+        elif path == "replay_lineage":
+            record["value"] = handoff["replay_lineage"]
+            record["source_artifact_ref"] = binding.trusted_assertion.source_artifact_ref
+            record["source_hash"] = binding.trusted_assertion.source_hash
+        elif path in {
+            "authority_evidence",
+            "human_approval_evidence",
+            "policy_lineage",
+            "expected_state",
+        }:
+            record["value"] = handoff[path]
+    synthetic = _complete_context(handoff)
+    assertions = tuple(
+        binding.trusted_assertion
+        if assertion.field_path == "replay_lineage"
+        else assertion
+        for assertion in synthetic.value_assertions
+    )
+    context = replace(synthetic, value_assertions=assertions)
+
+    ready = validate_canonical_decision_handoff(
+        handoff, context, REPLAY_INTEGRATION_EVALUATED_AT
+    )
+    assert ready.status is CanonicalDecisionHandoffStatus.READY_FOR_GUARDED_PROMOTION
+    assert ready.ready_for_guarded_promotion is True
+    assert ready.fail_closed is False
+
+    without_assertion = replace(
+        context,
+        value_assertions=tuple(
+            item for item in assertions if item.field_path != "replay_lineage"
+        ),
+    )
+    refused = validate_canonical_decision_handoff(
+        handoff, without_assertion, REPLAY_INTEGRATION_EVALUATED_AT
+    )
+    assert refused.status is CanonicalDecisionHandoffStatus.INCOMPLETE
+    assert refused.ready_for_guarded_promotion is False
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "original_decision_id",
+        "original_decision_hash",
+        "original_decision_ts",
+        "replay_request_id",
+        "replay_decision_id",
+    ],
+)
+def test_v1_replay_lineage_cross_decision_substitution_is_invalid(
+    field: str,
+) -> None:
+    """Apply strict source binding only to the new replay lineage version."""
+    handoff = deepcopy(_vectors()[0]["input"])
+    handoff["replay_lineage"].update(
+        {
+            "format_version": "canonical-replay-handoff-lineage/v1",
+            "original_decision_id": handoff["source_decision"][
+                "canonical_decision_id"
+            ],
+            "original_decision_hash": handoff["source_decision"][
+                "canonical_decision_hash"
+            ],
+            "original_decision_ts": handoff["source_decision"][
+                "canonical_decision_ts"
+            ],
+            "replay_request_id": "distinct-replay-request",
+            "replay_decision_id": "distinct-replay-decision",
+        }
+    )
+    if field == "replay_request_id":
+        handoff["replay_lineage"][field] = handoff["source_decision"]["request_id"]
+    elif field == "replay_decision_id":
+        handoff["replay_lineage"][field] = handoff["source_decision"][
+            "canonical_decision_id"
+        ]
+    else:
+        handoff["replay_lineage"][field] = "substituted"
+
+    result = validate_canonical_decision_handoff(
+        handoff, CanonicalDecisionHandoffValidationContext(), EVALUATED_AT
+    )
+    assert result.status is CanonicalDecisionHandoffStatus.INVALID
+    assert CanonicalDecisionHandoffReasonCode.HANDOFF_SOURCE_ARTIFACT_MISMATCH in (
+        result.reason_codes
+    )
 
 
 @pytest.mark.parametrize(

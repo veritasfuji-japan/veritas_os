@@ -315,22 +315,27 @@ def test_target_context_mismatch_has_a_distinct_canonical_reason_code() -> None:
     assert target_context_reason in specification
 
 
-def test_future_canonical_decision_artifact_mapping_is_non_operational() -> None:
-    """Pin the future verified artifact source without changing readiness."""
+def test_current_canonical_decision_artifact_and_handoff_boundary() -> None:
+    """Pin current artifact identity and the non-producing validator boundary."""
     specification = Path(
         "docs/en/architecture/canonical-decision-to-bind-handoff-v1.md"
     ).read_text(encoding="utf-8")
 
-    assert "CanonicalDecisionArtifact v1" in specification
+    assert "Canonical Decision Artifact v1" in specification
+    assert "CanonicalDecisionHandoff validator" in specification
     for field_name in (
         "canonical_decision_id",
         "canonical_decision_hash",
         "canonical_decision_ts",
     ):
         assert field_name in specification
-    assert "runtime validator continues to accept an already formed handoff" in (
-        specification
-    )
+    assert "accepts an already formed handoff" in specification
+    assert "trusted validation context" in specification
+    assert "does not infer or automatically produce one" in specification
+    ready_section = specification.split("`READY_FOR_GUARDED_PROMOTION`", 1)[1]
+    assert "does not authorize execution" in ready_section
+    assert "bypass Bind" in ready_section
+    assert "ExecutionIntent" in specification
 
 
 def test_action_substitution_invalidates_authority_and_approval_bindings() -> None:
