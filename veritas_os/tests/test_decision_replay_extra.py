@@ -54,7 +54,10 @@ async def test_replay_decision_handles_non_dict_replay_meta_and_save_error(
 
     async def _fake_run_decide_pipeline(req, _request):
         captured["req"] = req
-        return {"decision": "allow", "meta": {"confidence": 0.9}}
+        return {
+            "decision": {"output": "reject"},
+            "meta": {"confidence": 0.9},
+        }
 
     def _raise_value_error(*_args, **_kwargs):
         raise ValueError("simulated write failure")
@@ -73,7 +76,7 @@ async def test_replay_decision_handles_non_dict_replay_meta_and_save_error(
     assert result["replay_time_ms"] >= 1
 
     req = captured["req"]
-    assert req["request_id"] == "rid-42"
+    assert req["request_id"] != "rid-42"
     assert req["query"] == "What should we do?"
     assert req["seed"] == 3
     assert req["temperature"] == 0

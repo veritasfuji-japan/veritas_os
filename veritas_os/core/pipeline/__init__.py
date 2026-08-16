@@ -238,6 +238,11 @@ from ...audit.canonical_decision_trust_link import (
     CanonicalDecisionTrustLinkError,
     record_canonical_decision_trust_link,
 )
+from ...replay.canonical_replay import (
+    build_replay_source,
+    load_replay_source,
+    persist_replay_source,
+)
 from .pipeline_replay import (
     _safe_filename_id,  # noqa: F401 – backward compat
     _sanitize_for_diff,  # noqa: F401 – backward compat
@@ -417,6 +422,7 @@ def _get_memory_store() -> Optional[Any]:
 # _safe_paths, EVIDENCE_MAX, _SAFE_FILENAME_RE -> pipeline_persistence.py に移動済み
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths(_warn=_warn)
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
+REPLAY_SOURCE_DIR = (REPO_ROOT / "audit" / "replay_sources").resolve()
 EVIDENCE_MAX = _resolve_evidence_max()
 
 # ★ Replay functions moved to pipeline_replay.py.
@@ -454,7 +460,34 @@ async def replay_decision(
         _HAS_ATOMIC_IO=_HAS_ATOMIC_IO,
         _atomic_write_json=_atomic_write_json,
         _load_decision_fn=_load_persisted_decision,
+        _load_replay_source_fn=lambda source_id: load_replay_source(
+            source_id,
+            REPLAY_SOURCE_DIR,
+        ),
     )
+
+
+def _persist_canonical_replay_source(
+    ctx: PipelineContext,
+    payload: Dict[str, Any],
+    stage_failures: List[str],
+) -> None:
+    """Persist an original-decision replay source, never a nested replay source."""
+    if ctx.replay_mode:
+        return
+    try:
+        replay_source = build_replay_source(payload)
+        receipt = persist_replay_source(replay_source, REPLAY_SOURCE_DIR)
+    except (KeyError, TypeError, ValueError, OSError, RuntimeError) as exc:
+        stage_failures.append(f"canonical_replay_source:{type(exc).__name__}")
+        logger.warning(
+            "[pipeline] canonical replay source unavailable: %s",
+            type(exc).__name__,
+        )
+    else:
+        payload["canonical_replay_source_receipt"] = receipt.model_dump(
+            mode="json"
+        )
 
 
 # =========================================================
@@ -1035,6 +1068,7 @@ async def run_decide_pipeline(
         )
         if trust_receipt_payload is not None:
             payload["canonical_decision_trust_receipt"] = trust_receipt_payload
+        _persist_canonical_replay_source(ctx, payload, _stage_failures)
 
     # =================================================================
     # Observability: record pipeline health summary

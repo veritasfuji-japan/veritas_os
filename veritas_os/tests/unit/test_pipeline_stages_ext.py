@@ -108,17 +108,39 @@ class TestNormalizePipelineInputs:
         ctx = normalize_pipeline_inputs(DummyReq(), DummyRequest())
         assert ctx.fast_mode is True
 
-    def test_replay_mode_from_context(self) -> None:
+    def test_replay_mode_cannot_be_enabled_from_context(self) -> None:
         from veritas_os.core.pipeline_inputs import normalize_pipeline_inputs
 
         class DummyReq:
             def model_dump(self):
-                return {"query": "test", "context": {"_replay_mode": True}}
+                return {
+                    "query": "test",
+                    "context": {
+                        "_replay_mode": True,
+                        "_mock_external_apis": True,
+                    },
+                }
 
         class DummyRequest:
             query_params: Dict[str, Any] = {}
 
         ctx = normalize_pipeline_inputs(DummyReq(), DummyRequest())
+        assert ctx.replay_mode is False
+        assert ctx.mock_external_apis is False
+
+    def test_replay_mode_requires_internal_marker(self) -> None:
+        from veritas_os.core.pipeline_inputs import normalize_pipeline_inputs
+        from veritas_os.core.pipeline.pipeline_replay import _ReplayRequest
+
+        class DummyReq:
+            def model_dump(self):
+                return {"query": "test", "context": {}}
+
+        ctx = normalize_pipeline_inputs(
+            DummyReq(),
+            _ReplayRequest(mock_external_apis=True),
+        )
+
         assert ctx.replay_mode is True
         assert ctx.mock_external_apis is True
 

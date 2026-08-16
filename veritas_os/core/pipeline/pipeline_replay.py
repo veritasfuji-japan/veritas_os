@@ -10,10 +10,14 @@ from __future__ import annotations
 import json
 import re
 import time
+from uuid import uuid4
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from ..utils import utc_now_iso_z
+from veritas_os.replay.canonical_replay import TRUSTED_REPLAY_MARKER
+from veritas_os.replay.canonical_replay import ReplayControls, build_replay_evidence
+from veritas_os.replay.semantic_profile import semantic_projection
 
 
 # ★ パストラバーサル防止
@@ -34,6 +38,11 @@ def _sanitize_for_diff(value: Any) -> Any:
             "stage_latency",
             "replay_time_ms",
             "ts",
+            "request_id",
+            "canonical_decision_artifact",
+            "canonical_decision_trust_receipt",
+            "canonical_replay_source",
+            "canonical_replay_source_receipt",
         }
         return {
             str(k): _sanitize_for_diff(v)
@@ -68,6 +77,8 @@ def _build_replay_diff(
         "decision": "critical",
         "fuji": "critical",
         "value_scores": "warning",
+        "continuation_state": "warning",
+        "continuation_receipt": "warning",
     }
     field_severities = [_severity_map.get(k, "info") for k in changed_keys]
     max_severity = (
@@ -119,8 +130,10 @@ def _load_persisted_decision(
 class _ReplayRequest:
     """Minimal Request-like object accepted by run_decide_pipeline during replay."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, mock_external_apis: bool = True) -> None:
         self.query_params: Dict[str, Any] = {}
+        self._veritas_replay_marker = TRUSTED_REPLAY_MARKER
+        self._veritas_mock_external_apis = mock_external_apis
 
 
 async def replay_decision(
@@ -134,10 +147,20 @@ async def replay_decision(
     _HAS_ATOMIC_IO: bool = False,
     _atomic_write_json: Any = None,
     _load_decision_fn: Any = None,
+    _load_replay_source_fn: Any = None,
 ) -> Dict[str, Any]:
     """Replay a persisted decision deterministically and generate an audit diff report."""
     started_at = time.time()
-    if _load_decision_fn is not None:
+    source = (
+        _load_replay_source_fn(decision_id)
+        if _load_replay_source_fn is not None
+        else None
+    )
+    if source is not None:
+        replay_meta = source.deterministic_replay
+        source_output = replay_meta.get("final_output")
+        snapshot = source_output if isinstance(source_output, dict) else {}
+    elif _load_decision_fn is not None:
         snapshot = _load_decision_fn(decision_id)
     else:
         snapshot = _load_persisted_decision(decision_id, LOG_DIR=LOG_DIR)
@@ -148,7 +171,11 @@ async def replay_decision(
             "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
         }
 
-    replay_meta = snapshot.get("deterministic_replay") or {}
+    replay_meta = (
+        source.deterministic_replay
+        if source is not None
+        else snapshot.get("deterministic_replay") or {}
+    )
     req_body = replay_meta.get("request_body") or {}
     if not isinstance(req_body, dict):
         req_body = {}
@@ -159,7 +186,7 @@ async def replay_decision(
         ctx = {}
         req_body["context"] = ctx
 
-    req_body["request_id"] = str(snapshot.get("request_id") or decision_id)
+    req_body["request_id"] = str(uuid4())
     req_body["seed"] = replay_meta.get("seed", req_body.get("seed", 0))
     req_body["temperature"] = replay_meta.get(
         "temperature", req_body.get("temperature", 0)
@@ -172,11 +199,17 @@ async def replay_decision(
     else:
         replay_req = req_body
 
-    replay_output = await run_decide_pipeline_fn(replay_req, _ReplayRequest())
+    replay_output = await run_decide_pipeline_fn(
+        replay_req,
+        _ReplayRequest(mock_external_apis=bool(mock_external_apis)),
+    )
     original_output = replay_meta.get("final_output") or {}
     if not isinstance(original_output, dict):
         original_output = {}
-    diff = _build_replay_diff(original_output, replay_output)
+    diff = _build_replay_diff(
+        semantic_projection(original_output),
+        semantic_projection(replay_output),
+    )
     match = not bool(diff.get("changed"))
 
     report = {
@@ -186,6 +219,26 @@ async def replay_decision(
         "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
         "created_at": utc_now_iso_z(),
     }
+    if source is not None and isinstance(replay_output, dict):
+        controls = ReplayControls(
+            strict=bool(mock_external_apis),
+            mock_external_apis=bool(mock_external_apis),
+            seed=int(req_body.get("seed", 0) or 0),
+            temperature=float(req_body.get("temperature", 0) or 0),
+        )
+        evidence = build_replay_evidence(
+            source,
+            replay_output,
+            controls,
+        )
+        if (
+            evidence.semantic_match != match
+            or list(evidence.fields_changed) != diff["keys"]
+            or evidence.severity != diff["severity"]
+            or evidence.divergence_level != diff["divergence_level"]
+        ):
+            raise ValueError("canonical replay semantic comparison mismatch")
+        report["canonical_replay_evidence"] = evidence.model_dump(mode="json")
 
     try:
         Path(REPLAY_REPORT_DIR).mkdir(parents=True, exist_ok=True)
@@ -206,4 +259,5 @@ async def replay_decision(
         "match": report["match"],
         "diff": report["diff"],
         "replay_time_ms": report["replay_time_ms"],
+        "canonical_replay_evidence": report.get("canonical_replay_evidence"),
     }
