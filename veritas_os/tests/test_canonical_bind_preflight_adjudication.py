@@ -108,6 +108,29 @@ def test_invalid_source_and_timeline_refuse() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("mutation"),
+    [
+        lambda summary: summary.pop("ready_for_bind_preflight"),
+        lambda summary: summary.update(unexpected=True),
+    ],
+    ids=["missing-key", "extra-key"],
+)
+def test_recomputed_identity_cannot_bypass_exact_source_summary(mutation) -> None:
+    """Reject reduced or extended summaries even with recomputed identity."""
+    raw = _packet().model_dump(mode="json")
+    mutation(raw["source_pre_bind_validation"])
+    digest = _packet_hash(raw)
+    raw["bind_preflight_adjudication_hash"] = digest
+    raw["bind_preflight_adjudication_id"] = f"bpa:v1:sha256:{digest}"
+
+    with pytest.raises(
+        BindPreflightAdjudicationError,
+        match="BPA_PRE_BIND_VALIDATION_INVALID",
+    ):
+        verify_canonical_bind_preflight_adjudication_packet(raw)
+
+
 @pytest.mark.parametrize("path", [
     ("bind_preflight_adjudication_id",),
     ("bind_preflight_adjudication_hash",), ("adjudicated_at",),

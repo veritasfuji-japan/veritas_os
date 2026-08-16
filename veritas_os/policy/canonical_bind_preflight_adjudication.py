@@ -35,6 +35,17 @@ ENTRY_REQUIREMENTS_DOMAIN = (
     "veritas.bind-preflight-adjudication.entry-requirements/v1"
 )
 PACKET_DOMAIN = "veritas.bind-preflight-adjudication.packet/v1"
+SOURCE_PRE_BIND_VALIDATION_SUMMARY_KEYS = (
+    "pre_bind_validation_id",
+    "pre_bind_validation_hash",
+    "format_version",
+    "validation_mechanism",
+    "checked_at",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "pre_bind_status",
+    "ready_for_bind_preflight",
+)
 LOCAL_ADJUDICATION_CHECKS = {
     "pre_bind_validation_verified": True,
     "execution_intent_hash_verified": True,
@@ -214,11 +225,10 @@ def build_canonical_bind_preflight_adjudication_packet(
         "format_version": FORMAT_VERSION,
         "adjudication_mechanism": ADJUDICATION_MECHANISM,
         "adjudicated_at": adjudicated.isoformat(),
-        "source_pre_bind_validation": {key: source[key] for key in (
-            "pre_bind_validation_id", "pre_bind_validation_hash", "format_version",
-            "validation_mechanism", "checked_at", "execution_intent_id",
-            "execution_intent_hash", "pre_bind_status", "ready_for_bind_preflight",
-        )},
+        "source_pre_bind_validation": {
+            key: source[key]
+            for key in SOURCE_PRE_BIND_VALIDATION_SUMMARY_KEYS
+        },
         "source_pre_bind_validation_hash": source_packet.pre_bind_validation_hash,
         "source_pre_bind_validation_packet": source,
         **{key: source[key] for key in (
@@ -255,8 +265,17 @@ def verify_canonical_bind_preflight_adjudication_packet(
     raw = candidate.model_dump(mode="json")
     source_packet = _verified_pre_bind(candidate.source_pre_bind_validation_packet)
     source = source_packet.model_dump(mode="json")
-    summary_keys = tuple(candidate.source_pre_bind_validation)
-    if candidate.source_pre_bind_validation != {key: source[key] for key in summary_keys}:
+    if set(candidate.source_pre_bind_validation) != set(
+        SOURCE_PRE_BIND_VALIDATION_SUMMARY_KEYS
+    ):
+        raise BindPreflightAdjudicationError(
+            "BPA_PRE_BIND_VALIDATION_INVALID"
+        )
+    expected_summary = {
+        key: source[key]
+        for key in SOURCE_PRE_BIND_VALIDATION_SUMMARY_KEYS
+    }
+    if candidate.source_pre_bind_validation != expected_summary:
         raise BindPreflightAdjudicationError("BPA_PRE_BIND_VALIDATION_INVALID")
     adjudicated = _aware_iso(candidate.adjudicated_at, "BPA_ADJUDICATED_AT_INVALID")
     checked = _aware_iso(source_packet.checked_at, "BPA_PRE_BIND_VALIDATION_INVALID")
