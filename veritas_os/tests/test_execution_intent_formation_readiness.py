@@ -36,27 +36,40 @@ VECTOR = Path(
 NOW = datetime(2030, 1, 1, 0, 0, 3, tzinfo=timezone.utc)
 
 
-def _eligibility(*, semantic_match: bool = True):
+def _eligibility():
     handoff = json.loads(VECTOR.read_text())["input"]
-    if not semantic_match:
-        handoff["replay_lineage"].update(
-            semantic_match=False, fields_changed=["outcome.status"]
-        )
-        replay_record = next(
-            item
-            for item in handoff["provenance"]
-            if item["field_path"] == "replay_lineage"
-        )
-        replay_record["value"] = deepcopy(handoff["replay_lineage"])
     return build_guarded_promotion_eligibility_packet(
         handoff, _complete_context(handoff), NOW, NOW
     )
 
 
-def _packet(*, semantic_match: bool = True):
-    return build_execution_intent_formation_readiness_packet(
-        _eligibility(semantic_match=semantic_match), NOW
+def _canonical_replay_eligibility(*, semantic_match: bool, fields_changed: list[str]):
+    """Build eligibility with explicit, distinct canonical replay identities."""
+    handoff = json.loads(VECTOR.read_text())["input"]
+    handoff["replay_lineage"].update(
+        original_request_id="original-request-001",
+        replay_request_id="replay-request-001",
+        original_decision_id="cda:v1:sha256:" + "a" * 64,
+        replay_decision_id="cda:v1:sha256:" + "b" * 64,
+        semantic_profile="veritas.replay-semantic/v1",
+        semantic_match=semantic_match,
+        fields_changed=fields_changed,
+        severity="info" if semantic_match else "warning",
+        divergence_level=(
+            "no_divergence" if semantic_match else "acceptable_divergence"
+        ),
     )
+    replay_record = next(
+        item for item in handoff["provenance"] if item["field_path"] == "replay_lineage"
+    )
+    replay_record["value"] = deepcopy(handoff["replay_lineage"])
+    return build_guarded_promotion_eligibility_packet(
+        handoff, _complete_context(handoff), NOW, NOW
+    )
+
+
+def _packet():
+    return build_execution_intent_formation_readiness_packet(_eligibility(), NOW)
 
 
 def _resign(raw: dict) -> dict:
@@ -129,6 +142,21 @@ def test_source_summaries_and_replay_identity_are_preserved() -> None:
     assert packet.candidate_identity == eligibility.candidate_identity
     assert packet.evidence_lineage == eligibility.evidence_lineage
     assert packet.replay_summary == eligibility.replay_summary
+    original_request_id = packet.replay_summary.get("original_request_id")
+    replay_request_id = packet.replay_summary.get("replay_request_id")
+    if original_request_id is not None and replay_request_id is not None:
+        assert original_request_id != replay_request_id
+    original_decision_id = packet.replay_summary.get("original_decision_id")
+    replay_decision_id = packet.replay_summary.get("replay_decision_id")
+    if original_decision_id is not None and replay_decision_id is not None:
+        assert original_decision_id != replay_decision_id
+
+
+def test_explicit_canonical_replay_identities_are_preserved() -> None:
+    eligibility = _canonical_replay_eligibility(semantic_match=True, fields_changed=[])
+    packet = build_execution_intent_formation_readiness_packet(eligibility, NOW)
+    assert packet.replay_summary["original_request_id"] == "original-request-001"
+    assert packet.replay_summary["replay_request_id"] == "replay-request-001"
     assert (
         packet.replay_summary["original_request_id"]
         != packet.replay_summary["replay_request_id"]
@@ -137,14 +165,30 @@ def test_source_summaries_and_replay_identity_are_preserved() -> None:
         packet.replay_summary["original_decision_id"]
         != packet.replay_summary["replay_decision_id"]
     )
+    assert packet.replay_summary["semantic_match"] is True
+    assert packet.replay_summary["fields_changed"] == []
 
 
-def test_semantic_match_true_and_false_are_preserved_not_gated() -> None:
-    assert _packet().replay_summary["semantic_match"] is True
-    divergent = _packet(semantic_match=False)
-    assert divergent.replay_summary["semantic_match"] is False
-    assert divergent.replay_summary["fields_changed"] == ["outcome.status"]
-    assert verify_execution_intent_formation_readiness_packet(divergent)
+@pytest.mark.parametrize(
+    "semantic_match,fields_changed",
+    [(True, []), (False, ["outcome.status"])],
+)
+def test_semantic_match_is_preserved_not_gated(
+    semantic_match: bool, fields_changed: list[str]
+) -> None:
+    eligibility = _canonical_replay_eligibility(
+        semantic_match=semantic_match, fields_changed=fields_changed
+    )
+    packet = build_execution_intent_formation_readiness_packet(eligibility, NOW)
+    assert packet.replay_summary["semantic_match"] is semantic_match
+    assert packet.replay_summary["fields_changed"] == fields_changed
+    assert verify_execution_intent_formation_readiness_packet(packet) == packet
+
+
+def test_legacy_absent_semantic_match_is_preserved() -> None:
+    packet = _packet()
+    assert packet.replay_summary["semantic_match"] is None
+    assert verify_execution_intent_formation_readiness_packet(packet) == packet
 
 
 def test_invalid_eligibility_and_checked_at_are_refused() -> None:
