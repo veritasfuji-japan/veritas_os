@@ -29,6 +29,9 @@ from veritas_os.policy.canonical_decision_handoff import (
 
 VECTOR_DIR = Path("docs/en/architecture/test-vectors/decision-to-bind-handoff-v1")
 EVALUATED_AT = datetime(2030, 1, 1, 0, 0, 2, tzinfo=timezone.utc)
+REPLAY_INTEGRATION_EVALUATED_AT = datetime(
+    2031, 2, 3, 4, 6, tzinfo=timezone.utc
+)
 
 
 def _vectors() -> list[dict[str, object]]:
@@ -134,8 +137,18 @@ def test_real_replay_binding_reaches_ready_but_cannot_self_certify() -> None:
         _artifacts,
     )
 
-    source, _, binding = _artifacts(verified_at=EVALUATED_AT)
+    source, _, binding = _artifacts(
+        verified_at=REPLAY_INTEGRATION_EVALUATED_AT
+    )
     handoff = deepcopy(_vectors()[0]["input"])
+    handoff["created_at"] = "2031-02-03T04:05:07Z"
+    handoff["expires_at"] = "2031-02-03T04:10:07Z"
+    handoff["authority_evidence"]["expires_at"] = "2031-03-01T00:00:00Z"
+    handoff["human_approval_evidence"]["expires_at"] = (
+        "2031-03-01T00:00:00Z"
+    )
+    handoff["policy_lineage"]["expires_at"] = "2031-03-01T00:00:00Z"
+    handoff["expected_state"]["observed_at"] = "2031-02-03T04:05:30Z"
     original = source.original_cda
     source_values = {
         "request_id": original.request_id,
@@ -157,6 +170,13 @@ def test_real_replay_binding_reaches_ready_but_cannot_self_certify() -> None:
             record["value"] = handoff["replay_lineage"]
             record["source_artifact_ref"] = binding.trusted_assertion.source_artifact_ref
             record["source_hash"] = binding.trusted_assertion.source_hash
+        elif path in {
+            "authority_evidence",
+            "human_approval_evidence",
+            "policy_lineage",
+            "expected_state",
+        }:
+            record["value"] = handoff[path]
     synthetic = _complete_context(handoff)
     assertions = tuple(
         binding.trusted_assertion
@@ -166,7 +186,9 @@ def test_real_replay_binding_reaches_ready_but_cannot_self_certify() -> None:
     )
     context = replace(synthetic, value_assertions=assertions)
 
-    ready = validate_canonical_decision_handoff(handoff, context, EVALUATED_AT)
+    ready = validate_canonical_decision_handoff(
+        handoff, context, REPLAY_INTEGRATION_EVALUATED_AT
+    )
     assert ready.status is CanonicalDecisionHandoffStatus.READY_FOR_GUARDED_PROMOTION
     assert ready.ready_for_guarded_promotion is True
     assert ready.fail_closed is False
@@ -178,7 +200,7 @@ def test_real_replay_binding_reaches_ready_but_cannot_self_certify() -> None:
         ),
     )
     refused = validate_canonical_decision_handoff(
-        handoff, without_assertion, EVALUATED_AT
+        handoff, without_assertion, REPLAY_INTEGRATION_EVALUATED_AT
     )
     assert refused.status is CanonicalDecisionHandoffStatus.INCOMPLETE
     assert refused.ready_for_guarded_promotion is False

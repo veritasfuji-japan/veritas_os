@@ -40,16 +40,20 @@ def _payload(request_id: str, *, divergent: bool = False) -> dict:
     vector = json.loads(VECTOR.read_text(encoding="utf-8"))
     projection = dict(vector["source_projection"])
     projection["request_id"] = request_id
-    if divergent:
-        projection["decision"] = "REJECT"
     response = DecideResponse.model_validate(projection)
     cda = build_canonical_decision_artifact(
         response, decision_ts="2031-02-03T04:05:06.123456Z"
     )
     payload = response.model_dump(mode="json")
+    if divergent:
+        payload["decision"] = {"output": "REJECT", "answer": None}
     payload["canonical_decision_artifact"] = cda.model_dump(mode="json")
     payload["deterministic_replay"] = {
-        "final_output": response.model_dump(mode="json"),
+        "final_output": {
+            key: value
+            for key, value in payload.items()
+            if key != "canonical_decision_artifact"
+        },
         "seed": 7,
         "temperature": 0,
     }
@@ -92,7 +96,9 @@ def test_authentic_semantic_divergence_remains_visible_and_verifiable() -> None:
     source, evidence, binding = _artifacts(divergent=True)
 
     assert binding.replay_lineage.semantic_match is False
-    assert binding.replay_lineage.fields_changed
+    assert binding.replay_lineage.fields_changed == ["decision"]
+    assert binding.replay_lineage.severity == "critical"
+    assert binding.replay_lineage.divergence_level == "critical_divergence"
     assert verify_canonical_replay_handoff_binding(
         source, evidence, binding.replay_lineage, binding.trusted_assertion
     ) == binding
