@@ -1,0 +1,2464 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.org/schemas/execution-intent-pre-bind-validation-v1.schema.json",
+  "title": "Canonical ExecutionIntent Pre-Bind Validation Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "pre_bind_validation_id",
+    "pre_bind_validation_hash",
+    "validation_mechanism",
+    "checked_at",
+    "source_formation",
+    "source_formation_hash",
+    "source_formation_packet",
+    "source_readiness_hash",
+    "source_eligibility_hash",
+    "source_handoff_hash",
+    "trusted_validation_context_hash",
+    "validation_result_hash",
+    "mapping_value_digest",
+    "execution_intent_contract_version",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "pre_bind_status",
+    "ready_for_bind_preflight",
+    "fail_closed",
+    "local_validation_checks",
+    "scope_limitations"
+  ],
+  "properties": {
+    "format_version": {
+      "const": "canonical-execution-intent-pre-bind-validation/v1"
+    },
+    "pre_bind_validation_id": {
+      "type": "string",
+      "pattern": "^eipbv:v1:sha256:[0-9a-f]{64}$"
+    },
+    "pre_bind_validation_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "validation_mechanism": {
+      "const": "validate_execution_intent_before_bind/v1"
+    },
+    "checked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_formation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formation_id",
+        "formation_hash",
+        "format_version",
+        "formation_mechanism",
+        "formed_at",
+        "execution_intent_id",
+        "execution_intent_hash"
+      ],
+      "properties": {
+        "formation_id": {
+          "type": "string",
+          "pattern": "^eif:v1:sha256:[0-9a-f]{64}$"
+        },
+        "formation_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "format_version": {
+          "const": "canonical-execution-intent-formation/v1"
+        },
+        "formation_mechanism": {
+          "const": "build_execution_intent_from_readiness/v1"
+        },
+        "formed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "execution_intent_id": {
+          "type": "string",
+          "pattern": "^ei:v1:sha256:[0-9a-f]{64}$"
+        },
+        "execution_intent_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "source_formation_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_formation_packet": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://veritas-os.org/schemas/canonical-execution-intent-formation-v1.schema.json",
+      "title": "Canonical ExecutionIntent Formation Packet v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format_version",
+        "formation_id",
+        "formation_hash",
+        "formation_mechanism",
+        "formed_at",
+        "source_readiness",
+        "source_readiness_hash",
+        "source_readiness_packet",
+        "source_eligibility_hash",
+        "source_handoff_hash",
+        "trusted_validation_context_hash",
+        "validation_result_hash",
+        "mapping_value_digest",
+        "execution_intent_contract_version",
+        "execution_intent",
+        "execution_intent_id",
+        "execution_intent_hash",
+        "source_to_execution_intent_mapping",
+        "field_mapping_proof",
+        "required_field_presence",
+        "source_decision_identity",
+        "candidate_identity",
+        "evidence_lineage",
+        "replay_summary",
+        "scope_limitations"
+      ],
+      "properties": {
+        "format_version": {
+          "const": "canonical-execution-intent-formation/v1"
+        },
+        "formation_id": {
+          "type": "string",
+          "pattern": "^eif:v1:sha256:[0-9a-f]{64}$"
+        },
+        "formation_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "formation_mechanism": {
+          "const": "build_execution_intent_from_readiness/v1"
+        },
+        "formed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_readiness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "readiness_id",
+            "readiness_hash",
+            "format_version",
+            "checked_at",
+            "formation_status",
+            "ready_for_execution_intent_formation"
+          ],
+          "properties": {
+            "readiness_id": {
+              "type": "string",
+              "pattern": "^eifr:v1:sha256:[0-9a-f]{64}$"
+            },
+            "readiness_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "format_version": {
+              "const": "canonical-execution-intent-formation-readiness/v1"
+            },
+            "checked_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "formation_status": {
+              "const": "READY_FOR_EXECUTION_INTENT_FORMATION"
+            },
+            "ready_for_execution_intent_formation": {
+              "const": true
+            }
+          }
+        },
+        "source_readiness_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_readiness_packet": {
+          "$ref": "#/$defs/readiness"
+        },
+        "source_eligibility_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_handoff_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "trusted_validation_context_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "validation_result_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mapping_value_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "execution_intent_contract_version": {
+          "const": "execution-intent-contract/v1"
+        },
+        "execution_intent": {
+          "$ref": "#/$defs/execution_intent"
+        },
+        "execution_intent_id": {
+          "type": "string",
+          "pattern": "^ei:v1:sha256:[0-9a-f]{64}$"
+        },
+        "execution_intent_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_to_execution_intent_mapping": {
+          "$ref": "#/$defs/mapping"
+        },
+        "field_mapping_proof": {
+          "$ref": "#/$defs/mapping"
+        },
+        "required_field_presence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "execution_intent_id",
+            "decision_id",
+            "request_id",
+            "policy_snapshot_id",
+            "actor_identity",
+            "target_system",
+            "target_resource",
+            "intended_action",
+            "evidence_refs",
+            "decision_hash",
+            "decision_ts",
+            "ttl_seconds",
+            "expected_state_fingerprint",
+            "approval_context",
+            "policy_lineage"
+          ],
+          "properties": {
+            "execution_intent_id": {
+              "const": "intentionally_deferred"
+            },
+            "decision_id": {
+              "const": "mapped"
+            },
+            "request_id": {
+              "const": "mapped"
+            },
+            "policy_snapshot_id": {
+              "const": "mapped"
+            },
+            "actor_identity": {
+              "const": "mapped"
+            },
+            "target_system": {
+              "const": "mapped"
+            },
+            "target_resource": {
+              "const": "mapped"
+            },
+            "intended_action": {
+              "const": "mapped"
+            },
+            "evidence_refs": {
+              "const": "mapped"
+            },
+            "decision_hash": {
+              "const": "mapped"
+            },
+            "decision_ts": {
+              "const": "mapped"
+            },
+            "ttl_seconds": {
+              "const": "intentionally_deferred"
+            },
+            "expected_state_fingerprint": {
+              "const": "mapped"
+            },
+            "approval_context": {
+              "const": "mapped"
+            },
+            "policy_lineage": {
+              "const": "mapped"
+            }
+          }
+        },
+        "source_decision_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "request_id",
+            "canonical_decision_id",
+            "canonical_decision_hash",
+            "canonical_decision_ts"
+          ],
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "canonical_decision_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "canonical_decision_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "canonical_decision_ts": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "candidate_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_id",
+            "candidate_hash",
+            "actor_identity",
+            "target_system",
+            "target_resource",
+            "action_contract_id",
+            "action_contract_version"
+          ],
+          "properties": {
+            "candidate_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "candidate_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actor_identity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_system": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_resource": {
+              "type": "string",
+              "minLength": 1
+            },
+            "action_contract_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "action_contract_version": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "evidence_lineage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "trustlog_artifact_ref",
+            "trustlog_chain_hash",
+            "replay_artifact_ref",
+            "replay_artifact_hash",
+            "authority_evidence_ref",
+            "authority_evidence_hash",
+            "human_approval_receipt_ref",
+            "human_approval_receipt_hash",
+            "policy_snapshot_id",
+            "policy_version",
+            "policy_semantic_digest",
+            "expected_state_fingerprint",
+            "expected_state_source_ref"
+          ],
+          "properties": {
+            "trustlog_artifact_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "trustlog_chain_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "replay_artifact_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "replay_artifact_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authority_evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authority_evidence_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "human_approval_receipt_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "human_approval_receipt_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_semantic_digest": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expected_state_fingerprint": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expected_state_source_ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "replay_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "original_decision_id",
+            "replay_decision_id",
+            "original_request_id",
+            "replay_request_id",
+            "semantic_profile",
+            "semantic_match",
+            "fields_changed",
+            "severity",
+            "divergence_level"
+          ],
+          "properties": {
+            "original_decision_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "replay_decision_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "original_request_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "replay_request_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "semantic_profile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "semantic_match": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "fields_changed": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "severity": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "divergence_level": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "scope_limitations": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "NOT_EXECUTION_AUTHORITY"
+            },
+            {
+              "const": "NOT_BIND_AUTHORIZATION"
+            },
+            {
+              "const": "NOT_BIND_RECEIPT"
+            },
+            {
+              "const": "NOT_BIND_INVOCATION"
+            },
+            {
+              "const": "NOT_EXTERNAL_EFFECT"
+            },
+            {
+              "const": "NOT_ADAPTER_INVOCATION"
+            },
+            {
+              "const": "NOT_OPERATION_COMMIT"
+            },
+            {
+              "const": "NOT_TRUSTLOG_WRITE"
+            },
+            {
+              "const": "NOT_AUTHORITY_EVIDENCE"
+            },
+            {
+              "const": "NOT_HUMAN_APPROVAL"
+            }
+          ],
+          "items": false,
+          "minItems": 10,
+          "maxItems": 10
+        }
+      },
+      "$defs": {
+        "readiness": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://veritas-os.org/schemas/execution-intent-formation-readiness-v1.schema.json",
+          "title": "Canonical ExecutionIntent Formation Readiness Packet v1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "format_version",
+            "readiness_id",
+            "readiness_hash",
+            "verification_mechanism",
+            "checked_at",
+            "source_eligibility",
+            "source_eligibility_hash",
+            "source_eligibility_packet",
+            "source_handoff_hash",
+            "trusted_validation_context_hash",
+            "validation_result_hash",
+            "formation_status",
+            "ready_for_execution_intent_formation",
+            "fail_closed",
+            "execution_intent_contract_version",
+            "execution_intent_required_fields",
+            "source_to_execution_intent_mapping",
+            "mapping_value_digest",
+            "required_field_presence",
+            "source_decision_identity",
+            "candidate_identity",
+            "evidence_lineage",
+            "replay_summary",
+            "scope_limitations"
+          ],
+          "properties": {
+            "format_version": {
+              "const": "canonical-execution-intent-formation-readiness/v1"
+            },
+            "readiness_id": {
+              "type": "string",
+              "pattern": "^eifr:v1:sha256:[0-9a-f]{64}$"
+            },
+            "readiness_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "verification_mechanism": {
+              "const": "verify_guarded_promotion_eligibility_packet/v1"
+            },
+            "checked_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "source_eligibility": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "eligibility_id",
+                "eligibility_hash",
+                "format_version",
+                "validation_mechanism",
+                "handoff_validator_version",
+                "issued_at",
+                "evaluated_at"
+              ],
+              "properties": {
+                "eligibility_id": {
+                  "type": "string",
+                  "pattern": "^gpe:v1:sha256:[0-9a-f]{64}$"
+                },
+                "eligibility_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "format_version": {
+                  "const": "canonical-guarded-promotion-eligibility-packet/v1"
+                },
+                "validation_mechanism": {
+                  "const": "validate_canonical_decision_handoff/v1"
+                },
+                "handoff_validator_version": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "issued_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "evaluated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "source_eligibility_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_eligibility_packet": {
+              "$ref": "#/$defs/eligibility"
+            },
+            "source_handoff_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "trusted_validation_context_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "validation_result_hash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "formation_status": {
+              "const": "READY_FOR_EXECUTION_INTENT_FORMATION"
+            },
+            "ready_for_execution_intent_formation": {
+              "const": true
+            },
+            "fail_closed": {
+              "const": false
+            },
+            "execution_intent_contract_version": {
+              "const": "execution-intent-contract/v1"
+            },
+            "execution_intent_required_fields": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "execution_intent_id"
+                },
+                {
+                  "const": "decision_id"
+                },
+                {
+                  "const": "request_id"
+                },
+                {
+                  "const": "policy_snapshot_id"
+                },
+                {
+                  "const": "actor_identity"
+                },
+                {
+                  "const": "target_system"
+                },
+                {
+                  "const": "target_resource"
+                },
+                {
+                  "const": "intended_action"
+                },
+                {
+                  "const": "evidence_refs"
+                },
+                {
+                  "const": "decision_hash"
+                },
+                {
+                  "const": "decision_ts"
+                },
+                {
+                  "const": "ttl_seconds"
+                },
+                {
+                  "const": "expected_state_fingerprint"
+                },
+                {
+                  "const": "approval_context"
+                },
+                {
+                  "const": "policy_lineage"
+                }
+              ],
+              "items": false,
+              "minItems": 15,
+              "maxItems": 15
+            },
+            "source_to_execution_intent_mapping": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "decision_id",
+                "request_id",
+                "policy_snapshot_id",
+                "actor_identity",
+                "target_system",
+                "target_resource",
+                "intended_action",
+                "evidence_refs",
+                "decision_hash",
+                "decision_ts",
+                "ttl_seconds",
+                "expected_state_fingerprint",
+                "approval_context",
+                "policy_lineage"
+              ],
+              "properties": {
+                "decision_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "request_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_snapshot_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actor_identity": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_system": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_resource": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "intended_action": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidence_refs": {
+                  "type": "array",
+                  "minItems": 5,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "decision_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "decision_ts": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "ttl_seconds": {
+                  "type": "null"
+                },
+                "expected_state_fingerprint": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "approval_context": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "human_approval_receipt_ref",
+                    "human_approval_receipt_hash"
+                  ],
+                  "properties": {
+                    "human_approval_receipt_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "human_approval_receipt_hash": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "policy_lineage": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "policy_snapshot_id",
+                    "policy_version",
+                    "policy_semantic_digest"
+                  ],
+                  "properties": {
+                    "policy_snapshot_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "policy_version": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "policy_semantic_digest": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            },
+            "mapping_value_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "required_field_presence": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "execution_intent_id",
+                "decision_id",
+                "request_id",
+                "policy_snapshot_id",
+                "actor_identity",
+                "target_system",
+                "target_resource",
+                "intended_action",
+                "evidence_refs",
+                "decision_hash",
+                "decision_ts",
+                "ttl_seconds",
+                "expected_state_fingerprint",
+                "approval_context",
+                "policy_lineage"
+              ],
+              "properties": {
+                "execution_intent_id": {
+                  "const": "intentionally_deferred"
+                },
+                "decision_id": {
+                  "const": "mapped"
+                },
+                "request_id": {
+                  "const": "mapped"
+                },
+                "policy_snapshot_id": {
+                  "const": "mapped"
+                },
+                "actor_identity": {
+                  "const": "mapped"
+                },
+                "target_system": {
+                  "const": "mapped"
+                },
+                "target_resource": {
+                  "const": "mapped"
+                },
+                "intended_action": {
+                  "const": "mapped"
+                },
+                "evidence_refs": {
+                  "const": "mapped"
+                },
+                "decision_hash": {
+                  "const": "mapped"
+                },
+                "decision_ts": {
+                  "const": "mapped"
+                },
+                "ttl_seconds": {
+                  "const": "intentionally_deferred"
+                },
+                "expected_state_fingerprint": {
+                  "const": "mapped"
+                },
+                "approval_context": {
+                  "const": "mapped"
+                },
+                "policy_lineage": {
+                  "const": "mapped"
+                }
+              }
+            },
+            "source_decision_identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "request_id",
+                "canonical_decision_id",
+                "canonical_decision_hash",
+                "canonical_decision_ts"
+              ],
+              "properties": {
+                "request_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "canonical_decision_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "canonical_decision_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "canonical_decision_ts": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "candidate_identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "candidate_id",
+                "candidate_hash",
+                "actor_identity",
+                "target_system",
+                "target_resource",
+                "action_contract_id",
+                "action_contract_version"
+              ],
+              "properties": {
+                "candidate_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "candidate_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "actor_identity": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_system": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_resource": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "action_contract_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "action_contract_version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "evidence_lineage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "trustlog_artifact_ref",
+                "trustlog_chain_hash",
+                "replay_artifact_ref",
+                "replay_artifact_hash",
+                "authority_evidence_ref",
+                "authority_evidence_hash",
+                "human_approval_receipt_ref",
+                "human_approval_receipt_hash",
+                "policy_snapshot_id",
+                "policy_version",
+                "policy_semantic_digest",
+                "expected_state_fingerprint",
+                "expected_state_source_ref"
+              ],
+              "properties": {
+                "trustlog_artifact_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "trustlog_chain_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "replay_artifact_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "replay_artifact_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "authority_evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "authority_evidence_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "human_approval_receipt_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "human_approval_receipt_hash": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_snapshot_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_version": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_semantic_digest": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "expected_state_fingerprint": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "expected_state_source_ref": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "replay_summary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "original_decision_id",
+                "replay_decision_id",
+                "original_request_id",
+                "replay_request_id",
+                "semantic_profile",
+                "semantic_match",
+                "fields_changed",
+                "severity",
+                "divergence_level"
+              ],
+              "properties": {
+                "original_decision_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "replay_decision_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "original_request_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "replay_request_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "semantic_profile": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "semantic_match": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "fields_changed": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "severity": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "divergence_level": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_EXECUTION_INTENT"
+                },
+                {
+                  "const": "NOT_EXECUTION_AUTHORITY"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_EXTERNAL_EFFECT"
+                },
+                {
+                  "const": "NOT_ADAPTER_INVOCATION"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                }
+              ],
+              "items": false,
+              "minItems": 8,
+              "maxItems": 8
+            }
+          },
+          "$defs": {
+            "eligibility": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "$id": "https://veritas-os.org/schemas/guarded-promotion-eligibility-packet-v1.schema.json",
+              "title": "Canonical Guarded Promotion Eligibility Packet v1",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "format_version",
+                "eligibility_id",
+                "eligibility_hash",
+                "validation_mechanism",
+                "handoff_validator_version",
+                "issued_at",
+                "evaluated_at",
+                "validation_status",
+                "ready_for_guarded_promotion",
+                "fail_closed",
+                "source_handoff",
+                "source_handoff_hash",
+                "trusted_validation_context",
+                "trusted_validation_context_hash",
+                "validation_result",
+                "validation_result_hash",
+                "verified_provenance_paths",
+                "source_decision_identity",
+                "candidate_identity",
+                "evidence_lineage",
+                "replay_summary",
+                "scope_limitations"
+              ],
+              "properties": {
+                "format_version": {
+                  "const": "canonical-guarded-promotion-eligibility-packet/v1"
+                },
+                "eligibility_id": {
+                  "type": "string",
+                  "pattern": "^gpe:v1:sha256:[0-9a-f]{64}$"
+                },
+                "eligibility_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "validation_mechanism": {
+                  "const": "validate_canonical_decision_handoff/v1"
+                },
+                "handoff_validator_version": {
+                  "type": "string"
+                },
+                "issued_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "evaluated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "validation_status": {
+                  "const": "READY_FOR_GUARDED_PROMOTION"
+                },
+                "ready_for_guarded_promotion": {
+                  "const": true
+                },
+                "fail_closed": {
+                  "const": false
+                },
+                "source_handoff": {
+                  "type": "object"
+                },
+                "source_handoff_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "trusted_validation_context": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "value_assertions",
+                    "candidate_hash_binding",
+                    "authority_requirement_binding"
+                  ],
+                  "properties": {
+                    "value_assertions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/valueAssertion"
+                      }
+                    },
+                    "candidate_hash_binding": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/candidateBinding"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "authority_requirement_binding": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/authorityBinding"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "trusted_validation_context_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "validation_result": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "reason_codes",
+                    "structure_valid",
+                    "declared_status",
+                    "declared_status_matches",
+                    "declared_reason_codes",
+                    "declared_reason_codes_match",
+                    "verified_provenance_paths",
+                    "validation_version",
+                    "ready_for_guarded_promotion",
+                    "fail_closed",
+                    "requires_review"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "READY_FOR_GUARDED_PROMOTION"
+                    },
+                    "reason_codes": {
+                      "const": []
+                    },
+                    "structure_valid": {
+                      "const": true
+                    },
+                    "declared_status": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "declared_status_matches": {
+                      "type": "boolean"
+                    },
+                    "declared_reason_codes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "declared_reason_codes_match": {
+                      "type": "boolean"
+                    },
+                    "verified_provenance_paths": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "validation_version": {
+                      "type": "string"
+                    },
+                    "ready_for_guarded_promotion": {
+                      "const": true
+                    },
+                    "fail_closed": {
+                      "const": false
+                    },
+                    "requires_review": {
+                      "const": false
+                    }
+                  }
+                },
+                "validation_result_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "verified_provenance_paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "source_decision_identity": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "request_id",
+                    "canonical_decision_id",
+                    "canonical_decision_hash",
+                    "canonical_decision_ts"
+                  ],
+                  "properties": {
+                    "request_id": {
+                      "type": "string"
+                    },
+                    "canonical_decision_id": {
+                      "type": "string"
+                    },
+                    "canonical_decision_hash": {
+                      "type": "string"
+                    },
+                    "canonical_decision_ts": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "candidate_identity": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "candidate_id",
+                    "candidate_hash",
+                    "actor_identity",
+                    "target_system",
+                    "target_resource",
+                    "action_contract_id",
+                    "action_contract_version"
+                  ],
+                  "properties": {
+                    "candidate_id": {
+                      "type": "string"
+                    },
+                    "candidate_hash": {
+                      "type": "string"
+                    },
+                    "actor_identity": {
+                      "type": "string"
+                    },
+                    "target_system": {
+                      "type": "string"
+                    },
+                    "target_resource": {
+                      "type": "string"
+                    },
+                    "action_contract_id": {
+                      "type": "string"
+                    },
+                    "action_contract_version": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "evidence_lineage": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "trustlog_artifact_ref",
+                    "trustlog_chain_hash",
+                    "replay_artifact_ref",
+                    "replay_artifact_hash",
+                    "authority_evidence_ref",
+                    "authority_evidence_hash",
+                    "human_approval_receipt_ref",
+                    "human_approval_receipt_hash",
+                    "policy_snapshot_id",
+                    "policy_version",
+                    "policy_semantic_digest",
+                    "expected_state_fingerprint",
+                    "expected_state_source_ref"
+                  ],
+                  "properties": {
+                    "trustlog_artifact_ref": {
+                      "type": "string"
+                    },
+                    "trustlog_chain_hash": {
+                      "type": "string"
+                    },
+                    "replay_artifact_ref": {
+                      "type": "string"
+                    },
+                    "replay_artifact_hash": {
+                      "type": "string"
+                    },
+                    "authority_evidence_ref": {
+                      "type": "string"
+                    },
+                    "authority_evidence_hash": {
+                      "type": "string"
+                    },
+                    "human_approval_receipt_ref": {
+                      "type": "string"
+                    },
+                    "human_approval_receipt_hash": {
+                      "type": "string"
+                    },
+                    "policy_snapshot_id": {
+                      "type": "string"
+                    },
+                    "policy_version": {
+                      "type": "string"
+                    },
+                    "policy_semantic_digest": {
+                      "type": "string"
+                    },
+                    "expected_state_fingerprint": {
+                      "type": "string"
+                    },
+                    "expected_state_source_ref": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "replay_summary": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "original_decision_id",
+                    "replay_decision_id",
+                    "original_request_id",
+                    "replay_request_id",
+                    "semantic_profile",
+                    "semantic_match",
+                    "fields_changed",
+                    "severity",
+                    "divergence_level"
+                  ],
+                  "properties": {
+                    "original_decision_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "replay_decision_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "original_request_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "replay_request_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "semantic_profile": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "semantic_match": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fields_changed": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "divergence_level": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_EXECUTION_AUTHORITY"
+                    },
+                    {
+                      "const": "NOT_EXECUTION_INTENT"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_EXTERNAL_EFFECT"
+                    },
+                    {
+                      "const": "NOT_AUTHORITY_EVIDENCE"
+                    },
+                    {
+                      "const": "NOT_HUMAN_APPROVAL"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_SUBSTITUTE"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 8,
+                  "maxItems": 8
+                }
+              },
+              "$defs": {
+                "valueAssertion": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "field_path",
+                    "value_digest",
+                    "verification_mechanism",
+                    "source_artifact_ref",
+                    "source_hash",
+                    "verified_at",
+                    "claims"
+                  ],
+                  "properties": {
+                    "field_path": {
+                      "type": "string"
+                    },
+                    "value_digest": {
+                      "type": "string"
+                    },
+                    "verification_mechanism": {
+                      "type": "string"
+                    },
+                    "source_artifact_ref": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "verified_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "claims": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "candidateBinding": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "candidate_value_digest",
+                    "asserted_candidate_hash",
+                    "candidate_hash_profile",
+                    "verification_mechanism",
+                    "claim",
+                    "source_artifact_ref",
+                    "source_hash",
+                    "verified_at"
+                  ],
+                  "properties": {
+                    "candidate_value_digest": {
+                      "type": "string"
+                    },
+                    "asserted_candidate_hash": {
+                      "type": "string"
+                    },
+                    "candidate_hash_profile": {
+                      "type": "string"
+                    },
+                    "verification_mechanism": {
+                      "type": "string"
+                    },
+                    "claim": {
+                      "type": "string"
+                    },
+                    "source_artifact_ref": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "verified_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "authorityBinding": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "authority_requirement_value_digest",
+                    "authority_evidence_value_digest",
+                    "verification_mechanism",
+                    "claim",
+                    "source_artifact_ref",
+                    "source_hash",
+                    "verified_at"
+                  ],
+                  "properties": {
+                    "authority_requirement_value_digest": {
+                      "type": "string"
+                    },
+                    "authority_evidence_value_digest": {
+                      "type": "string"
+                    },
+                    "verification_mechanism": {
+                      "type": "string"
+                    },
+                    "claim": {
+                      "type": "string"
+                    },
+                    "source_artifact_ref": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "verified_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "mapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "decision_id",
+            "request_id",
+            "policy_snapshot_id",
+            "actor_identity",
+            "target_system",
+            "target_resource",
+            "intended_action",
+            "evidence_refs",
+            "decision_hash",
+            "decision_ts",
+            "ttl_seconds",
+            "expected_state_fingerprint",
+            "approval_context",
+            "policy_lineage"
+          ],
+          "properties": {
+            "decision_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "request_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actor_identity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_system": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_resource": {
+              "type": "string",
+              "minLength": 1
+            },
+            "intended_action": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidence_refs": {
+              "type": "array",
+              "minItems": 5,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "decision_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decision_ts": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ttl_seconds": {
+              "type": "null"
+            },
+            "expected_state_fingerprint": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approval_context": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "human_approval_receipt_ref",
+                "human_approval_receipt_hash"
+              ],
+              "properties": {
+                "human_approval_receipt_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "human_approval_receipt_hash": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "policy_lineage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "policy_snapshot_id",
+                "policy_version",
+                "policy_semantic_digest"
+              ],
+              "properties": {
+                "policy_snapshot_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_version": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_semantic_digest": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "execution_intent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "execution_intent_id",
+            "decision_id",
+            "request_id",
+            "policy_snapshot_id",
+            "actor_identity",
+            "target_system",
+            "target_resource",
+            "intended_action",
+            "evidence_refs",
+            "decision_hash",
+            "decision_ts",
+            "ttl_seconds",
+            "expected_state_fingerprint",
+            "approval_context",
+            "policy_lineage"
+          ],
+          "properties": {
+            "execution_intent_id": {
+              "type": "string",
+              "pattern": "^ei:v1:sha256:[0-9a-f]{64}$"
+            },
+            "decision_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "request_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_snapshot_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actor_identity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_system": {
+              "type": "string",
+              "minLength": 1
+            },
+            "target_resource": {
+              "type": "string",
+              "minLength": 1
+            },
+            "intended_action": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidence_refs": {
+              "type": "array",
+              "minItems": 5,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "decision_hash": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decision_ts": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ttl_seconds": {
+              "type": "null"
+            },
+            "expected_state_fingerprint": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approval_context": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "human_approval_receipt_ref",
+                "human_approval_receipt_hash"
+              ],
+              "properties": {
+                "human_approval_receipt_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "human_approval_receipt_hash": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "policy_lineage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "policy_snapshot_id",
+                "policy_version",
+                "policy_semantic_digest"
+              ],
+              "properties": {
+                "policy_snapshot_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_version": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "policy_semantic_digest": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "source_readiness_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_eligibility_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_handoff_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "trusted_validation_context_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "validation_result_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "mapping_value_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "execution_intent_contract_version": {
+      "const": "execution-intent-contract/v1"
+    },
+    "execution_intent": {
+      "$ref": "#/$defs/execution_intent"
+    },
+    "execution_intent_id": {
+      "type": "string",
+      "pattern": "^ei:v1:sha256:[0-9a-f]{64}$"
+    },
+    "execution_intent_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_to_execution_intent_mapping": {
+      "$ref": "#/$defs/mapping"
+    },
+    "field_mapping_proof": {
+      "$ref": "#/$defs/mapping"
+    },
+    "required_field_presence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_intent_id",
+        "decision_id",
+        "request_id",
+        "policy_snapshot_id",
+        "actor_identity",
+        "target_system",
+        "target_resource",
+        "intended_action",
+        "evidence_refs",
+        "decision_hash",
+        "decision_ts",
+        "ttl_seconds",
+        "expected_state_fingerprint",
+        "approval_context",
+        "policy_lineage"
+      ],
+      "properties": {
+        "execution_intent_id": {
+          "const": "intentionally_deferred"
+        },
+        "decision_id": {
+          "const": "mapped"
+        },
+        "request_id": {
+          "const": "mapped"
+        },
+        "policy_snapshot_id": {
+          "const": "mapped"
+        },
+        "actor_identity": {
+          "const": "mapped"
+        },
+        "target_system": {
+          "const": "mapped"
+        },
+        "target_resource": {
+          "const": "mapped"
+        },
+        "intended_action": {
+          "const": "mapped"
+        },
+        "evidence_refs": {
+          "const": "mapped"
+        },
+        "decision_hash": {
+          "const": "mapped"
+        },
+        "decision_ts": {
+          "const": "mapped"
+        },
+        "ttl_seconds": {
+          "const": "intentionally_deferred"
+        },
+        "expected_state_fingerprint": {
+          "const": "mapped"
+        },
+        "approval_context": {
+          "const": "mapped"
+        },
+        "policy_lineage": {
+          "const": "mapped"
+        }
+      }
+    },
+    "source_decision_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "canonical_decision_id",
+        "canonical_decision_hash",
+        "canonical_decision_ts"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_decision_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_decision_ts": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "candidate_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "candidate_hash",
+        "actor_identity",
+        "target_system",
+        "target_resource",
+        "action_contract_id",
+        "action_contract_version"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actor_identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_resource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action_contract_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action_contract_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trustlog_artifact_ref",
+        "trustlog_chain_hash",
+        "replay_artifact_ref",
+        "replay_artifact_hash",
+        "authority_evidence_ref",
+        "authority_evidence_hash",
+        "human_approval_receipt_ref",
+        "human_approval_receipt_hash",
+        "policy_snapshot_id",
+        "policy_version",
+        "policy_semantic_digest",
+        "expected_state_fingerprint",
+        "expected_state_source_ref"
+      ],
+      "properties": {
+        "trustlog_artifact_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trustlog_chain_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replay_artifact_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replay_artifact_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority_evidence_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "human_approval_receipt_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "human_approval_receipt_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_semantic_digest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_state_fingerprint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_state_source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "replay_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_decision_id",
+        "replay_decision_id",
+        "original_request_id",
+        "replay_request_id",
+        "semantic_profile",
+        "semantic_match",
+        "fields_changed",
+        "severity",
+        "divergence_level"
+      ],
+      "properties": {
+        "original_decision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replay_decision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original_request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replay_request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "semantic_profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "semantic_match": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "fields_changed": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "severity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "divergence_level": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "pre_bind_status": {
+      "const": "READY_FOR_BIND_PREFLIGHT"
+    },
+    "ready_for_bind_preflight": {
+      "const": true
+    },
+    "fail_closed": {
+      "const": false
+    },
+    "local_validation_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formation_verified",
+        "execution_intent_hash_verified",
+        "execution_intent_id_verified",
+        "field_mapping_verified",
+        "required_field_presence_verified",
+        "evidence_refs_non_empty",
+        "decision_timestamp_timezone_aware",
+        "checked_after_formation",
+        "no_bind_invocation",
+        "no_trustlog_write"
+      ],
+      "properties": {
+        "formation_verified": {
+          "const": true
+        },
+        "execution_intent_hash_verified": {
+          "const": true
+        },
+        "execution_intent_id_verified": {
+          "const": true
+        },
+        "field_mapping_verified": {
+          "const": true
+        },
+        "required_field_presence_verified": {
+          "const": true
+        },
+        "evidence_refs_non_empty": {
+          "const": true
+        },
+        "decision_timestamp_timezone_aware": {
+          "const": true
+        },
+        "checked_after_formation": {
+          "const": true
+        },
+        "no_bind_invocation": {
+          "const": true
+        },
+        "no_trustlog_write": {
+          "const": true
+        }
+      }
+    },
+    "scope_limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_BIND_INVOCATION"
+        },
+        {
+          "const": "NOT_ADAPTER_INVOCATION"
+        },
+        {
+          "const": "NOT_EXTERNAL_EFFECT"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_LIVE_STATE_CHECK"
+        },
+        {
+          "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        }
+      ],
+      "items": false,
+      "minItems": 12,
+      "maxItems": 12
+    }
+  }
+}
