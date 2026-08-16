@@ -125,7 +125,50 @@ def _aware_iso(value: datetime, code: str) -> str:
 def _context_from_json(
     raw: dict[str, Any],
 ) -> CanonicalDecisionHandoffValidationContext:
+    """Reconstruct only the complete, closed v1 trusted-context shape."""
+    context_keys = {
+        "value_assertions",
+        "candidate_hash_binding",
+        "authority_requirement_binding",
+    }
+    value_assertion_keys = {
+        "field_path",
+        "value_digest",
+        "source_artifact_ref",
+        "source_hash",
+        "verification_mechanism",
+        "verified_at",
+        "claims",
+    }
+    candidate_binding_keys = {
+        "candidate_value_digest",
+        "asserted_candidate_hash",
+        "candidate_hash_profile",
+        "source_artifact_ref",
+        "source_hash",
+        "verification_mechanism",
+        "verified_at",
+        "claim",
+    }
+    authority_binding_keys = {
+        "authority_requirement_value_digest",
+        "authority_evidence_value_digest",
+        "source_artifact_ref",
+        "source_hash",
+        "verification_mechanism",
+        "verified_at",
+        "claim",
+    }
     try:
+        if not isinstance(raw, dict) or set(raw) != context_keys:
+            raise ValueError("trusted context keys differ")
+        if not isinstance(raw["value_assertions"], list):
+            raise TypeError("value_assertions is not an array")
+        if any(
+            not isinstance(item, dict) or set(item) != value_assertion_keys
+            for item in raw["value_assertions"]
+        ):
+            raise ValueError("value assertion keys differ")
         assertions = tuple(
             TrustedValueAssertion(
                 **{
@@ -138,7 +181,11 @@ def _context_from_json(
         )
         candidate = raw.get("candidate_hash_binding")
         authority = raw.get("authority_requirement_binding")
-        if candidate:
+        if candidate is not None:
+            if not isinstance(candidate, dict) or set(candidate) != (
+                candidate_binding_keys
+            ):
+                raise ValueError("candidate binding keys differ")
             candidate = CandidateHashBindingAssertion(
                 **{
                     **candidate,
@@ -147,7 +194,11 @@ def _context_from_json(
                     ),
                 }
             )
-        if authority:
+        if authority is not None:
+            if not isinstance(authority, dict) or set(authority) != (
+                authority_binding_keys
+            ):
+                raise ValueError("authority binding keys differ")
             authority = AuthorityEvidenceRequirementBindingAssertion(
                 **{
                     **authority,
@@ -161,7 +212,7 @@ def _context_from_json(
         )
         _json_value(context)
         return context
-    except (KeyError, TypeError, ValueError) as exc:
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
         raise GuardedPromotionEligibilityError(
             "GPE_CONTEXT_RECONSTRUCTION_FAILED"
         ) from exc
@@ -227,6 +278,8 @@ def build_guarded_promotion_eligibility_packet(
     """Build a packet only after independently rerunning the handoff validator."""
     evaluated = _aware_iso(evaluated_at, "GPE_EVALUATED_AT_INVALID")
     issued = _aware_iso(issued_at, "GPE_ISSUED_AT_INVALID")
+    if issued_at < evaluated_at:
+        raise GuardedPromotionEligibilityError("GPE_ISSUED_BEFORE_EVALUATED")
     source = _json_value(handoff)
     context = _json_value(trusted_context)
     result = validate_canonical_decision_handoff(source, trusted_context, evaluated_at)
@@ -300,6 +353,10 @@ def verify_guarded_promotion_eligibility_packet(
         if actual != expected:
             raise GuardedPromotionEligibilityError(code)
     context = _context_from_json(candidate.trusted_validation_context)
+    if _json_value(context) != candidate.trusted_validation_context:
+        raise GuardedPromotionEligibilityError(
+            "GPE_TRUSTED_CONTEXT_ROUNDTRIP_MISMATCH"
+        )
     try:
         evaluated = datetime.fromisoformat(candidate.evaluated_at)
         issued = datetime.fromisoformat(candidate.issued_at)
@@ -307,9 +364,16 @@ def verify_guarded_promotion_eligibility_packet(
         _aware_iso(issued, "GPE_ISSUED_AT_INVALID")
     except ValueError as exc:
         raise GuardedPromotionEligibilityError("GPE_TIMESTAMP_INVALID") from exc
-    result = validate_canonical_decision_handoff(
-        candidate.source_handoff, context, evaluated
-    )
+    if issued < evaluated:
+        raise GuardedPromotionEligibilityError("GPE_ISSUED_BEFORE_EVALUATED")
+    try:
+        result = validate_canonical_decision_handoff(
+            candidate.source_handoff, context, evaluated
+        )
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise GuardedPromotionEligibilityError(
+            "GPE_VALIDATION_RERUN_FAILED"
+        ) from exc
     if result.status is not CanonicalDecisionHandoffStatus.READY_FOR_GUARDED_PROMOTION:
         raise GuardedPromotionEligibilityError("GPE_HANDOFF_NOT_READY")
     if _json_value(result.to_dict()) != candidate.validation_result:
