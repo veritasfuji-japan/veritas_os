@@ -197,17 +197,49 @@ def test_typed_instance_bypass_refuses(method: str, updates: dict) -> None:
 
 
 def test_schema_accepts_valid_and_rejects_invalid_packet() -> None:
-    validator = Draft202012Validator(
-        json.loads(SCHEMA.read_text()), format_checker=FormatChecker()
-    )
+    schema = json.loads(SCHEMA.read_text())
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
     valid = _packet().model_dump(mode="json")
     validator.validate(valid)
-    invalid = deepcopy(valid)
-    invalid["execution_intent"]["unexpected"] = True
-    assert list(validator.iter_errors(invalid))
-    invalid = deepcopy(valid)
-    invalid["scope_limitations"] = invalid["scope_limitations"][:-1]
-    assert list(validator.iter_errors(invalid))
+    invalid_mutations = (
+        lambda packet: packet["execution_intent"].update(unexpected=True),
+        lambda packet: packet[
+            "source_to_execution_intent_mapping"
+        ].update(unexpected=True),
+        lambda packet: packet["source_formation_packet"][
+            "execution_intent"
+        ].update(unexpected=True),
+        lambda packet: packet["local_validation_checks"].update(
+            unexpected=True
+        ),
+        lambda packet: packet.update(
+            scope_limitations=packet["scope_limitations"][:-1]
+        ),
+    )
+    for mutate in invalid_mutations:
+        invalid = deepcopy(valid)
+        mutate(invalid)
+        assert list(validator.iter_errors(invalid))
+
+    refs: set[str] = set()
+
+    def collect_refs(value) -> None:
+        """Collect every local reference from the self-contained schema."""
+        if isinstance(value, dict):
+            if "$ref" in value:
+                refs.add(value["$ref"])
+            for nested in value.values():
+                collect_refs(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                collect_refs(nested)
+
+    collect_refs(schema)
+    assert refs
+    for ref in refs:
+        assert ref.startswith("#/$defs/")
+        assert ref.removeprefix("#/$defs/") in schema["$defs"]
 
 
 def test_static_import_and_side_effect_boundary() -> None:
