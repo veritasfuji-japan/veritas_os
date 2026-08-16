@@ -204,10 +204,22 @@ async def test_stage_core_execute_kernel_missing_sets_env_flag() -> None:
 
 
 @pytest.mark.anyio
-async def test_replay_endpoint_decision_not_found_returns_404(
+@pytest.mark.parametrize(
+    ("reason", "expected_status", "expected_error"),
+    [
+        ("decision_not_found: abc", 404, "decision_not_found"),
+        ("decision not found", 404, "decision_not_found"),
+        ("missing", 500, "replay_internal_failure"),
+        ("unexpected internal failure", 500, "replay_internal_failure"),
+    ],
+)
+async def test_replay_endpoint_value_error_classification(
     monkeypatch: pytest.MonkeyPatch,
+    reason: str,
+    expected_status: int,
+    expected_error: str,
 ) -> None:
-    """Replay endpoint should translate missing decision into stable 404 payload."""
+    """Only stable decision-not-found reasons map to the public 404 response."""
 
     class _DummyServer:
         @staticmethod
@@ -216,7 +228,7 @@ async def test_replay_endpoint_decision_not_found_returns_404(
 
         @staticmethod
         async def run_replay(*_args: Any, **_kwargs: Any) -> Any:
-            raise ValueError("missing")
+            raise ValueError(reason)
 
     class _DummyRequest:
         headers: dict[str, str] = {}
@@ -225,8 +237,8 @@ async def test_replay_endpoint_decision_not_found_returns_404(
 
     resp = await rd.replay_endpoint("missing-id", _DummyRequest())
 
-    assert resp.status_code == 404
-    assert resp.body
+    assert resp.status_code == expected_status
+    assert expected_error.encode("utf-8") in resp.body
 
 
 def test_start_rate_cleanup_scheduler_is_idempotent(
