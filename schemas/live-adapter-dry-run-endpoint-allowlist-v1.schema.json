@@ -1,0 +1,665 @@
+{
+  "$defs": {
+    "AllowlistEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_adapter_contract_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "allowed_purposes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "allowed_target_resource_scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "allowed_target_systems": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "endpoint_environment": {
+          "type": "string"
+        },
+        "endpoint_host": {
+          "type": "string"
+        },
+        "endpoint_kind": {
+          "type": "string"
+        },
+        "endpoint_path_prefix": {
+          "type": "string"
+        },
+        "endpoint_port": {
+          "type": "integer"
+        },
+        "endpoint_scheme": {
+          "type": "string"
+        },
+        "entry_id": {
+          "type": "string"
+        },
+        "entry_status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry_id",
+        "endpoint_kind",
+        "endpoint_scheme",
+        "endpoint_host",
+        "endpoint_port",
+        "endpoint_path_prefix",
+        "endpoint_environment",
+        "allowed_adapter_contract_ids",
+        "allowed_target_systems",
+        "allowed_target_resource_scopes",
+        "allowed_purposes",
+        "entry_status"
+      ],
+      "type": "object"
+    },
+    "AllowlistEvaluationResult": {
+      "additionalProperties": false,
+      "properties": {
+        "comparison_mode": {
+          "const": "exact_local_allowlist_comparison_only"
+        },
+        "exact_fields_compared": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "match_reason": {
+          "type": "string"
+        },
+        "matched": {
+          "type": "boolean"
+        },
+        "matched_entry_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mismatch_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "semantic_match_used": {
+          "const": false
+        }
+      },
+      "required": [
+        "matched",
+        "matched_entry_id",
+        "match_reason",
+        "mismatch_reasons",
+        "comparison_mode",
+        "exact_fields_compared",
+        "semantic_match_used"
+      ],
+      "type": "object"
+    },
+    "EndpointAllowlistCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_header_embedded": {
+          "const": false
+        },
+        "bind_invoked": {
+          "const": false
+        },
+        "bind_receipt_created": {
+          "const": false
+        },
+        "check_id": {
+          "type": "string"
+        },
+        "credential_material_accessed": {
+          "const": false
+        },
+        "credential_material_embedded": {
+          "const": false
+        },
+        "database_used": {
+          "const": false
+        },
+        "dns_used": {
+          "const": false
+        },
+        "endpoint_resolved": {
+          "const": false
+        },
+        "evidence_ref": {
+          "type": "string"
+        },
+        "external_effect_used": {
+          "const": false
+        },
+        "filesystem_used": {
+          "const": false
+        },
+        "live_adapter_instantiated": {
+          "const": false
+        },
+        "live_adapter_method_called": {
+          "const": false
+        },
+        "mode": {
+          "const": "deterministic_local_endpoint_allowlist_evaluation_only"
+        },
+        "name": {
+          "enum": [
+            "source_dispatch_readiness_verified",
+            "source_request_not_dispatched",
+            "endpoint_candidate_closed_schema_valid",
+            "endpoint_candidate_contains_no_credentials",
+            "endpoint_candidate_contains_no_authorization_headers",
+            "endpoint_candidate_contains_no_tokens",
+            "endpoint_candidate_contains_no_secrets",
+            "allowlist_snapshot_closed_schema_valid",
+            "allowlist_snapshot_hash_verified",
+            "allowlist_entry_active_status_required",
+            "endpoint_scheme_exact_match",
+            "endpoint_host_exact_match",
+            "endpoint_port_exact_match",
+            "endpoint_path_prefix_exact_match",
+            "endpoint_environment_exact_match",
+            "adapter_contract_id_allowed",
+            "target_system_allowed",
+            "target_resource_scope_allowed",
+            "endpoint_purpose_allowed",
+            "endpoint_identity_binding_constructed",
+            "endpoint_not_resolved",
+            "dns_not_used",
+            "network_not_used",
+            "credential_not_accessed",
+            "webhook_not_called",
+            "live_adapter_not_instantiated",
+            "bind_not_invoked",
+            "bind_receipt_not_created",
+            "trustlog_not_written",
+            "future_credential_gate_required"
+          ]
+        },
+        "network_used": {
+          "const": false
+        },
+        "operation_committed": {
+          "const": false
+        },
+        "ordinal": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "provider_used": {
+          "const": false
+        },
+        "request_dispatched": {
+          "const": false
+        },
+        "secret_embedded": {
+          "const": false
+        },
+        "subprocess_used": {
+          "const": false
+        },
+        "token_embedded": {
+          "const": false
+        },
+        "trustlog_written": {
+          "const": false
+        },
+        "webhook_called": {
+          "const": false
+        }
+      },
+      "required": [
+        "check_id",
+        "ordinal",
+        "name",
+        "mode",
+        "passed",
+        "evidence_ref",
+        "endpoint_resolved",
+        "dns_used",
+        "network_used",
+        "credential_material_accessed",
+        "credential_material_embedded",
+        "authorization_header_embedded",
+        "token_embedded",
+        "secret_embedded",
+        "webhook_called",
+        "live_adapter_instantiated",
+        "live_adapter_method_called",
+        "request_dispatched",
+        "bind_invoked",
+        "bind_receipt_created",
+        "trustlog_written",
+        "external_effect_used",
+        "filesystem_used",
+        "database_used",
+        "provider_used",
+        "subprocess_used",
+        "operation_committed"
+      ],
+      "type": "object"
+    },
+    "EndpointAllowlistSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "allowlist_entries": {
+          "items": {
+            "$ref": "#/$defs/AllowlistEntry"
+          },
+          "type": "array"
+        },
+        "allowlist_generated_at": {
+          "type": "string"
+        },
+        "allowlist_scope_limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "allowlist_snapshot_hash": {
+          "type": "string"
+        },
+        "allowlist_snapshot_id": {
+          "type": "string"
+        },
+        "allowlist_source": {
+          "type": "string"
+        },
+        "allowlist_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowlist_snapshot_id",
+        "allowlist_snapshot_hash",
+        "allowlist_version",
+        "allowlist_source",
+        "allowlist_generated_at",
+        "allowlist_entries",
+        "allowlist_scope_limitations"
+      ],
+      "type": "object"
+    },
+    "EndpointCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_contract_id": {
+          "type": "string"
+        },
+        "declared_at": {
+          "type": "string"
+        },
+        "declared_by": {
+          "type": "string"
+        },
+        "endpoint_candidate_id": {
+          "type": "string"
+        },
+        "endpoint_environment": {
+          "type": "string"
+        },
+        "endpoint_host": {
+          "type": "string"
+        },
+        "endpoint_kind": {
+          "type": "string"
+        },
+        "endpoint_path_prefix": {
+          "type": "string"
+        },
+        "endpoint_port": {
+          "type": "integer"
+        },
+        "endpoint_purpose": {
+          "type": "string"
+        },
+        "endpoint_scheme": {
+          "type": "string"
+        },
+        "target_resource_scope": {
+          "type": "string"
+        },
+        "target_system": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpoint_candidate_id",
+        "endpoint_kind",
+        "endpoint_scheme",
+        "endpoint_host",
+        "endpoint_port",
+        "endpoint_path_prefix",
+        "endpoint_environment",
+        "endpoint_purpose",
+        "adapter_contract_id",
+        "target_system",
+        "target_resource_scope",
+        "declared_by",
+        "declared_at"
+      ],
+      "type": "object"
+    },
+    "FutureCredentialRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer"
+        },
+        "satisfied_by_this_packet": {
+          "const": false
+        },
+        "separate_future_artifact_required": {
+          "const": true
+        }
+      },
+      "required": [
+        "ordinal",
+        "name",
+        "separate_future_artifact_required",
+        "satisfied_by_this_packet"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://veritas-os.example/schemas/live-adapter-dry-run-endpoint-allowlist-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_contract_descriptor": {
+      "type": "object"
+    },
+    "adapter_contract_hash": {
+      "type": "string"
+    },
+    "adapter_contract_id": {
+      "type": "string"
+    },
+    "adapter_contract_version": {
+      "type": "string"
+    },
+    "allowlist_evaluation_digest": {
+      "type": "string"
+    },
+    "allowlist_evaluation_result": {
+      "$ref": "#/$defs/AllowlistEvaluationResult"
+    },
+    "allowlist_snapshot": {
+      "$ref": "#/$defs/EndpointAllowlistSnapshot"
+    },
+    "allowlist_snapshot_hash": {
+      "type": "string"
+    },
+    "bind_invoked": {
+      "const": false
+    },
+    "bind_receipt_created": {
+      "const": false
+    },
+    "candidate_identity": {
+      "type": "object"
+    },
+    "credential_material_accessed": {
+      "const": false
+    },
+    "endpoint_allowlist_check_digest": {
+      "type": "string"
+    },
+    "endpoint_allowlist_checks": {
+      "items": {
+        "$ref": "#/$defs/EndpointAllowlistCheck"
+      },
+      "type": "array"
+    },
+    "endpoint_allowlist_evaluated_at": {
+      "type": "string"
+    },
+    "endpoint_allowlist_evaluation_mechanism": {
+      "const": "evaluate_live_adapter_dry_run_endpoint_allowlist_without_resolution/v1"
+    },
+    "endpoint_allowlist_status": {
+      "const": "LIVE_ADAPTER_DRY_RUN_ENDPOINT_ALLOWLIST_EVALUATED_NOT_DISPATCHED"
+    },
+    "endpoint_candidate": {
+      "$ref": "#/$defs/EndpointCandidate"
+    },
+    "endpoint_candidate_digest": {
+      "type": "string"
+    },
+    "endpoint_identity_binding": {
+      "type": "object"
+    },
+    "endpoint_identity_binding_digest": {
+      "type": "string"
+    },
+    "endpoint_resolved": {
+      "const": false
+    },
+    "evidence_lineage": {
+      "type": "object"
+    },
+    "execution_intent": {
+      "type": "object"
+    },
+    "execution_intent_hash": {
+      "type": "string"
+    },
+    "execution_intent_id": {
+      "type": "string"
+    },
+    "fail_closed": {
+      "type": "boolean"
+    },
+    "field_mapping_proof": {
+      "type": "object"
+    },
+    "format_version": {
+      "const": "canonical-live-adapter-dry-run-endpoint-allowlist-evaluation/v1"
+    },
+    "future_credential_requirement_digest": {
+      "type": "string"
+    },
+    "future_credential_requirements": {
+      "items": {
+        "$ref": "#/$defs/FutureCredentialRequirement"
+      },
+      "type": "array"
+    },
+    "live_adapter_dry_run_endpoint_allowlist_evaluation_hash": {
+      "type": "string"
+    },
+    "live_adapter_dry_run_endpoint_allowlist_evaluation_id": {
+      "type": "string"
+    },
+    "live_adapter_instantiated": {
+      "const": false
+    },
+    "network_used": {
+      "const": false
+    },
+    "replay_summary": {
+      "type": "object"
+    },
+    "request_descriptor": {
+      "type": "object"
+    },
+    "request_dispatch_state": {
+      "const": "NOT_DISPATCHED"
+    },
+    "required_field_presence": {
+      "type": "object"
+    },
+    "scope_limitations": {
+      "items": false,
+      "maxItems": 20,
+      "minItems": 20,
+      "prefixItems": [
+        {
+          "const": "NOT_DISPATCHED"
+        },
+        {
+          "const": "NOT_ENDPOINT_RESOLUTION"
+        },
+        {
+          "const": "NOT_DNS_RESOLUTION"
+        },
+        {
+          "const": "NOT_NETWORK_CALL"
+        },
+        {
+          "const": "NOT_WEBHOOK_CALL"
+        },
+        {
+          "const": "NOT_CREDENTIAL_RESOLUTION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_ACCESS"
+        },
+        {
+          "const": "NOT_CREDENTIAL_EMBEDDING"
+        },
+        {
+          "const": "NOT_AUTHORIZATION_HEADER"
+        },
+        {
+          "const": "NOT_TOKEN"
+        },
+        {
+          "const": "NOT_SECRET"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_PRODUCTION_CLAIM"
+        },
+        {
+          "const": "NOT_CUSTOMER_CLAIM"
+        },
+        {
+          "const": "NOT_REGULATORY_CERTIFICATION"
+        }
+      ],
+      "type": "array"
+    },
+    "source_decision_identity": {
+      "type": "object"
+    },
+    "source_dispatch_readiness_hash": {
+      "type": "string"
+    },
+    "source_dispatch_readiness_id": {
+      "type": "string"
+    },
+    "source_dispatch_readiness_packet": {
+      "type": "object"
+    },
+    "source_live_adapter_dry_run_request_hash": {
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_request_id": {
+      "type": "string"
+    },
+    "source_to_execution_intent_mapping": {
+      "type": "object"
+    },
+    "trustlog_written": {
+      "const": false
+    },
+    "webhook_called": {
+      "const": false
+    }
+  },
+  "required": [
+    "format_version",
+    "live_adapter_dry_run_endpoint_allowlist_evaluation_id",
+    "live_adapter_dry_run_endpoint_allowlist_evaluation_hash",
+    "endpoint_allowlist_evaluation_mechanism",
+    "endpoint_allowlist_evaluated_at",
+    "source_dispatch_readiness_id",
+    "source_dispatch_readiness_hash",
+    "source_dispatch_readiness_packet",
+    "source_live_adapter_dry_run_request_id",
+    "source_live_adapter_dry_run_request_hash",
+    "request_descriptor",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "endpoint_candidate",
+    "endpoint_candidate_digest",
+    "allowlist_snapshot",
+    "allowlist_snapshot_hash",
+    "allowlist_evaluation_result",
+    "allowlist_evaluation_digest",
+    "endpoint_identity_binding",
+    "endpoint_identity_binding_digest",
+    "endpoint_allowlist_checks",
+    "endpoint_allowlist_check_digest",
+    "future_credential_requirements",
+    "future_credential_requirement_digest",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "endpoint_allowlist_status",
+    "request_dispatch_state",
+    "endpoint_resolved",
+    "network_used",
+    "credential_material_accessed",
+    "live_adapter_instantiated",
+    "webhook_called",
+    "bind_invoked",
+    "bind_receipt_created",
+    "trustlog_written",
+    "fail_closed",
+    "scope_limitations"
+  ],
+  "type": "object"
+}
