@@ -17,6 +17,7 @@ from veritas_os.policy.live_adapter_dry_run_request import (
     PRECONDITION_NAMES,
     LiveAdapterDryRunRequestError,
     _build_expected_dispatch_preconditions,
+    _build_expected_request_descriptor,
     _digest,
     _packet_hash,
     build_live_adapter_dry_run_request_packet,
@@ -134,6 +135,23 @@ def test_expected_dispatch_preconditions_are_canonical_and_deterministic() -> No
     assert all(
         isinstance(item["precondition_scope_limitations"], list) for item in first
     )
+
+
+def test_expected_request_descriptor_is_canonical_and_deterministic() -> None:
+    """The shared descriptor helper matches canonical packet JSON exactly."""
+    source = readiness_packet()
+    first = _build_expected_request_descriptor(source)
+    second = _build_expected_request_descriptor(source)
+    packet = _packet()
+
+    assert first == second
+    assert first == packet.model_dump(mode="json")["request_descriptor"]
+    assert isinstance(first["descriptor_scope_limitations"], list)
+    assert first["target_system"] == source.execution_intent["target_system"]
+    assert first["target_resource_scope"] == source.execution_intent[
+        "target_resource"
+    ]
+    assert first["action_name"] == source.execution_intent["intended_action"]
 
 
 @pytest.mark.parametrize("semantic_match", [True, False])

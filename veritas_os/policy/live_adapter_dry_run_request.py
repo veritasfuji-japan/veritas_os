@@ -319,7 +319,11 @@ def _intent(raw: dict[str, Any]) -> ExecutionIntent:
     return intent
 
 
-def _descriptor(source: CanonicalLiveAdapterDryRunRequestReadinessPacket) -> dict[str, Any]:
+def _build_expected_request_descriptor(
+    source_readiness_packet: CanonicalLiveAdapterDryRunRequestReadinessPacket,
+) -> dict[str, Any]:
+    """Build the canonical request descriptor from the verified source only."""
+    source = source_readiness_packet
     intent = _intent(source.execution_intent)
     slug = re.sub(r"[^a-z0-9]+", "-", source.adapter_contract_id.lower()).strip("-")
     raw = {
@@ -341,8 +345,9 @@ def _descriptor(source: CanonicalLiveAdapterDryRunRequestReadinessPacket) -> dic
         "external_effect_used": False,
         "descriptor_scope_limitations": DESCRIPTOR_LIMITATIONS,
     }
-    _digest(DESCRIPTOR_DOMAIN, raw)
-    return raw
+    descriptor = _json_value(raw)
+    _digest(DESCRIPTOR_DOMAIN, descriptor)
+    return descriptor
 
 
 def _build_expected_dispatch_preconditions(
@@ -399,7 +404,7 @@ def build_live_adapter_dry_run_request_packet(
     if requested < _aware(source.readiness_evaluated_at, "LADRQ_READINESS_PACKET_INVALID"):
         raise LiveAdapterDryRunRequestError("LADRQ_REQUESTED_BEFORE_READINESS")
     source_raw = source.model_dump(mode="json")
-    request_descriptor = _descriptor(source)
+    request_descriptor = _build_expected_request_descriptor(source)
     preconditions = _build_expected_dispatch_preconditions(
         source, request_descriptor
     )
@@ -481,8 +486,9 @@ def verify_live_adapter_dry_run_request_packet(
     if (hash_execution_intent(intent) != candidate.execution_intent_hash or
             candidate.execution_intent_hash != source.execution_intent_hash):
         raise LiveAdapterDryRunRequestError("LADRQ_EXECUTION_INTENT_HASH_MISMATCH")
-    expected_descriptor = _descriptor(source)
-    if _json_value(candidate.request_descriptor) != expected_descriptor:
+    expected_descriptor = _build_expected_request_descriptor(source)
+    if (_json_value(candidate.request_descriptor) !=
+            _json_value(expected_descriptor)):
         raise LiveAdapterDryRunRequestError("LADRQ_REQUEST_DESCRIPTOR_INVALID")
     for key in ("adapter_contract_descriptor", "adapter_contract_id",
                 "adapter_contract_hash", "adapter_contract_version", *COPIED_FIELDS):
