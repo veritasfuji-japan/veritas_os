@@ -1,0 +1,2777 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.org/schemas/live-adapter-dry-run-dispatch-readiness-v1.schema.json",
+  "title": "Canonical Live Adapter Dry-Run Dispatch Readiness Packet v1",
+  "type": "object",
+  "required": [
+    "format_version",
+    "live_adapter_dry_run_dispatch_readiness_id",
+    "live_adapter_dry_run_dispatch_readiness_hash",
+    "dispatch_readiness_mechanism",
+    "dispatch_readiness_evaluated_at",
+    "source_live_adapter_dry_run_request_id",
+    "source_live_adapter_dry_run_request_hash",
+    "source_live_adapter_dry_run_request_packet",
+    "request_descriptor",
+    "dispatch_preconditions",
+    "dispatch_precondition_digest",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "source_live_adapter_dry_run_readiness_hash",
+    "source_reference_rehearsal_hash",
+    "source_adapter_dry_run_fixture_result_hash",
+    "source_adapter_dry_run_plan_hash",
+    "source_adapter_contract_selection_hash",
+    "source_bind_preflight_adjudication_hash",
+    "source_formation_hash",
+    "source_readiness_hash",
+    "source_eligibility_hash",
+    "source_handoff_hash",
+    "trusted_validation_context_hash",
+    "validation_result_hash",
+    "mapping_value_digest",
+    "execution_intent_contract_version",
+    "dispatch_readiness_status",
+    "request_dispatch_state",
+    "ready_for_endpoint_allowlist_evaluation",
+    "ready_for_credential_resolution_evaluation",
+    "ready_for_live_adapter_instance_evaluation",
+    "ready_for_operator_dispatch_review",
+    "ready_for_bind_pre_dispatch_review",
+    "fail_closed",
+    "dispatch_readiness_checks",
+    "dispatch_readiness_check_digest",
+    "future_dispatch_requirements",
+    "future_dispatch_requirement_digest",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "scope_limitations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {
+      "const": "canonical-live-adapter-dry-run-dispatch-readiness/v1"
+    },
+    "live_adapter_dry_run_dispatch_readiness_id": {
+      "type": "string",
+      "pattern": "^ladrdr:v1:sha256:[0-9a-f]{64}$"
+    },
+    "live_adapter_dry_run_dispatch_readiness_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "dispatch_readiness_mechanism": {
+      "const": "evaluate_live_adapter_dry_run_dispatch_readiness_without_dispatch/v1"
+    },
+    "dispatch_readiness_evaluated_at": {
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_request_id": {
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_request_hash": {
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_request_packet": {
+      "type": "object"
+    },
+    "request_descriptor": {
+      "type": "object"
+    },
+    "dispatch_preconditions": {
+      "type": "array"
+    },
+    "dispatch_precondition_digest": {
+      "type": "string"
+    },
+    "execution_intent": {
+      "type": "object"
+    },
+    "execution_intent_id": {
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "type": "string"
+    },
+    "adapter_contract_descriptor": {
+      "type": "object"
+    },
+    "adapter_contract_id": {
+      "type": "string"
+    },
+    "adapter_contract_hash": {
+      "type": "string"
+    },
+    "adapter_contract_version": {
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_readiness_hash": {
+      "type": "string"
+    },
+    "source_reference_rehearsal_hash": {
+      "type": "string"
+    },
+    "source_adapter_dry_run_fixture_result_hash": {
+      "type": "string"
+    },
+    "source_adapter_dry_run_plan_hash": {
+      "type": "string"
+    },
+    "source_adapter_contract_selection_hash": {
+      "type": "string"
+    },
+    "source_bind_preflight_adjudication_hash": {
+      "type": "string"
+    },
+    "source_formation_hash": {
+      "type": "string"
+    },
+    "source_readiness_hash": {
+      "type": "string"
+    },
+    "source_eligibility_hash": {
+      "type": "string"
+    },
+    "source_handoff_hash": {
+      "type": "string"
+    },
+    "trusted_validation_context_hash": {
+      "type": "string"
+    },
+    "validation_result_hash": {
+      "type": "string"
+    },
+    "mapping_value_digest": {
+      "type": "string"
+    },
+    "execution_intent_contract_version": {
+      "type": "string"
+    },
+    "dispatch_readiness_status": {
+      "const": "LIVE_ADAPTER_DRY_RUN_DISPATCH_READINESS_EVALUATED_NOT_DISPATCHED"
+    },
+    "request_dispatch_state": {
+      "const": "NOT_DISPATCHED"
+    },
+    "ready_for_endpoint_allowlist_evaluation": {
+      "const": true
+    },
+    "ready_for_credential_resolution_evaluation": {
+      "const": true
+    },
+    "ready_for_live_adapter_instance_evaluation": {
+      "const": true
+    },
+    "ready_for_operator_dispatch_review": {
+      "const": true
+    },
+    "ready_for_bind_pre_dispatch_review": {
+      "const": true
+    },
+    "fail_closed": {
+      "const": false
+    },
+    "dispatch_readiness_checks": {
+      "type": "array",
+      "minItems": 21,
+      "maxItems": 21,
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 1
+            },
+            "name": {
+              "const": "source_request_packet_verified"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 2
+            },
+            "name": {
+              "const": "request_packet_not_dispatched"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 3
+            },
+            "name": {
+              "const": "request_descriptor_preserved"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 4
+            },
+            "name": {
+              "const": "dispatch_preconditions_preserved"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 5
+            },
+            "name": {
+              "const": "execution_intent_identity_preserved"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 6
+            },
+            "name": {
+              "const": "adapter_contract_identity_preserved"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 7
+            },
+            "name": {
+              "const": "source_lineage_preserved"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 8
+            },
+            "name": {
+              "const": "no_endpoint_material_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 9
+            },
+            "name": {
+              "const": "no_credential_material_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 10
+            },
+            "name": {
+              "const": "no_network_material_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 11
+            },
+            "name": {
+              "const": "no_webhook_material_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 12
+            },
+            "name": {
+              "const": "no_live_adapter_instance_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 13
+            },
+            "name": {
+              "const": "no_bind_invocation_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 14
+            },
+            "name": {
+              "const": "no_bind_receipt_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 15
+            },
+            "name": {
+              "const": "no_trustlog_write_present"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 16
+            },
+            "name": {
+              "const": "endpoint_allowlist_evaluation_required"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 17
+            },
+            "name": {
+              "const": "credential_resolution_evaluation_required"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 18
+            },
+            "name": {
+              "const": "live_adapter_instance_evaluation_required"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 19
+            },
+            "name": {
+              "const": "operator_dispatch_review_required"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 20
+            },
+            "name": {
+              "const": "bind_pre_dispatch_review_required"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "check_id",
+            "ordinal",
+            "name",
+            "mode",
+            "passed",
+            "evidence_ref",
+            "endpoint_resolved",
+            "credential_resolved",
+            "credential_material_accessed",
+            "credential_material_embedded",
+            "network_used",
+            "webhook_called",
+            "live_adapter_instantiated",
+            "live_adapter_method_called",
+            "request_dispatched",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "filesystem_used",
+            "database_used",
+            "provider_used",
+            "subprocess_used",
+            "operation_committed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "check_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 21
+            },
+            "name": {
+              "const": "future_dispatch_gate_required"
+            },
+            "mode": {
+              "const": "deterministic_local_dispatch_readiness_evaluation_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_resolved": {
+              "const": false
+            },
+            "credential_resolved": {
+              "const": false
+            },
+            "credential_material_accessed": {
+              "const": false
+            },
+            "credential_material_embedded": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "live_adapter_instantiated": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "database_used": {
+              "const": false
+            },
+            "provider_used": {
+              "const": false
+            },
+            "subprocess_used": {
+              "const": false
+            },
+            "operation_committed": {
+              "const": false
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "dispatch_readiness_check_digest": {
+      "type": "string"
+    },
+    "future_dispatch_requirements": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 1
+            },
+            "name": {
+              "const": "endpoint_allowlist_evaluation"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 2
+            },
+            "name": {
+              "const": "endpoint_identity_binding"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 3
+            },
+            "name": {
+              "const": "credential_resolution_authorization"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 4
+            },
+            "name": {
+              "const": "credential_material_non_embedding"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 5
+            },
+            "name": {
+              "const": "live_adapter_instance_construction_boundary"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 6
+            },
+            "name": {
+              "const": "operator_human_dispatch_review"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 7
+            },
+            "name": {
+              "const": "bind_pre_dispatch_review"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 8
+            },
+            "name": {
+              "const": "network_dispatch_boundary"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 9
+            },
+            "name": {
+              "const": "external_effect_scope_declaration"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 10
+            },
+            "name": {
+              "const": "trustlog_write_boundary_after_proper_authorization"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 11
+            },
+            "name": {
+              "const": "bind_receipt_boundary_only_after_bind"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ordinal",
+            "name",
+            "separate_future_artifact_required",
+            "satisfied_by_this_packet"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ordinal": {
+              "const": 12
+            },
+            "name": {
+              "const": "rollback_postcondition_requirements_for_later_apply_path"
+            },
+            "separate_future_artifact_required": {
+              "const": true
+            },
+            "satisfied_by_this_packet": {
+              "const": false
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "future_dispatch_requirement_digest": {
+      "type": "string"
+    },
+    "source_to_execution_intent_mapping": {
+      "type": "object"
+    },
+    "field_mapping_proof": {
+      "type": "object"
+    },
+    "required_field_presence": {
+      "type": "object"
+    },
+    "source_decision_identity": {
+      "type": "object"
+    },
+    "candidate_identity": {
+      "type": "object"
+    },
+    "evidence_lineage": {
+      "type": "object"
+    },
+    "replay_summary": {
+      "type": "object"
+    },
+    "scope_limitations": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "prefixItems": [
+        {
+          "const": "NOT_DISPATCHED"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_LIVE_STATE"
+        },
+        {
+          "const": "NOT_ENDPOINT_RESOLUTION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_RESOLUTION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_ACCESS"
+        },
+        {
+          "const": "NOT_NETWORK_CALL"
+        },
+        {
+          "const": "NOT_WEBHOOK_CALL"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_PRODUCTION_CLAIM"
+        },
+        {
+          "const": "NOT_CUSTOMER_CLAIM"
+        },
+        {
+          "const": "NOT_REGULATORY_CERTIFICATION"
+        }
+      ],
+      "items": false
+    }
+  }
+}
