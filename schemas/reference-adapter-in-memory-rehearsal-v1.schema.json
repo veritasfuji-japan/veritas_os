@@ -1,0 +1,1174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.org/schemas/reference-adapter-in-memory-rehearsal-v1.schema.json",
+  "title": "Canonical Reference Adapter In-Memory Rehearsal v1",
+  "type": "object",
+  "required": [
+    "source_adapter_dry_run_fixture_result",
+    "adapter_contract_descriptor",
+    "execution_intent",
+    "local_rehearsal_checks",
+    "future_live_adapter_dry_run_requirements",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "format_version",
+    "reference_rehearsal_id",
+    "reference_rehearsal_hash",
+    "rehearsal_mechanism",
+    "rehearsed_at",
+    "source_adapter_dry_run_fixture_result_packet",
+    "reference_rehearsal_status",
+    "ready_for_live_adapter_dry_run_request",
+    "fail_closed",
+    "planned_steps",
+    "fixture_step_results",
+    "reference_rehearsal_results",
+    "scope_limitations",
+    "source_adapter_dry_run_fixture_result_hash",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "source_adapter_dry_run_plan_hash",
+    "source_adapter_contract_selection_hash",
+    "source_bind_preflight_adjudication_hash",
+    "source_formation_hash",
+    "source_readiness_hash",
+    "source_eligibility_hash",
+    "source_handoff_hash",
+    "trusted_validation_context_hash",
+    "validation_result_hash",
+    "mapping_value_digest",
+    "execution_intent_contract_version",
+    "planned_step_digest",
+    "fixture_result_digest",
+    "reference_rehearsal_result_digest"
+  ],
+  "properties": {
+    "source_adapter_dry_run_fixture_result": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "adapter_contract_descriptor": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "execution_intent": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "local_rehearsal_checks": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "future_live_adapter_dry_run_requirements": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "source_to_execution_intent_mapping": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "field_mapping_proof": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "required_field_presence": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "source_decision_identity": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "candidate_identity": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "evidence_lineage": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "replay_summary": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "format_version": {
+      "const": "canonical-reference-adapter-in-memory-rehearsal/v1"
+    },
+    "reference_rehearsal_id": {
+      "pattern": "^rar:v1:sha256:[0-9a-f]{64}$"
+    },
+    "reference_rehearsal_hash": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "rehearsal_mechanism": {
+      "const": "run_reference_adapter_in_memory_rehearsal_without_bind/v1"
+    },
+    "rehearsed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_adapter_dry_run_fixture_result_packet": {
+      "$ref": "adapter-dry-run-fixture-result-v1.schema.json"
+    },
+    "reference_rehearsal_status": {
+      "const": "REFERENCE_ADAPTER_IN_MEMORY_REHEARSAL_COMPLETED_NO_EFFECT"
+    },
+    "ready_for_live_adapter_dry_run_request": {
+      "const": true
+    },
+    "fail_closed": {
+      "const": false
+    },
+    "planned_steps": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "patternProperties": {
+          "^.*$": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "fixture_step_results": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "patternProperties": {
+          "^.*$": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "reference_rehearsal_results": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": [
+            "rehearsal_step_result_id",
+            "planned_step_id",
+            "fixture_step_result_id",
+            "ordinal",
+            "planned_adapter_method",
+            "rehearsal_mode",
+            "reference_adapter_instance_created",
+            "reference_adapter_method_called",
+            "live_adapter_instance_created",
+            "live_adapter_method_called",
+            "network_used",
+            "filesystem_used",
+            "external_effect_used",
+            "trustlog_written",
+            "bind_receipt_created",
+            "bind_invoked",
+            "output_summary",
+            "output_digest",
+            "matched_expected_output_ref",
+            "rehearsal_scope_limitations"
+          ],
+          "properties": {
+            "rehearsal_step_result_id": {
+              "pattern": "^reference-rehearsal-result:v1:[1-9][0-9]*:[a-z0-9-]+$"
+            },
+            "planned_step_id": {
+              "type": "string"
+            },
+            "fixture_step_result_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 1
+            },
+            "planned_adapter_method": {
+              "const": "describe_target"
+            },
+            "rehearsal_mode": {
+              "const": "reference_in_memory_no_effect"
+            },
+            "reference_adapter_instance_created": {
+              "const": true
+            },
+            "reference_adapter_method_called": {
+              "const": true
+            },
+            "live_adapter_instance_created": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "output_summary": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "additionalProperties": false
+            },
+            "output_digest": {
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_expected_output_ref": {
+              "type": "string"
+            },
+            "rehearsal_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "rehearsal_step_result_id",
+            "planned_step_id",
+            "fixture_step_result_id",
+            "ordinal",
+            "planned_adapter_method",
+            "rehearsal_mode",
+            "reference_adapter_instance_created",
+            "reference_adapter_method_called",
+            "live_adapter_instance_created",
+            "live_adapter_method_called",
+            "network_used",
+            "filesystem_used",
+            "external_effect_used",
+            "trustlog_written",
+            "bind_receipt_created",
+            "bind_invoked",
+            "output_summary",
+            "output_digest",
+            "matched_expected_output_ref",
+            "rehearsal_scope_limitations"
+          ],
+          "properties": {
+            "rehearsal_step_result_id": {
+              "pattern": "^reference-rehearsal-result:v1:[1-9][0-9]*:[a-z0-9-]+$"
+            },
+            "planned_step_id": {
+              "type": "string"
+            },
+            "fixture_step_result_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 2
+            },
+            "planned_adapter_method": {
+              "const": "build_idempotency_key"
+            },
+            "rehearsal_mode": {
+              "const": "reference_in_memory_no_effect"
+            },
+            "reference_adapter_instance_created": {
+              "const": true
+            },
+            "reference_adapter_method_called": {
+              "const": true
+            },
+            "live_adapter_instance_created": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "output_summary": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "additionalProperties": false
+            },
+            "output_digest": {
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_expected_output_ref": {
+              "type": "string"
+            },
+            "rehearsal_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "rehearsal_step_result_id",
+            "planned_step_id",
+            "fixture_step_result_id",
+            "ordinal",
+            "planned_adapter_method",
+            "rehearsal_mode",
+            "reference_adapter_instance_created",
+            "reference_adapter_method_called",
+            "live_adapter_instance_created",
+            "live_adapter_method_called",
+            "network_used",
+            "filesystem_used",
+            "external_effect_used",
+            "trustlog_written",
+            "bind_receipt_created",
+            "bind_invoked",
+            "output_summary",
+            "output_digest",
+            "matched_expected_output_ref",
+            "rehearsal_scope_limitations"
+          ],
+          "properties": {
+            "rehearsal_step_result_id": {
+              "pattern": "^reference-rehearsal-result:v1:[1-9][0-9]*:[a-z0-9-]+$"
+            },
+            "planned_step_id": {
+              "type": "string"
+            },
+            "fixture_step_result_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 3
+            },
+            "planned_adapter_method": {
+              "const": "snapshot"
+            },
+            "rehearsal_mode": {
+              "const": "reference_in_memory_no_effect"
+            },
+            "reference_adapter_instance_created": {
+              "const": true
+            },
+            "reference_adapter_method_called": {
+              "const": true
+            },
+            "live_adapter_instance_created": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "output_summary": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "additionalProperties": false
+            },
+            "output_digest": {
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_expected_output_ref": {
+              "type": "string"
+            },
+            "rehearsal_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "rehearsal_step_result_id",
+            "planned_step_id",
+            "fixture_step_result_id",
+            "ordinal",
+            "planned_adapter_method",
+            "rehearsal_mode",
+            "reference_adapter_instance_created",
+            "reference_adapter_method_called",
+            "live_adapter_instance_created",
+            "live_adapter_method_called",
+            "network_used",
+            "filesystem_used",
+            "external_effect_used",
+            "trustlog_written",
+            "bind_receipt_created",
+            "bind_invoked",
+            "output_summary",
+            "output_digest",
+            "matched_expected_output_ref",
+            "rehearsal_scope_limitations"
+          ],
+          "properties": {
+            "rehearsal_step_result_id": {
+              "pattern": "^reference-rehearsal-result:v1:[1-9][0-9]*:[a-z0-9-]+$"
+            },
+            "planned_step_id": {
+              "type": "string"
+            },
+            "fixture_step_result_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 4
+            },
+            "planned_adapter_method": {
+              "const": "fingerprint_state"
+            },
+            "rehearsal_mode": {
+              "const": "reference_in_memory_no_effect"
+            },
+            "reference_adapter_instance_created": {
+              "const": true
+            },
+            "reference_adapter_method_called": {
+              "const": true
+            },
+            "live_adapter_instance_created": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "output_summary": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "additionalProperties": false
+            },
+            "output_digest": {
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_expected_output_ref": {
+              "type": "string"
+            },
+            "rehearsal_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "rehearsal_step_result_id",
+            "planned_step_id",
+            "fixture_step_result_id",
+            "ordinal",
+            "planned_adapter_method",
+            "rehearsal_mode",
+            "reference_adapter_instance_created",
+            "reference_adapter_method_called",
+            "live_adapter_instance_created",
+            "live_adapter_method_called",
+            "network_used",
+            "filesystem_used",
+            "external_effect_used",
+            "trustlog_written",
+            "bind_receipt_created",
+            "bind_invoked",
+            "output_summary",
+            "output_digest",
+            "matched_expected_output_ref",
+            "rehearsal_scope_limitations"
+          ],
+          "properties": {
+            "rehearsal_step_result_id": {
+              "pattern": "^reference-rehearsal-result:v1:[1-9][0-9]*:[a-z0-9-]+$"
+            },
+            "planned_step_id": {
+              "type": "string"
+            },
+            "fixture_step_result_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 5
+            },
+            "planned_adapter_method": {
+              "const": "validate_authority"
+            },
+            "rehearsal_mode": {
+              "const": "reference_in_memory_no_effect"
+            },
+            "reference_adapter_instance_created": {
+              "const": true
+            },
+            "reference_adapter_method_called": {
+              "const": true
+            },
+            "live_adapter_instance_created": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "output_summary": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "additionalProperties": false
+            },
+            "output_digest": {
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_expected_output_ref": {
+              "type": "string"
+            },
+            "rehearsal_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "rehearsal_step_result_id",
+            "planned_step_id",
+            "fixture_step_result_id",
+            "ordinal",
+            "planned_adapter_method",
+            "rehearsal_mode",
+            "reference_adapter_instance_created",
+            "reference_adapter_method_called",
+            "live_adapter_instance_created",
+            "live_adapter_method_called",
+            "network_used",
+            "filesystem_used",
+            "external_effect_used",
+            "trustlog_written",
+            "bind_receipt_created",
+            "bind_invoked",
+            "output_summary",
+            "output_digest",
+            "matched_expected_output_ref",
+            "rehearsal_scope_limitations"
+          ],
+          "properties": {
+            "rehearsal_step_result_id": {
+              "pattern": "^reference-rehearsal-result:v1:[1-9][0-9]*:[a-z0-9-]+$"
+            },
+            "planned_step_id": {
+              "type": "string"
+            },
+            "fixture_step_result_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 6
+            },
+            "planned_adapter_method": {
+              "const": "validate_constraints"
+            },
+            "rehearsal_mode": {
+              "const": "reference_in_memory_no_effect"
+            },
+            "reference_adapter_instance_created": {
+              "const": true
+            },
+            "reference_adapter_method_called": {
+              "const": true
+            },
+            "live_adapter_instance_created": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "output_summary": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "additionalProperties": false
+            },
+            "output_digest": {
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_expected_output_ref": {
+              "type": "string"
+            },
+            "rehearsal_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "rehearsal_step_result_id",
+            "planned_step_id",
+            "fixture_step_result_id",
+            "ordinal",
+            "planned_adapter_method",
+            "rehearsal_mode",
+            "reference_adapter_instance_created",
+            "reference_adapter_method_called",
+            "live_adapter_instance_created",
+            "live_adapter_method_called",
+            "network_used",
+            "filesystem_used",
+            "external_effect_used",
+            "trustlog_written",
+            "bind_receipt_created",
+            "bind_invoked",
+            "output_summary",
+            "output_digest",
+            "matched_expected_output_ref",
+            "rehearsal_scope_limitations"
+          ],
+          "properties": {
+            "rehearsal_step_result_id": {
+              "pattern": "^reference-rehearsal-result:v1:[1-9][0-9]*:[a-z0-9-]+$"
+            },
+            "planned_step_id": {
+              "type": "string"
+            },
+            "fixture_step_result_id": {
+              "type": "string"
+            },
+            "ordinal": {
+              "const": 7
+            },
+            "planned_adapter_method": {
+              "const": "assess_runtime_risk"
+            },
+            "rehearsal_mode": {
+              "const": "reference_in_memory_no_effect"
+            },
+            "reference_adapter_instance_created": {
+              "const": true
+            },
+            "reference_adapter_method_called": {
+              "const": true
+            },
+            "live_adapter_instance_created": {
+              "const": false
+            },
+            "live_adapter_method_called": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "output_summary": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              },
+              "additionalProperties": false
+            },
+            "output_digest": {
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_expected_output_ref": {
+              "type": "string"
+            },
+            "rehearsal_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "items": false
+    },
+    "scope_limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_BIND_INVOCATION"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INVOCATION"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_EXTERNAL_EFFECT"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_LIVE_STATE_CHECK"
+        },
+        {
+          "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+        },
+        {
+          "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+        },
+        {
+          "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+        },
+        {
+          "const": "NOT_POSTCONDITION_VERIFICATION"
+        },
+        {
+          "const": "NOT_ROLLBACK_PROOF"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        }
+      ],
+      "items": false
+    },
+    "source_adapter_dry_run_fixture_result_hash": {
+      "type": "string"
+    },
+    "adapter_contract_id": {
+      "type": "string"
+    },
+    "adapter_contract_hash": {
+      "type": "string"
+    },
+    "adapter_contract_version": {
+      "type": "string"
+    },
+    "execution_intent_id": {
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "type": "string"
+    },
+    "source_adapter_dry_run_plan_hash": {
+      "type": "string"
+    },
+    "source_adapter_contract_selection_hash": {
+      "type": "string"
+    },
+    "source_bind_preflight_adjudication_hash": {
+      "type": "string"
+    },
+    "source_formation_hash": {
+      "type": "string"
+    },
+    "source_readiness_hash": {
+      "type": "string"
+    },
+    "source_eligibility_hash": {
+      "type": "string"
+    },
+    "source_handoff_hash": {
+      "type": "string"
+    },
+    "trusted_validation_context_hash": {
+      "type": "string"
+    },
+    "validation_result_hash": {
+      "type": "string"
+    },
+    "mapping_value_digest": {
+      "type": "string"
+    },
+    "execution_intent_contract_version": {
+      "type": "string"
+    },
+    "planned_step_digest": {
+      "type": "string"
+    },
+    "fixture_result_digest": {
+      "type": "string"
+    },
+    "reference_rehearsal_result_digest": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
