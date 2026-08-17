@@ -82,6 +82,19 @@ def _rehash(raw):
     raw["adapter_dry_run_result_id"] = f"adr:v1:sha256:{digest}"
 
 
+def _assert_forbidden_keys_absent(
+    value: object, forbidden_keys: set[str]
+) -> None:
+    """Reject exact forbidden JSON keys while preserving governance vocabulary."""
+    if isinstance(value, dict):
+        assert set(value).isdisjoint(forbidden_keys)
+        for item in value.values():
+            _assert_forbidden_keys_absent(item, forbidden_keys)
+    elif isinstance(value, list):
+        for item in value:
+            _assert_forbidden_keys_absent(item, forbidden_keys)
+
+
 def test_build_verify_integrity_preservation_and_no_effects(monkeypatch) -> None:
     import veritas_os.policy.adapter_dry_run_result as module
 
@@ -130,18 +143,14 @@ def test_build_verify_integrity_preservation_and_no_effects(monkeypatch) -> None
     assert set(methods).isdisjoint({"apply", "verify_postconditions", "revert"})
     for result in packet.fixture_step_results:
         assert result.result_mode == "fixture_no_effect"
-        assert not any(
-            (
-                result.live_observed,
-                result.adapter_instance_created,
-                result.adapter_method_called,
-                result.network_used,
-                result.filesystem_used,
-                result.external_effect_used,
-                result.trustlog_written,
-                result.bind_receipt_created,
-            )
-        )
+        assert result.live_observed is False
+        assert result.adapter_instance_created is False
+        assert result.adapter_method_called is False
+        assert result.network_used is False
+        assert result.filesystem_used is False
+        assert result.external_effect_used is False
+        assert result.trustlog_written is False
+        assert result.bind_receipt_created is False
         assert result.fixture_value_digest == _digest(
             VALUE_DOMAIN, result.fixture_value_summary
         )
@@ -161,9 +170,24 @@ def test_build_verify_integrity_preservation_and_no_effects(monkeypatch) -> None
     ):
         assert getattr(packet, field) == getattr(source, field)
     assert packet.replay_summary["semantic_match"] is False
-    serialized = json.dumps(packet.model_dump(mode="json"))
-    for forbidden in ("bind_receipt_id", "adapter_instance", "live_adapter_result"):
-        assert forbidden not in serialized
+    packet_json = packet.model_dump(mode="json")
+    _assert_forbidden_keys_absent(
+        packet_json,
+        {
+            "bind_receipt_id",
+            "adapter_instance",
+            "live_adapter_result",
+            "live_state_verified",
+        },
+    )
+    assert packet.local_result_checks["no_adapter_instance"] is True
+    assert (
+        packet.future_reference_adapter_rehearsal_requirements[
+            "adapter_instance_required"
+        ]
+        is True
+    )
+    assert "NOT_ADAPTER_INSTANCE" in packet.scope_limitations
 
 
 @pytest.mark.parametrize("semantic_match", [True, False])
