@@ -29,6 +29,17 @@ REHEARSED_AT = RESULTED_AT + timedelta(seconds=1)
 MODULE = Path("veritas_os/policy/reference_adapter_rehearsal.py")
 
 
+def _jsonified(value):
+    """Recursively convert typed test values to canonical JSON representations."""
+    if hasattr(value, "model_dump"):
+        return _jsonified(value.model_dump(mode="json"))
+    if isinstance(value, dict):
+        return {key: _jsonified(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonified(item) for item in value]
+    return value
+
+
 def _packet(*, semantic_match: bool = True):
     return build_reference_adapter_in_memory_rehearsal_packet(
         fixture_packet(semantic_match=semantic_match),
@@ -83,7 +94,9 @@ def test_build_verify_preserves_source_and_records_no_effects(monkeypatch) -> No
         "evidence_lineage",
         "replay_summary",
     ):
-        assert getattr(packet, field) == getattr(source, field)
+        assert _jsonified(getattr(packet, field)) == _jsonified(
+            getattr(source, field)
+        )
     assert packet.replay_summary["semantic_match"] is False
     results = list(packet.reference_rehearsal_results)
     assert [item.planned_adapter_method for item in results] == list(PLANNED_METHODS)
