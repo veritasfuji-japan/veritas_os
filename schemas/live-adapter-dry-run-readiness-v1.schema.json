@@ -1,0 +1,2525 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json",
+  "title": "Canonical Live Adapter Dry-Run Request Readiness v1",
+  "type": "object",
+  "required": [
+    "format_version",
+    "live_adapter_dry_run_readiness_id",
+    "live_adapter_dry_run_readiness_hash",
+    "readiness_mechanism",
+    "readiness_evaluated_at",
+    "source_reference_rehearsal",
+    "source_reference_rehearsal_hash",
+    "source_reference_rehearsal_packet",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "source_adapter_dry_run_fixture_result_hash",
+    "source_adapter_dry_run_plan_hash",
+    "source_adapter_contract_selection_hash",
+    "source_bind_preflight_adjudication_hash",
+    "source_formation_hash",
+    "source_readiness_hash",
+    "source_eligibility_hash",
+    "source_handoff_hash",
+    "trusted_validation_context_hash",
+    "validation_result_hash",
+    "mapping_value_digest",
+    "execution_intent_contract_version",
+    "live_adapter_dry_run_request_readiness_status",
+    "ready_for_live_adapter_dry_run_request_packet",
+    "fail_closed",
+    "planned_steps",
+    "planned_step_digest",
+    "fixture_step_results",
+    "fixture_result_digest",
+    "reference_rehearsal_results",
+    "reference_rehearsal_result_digest",
+    "readiness_checks",
+    "readiness_check_digest",
+    "local_readiness_checks",
+    "future_live_adapter_dry_run_request_packet_requirements",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "scope_limitations"
+  ],
+  "properties": {
+    "format_version": {
+      "const": "canonical-live-adapter-dry-run-request-readiness/v1"
+    },
+    "live_adapter_dry_run_readiness_id": {
+      "type": "string",
+      "pattern": "^ladr:v1:sha256:[0-9a-f]{64}$"
+    },
+    "live_adapter_dry_run_readiness_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "readiness_mechanism": {
+      "const": "evaluate_live_adapter_dry_run_request_readiness_without_request/v1"
+    },
+    "readiness_evaluated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_reference_rehearsal": {
+      "type": "object",
+      "required": [
+        "reference_rehearsal_id",
+        "reference_rehearsal_hash",
+        "format_version",
+        "rehearsal_mechanism",
+        "rehearsed_at",
+        "execution_intent_id",
+        "execution_intent_hash",
+        "reference_rehearsal_status",
+        "ready_for_live_adapter_dry_run_request"
+      ],
+      "properties": {
+        "reference_rehearsal_id": {
+          "type": "string"
+        },
+        "reference_rehearsal_hash": {
+          "type": "string"
+        },
+        "format_version": {
+          "const": "canonical-reference-adapter-in-memory-rehearsal/v1"
+        },
+        "rehearsal_mechanism": {
+          "type": "string"
+        },
+        "rehearsed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "execution_intent_id": {
+          "type": "string"
+        },
+        "execution_intent_hash": {
+          "type": "string"
+        },
+        "reference_rehearsal_status": {
+          "const": "REFERENCE_ADAPTER_IN_MEMORY_REHEARSAL_COMPLETED_NO_EFFECT"
+        },
+        "ready_for_live_adapter_dry_run_request": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_reference_rehearsal_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_reference_rehearsal_packet": {
+      "$ref": "reference-adapter-in-memory-rehearsal-v1.schema.json"
+    },
+    "adapter_contract_descriptor": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "adapter_contract_id": {
+      "type": "string"
+    },
+    "adapter_contract_hash": {
+      "type": "string"
+    },
+    "adapter_contract_version": {
+      "type": "string"
+    },
+    "execution_intent": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "execution_intent_id": {
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "type": "string"
+    },
+    "source_adapter_dry_run_fixture_result_hash": {
+      "type": "string"
+    },
+    "source_adapter_dry_run_plan_hash": {
+      "type": "string"
+    },
+    "source_adapter_contract_selection_hash": {
+      "type": "string"
+    },
+    "source_bind_preflight_adjudication_hash": {
+      "type": "string"
+    },
+    "source_formation_hash": {
+      "type": "string"
+    },
+    "source_readiness_hash": {
+      "type": "string"
+    },
+    "source_eligibility_hash": {
+      "type": "string"
+    },
+    "source_handoff_hash": {
+      "type": "string"
+    },
+    "trusted_validation_context_hash": {
+      "type": "string"
+    },
+    "validation_result_hash": {
+      "type": "string"
+    },
+    "mapping_value_digest": {
+      "type": "string"
+    },
+    "execution_intent_contract_version": {
+      "type": "string"
+    },
+    "live_adapter_dry_run_request_readiness_status": {
+      "const": "LIVE_ADAPTER_DRY_RUN_REQUEST_READY_BUT_NOT_REQUESTED"
+    },
+    "ready_for_live_adapter_dry_run_request_packet": {
+      "const": true
+    },
+    "fail_closed": {
+      "const": false
+    },
+    "planned_steps": {
+      "$ref": "reference-adapter-in-memory-rehearsal-v1.schema.json#/properties/planned_steps"
+    },
+    "planned_step_digest": {
+      "type": "string"
+    },
+    "fixture_step_results": {
+      "$ref": "reference-adapter-in-memory-rehearsal-v1.schema.json#/properties/fixture_step_results"
+    },
+    "fixture_result_digest": {
+      "type": "string"
+    },
+    "reference_rehearsal_results": {
+      "$ref": "reference-adapter-in-memory-rehearsal-v1.schema.json#/properties/reference_rehearsal_results"
+    },
+    "reference_rehearsal_result_digest": {
+      "type": "string"
+    },
+    "readiness_checks": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 1
+                },
+                "check_name": {
+                  "const": "source_reference_rehearsal_verified"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:1:source-reference-rehearsal-verified"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 2
+                },
+                "check_name": {
+                  "const": "execution_intent_identity_verified"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:2:execution-intent-identity-verified"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 3
+                },
+                "check_name": {
+                  "const": "adapter_contract_descriptor_preserved"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:3:adapter-contract-descriptor-preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 4
+                },
+                "check_name": {
+                  "const": "planned_steps_preserved"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:4:planned-steps-preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 5
+                },
+                "check_name": {
+                  "const": "fixture_results_preserved"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:5:fixture-results-preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 6
+                },
+                "check_name": {
+                  "const": "reference_rehearsal_results_preserved"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:6:reference-rehearsal-results-preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 7
+                },
+                "check_name": {
+                  "const": "no_live_adapter_already_called"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:7:no-live-adapter-already-called"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 8
+                },
+                "check_name": {
+                  "const": "no_webhook_already_called"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:8:no-webhook-already-called"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 9
+                },
+                "check_name": {
+                  "const": "no_bind_already_invoked"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:9:no-bind-already-invoked"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 10
+                },
+                "check_name": {
+                  "const": "no_bind_receipt_created"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:10:no-bind-receipt-created"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 11
+                },
+                "check_name": {
+                  "const": "no_trustlog_written"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:11:no-trustlog-written"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 12
+                },
+                "check_name": {
+                  "const": "no_external_effect_observed"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:12:no-external-effect-observed"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 13
+                },
+                "check_name": {
+                  "const": "live_dry_run_request_not_yet_created"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:13:live-dry-run-request-not-yet-created"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 14
+                },
+                "check_name": {
+                  "const": "apply_still_forbidden"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:14:apply-still-forbidden"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 15
+                },
+                "check_name": {
+                  "const": "postconditions_still_deferred"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:15:postconditions-still-deferred"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "readiness_check_id",
+                "ordinal",
+                "check_name",
+                "check_mode",
+                "passed",
+                "evidence_ref",
+                "live_observation_used",
+                "network_used",
+                "filesystem_used",
+                "credential_accessed",
+                "adapter_instance_created",
+                "adapter_method_called",
+                "bind_invoked",
+                "bind_receipt_created",
+                "trustlog_written",
+                "external_effect_used",
+                "check_scope_limitations"
+              ],
+              "properties": {
+                "readiness_check_id": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "check_name": {
+                  "type": "string"
+                },
+                "check_mode": {
+                  "const": "deterministic_local_readiness_only"
+                },
+                "passed": {
+                  "const": true
+                },
+                "evidence_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "live_observation_used": {
+                  "const": false
+                },
+                "network_used": {
+                  "const": false
+                },
+                "filesystem_used": {
+                  "const": false
+                },
+                "credential_accessed": {
+                  "const": false
+                },
+                "adapter_instance_created": {
+                  "const": false
+                },
+                "adapter_method_called": {
+                  "const": false
+                },
+                "bind_invoked": {
+                  "const": false
+                },
+                "bind_receipt_created": {
+                  "const": false
+                },
+                "trustlog_written": {
+                  "const": false
+                },
+                "external_effect_used": {
+                  "const": false
+                },
+                "check_scope_limitations": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "const": "NOT_LIVE_ADAPTER_RESULT"
+                    },
+                    {
+                      "const": "NOT_LIVE_STATE"
+                    },
+                    {
+                      "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                    },
+                    {
+                      "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                    },
+                    {
+                      "const": "NOT_BIND_AUTHORIZATION"
+                    },
+                    {
+                      "const": "NOT_BIND_RECEIPT"
+                    },
+                    {
+                      "const": "NOT_TRUSTLOG_WRITE"
+                    },
+                    {
+                      "const": "NOT_OPERATION_COMMIT"
+                    }
+                  ],
+                  "items": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 16
+                },
+                "check_name": {
+                  "const": "rollback_still_deferred"
+                },
+                "readiness_check_id": {
+                  "const": "live-adapter-dry-run-readiness-check:v1:16:rollback-still-deferred"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "readiness_check_digest": {
+      "type": "string"
+    },
+    "local_readiness_checks": {
+      "type": "object",
+      "required": [
+        "source_reference_rehearsal_verified",
+        "execution_intent_hash_verified",
+        "execution_intent_id_verified",
+        "adapter_descriptor_preserved",
+        "planned_steps_preserved",
+        "fixture_results_preserved",
+        "reference_rehearsal_results_preserved",
+        "planned_step_digest_verified",
+        "fixture_result_digest_verified",
+        "reference_rehearsal_result_digest_verified",
+        "readiness_checks_ordered",
+        "readiness_checks_digest_verified",
+        "evaluated_after_reference_rehearsal",
+        "no_live_adapter_instance",
+        "no_live_adapter_invocation",
+        "no_webhook_invocation",
+        "no_live_dry_run_request_created",
+        "no_bind_invocation",
+        "no_bind_receipt_created",
+        "no_trustlog_write",
+        "no_network",
+        "no_filesystem",
+        "no_credential_access",
+        "no_external_effect",
+        "no_apply",
+        "no_postcondition_verification",
+        "no_revert",
+        "semantic_match_not_authority"
+      ],
+      "properties": {
+        "source_reference_rehearsal_verified": {
+          "const": true
+        },
+        "execution_intent_hash_verified": {
+          "const": true
+        },
+        "execution_intent_id_verified": {
+          "const": true
+        },
+        "adapter_descriptor_preserved": {
+          "const": true
+        },
+        "planned_steps_preserved": {
+          "const": true
+        },
+        "fixture_results_preserved": {
+          "const": true
+        },
+        "reference_rehearsal_results_preserved": {
+          "const": true
+        },
+        "planned_step_digest_verified": {
+          "const": true
+        },
+        "fixture_result_digest_verified": {
+          "const": true
+        },
+        "reference_rehearsal_result_digest_verified": {
+          "const": true
+        },
+        "readiness_checks_ordered": {
+          "const": true
+        },
+        "readiness_checks_digest_verified": {
+          "const": true
+        },
+        "evaluated_after_reference_rehearsal": {
+          "const": true
+        },
+        "no_live_adapter_instance": {
+          "const": true
+        },
+        "no_live_adapter_invocation": {
+          "const": true
+        },
+        "no_webhook_invocation": {
+          "const": true
+        },
+        "no_live_dry_run_request_created": {
+          "const": true
+        },
+        "no_bind_invocation": {
+          "const": true
+        },
+        "no_bind_receipt_created": {
+          "const": true
+        },
+        "no_trustlog_write": {
+          "const": true
+        },
+        "no_network": {
+          "const": true
+        },
+        "no_filesystem": {
+          "const": true
+        },
+        "no_credential_access": {
+          "const": true
+        },
+        "no_external_effect": {
+          "const": true
+        },
+        "no_apply": {
+          "const": true
+        },
+        "no_postcondition_verification": {
+          "const": true
+        },
+        "no_revert": {
+          "const": true
+        },
+        "semantic_match_not_authority": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "future_live_adapter_dry_run_request_packet_requirements": {
+      "type": "object",
+      "required": [
+        "explicit_live_dry_run_request_packet_required",
+        "live_adapter_descriptor_required",
+        "live_adapter_endpoint_allowlist_required",
+        "live_adapter_read_only_scope_required",
+        "live_adapter_credentials_review_required",
+        "live_adapter_timeout_required",
+        "live_adapter_rate_limit_required",
+        "live_adapter_idempotency_key_required",
+        "live_adapter_no_apply_policy_required",
+        "live_adapter_no_commit_policy_required",
+        "live_adapter_no_trustlog_write_before_policy_required",
+        "bind_receipt_still_deferred",
+        "human_approval_still_required_when_policy_requires",
+        "authority_evidence_still_required",
+        "apply_still_forbidden",
+        "verify_postconditions_still_deferred",
+        "rollback_or_revert_still_deferred"
+      ],
+      "properties": {
+        "explicit_live_dry_run_request_packet_required": {
+          "const": true
+        },
+        "live_adapter_descriptor_required": {
+          "const": true
+        },
+        "live_adapter_endpoint_allowlist_required": {
+          "const": true
+        },
+        "live_adapter_read_only_scope_required": {
+          "const": true
+        },
+        "live_adapter_credentials_review_required": {
+          "const": true
+        },
+        "live_adapter_timeout_required": {
+          "const": true
+        },
+        "live_adapter_rate_limit_required": {
+          "const": true
+        },
+        "live_adapter_idempotency_key_required": {
+          "const": true
+        },
+        "live_adapter_no_apply_policy_required": {
+          "const": true
+        },
+        "live_adapter_no_commit_policy_required": {
+          "const": true
+        },
+        "live_adapter_no_trustlog_write_before_policy_required": {
+          "const": true
+        },
+        "bind_receipt_still_deferred": {
+          "const": true
+        },
+        "human_approval_still_required_when_policy_requires": {
+          "const": true
+        },
+        "authority_evidence_still_required": {
+          "const": true
+        },
+        "apply_still_forbidden": {
+          "const": true
+        },
+        "verify_postconditions_still_deferred": {
+          "const": true
+        },
+        "rollback_or_revert_still_deferred": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_to_execution_intent_mapping": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "field_mapping_proof": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "required_field_presence": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "source_decision_identity": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "candidate_identity": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "evidence_lineage": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "replay_summary": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {}
+      },
+      "additionalProperties": false
+    },
+    "scope_limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_BIND_INVOCATION"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INVOCATION"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_LIVE_DRY_RUN_REQUEST"
+        },
+        {
+          "const": "NOT_WEBHOOK_INVOCATION"
+        },
+        {
+          "const": "NOT_EXTERNAL_EFFECT"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_LIVE_STATE_CHECK"
+        },
+        {
+          "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+        },
+        {
+          "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+        },
+        {
+          "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+        },
+        {
+          "const": "NOT_POSTCONDITION_VERIFICATION"
+        },
+        {
+          "const": "NOT_ROLLBACK_PROOF"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        }
+      ],
+      "items": false
+    }
+  },
+  "additionalProperties": false
+}
