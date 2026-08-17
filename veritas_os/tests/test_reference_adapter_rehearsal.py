@@ -57,6 +57,7 @@ def test_build_verify_preserves_source_and_records_no_effects(monkeypatch) -> No
         module, "verify_adapter_dry_run_fixture_result_packet", recording
     )
     source = fixture_packet(semantic_match=False)
+    assert all(isinstance(step, dict) for step in source.planned_steps)
     packet = module.build_reference_adapter_in_memory_rehearsal_packet(
         source, {"scenario": "deterministic-reference-v1"}, REHEARSED_AT
     )

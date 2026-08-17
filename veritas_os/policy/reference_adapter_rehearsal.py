@@ -339,17 +339,25 @@ def _results(
     for step, fixture_result in zip(
         source.planned_steps, source.fixture_step_results, strict=True
     ):
-        summary = adapter.rehearse(step.planned_adapter_method, step.ordinal)
+        step_json = _json_value(step)
+        fixture_result_json = _json_value(fixture_result)
+        if not isinstance(step_json, dict) or not isinstance(
+            fixture_result_json, dict
+        ):
+            raise ReferenceAdapterRehearsalError("RAR_PACKET_INVALID")
+        method = step_json["planned_adapter_method"]
+        ordinal = step_json["ordinal"]
+        summary = adapter.rehearse(method, ordinal)
         results.append(
             {
                 "rehearsal_step_result_id": (
-                    f"reference-rehearsal-result:v1:{step.ordinal}:"
-                    f"{step.planned_adapter_method.replace('_', '-')}"
+                    f"reference-rehearsal-result:v1:{ordinal}:"
+                    f"{method.replace('_', '-')}"
                 ),
-                "planned_step_id": step.step_id,
-                "fixture_step_result_id": fixture_result.step_result_id,
-                "ordinal": step.ordinal,
-                "planned_adapter_method": step.planned_adapter_method,
+                "planned_step_id": step_json["step_id"],
+                "fixture_step_result_id": fixture_result_json["step_result_id"],
+                "ordinal": ordinal,
+                "planned_adapter_method": method,
                 "rehearsal_mode": "reference_in_memory_no_effect",
                 "reference_adapter_instance_created": True,
                 "reference_adapter_method_called": True,
@@ -363,7 +371,7 @@ def _results(
                 "bind_invoked": False,
                 "output_summary": summary,
                 "output_digest": _digest(OUTPUT_DOMAIN, summary),
-                "matched_expected_output_ref": step.expected_output_ref,
+                "matched_expected_output_ref": step_json["expected_output_ref"],
                 "rehearsal_scope_limitations": STEP_LIMITATIONS,
             }
         )
@@ -424,10 +432,8 @@ def build_reference_adapter_in_memory_rehearsal_packet(
         or descriptor["target_resource_scope"] != intent.target_resource
     ):
         raise ReferenceAdapterRehearsalError("RAR_DESCRIPTOR_MISMATCH")
-    steps = [item.model_dump(mode="json") for item in source_packet.planned_steps]
-    fixtures = [
-        item.model_dump(mode="json") for item in source_packet.fixture_step_results
-    ]
+    steps = [_json_value(item) for item in source_packet.planned_steps]
+    fixtures = [_json_value(item) for item in source_packet.fixture_step_results]
     results = _results(source_packet, fixture)
     raw = {
         "format_version": FORMAT_VERSION,
@@ -507,10 +513,8 @@ def verify_reference_adapter_in_memory_rehearsal_packet(
         or descriptor["target_resource_scope"] != intent.target_resource
     ):
         raise ReferenceAdapterRehearsalError("RAR_DESCRIPTOR_MISMATCH")
-    steps = [item.model_dump(mode="json") for item in source_packet.planned_steps]
-    fixtures = [
-        item.model_dump(mode="json") for item in source_packet.fixture_step_results
-    ]
+    steps = [_json_value(item) for item in source_packet.planned_steps]
+    fixtures = [_json_value(item) for item in source_packet.fixture_step_results]
     if list(candidate.planned_steps) != steps:
         raise ReferenceAdapterRehearsalError("RAR_PLANNED_STEPS_MISMATCH")
     if (
@@ -525,9 +529,7 @@ def verify_reference_adapter_in_memory_rehearsal_packet(
         or candidate.fixture_result_digest != _digest(FIXTURE_RESULTS_DOMAIN, fixtures)
     ):
         raise ReferenceAdapterRehearsalError("RAR_FIXTURE_RESULTS_MISMATCH")
-    results = [
-        item.model_dump(mode="json") for item in candidate.reference_rehearsal_results
-    ]
+    results = [_json_value(item) for item in candidate.reference_rehearsal_results]
     if len(results) != 7 or [
         item["planned_adapter_method"] for item in results
     ] != list(PLANNED_METHODS):
