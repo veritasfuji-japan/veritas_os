@@ -1,0 +1,2878 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.org/schemas/live-adapter-dry-run-request-v1.schema.json",
+  "title": "Canonical Live Adapter Dry-Run Request Packet v1",
+  "type": "object",
+  "required": [
+    "format_version",
+    "live_adapter_dry_run_request_id",
+    "live_adapter_dry_run_request_hash",
+    "request_mechanism",
+    "requested_at",
+    "source_live_adapter_dry_run_readiness",
+    "source_live_adapter_dry_run_readiness_hash",
+    "source_live_adapter_dry_run_readiness_packet",
+    "request_descriptor",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "source_reference_rehearsal_hash",
+    "source_adapter_dry_run_fixture_result_hash",
+    "source_adapter_dry_run_plan_hash",
+    "source_adapter_contract_selection_hash",
+    "source_bind_preflight_adjudication_hash",
+    "source_formation_hash",
+    "source_readiness_hash",
+    "source_eligibility_hash",
+    "source_handoff_hash",
+    "trusted_validation_context_hash",
+    "validation_result_hash",
+    "mapping_value_digest",
+    "execution_intent_contract_version",
+    "live_adapter_dry_run_request_status",
+    "request_dispatch_state",
+    "ready_for_live_adapter_dry_run_dispatch_readiness",
+    "fail_closed",
+    "planned_steps",
+    "planned_step_digest",
+    "fixture_step_results",
+    "fixture_result_digest",
+    "reference_rehearsal_results",
+    "reference_rehearsal_result_digest",
+    "readiness_checks",
+    "readiness_check_digest",
+    "dispatch_preconditions",
+    "dispatch_precondition_digest",
+    "request_construction_checks",
+    "future_live_adapter_dry_run_dispatch_requirements",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "scope_limitations"
+  ],
+  "properties": {
+    "format_version": {
+      "const": "canonical-live-adapter-dry-run-request/v1"
+    },
+    "live_adapter_dry_run_request_id": {
+      "type": "string",
+      "pattern": "^ladrq:v1:sha256:[0-9a-f]{64}$"
+    },
+    "live_adapter_dry_run_request_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_mechanism": {
+      "const": "construct_live_adapter_dry_run_request_without_dispatch/v1"
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_live_adapter_dry_run_readiness": {
+      "type": "object",
+      "required": [
+        "live_adapter_dry_run_readiness_id",
+        "live_adapter_dry_run_readiness_hash",
+        "format_version",
+        "readiness_mechanism",
+        "readiness_evaluated_at",
+        "execution_intent_id",
+        "execution_intent_hash",
+        "live_adapter_dry_run_request_readiness_status",
+        "ready_for_live_adapter_dry_run_request_packet"
+      ],
+      "properties": {
+        "live_adapter_dry_run_readiness_id": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/live_adapter_dry_run_readiness_id"
+        },
+        "live_adapter_dry_run_readiness_hash": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/live_adapter_dry_run_readiness_hash"
+        },
+        "format_version": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/format_version"
+        },
+        "readiness_mechanism": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/readiness_mechanism"
+        },
+        "readiness_evaluated_at": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/readiness_evaluated_at"
+        },
+        "execution_intent_id": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/execution_intent_id"
+        },
+        "execution_intent_hash": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/execution_intent_hash"
+        },
+        "live_adapter_dry_run_request_readiness_status": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/live_adapter_dry_run_request_readiness_status"
+        },
+        "ready_for_live_adapter_dry_run_request_packet": {
+          "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/ready_for_live_adapter_dry_run_request_packet"
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_live_adapter_dry_run_readiness_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_live_adapter_dry_run_readiness_packet": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json"
+    },
+    "request_descriptor": {
+      "type": "object",
+      "required": [
+        "request_descriptor_id",
+        "request_kind",
+        "dispatch_mode",
+        "adapter_contract_id",
+        "adapter_contract_hash",
+        "adapter_contract_version",
+        "target_system",
+        "target_resource_scope",
+        "action_name",
+        "dry_run_only",
+        "read_only_scope_required",
+        "no_apply",
+        "no_commit",
+        "no_state_mutation",
+        "no_trustlog_write_before_policy",
+        "no_bind_receipt_before_bind",
+        "credential_material_included",
+        "credential_accessed",
+        "endpoint_material_included",
+        "endpoint_contacted",
+        "webhook_contacted",
+        "network_used",
+        "external_effect_used",
+        "descriptor_scope_limitations"
+      ],
+      "properties": {
+        "request_descriptor_id": {
+          "type": "string",
+          "pattern": "^live-adapter-dry-run-request-descriptor:v1:[a-z0-9-]+$"
+        },
+        "request_kind": {
+          "const": "live_adapter_dry_run"
+        },
+        "dispatch_mode": {
+          "const": "not_dispatched"
+        },
+        "adapter_contract_id": {
+          "type": "string"
+        },
+        "adapter_contract_hash": {
+          "type": "string"
+        },
+        "adapter_contract_version": {
+          "type": "string"
+        },
+        "target_system": {
+          "type": "string"
+        },
+        "target_resource_scope": {
+          "type": "string"
+        },
+        "action_name": {
+          "type": "string"
+        },
+        "dry_run_only": {
+          "const": true
+        },
+        "read_only_scope_required": {
+          "const": true
+        },
+        "no_apply": {
+          "const": true
+        },
+        "no_commit": {
+          "const": true
+        },
+        "no_state_mutation": {
+          "const": true
+        },
+        "no_trustlog_write_before_policy": {
+          "const": true
+        },
+        "no_bind_receipt_before_bind": {
+          "const": true
+        },
+        "credential_material_included": {
+          "const": false
+        },
+        "credential_accessed": {
+          "const": false
+        },
+        "endpoint_material_included": {
+          "const": false
+        },
+        "endpoint_contacted": {
+          "const": false
+        },
+        "webhook_contacted": {
+          "const": false
+        },
+        "network_used": {
+          "const": false
+        },
+        "external_effect_used": {
+          "const": false
+        },
+        "descriptor_scope_limitations": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "NOT_DISPATCHED"
+            },
+            {
+              "const": "NOT_LIVE_ADAPTER_INVOCATION"
+            },
+            {
+              "const": "NOT_WEBHOOK_INVOCATION"
+            },
+            {
+              "const": "NOT_NETWORK_CALL"
+            },
+            {
+              "const": "NOT_CREDENTIAL_ACCESS"
+            },
+            {
+              "const": "NOT_LIVE_STATE"
+            },
+            {
+              "const": "NOT_BIND_AUTHORIZATION"
+            },
+            {
+              "const": "NOT_BIND_RECEIPT"
+            },
+            {
+              "const": "NOT_TRUSTLOG_WRITE"
+            },
+            {
+              "const": "NOT_OPERATION_COMMIT"
+            }
+          ],
+          "items": false,
+          "minItems": 10,
+          "maxItems": 10
+        }
+      },
+      "additionalProperties": false
+    },
+    "adapter_contract_descriptor": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/adapter_contract_descriptor"
+    },
+    "adapter_contract_id": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/adapter_contract_id"
+    },
+    "adapter_contract_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/adapter_contract_hash"
+    },
+    "adapter_contract_version": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/adapter_contract_version"
+    },
+    "execution_intent": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/execution_intent"
+    },
+    "execution_intent_id": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/execution_intent_id"
+    },
+    "execution_intent_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/execution_intent_hash"
+    },
+    "source_adapter_dry_run_fixture_result_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_adapter_dry_run_fixture_result_hash"
+    },
+    "source_adapter_dry_run_plan_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_adapter_dry_run_plan_hash"
+    },
+    "source_adapter_contract_selection_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_adapter_contract_selection_hash"
+    },
+    "source_bind_preflight_adjudication_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_bind_preflight_adjudication_hash"
+    },
+    "source_formation_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_formation_hash"
+    },
+    "source_readiness_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_readiness_hash"
+    },
+    "source_eligibility_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_eligibility_hash"
+    },
+    "source_handoff_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_handoff_hash"
+    },
+    "trusted_validation_context_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/trusted_validation_context_hash"
+    },
+    "validation_result_hash": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/validation_result_hash"
+    },
+    "mapping_value_digest": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/mapping_value_digest"
+    },
+    "execution_intent_contract_version": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/execution_intent_contract_version"
+    },
+    "planned_steps": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/planned_steps"
+    },
+    "planned_step_digest": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/planned_step_digest"
+    },
+    "fixture_step_results": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/fixture_step_results"
+    },
+    "fixture_result_digest": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/fixture_result_digest"
+    },
+    "reference_rehearsal_results": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/reference_rehearsal_results"
+    },
+    "reference_rehearsal_result_digest": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/reference_rehearsal_result_digest"
+    },
+    "readiness_checks": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/readiness_checks"
+    },
+    "readiness_check_digest": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/readiness_check_digest"
+    },
+    "source_to_execution_intent_mapping": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_to_execution_intent_mapping"
+    },
+    "field_mapping_proof": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/field_mapping_proof"
+    },
+    "required_field_presence": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/required_field_presence"
+    },
+    "source_decision_identity": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/source_decision_identity"
+    },
+    "candidate_identity": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/candidate_identity"
+    },
+    "evidence_lineage": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/evidence_lineage"
+    },
+    "replay_summary": {
+      "$ref": "https://veritas-os.org/schemas/live-adapter-dry-run-readiness-v1.schema.json#/properties/replay_summary"
+    },
+    "source_reference_rehearsal_hash": {
+      "type": "string"
+    },
+    "live_adapter_dry_run_request_status": {
+      "const": "LIVE_ADAPTER_DRY_RUN_REQUEST_CREATED_NOT_DISPATCHED"
+    },
+    "request_dispatch_state": {
+      "const": "NOT_DISPATCHED"
+    },
+    "ready_for_live_adapter_dry_run_dispatch_readiness": {
+      "const": true
+    },
+    "fail_closed": {
+      "const": false
+    },
+    "dispatch_preconditions": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:1:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 1
+            },
+            "precondition_name": {
+              "const": "readiness_packet_verified"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:2:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 2
+            },
+            "precondition_name": {
+              "const": "execution_intent_identity_verified"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:3:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 3
+            },
+            "precondition_name": {
+              "const": "adapter_descriptor_preserved"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:4:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 4
+            },
+            "precondition_name": {
+              "const": "request_descriptor_constructed"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:5:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 5
+            },
+            "precondition_name": {
+              "const": "dry_run_only_policy_declared"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:6:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 6
+            },
+            "precondition_name": {
+              "const": "read_only_scope_declared"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:7:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 7
+            },
+            "precondition_name": {
+              "const": "no_apply_policy_declared"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:8:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 8
+            },
+            "precondition_name": {
+              "const": "no_commit_policy_declared"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:9:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 9
+            },
+            "precondition_name": {
+              "const": "no_credential_material_embedded"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:10:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 10
+            },
+            "precondition_name": {
+              "const": "no_endpoint_material_embedded"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:11:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 11
+            },
+            "precondition_name": {
+              "const": "dispatch_not_performed"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:12:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 12
+            },
+            "precondition_name": {
+              "const": "webhook_not_called"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:13:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 13
+            },
+            "precondition_name": {
+              "const": "live_adapter_not_instantiated"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:14:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 14
+            },
+            "precondition_name": {
+              "const": "bind_not_invoked"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:15:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 15
+            },
+            "precondition_name": {
+              "const": "bind_receipt_not_created"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:16:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 16
+            },
+            "precondition_name": {
+              "const": "trustlog_not_written"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:17:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 17
+            },
+            "precondition_name": {
+              "const": "external_effect_not_used"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "precondition_id",
+            "ordinal",
+            "precondition_name",
+            "precondition_mode",
+            "passed",
+            "evidence_ref",
+            "live_observation_used",
+            "network_used",
+            "filesystem_used",
+            "credential_accessed",
+            "adapter_instance_created",
+            "adapter_method_called",
+            "request_dispatched",
+            "webhook_called",
+            "bind_invoked",
+            "bind_receipt_created",
+            "trustlog_written",
+            "external_effect_used",
+            "precondition_scope_limitations"
+          ],
+          "properties": {
+            "live_observation_used": {
+              "const": false
+            },
+            "network_used": {
+              "const": false
+            },
+            "filesystem_used": {
+              "const": false
+            },
+            "credential_accessed": {
+              "const": false
+            },
+            "adapter_instance_created": {
+              "const": false
+            },
+            "adapter_method_called": {
+              "const": false
+            },
+            "request_dispatched": {
+              "const": false
+            },
+            "webhook_called": {
+              "const": false
+            },
+            "bind_invoked": {
+              "const": false
+            },
+            "bind_receipt_created": {
+              "const": false
+            },
+            "trustlog_written": {
+              "const": false
+            },
+            "external_effect_used": {
+              "const": false
+            },
+            "precondition_id": {
+              "type": "string",
+              "pattern": "^live-adapter-dry-run-dispatch-precondition:v1:18:[a-z0-9-]+$"
+            },
+            "ordinal": {
+              "const": 18
+            },
+            "precondition_name": {
+              "const": "future_dispatch_gate_required"
+            },
+            "precondition_mode": {
+              "const": "deterministic_local_request_construction_only"
+            },
+            "passed": {
+              "const": true
+            },
+            "evidence_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "precondition_scope_limitations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "NOT_DISPATCHED"
+                },
+                {
+                  "const": "NOT_LIVE_ADAPTER_RESULT"
+                },
+                {
+                  "const": "NOT_LIVE_STATE"
+                },
+                {
+                  "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+                },
+                {
+                  "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+                },
+                {
+                  "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+                },
+                {
+                  "const": "NOT_BIND_AUTHORIZATION"
+                },
+                {
+                  "const": "NOT_BIND_RECEIPT"
+                },
+                {
+                  "const": "NOT_TRUSTLOG_WRITE"
+                },
+                {
+                  "const": "NOT_OPERATION_COMMIT"
+                }
+              ],
+              "items": false,
+              "minItems": 10,
+              "maxItems": 10
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "items": false,
+      "minItems": 18,
+      "maxItems": 18
+    },
+    "dispatch_precondition_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_construction_checks": {
+      "type": "object",
+      "required": [
+        "readiness_packet_verified",
+        "execution_intent_hash_verified",
+        "execution_intent_id_verified",
+        "adapter_descriptor_preserved",
+        "planned_steps_preserved",
+        "fixture_results_preserved",
+        "reference_rehearsal_results_preserved",
+        "readiness_checks_preserved",
+        "planned_step_digest_verified",
+        "fixture_result_digest_verified",
+        "reference_rehearsal_result_digest_verified",
+        "readiness_check_digest_verified",
+        "request_descriptor_constructed",
+        "dispatch_preconditions_ordered",
+        "dispatch_precondition_digest_verified",
+        "requested_after_readiness_evaluation",
+        "no_live_adapter_instance",
+        "no_live_adapter_invocation",
+        "no_webhook_invocation",
+        "no_live_dry_run_dispatch",
+        "no_bind_invocation",
+        "no_bind_receipt_created",
+        "no_trustlog_write",
+        "no_network",
+        "no_filesystem",
+        "no_credential_access",
+        "no_endpoint_contact",
+        "no_external_effect",
+        "no_apply",
+        "no_postcondition_verification",
+        "no_revert",
+        "semantic_match_not_authority"
+      ],
+      "properties": {
+        "readiness_packet_verified": {
+          "const": true
+        },
+        "execution_intent_hash_verified": {
+          "const": true
+        },
+        "execution_intent_id_verified": {
+          "const": true
+        },
+        "adapter_descriptor_preserved": {
+          "const": true
+        },
+        "planned_steps_preserved": {
+          "const": true
+        },
+        "fixture_results_preserved": {
+          "const": true
+        },
+        "reference_rehearsal_results_preserved": {
+          "const": true
+        },
+        "readiness_checks_preserved": {
+          "const": true
+        },
+        "planned_step_digest_verified": {
+          "const": true
+        },
+        "fixture_result_digest_verified": {
+          "const": true
+        },
+        "reference_rehearsal_result_digest_verified": {
+          "const": true
+        },
+        "readiness_check_digest_verified": {
+          "const": true
+        },
+        "request_descriptor_constructed": {
+          "const": true
+        },
+        "dispatch_preconditions_ordered": {
+          "const": true
+        },
+        "dispatch_precondition_digest_verified": {
+          "const": true
+        },
+        "requested_after_readiness_evaluation": {
+          "const": true
+        },
+        "no_live_adapter_instance": {
+          "const": true
+        },
+        "no_live_adapter_invocation": {
+          "const": true
+        },
+        "no_webhook_invocation": {
+          "const": true
+        },
+        "no_live_dry_run_dispatch": {
+          "const": true
+        },
+        "no_bind_invocation": {
+          "const": true
+        },
+        "no_bind_receipt_created": {
+          "const": true
+        },
+        "no_trustlog_write": {
+          "const": true
+        },
+        "no_network": {
+          "const": true
+        },
+        "no_filesystem": {
+          "const": true
+        },
+        "no_credential_access": {
+          "const": true
+        },
+        "no_endpoint_contact": {
+          "const": true
+        },
+        "no_external_effect": {
+          "const": true
+        },
+        "no_apply": {
+          "const": true
+        },
+        "no_postcondition_verification": {
+          "const": true
+        },
+        "no_revert": {
+          "const": true
+        },
+        "semantic_match_not_authority": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "future_live_adapter_dry_run_dispatch_requirements": {
+      "type": "object",
+      "required": [
+        "dispatch_readiness_packet_required",
+        "endpoint_allowlist_resolution_required",
+        "credential_resolution_required",
+        "credential_scope_review_required",
+        "live_adapter_instance_policy_required",
+        "live_adapter_timeout_required",
+        "live_adapter_rate_limit_required",
+        "live_adapter_idempotency_key_required",
+        "dry_run_only_enforcement_required",
+        "no_apply_runtime_guard_required",
+        "no_commit_runtime_guard_required",
+        "network_egress_policy_required",
+        "webhook_dispatch_policy_required",
+        "live_result_packet_required",
+        "bind_receipt_still_deferred",
+        "human_approval_still_required_when_policy_requires",
+        "authority_evidence_still_required",
+        "apply_still_forbidden",
+        "verify_postconditions_still_deferred",
+        "rollback_or_revert_still_deferred"
+      ],
+      "properties": {
+        "dispatch_readiness_packet_required": {
+          "const": true
+        },
+        "endpoint_allowlist_resolution_required": {
+          "const": true
+        },
+        "credential_resolution_required": {
+          "const": true
+        },
+        "credential_scope_review_required": {
+          "const": true
+        },
+        "live_adapter_instance_policy_required": {
+          "const": true
+        },
+        "live_adapter_timeout_required": {
+          "const": true
+        },
+        "live_adapter_rate_limit_required": {
+          "const": true
+        },
+        "live_adapter_idempotency_key_required": {
+          "const": true
+        },
+        "dry_run_only_enforcement_required": {
+          "const": true
+        },
+        "no_apply_runtime_guard_required": {
+          "const": true
+        },
+        "no_commit_runtime_guard_required": {
+          "const": true
+        },
+        "network_egress_policy_required": {
+          "const": true
+        },
+        "webhook_dispatch_policy_required": {
+          "const": true
+        },
+        "live_result_packet_required": {
+          "const": true
+        },
+        "bind_receipt_still_deferred": {
+          "const": true
+        },
+        "human_approval_still_required_when_policy_requires": {
+          "const": true
+        },
+        "authority_evidence_still_required": {
+          "const": true
+        },
+        "apply_still_forbidden": {
+          "const": true
+        },
+        "verify_postconditions_still_deferred": {
+          "const": true
+        },
+        "rollback_or_revert_still_deferred": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "scope_limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_BIND_INVOCATION"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INVOCATION"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_LIVE_DRY_RUN_DISPATCH"
+        },
+        {
+          "const": "NOT_WEBHOOK_INVOCATION"
+        },
+        {
+          "const": "NOT_NETWORK_CALL"
+        },
+        {
+          "const": "NOT_CREDENTIAL_ACCESS"
+        },
+        {
+          "const": "NOT_EXTERNAL_EFFECT"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_LIVE_STATE_CHECK"
+        },
+        {
+          "const": "NOT_RUNTIME_RISK_ACCEPTANCE"
+        },
+        {
+          "const": "NOT_LIVE_AUTHORITY_REVALIDATION"
+        },
+        {
+          "const": "NOT_LIVE_CONSTRAINT_REVALIDATION"
+        },
+        {
+          "const": "NOT_POSTCONDITION_VERIFICATION"
+        },
+        {
+          "const": "NOT_ROLLBACK_PROOF"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        }
+      ],
+      "items": false,
+      "minItems": 22,
+      "maxItems": 22
+    }
+  },
+  "additionalProperties": false
+}
