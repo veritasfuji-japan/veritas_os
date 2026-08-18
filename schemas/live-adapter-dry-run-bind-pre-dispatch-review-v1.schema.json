@@ -1,0 +1,1779 @@
+{
+  "$defs": {
+    "BindPreDispatchReviewCheck": {
+      "additionalProperties": false,
+      "description": "One ordered local check with explicit false effect flags.",
+      "properties": {
+        "check_id": {
+          "title": "Check Id",
+          "type": "string"
+        },
+        "ordinal": {
+          "maximum": 37,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "name": {
+          "enum": [
+            "source_operator_dispatch_review_verified",
+            "source_request_not_dispatched",
+            "source_bind_not_invoked",
+            "source_operator_review_accepted",
+            "bind_pre_dispatch_review_decision_closed_schema_valid",
+            "reviewer_identity_present",
+            "reviewer_role_present",
+            "reviewer_attestation_present",
+            "acknowledged_not_bind_authorization",
+            "acknowledged_no_bind_invocation",
+            "acknowledged_no_bind_receipt",
+            "acknowledged_no_trustlog_write",
+            "acknowledged_no_dispatch",
+            "acknowledged_no_credential_access",
+            "acknowledged_no_network_call",
+            "acknowledged_semantic_match_not_authority",
+            "request_descriptor_preserved",
+            "execution_intent_identity_preserved",
+            "adapter_contract_identity_preserved",
+            "endpoint_identity_binding_preserved",
+            "credential_scope_binding_preserved",
+            "operator_review_decision_preserved",
+            "bind_boundary_preconditions_constructed",
+            "bind_not_invoked",
+            "bind_receipt_not_created",
+            "trustlog_not_written",
+            "request_not_dispatched",
+            "endpoint_not_resolved",
+            "credential_material_not_accessed",
+            "authorization_header_not_constructed",
+            "network_not_used",
+            "webhook_not_called",
+            "live_adapter_not_instantiated",
+            "no_execution_authority_created",
+            "no_human_approval_created",
+            "no_authority_evidence_created",
+            "future_bind_invocation_gate_required"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "mode": {
+          "const": "deterministic_local_bind_pre_dispatch_review_only",
+          "title": "Mode",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "evidence_ref": {
+          "title": "Evidence Ref",
+          "type": "string"
+        },
+        "bind_invoked": {
+          "const": false,
+          "title": "Bind Invoked",
+          "type": "boolean"
+        },
+        "bind_receipt_created": {
+          "const": false,
+          "title": "Bind Receipt Created",
+          "type": "boolean"
+        },
+        "trustlog_written": {
+          "const": false,
+          "title": "Trustlog Written",
+          "type": "boolean"
+        },
+        "request_dispatched": {
+          "const": false,
+          "title": "Request Dispatched",
+          "type": "boolean"
+        },
+        "endpoint_resolved": {
+          "const": false,
+          "title": "Endpoint Resolved",
+          "type": "boolean"
+        },
+        "credential_material_accessed": {
+          "const": false,
+          "title": "Credential Material Accessed",
+          "type": "boolean"
+        },
+        "credential_material_embedded": {
+          "const": false,
+          "title": "Credential Material Embedded",
+          "type": "boolean"
+        },
+        "authorization_header_constructed": {
+          "const": false,
+          "title": "Authorization Header Constructed",
+          "type": "boolean"
+        },
+        "token_embedded": {
+          "const": false,
+          "title": "Token Embedded",
+          "type": "boolean"
+        },
+        "secret_embedded": {
+          "const": false,
+          "title": "Secret Embedded",
+          "type": "boolean"
+        },
+        "network_used": {
+          "const": false,
+          "title": "Network Used",
+          "type": "boolean"
+        },
+        "dns_used": {
+          "const": false,
+          "title": "Dns Used",
+          "type": "boolean"
+        },
+        "webhook_called": {
+          "const": false,
+          "title": "Webhook Called",
+          "type": "boolean"
+        },
+        "live_adapter_instantiated": {
+          "const": false,
+          "title": "Live Adapter Instantiated",
+          "type": "boolean"
+        },
+        "live_adapter_method_called": {
+          "const": false,
+          "title": "Live Adapter Method Called",
+          "type": "boolean"
+        },
+        "external_effect_used": {
+          "const": false,
+          "title": "External Effect Used",
+          "type": "boolean"
+        },
+        "filesystem_used": {
+          "const": false,
+          "title": "Filesystem Used",
+          "type": "boolean"
+        },
+        "database_used": {
+          "const": false,
+          "title": "Database Used",
+          "type": "boolean"
+        },
+        "provider_used": {
+          "const": false,
+          "title": "Provider Used",
+          "type": "boolean"
+        },
+        "subprocess_used": {
+          "const": false,
+          "title": "Subprocess Used",
+          "type": "boolean"
+        },
+        "operation_committed": {
+          "const": false,
+          "title": "Operation Committed",
+          "type": "boolean"
+        },
+        "execution_authority_created": {
+          "const": false,
+          "title": "Execution Authority Created",
+          "type": "boolean"
+        },
+        "human_approval_created": {
+          "const": false,
+          "title": "Human Approval Created",
+          "type": "boolean"
+        },
+        "authority_evidence_created": {
+          "const": false,
+          "title": "Authority Evidence Created",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "check_id",
+        "ordinal",
+        "name",
+        "mode",
+        "passed",
+        "evidence_ref",
+        "bind_invoked",
+        "bind_receipt_created",
+        "trustlog_written",
+        "request_dispatched",
+        "endpoint_resolved",
+        "credential_material_accessed",
+        "credential_material_embedded",
+        "authorization_header_constructed",
+        "token_embedded",
+        "secret_embedded",
+        "network_used",
+        "dns_used",
+        "webhook_called",
+        "live_adapter_instantiated",
+        "live_adapter_method_called",
+        "external_effect_used",
+        "filesystem_used",
+        "database_used",
+        "provider_used",
+        "subprocess_used",
+        "operation_committed",
+        "execution_authority_created",
+        "human_approval_created",
+        "authority_evidence_created"
+      ],
+      "title": "BindPreDispatchReviewCheck",
+      "type": "object"
+    },
+    "BindPreDispatchReviewDecision": {
+      "additionalProperties": false,
+      "description": "Closed reviewer decision with mandatory non-authority acknowledgements.",
+      "properties": {
+        "bind_pre_dispatch_review_decision_id": {
+          "minLength": 1,
+          "title": "Bind Pre Dispatch Review Decision Id",
+          "type": "string"
+        },
+        "reviewer_id": {
+          "minLength": 1,
+          "title": "Reviewer Id",
+          "type": "string"
+        },
+        "reviewer_role": {
+          "minLength": 1,
+          "title": "Reviewer Role",
+          "type": "string"
+        },
+        "reviewer_attestation": {
+          "minLength": 1,
+          "title": "Reviewer Attestation",
+          "type": "string"
+        },
+        "reviewed_at": {
+          "title": "Reviewed At",
+          "type": "string"
+        },
+        "review_outcome": {
+          "enum": [
+            "ACCEPTED_FOR_FUTURE_BIND_DISPATCH_GATE_REVIEW",
+            "REJECTED_FOR_FUTURE_BIND_DISPATCH_GATE_REVIEW"
+          ],
+          "title": "Review Outcome",
+          "type": "string"
+        },
+        "review_reason": {
+          "minLength": 1,
+          "title": "Review Reason",
+          "type": "string"
+        },
+        "acknowledged_not_bind_authorization": {
+          "const": true,
+          "title": "Acknowledged Not Bind Authorization",
+          "type": "boolean"
+        },
+        "acknowledged_no_bind_invocation": {
+          "const": true,
+          "title": "Acknowledged No Bind Invocation",
+          "type": "boolean"
+        },
+        "acknowledged_no_bind_receipt": {
+          "const": true,
+          "title": "Acknowledged No Bind Receipt",
+          "type": "boolean"
+        },
+        "acknowledged_no_trustlog_write": {
+          "const": true,
+          "title": "Acknowledged No Trustlog Write",
+          "type": "boolean"
+        },
+        "acknowledged_no_dispatch": {
+          "const": true,
+          "title": "Acknowledged No Dispatch",
+          "type": "boolean"
+        },
+        "acknowledged_no_credential_access": {
+          "const": true,
+          "title": "Acknowledged No Credential Access",
+          "type": "boolean"
+        },
+        "acknowledged_no_network_call": {
+          "const": true,
+          "title": "Acknowledged No Network Call",
+          "type": "boolean"
+        },
+        "acknowledged_semantic_match_not_authority": {
+          "const": true,
+          "title": "Acknowledged Semantic Match Not Authority",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bind_pre_dispatch_review_decision_id",
+        "reviewer_id",
+        "reviewer_role",
+        "reviewer_attestation",
+        "reviewed_at",
+        "review_outcome",
+        "review_reason",
+        "acknowledged_not_bind_authorization",
+        "acknowledged_no_bind_invocation",
+        "acknowledged_no_bind_receipt",
+        "acknowledged_no_trustlog_write",
+        "acknowledged_no_dispatch",
+        "acknowledged_no_credential_access",
+        "acknowledged_no_network_call",
+        "acknowledged_semantic_match_not_authority"
+      ],
+      "title": "BindPreDispatchReviewDecision",
+      "type": "object"
+    },
+    "BindPreDispatchReviewResult": {
+      "additionalProperties": false,
+      "description": "Deterministic outcome that explicitly creates no authority.",
+      "properties": {
+        "accepted_for_future_bind_dispatch_gate_review": {
+          "title": "Accepted For Future Bind Dispatch Gate Review",
+          "type": "boolean"
+        },
+        "rejection_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rejection Reasons",
+          "type": "array"
+        },
+        "review_reason": {
+          "title": "Review Reason",
+          "type": "string"
+        },
+        "comparison_mode": {
+          "const": "deterministic_local_bind_pre_dispatch_review_only",
+          "title": "Comparison Mode",
+          "type": "string"
+        },
+        "semantic_match_used": {
+          "const": false,
+          "title": "Semantic Match Used",
+          "type": "boolean"
+        },
+        "creates_bind_authorization": {
+          "const": false,
+          "title": "Creates Bind Authorization",
+          "type": "boolean"
+        },
+        "creates_execution_authority": {
+          "const": false,
+          "title": "Creates Execution Authority",
+          "type": "boolean"
+        },
+        "creates_human_approval": {
+          "const": false,
+          "title": "Creates Human Approval",
+          "type": "boolean"
+        },
+        "creates_authority_evidence": {
+          "const": false,
+          "title": "Creates Authority Evidence",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "accepted_for_future_bind_dispatch_gate_review",
+        "rejection_reasons",
+        "review_reason",
+        "comparison_mode",
+        "semantic_match_used",
+        "creates_bind_authorization",
+        "creates_execution_authority",
+        "creates_human_approval",
+        "creates_authority_evidence"
+      ],
+      "title": "BindPreDispatchReviewResult",
+      "type": "object"
+    },
+    "FutureBindInvocationRequirement": {
+      "additionalProperties": false,
+      "description": "A future proof boundary that this packet does not satisfy.",
+      "properties": {
+        "ordinal": {
+          "maximum": 13,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "name": {
+          "enum": [
+            "valid_authority_evidence",
+            "valid_human_approval_where_required",
+            "final_policy_admissibility",
+            "final_endpoint_identity_binding",
+            "final_credential_resolution_boundary",
+            "final_authorization_header_construction_boundary",
+            "runtime_risk_review",
+            "idempotency_key_binding",
+            "request_dispatch_boundary",
+            "bind_invocation_boundary",
+            "bind_receipt_creation_boundary",
+            "trustlog_write_boundary_after_bind",
+            "postcondition_and_rollback_requirements_for_later_apply_path"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "separate_future_artifact_required": {
+          "const": true,
+          "title": "Separate Future Artifact Required",
+          "type": "boolean"
+        },
+        "satisfied_by_this_packet": {
+          "const": false,
+          "title": "Satisfied By This Packet",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ordinal",
+        "name",
+        "separate_future_artifact_required",
+        "satisfied_by_this_packet"
+      ],
+      "title": "FutureBindInvocationRequirement",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Closed content-addressed, non-effecting Bind review packet.",
+  "properties": {
+    "format_version": {
+      "const": "canonical-live-adapter-dry-run-bind-pre-dispatch-review/v1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "live_adapter_dry_run_bind_pre_dispatch_review_id": {
+      "title": "Live Adapter Dry Run Bind Pre Dispatch Review Id",
+      "type": "string"
+    },
+    "live_adapter_dry_run_bind_pre_dispatch_review_hash": {
+      "title": "Live Adapter Dry Run Bind Pre Dispatch Review Hash",
+      "type": "string"
+    },
+    "bind_pre_dispatch_review_mechanism": {
+      "const": "review_live_adapter_dry_run_bind_pre_dispatch_without_bind_invocation/v1",
+      "title": "Bind Pre Dispatch Review Mechanism",
+      "type": "string"
+    },
+    "bind_pre_dispatch_review_recorded_at": {
+      "title": "Bind Pre Dispatch Review Recorded At",
+      "type": "string"
+    },
+    "source_operator_dispatch_review_id": {
+      "title": "Source Operator Dispatch Review Id",
+      "type": "string"
+    },
+    "source_operator_dispatch_review_hash": {
+      "title": "Source Operator Dispatch Review Hash",
+      "type": "string"
+    },
+    "source_operator_dispatch_review_packet": {
+      "additionalProperties": true,
+      "title": "Source Operator Dispatch Review Packet",
+      "type": "object"
+    },
+    "source_credential_authorization_hash": {
+      "title": "Source Credential Authorization Hash",
+      "type": "string"
+    },
+    "source_endpoint_allowlist_evaluation_hash": {
+      "title": "Source Endpoint Allowlist Evaluation Hash",
+      "type": "string"
+    },
+    "source_dispatch_readiness_hash": {
+      "title": "Source Dispatch Readiness Hash",
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_request_hash": {
+      "title": "Source Live Adapter Dry Run Request Hash",
+      "type": "string"
+    },
+    "request_descriptor": {
+      "additionalProperties": true,
+      "title": "Request Descriptor",
+      "type": "object"
+    },
+    "execution_intent": {
+      "additionalProperties": true,
+      "title": "Execution Intent",
+      "type": "object"
+    },
+    "execution_intent_id": {
+      "title": "Execution Intent Id",
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "title": "Execution Intent Hash",
+      "type": "string"
+    },
+    "adapter_contract_descriptor": {
+      "additionalProperties": true,
+      "title": "Adapter Contract Descriptor",
+      "type": "object"
+    },
+    "adapter_contract_id": {
+      "title": "Adapter Contract Id",
+      "type": "string"
+    },
+    "adapter_contract_hash": {
+      "title": "Adapter Contract Hash",
+      "type": "string"
+    },
+    "adapter_contract_version": {
+      "title": "Adapter Contract Version",
+      "type": "string"
+    },
+    "endpoint_candidate": {
+      "additionalProperties": true,
+      "title": "Endpoint Candidate",
+      "type": "object"
+    },
+    "endpoint_candidate_digest": {
+      "title": "Endpoint Candidate Digest",
+      "type": "string"
+    },
+    "endpoint_identity_binding": {
+      "additionalProperties": true,
+      "title": "Endpoint Identity Binding",
+      "type": "object"
+    },
+    "endpoint_identity_binding_digest": {
+      "title": "Endpoint Identity Binding Digest",
+      "type": "string"
+    },
+    "credential_reference": {
+      "additionalProperties": true,
+      "title": "Credential Reference",
+      "type": "object"
+    },
+    "credential_reference_digest": {
+      "title": "Credential Reference Digest",
+      "type": "string"
+    },
+    "credential_scope_binding": {
+      "additionalProperties": true,
+      "title": "Credential Scope Binding",
+      "type": "object"
+    },
+    "credential_scope_binding_digest": {
+      "title": "Credential Scope Binding Digest",
+      "type": "string"
+    },
+    "operator_review_decision": {
+      "additionalProperties": true,
+      "title": "Operator Review Decision",
+      "type": "object"
+    },
+    "operator_review_decision_digest": {
+      "title": "Operator Review Decision Digest",
+      "type": "string"
+    },
+    "bind_pre_dispatch_review_decision": {
+      "$ref": "#/$defs/BindPreDispatchReviewDecision"
+    },
+    "bind_pre_dispatch_review_decision_digest": {
+      "title": "Bind Pre Dispatch Review Decision Digest",
+      "type": "string"
+    },
+    "bind_pre_dispatch_review_result": {
+      "$ref": "#/$defs/BindPreDispatchReviewResult"
+    },
+    "bind_pre_dispatch_review_result_digest": {
+      "title": "Bind Pre Dispatch Review Result Digest",
+      "type": "string"
+    },
+    "bind_boundary_preconditions": {
+      "additionalProperties": true,
+      "title": "Bind Boundary Preconditions",
+      "type": "object"
+    },
+    "bind_boundary_precondition_digest": {
+      "title": "Bind Boundary Precondition Digest",
+      "type": "string"
+    },
+    "bind_pre_dispatch_review_checks": {
+      "type": "array",
+      "minItems": 37,
+      "maxItems": 37,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "source_operator_dispatch_review_verified"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "source_request_not_dispatched"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 3
+                },
+                "name": {
+                  "const": "source_bind_not_invoked"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 4
+                },
+                "name": {
+                  "const": "source_operator_review_accepted"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 5
+                },
+                "name": {
+                  "const": "bind_pre_dispatch_review_decision_closed_schema_valid"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 6
+                },
+                "name": {
+                  "const": "reviewer_identity_present"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 7
+                },
+                "name": {
+                  "const": "reviewer_role_present"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 8
+                },
+                "name": {
+                  "const": "reviewer_attestation_present"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 9
+                },
+                "name": {
+                  "const": "acknowledged_not_bind_authorization"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 10
+                },
+                "name": {
+                  "const": "acknowledged_no_bind_invocation"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 11
+                },
+                "name": {
+                  "const": "acknowledged_no_bind_receipt"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 12
+                },
+                "name": {
+                  "const": "acknowledged_no_trustlog_write"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 13
+                },
+                "name": {
+                  "const": "acknowledged_no_dispatch"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 14
+                },
+                "name": {
+                  "const": "acknowledged_no_credential_access"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 15
+                },
+                "name": {
+                  "const": "acknowledged_no_network_call"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 16
+                },
+                "name": {
+                  "const": "acknowledged_semantic_match_not_authority"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 17
+                },
+                "name": {
+                  "const": "request_descriptor_preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 18
+                },
+                "name": {
+                  "const": "execution_intent_identity_preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 19
+                },
+                "name": {
+                  "const": "adapter_contract_identity_preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 20
+                },
+                "name": {
+                  "const": "endpoint_identity_binding_preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 21
+                },
+                "name": {
+                  "const": "credential_scope_binding_preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 22
+                },
+                "name": {
+                  "const": "operator_review_decision_preserved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 23
+                },
+                "name": {
+                  "const": "bind_boundary_preconditions_constructed"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 24
+                },
+                "name": {
+                  "const": "bind_not_invoked"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 25
+                },
+                "name": {
+                  "const": "bind_receipt_not_created"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 26
+                },
+                "name": {
+                  "const": "trustlog_not_written"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 27
+                },
+                "name": {
+                  "const": "request_not_dispatched"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 28
+                },
+                "name": {
+                  "const": "endpoint_not_resolved"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 29
+                },
+                "name": {
+                  "const": "credential_material_not_accessed"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 30
+                },
+                "name": {
+                  "const": "authorization_header_not_constructed"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 31
+                },
+                "name": {
+                  "const": "network_not_used"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 32
+                },
+                "name": {
+                  "const": "webhook_not_called"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 33
+                },
+                "name": {
+                  "const": "live_adapter_not_instantiated"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 34
+                },
+                "name": {
+                  "const": "no_execution_authority_created"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 35
+                },
+                "name": {
+                  "const": "no_human_approval_created"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 36
+                },
+                "name": {
+                  "const": "no_authority_evidence_created"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BindPreDispatchReviewCheck"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 37
+                },
+                "name": {
+                  "const": "future_bind_invocation_gate_required"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "bind_pre_dispatch_review_check_digest": {
+      "title": "Bind Pre Dispatch Review Check Digest",
+      "type": "string"
+    },
+    "future_bind_invocation_requirements": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "valid_authority_evidence"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "valid_human_approval_where_required"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 3
+                },
+                "name": {
+                  "const": "final_policy_admissibility"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 4
+                },
+                "name": {
+                  "const": "final_endpoint_identity_binding"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 5
+                },
+                "name": {
+                  "const": "final_credential_resolution_boundary"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 6
+                },
+                "name": {
+                  "const": "final_authorization_header_construction_boundary"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 7
+                },
+                "name": {
+                  "const": "runtime_risk_review"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 8
+                },
+                "name": {
+                  "const": "idempotency_key_binding"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 9
+                },
+                "name": {
+                  "const": "request_dispatch_boundary"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 10
+                },
+                "name": {
+                  "const": "bind_invocation_boundary"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 11
+                },
+                "name": {
+                  "const": "bind_receipt_creation_boundary"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 12
+                },
+                "name": {
+                  "const": "trustlog_write_boundary_after_bind"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureBindInvocationRequirement"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ordinal": {
+                  "const": 13
+                },
+                "name": {
+                  "const": "postcondition_and_rollback_requirements_for_later_apply_path"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "future_bind_invocation_requirement_digest": {
+      "title": "Future Bind Invocation Requirement Digest",
+      "type": "string"
+    },
+    "source_to_execution_intent_mapping": {
+      "additionalProperties": true,
+      "title": "Source To Execution Intent Mapping",
+      "type": "object"
+    },
+    "field_mapping_proof": {
+      "additionalProperties": true,
+      "title": "Field Mapping Proof",
+      "type": "object"
+    },
+    "required_field_presence": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Required Field Presence",
+      "type": "object"
+    },
+    "source_decision_identity": {
+      "additionalProperties": true,
+      "title": "Source Decision Identity",
+      "type": "object"
+    },
+    "candidate_identity": {
+      "additionalProperties": true,
+      "title": "Candidate Identity",
+      "type": "object"
+    },
+    "evidence_lineage": {
+      "additionalProperties": true,
+      "title": "Evidence Lineage",
+      "type": "object"
+    },
+    "replay_summary": {
+      "additionalProperties": true,
+      "title": "Replay Summary",
+      "type": "object"
+    },
+    "bind_pre_dispatch_review_status": {
+      "const": "LIVE_ADAPTER_DRY_RUN_BIND_PRE_DISPATCH_REVIEW_RECORDED_NOT_BOUND",
+      "title": "Bind Pre Dispatch Review Status",
+      "type": "string"
+    },
+    "request_dispatch_state": {
+      "const": "NOT_DISPATCHED",
+      "title": "Request Dispatch State",
+      "type": "string"
+    },
+    "bind_state": {
+      "const": "NOT_BOUND",
+      "title": "Bind State",
+      "type": "string"
+    },
+    "bind_invoked": {
+      "const": false,
+      "title": "Bind Invoked",
+      "type": "boolean"
+    },
+    "bind_receipt_created": {
+      "const": false,
+      "title": "Bind Receipt Created",
+      "type": "boolean"
+    },
+    "trustlog_written": {
+      "const": false,
+      "title": "Trustlog Written",
+      "type": "boolean"
+    },
+    "request_dispatched": {
+      "const": false,
+      "title": "Request Dispatched",
+      "type": "boolean"
+    },
+    "endpoint_resolved": {
+      "const": false,
+      "title": "Endpoint Resolved",
+      "type": "boolean"
+    },
+    "credential_material_accessed": {
+      "const": false,
+      "title": "Credential Material Accessed",
+      "type": "boolean"
+    },
+    "authorization_header_constructed": {
+      "const": false,
+      "title": "Authorization Header Constructed",
+      "type": "boolean"
+    },
+    "network_used": {
+      "const": false,
+      "title": "Network Used",
+      "type": "boolean"
+    },
+    "live_adapter_instantiated": {
+      "const": false,
+      "title": "Live Adapter Instantiated",
+      "type": "boolean"
+    },
+    "webhook_called": {
+      "const": false,
+      "title": "Webhook Called",
+      "type": "boolean"
+    },
+    "fail_closed": {
+      "title": "Fail Closed",
+      "type": "boolean"
+    },
+    "scope_limitations": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 24,
+      "prefixItems": [
+        {
+          "const": "NOT_DISPATCHED"
+        },
+        {
+          "const": "NOT_BIND_INVOCATION"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_CREDENTIAL_RESOLUTION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_ACCESS"
+        },
+        {
+          "const": "NOT_CREDENTIAL_EMBEDDING"
+        },
+        {
+          "const": "NOT_AUTHORIZATION_HEADER"
+        },
+        {
+          "const": "NOT_TOKEN"
+        },
+        {
+          "const": "NOT_SECRET"
+        },
+        {
+          "const": "NOT_ENDPOINT_RESOLUTION"
+        },
+        {
+          "const": "NOT_DNS_RESOLUTION"
+        },
+        {
+          "const": "NOT_NETWORK_CALL"
+        },
+        {
+          "const": "NOT_WEBHOOK_CALL"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_PRODUCTION_CLAIM"
+        },
+        {
+          "const": "NOT_CUSTOMER_CLAIM"
+        },
+        {
+          "const": "NOT_REGULATORY_CERTIFICATION"
+        }
+      ],
+      "items": false
+    }
+  },
+  "required": [
+    "format_version",
+    "live_adapter_dry_run_bind_pre_dispatch_review_id",
+    "live_adapter_dry_run_bind_pre_dispatch_review_hash",
+    "bind_pre_dispatch_review_mechanism",
+    "bind_pre_dispatch_review_recorded_at",
+    "source_operator_dispatch_review_id",
+    "source_operator_dispatch_review_hash",
+    "source_operator_dispatch_review_packet",
+    "source_credential_authorization_hash",
+    "source_endpoint_allowlist_evaluation_hash",
+    "source_dispatch_readiness_hash",
+    "source_live_adapter_dry_run_request_hash",
+    "request_descriptor",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "endpoint_candidate",
+    "endpoint_candidate_digest",
+    "endpoint_identity_binding",
+    "endpoint_identity_binding_digest",
+    "credential_reference",
+    "credential_reference_digest",
+    "credential_scope_binding",
+    "credential_scope_binding_digest",
+    "operator_review_decision",
+    "operator_review_decision_digest",
+    "bind_pre_dispatch_review_decision",
+    "bind_pre_dispatch_review_decision_digest",
+    "bind_pre_dispatch_review_result",
+    "bind_pre_dispatch_review_result_digest",
+    "bind_boundary_preconditions",
+    "bind_boundary_precondition_digest",
+    "bind_pre_dispatch_review_checks",
+    "bind_pre_dispatch_review_check_digest",
+    "future_bind_invocation_requirements",
+    "future_bind_invocation_requirement_digest",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "bind_pre_dispatch_review_status",
+    "request_dispatch_state",
+    "bind_state",
+    "bind_invoked",
+    "bind_receipt_created",
+    "trustlog_written",
+    "request_dispatched",
+    "endpoint_resolved",
+    "credential_material_accessed",
+    "authorization_header_constructed",
+    "network_used",
+    "live_adapter_instantiated",
+    "webhook_called",
+    "fail_closed",
+    "scope_limitations"
+  ],
+  "title": "CanonicalLiveAdapterDryRunBindPreDispatchReviewPacket",
+  "type": "object"
+}
