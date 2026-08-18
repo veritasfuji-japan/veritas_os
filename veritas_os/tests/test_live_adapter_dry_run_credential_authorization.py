@@ -352,27 +352,93 @@ def test_source_packet_is_reverified_and_unmatched_source_is_rejected() -> None:
         verify_live_adapter_dry_run_credential_authorization_evaluation_packet(raw)
 
 
-def test_security_import_and_call_surface_is_absent() -> None:
-    tree = ast.parse(MODULE.read_text())
-    imported = {
-        alias.name.split(".")[0]
-        for node in ast.walk(tree) if isinstance(node, ast.Import)
-        for alias in node.names
+def _dangerous_security_surface(source: str) -> set[str]:
+    """Return real forbidden imports, calls, and capability access paths."""
+
+    def attribute_root(node: ast.AST) -> str | None:
+        while isinstance(node, ast.Attribute):
+            node = node.value
+        return node.id if isinstance(node, ast.Name) else None
+
+    tree = ast.parse(source)
+    forbidden_import_roots = {
+        "requests", "httpx", "urllib", "socket", "dns", "subprocess", "os",
+        "pathlib",
     }
-    imported.update(
-        (node.module or "").split(".")[0]
-        for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
-    )
-    assert imported.isdisjoint(
-        {"requests", "httpx", "urllib", "socket", "dns", "subprocess", "os",
-         "pathlib"}
-    )
-    source = MODULE.read_text()
-    for forbidden in (
-        "WebhookBindAdapter", "BindReceipt", "TrustLog", "credential_store",
-        "verify_postconditions", "os.environ", ".read_text(", ".write_text(",
-    ):
-        assert forbidden not in source
+    forbidden_symbols = {
+        "WebhookBindAdapter", "Bind", "BindReceipt", "TrustLog",
+        "CredentialStore", "ProviderClient", "apply", "verify_postconditions",
+        "revert", "open",
+    }
+    forbidden_module_parts = {
+        "credential_store", "credential_stores", "provider_client",
+        "provider_clients", "live_adapter_implementation",
+        "live_adapter_implementations",
+    }
+    forbidden_attributes = {
+        "credential_store", "credential_stores", "provider_client",
+        "provider_clients", "environ", "read_text", "write_text",
+    }
+    findings: set[str] = set()
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                parts = alias.name.split(".")
+                if parts[0] in forbidden_import_roots or (
+                    forbidden_module_parts & set(parts)
+                ):
+                    findings.add(f"import:{alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            parts = module.split(".")
+            if parts[0] in forbidden_import_roots or (
+                forbidden_module_parts & set(parts)
+            ):
+                findings.add(f"import:{module}")
+            for alias in node.names:
+                if alias.name in forbidden_symbols:
+                    findings.add(f"import-symbol:{alias.name}")
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in forbidden_symbols:
+                findings.add(f"call:{node.func.id}")
+            elif isinstance(node.func, ast.Attribute):
+                if node.func.attr in forbidden_symbols | forbidden_attributes:
+                    findings.add(f"call-attribute:{node.func.attr}")
+                root = attribute_root(node.func)
+                if root and root.lower() in (
+                    forbidden_import_roots
+                    | {"trustlog", "credential_store", "provider_client"}
+                ):
+                    findings.add(
+                        f"capability-call:{root}.{node.func.attr}"
+                    )
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr in forbidden_attributes
+        ):
+            findings.add(f"attribute:{node.attr}")
+    return findings
+
+
+def test_security_import_and_call_surface_is_absent() -> None:
+    assert _dangerous_security_surface(MODULE.read_text()) == set()
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import requests", "from socket import socket",
+        "from example.credential_store import CredentialStore",
+        "from example import WebhookBindAdapter", "Bind()", "BindReceipt()",
+        "TrustLog()", "credential_store.resolve()", "provider.credential_store",
+        "requests.get('https://example.invalid')", "urllib.request.urlopen(url)",
+        "open('secret')", "Path('secret').read_text()", "os.environ.get('KEY')",
+        "apply()", "verify_postconditions()", "revert()",
+    ],
+)
+def test_security_surface_detector_rejects_real_access_paths(source) -> None:
+    assert _dangerous_security_surface(source)
 
 
 def test_schema_accepts_packet_and_rejects_mutation() -> None:
