@@ -1,8 +1,8 @@
 """Evaluate credential-reference authorization without accessing credentials.
 
 This module is deliberately limited to deterministic comparison of caller-
-supplied metadata.  It has no credential resolution, I/O, adapter, Bind,
-TrustLog, or dispatch capability.
+supplied metadata. It has no credential resolution, I/O, adapter, binding
+runtime, audit-log writer, receipt boundary, or dispatch capability.
 """
 
 from __future__ import annotations
