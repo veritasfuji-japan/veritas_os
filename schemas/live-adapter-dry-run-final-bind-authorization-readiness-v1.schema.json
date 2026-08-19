@@ -1,0 +1,1720 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/live-adapter-dry-run-final-bind-authorization-readiness-v1.schema.json",
+  "title": "Canonical Live Adapter Dry-Run Final Bind Authorization Readiness Packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "live_adapter_dry_run_final_bind_authorization_readiness_id",
+    "live_adapter_dry_run_final_bind_authorization_readiness_hash",
+    "final_bind_authorization_readiness_mechanism",
+    "final_bind_authorization_readiness_recorded_at",
+    "source_human_approval_linkage_review_id",
+    "source_human_approval_linkage_review_hash",
+    "source_human_approval_linkage_review_packet",
+    "source_authority_evidence_linkage_review_hash",
+    "source_bind_pre_dispatch_review_hash",
+    "source_operator_dispatch_review_hash",
+    "source_credential_authorization_hash",
+    "source_endpoint_allowlist_evaluation_hash",
+    "source_dispatch_readiness_hash",
+    "source_live_adapter_dry_run_request_hash",
+    "request_descriptor",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "endpoint_candidate",
+    "endpoint_candidate_digest",
+    "endpoint_identity_binding",
+    "endpoint_identity_binding_digest",
+    "credential_reference",
+    "credential_reference_digest",
+    "credential_scope_binding",
+    "credential_scope_binding_digest",
+    "authority_evidence_reference_bundle",
+    "authority_evidence_reference_bundle_digest",
+    "authority_evidence_linkage_result",
+    "authority_evidence_linkage_result_digest",
+    "human_approval_reference_bundle",
+    "human_approval_reference_bundle_digest",
+    "human_approval_linkage_result",
+    "human_approval_linkage_result_digest",
+    "final_bind_authorization_readiness_review_decision",
+    "final_bind_authorization_readiness_review_decision_digest",
+    "final_bind_authorization_readiness_result",
+    "final_bind_authorization_readiness_result_digest",
+    "final_bind_authorization_readiness_checks",
+    "final_bind_authorization_readiness_check_digest",
+    "future_bind_authorization_gate_requirements",
+    "future_bind_authorization_gate_requirements_digest",
+    "future_bind_invocation_requirements",
+    "future_bind_invocation_requirements_digest",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "final_bind_authorization_readiness_status",
+    "request_dispatch_state",
+    "bind_state",
+    "authority_state",
+    "human_approval_state",
+    "final_readiness_state",
+    "authority_evidence_created",
+    "human_approval_created",
+    "execution_authority_created",
+    "bind_authorization_created",
+    "bind_invoked",
+    "bind_receipt_created",
+    "trustlog_written",
+    "request_dispatched",
+    "endpoint_resolved",
+    "credential_material_accessed",
+    "authorization_header_constructed",
+    "network_used",
+    "live_adapter_instantiated",
+    "webhook_called",
+    "fail_closed",
+    "scope_limitations"
+  ],
+  "properties": {
+    "format_version": {
+      "const": "canonical-live-adapter-dry-run-final-bind-authorization-readiness/v1"
+    },
+    "live_adapter_dry_run_final_bind_authorization_readiness_id": {
+      "type": "string"
+    },
+    "live_adapter_dry_run_final_bind_authorization_readiness_hash": {
+      "type": "string"
+    },
+    "final_bind_authorization_readiness_mechanism": {
+      "const": "evaluate_live_adapter_dry_run_final_bind_authorization_readiness_without_authorization/v1"
+    },
+    "final_bind_authorization_readiness_recorded_at": {
+      "type": "string"
+    },
+    "source_human_approval_linkage_review_id": {
+      "type": "string"
+    },
+    "source_human_approval_linkage_review_hash": {
+      "type": "string"
+    },
+    "source_human_approval_linkage_review_packet": {
+      "type": "object"
+    },
+    "source_authority_evidence_linkage_review_hash": {
+      "type": "string"
+    },
+    "source_bind_pre_dispatch_review_hash": {
+      "type": "string"
+    },
+    "source_operator_dispatch_review_hash": {
+      "type": "string"
+    },
+    "source_credential_authorization_hash": {
+      "type": "string"
+    },
+    "source_endpoint_allowlist_evaluation_hash": {
+      "type": "string"
+    },
+    "source_dispatch_readiness_hash": {
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_request_hash": {
+      "type": "string"
+    },
+    "request_descriptor": {
+      "type": "object"
+    },
+    "execution_intent": {
+      "type": "object"
+    },
+    "execution_intent_id": {
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "type": "string"
+    },
+    "adapter_contract_descriptor": {
+      "type": "object"
+    },
+    "adapter_contract_id": {
+      "type": "string"
+    },
+    "adapter_contract_hash": {
+      "type": "string"
+    },
+    "adapter_contract_version": {
+      "type": "string"
+    },
+    "endpoint_candidate": {
+      "type": "object"
+    },
+    "endpoint_candidate_digest": {
+      "type": "string"
+    },
+    "endpoint_identity_binding": {
+      "type": "object"
+    },
+    "endpoint_identity_binding_digest": {
+      "type": "string"
+    },
+    "credential_reference": {
+      "type": "object"
+    },
+    "credential_reference_digest": {
+      "type": "string"
+    },
+    "credential_scope_binding": {
+      "type": "object"
+    },
+    "credential_scope_binding_digest": {
+      "type": "string"
+    },
+    "authority_evidence_reference_bundle": {
+      "type": "object"
+    },
+    "authority_evidence_reference_bundle_digest": {
+      "type": "string"
+    },
+    "authority_evidence_linkage_result": {
+      "type": "object"
+    },
+    "authority_evidence_linkage_result_digest": {
+      "type": "string"
+    },
+    "human_approval_reference_bundle": {
+      "type": "object"
+    },
+    "human_approval_reference_bundle_digest": {
+      "type": "string"
+    },
+    "human_approval_linkage_result": {
+      "type": "object"
+    },
+    "human_approval_linkage_result_digest": {
+      "type": "string"
+    },
+    "final_bind_authorization_readiness_review_decision": {
+      "$ref": "#/$defs/decision"
+    },
+    "final_bind_authorization_readiness_review_decision_digest": {
+      "type": "string"
+    },
+    "final_bind_authorization_readiness_result": {
+      "$ref": "#/$defs/result"
+    },
+    "final_bind_authorization_readiness_result_digest": {
+      "type": "string"
+    },
+    "final_bind_authorization_readiness_checks": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 1
+                },
+                "name": {
+                  "const": "source_human_approval_linkage_review_verified"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 2
+                },
+                "name": {
+                  "const": "source_request_not_dispatched"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 3
+                },
+                "name": {
+                  "const": "source_bind_not_invoked"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 4
+                },
+                "name": {
+                  "const": "source_bind_not_authorized"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 5
+                },
+                "name": {
+                  "const": "source_human_approval_linkage_passed"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 6
+                },
+                "name": {
+                  "const": "source_authority_evidence_linkage_passed"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 7
+                },
+                "name": {
+                  "const": "source_bind_pre_dispatch_review_passed"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 8
+                },
+                "name": {
+                  "const": "final_review_decision_closed_schema_valid"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 9
+                },
+                "name": {
+                  "const": "reviewer_identity_present"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 10
+                },
+                "name": {
+                  "const": "reviewer_role_present"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 11
+                },
+                "name": {
+                  "const": "reviewer_attestation_present"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 12
+                },
+                "name": {
+                  "const": "acknowledged_not_bind_authorization"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 13
+                },
+                "name": {
+                  "const": "acknowledged_no_bind_invocation"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 14
+                },
+                "name": {
+                  "const": "acknowledged_no_bind_receipt"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 15
+                },
+                "name": {
+                  "const": "acknowledged_no_trustlog_write"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 16
+                },
+                "name": {
+                  "const": "acknowledged_no_dispatch"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 17
+                },
+                "name": {
+                  "const": "acknowledged_no_execution_authority"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 18
+                },
+                "name": {
+                  "const": "acknowledged_no_human_approval_creation"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 19
+                },
+                "name": {
+                  "const": "acknowledged_no_authority_evidence_creation"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 20
+                },
+                "name": {
+                  "const": "acknowledged_no_credential_access"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 21
+                },
+                "name": {
+                  "const": "acknowledged_no_authorization_header"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 22
+                },
+                "name": {
+                  "const": "acknowledged_no_network_call"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 23
+                },
+                "name": {
+                  "const": "acknowledged_semantic_match_not_authority"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 24
+                },
+                "name": {
+                  "const": "request_descriptor_preserved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 25
+                },
+                "name": {
+                  "const": "execution_intent_identity_preserved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 26
+                },
+                "name": {
+                  "const": "adapter_contract_identity_preserved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 27
+                },
+                "name": {
+                  "const": "endpoint_identity_binding_preserved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 28
+                },
+                "name": {
+                  "const": "credential_scope_binding_preserved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 29
+                },
+                "name": {
+                  "const": "authority_evidence_linkage_result_preserved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 30
+                },
+                "name": {
+                  "const": "human_approval_linkage_result_preserved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 31
+                },
+                "name": {
+                  "const": "final_readiness_result_constructed"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 32
+                },
+                "name": {
+                  "const": "future_bind_authorization_gate_required"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 33
+                },
+                "name": {
+                  "const": "future_bind_invocation_gate_required"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 34
+                },
+                "name": {
+                  "const": "bind_authorization_not_created"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 35
+                },
+                "name": {
+                  "const": "execution_authority_not_created"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 36
+                },
+                "name": {
+                  "const": "human_approval_not_created"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 37
+                },
+                "name": {
+                  "const": "authority_evidence_not_created"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 38
+                },
+                "name": {
+                  "const": "bind_not_invoked"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 39
+                },
+                "name": {
+                  "const": "bind_receipt_not_created"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 40
+                },
+                "name": {
+                  "const": "trustlog_not_written"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 41
+                },
+                "name": {
+                  "const": "request_not_dispatched"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 42
+                },
+                "name": {
+                  "const": "endpoint_not_resolved"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 43
+                },
+                "name": {
+                  "const": "credential_material_not_accessed"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 44
+                },
+                "name": {
+                  "const": "authorization_header_not_constructed"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 45
+                },
+                "name": {
+                  "const": "network_not_used"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 46
+                },
+                "name": {
+                  "const": "webhook_not_called"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "properties": {
+                "ordinal": {
+                  "const": 47
+                },
+                "name": {
+                  "const": "live_adapter_not_instantiated"
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ]
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "final_bind_authorization_readiness_check_digest": {
+      "type": "string"
+    },
+    "future_bind_authorization_gate_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requirement"
+      }
+    },
+    "future_bind_authorization_gate_requirements_digest": {
+      "type": "string"
+    },
+    "future_bind_invocation_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requirement"
+      }
+    },
+    "future_bind_invocation_requirements_digest": {
+      "type": "string"
+    },
+    "source_to_execution_intent_mapping": {
+      "type": "object"
+    },
+    "field_mapping_proof": {
+      "type": "object"
+    },
+    "required_field_presence": {
+      "type": "object"
+    },
+    "source_decision_identity": {
+      "type": "object"
+    },
+    "candidate_identity": {
+      "type": "object"
+    },
+    "evidence_lineage": {
+      "type": "object"
+    },
+    "replay_summary": {
+      "type": "object"
+    },
+    "final_bind_authorization_readiness_status": {
+      "const": "LIVE_ADAPTER_DRY_RUN_FINAL_BIND_AUTHORIZATION_READINESS_RECORDED_NOT_AUTHORIZED"
+    },
+    "request_dispatch_state": {
+      "const": "NOT_DISPATCHED"
+    },
+    "bind_state": {
+      "const": "NOT_BOUND"
+    },
+    "authority_state": {
+      "const": "NOT_AUTHORIZED"
+    },
+    "human_approval_state": {
+      "const": "NOT_APPROVED"
+    },
+    "final_readiness_state": {
+      "enum": [
+        "READY_FOR_FUTURE_BIND_AUTHORIZATION_GATE",
+        "NOT_READY_FOR_FUTURE_BIND_AUTHORIZATION_GATE"
+      ]
+    },
+    "authority_evidence_created": {
+      "const": false
+    },
+    "human_approval_created": {
+      "const": false
+    },
+    "execution_authority_created": {
+      "const": false
+    },
+    "bind_authorization_created": {
+      "const": false
+    },
+    "bind_invoked": {
+      "const": false
+    },
+    "bind_receipt_created": {
+      "const": false
+    },
+    "trustlog_written": {
+      "const": false
+    },
+    "request_dispatched": {
+      "const": false
+    },
+    "endpoint_resolved": {
+      "const": false
+    },
+    "credential_material_accessed": {
+      "const": false
+    },
+    "authorization_header_constructed": {
+      "const": false
+    },
+    "network_used": {
+      "const": false
+    },
+    "live_adapter_instantiated": {
+      "const": false
+    },
+    "webhook_called": {
+      "const": false
+    },
+    "fail_closed": {
+      "type": "boolean"
+    },
+    "scope_limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "NOT_DISPATCHED"
+        },
+        {
+          "const": "NOT_BIND_INVOCATION"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION_CREATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL_CREATION"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE_CREATION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_RESOLUTION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_ACCESS"
+        },
+        {
+          "const": "NOT_CREDENTIAL_EMBEDDING"
+        },
+        {
+          "const": "NOT_AUTHORIZATION_HEADER"
+        },
+        {
+          "const": "NOT_TOKEN"
+        },
+        {
+          "const": "NOT_SECRET"
+        },
+        {
+          "const": "NOT_ENDPOINT_RESOLUTION"
+        },
+        {
+          "const": "NOT_DNS_RESOLUTION"
+        },
+        {
+          "const": "NOT_NETWORK_CALL"
+        },
+        {
+          "const": "NOT_WEBHOOK_CALL"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_PRODUCTION_CLAIM"
+        },
+        {
+          "const": "NOT_CUSTOMER_CLAIM"
+        },
+        {
+          "const": "NOT_REGULATORY_CERTIFICATION"
+        }
+      ],
+      "items": false,
+      "minItems": 27,
+      "maxItems": 27
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "final_bind_authorization_readiness_review_decision_id",
+        "reviewer_id",
+        "reviewer_role",
+        "reviewer_attestation",
+        "reviewed_at",
+        "review_outcome",
+        "review_reason",
+        "acknowledged_not_bind_authorization",
+        "acknowledged_no_bind_invocation",
+        "acknowledged_no_bind_receipt",
+        "acknowledged_no_trustlog_write",
+        "acknowledged_no_dispatch",
+        "acknowledged_no_execution_authority",
+        "acknowledged_no_human_approval_creation",
+        "acknowledged_no_authority_evidence_creation",
+        "acknowledged_no_credential_access",
+        "acknowledged_no_authorization_header",
+        "acknowledged_no_network_call",
+        "acknowledged_semantic_match_not_authority"
+      ],
+      "properties": {
+        "final_bind_authorization_readiness_review_decision_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_attestation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_outcome": {
+          "enum": [
+            "ACCEPTED_FOR_FUTURE_BIND_AUTHORIZATION_GATE_REVIEW",
+            "REJECTED_FOR_FUTURE_BIND_AUTHORIZATION_GATE_REVIEW"
+          ]
+        },
+        "review_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acknowledged_not_bind_authorization": {
+          "const": true
+        },
+        "acknowledged_no_bind_invocation": {
+          "const": true
+        },
+        "acknowledged_no_bind_receipt": {
+          "const": true
+        },
+        "acknowledged_no_trustlog_write": {
+          "const": true
+        },
+        "acknowledged_no_dispatch": {
+          "const": true
+        },
+        "acknowledged_no_execution_authority": {
+          "const": true
+        },
+        "acknowledged_no_human_approval_creation": {
+          "const": true
+        },
+        "acknowledged_no_authority_evidence_creation": {
+          "const": true
+        },
+        "acknowledged_no_credential_access": {
+          "const": true
+        },
+        "acknowledged_no_authorization_header": {
+          "const": true
+        },
+        "acknowledged_no_network_call": {
+          "const": true
+        },
+        "acknowledged_semantic_match_not_authority": {
+          "const": true
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_human_approval_linkage_passed",
+        "source_authority_evidence_linkage_passed",
+        "source_bind_pre_dispatch_review_passed",
+        "all_required_local_linkage_artifacts_present",
+        "all_required_local_linkage_artifacts_verified",
+        "accepted_for_future_bind_authorization_gate_review",
+        "rejection_reasons",
+        "comparison_mode",
+        "semantic_match_used",
+        "creates_bind_authorization",
+        "creates_execution_authority",
+        "creates_human_approval",
+        "creates_authority_evidence"
+      ],
+      "properties": {
+        "source_human_approval_linkage_passed": {
+          "type": "boolean"
+        },
+        "source_authority_evidence_linkage_passed": {
+          "type": "boolean"
+        },
+        "source_bind_pre_dispatch_review_passed": {
+          "type": "boolean"
+        },
+        "all_required_local_linkage_artifacts_present": {
+          "type": "boolean"
+        },
+        "all_required_local_linkage_artifacts_verified": {
+          "type": "boolean"
+        },
+        "accepted_for_future_bind_authorization_gate_review": {
+          "type": "boolean"
+        },
+        "rejection_reasons": {
+          "type": "array"
+        },
+        "comparison_mode": {
+          "const": "deterministic_local_final_bind_authorization_readiness_only"
+        },
+        "semantic_match_used": {
+          "const": false
+        },
+        "creates_bind_authorization": {
+          "const": false
+        },
+        "creates_execution_authority": {
+          "const": false
+        },
+        "creates_human_approval": {
+          "const": false
+        },
+        "creates_authority_evidence": {
+          "const": false
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check_id",
+        "ordinal",
+        "name",
+        "mode",
+        "passed",
+        "evidence_ref",
+        "bind_authorization_created",
+        "execution_authority_created",
+        "human_approval_created",
+        "authority_evidence_created",
+        "bind_invoked",
+        "bind_receipt_created",
+        "trustlog_written",
+        "request_dispatched",
+        "endpoint_resolved",
+        "credential_material_accessed",
+        "credential_material_embedded",
+        "authorization_header_constructed",
+        "token_embedded",
+        "secret_embedded",
+        "network_used",
+        "dns_used",
+        "webhook_called",
+        "live_adapter_instantiated",
+        "live_adapter_method_called",
+        "external_effect_used",
+        "filesystem_used",
+        "database_used",
+        "provider_used",
+        "subprocess_used",
+        "operation_committed"
+      ],
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mode": {
+          "const": "deterministic_local_final_bind_authorization_readiness_only"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "evidence_ref": {
+          "type": "string"
+        },
+        "bind_authorization_created": {
+          "const": false
+        },
+        "execution_authority_created": {
+          "const": false
+        },
+        "human_approval_created": {
+          "const": false
+        },
+        "authority_evidence_created": {
+          "const": false
+        },
+        "bind_invoked": {
+          "const": false
+        },
+        "bind_receipt_created": {
+          "const": false
+        },
+        "trustlog_written": {
+          "const": false
+        },
+        "request_dispatched": {
+          "const": false
+        },
+        "endpoint_resolved": {
+          "const": false
+        },
+        "credential_material_accessed": {
+          "const": false
+        },
+        "credential_material_embedded": {
+          "const": false
+        },
+        "authorization_header_constructed": {
+          "const": false
+        },
+        "token_embedded": {
+          "const": false
+        },
+        "secret_embedded": {
+          "const": false
+        },
+        "network_used": {
+          "const": false
+        },
+        "dns_used": {
+          "const": false
+        },
+        "webhook_called": {
+          "const": false
+        },
+        "live_adapter_instantiated": {
+          "const": false
+        },
+        "live_adapter_method_called": {
+          "const": false
+        },
+        "external_effect_used": {
+          "const": false
+        },
+        "filesystem_used": {
+          "const": false
+        },
+        "database_used": {
+          "const": false
+        },
+        "provider_used": {
+          "const": false
+        },
+        "subprocess_used": {
+          "const": false
+        },
+        "operation_committed": {
+          "const": false
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ordinal",
+        "name",
+        "separate_future_artifact_required",
+        "satisfied_by_this_packet"
+      ],
+      "properties": {
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "separate_future_artifact_required": {
+          "const": true
+        },
+        "satisfied_by_this_packet": {
+          "const": false
+        }
+      }
+    }
+  }
+}
