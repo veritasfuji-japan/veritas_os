@@ -326,6 +326,7 @@ class CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket(BaseModel):
     source_final_bind_authorization_readiness_id: str
     source_final_bind_authorization_readiness_hash: str
     source_final_bind_authorization_readiness_packet: dict[str, Any]
+    source_human_approval_linkage_review_hash: str
     source_authority_evidence_linkage_review_hash: str
     source_bind_pre_dispatch_review_hash: str
     source_operator_dispatch_review_hash: str

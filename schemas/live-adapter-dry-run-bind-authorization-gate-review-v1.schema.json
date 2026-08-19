@@ -2390,6 +2390,10 @@
       "title": "Source Final Bind Authorization Readiness Packet",
       "type": "object"
     },
+    "source_human_approval_linkage_review_hash": {
+      "title": "Source Human Approval Linkage Review Hash",
+      "type": "string"
+    },
     "source_live_adapter_dry_run_request_hash": {
       "title": "Source Live Adapter Dry Run Request Hash",
       "type": "string"
@@ -2423,6 +2427,7 @@
     "source_final_bind_authorization_readiness_id",
     "source_final_bind_authorization_readiness_hash",
     "source_final_bind_authorization_readiness_packet",
+    "source_human_approval_linkage_review_hash",
     "source_authority_evidence_linkage_review_hash",
     "source_bind_pre_dispatch_review_hash",
     "source_operator_dispatch_review_hash",

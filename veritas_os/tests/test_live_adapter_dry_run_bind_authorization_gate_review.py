@@ -166,6 +166,15 @@ def test_source_content_and_lineage_are_preserved(field):
     )
 
 
+def test_source_human_approval_linkage_review_hash_mutation_is_rejected():
+    raw = _packet().model_dump(mode="json")
+    raw["source_human_approval_linkage_review_hash"] = "0" * 64
+    _rehash(raw)
+
+    with pytest.raises(LiveAdapterDryRunBindAuthorizationGateReviewError):
+        verify_live_adapter_dry_run_bind_authorization_gate_review_packet(raw)
+
+
 def test_checks_requirements_and_scope_are_exact_ordered_and_non_effecting():
     packet = _packet()
     assert (
