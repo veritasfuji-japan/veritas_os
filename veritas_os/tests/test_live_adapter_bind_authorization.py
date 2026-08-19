@@ -16,6 +16,7 @@ from veritas_os.policy.live_adapter_bind_authorization import (
     BindAuthorizationDecision,
     LiveAdapterBindAuthorizationError,
     _timestamp,
+    _validate_source,
     build_live_adapter_bind_authorization_artifact,
 )
 from veritas_os.tests.test_live_adapter_dry_run_bind_authorization_gate_review import (
@@ -55,16 +56,42 @@ def _build(source=None, decision=None):
 
 def test_passed_gate_review_still_fails_closed_at_real_proof_gap():
     """Declared linkage metadata must never be promoted to real authority."""
+    source = source_packet()
+    assert _validate_source(source) is None
     with pytest.raises(
         LiveAdapterBindAuthorizationError,
-        match="LABA_ARCHITECTURE_GAP_UNVERIFIED_REAL_GOVERNANCE_ARTIFACTS",
+        match="LABA_ARCHITECTURE_GAP_UNVERIFIED_REAL_GOVERNANCE_PROOF",
     ):
-        _build()
+        _build(source=source)
     assert ARCHITECTURE_GAPS == (
         "real_authority_evidence_is_only_a_declared_reference_bundle",
         "real_human_approval_is_only_a_declared_reference_bundle",
         "runtime_authority_validator_inputs_are_not_embedded_in_the_source_chain",
+        "final_credential_boundary_permission_has_no_first_class_proof",
+        "final_authorization_header_boundary_permission_has_no_first_class_proof",
     )
+
+
+def test_raw_or_declared_governance_data_cannot_cross_proof_boundary():
+    """No caller mapping can turn declared linkage into verified authority."""
+    for forged in (
+        {},
+        {"verified": True},
+        {"runtime_authority_status": "pass"},
+        source_packet().authority_evidence_reference_bundle,
+        source_packet().human_approval_reference_bundle,
+    ):
+        with pytest.raises(
+            LiveAdapterBindAuthorizationError,
+            match="LABA_ARCHITECTURE_GAP_UNVERIFIED_REAL_GOVERNANCE_PROOF",
+        ):
+            build_live_adapter_bind_authorization_artifact(
+                source_packet(),
+                _decision(),
+                AUTHORIZED_AT,
+                VALID_UNTIL,
+                verified_governance_proof=forged,
+            )
 
 
 def test_failed_gate_review_cannot_be_upgraded_to_authorization():
@@ -148,3 +175,6 @@ def test_module_has_no_runtime_effect_imports_or_calls():
         "write_text", "os.environ",
     ):
         assert prohibited not in text
+    assert '"verified": True' not in text
+    assert "source_authority_evidence_linkage_review_hash," not in text
+    assert "source_human_approval_linkage_review_hash," not in text

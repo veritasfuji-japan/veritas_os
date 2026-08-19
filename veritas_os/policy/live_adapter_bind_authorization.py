@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -85,6 +85,8 @@ ARCHITECTURE_GAPS = (
     "real_authority_evidence_is_only_a_declared_reference_bundle",
     "real_human_approval_is_only_a_declared_reference_bundle",
     "runtime_authority_validator_inputs_are_not_embedded_in_the_source_chain",
+    "final_credential_boundary_permission_has_no_first_class_proof",
+    "final_authorization_header_boundary_permission_has_no_first_class_proof",
 )
 
 
@@ -113,12 +115,12 @@ class BindAuthorizationDecision(BaseModel):
 
 
 class AuthorizationRequirementProof(BaseModel):
-    """A deterministic proof reference derived from the verified source chain."""
+    """Future proof record; this scaffold never emits a verified instance."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     ordinal: int = Field(ge=1)
     requirement: str = Field(min_length=1)
-    verified: Literal[True]
+    verified: bool
     evidence_source: str = Field(min_length=1)
 
 
@@ -291,13 +293,23 @@ def _validate_source(
     requirements = source.future_real_bind_authorization_artifact_requirements
     if tuple(item.name for item in requirements) != AUTHORIZATION_REQUIREMENTS:
         raise LiveAdapterBindAuthorizationError("LABA_REQUIREMENTS_MISMATCH")
-    # The verified #2130 packet proves exact linkage of caller-declared metadata,
-    # not the referenced AuthorityEvidence or HumanApprovalReceipt itself.  It
-    # therefore cannot satisfy the first two real-authorization requirements,
-    # nor can this verifier reconstruct RuntimeAuthorityValidator inputs.  Never
-    # promote those declarations to authority merely because their hashes match.
+
+
+def _validate_real_governance_proof(value: Any) -> NoReturn:
+    """Reject issuance until a re-verifiable first-class proof exists.
+
+    A raw mapping, a dry-run reference bundle, an ``AuthorityEvidence`` hash,
+    or a caller-created runtime result cannot cross this boundary.  The current
+    repository has no canonical proof packet that can independently replay the
+    Human Approval signature verification and ``RuntimeAuthorityValidator``
+    inputs while also proving the future credential/header permissions required
+    by #2130.  Keeping that gap here separates source eligibility from real
+    governance verification and prevents future callers from bypassing it by
+    weakening ``_validate_source``.
+    """
+    del value
     raise LiveAdapterBindAuthorizationError(
-        "LABA_ARCHITECTURE_GAP_UNVERIFIED_REAL_GOVERNANCE_ARTIFACTS"
+        "LABA_ARCHITECTURE_GAP_UNVERIFIED_REAL_GOVERNANCE_PROOF"
     )
 
 
@@ -334,74 +346,24 @@ def _window(source: Any, decision: BindAuthorizationDecision,
     return authorized_at, start, end
 
 
-def _proofs(source: Any, decision: BindAuthorizationDecision) -> list[dict[str, Any]]:
-    evidence = {
-        "real_authority_evidence_verification": source.source_authority_evidence_linkage_review_hash,
-        "real_human_approval_verification_where_required": source.source_human_approval_linkage_review_hash,
-        "final_policy_admissibility": source.source_bind_pre_dispatch_review_hash,
-        "final_runtime_risk_review": source.source_final_bind_authorization_readiness_hash,
-        "final_endpoint_identity_binding": source.endpoint_identity_binding_digest,
-        "final_credential_resolution_authorization": source.source_credential_authorization_hash,
-        "final_authorization_header_construction_boundary": source.source_credential_authorization_hash,
-        "idempotency_key_binding": source.execution_intent_hash,
-        "final_no_replay_no_duplicate_dispatch_review": _digest(DOMAINS["idempotency"], source.replay_summary),
-        "final_operator_human_go_no_go_confirmation": _digest(DOMAINS["decision"], decision),
-        "explicit_real_bind_authorization_decision_boundary": _digest(DOMAINS["decision"], decision),
-    }
-    return [
-        {"ordinal": ordinal, "requirement": name, "verified": True,
-         "evidence_source": evidence[name]}
-        for ordinal, name in enumerate(AUTHORIZATION_REQUIREMENTS, 1)
-    ]
-
-
 def build_live_adapter_bind_authorization_artifact(
     source_gate_review_packet: Any,
     authorization_decision: Any,
     valid_from: datetime | str,
     valid_until: datetime | str,
+    *,
+    verified_governance_proof: Any = None,
 ) -> CanonicalLiveAdapterBindAuthorizationArtifact:
-    """Build and self-verify an authorization with no runtime effects."""
+    """Validate source eligibility, then fail closed at the missing proof.
+
+    The remaining parameters are retained as the proposed v1 API, but are not
+    normalized until a real governance proof passes.  This ordering ensures a
+    failed #2130 packet reports a source error while an eligible packet reports
+    the precise non-enabling architecture gap.
+    """
     source = _source(_json(source_gate_review_packet))
     _validate_source(source)
-    decision = _decision(authorization_decision)
-    authorized_at, start, end = _window(source, decision, valid_from, valid_until)
-    source_raw = source.model_dump(mode="json")
-    proofs = _proofs(source, decision)
-    raw = {
-        "format_version": FORMAT_VERSION,
-        "authorization_mechanism": MECHANISM,
-        "source_gate_review_id": source.live_adapter_dry_run_bind_authorization_gate_review_id,
-        "source_gate_review_hash": source.live_adapter_dry_run_bind_authorization_gate_review_hash,
-        "source_gate_review_packet": source_raw,
-        **{field: source_raw[field] for field in COPIED_FIELDS},
-        **{field: source_raw[field] for field in UPSTREAM_HASH_FIELDS},
-        "authorization_decision": decision.model_dump(mode="json"),
-        "authorization_decision_digest": _digest(DOMAINS["decision"], decision),
-        "authorization_requirement_proofs": proofs,
-        "authorization_requirement_proofs_digest": _digest(DOMAINS["requirements"], proofs),
-        "authorized_at": authorized_at, "valid_from": start, "valid_until": end,
-        "idempotency_key": "laba-idem:v1:sha256:" + _digest(
-            DOMAINS["idempotency"], {
-                "execution_intent_hash": source.execution_intent_hash,
-                "request_descriptor": source.request_descriptor,
-            },
-        ),
-        "single_use": True, "authorization_consumption_required": True,
-        "replay_protection_required": True, "duplicate_dispatch_prohibited": True,
-        "bind_authorization_status": STATUS,
-        "bind_authorization_state": "AUTHORIZED", "bind_authorization_created": True,
-        "execution_authority_created": False,
-        "request_dispatch_state": "NOT_DISPATCHED", "bind_state": "NOT_BOUND",
-        "bind_invocation_state": "NOT_INVOKED",
-        "authorization_consumption_state": "NOT_CONSUMED",
-        "execution_state": "NOT_EXECUTED",
-        **{field: False for field in EFFECT_FIELDS},
-    }
-    digest = _artifact_hash(raw)
-    raw["live_adapter_bind_authorization_hash"] = digest
-    raw["live_adapter_bind_authorization_id"] = f"laba:v1:sha256:{digest}"
-    return verify_live_adapter_bind_authorization_artifact(raw)
+    _validate_real_governance_proof(verified_governance_proof)
 
 
 def verify_live_adapter_bind_authorization_artifact(
@@ -419,45 +381,9 @@ def verify_live_adapter_bind_authorization_artifact(
         )
     except (ValidationError, TypeError, LiveAdapterBindAuthorizationError) as exc:
         raise LiveAdapterBindAuthorizationError("LABA_ARTIFACT_INVALID") from exc
-    actual = artifact.model_dump(mode="json")
     source = _source(artifact.source_gate_review_packet)
     _validate_source(source)
-    source_raw = source.model_dump(mode="json")
-    if (
-        artifact.source_gate_review_id != source.live_adapter_dry_run_bind_authorization_gate_review_id
-        or artifact.source_gate_review_hash != source.live_adapter_dry_run_bind_authorization_gate_review_hash
-        or any(_json(getattr(artifact, field)) != _json(source_raw[field]) for field in COPIED_FIELDS)
-        or any(getattr(artifact, field) != source_raw[field] for field in UPSTREAM_HASH_FIELDS)
-    ):
-        raise LiveAdapterBindAuthorizationError("LABA_SOURCE_LINEAGE_MISMATCH")
-    decision = _decision(artifact.authorization_decision)
-    authorized_at, start, end = _window(
-        source, decision, artifact.valid_from, artifact.valid_until
-    )
-    proofs = _proofs(source, decision)
-    expected_idempotency = "laba-idem:v1:sha256:" + _digest(
-        DOMAINS["idempotency"], {
-            "execution_intent_hash": source.execution_intent_hash,
-            "request_descriptor": source.request_descriptor,
-        },
-    )
-    expected = (
-        artifact.authorized_at == authorized_at,
-        artifact.valid_from == start, artifact.valid_until == end,
-        artifact.authorization_decision_digest == _digest(DOMAINS["decision"], decision),
-        _json(artifact.authorization_requirement_proofs) == proofs,
-        artifact.authorization_requirement_proofs_digest == _digest(DOMAINS["requirements"], proofs),
-        artifact.idempotency_key == expected_idempotency,
-        not any(getattr(artifact, field) for field in EFFECT_FIELDS),
-    )
-    if not all(expected):
-        raise LiveAdapterBindAuthorizationError("LABA_DERIVED_MISMATCH")
-    digest = _artifact_hash(actual)
-    if artifact.live_adapter_bind_authorization_hash != digest:
-        raise LiveAdapterBindAuthorizationError("LABA_HASH_MISMATCH")
-    if artifact.live_adapter_bind_authorization_id != f"laba:v1:sha256:{digest}":
-        raise LiveAdapterBindAuthorizationError("LABA_ID_MISMATCH")
-    return artifact
+    _validate_real_governance_proof(None)
 
 
 def validate_live_adapter_bind_authorization_temporal_validity(
