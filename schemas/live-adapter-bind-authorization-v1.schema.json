@@ -1,0 +1,502 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/live-adapter-bind-authorization-v1.schema.json",
+  "title": "Canonical Live Adapter Bind Authorization v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {
+      "const": "canonical-live-adapter-bind-authorization/v1"
+    },
+    "live_adapter_bind_authorization_id": {
+      "type": "string",
+      "pattern": "^laba:v1:sha256:[0-9a-f]{64}$"
+    },
+    "live_adapter_bind_authorization_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authorization_mechanism": {
+      "const": "authorize_exact_future_live_adapter_bind_without_invocation/v1"
+    },
+    "source_gate_review_id": {
+      "type": "string"
+    },
+    "source_gate_review_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_gate_review_packet": {
+      "type": "object"
+    },
+    "source_final_bind_authorization_readiness_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_human_approval_linkage_review_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_authority_evidence_linkage_review_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_bind_pre_dispatch_review_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_operator_dispatch_review_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_credential_authorization_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_endpoint_allowlist_evaluation_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_dispatch_readiness_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_live_adapter_dry_run_request_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_descriptor": {
+      "type": "object"
+    },
+    "execution_intent": {
+      "type": "object"
+    },
+    "execution_intent_id": {
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "adapter_contract_descriptor": {
+      "type": "object"
+    },
+    "adapter_contract_id": {
+      "type": "string"
+    },
+    "adapter_contract_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "adapter_contract_version": {
+      "type": "string"
+    },
+    "endpoint_candidate": {
+      "type": "object"
+    },
+    "endpoint_candidate_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "endpoint_identity_binding": {
+      "type": "object"
+    },
+    "endpoint_identity_binding_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "credential_reference": {
+      "type": "object"
+    },
+    "credential_reference_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "credential_scope_binding": {
+      "type": "object"
+    },
+    "credential_scope_binding_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authority_evidence_reference_bundle": {
+      "type": "object"
+    },
+    "authority_evidence_reference_bundle_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authority_evidence_linkage_result": {
+      "type": "object"
+    },
+    "authority_evidence_linkage_result_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "human_approval_reference_bundle": {
+      "type": "object"
+    },
+    "human_approval_reference_bundle_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "human_approval_linkage_result": {
+      "type": "object"
+    },
+    "human_approval_linkage_result_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "final_bind_authorization_readiness_result": {
+      "type": "object"
+    },
+    "final_bind_authorization_readiness_result_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_to_execution_intent_mapping": {
+      "type": "object"
+    },
+    "field_mapping_proof": {
+      "type": "object"
+    },
+    "required_field_presence": {
+      "type": "object"
+    },
+    "source_decision_identity": {
+      "type": "object"
+    },
+    "candidate_identity": {
+      "type": "object"
+    },
+    "evidence_lineage": {
+      "type": "object"
+    },
+    "replay_summary": {
+      "type": "object"
+    },
+    "authorization_decision": {
+      "$ref": "#/$defs/BindAuthorizationDecision"
+    },
+    "authorization_decision_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authorization_requirement_proofs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AuthorizationRequirementProof"
+      }
+    },
+    "authorization_requirement_proofs_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authorized_at": {
+      "type": "string"
+    },
+    "valid_from": {
+      "type": "string"
+    },
+    "valid_until": {
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "pattern": "^laba-idem:v1:sha256:[0-9a-f]{64}$"
+    },
+    "single_use": {
+      "const": true
+    },
+    "authorization_consumption_required": {
+      "const": true
+    },
+    "replay_protection_required": {
+      "const": true
+    },
+    "duplicate_dispatch_prohibited": {
+      "const": true
+    },
+    "bind_authorization_status": {
+      "const": "LIVE_ADAPTER_BIND_AUTHORIZATION_GRANTED_NOT_INVOKED"
+    },
+    "bind_authorization_state": {
+      "const": "AUTHORIZED"
+    },
+    "bind_authorization_created": {
+      "const": true
+    },
+    "execution_authority_created": {
+      "const": false
+    },
+    "request_dispatch_state": {
+      "const": "NOT_DISPATCHED"
+    },
+    "bind_state": {
+      "const": "NOT_BOUND"
+    },
+    "bind_invocation_state": {
+      "const": "NOT_INVOKED"
+    },
+    "authorization_consumption_state": {
+      "const": "NOT_CONSUMED"
+    },
+    "execution_state": {
+      "const": "NOT_EXECUTED"
+    },
+    "bind_invoked": {
+      "const": false
+    },
+    "bind_receipt_created": {
+      "const": false
+    },
+    "trustlog_written": {
+      "const": false
+    },
+    "request_dispatched": {
+      "const": false
+    },
+    "endpoint_resolved": {
+      "const": false
+    },
+    "credential_material_accessed": {
+      "const": false
+    },
+    "credential_material_embedded": {
+      "const": false
+    },
+    "authorization_header_constructed": {
+      "const": false
+    },
+    "token_embedded": {
+      "const": false
+    },
+    "secret_embedded": {
+      "const": false
+    },
+    "network_used": {
+      "const": false
+    },
+    "dns_used": {
+      "const": false
+    },
+    "webhook_called": {
+      "const": false
+    },
+    "live_adapter_instantiated": {
+      "const": false
+    },
+    "live_adapter_method_called": {
+      "const": false
+    },
+    "external_effect_used": {
+      "const": false
+    },
+    "filesystem_used": {
+      "const": false
+    },
+    "database_used": {
+      "const": false
+    },
+    "provider_used": {
+      "const": false
+    },
+    "subprocess_used": {
+      "const": false
+    },
+    "operation_committed": {
+      "const": false
+    }
+  },
+  "required": [
+    "format_version",
+    "live_adapter_bind_authorization_id",
+    "live_adapter_bind_authorization_hash",
+    "authorization_mechanism",
+    "source_gate_review_id",
+    "source_gate_review_hash",
+    "source_gate_review_packet",
+    "source_final_bind_authorization_readiness_hash",
+    "source_human_approval_linkage_review_hash",
+    "source_authority_evidence_linkage_review_hash",
+    "source_bind_pre_dispatch_review_hash",
+    "source_operator_dispatch_review_hash",
+    "source_credential_authorization_hash",
+    "source_endpoint_allowlist_evaluation_hash",
+    "source_dispatch_readiness_hash",
+    "source_live_adapter_dry_run_request_hash",
+    "request_descriptor",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "endpoint_candidate",
+    "endpoint_candidate_digest",
+    "endpoint_identity_binding",
+    "endpoint_identity_binding_digest",
+    "credential_reference",
+    "credential_reference_digest",
+    "credential_scope_binding",
+    "credential_scope_binding_digest",
+    "authority_evidence_reference_bundle",
+    "authority_evidence_reference_bundle_digest",
+    "authority_evidence_linkage_result",
+    "authority_evidence_linkage_result_digest",
+    "human_approval_reference_bundle",
+    "human_approval_reference_bundle_digest",
+    "human_approval_linkage_result",
+    "human_approval_linkage_result_digest",
+    "final_bind_authorization_readiness_result",
+    "final_bind_authorization_readiness_result_digest",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "authorization_decision",
+    "authorization_decision_digest",
+    "authorization_requirement_proofs",
+    "authorization_requirement_proofs_digest",
+    "authorized_at",
+    "valid_from",
+    "valid_until",
+    "idempotency_key",
+    "single_use",
+    "authorization_consumption_required",
+    "replay_protection_required",
+    "duplicate_dispatch_prohibited",
+    "bind_authorization_status",
+    "bind_authorization_state",
+    "bind_authorization_created",
+    "execution_authority_created",
+    "request_dispatch_state",
+    "bind_state",
+    "bind_invocation_state",
+    "authorization_consumption_state",
+    "execution_state",
+    "bind_invoked",
+    "bind_receipt_created",
+    "trustlog_written",
+    "request_dispatched",
+    "endpoint_resolved",
+    "credential_material_accessed",
+    "credential_material_embedded",
+    "authorization_header_constructed",
+    "token_embedded",
+    "secret_embedded",
+    "network_used",
+    "dns_used",
+    "webhook_called",
+    "live_adapter_instantiated",
+    "live_adapter_method_called",
+    "external_effect_used",
+    "filesystem_used",
+    "database_used",
+    "provider_used",
+    "subprocess_used",
+    "operation_committed"
+  ],
+  "$defs": {
+    "BindAuthorizationDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "authorizer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorizer_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorizer_attestation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorized_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorization_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "explicit_go_no_go_confirmation": {
+          "const": "GO_AUTHORIZED"
+        },
+        "acknowledged_exact_source_context_only": {
+          "const": true
+        },
+        "acknowledged_authorization_does_not_invoke_bind": {
+          "const": true
+        },
+        "acknowledged_authorization_does_not_dispatch_request": {
+          "const": true
+        },
+        "acknowledged_authorization_does_not_access_credentials": {
+          "const": true
+        },
+        "acknowledged_authorization_does_not_construct_authorization_header": {
+          "const": true
+        },
+        "acknowledged_authorization_does_not_create_bind_receipt": {
+          "const": true
+        },
+        "acknowledged_authorization_does_not_write_trustlog": {
+          "const": true
+        },
+        "acknowledged_semantic_match_is_not_authority": {
+          "const": true
+        }
+      },
+      "required": [
+        "authorizer_id",
+        "authorizer_role",
+        "authorizer_attestation",
+        "authorized_at",
+        "authorization_reason",
+        "explicit_go_no_go_confirmation",
+        "acknowledged_exact_source_context_only",
+        "acknowledged_authorization_does_not_invoke_bind",
+        "acknowledged_authorization_does_not_dispatch_request",
+        "acknowledged_authorization_does_not_access_credentials",
+        "acknowledged_authorization_does_not_construct_authorization_header",
+        "acknowledged_authorization_does_not_create_bind_receipt",
+        "acknowledged_authorization_does_not_write_trustlog",
+        "acknowledged_semantic_match_is_not_authority"
+      ]
+    },
+    "AuthorizationRequirementProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "requirement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified": {
+          "const": true
+        },
+        "evidence_source": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "ordinal",
+        "requirement",
+        "verified",
+        "evidence_source"
+      ]
+    }
+  }
+}
