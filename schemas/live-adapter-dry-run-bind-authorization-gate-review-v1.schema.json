@@ -1,0 +1,2532 @@
+{
+  "$defs": {
+    "BindAuthorizationGateReviewDecision": {
+      "additionalProperties": false,
+      "description": "Closed human review metadata that explicitly is not authorization.",
+      "properties": {
+        "acknowledged_no_authority_evidence_creation": {
+          "title": "Acknowledged No Authority Evidence Creation",
+          "type": "boolean"
+        },
+        "acknowledged_no_authorization_header": {
+          "title": "Acknowledged No Authorization Header",
+          "type": "boolean"
+        },
+        "acknowledged_no_bind_invocation": {
+          "title": "Acknowledged No Bind Invocation",
+          "type": "boolean"
+        },
+        "acknowledged_no_bind_receipt": {
+          "title": "Acknowledged No Bind Receipt",
+          "type": "boolean"
+        },
+        "acknowledged_no_credential_access": {
+          "title": "Acknowledged No Credential Access",
+          "type": "boolean"
+        },
+        "acknowledged_no_dispatch": {
+          "title": "Acknowledged No Dispatch",
+          "type": "boolean"
+        },
+        "acknowledged_no_execution_authority": {
+          "title": "Acknowledged No Execution Authority",
+          "type": "boolean"
+        },
+        "acknowledged_no_human_approval_creation": {
+          "title": "Acknowledged No Human Approval Creation",
+          "type": "boolean"
+        },
+        "acknowledged_no_network_call": {
+          "title": "Acknowledged No Network Call",
+          "type": "boolean"
+        },
+        "acknowledged_no_trustlog_write": {
+          "title": "Acknowledged No Trustlog Write",
+          "type": "boolean"
+        },
+        "acknowledged_not_real_bind_authorization": {
+          "title": "Acknowledged Not Real Bind Authorization",
+          "type": "boolean"
+        },
+        "acknowledged_semantic_match_not_authority": {
+          "title": "Acknowledged Semantic Match Not Authority",
+          "type": "boolean"
+        },
+        "bind_authorization_gate_review_decision_id": {
+          "minLength": 1,
+          "title": "Bind Authorization Gate Review Decision Id",
+          "type": "string"
+        },
+        "review_outcome": {
+          "enum": [
+            "PASSED_FOR_FUTURE_BIND_AUTHORIZATION_ARTIFACT",
+            "FAILED_FOR_FUTURE_BIND_AUTHORIZATION_ARTIFACT"
+          ],
+          "title": "Review Outcome",
+          "type": "string"
+        },
+        "review_reason": {
+          "minLength": 1,
+          "title": "Review Reason",
+          "type": "string"
+        },
+        "reviewed_at": {
+          "title": "Reviewed At",
+          "type": "string"
+        },
+        "reviewer_attestation": {
+          "minLength": 1,
+          "title": "Reviewer Attestation",
+          "type": "string"
+        },
+        "reviewer_id": {
+          "minLength": 1,
+          "title": "Reviewer Id",
+          "type": "string"
+        },
+        "reviewer_role": {
+          "minLength": 1,
+          "title": "Reviewer Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bind_authorization_gate_review_decision_id",
+        "reviewer_id",
+        "reviewer_role",
+        "reviewer_attestation",
+        "reviewed_at",
+        "review_outcome",
+        "review_reason",
+        "acknowledged_not_real_bind_authorization",
+        "acknowledged_no_bind_invocation",
+        "acknowledged_no_bind_receipt",
+        "acknowledged_no_trustlog_write",
+        "acknowledged_no_dispatch",
+        "acknowledged_no_execution_authority",
+        "acknowledged_no_human_approval_creation",
+        "acknowledged_no_authority_evidence_creation",
+        "acknowledged_no_credential_access",
+        "acknowledged_no_authorization_header",
+        "acknowledged_no_network_call",
+        "acknowledged_semantic_match_not_authority"
+      ],
+      "title": "BindAuthorizationGateReviewDecision",
+      "type": "object"
+    },
+    "BindAuthorizationGateReviewResult": {
+      "additionalProperties": false,
+      "description": "Deterministic readiness conclusion with explicit non-authority flags.",
+      "properties": {
+        "accepted_for_future_real_bind_authorization_artifact": {
+          "title": "Accepted For Future Real Bind Authorization Artifact",
+          "type": "boolean"
+        },
+        "comparison_mode": {
+          "const": "deterministic_local_bind_authorization_gate_review_only",
+          "title": "Comparison Mode",
+          "type": "string"
+        },
+        "creates_authority_evidence": {
+          "const": false,
+          "title": "Creates Authority Evidence",
+          "type": "boolean"
+        },
+        "creates_execution_authority": {
+          "const": false,
+          "title": "Creates Execution Authority",
+          "type": "boolean"
+        },
+        "creates_human_approval": {
+          "const": false,
+          "title": "Creates Human Approval",
+          "type": "boolean"
+        },
+        "creates_real_bind_authorization": {
+          "const": false,
+          "title": "Creates Real Bind Authorization",
+          "type": "boolean"
+        },
+        "gate_review_passed": {
+          "title": "Gate Review Passed",
+          "type": "boolean"
+        },
+        "rejection_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rejection Reasons",
+          "type": "array"
+        },
+        "semantic_match_used": {
+          "const": false,
+          "title": "Semantic Match Used",
+          "type": "boolean"
+        },
+        "source_authority_evidence_linkage_passed": {
+          "title": "Source Authority Evidence Linkage Passed",
+          "type": "boolean"
+        },
+        "source_bind_pre_dispatch_review_passed": {
+          "title": "Source Bind Pre Dispatch Review Passed",
+          "type": "boolean"
+        },
+        "source_final_readiness_passed": {
+          "title": "Source Final Readiness Passed",
+          "type": "boolean"
+        },
+        "source_human_approval_linkage_passed": {
+          "title": "Source Human Approval Linkage Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_final_readiness_passed",
+        "source_human_approval_linkage_passed",
+        "source_authority_evidence_linkage_passed",
+        "source_bind_pre_dispatch_review_passed",
+        "gate_review_passed",
+        "accepted_for_future_real_bind_authorization_artifact",
+        "rejection_reasons",
+        "comparison_mode",
+        "semantic_match_used",
+        "creates_real_bind_authorization",
+        "creates_execution_authority",
+        "creates_human_approval",
+        "creates_authority_evidence"
+      ],
+      "title": "BindAuthorizationGateReviewResult",
+      "type": "object"
+    },
+    "FutureRequirement": {
+      "additionalProperties": false,
+      "description": "A requirement that only a separate future artifact may satisfy.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ordinal": {
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "satisfied_by_this_packet": {
+          "const": false,
+          "title": "Satisfied By This Packet",
+          "type": "boolean"
+        },
+        "separate_future_artifact_required": {
+          "const": true,
+          "title": "Separate Future Artifact Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ordinal",
+        "name",
+        "separate_future_artifact_required",
+        "satisfied_by_this_packet"
+      ],
+      "title": "FutureRequirement",
+      "type": "object"
+    },
+    "GateReviewCheck": {
+      "additionalProperties": false,
+      "description": "One ordered local check whose effect flags are all false.",
+      "properties": {
+        "authority_evidence_created": {
+          "const": false,
+          "title": "Authority Evidence Created",
+          "type": "boolean"
+        },
+        "authorization_header_constructed": {
+          "const": false,
+          "title": "Authorization Header Constructed",
+          "type": "boolean"
+        },
+        "bind_authorization_created": {
+          "const": false,
+          "title": "Bind Authorization Created",
+          "type": "boolean"
+        },
+        "bind_invoked": {
+          "const": false,
+          "title": "Bind Invoked",
+          "type": "boolean"
+        },
+        "bind_receipt_created": {
+          "const": false,
+          "title": "Bind Receipt Created",
+          "type": "boolean"
+        },
+        "check_id": {
+          "title": "Check Id",
+          "type": "string"
+        },
+        "credential_material_accessed": {
+          "const": false,
+          "title": "Credential Material Accessed",
+          "type": "boolean"
+        },
+        "credential_material_embedded": {
+          "const": false,
+          "title": "Credential Material Embedded",
+          "type": "boolean"
+        },
+        "database_used": {
+          "const": false,
+          "title": "Database Used",
+          "type": "boolean"
+        },
+        "dns_used": {
+          "const": false,
+          "title": "Dns Used",
+          "type": "boolean"
+        },
+        "endpoint_resolved": {
+          "const": false,
+          "title": "Endpoint Resolved",
+          "type": "boolean"
+        },
+        "evidence_ref": {
+          "title": "Evidence Ref",
+          "type": "string"
+        },
+        "execution_authority_created": {
+          "const": false,
+          "title": "Execution Authority Created",
+          "type": "boolean"
+        },
+        "external_effect_used": {
+          "const": false,
+          "title": "External Effect Used",
+          "type": "boolean"
+        },
+        "filesystem_used": {
+          "const": false,
+          "title": "Filesystem Used",
+          "type": "boolean"
+        },
+        "human_approval_created": {
+          "const": false,
+          "title": "Human Approval Created",
+          "type": "boolean"
+        },
+        "live_adapter_instantiated": {
+          "const": false,
+          "title": "Live Adapter Instantiated",
+          "type": "boolean"
+        },
+        "live_adapter_method_called": {
+          "const": false,
+          "title": "Live Adapter Method Called",
+          "type": "boolean"
+        },
+        "mode": {
+          "const": "deterministic_local_bind_authorization_gate_review_only",
+          "title": "Mode",
+          "type": "string"
+        },
+        "name": {
+          "enum": [
+            "source_final_bind_authorization_readiness_verified",
+            "source_request_not_dispatched",
+            "source_bind_not_invoked",
+            "source_bind_not_authorized",
+            "source_final_readiness_passed",
+            "source_human_approval_linkage_passed",
+            "source_authority_evidence_linkage_passed",
+            "source_bind_pre_dispatch_review_passed",
+            "gate_review_decision_closed_schema_valid",
+            "reviewer_identity_present",
+            "reviewer_role_present",
+            "reviewer_attestation_present",
+            "acknowledged_not_real_bind_authorization",
+            "acknowledged_no_bind_invocation",
+            "acknowledged_no_bind_receipt",
+            "acknowledged_no_trustlog_write",
+            "acknowledged_no_dispatch",
+            "acknowledged_no_execution_authority",
+            "acknowledged_no_human_approval_creation",
+            "acknowledged_no_authority_evidence_creation",
+            "acknowledged_no_credential_access",
+            "acknowledged_no_authorization_header",
+            "acknowledged_no_network_call",
+            "acknowledged_semantic_match_not_authority",
+            "request_descriptor_preserved",
+            "execution_intent_identity_preserved",
+            "adapter_contract_identity_preserved",
+            "endpoint_identity_binding_preserved",
+            "credential_scope_binding_preserved",
+            "authority_evidence_linkage_result_preserved",
+            "human_approval_linkage_result_preserved",
+            "final_readiness_result_preserved",
+            "gate_review_result_constructed",
+            "future_real_bind_authorization_artifact_required",
+            "future_bind_invocation_gate_required",
+            "bind_authorization_not_created",
+            "execution_authority_not_created",
+            "human_approval_not_created",
+            "authority_evidence_not_created",
+            "bind_not_invoked",
+            "bind_receipt_not_created",
+            "trustlog_not_written",
+            "request_not_dispatched",
+            "endpoint_not_resolved",
+            "credential_material_not_accessed",
+            "authorization_header_not_constructed",
+            "network_not_used",
+            "webhook_not_called",
+            "live_adapter_not_instantiated"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "network_used": {
+          "const": false,
+          "title": "Network Used",
+          "type": "boolean"
+        },
+        "operation_committed": {
+          "const": false,
+          "title": "Operation Committed",
+          "type": "boolean"
+        },
+        "ordinal": {
+          "maximum": 49,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "provider_used": {
+          "const": false,
+          "title": "Provider Used",
+          "type": "boolean"
+        },
+        "request_dispatched": {
+          "const": false,
+          "title": "Request Dispatched",
+          "type": "boolean"
+        },
+        "secret_embedded": {
+          "const": false,
+          "title": "Secret Embedded",
+          "type": "boolean"
+        },
+        "subprocess_used": {
+          "const": false,
+          "title": "Subprocess Used",
+          "type": "boolean"
+        },
+        "token_embedded": {
+          "const": false,
+          "title": "Token Embedded",
+          "type": "boolean"
+        },
+        "trustlog_written": {
+          "const": false,
+          "title": "Trustlog Written",
+          "type": "boolean"
+        },
+        "webhook_called": {
+          "const": false,
+          "title": "Webhook Called",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "check_id",
+        "ordinal",
+        "name",
+        "mode",
+        "passed",
+        "evidence_ref",
+        "bind_authorization_created",
+        "execution_authority_created",
+        "human_approval_created",
+        "authority_evidence_created",
+        "bind_invoked",
+        "bind_receipt_created",
+        "trustlog_written",
+        "request_dispatched",
+        "endpoint_resolved",
+        "credential_material_accessed",
+        "credential_material_embedded",
+        "authorization_header_constructed",
+        "token_embedded",
+        "secret_embedded",
+        "network_used",
+        "dns_used",
+        "webhook_called",
+        "live_adapter_instantiated",
+        "live_adapter_method_called",
+        "external_effect_used",
+        "filesystem_used",
+        "database_used",
+        "provider_used",
+        "subprocess_used",
+        "operation_committed"
+      ],
+      "title": "GateReviewCheck",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Closed content-addressed gate review packet without authorization.",
+  "properties": {
+    "adapter_contract_descriptor": {
+      "additionalProperties": true,
+      "title": "Adapter Contract Descriptor",
+      "type": "object"
+    },
+    "adapter_contract_hash": {
+      "title": "Adapter Contract Hash",
+      "type": "string"
+    },
+    "adapter_contract_id": {
+      "title": "Adapter Contract Id",
+      "type": "string"
+    },
+    "adapter_contract_version": {
+      "title": "Adapter Contract Version",
+      "type": "string"
+    },
+    "authority_evidence_created": {
+      "const": false,
+      "title": "Authority Evidence Created",
+      "type": "boolean"
+    },
+    "authority_evidence_linkage_result": {
+      "additionalProperties": true,
+      "title": "Authority Evidence Linkage Result",
+      "type": "object"
+    },
+    "authority_evidence_linkage_result_digest": {
+      "title": "Authority Evidence Linkage Result Digest",
+      "type": "string"
+    },
+    "authority_evidence_reference_bundle": {
+      "additionalProperties": true,
+      "title": "Authority Evidence Reference Bundle",
+      "type": "object"
+    },
+    "authority_evidence_reference_bundle_digest": {
+      "title": "Authority Evidence Reference Bundle Digest",
+      "type": "string"
+    },
+    "authority_state": {
+      "const": "NOT_AUTHORIZED",
+      "title": "Authority State",
+      "type": "string"
+    },
+    "authorization_header_constructed": {
+      "const": false,
+      "title": "Authorization Header Constructed",
+      "type": "boolean"
+    },
+    "bind_authorization_created": {
+      "const": false,
+      "title": "Bind Authorization Created",
+      "type": "boolean"
+    },
+    "bind_authorization_gate_review_check_digest": {
+      "title": "Bind Authorization Gate Review Check Digest",
+      "type": "string"
+    },
+    "bind_authorization_gate_review_checks": {
+      "maxItems": 49,
+      "minItems": 49,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_final_bind_authorization_readiness_verified"
+                },
+                "ordinal": {
+                  "const": 1
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_request_not_dispatched"
+                },
+                "ordinal": {
+                  "const": 2
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_bind_not_invoked"
+                },
+                "ordinal": {
+                  "const": 3
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_bind_not_authorized"
+                },
+                "ordinal": {
+                  "const": 4
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_final_readiness_passed"
+                },
+                "ordinal": {
+                  "const": 5
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_human_approval_linkage_passed"
+                },
+                "ordinal": {
+                  "const": 6
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_authority_evidence_linkage_passed"
+                },
+                "ordinal": {
+                  "const": 7
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "source_bind_pre_dispatch_review_passed"
+                },
+                "ordinal": {
+                  "const": 8
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "gate_review_decision_closed_schema_valid"
+                },
+                "ordinal": {
+                  "const": 9
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "reviewer_identity_present"
+                },
+                "ordinal": {
+                  "const": 10
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "reviewer_role_present"
+                },
+                "ordinal": {
+                  "const": 11
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "reviewer_attestation_present"
+                },
+                "ordinal": {
+                  "const": 12
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_not_real_bind_authorization"
+                },
+                "ordinal": {
+                  "const": 13
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_bind_invocation"
+                },
+                "ordinal": {
+                  "const": 14
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_bind_receipt"
+                },
+                "ordinal": {
+                  "const": 15
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_trustlog_write"
+                },
+                "ordinal": {
+                  "const": 16
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_dispatch"
+                },
+                "ordinal": {
+                  "const": 17
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_execution_authority"
+                },
+                "ordinal": {
+                  "const": 18
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_human_approval_creation"
+                },
+                "ordinal": {
+                  "const": 19
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_authority_evidence_creation"
+                },
+                "ordinal": {
+                  "const": 20
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_credential_access"
+                },
+                "ordinal": {
+                  "const": 21
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_authorization_header"
+                },
+                "ordinal": {
+                  "const": 22
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_no_network_call"
+                },
+                "ordinal": {
+                  "const": 23
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "acknowledged_semantic_match_not_authority"
+                },
+                "ordinal": {
+                  "const": 24
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "request_descriptor_preserved"
+                },
+                "ordinal": {
+                  "const": 25
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "execution_intent_identity_preserved"
+                },
+                "ordinal": {
+                  "const": 26
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "adapter_contract_identity_preserved"
+                },
+                "ordinal": {
+                  "const": 27
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "endpoint_identity_binding_preserved"
+                },
+                "ordinal": {
+                  "const": 28
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "credential_scope_binding_preserved"
+                },
+                "ordinal": {
+                  "const": 29
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "authority_evidence_linkage_result_preserved"
+                },
+                "ordinal": {
+                  "const": 30
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "human_approval_linkage_result_preserved"
+                },
+                "ordinal": {
+                  "const": 31
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_readiness_result_preserved"
+                },
+                "ordinal": {
+                  "const": 32
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "gate_review_result_constructed"
+                },
+                "ordinal": {
+                  "const": 33
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "future_real_bind_authorization_artifact_required"
+                },
+                "ordinal": {
+                  "const": 34
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "future_bind_invocation_gate_required"
+                },
+                "ordinal": {
+                  "const": 35
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "bind_authorization_not_created"
+                },
+                "ordinal": {
+                  "const": 36
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "execution_authority_not_created"
+                },
+                "ordinal": {
+                  "const": 37
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "human_approval_not_created"
+                },
+                "ordinal": {
+                  "const": 38
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "authority_evidence_not_created"
+                },
+                "ordinal": {
+                  "const": 39
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "bind_not_invoked"
+                },
+                "ordinal": {
+                  "const": 40
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "bind_receipt_not_created"
+                },
+                "ordinal": {
+                  "const": 41
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "trustlog_not_written"
+                },
+                "ordinal": {
+                  "const": 42
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "request_not_dispatched"
+                },
+                "ordinal": {
+                  "const": 43
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "endpoint_not_resolved"
+                },
+                "ordinal": {
+                  "const": 44
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "credential_material_not_accessed"
+                },
+                "ordinal": {
+                  "const": 45
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "authorization_header_not_constructed"
+                },
+                "ordinal": {
+                  "const": 46
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "network_not_used"
+                },
+                "ordinal": {
+                  "const": 47
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "webhook_not_called"
+                },
+                "ordinal": {
+                  "const": 48
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "live_adapter_not_instantiated"
+                },
+                "ordinal": {
+                  "const": 49
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      ],
+      "type": "array"
+    },
+    "bind_authorization_gate_review_decision": {
+      "$ref": "#/$defs/BindAuthorizationGateReviewDecision"
+    },
+    "bind_authorization_gate_review_decision_digest": {
+      "title": "Bind Authorization Gate Review Decision Digest",
+      "type": "string"
+    },
+    "bind_authorization_gate_review_mechanism": {
+      "const": "review_live_adapter_dry_run_bind_authorization_gate_without_authorization_creation/v1",
+      "title": "Bind Authorization Gate Review Mechanism",
+      "type": "string"
+    },
+    "bind_authorization_gate_review_recorded_at": {
+      "title": "Bind Authorization Gate Review Recorded At",
+      "type": "string"
+    },
+    "bind_authorization_gate_review_result": {
+      "$ref": "#/$defs/BindAuthorizationGateReviewResult"
+    },
+    "bind_authorization_gate_review_result_digest": {
+      "title": "Bind Authorization Gate Review Result Digest",
+      "type": "string"
+    },
+    "bind_authorization_gate_review_status": {
+      "const": "LIVE_ADAPTER_DRY_RUN_BIND_AUTHORIZATION_GATE_REVIEWED_NOT_AUTHORIZED",
+      "title": "Bind Authorization Gate Review Status",
+      "type": "string"
+    },
+    "bind_authorization_state": {
+      "const": "NOT_AUTHORIZED",
+      "title": "Bind Authorization State",
+      "type": "string"
+    },
+    "bind_invoked": {
+      "const": false,
+      "title": "Bind Invoked",
+      "type": "boolean"
+    },
+    "bind_receipt_created": {
+      "const": false,
+      "title": "Bind Receipt Created",
+      "type": "boolean"
+    },
+    "bind_state": {
+      "const": "NOT_BOUND",
+      "title": "Bind State",
+      "type": "string"
+    },
+    "candidate_identity": {
+      "additionalProperties": true,
+      "title": "Candidate Identity",
+      "type": "object"
+    },
+    "credential_material_accessed": {
+      "const": false,
+      "title": "Credential Material Accessed",
+      "type": "boolean"
+    },
+    "credential_reference": {
+      "additionalProperties": true,
+      "title": "Credential Reference",
+      "type": "object"
+    },
+    "credential_reference_digest": {
+      "title": "Credential Reference Digest",
+      "type": "string"
+    },
+    "credential_scope_binding": {
+      "additionalProperties": true,
+      "title": "Credential Scope Binding",
+      "type": "object"
+    },
+    "credential_scope_binding_digest": {
+      "title": "Credential Scope Binding Digest",
+      "type": "string"
+    },
+    "endpoint_candidate": {
+      "additionalProperties": true,
+      "title": "Endpoint Candidate",
+      "type": "object"
+    },
+    "endpoint_candidate_digest": {
+      "title": "Endpoint Candidate Digest",
+      "type": "string"
+    },
+    "endpoint_identity_binding": {
+      "additionalProperties": true,
+      "title": "Endpoint Identity Binding",
+      "type": "object"
+    },
+    "endpoint_identity_binding_digest": {
+      "title": "Endpoint Identity Binding Digest",
+      "type": "string"
+    },
+    "endpoint_resolved": {
+      "const": false,
+      "title": "Endpoint Resolved",
+      "type": "boolean"
+    },
+    "evidence_lineage": {
+      "additionalProperties": true,
+      "title": "Evidence Lineage",
+      "type": "object"
+    },
+    "execution_authority_created": {
+      "const": false,
+      "title": "Execution Authority Created",
+      "type": "boolean"
+    },
+    "execution_intent": {
+      "additionalProperties": true,
+      "title": "Execution Intent",
+      "type": "object"
+    },
+    "execution_intent_hash": {
+      "title": "Execution Intent Hash",
+      "type": "string"
+    },
+    "execution_intent_id": {
+      "title": "Execution Intent Id",
+      "type": "string"
+    },
+    "fail_closed": {
+      "title": "Fail Closed",
+      "type": "boolean"
+    },
+    "field_mapping_proof": {
+      "additionalProperties": true,
+      "title": "Field Mapping Proof",
+      "type": "object"
+    },
+    "final_bind_authorization_readiness_result": {
+      "additionalProperties": true,
+      "title": "Final Bind Authorization Readiness Result",
+      "type": "object"
+    },
+    "final_bind_authorization_readiness_result_digest": {
+      "title": "Final Bind Authorization Readiness Result Digest",
+      "type": "string"
+    },
+    "format_version": {
+      "const": "canonical-live-adapter-dry-run-bind-authorization-gate-review/v1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "future_bind_invocation_requirements": {
+      "maxItems": 8,
+      "minItems": 8,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "bind_authorization_exists"
+                },
+                "ordinal": {
+                  "const": 1
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "request_dispatch_boundary_approved"
+                },
+                "ordinal": {
+                  "const": 2
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "credential_material_boundary_controlled"
+                },
+                "ordinal": {
+                  "const": 3
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "authorization_header_construction_boundary_controlled"
+                },
+                "ordinal": {
+                  "const": 4
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "bind_invocation_boundary_explicit"
+                },
+                "ordinal": {
+                  "const": 5
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "bind_receipt_creation_boundary_explicit"
+                },
+                "ordinal": {
+                  "const": 6
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "trustlog_write_boundary_after_bind_explicit"
+                },
+                "ordinal": {
+                  "const": 7
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "postcondition_and_rollback_requirements_exist_for_later_apply_path"
+                },
+                "ordinal": {
+                  "const": 8
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      ],
+      "type": "array"
+    },
+    "future_bind_invocation_requirements_digest": {
+      "title": "Future Bind Invocation Requirements Digest",
+      "type": "string"
+    },
+    "future_real_bind_authorization_artifact_requirements": {
+      "maxItems": 11,
+      "minItems": 11,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "real_authority_evidence_verification"
+                },
+                "ordinal": {
+                  "const": 1
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "real_human_approval_verification_where_required"
+                },
+                "ordinal": {
+                  "const": 2
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_policy_admissibility"
+                },
+                "ordinal": {
+                  "const": 3
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_runtime_risk_review"
+                },
+                "ordinal": {
+                  "const": 4
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_endpoint_identity_binding"
+                },
+                "ordinal": {
+                  "const": 5
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_credential_resolution_authorization"
+                },
+                "ordinal": {
+                  "const": 6
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_authorization_header_construction_boundary"
+                },
+                "ordinal": {
+                  "const": 7
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "idempotency_key_binding"
+                },
+                "ordinal": {
+                  "const": 8
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_no_replay_no_duplicate_dispatch_review"
+                },
+                "ordinal": {
+                  "const": 9
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "final_operator_human_go_no_go_confirmation"
+                },
+                "ordinal": {
+                  "const": 10
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/FutureRequirement"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "explicit_real_bind_authorization_decision_boundary"
+                },
+                "ordinal": {
+                  "const": 11
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      ],
+      "type": "array"
+    },
+    "future_real_bind_authorization_artifact_requirements_digest": {
+      "title": "Future Real Bind Authorization Artifact Requirements Digest",
+      "type": "string"
+    },
+    "gate_review_state": {
+      "enum": [
+        "PASSED_FOR_FUTURE_BIND_AUTHORIZATION_ARTIFACT",
+        "FAILED_FOR_FUTURE_BIND_AUTHORIZATION_ARTIFACT"
+      ],
+      "title": "Gate Review State",
+      "type": "string"
+    },
+    "human_approval_created": {
+      "const": false,
+      "title": "Human Approval Created",
+      "type": "boolean"
+    },
+    "human_approval_linkage_result": {
+      "additionalProperties": true,
+      "title": "Human Approval Linkage Result",
+      "type": "object"
+    },
+    "human_approval_linkage_result_digest": {
+      "title": "Human Approval Linkage Result Digest",
+      "type": "string"
+    },
+    "human_approval_reference_bundle": {
+      "additionalProperties": true,
+      "title": "Human Approval Reference Bundle",
+      "type": "object"
+    },
+    "human_approval_reference_bundle_digest": {
+      "title": "Human Approval Reference Bundle Digest",
+      "type": "string"
+    },
+    "human_approval_state": {
+      "const": "NOT_APPROVED",
+      "title": "Human Approval State",
+      "type": "string"
+    },
+    "live_adapter_dry_run_bind_authorization_gate_review_hash": {
+      "title": "Live Adapter Dry Run Bind Authorization Gate Review Hash",
+      "type": "string"
+    },
+    "live_adapter_dry_run_bind_authorization_gate_review_id": {
+      "title": "Live Adapter Dry Run Bind Authorization Gate Review Id",
+      "type": "string"
+    },
+    "live_adapter_instantiated": {
+      "const": false,
+      "title": "Live Adapter Instantiated",
+      "type": "boolean"
+    },
+    "network_used": {
+      "const": false,
+      "title": "Network Used",
+      "type": "boolean"
+    },
+    "replay_summary": {
+      "additionalProperties": true,
+      "title": "Replay Summary",
+      "type": "object"
+    },
+    "request_descriptor": {
+      "additionalProperties": true,
+      "title": "Request Descriptor",
+      "type": "object"
+    },
+    "request_dispatch_state": {
+      "const": "NOT_DISPATCHED",
+      "title": "Request Dispatch State",
+      "type": "string"
+    },
+    "request_dispatched": {
+      "const": false,
+      "title": "Request Dispatched",
+      "type": "boolean"
+    },
+    "required_field_presence": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Required Field Presence",
+      "type": "object"
+    },
+    "scope_limitations": {
+      "maxItems": 27,
+      "minItems": 27,
+      "prefixItems": [
+        {
+          "const": "NOT_DISPATCHED"
+        },
+        {
+          "const": "NOT_BIND_INVOCATION"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION"
+        },
+        {
+          "const": "NOT_BIND_AUTHORIZATION_CREATION"
+        },
+        {
+          "const": "NOT_BIND_RECEIPT"
+        },
+        {
+          "const": "NOT_TRUSTLOG_WRITE"
+        },
+        {
+          "const": "NOT_EXECUTION_AUTHORITY"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL"
+        },
+        {
+          "const": "NOT_HUMAN_APPROVAL_CREATION"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE"
+        },
+        {
+          "const": "NOT_AUTHORITY_EVIDENCE_CREATION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_RESOLUTION"
+        },
+        {
+          "const": "NOT_CREDENTIAL_ACCESS"
+        },
+        {
+          "const": "NOT_CREDENTIAL_EMBEDDING"
+        },
+        {
+          "const": "NOT_AUTHORIZATION_HEADER"
+        },
+        {
+          "const": "NOT_TOKEN"
+        },
+        {
+          "const": "NOT_SECRET"
+        },
+        {
+          "const": "NOT_ENDPOINT_RESOLUTION"
+        },
+        {
+          "const": "NOT_DNS_RESOLUTION"
+        },
+        {
+          "const": "NOT_NETWORK_CALL"
+        },
+        {
+          "const": "NOT_WEBHOOK_CALL"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_INSTANCE"
+        },
+        {
+          "const": "NOT_LIVE_ADAPTER_RESULT"
+        },
+        {
+          "const": "NOT_OPERATION_COMMIT"
+        },
+        {
+          "const": "NOT_PRODUCTION_CLAIM"
+        },
+        {
+          "const": "NOT_CUSTOMER_CLAIM"
+        },
+        {
+          "const": "NOT_REGULATORY_CERTIFICATION"
+        }
+      ],
+      "title": "Scope Limitations",
+      "type": "array"
+    },
+    "source_authority_evidence_linkage_review_hash": {
+      "title": "Source Authority Evidence Linkage Review Hash",
+      "type": "string"
+    },
+    "source_bind_pre_dispatch_review_hash": {
+      "title": "Source Bind Pre Dispatch Review Hash",
+      "type": "string"
+    },
+    "source_credential_authorization_hash": {
+      "title": "Source Credential Authorization Hash",
+      "type": "string"
+    },
+    "source_decision_identity": {
+      "additionalProperties": true,
+      "title": "Source Decision Identity",
+      "type": "object"
+    },
+    "source_dispatch_readiness_hash": {
+      "title": "Source Dispatch Readiness Hash",
+      "type": "string"
+    },
+    "source_endpoint_allowlist_evaluation_hash": {
+      "title": "Source Endpoint Allowlist Evaluation Hash",
+      "type": "string"
+    },
+    "source_final_bind_authorization_readiness_hash": {
+      "title": "Source Final Bind Authorization Readiness Hash",
+      "type": "string"
+    },
+    "source_final_bind_authorization_readiness_id": {
+      "title": "Source Final Bind Authorization Readiness Id",
+      "type": "string"
+    },
+    "source_final_bind_authorization_readiness_packet": {
+      "additionalProperties": true,
+      "title": "Source Final Bind Authorization Readiness Packet",
+      "type": "object"
+    },
+    "source_human_approval_linkage_review_hash": {
+      "title": "Source Human Approval Linkage Review Hash",
+      "type": "string"
+    },
+    "source_live_adapter_dry_run_request_hash": {
+      "title": "Source Live Adapter Dry Run Request Hash",
+      "type": "string"
+    },
+    "source_operator_dispatch_review_hash": {
+      "title": "Source Operator Dispatch Review Hash",
+      "type": "string"
+    },
+    "source_to_execution_intent_mapping": {
+      "additionalProperties": true,
+      "title": "Source To Execution Intent Mapping",
+      "type": "object"
+    },
+    "trustlog_written": {
+      "const": false,
+      "title": "Trustlog Written",
+      "type": "boolean"
+    },
+    "webhook_called": {
+      "const": false,
+      "title": "Webhook Called",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "format_version",
+    "live_adapter_dry_run_bind_authorization_gate_review_id",
+    "live_adapter_dry_run_bind_authorization_gate_review_hash",
+    "bind_authorization_gate_review_mechanism",
+    "bind_authorization_gate_review_recorded_at",
+    "source_final_bind_authorization_readiness_id",
+    "source_final_bind_authorization_readiness_hash",
+    "source_final_bind_authorization_readiness_packet",
+    "source_human_approval_linkage_review_hash",
+    "source_authority_evidence_linkage_review_hash",
+    "source_bind_pre_dispatch_review_hash",
+    "source_operator_dispatch_review_hash",
+    "source_credential_authorization_hash",
+    "source_endpoint_allowlist_evaluation_hash",
+    "source_dispatch_readiness_hash",
+    "source_live_adapter_dry_run_request_hash",
+    "request_descriptor",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "adapter_contract_descriptor",
+    "adapter_contract_id",
+    "adapter_contract_hash",
+    "adapter_contract_version",
+    "endpoint_candidate",
+    "endpoint_candidate_digest",
+    "endpoint_identity_binding",
+    "endpoint_identity_binding_digest",
+    "credential_reference",
+    "credential_reference_digest",
+    "credential_scope_binding",
+    "credential_scope_binding_digest",
+    "authority_evidence_reference_bundle",
+    "authority_evidence_reference_bundle_digest",
+    "authority_evidence_linkage_result",
+    "authority_evidence_linkage_result_digest",
+    "human_approval_reference_bundle",
+    "human_approval_reference_bundle_digest",
+    "human_approval_linkage_result",
+    "human_approval_linkage_result_digest",
+    "final_bind_authorization_readiness_result",
+    "final_bind_authorization_readiness_result_digest",
+    "bind_authorization_gate_review_decision",
+    "bind_authorization_gate_review_decision_digest",
+    "bind_authorization_gate_review_result",
+    "bind_authorization_gate_review_result_digest",
+    "bind_authorization_gate_review_checks",
+    "bind_authorization_gate_review_check_digest",
+    "future_real_bind_authorization_artifact_requirements",
+    "future_real_bind_authorization_artifact_requirements_digest",
+    "future_bind_invocation_requirements",
+    "future_bind_invocation_requirements_digest",
+    "source_to_execution_intent_mapping",
+    "field_mapping_proof",
+    "required_field_presence",
+    "source_decision_identity",
+    "candidate_identity",
+    "evidence_lineage",
+    "replay_summary",
+    "bind_authorization_gate_review_status",
+    "request_dispatch_state",
+    "bind_state",
+    "authority_state",
+    "human_approval_state",
+    "bind_authorization_state",
+    "gate_review_state",
+    "authority_evidence_created",
+    "human_approval_created",
+    "execution_authority_created",
+    "bind_authorization_created",
+    "bind_invoked",
+    "bind_receipt_created",
+    "trustlog_written",
+    "request_dispatched",
+    "endpoint_resolved",
+    "credential_material_accessed",
+    "authorization_header_constructed",
+    "network_used",
+    "live_adapter_instantiated",
+    "webhook_called",
+    "fail_closed",
+    "scope_limitations"
+  ],
+  "title": "CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket",
+  "type": "object"
+}
