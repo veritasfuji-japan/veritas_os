@@ -104,6 +104,21 @@ def test_failed_review_is_valid_fail_closed_evidence():
     assert not packet.bind_authorization_gate_review_result.gate_review_passed
 
 
+def test_packet_and_content_address_are_deterministic():
+    first = _packet()
+    second = _packet()
+
+    assert first == second
+    assert (
+        first.live_adapter_dry_run_bind_authorization_gate_review_hash
+        == second.live_adapter_dry_run_bind_authorization_gate_review_hash
+    )
+    assert (
+        first.live_adapter_dry_run_bind_authorization_gate_review_id
+        == second.live_adapter_dry_run_bind_authorization_gate_review_id
+    )
+
+
 @pytest.mark.parametrize("field", ACKNOWLEDGEMENTS)
 def test_every_acknowledgement_is_required(field):
     with pytest.raises(LiveAdapterDryRunBindAuthorizationGateReviewError):
@@ -177,6 +192,8 @@ def test_source_human_approval_linkage_review_hash_mutation_is_rejected():
 
 def test_checks_requirements_and_scope_are_exact_ordered_and_non_effecting():
     packet = _packet()
+    assert len(CHECK_NAMES) == 49
+    assert len(packet.bind_authorization_gate_review_checks) == 49
     assert (
         tuple(check.name for check in packet.bind_authorization_gate_review_checks)
         == CHECK_NAMES
@@ -252,6 +269,28 @@ def test_effect_mutations_are_rejected(field):
     _rehash(raw)
     with pytest.raises(LiveAdapterDryRunBindAuthorizationGateReviewError):
         verify_live_adapter_dry_run_bind_authorization_gate_review_packet(raw)
+
+
+def test_all_packet_external_effect_flags_remain_false():
+    packet = _packet()
+    effect_fields = (
+        "authority_evidence_created",
+        "human_approval_created",
+        "execution_authority_created",
+        "bind_authorization_created",
+        "bind_invoked",
+        "bind_receipt_created",
+        "trustlog_written",
+        "request_dispatched",
+        "endpoint_resolved",
+        "credential_material_accessed",
+        "authorization_header_constructed",
+        "network_used",
+        "live_adapter_instantiated",
+        "webhook_called",
+    )
+
+    assert all(not getattr(packet, field) for field in effect_fields)
 
 
 @pytest.mark.parametrize(

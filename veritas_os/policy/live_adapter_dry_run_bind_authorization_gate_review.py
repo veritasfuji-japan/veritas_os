@@ -1,8 +1,8 @@
 """Record Bind Authorization Gate review without creating authority.
 
 This module performs only deterministic, local comparisons over a previously
-verified Human Approval linkage review packet.  It deliberately has no runtime,
-credential, persistence, adapter, or transport dependencies.
+verified Final Bind Authorization Readiness packet.  It deliberately has no
+runtime, credential, persistence, adapter, or transport dependencies.
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ CHECK_NAMES = (
     "source_request_not_dispatched",
     "source_bind_not_invoked",
     "source_bind_not_authorized",
+    "source_final_readiness_passed",
     "source_human_approval_linkage_passed",
     "source_authority_evidence_linkage_passed",
     "source_bind_pre_dispatch_review_passed",

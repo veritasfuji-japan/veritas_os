@@ -333,6 +333,7 @@
             "source_request_not_dispatched",
             "source_bind_not_invoked",
             "source_bind_not_authorized",
+            "source_final_readiness_passed",
             "source_human_approval_linkage_passed",
             "source_authority_evidence_linkage_passed",
             "source_bind_pre_dispatch_review_passed",
@@ -377,7 +378,9 @@
             "network_not_used",
             "webhook_not_called",
             "live_adapter_not_instantiated"
-          ]
+          ],
+          "title": "Name",
+          "type": "string"
         },
         "network_used": {
           "const": false,
@@ -634,7 +637,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "source_human_approval_linkage_passed"
+                  "const": "source_final_readiness_passed"
                 },
                 "ordinal": {
                   "const": 5
@@ -656,7 +659,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "source_authority_evidence_linkage_passed"
+                  "const": "source_human_approval_linkage_passed"
                 },
                 "ordinal": {
                   "const": 6
@@ -678,7 +681,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "source_bind_pre_dispatch_review_passed"
+                  "const": "source_authority_evidence_linkage_passed"
                 },
                 "ordinal": {
                   "const": 7
@@ -700,7 +703,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "gate_review_decision_closed_schema_valid"
+                  "const": "source_bind_pre_dispatch_review_passed"
                 },
                 "ordinal": {
                   "const": 8
@@ -722,7 +725,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "reviewer_identity_present"
+                  "const": "gate_review_decision_closed_schema_valid"
                 },
                 "ordinal": {
                   "const": 9
@@ -744,7 +747,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "reviewer_role_present"
+                  "const": "reviewer_identity_present"
                 },
                 "ordinal": {
                   "const": 10
@@ -766,7 +769,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "reviewer_attestation_present"
+                  "const": "reviewer_role_present"
                 },
                 "ordinal": {
                   "const": 11
@@ -788,7 +791,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_not_real_bind_authorization"
+                  "const": "reviewer_attestation_present"
                 },
                 "ordinal": {
                   "const": 12
@@ -810,7 +813,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_bind_invocation"
+                  "const": "acknowledged_not_real_bind_authorization"
                 },
                 "ordinal": {
                   "const": 13
@@ -832,7 +835,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_bind_receipt"
+                  "const": "acknowledged_no_bind_invocation"
                 },
                 "ordinal": {
                   "const": 14
@@ -854,7 +857,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_trustlog_write"
+                  "const": "acknowledged_no_bind_receipt"
                 },
                 "ordinal": {
                   "const": 15
@@ -876,7 +879,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_dispatch"
+                  "const": "acknowledged_no_trustlog_write"
                 },
                 "ordinal": {
                   "const": 16
@@ -898,7 +901,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_execution_authority"
+                  "const": "acknowledged_no_dispatch"
                 },
                 "ordinal": {
                   "const": 17
@@ -920,7 +923,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_human_approval_creation"
+                  "const": "acknowledged_no_execution_authority"
                 },
                 "ordinal": {
                   "const": 18
@@ -942,7 +945,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_authority_evidence_creation"
+                  "const": "acknowledged_no_human_approval_creation"
                 },
                 "ordinal": {
                   "const": 19
@@ -964,7 +967,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_credential_access"
+                  "const": "acknowledged_no_authority_evidence_creation"
                 },
                 "ordinal": {
                   "const": 20
@@ -986,7 +989,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_authorization_header"
+                  "const": "acknowledged_no_credential_access"
                 },
                 "ordinal": {
                   "const": 21
@@ -1008,7 +1011,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_no_network_call"
+                  "const": "acknowledged_no_authorization_header"
                 },
                 "ordinal": {
                   "const": 22
@@ -1030,7 +1033,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "acknowledged_semantic_match_not_authority"
+                  "const": "acknowledged_no_network_call"
                 },
                 "ordinal": {
                   "const": 23
@@ -1052,7 +1055,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "request_descriptor_preserved"
+                  "const": "acknowledged_semantic_match_not_authority"
                 },
                 "ordinal": {
                   "const": 24
@@ -1074,7 +1077,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "execution_intent_identity_preserved"
+                  "const": "request_descriptor_preserved"
                 },
                 "ordinal": {
                   "const": 25
@@ -1096,7 +1099,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "adapter_contract_identity_preserved"
+                  "const": "execution_intent_identity_preserved"
                 },
                 "ordinal": {
                   "const": 26
@@ -1118,7 +1121,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "endpoint_identity_binding_preserved"
+                  "const": "adapter_contract_identity_preserved"
                 },
                 "ordinal": {
                   "const": 27
@@ -1140,7 +1143,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "credential_scope_binding_preserved"
+                  "const": "endpoint_identity_binding_preserved"
                 },
                 "ordinal": {
                   "const": 28
@@ -1162,7 +1165,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "authority_evidence_linkage_result_preserved"
+                  "const": "credential_scope_binding_preserved"
                 },
                 "ordinal": {
                   "const": 29
@@ -1184,7 +1187,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "human_approval_linkage_result_preserved"
+                  "const": "authority_evidence_linkage_result_preserved"
                 },
                 "ordinal": {
                   "const": 30
@@ -1206,7 +1209,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "final_readiness_result_preserved"
+                  "const": "human_approval_linkage_result_preserved"
                 },
                 "ordinal": {
                   "const": 31
@@ -1228,7 +1231,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "gate_review_result_constructed"
+                  "const": "final_readiness_result_preserved"
                 },
                 "ordinal": {
                   "const": 32
@@ -1250,7 +1253,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "future_real_bind_authorization_artifact_required"
+                  "const": "gate_review_result_constructed"
                 },
                 "ordinal": {
                   "const": 33
@@ -1272,7 +1275,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "future_bind_invocation_gate_required"
+                  "const": "future_real_bind_authorization_artifact_required"
                 },
                 "ordinal": {
                   "const": 34
@@ -1294,7 +1297,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "bind_authorization_not_created"
+                  "const": "future_bind_invocation_gate_required"
                 },
                 "ordinal": {
                   "const": 35
@@ -1316,7 +1319,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "execution_authority_not_created"
+                  "const": "bind_authorization_not_created"
                 },
                 "ordinal": {
                   "const": 36
@@ -1338,7 +1341,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "human_approval_not_created"
+                  "const": "execution_authority_not_created"
                 },
                 "ordinal": {
                   "const": 37
@@ -1360,7 +1363,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "authority_evidence_not_created"
+                  "const": "human_approval_not_created"
                 },
                 "ordinal": {
                   "const": 38
@@ -1382,7 +1385,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "bind_not_invoked"
+                  "const": "authority_evidence_not_created"
                 },
                 "ordinal": {
                   "const": 39
@@ -1404,7 +1407,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "bind_receipt_not_created"
+                  "const": "bind_not_invoked"
                 },
                 "ordinal": {
                   "const": 40
@@ -1426,7 +1429,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "trustlog_not_written"
+                  "const": "bind_receipt_not_created"
                 },
                 "ordinal": {
                   "const": 41
@@ -1448,7 +1451,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "request_not_dispatched"
+                  "const": "trustlog_not_written"
                 },
                 "ordinal": {
                   "const": 42
@@ -1470,7 +1473,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "endpoint_not_resolved"
+                  "const": "request_not_dispatched"
                 },
                 "ordinal": {
                   "const": 43
@@ -1492,7 +1495,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "credential_material_not_accessed"
+                  "const": "endpoint_not_resolved"
                 },
                 "ordinal": {
                   "const": 44
@@ -1514,7 +1517,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "authorization_header_not_constructed"
+                  "const": "credential_material_not_accessed"
                 },
                 "ordinal": {
                   "const": 45
@@ -1536,7 +1539,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "network_not_used"
+                  "const": "authorization_header_not_constructed"
                 },
                 "ordinal": {
                   "const": 46
@@ -1558,7 +1561,7 @@
             {
               "properties": {
                 "name": {
-                  "const": "webhook_not_called"
+                  "const": "network_not_used"
                 },
                 "ordinal": {
                   "const": 47
@@ -1580,10 +1583,32 @@
             {
               "properties": {
                 "name": {
-                  "const": "live_adapter_not_instantiated"
+                  "const": "webhook_not_called"
                 },
                 "ordinal": {
                   "const": 48
+                }
+              },
+              "required": [
+                "ordinal",
+                "name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GateReviewCheck"
+            },
+            {
+              "properties": {
+                "name": {
+                  "const": "live_adapter_not_instantiated"
+                },
+                "ordinal": {
+                  "const": 49
                 }
               },
               "required": [
