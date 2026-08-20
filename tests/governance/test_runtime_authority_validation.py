@@ -5,7 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from veritas_os.governance.action_contracts import ActionClassContract
-from veritas_os.governance.authority_evidence import AuthorityEvidence, VerificationResult
+from veritas_os.governance.authority_evidence import (
+    AuthorityEvidence,
+    AuthorityRevocationVerificationResult,
+    VerificationResult,
+    VerifiedAuthorityEvidence,
+)
 from veritas_os.governance.predicates import PredicateResult
 from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
 
@@ -218,3 +223,52 @@ def test_unknown_critical_predicate_is_fail_closed_block() -> None:
     assert result.status == "fail"
     assert result.recommended_outcome == "block"
     assert "unknown_critical_predicate" in result.reason_summary
+
+
+def test_verified_authority_id_is_used_when_raw_authority_is_absent() -> None:
+    """Downstream Human Approval binding must use effective authority."""
+    captured: dict[str, object] = {}
+
+    class CapturingValidator(RuntimeAuthorityValidator):
+        def _validated_human_approval(self, **kwargs: object):
+            captured.update(kwargs)
+            return True, "human_approval_present"
+
+    authority = _authority()
+    proof = VerifiedAuthorityEvidence(
+        authority_evidence=authority,
+        claims_hash="a" * 64,
+        artifact_type="authority_evidence",
+        artifact_version="v1",
+        action_contract_hash="b" * 64,
+        signer_key_id="signer",
+        signer_algorithm="Ed25519",
+        issuer_identity="issuer",
+        signer_policy_id="signer-policy",
+        signer_policy_hash="c" * 64,
+        verifier_id="verifier",
+        verifier_trust_level="production",
+        verifier_policy_id="verifier-policy",
+        verifier_policy_hash="d" * 64,
+        signature_verification_reason="signature_valid",
+        signed_at="2026-04-25T00:00:00+00:00",
+        verified_at="2026-04-26T00:00:00+00:00",
+        revocation=AuthorityRevocationVerificationResult(
+            True, False, "2026-04-26T00:00:00+00:00", "source", "1",
+            "e" * 64, "not_revoked",
+        ),
+        verification_source="signed_authority_evidence_artifact",
+        verification_proof_hash="f" * 64,
+    )
+    CapturingValidator().validate(
+        action_contract=_contract(),
+        authority_evidence=None,
+        verified_authority_evidence=proof,
+        requested_scope=["customer:risk_escalation"],
+        required_evidence_metadata=_required_evidence(),
+        policy_snapshot_id="policy-snapshot-001",
+        actor_identity="operator:alice",
+        now=datetime.fromisoformat("2026-04-26T00:00:00+00:00"),
+    )
+
+    assert captured["authority_evidence_id"] == "aev-001"

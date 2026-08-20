@@ -11,7 +11,7 @@ from veritas_os.governance.commit_boundary import CommitBoundaryEvaluator
 from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
 
 
-FIXED_NOW = datetime.fromisoformat("2026-04-26T00:00:00")
+FIXED_NOW = datetime.fromisoformat("2026-04-26T00:00:00+00:00")
 
 
 def _payload(**overrides: object) -> dict[str, object]:
@@ -25,9 +25,9 @@ def _payload(**overrides: object) -> dict[str, object]:
         "role_or_policy_basis": ["role:aml_reviewer"],
         "scope_grants": ["customer:risk_escalation"],
         "scope_limitations": ["customer:fund_transfer"],
-        "issued_at": "2026-04-25T00:00:00",
-        "valid_from": "2026-04-25T00:00:00",
-        "valid_until": "2026-04-30T00:00:00",
+        "issued_at": "2026-04-25T00:00:00+00:00",
+        "valid_from": "2026-04-25T00:00:00+00:00",
+        "valid_until": "2026-04-30T00:00:00+00:00",
         "policy_snapshot_id": "policy-snapshot-001",
         "verification_result": "valid",
         "metadata": {
@@ -104,7 +104,7 @@ def test_alias_fields_are_mapped_correctly() -> None:
         {
             "evidence_id": "aev-alias-001",
             "subject": "operator:bob",
-            "expires_at": "2026-04-30T00:00:00",
+            "expires_at": "2026-04-30T00:00:00+00:00",
             "authority_scope": ["customer:risk_escalation"],
             "issuer": "external-issuer",
             "source_type": "external-mock",
@@ -114,7 +114,7 @@ def test_alias_fields_are_mapped_correctly() -> None:
 
     assert evidence.authority_evidence_id == "aev-alias-001"
     assert evidence.actor_identity == "operator:bob"
-    assert evidence.valid_until == "2026-04-30T00:00:00"
+    assert evidence.valid_until == "2026-04-30T00:00:00+00:00"
     assert evidence.scope_grants == ["customer:risk_escalation"]
     assert evidence.metadata["issuer"] == "external-issuer"
     assert evidence.metadata["source_type"] == "external-mock"
@@ -160,7 +160,7 @@ def test_unknown_verification_result_defaults_to_indeterminate() -> None:
 
 
 def test_expired_evidence_normalizes_and_validation_marks_invalid() -> None:
-    evidence = ingest_authority_evidence_payload(_payload(valid_until="2026-04-01T00:00:00"))
+    evidence = ingest_authority_evidence_payload(_payload(valid_until="2026-04-01T00:00:00+00:00"))
 
     result = validate_authority_evidence(evidence, now=FIXED_NOW)
 

@@ -99,7 +99,17 @@ def test_legacy_hash_identity_omits_absent_contract_hash() -> None:
 
 
 def test_expired_authority_is_invalid() -> None:
-    artifact = _build_valid_authority_evidence(valid_until="2026-04-20T00:00:00+00:00")
+    expired_until = "2026-04-20T00:00:00+00:00"
+    artifact = _build_valid_authority_evidence(
+        valid_until=expired_until,
+        validity_window={
+            "issued_at": "2026-04-15T00:00:00+00:00",
+            "valid_from": "2026-04-15T00:00:00+00:00",
+            "valid_until": expired_until,
+        },
+        issued_at="2026-04-15T00:00:00+00:00",
+        valid_from="2026-04-15T00:00:00+00:00",
+    )
 
     result = validate_authority_evidence(
         artifact,
@@ -108,6 +118,17 @@ def test_expired_authority_is_invalid() -> None:
 
     assert result.is_valid is False
     assert "authority_expired" in result.failure_reasons
+
+
+def test_redundant_validity_window_mismatch_is_invalid() -> None:
+    artifact = _build_valid_authority_evidence(
+        valid_until="2026-04-29T00:00:00+00:00"
+    )
+    result = validate_authority_evidence(
+        artifact,
+        now=datetime.fromisoformat("2026-04-26T00:00:00+00:00"),
+    )
+    assert "validity_window_fields_mismatch" in result.failure_reasons
 
 
 def test_missing_authority_source_is_invalid() -> None:

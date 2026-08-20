@@ -360,8 +360,8 @@ class RuntimeAuthorityValidator:
                 execution_intent_id=execution_intent_id,
                 bind_context_hash=bind_context_hash,
                 authority_evidence_id=(
-                    authority_evidence.authority_evidence_id
-                    if authority_evidence is not None
+                    effective_authority.authority_evidence_id
+                    if effective_authority is not None
                     else None
                 ),
             )
