@@ -11,14 +11,20 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from veritas_os.api.schemas import TrustLog
 from veritas_os.governance.authority_evidence import (
     AuthorityEvidence,
+    ApprovedAuthorityEvidenceVerifier,
+    AuthorityEvidenceVerifierPolicy,
     AuthorityEvidenceSignerPolicy,
+    AuthorityRevocationPolicy,
     AuthorityRevocationVerificationResult,
-    AUTHORITY_SIGNATURE_DOMAIN,
-    TrustedEd25519AuthorityVerifier,
     VerificationResult,
     is_scope_granting,
     validate_authority_evidence,
+    validate_verified_authority_evidence,
     verify_authority_evidence_artifact_to_proof,
+    authority_signature_payload,
+)
+from veritas_os.governance.authority_evidence_signing import (
+    TrustedEd25519AuthorityVerifier,
 )
 from veritas_os.governance.action_contracts import ActionClassContract
 
@@ -231,7 +237,7 @@ def _signed_authority_artifact():
         "signed_at": "2026-04-25T00:00:00+00:00",
     }
     artifact["signature"] = base64.urlsafe_b64encode(
-        private.sign((AUTHORITY_SIGNATURE_DOMAIN + claims_hash).encode())
+        private.sign(authority_signature_payload(artifact).encode())
     ).decode()
     verifier = TrustedEd25519AuthorityVerifier(
         {"authority-key-1": public},
@@ -251,10 +257,38 @@ def test_real_ed25519_verification_emits_sealed_proof() -> None:
         requested_scope=["customer:risk_escalation"],
         policy_snapshot_id="policy-snapshot-001", signature_verifier=verifier,
         signer_policy=policy, revocation_checker=_NotRevoked(),
+        revocation_policy=AuthorityRevocationPolicy(
+            60, ["revocation-control"]
+        ),
         now=datetime(2026, 4, 26, tzinfo=UTC),
     )
     assert proof.verification_proof_hash
     assert proof.authority_evidence.verification_result == VerificationResult.INDETERMINATE
+    deployment_policy = AuthorityEvidenceVerifierPolicy([
+        ApprovedAuthorityEvidenceVerifier(
+            verifier_id="verifier-1",
+            trust_level="production",
+            verifier_key_id="authority-key-1",
+            verifier_policy_id="authority-verifier-v1",
+            verifier_policy_hash=verifier.policy_hash(),
+            signer_policy_id=policy.policy_id,
+            signer_policy_hash=policy.deterministic_hash(),
+        )
+    ])
+    validation = validate_verified_authority_evidence(
+        proof,
+        action_contract=contract,
+        actor_identity="operator:alice",
+        requested_scope=["customer:risk_escalation"],
+        policy_snapshot_id="policy-snapshot-001",
+        verifier_policy=deployment_policy,
+        revocation_policy=AuthorityRevocationPolicy(
+            60, ["revocation-control"]
+        ),
+        now=datetime(2026, 4, 26, tzinfo=UTC),
+        require_production_verifier=True,
+    )
+    assert validation.is_valid is True
 
 
 def test_attacker_artifact_key_and_forged_flags_do_not_establish_trust() -> None:
@@ -266,7 +300,7 @@ def test_attacker_artifact_key_and_forged_flags_do_not_establish_trust() -> None
     artifact["signature_verified"] = True
     artifact["not_revoked"] = True
     artifact["signature"] = base64.urlsafe_b64encode(
-        attacker.sign((AUTHORITY_SIGNATURE_DOMAIN + artifact["claims_hash"]).encode())
+        attacker.sign(authority_signature_payload(artifact).encode())
     ).decode()
     with pytest.raises(ValueError, match="authority_signature_invalid"):
         verify_authority_evidence_artifact_to_proof(
@@ -274,5 +308,25 @@ def test_attacker_artifact_key_and_forged_flags_do_not_establish_trust() -> None
             requested_scope=["customer:risk_escalation"],
             policy_snapshot_id="policy-snapshot-001", signature_verifier=verifier,
             signer_policy=policy, revocation_checker=_NotRevoked(),
+            revocation_policy=AuthorityRevocationPolicy(
+                60, ["revocation-control"]
+            ),
             now=datetime(2026, 4, 26, tzinfo=UTC),
         )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("claims_hash", "0" * 64),
+        ("signed_at", "2026-04-25T00:00:01+00:00"),
+        ("artifact_type", "other"),
+        ("artifact_version", "v2"),
+    ],
+)
+def test_security_envelope_tampering_invalidates_signature(
+    field: str, value: str
+) -> None:
+    artifact, _, verifier, _ = _signed_authority_artifact()
+    artifact[field] = value
+    assert verifier.verify(artifact).verified is False
