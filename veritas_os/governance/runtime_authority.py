@@ -10,8 +10,10 @@ from typing import Any, Callable, Literal
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import (
     AuthorityEvidence,
+    VerifiedAuthorityEvidence,
     VerificationResult,
     is_expired,
+    validate_verified_authority_evidence,
 )
 from veritas_os.governance.human_approval_receipt import (
     HUMAN_APPROVAL_STATE_SOURCE,
@@ -37,6 +39,7 @@ KNOWN_PREDICATE_TYPES = {
     "action_contract_valid",
     "authority_present",
     "authority_valid",
+    "authority_provenance_verified",
     "authority_not_expired",
     "scope_allowed",
     "prohibited_scope_absent",
@@ -80,6 +83,7 @@ class RuntimeAuthorityValidator:
         required_evidence_metadata: dict[str, Any],
         policy_snapshot_id: str | None,
         actor_identity: str | None,
+        verified_authority_evidence: VerifiedAuthorityEvidence | None = None,
         human_approval_state: dict[str, Any] | None = None,
         human_approval_receipt: HumanApprovalReceipt | None = None,
         verified_human_approval: VerifiedHumanApprovalReceipt | None = None,
@@ -133,7 +137,12 @@ class RuntimeAuthorityValidator:
                 )
             )
 
-            authority_present = authority_evidence is not None
+            effective_authority = (
+                verified_authority_evidence.authority_evidence
+                if verified_authority_evidence is not None
+                else authority_evidence
+            )
+            authority_present = effective_authority is not None
             predicates.append(
                 self._predicate(
                     predicate_id="p-authority-present",
@@ -144,16 +153,43 @@ class RuntimeAuthorityValidator:
                 )
             )
 
-            authority_valid = False
-            if authority_evidence and action_contract:
+            posture = self._runtime_posture()
+            strict_authority = posture in {"secure", "prod"}
+            provenance_verified = False
+            if verified_authority_evidence and action_contract and actor_identity:
+                proof_validation = validate_verified_authority_evidence(
+                    verified_authority_evidence,
+                    action_contract=action_contract,
+                    actor_identity=actor_identity,
+                    requested_scope=requested_scope,
+                    policy_snapshot_id=policy_snapshot_id or "",
+                    now=now,
+                    require_production_verifier=posture == "prod",
+                )
+                provenance_verified = proof_validation.is_valid
+            predicates.append(
+                self._predicate(
+                    predicate_id="p-authority-provenance-verified",
+                    predicate_type="authority_provenance_verified",
+                    status=("pass" if provenance_verified else
+                            "fail" if strict_authority else "pass"),
+                    reason=("authority_provenance_verified" if provenance_verified else
+                            "legacy_unverified_authority_dev_only" if not strict_authority else
+                            "authority_verified_provenance_required"),
+                    evaluated_at=evaluated_at,
+                )
+            )
+
+            authority_valid = provenance_verified
+            if not strict_authority and effective_authority and action_contract:
                 authority_valid = (
-                    authority_evidence.verification_result == VerificationResult.VALID
-                    and authority_evidence.action_contract_version == action_contract.version
-                    and bool(authority_evidence.actor_role.strip())
-                    and bool(authority_evidence.authority_source_refs)
+                    effective_authority.verification_result == VerificationResult.VALID
+                    and effective_authority.action_contract_version == action_contract.version
+                    and bool(effective_authority.actor_role.strip())
+                    and bool(effective_authority.authority_source_refs)
                     and all(
-                        scope in authority_evidence.scope_grants
-                        and scope not in authority_evidence.scope_limitations
+                        scope in effective_authority.scope_grants
+                        and scope not in effective_authority.scope_limitations
                         for scope in requested_scope
                     )
                 )
@@ -169,8 +205,8 @@ class RuntimeAuthorityValidator:
 
             not_expired = False
             expiration_reason = "authority_expired_or_missing"
-            if authority_evidence:
-                not_expired = not is_expired(authority_evidence, now=now)
+            if effective_authority:
+                not_expired = not is_expired(effective_authority, now=now)
                 expiration_reason = "authority_not_expired" if not_expired else "authority_expired"
             predicates.append(
                 self._predicate(
@@ -262,10 +298,10 @@ class RuntimeAuthorityValidator:
             )
 
             snapshot_resolved = bool((policy_snapshot_id or "").strip())
-            if authority_evidence and authority_evidence.policy_snapshot_id:
+            if effective_authority and effective_authority.policy_snapshot_id:
                 snapshot_resolved = (
                     snapshot_resolved
-                    and authority_evidence.policy_snapshot_id == policy_snapshot_id
+                    and effective_authority.policy_snapshot_id == policy_snapshot_id
                 )
             predicates.append(
                 self._predicate(
