@@ -65,6 +65,7 @@ def ingest_authority_evidence_payload(payload: dict[str, Any]) -> AuthorityEvide
         valid_until=normalized["valid_until"],
         revalidated_at=_optional_str(normalized.get("revalidated_at")),
         policy_snapshot_id=_optional_str(normalized.get("policy_snapshot_id")),
+        action_contract_hash=_optional_str(normalized.get("action_contract_hash")),
         evidence_hash="",
         verification_result=verification_result,
         failure_reasons=_to_sorted_str_list(normalized.get("failure_reasons", [])),

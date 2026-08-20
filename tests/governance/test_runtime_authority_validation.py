@@ -46,14 +46,14 @@ def _authority(**overrides: object) -> AuthorityEvidence:
         "scope_grants": ["customer:risk_escalation", "customer:case_note"],
         "scope_limitations": ["customer:fund_transfer"],
         "validity_window": {
-            "issued_at": "2026-04-25T00:00:00",
-            "valid_from": "2026-04-25T00:00:00",
-            "valid_until": "2026-04-30T00:00:00",
+            "issued_at": "2026-04-25T00:00:00+00:00",
+            "valid_from": "2026-04-25T00:00:00+00:00",
+            "valid_until": "2026-04-30T00:00:00+00:00",
         },
-        "issued_at": "2026-04-25T00:00:00",
-        "valid_from": "2026-04-25T00:00:00",
-        "valid_until": "2026-04-30T00:00:00",
-        "revalidated_at": "2026-04-26T00:00:00",
+        "issued_at": "2026-04-25T00:00:00+00:00",
+        "valid_from": "2026-04-25T00:00:00+00:00",
+        "valid_until": "2026-04-30T00:00:00+00:00",
+        "revalidated_at": "2026-04-26T00:00:00+00:00",
         "policy_snapshot_id": "policy-snapshot-001",
         "evidence_hash": "",
         "verification_result": VerificationResult.VALID,
@@ -82,7 +82,7 @@ def _validate(**overrides: object):
         "actor_identity": "operator:alice",
         "human_approval_state": {"approved": True},
         "bind_context_metadata": {"session_id": "bind-001"},
-        "now": datetime.fromisoformat("2026-04-26T00:00:00"),
+        "now": datetime.fromisoformat("2026-04-26T00:00:00+00:00"),
     }
     payload.update(overrides)
     return validator.validate(**payload)
@@ -113,8 +113,21 @@ def test_missing_authority_evidence_is_block() -> None:
     assert result.recommended_outcome == "block"
 
 
+def test_raw_caller_valid_is_blocked_in_secure_and_prod(monkeypatch) -> None:
+    for posture in ("secure", "prod"):
+        monkeypatch.setenv("VERITAS_POSTURE", posture)
+        result = _validate(authority_evidence=_authority(
+            verification_result=VerificationResult.VALID
+        ))
+        assert result.recommended_outcome == "block"
+        assert any(
+            item.predicate_type == "authority_provenance_verified"
+            and item.status == "fail" for item in result.failed_predicates
+        )
+
+
 def test_expired_authority_is_block() -> None:
-    result = _validate(authority_evidence=_authority(valid_until="2026-04-01T00:00:00"))
+    result = _validate(authority_evidence=_authority(valid_until="2026-04-01T00:00:00+00:00"))
 
     assert result.recommended_outcome == "block"
 

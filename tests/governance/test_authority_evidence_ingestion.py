@@ -80,6 +80,20 @@ def test_evidence_hash_is_populated_and_deterministic() -> None:
     assert first == second
 
 
+def test_ingestion_preserves_optional_contract_hash_without_requiring_it() -> None:
+    """Keep legacy ingestion stable while retaining an explicit hash claim."""
+    legacy = ingest_authority_evidence_payload(_payload())
+    contract_bound = ingest_authority_evidence_payload(
+        _payload(action_contract_hash="a" * 64)
+    )
+
+    assert legacy.action_contract_hash is None
+    assert "action_contract_hash" not in legacy.to_dict_for_hash()
+    assert contract_bound.action_contract_hash == "a" * 64
+    assert contract_bound.to_dict_for_hash()["action_contract_hash"] == "a" * 64
+    assert contract_bound.evidence_hash != legacy.evidence_hash
+
+
 def test_alias_fields_are_mapped_correctly() -> None:
     alias_payload = _payload(metadata={})
     del alias_payload["authority_evidence_id"]
