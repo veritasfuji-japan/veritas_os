@@ -10,6 +10,8 @@ from typing import Any, Callable, Literal
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import (
     AuthorityEvidence,
+    AuthorityEvidenceVerifierPolicy,
+    AuthorityRevocationPolicy,
     VerifiedAuthorityEvidence,
     VerificationResult,
     is_expired,
@@ -84,6 +86,8 @@ class RuntimeAuthorityValidator:
         policy_snapshot_id: str | None,
         actor_identity: str | None,
         verified_authority_evidence: VerifiedAuthorityEvidence | None = None,
+        authority_verifier_policy: AuthorityEvidenceVerifierPolicy | None = None,
+        authority_revocation_policy: AuthorityRevocationPolicy | None = None,
         human_approval_state: dict[str, Any] | None = None,
         human_approval_receipt: HumanApprovalReceipt | None = None,
         verified_human_approval: VerifiedHumanApprovalReceipt | None = None,
@@ -165,6 +169,8 @@ class RuntimeAuthorityValidator:
                     policy_snapshot_id=policy_snapshot_id or "",
                     now=now,
                     require_production_verifier=posture == "prod",
+                    verifier_policy=authority_verifier_policy,
+                    revocation_policy=authority_revocation_policy,
                 )
                 provenance_verified = proof_validation.is_valid
             predicates.append(
@@ -181,7 +187,12 @@ class RuntimeAuthorityValidator:
             )
 
             authority_valid = provenance_verified
-            if not strict_authority and effective_authority and action_contract:
+            if (
+                not provenance_verified
+                and not strict_authority
+                and effective_authority
+                and action_contract
+            ):
                 authority_valid = (
                     effective_authority.verification_result == VerificationResult.VALID
                     and effective_authority.action_contract_version == action_contract.version

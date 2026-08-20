@@ -8,15 +8,10 @@ proves authenticity.  Strict runtime boundaries consume only proofs emitted by
 
 from __future__ import annotations
 
-import base64
-import binascii
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Protocol
-
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
@@ -143,44 +138,6 @@ class AuthorityEvidenceSignatureVerifier(Protocol):
 
 
 @dataclass(frozen=True)
-class TrustedEd25519AuthorityVerifier:
-    """Offline Ed25519 verifier whose keys are supplied by deployment policy."""
-
-    trusted_public_keys: dict[str, bytes]
-    trusted_issuers: dict[str, str]
-    verifier_id: str
-    trust_level: str = "production"
-    verifier_policy_id: str = "authority-verifier-v1"
-
-    def verify(self, artifact: dict[str, Any]) -> AuthorityEvidenceSignatureVerificationResult:
-        """Verify domain-separated claims using only configured public keys."""
-        signer = artifact.get("signer") if isinstance(artifact.get("signer"), dict) else {}
-        key_id = str(signer.get("key_id", ""))
-        key = self.trusted_public_keys.get(key_id)
-        issuer = self.trusted_issuers.get(key_id)
-        if key is None or issuer is None:
-            return AuthorityEvidenceSignatureVerificationResult(False, reason="untrusted_key")
-        try:
-            signature = base64.urlsafe_b64decode(str(artifact.get("signature", "")))
-            digest = str(artifact.get("claims_hash", ""))
-            Ed25519PublicKey.from_public_bytes(key).verify(
-                signature, (AUTHORITY_SIGNATURE_DOMAIN + digest).encode()
-            )
-        except (ValueError, TypeError, binascii.Error, InvalidSignature):
-            return AuthorityEvidenceSignatureVerificationResult(False, reason="bad_signature")
-        return AuthorityEvidenceSignatureVerificationResult(
-            True, key_id, "Ed25519", issuer, reason="signature_valid",
-            verifier_trust_level=self.trust_level, verifier_id=self.verifier_id,
-            verifier_key_id=key_id, verifier_policy_id=self.verifier_policy_id,
-            verifier_policy_hash=sha256_of_canonical_json({
-                "id": self.verifier_policy_id,
-                "keys": sorted(self.trusted_public_keys),
-                "issuers": self.trusted_issuers,
-            }),
-        )
-
-
-@dataclass(frozen=True)
 class AuthorityEvidenceSignerPolicy:
     """Allowlist binding signing keys, algorithms, and issuer identities."""
 
@@ -197,6 +154,43 @@ class AuthorityEvidenceSignerPolicy:
             "allowed_algorithms": sorted(self.allowed_algorithms),
             "allowed_issuer_identities": sorted(self.allowed_issuer_identities),
         })
+
+
+@dataclass(frozen=True)
+class ApprovedAuthorityEvidenceVerifier:
+    """Deployment trust-root entry for an authority verifier and signer policy."""
+
+    verifier_id: str
+    trust_level: str
+    verifier_key_id: str
+    verifier_policy_id: str
+    verifier_policy_hash: str
+    approved_signer_policies: dict[str, str]
+
+
+@dataclass(frozen=True)
+class AuthorityEvidenceVerifierPolicy:
+    """Deployment-controlled allowlist of authority verification infrastructure."""
+
+    approved_verifiers: list[ApprovedAuthorityEvidenceVerifier]
+
+    def approved_by_id(
+        self, verifier_id: str
+    ) -> ApprovedAuthorityEvidenceVerifier | None:
+        """Return the independently configured verifier entry, if approved."""
+        return next(
+            (item for item in self.approved_verifiers
+             if item.verifier_id == verifier_id),
+            None,
+        )
+
+
+@dataclass(frozen=True)
+class AuthorityRevocationPolicy:
+    """Maximum permitted age for independently checked revocation state."""
+
+    max_age_seconds: int
+    allowed_source_identities: list[str]
 
 
 @dataclass(frozen=True)
@@ -218,6 +212,17 @@ class AuthorityRevocationChecker(Protocol):
     def check(self, authority_evidence_id: str, *, now: datetime) -> AuthorityRevocationVerificationResult:
         """Return independently established revocation state."""
         ...
+
+
+def authority_signature_payload(artifact: dict[str, Any]) -> str:
+    """Return canonical, domain-separated bytes-as-text signed by authority keys."""
+    return canonical_json_dumps({
+        "domain": AUTHORITY_SIGNATURE_DOMAIN,
+        "artifact_type": artifact.get("artifact_type"),
+        "artifact_version": artifact.get("artifact_version"),
+        "claims_hash": artifact.get("claims_hash"),
+        "signed_at": artifact.get("signed_at"),
+    })
 
 
 @dataclass(frozen=True)
@@ -323,6 +328,11 @@ def validate_authority_evidence(authority_evidence: AuthorityEvidence | None, *,
         failures.append("authority_source_refs_missing")
     if policy_snapshot_required and not (authority_evidence.policy_snapshot_id or "").strip():
         failures.append("policy_snapshot_id_missing")
+    for field_name in ("issued_at", "valid_from", "valid_until"):
+        if authority_evidence.validity_window.get(field_name) != getattr(
+            authority_evidence, field_name
+        ):
+            failures.append(f"validity_window_{field_name}_mismatch")
     if authority_evidence.verification_result != VerificationResult.VALID:
         failures.append(f"verification_result_{authority_evidence.verification_result.value}")
     try:
@@ -355,7 +365,10 @@ def verify_authority_evidence_artifact_to_proof(
     actor_identity: str, requested_scope: list[str], policy_snapshot_id: str,
     signature_verifier: AuthorityEvidenceSignatureVerifier,
     signer_policy: AuthorityEvidenceSignerPolicy,
-    revocation_checker: AuthorityRevocationChecker, now: datetime | None = None,
+    revocation_checker: AuthorityRevocationChecker,
+    revocation_policy: AuthorityRevocationPolicy,
+    verifier_policy: AuthorityEvidenceVerifierPolicy | None = None,
+    now: datetime | None = None,
 ) -> VerifiedAuthorityEvidence:
     """Authenticate exact claims and emit an all-or-nothing sealed proof."""
     current = now or datetime.now(UTC)
@@ -382,6 +395,23 @@ def verify_authority_evidence_artifact_to_proof(
     result = signature_verifier.verify(artifact)
     if not result.verified:
         raise ValueError("authority_signature_invalid")
+    required_result_fields = {
+        "key_id": result.key_id,
+        "algorithm": result.algorithm,
+        "issuer_identity": result.issuer_identity,
+        "verifier_id": result.verifier_id,
+        "verifier_trust_level": result.verifier_trust_level,
+        "verifier_policy_id": result.verifier_policy_id,
+        "verifier_policy_hash": result.verifier_policy_hash,
+        "reason": result.reason,
+    }
+    missing = next(
+        (name for name, value in required_result_fields.items()
+         if not str(value or "").strip()),
+        None,
+    )
+    if missing:
+        raise ValueError(f"authority_verifier_result_{missing}_missing")
     if result.key_id not in signer_policy.allowed_key_ids:
         raise ValueError("authority_signer_key_unapproved")
     if result.algorithm not in signer_policy.allowed_algorithms:
@@ -417,8 +447,22 @@ def verify_authority_evidence_artifact_to_proof(
     signed_at = artifact.get("signed_at")
     _aware_datetime(signed_at, "authority_signed_at_invalid")
     revocation = revocation_checker.check(evidence.authority_evidence_id, now=current)
-    if not revocation.checked or revocation.revoked is not False:
-        raise ValueError("authority_revocation_status_unestablished")
+    revocation_failure = _revocation_failure(
+        revocation, policy=revocation_policy, now=current
+    )
+    if revocation_failure:
+        raise ValueError(revocation_failure)
+    signer_policy_hash = signer_policy.deterministic_hash()
+    if verifier_policy is not None:
+        policy_failure = _verifier_policy_failure(
+            result=result,
+            signer_policy_id=signer_policy.policy_id,
+            signer_policy_hash=signer_policy_hash,
+            verifier_policy=verifier_policy,
+            require_production=False,
+        )
+        if policy_failure:
+            raise ValueError(policy_failure)
     proof_data = dict(
         authority_evidence=evidence, claims_hash=claims_hash,
         artifact_type=SIGNED_AUTHORITY_ARTIFACT_TYPE,
@@ -426,7 +470,7 @@ def verify_authority_evidence_artifact_to_proof(
         action_contract_hash=contract_hash, signer_key_id=str(result.key_id),
         signer_algorithm=str(result.algorithm), issuer_identity=str(result.issuer_identity),
         signer_policy_id=signer_policy.policy_id,
-        signer_policy_hash=signer_policy.deterministic_hash(),
+        signer_policy_hash=signer_policy_hash,
         verifier_id=str(result.verifier_id), verifier_trust_level=str(result.verifier_trust_level),
         verifier_policy_id=str(result.verifier_policy_id),
         verifier_policy_hash=str(result.verifier_policy_hash),
@@ -444,7 +488,10 @@ def verify_authority_evidence_artifact_to_proof(
 def validate_verified_authority_evidence(
     proof: VerifiedAuthorityEvidence, *, action_contract: ActionClassContract,
     actor_identity: str, requested_scope: list[str], policy_snapshot_id: str,
-    now: datetime | None = None, require_production_verifier: bool = False,
+    now: datetime | None = None,
+    require_production_verifier: bool = False,
+    verifier_policy: AuthorityEvidenceVerifierPolicy | None = None,
+    revocation_policy: AuthorityRevocationPolicy | None = None,
 ) -> AuthorityEvidenceValidationResult:
     """Revalidate proof integrity, process provenance, context, time, and revocation."""
     failures: list[str] = []
@@ -453,7 +500,17 @@ def validate_verified_authority_evidence(
         failures.append("authority_verification_proof_invalid")
     if proof.claims_hash != sha256_of_canonical_json(proof.authority_evidence.claims_dict()):
         failures.append("authority_claims_hash_mismatch")
-    if proof.action_contract_hash != action_contract.deterministic_digest():
+    for value, reason in (
+        (proof.signed_at, "authority_signed_at_invalid"),
+        (proof.verified_at, "authority_verified_at_invalid"),
+    ):
+        try:
+            _aware_datetime(value, reason)
+        except ValueError as exc:
+            failures.append(str(exc))
+    if (proof.action_contract_hash != action_contract.deterministic_digest()
+            or proof.authority_evidence.action_contract_hash
+            != proof.action_contract_hash):
         failures.append("authority_action_contract_hash_mismatch")
     if proof.authority_evidence.actor_identity != actor_identity:
         failures.append("authority_actor_identity_mismatch")
@@ -461,11 +518,110 @@ def validate_verified_authority_evidence(
         failures.append("authority_policy_snapshot_mismatch")
     if any(not is_scope_granting(proof.authority_evidence, scope) for scope in requested_scope):
         failures.append("authority_scope_not_granted")
-    if not proof.revocation.checked or proof.revocation.revoked is not False:
-        failures.append("authority_revocation_status_unestablished")
-    if require_production_verifier and proof.verifier_trust_level != "production":
-        failures.append("authority_production_verifier_required")
+    current = now or datetime.now(UTC)
+    if revocation_policy is None:
+        failures.append("authority_revocation_policy_required")
+    else:
+        revocation_failure = _revocation_failure(
+            proof.revocation, policy=revocation_policy, now=current
+        )
+        if revocation_failure:
+            failures.append(revocation_failure)
+    if verifier_policy is None:
+        failures.append("authority_verifier_policy_required")
+    else:
+        policy_result = AuthorityEvidenceSignatureVerificationResult(
+            verified=True,
+            key_id=proof.signer_key_id,
+            algorithm=proof.signer_algorithm,
+            issuer_identity=proof.issuer_identity,
+            reason=proof.signature_verification_reason,
+            verifier_trust_level=proof.verifier_trust_level,
+            verifier_id=proof.verifier_id,
+            verifier_key_id=proof.signer_key_id,
+            verifier_policy_id=proof.verifier_policy_id,
+            verifier_policy_hash=proof.verifier_policy_hash,
+        )
+        policy_failure = _verifier_policy_failure(
+            result=policy_result,
+            signer_policy_id=proof.signer_policy_id,
+            signer_policy_hash=proof.signer_policy_hash,
+            verifier_policy=verifier_policy,
+            require_production=require_production_verifier,
+        )
+        if policy_failure:
+            failures.append(policy_failure)
     raw = validate_authority_evidence(proof.authority_evidence, now=now)
     failures.extend(reason for reason in raw.failure_reasons
                     if not reason.startswith("verification_result_"))
     return AuthorityEvidenceValidationResult(not failures, failures)
+
+
+def _verifier_policy_failure(
+    *,
+    result: AuthorityEvidenceSignatureVerificationResult,
+    signer_policy_id: str,
+    signer_policy_hash: str,
+    verifier_policy: AuthorityEvidenceVerifierPolicy,
+    require_production: bool,
+) -> str | None:
+    """Return a stable failure when deployment trust policy is contradicted."""
+    approved = verifier_policy.approved_by_id(str(result.verifier_id or ""))
+    if approved is None:
+        return "authority_verifier_not_approved"
+    if require_production and approved.trust_level != "production":
+        return "authority_production_verifier_required"
+    comparisons = (
+        (approved.trust_level, result.verifier_trust_level,
+         "authority_verifier_trust_level_mismatch"),
+        (approved.verifier_key_id, result.verifier_key_id,
+         "authority_verifier_key_mismatch"),
+        (approved.verifier_policy_id, result.verifier_policy_id,
+         "authority_verifier_policy_id_mismatch"),
+        (approved.verifier_policy_hash, result.verifier_policy_hash,
+         "authority_verifier_policy_hash_mismatch"),
+    )
+    for expected, actual, reason in comparisons:
+        if expected != actual:
+            return reason
+    if approved.approved_signer_policies.get(signer_policy_id) != signer_policy_hash:
+        return "authority_signer_policy_not_approved"
+    return None
+
+
+def _revocation_failure(
+    result: AuthorityRevocationVerificationResult,
+    *,
+    policy: AuthorityRevocationPolicy,
+    now: datetime,
+) -> str | None:
+    """Validate revocation state and freshness without network access."""
+    if not result.checked:
+        return "authority_revocation_not_checked"
+    if result.revoked is True:
+        return "authority_revoked"
+    if result.revoked is not False:
+        return "authority_revocation_status_unknown"
+    if not result.source_identity or not result.source_version:
+        return "authority_revocation_source_invalid"
+    if result.source_identity not in policy.allowed_source_identities:
+        return "authority_revocation_source_unapproved"
+    if (
+        len(result.source_hash) != 64
+        or any(character not in "0123456789abcdef" for character in result.source_hash)
+    ):
+        return "authority_revocation_source_hash_invalid"
+    try:
+        checked_at = _aware_datetime(
+            result.checked_at, "authority_revocation_checked_at_invalid"
+        )
+        if now.tzinfo is None or now.utcoffset() is None:
+            return "validation_now_timezone_required"
+        age = (now - checked_at).total_seconds()
+    except (TypeError, ValueError):
+        return "authority_revocation_checked_at_invalid"
+    if age < 0:
+        return "authority_revocation_checked_at_future"
+    if age > policy.max_age_seconds:
+        return "authority_revocation_status_stale"
+    return None
