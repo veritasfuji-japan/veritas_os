@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,12 +29,28 @@ class TrustedEd25519AuthorityVerifier:
     verifier_policy_id: str = "authority-verifier-v1"
 
     def policy_hash(self) -> str:
-        """Return deterministic deployment verifier configuration identity."""
-        return sha256_of_canonical_json({
-            "id": self.verifier_policy_id,
-            "keys": sorted(self.trusted_public_keys),
-            "issuers": self.trusted_issuers,
-        })
+        """Return identity bound to deployment policy and trusted key bytes."""
+        keys = [
+            {
+                "key_id": key_id,
+                "public_key_sha256": hashlib.sha256(
+                    self.trusted_public_keys[key_id]
+                ).hexdigest(),
+            }
+            for key_id in sorted(self.trusted_public_keys)
+        ]
+        return sha256_of_canonical_json(
+            {
+                "id": self.verifier_policy_id,
+                "algorithm": "Ed25519",
+                "domain": "authority-evidence-verifier",
+                "version": "v1",
+                "verifier_id": self.verifier_id,
+                "trust_level": self.trust_level,
+                "keys": keys,
+                "issuers": self.trusted_issuers,
+            }
+        )
 
     def verify(
         self, artifact: dict[str, Any]
@@ -49,9 +66,7 @@ class TrustedEd25519AuthorityVerifier:
                 False, reason="untrusted_key"
             )
         try:
-            signature = base64.urlsafe_b64decode(
-                str(artifact.get("signature", ""))
-            )
+            signature = base64.urlsafe_b64decode(str(artifact.get("signature", "")))
             Ed25519PublicKey.from_public_bytes(key).verify(
                 signature,
                 authority_signature_payload(artifact).encode("utf-8"),

@@ -399,3 +399,34 @@ def test_security_envelope_tampering_invalidates_signature(
     artifact, _, verifier, _ = _signed_authority_artifact()
     artifact[field] = value
     assert verifier.verify(artifact).verified is False
+
+
+def test_verifier_policy_hash_binds_public_key_material_stably() -> None:
+    """A key swap under an unchanged key ID must change policy identity."""
+    legitimate_key = Ed25519PrivateKey.generate().public_key().public_bytes_raw()
+    attacker_key = Ed25519PrivateKey.generate().public_key().public_bytes_raw()
+    common = {
+        "trusted_issuers": {"key-b": "issuer-b", "key-a": "issuer-a"},
+        "verifier_id": "verifier-1",
+        "trust_level": "production",
+        "verifier_policy_id": "policy-1",
+    }
+    legitimate = TrustedEd25519AuthorityVerifier(
+        trusted_public_keys={"key-a": legitimate_key, "key-b": attacker_key},
+        **common,
+    )
+    reordered = TrustedEd25519AuthorityVerifier(
+        trusted_public_keys={"key-b": attacker_key, "key-a": legitimate_key},
+        trusted_issuers={"key-a": "issuer-a", "key-b": "issuer-b"},
+        verifier_id="verifier-1",
+        trust_level="production",
+        verifier_policy_id="policy-1",
+    )
+    swapped = TrustedEd25519AuthorityVerifier(
+        trusted_public_keys={"key-a": attacker_key, "key-b": attacker_key},
+        **common,
+    )
+
+    assert legitimate.policy_hash() == reordered.policy_hash()
+    assert legitimate.policy_hash() != swapped.policy_hash()
+    assert legitimate_key.hex() not in legitimate.policy_hash()
