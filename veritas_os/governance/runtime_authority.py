@@ -186,8 +186,9 @@ class RuntimeAuthorityValidator:
                 )
             )
 
-            authority_valid = provenance_verified
-            if not strict_authority and effective_authority and action_contract:
+            if provenance_verified:
+                authority_valid = True
+            elif not strict_authority and effective_authority and action_contract:
                 authority_valid = (
                     effective_authority.verification_result == VerificationResult.VALID
                     and effective_authority.action_contract_version == action_contract.version
@@ -199,6 +200,8 @@ class RuntimeAuthorityValidator:
                         for scope in requested_scope
                     )
                 )
+            else:
+                authority_valid = False
             predicates.append(
                 self._predicate(
                     predicate_id="p-authority-valid",

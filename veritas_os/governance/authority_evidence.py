@@ -396,6 +396,10 @@ def verify_authority_evidence_artifact_to_proof(
     claims_hash = sha256_of_canonical_json(evidence.claims_dict())
     if artifact.get("claims_hash") != claims_hash:
         raise ValueError("authority_claims_hash_mismatch")
+    evidence_payload = evidence.to_dict()
+    evidence_payload["verification_result"] = VerificationResult.INDETERMINATE
+    evidence_payload["evidence_hash"] = evidence.deterministic_digest()
+    evidence = AuthorityEvidence(**evidence_payload)
     result = signature_verifier.verify(artifact)
     if not result.verified:
         raise ValueError("authority_signature_invalid")

@@ -27,6 +27,8 @@ from veritas_os.governance.authority_evidence_signing import (
     TrustedEd25519AuthorityVerifier,
 )
 from veritas_os.governance.action_contracts import ActionClassContract
+from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
+from veritas_os.governance.commit_boundary import CommitBoundaryEvaluator
 
 
 def _build_valid_authority_evidence(**overrides: object) -> AuthorityEvidence:
@@ -271,7 +273,9 @@ def _signed_authority_artifact():
     return artifact, contract, verifier, policy
 
 
-def test_real_ed25519_verification_emits_sealed_proof() -> None:
+def test_real_ed25519_verification_emits_sealed_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     artifact, contract, verifier, policy = _signed_authority_artifact()
     proof = verify_authority_evidence_artifact_to_proof(
         artifact, action_contract=contract, actor_identity="operator:alice",
@@ -310,6 +314,50 @@ def test_real_ed25519_verification_emits_sealed_proof() -> None:
         require_production_verifier=True,
     )
     assert validation.is_valid is True
+    runtime_result = RuntimeAuthorityValidator().validate(
+        action_contract=contract,
+        authority_evidence=None,
+        verified_authority_evidence=proof,
+        authority_verifier_policy=deployment_policy,
+        authority_revocation_policy=AuthorityRevocationPolicy(
+            60, ["revocation-control"]
+        ),
+        requested_scope=["customer:risk_escalation"],
+        required_evidence_metadata={},
+        policy_snapshot_id="policy-snapshot-001",
+        actor_identity="operator:alice",
+        human_approval_state={"approved": False},
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 4, 26, tzinfo=UTC),
+    )
+    assert runtime_result.status == "pass"
+    assert any(
+        predicate.predicate_type == "authority_valid"
+        and predicate.status == "pass"
+        for predicate in runtime_result.passed_predicates
+    )
+    monkeypatch.setenv("VERITAS_POSTURE", "prod")
+    boundary_result = CommitBoundaryEvaluator().evaluate(
+        execution_intent={"admissible": True},
+        action_contract=contract,
+        authority_evidence=None,
+        verified_authority_evidence=proof,
+        authority_verifier_policy=deployment_policy,
+        authority_revocation_policy=AuthorityRevocationPolicy(
+            60, ["revocation-control"]
+        ),
+        requested_scope=["customer:risk_escalation"],
+        required_evidence_metadata={},
+        evidence_freshness_metadata={},
+        policy_snapshot_id="policy-snapshot-001",
+        actor_identity="operator:alice",
+        human_approval_state={"approved": False},
+        bind_context_metadata={"session_id": "bind-001"},
+        now=datetime(2026, 4, 26, tzinfo=UTC),
+    )
+    assert boundary_result.commit_boundary_result == "commit"
+    assert boundary_result.authority_evidence_id == "aev-001"
+    assert boundary_result.authority_evidence_hash == proof.authority_evidence.evidence_hash
 
 
 def test_attacker_artifact_key_and_forged_flags_do_not_establish_trust() -> None:
