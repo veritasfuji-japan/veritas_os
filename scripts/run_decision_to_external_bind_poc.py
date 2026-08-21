@@ -16,6 +16,7 @@ from typing import Any
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives import serialization
 from fastapi.testclient import TestClient
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -76,6 +77,70 @@ POLICY_SNAPSHOT_ID = "controlled-synthetic-policy-v1"
 NOW = datetime(2026, 8, 21, 12, tzinfo=UTC)
 
 
+class _DeterministicKmsClient:
+    """Test-only KMS client boundary exercising the production AWS signer."""
+
+    def __init__(self, key_id: str) -> None:
+        self.key_id = key_id
+        self.private_key = Ed25519PrivateKey.generate()
+        self.sign_calls = 0
+
+    def sign(
+        self,
+        *,
+        KeyId: str,
+        Message: bytes,
+        MessageType: str,
+        SigningAlgorithm: str,
+    ) -> dict[str, bytes]:
+        if KeyId != self.key_id or MessageType != "RAW" or SigningAlgorithm != "EDDSA":
+            raise ValueError("unexpected synthetic KMS signing request")
+        self.sign_calls += 1
+        return {"Signature": self.private_key.sign(Message)}
+
+    def get_public_key(self, *, KeyId: str) -> dict[str, bytes]:
+        if KeyId != self.key_id:
+            raise ValueError("unexpected synthetic KMS key request")
+        public_der = self.private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return {"PublicKey": public_der}
+
+
+class _DeterministicObjectLockClient:
+    """Test-only S3 boundary that enforces retention metadata on every put."""
+
+    def __init__(self) -> None:
+        self.put_calls: list[dict[str, Any]] = []
+
+    def put_object(self, **kwargs: Any) -> dict[str, str]:
+        if "ObjectLockMode" not in kwargs or "ObjectLockRetainUntilDate" not in kwargs:
+            raise ValueError("synthetic Object Lock retention metadata missing")
+        self.put_calls.append(dict(kwargs))
+        return {"VersionId": f"poc-v{len(self.put_calls)}", "ETag": '"poc-etag"'}
+
+
+class _DeterministicAwsClients:
+    """Minimal boto3-shaped facade restricted to the PoC patch context."""
+
+    def __init__(
+        self,
+        kms_client: _DeterministicKmsClient,
+        s3_client: _DeterministicObjectLockClient,
+    ) -> None:
+        self.kms_client = kms_client
+        self.s3_client = s3_client
+
+    def client(self, service_name: str, **kwargs: Any) -> Any:
+        del kwargs
+        if service_name == "kms":
+            return self.kms_client
+        if service_name == "s3":
+            return self.s3_client
+        raise ValueError("unsupported synthetic AWS service")
+
+
 class _NotRevoked:
     """Return deterministic, current revocation evidence for the local PoC."""
 
@@ -133,6 +198,45 @@ def _candidate() -> DecisionCandidate:
         required_human_approval=False,
         risk_level="low",
     )
+
+
+def _configure_secure_test_infrastructure(
+    runtime_root: Path,
+    api_secret: str,
+) -> str:
+    """Configure secure posture while isolating external network clients.
+
+    The production AWS KMS signer and S3 Object Lock mirror remain selected.
+    Only their client boundary is replaced during the PoC with implementations
+    that perform Ed25519 signing and enforce retention metadata.
+    """
+    kms_key_id = "arn:aws:kms:us-east-1:000000000000:key/decision-bind-poc"
+    os.environ.update(
+        {
+            "VERITAS_POSTURE": "secure",
+            "VERITAS_API_SECRET": api_secret,
+            "VERITAS_SECRET_PROVIDER": "vault",
+            "VERITAS_API_SECRET_REF": "synthetic/decision-bind-poc/api-secret",
+            "VERITAS_TRUSTLOG_BACKEND": "postgresql",
+            "VERITAS_DATABASE_URL": (
+                "postgresql://synthetic:synthetic@127.0.0.1:1/decision_bind_poc"
+            ),
+            "VERITAS_TRUSTLOG_SIGNER_BACKEND": "aws_kms",
+            "VERITAS_TRUSTLOG_KMS_KEY_ID": kms_key_id,
+            "VERITAS_TRUSTLOG_MIRROR_BACKEND": "s3_object_lock",
+            "VERITAS_TRUSTLOG_S3_BUCKET": "decision-bind-poc-object-lock",
+            "VERITAS_TRUSTLOG_S3_PREFIX": "trustlog/poc",
+            "VERITAS_TRUSTLOG_S3_REGION": "us-east-1",
+            "VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE": "GOVERNANCE",
+            "VERITAS_TRUSTLOG_S3_RETENTION_DAYS": "1",
+            "VERITAS_TRUSTLOG_ANCHOR_BACKEND": "local",
+            "VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED": "1",
+            "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": str(
+                runtime_root / "transparency" / "anchors.jsonl"
+            ),
+        }
+    )
+    return kms_key_id
 
 
 def _verified_authority() -> tuple[
@@ -227,7 +331,10 @@ def _verified_authority() -> tuple[
     return proof, verifier_policy, revocation_policy
 
 
-def _decide() -> tuple[dict[str, Any], bool]:
+def _decide(
+    *,
+    aws_clients: _DeterministicAwsClients,
+) -> tuple[dict[str, Any], bool, dict[str, int]]:
     """Cross the authenticated real HTTP route with controlled provider output."""
     from veritas_os.api import server
     from veritas_os.core import kernel as decision_kernel
@@ -247,6 +354,14 @@ def _decide() -> tuple[dict[str, Any], bool]:
     with (
         patch.object(llm_client, "chat", controlled_chat),
         patch.object(decision_kernel, "decide", observed),
+        patch(
+            "veritas_os.security.signing.importlib.import_module",
+            return_value=aws_clients,
+        ),
+        patch(
+            "veritas_os.audit.storage_mirror.importlib.import_module",
+            return_value=aws_clients,
+        ),
     ):
         with TestClient(server.app) as client:
             response = client.post(
@@ -255,24 +370,38 @@ def _decide() -> tuple[dict[str, Any], bool]:
                 json=_request_fixture(),
             )
     response.raise_for_status()
-    return response.json(), bool(
-        calls and counters["calls"] and counters["successful_calls"]
+    return (
+        response.json(),
+        bool(calls and counters["calls"] and counters["successful_calls"]),
+        {
+            "kms_sign_calls": aws_clients.kms_client.sign_calls,
+            "object_lock_put_calls": len(aws_clients.s3_client.put_calls),
+        },
     )
 
 
 def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
     """Run the integrated chain, gating Bind on strict runtime governance."""
     api_key = "poc-" + secrets.token_urlsafe(24)
+    api_secret = "poc-secret-" + secrets.token_urlsafe(32)
     encryption_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
     with tempfile.TemporaryDirectory(
         prefix="decision-bind-poc-", dir=REPO_ROOT / "runtime"
     ) as temporary:
-        _configure_environment(Path(temporary), api_key, encryption_key)
-        os.environ["VERITAS_POSTURE"] = "secure"
+        runtime_root = Path(temporary)
+        _configure_environment(runtime_root, api_key, encryption_key)
+        kms_key_id = _configure_secure_test_infrastructure(
+            runtime_root,
+            api_secret,
+        )
         if os.environ.get("VERITAS_POSTURE") != "secure":
             raise RuntimeError("integrated proof requires secure posture")
 
-        response, pipeline_ok = _decide()
+        kms_client = _DeterministicKmsClient(kms_key_id)
+        s3_client = _DeterministicObjectLockClient()
+        response, pipeline_ok, infrastructure_calls = _decide(
+            aws_clients=_DeterministicAwsClients(kms_client, s3_client)
+        )
         raw_cda = response.get("canonical_decision_artifact")
         cda_verification = verify_canonical_decision_artifact(raw_cda)
         if not cda_verification.is_valid or cda_verification.artifact is None:
@@ -355,11 +484,45 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             and receipt.final_outcome is FinalOutcome.COMMITTED
             and receipt_lineage
         )
+        infrastructure_exercised = (
+            infrastructure_calls["kms_sign_calls"] > 0
+            and infrastructure_calls["object_lock_put_calls"] > 0
+        )
         report = {
             "format_version": 1,
             "proof_name": "VERITAS integrated Decision-to-Bind evidence PoC",
             "proof_scope": "network-real, effect-synthetic governance chain",
             "runtime_posture": "secure",
+            "secure_posture_startup_passed": True,
+            "posture_validation_bypassed": False,
+            "external_infrastructure_mode": "deterministic_test_doubles",
+            "secret_provider_mode": "synthetic_runtime_secret_injection",
+            "trustlog_signer_backend": "aws_kms",
+            "trustlog_mirror_backend": "s3_object_lock",
+            "trustlog_anchor_backend": "local",
+            "kms_sign_call_count": infrastructure_calls["kms_sign_calls"],
+            "object_lock_put_call_count": infrastructure_calls["object_lock_put_calls"],
+            "secure_test_infrastructure_exercised": infrastructure_exercised,
+            "real_runtime_components": [
+                "FastAPI POST /v1/decide",
+                "decision pipeline and kernel",
+                "CanonicalDecisionArtifact verification",
+                "DecisionCandidate promotion",
+                "AuthorityEvidence Ed25519 verification",
+                "RuntimeAuthorityValidator",
+                "execute_bind_adjudication",
+                "WebhookBindAdapter",
+                "local HTTP fixture",
+                "BindReceipt lineage verification",
+            ],
+            "controlled_components": [
+                "model provider output",
+                "runtime-injected API secret",
+                "AWS KMS network client",
+                "S3 Object Lock network client",
+                "local transparency endpoint",
+                "synthetic external action endpoint",
+            ],
             "http_decide_status": "pass",
             "pipeline_kernel_status": "pass" if pipeline_ok else "fail",
             "canonical_decision_present": raw_cda is not None,
@@ -406,15 +569,24 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
                 "live LLM provider reliability",
                 "production customer integration",
                 "production credential handling",
+                "real cloud KMS availability",
+                "real S3 Object Lock durability",
+                "production TrustLog infrastructure",
                 "Real Bind Authorization",
                 "authorization consumption or atomic single-use enforcement",
                 "production deployment",
                 "regulatory approval or certification",
             ],
-            "result": "pass" if expected and pipeline_ok and lineage_ok else "fail",
+            "result": (
+                "pass"
+                if expected and pipeline_ok and lineage_ok and infrastructure_exercised
+                else "fail"
+            ),
         }
         serialized = json.dumps(report, sort_keys=True, separators=(",", ":"))
-        if api_key in serialized or encryption_key in serialized:
+        if any(
+            secret in serialized for secret in (api_key, api_secret, encryption_key)
+        ):
             raise RuntimeError("ephemeral secret leaked into proof report")
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(serialized + "\n", encoding="utf-8")

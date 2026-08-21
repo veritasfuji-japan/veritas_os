@@ -241,7 +241,9 @@ def _contract() -> ActionClassContract:
     )
 
 
-def _signed_authority_artifact():
+def _signed_authority_artifact(
+    *, signed_at: str = "2026-04-25T00:00:00+00:00"
+):
     contract = _contract()
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes_raw()
@@ -257,7 +259,7 @@ def _signed_authority_artifact():
         "claims": claims, "claims_hash": claims_hash,
         "signer": {"key_id": "authority-key-1", "algorithm": "Ed25519"},
         "issuer_identity": "governance-control-plane",
-        "signed_at": "2026-04-25T00:00:00+00:00",
+        "signed_at": signed_at,
     }
     artifact["signature"] = base64.urlsafe_b64encode(
         private.sign(authority_signature_payload(artifact).encode())
@@ -271,6 +273,29 @@ def _signed_authority_artifact():
         ["governance-control-plane"],
     )
     return artifact, contract, verifier, policy
+
+
+def test_authority_artifact_rejects_future_signed_at() -> None:
+    """An artifact cannot claim it was signed after verification time."""
+    artifact, contract, verifier, policy = _signed_authority_artifact(
+        signed_at="2026-04-26T00:00:01+00:00"
+    )
+
+    with pytest.raises(ValueError, match="authority_signed_at_future"):
+        verify_authority_evidence_artifact_to_proof(
+            artifact,
+            action_contract=contract,
+            actor_identity="operator:alice",
+            requested_scope=["customer:risk_escalation"],
+            policy_snapshot_id="policy-snapshot-001",
+            signature_verifier=verifier,
+            signer_policy=policy,
+            revocation_checker=_NotRevoked(),
+            revocation_policy=AuthorityRevocationPolicy(
+                60, ["revocation-control"]
+            ),
+            now=datetime(2026, 4, 26, tzinfo=UTC),
+        )
 
 
 def test_real_ed25519_verification_emits_sealed_proof(
