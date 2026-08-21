@@ -160,7 +160,11 @@ def test_unknown_verification_result_defaults_to_indeterminate() -> None:
 
 
 def test_expired_evidence_normalizes_and_validation_marks_invalid() -> None:
-    evidence = ingest_authority_evidence_payload(_payload(valid_until="2026-04-01T00:00:00+00:00"))
+    evidence = ingest_authority_evidence_payload(_payload(
+        issued_at="2026-03-01T00:00:00+00:00",
+        valid_from="2026-03-01T00:00:00+00:00",
+        valid_until="2026-04-01T00:00:00+00:00",
+    ))
 
     result = validate_authority_evidence(evidence, now=FIXED_NOW)
 
