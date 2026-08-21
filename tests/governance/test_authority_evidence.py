@@ -426,7 +426,97 @@ def test_verifier_policy_hash_binds_public_key_material_stably() -> None:
         trusted_public_keys={"key-a": attacker_key, "key-b": attacker_key},
         **common,
     )
+    remapped_issuer = TrustedEd25519AuthorityVerifier(
+        trusted_public_keys={"key-a": legitimate_key, "key-b": attacker_key},
+        trusted_issuers={"key-a": "issuer-attacker", "key-b": "issuer-b"},
+        verifier_id="verifier-1",
+        trust_level="production",
+        verifier_policy_id="policy-1",
+    )
 
     assert legitimate.policy_hash() == reordered.policy_hash()
     assert legitimate.policy_hash() != swapped.policy_hash()
+    assert legitimate.policy_hash() != remapped_issuer.policy_hash()
     assert legitimate_key.hex() not in legitimate.policy_hash()
+
+
+def test_deployment_policy_rejects_same_id_attacker_key() -> None:
+    """An attacker-valid signature cannot satisfy the pinned deployment hash."""
+    contract = _contract()
+    legitimate_private = Ed25519PrivateKey.generate()
+    attacker_private = Ed25519PrivateKey.generate()
+    common = {
+        "trusted_issuers": {"authority-key-1": "governance-control-plane"},
+        "verifier_id": "verifier-1",
+        "trust_level": "production",
+        "verifier_policy_id": "authority-verifier-v1",
+    }
+    legitimate = TrustedEd25519AuthorityVerifier(
+        trusted_public_keys={
+            "authority-key-1": legitimate_private.public_key().public_bytes_raw()
+        },
+        **common,
+    )
+    attacker = TrustedEd25519AuthorityVerifier(
+        trusted_public_keys={
+            "authority-key-1": attacker_private.public_key().public_bytes_raw()
+        },
+        **common,
+    )
+    evidence = _build_valid_authority_evidence(
+        action_contract_hash=contract.deterministic_digest(),
+        verification_result=VerificationResult.INVALID,
+    )
+    claims = evidence.claims_dict()
+    from veritas_os.security.hash import sha256_of_canonical_json
+
+    artifact = {
+        "artifact_type": "authority_evidence",
+        "artifact_version": "v1",
+        "claims": claims,
+        "claims_hash": sha256_of_canonical_json(claims),
+        "signer": {"key_id": "authority-key-1", "algorithm": "Ed25519"},
+        "issuer_identity": "governance-control-plane",
+        "signed_at": "2026-04-25T00:00:00+00:00",
+    }
+    artifact["signature"] = base64.urlsafe_b64encode(
+        attacker_private.sign(authority_signature_payload(artifact).encode())
+    ).decode()
+    signer_policy = AuthorityEvidenceSignerPolicy(
+        "issuer-policy-1",
+        ["authority-key-1"],
+        ["Ed25519"],
+        ["governance-control-plane"],
+    )
+    deployment_policy = AuthorityEvidenceVerifierPolicy(
+        [
+            ApprovedAuthorityEvidenceVerifier(
+                verifier_id="verifier-1",
+                trust_level="production",
+                verifier_key_id="authority-key-1",
+                verifier_policy_id="authority-verifier-v1",
+                verifier_policy_hash=legitimate.policy_hash(),
+                signer_policy_id=signer_policy.policy_id,
+                signer_policy_hash=signer_policy.deterministic_hash(),
+            )
+        ]
+    )
+
+    assert attacker.verify(artifact).verified is True
+    assert attacker.policy_hash() != legitimate.policy_hash()
+    with pytest.raises(ValueError, match="authority_verifier_policy_mismatch"):
+        verify_authority_evidence_artifact_to_proof(
+            artifact,
+            action_contract=contract,
+            actor_identity="operator:alice",
+            requested_scope=["customer:risk_escalation"],
+            policy_snapshot_id="policy-snapshot-001",
+            signature_verifier=attacker,
+            signer_policy=signer_policy,
+            verifier_policy=deployment_policy,
+            revocation_checker=_NotRevoked(),
+            revocation_policy=AuthorityRevocationPolicy(
+                60, ["revocation-control"]
+            ),
+            now=datetime(2026, 4, 26, tzinfo=UTC),
+        )

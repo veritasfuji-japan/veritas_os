@@ -10,15 +10,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from veritas_os.governance.canonical_decision_artifact import (
-    CanonicalDecisionArtifact,
-    verify_canonical_decision_artifact,
-)
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
+
+if TYPE_CHECKING:
+    from veritas_os.governance.canonical_decision_artifact import (
+        CanonicalDecisionArtifact,
+    )
 
 
 class DecisionCandidatePromotionStatus(str, Enum):
@@ -609,6 +610,10 @@ def try_promote_verified_canonical_decision_candidate_to_execution_intent(
     CDA-v1 does not assert policy-snapshot provenance. No decision-lineage
     override parameters are accepted, and this helper performs no I/O or Bind.
     """
+    from veritas_os.governance.canonical_decision_artifact import (
+        verify_canonical_decision_artifact,
+    )
+
     normalized = normalize_decision_candidate(candidate)
     candidate_validation = validate_decision_candidate(normalized)
     verification = verify_canonical_decision_artifact(canonical_decision_artifact)

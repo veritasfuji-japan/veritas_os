@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 
+import pytest
+
 from veritas_os.api.schemas import DecideResponse
 from veritas_os.governance.canonical_decision_artifact import (
     build_canonical_decision_artifact,
@@ -91,8 +93,12 @@ def test_lineage_overrides_are_not_part_of_helper_contract() -> None:
     result = _promote(artifact)
 
     assert result.execution_intent is not None
-    assert result.execution_intent.decision_id != "caller-decision"
-    assert result.execution_intent.decision_hash != "caller-hash"
+    assert result.execution_intent.decision_id == artifact.decision_id
+    assert result.execution_intent.decision_hash == artifact.decision_hash
+    with pytest.raises(TypeError):
+        _promote(artifact, decision_id="caller-decision")
+    with pytest.raises(TypeError):
+        _promote(artifact, decision_hash="caller-hash")
 
 
 def test_policy_snapshot_is_explicit_and_required() -> None:
