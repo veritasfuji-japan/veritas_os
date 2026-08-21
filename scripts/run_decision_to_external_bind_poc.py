@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 from datetime import UTC, datetime, timedelta
+import importlib
 import json
 import os
 from pathlib import Path
@@ -351,16 +352,23 @@ def _decide(
         return dict(transcript["response"])
 
     observed = _observed_kernel_decide(decision_kernel.decide, counters)
+    real_import_module = importlib.import_module
+
+    def controlled_import_module(
+        name: str,
+        package: str | None = None,
+    ) -> Any:
+        """Substitute only boto3 while preserving normal dynamic imports."""
+        if name == "boto3":
+            return aws_clients
+        return real_import_module(name, package)
+
     with (
         patch.object(llm_client, "chat", controlled_chat),
         patch.object(decision_kernel, "decide", observed),
         patch(
-            "veritas_os.security.signing.importlib.import_module",
-            return_value=aws_clients,
-        ),
-        patch(
-            "veritas_os.audit.storage_mirror.importlib.import_module",
-            return_value=aws_clients,
+            "importlib.import_module",
+            side_effect=controlled_import_module,
         ),
     ):
         with TestClient(server.app) as client:
