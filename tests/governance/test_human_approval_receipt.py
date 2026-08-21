@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+import os
+from typing import Any
 
 import pytest
 
@@ -27,6 +29,46 @@ from veritas_os.governance.runtime_authority import (
     RuntimeAuthorityValidationResult,
     RuntimeAuthorityValidator,
 )
+from tests.governance.authority_test_helpers import build_strict_authority_bundle
+
+
+class _HumanApprovalRuntimeValidator(RuntimeAuthorityValidator):
+    """Supply genuine authority prerequisites to strict Human Approval tests."""
+
+    def validate(self, **kwargs: Any) -> RuntimeAuthorityValidationResult:
+        posture = os.getenv("VERITAS_POSTURE", "dev").strip().lower()
+        if posture in {"secure", "prod"} and not kwargs.get(
+            "verified_authority_evidence"
+        ):
+            authority = kwargs.get("authority_evidence")
+            contract = kwargs.get("action_contract")
+            actor = kwargs.get("actor_identity")
+            policy_snapshot = kwargs.get("policy_snapshot_id")
+            now = kwargs.get("now")
+            if (
+                isinstance(authority, AuthorityEvidence)
+                and isinstance(contract, ActionClassContract)
+                and isinstance(actor, str)
+                and isinstance(policy_snapshot, str)
+                and isinstance(now, datetime)
+            ):
+                bundle = build_strict_authority_bundle(
+                    authority=authority,
+                    action_contract=contract,
+                    actor_identity=actor,
+                    requested_scope=list(kwargs.get("requested_scope", [])),
+                    policy_snapshot_id=policy_snapshot,
+                    now=now,
+                )
+                kwargs["verified_authority_evidence"] = bundle.proof
+                kwargs["authority_verifier_policy"] = bundle.verifier_policy
+                kwargs["authority_revocation_policy"] = bundle.revocation_policy
+        return super().validate(**kwargs)
+
+
+def _runtime_validator() -> RuntimeAuthorityValidator:
+    """Return the Human Approval test validator with strict authority setup."""
+    return _HumanApprovalRuntimeValidator()
 
 
 def _receipt(**overrides: object) -> HumanApprovalReceipt:
@@ -289,7 +331,7 @@ def test_action_class_mismatch_fails_validation() -> None:
 
 
 def test_high_irreversibility_passes_with_valid_human_approval_state() -> None:
-    validator = RuntimeAuthorityValidator()
+    validator = _runtime_validator()
     approval_state = build_human_approval_state(
         _receipt(),
         requested_scope=["ledger:debit"],
@@ -315,7 +357,7 @@ def test_high_irreversibility_passes_with_valid_human_approval_state() -> None:
 
 
 def test_high_irreversibility_blocks_with_invalid_human_approval_state() -> None:
-    validator = RuntimeAuthorityValidator()
+    validator = _runtime_validator()
     approval_state = build_human_approval_state(
         _receipt(expires_at="2026-04-01T00:00:00+00:00"),
         requested_scope=["ledger:debit"],
@@ -391,7 +433,7 @@ def test_human_approval_state_uses_finalized_receipt_hash() -> None:
 
 def test_raw_approved_dict_without_receipt_hash_fails_closed() -> None:
     """Runtime authority cannot trust a self-asserted approval dict."""
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -410,7 +452,7 @@ def test_raw_approved_dict_without_receipt_hash_fails_closed() -> None:
 
 def test_raw_approved_dict_with_untrusted_receipt_hash_fails_closed() -> None:
     """Receipt-shaped dicts must include validated receipt state metadata."""
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -446,7 +488,7 @@ def test_tampered_receipt_hash_in_built_state_fails_closed() -> None:
     )
     approval_state["receipt_hash"] = "f" * 64
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -473,7 +515,7 @@ def test_tampered_approved_scope_in_built_state_fails_closed() -> None:
     )
     approval_state["approved_scope"] = ["ledger:mint"]
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -545,7 +587,7 @@ def test_runtime_authority_blocks_invalid_human_approval_receipt_state(
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -576,7 +618,7 @@ def test_strict_posture_rejects_valid_receipt_without_artifact_provenance(
     posture: str,
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
-    validator = RuntimeAuthorityValidator()
+    validator = _runtime_validator()
 
     result = validator.validate(
         action_contract=_contract(),
@@ -605,7 +647,7 @@ def test_strict_posture_rejects_compatibility_state_without_receipt(
     posture: str,
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
-    validator = RuntimeAuthorityValidator()
+    validator = _runtime_validator()
     approval_state = build_human_approval_state(
         _receipt(),
         requested_scope=["ledger:debit"],
@@ -634,7 +676,7 @@ def test_dev_posture_keeps_compatibility_state_support(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "dev")
-    validator = RuntimeAuthorityValidator()
+    validator = _runtime_validator()
     approval_state = build_human_approval_state(
         _receipt(),
         requested_scope=["ledger:debit"],
@@ -663,7 +705,7 @@ def test_dev_posture_accepts_direct_signature_verified_receipt(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "dev")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -681,7 +723,7 @@ def test_dev_posture_accepts_direct_signature_verified_receipt(
 
 def test_dev_posture_rejects_raw_approved_dict(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "dev")
-    validator = RuntimeAuthorityValidator()
+    validator = _runtime_validator()
 
     result = validator.validate(
         action_contract=_contract(),
@@ -714,7 +756,7 @@ def test_strict_posture_invalid_direct_receipt_requires_provenance(
     receipt_overrides: dict[str, object],
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
-    validator = RuntimeAuthorityValidator()
+    validator = _runtime_validator()
 
     result = validator.validate(
         action_contract=_contract(),
@@ -813,7 +855,7 @@ def test_strict_posture_rejects_naked_signature_verified_receipt(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -855,7 +897,7 @@ def test_strict_posture_rejects_forged_receipt_provenance(
         },
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -894,7 +936,7 @@ def test_secure_posture_accepts_receipt_returned_by_artifact_verifier(
         require_structured_signature_result=True,
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -927,7 +969,7 @@ def test_prod_posture_rejects_direct_receipt_returned_by_artifact_verifier(
         require_structured_signature_result=True,
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -953,7 +995,7 @@ def test_strict_posture_rejects_test_human_approval_signature_verifier(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -981,7 +1023,7 @@ def test_strict_posture_accepts_production_human_approval_signature_verifier(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1007,7 +1049,7 @@ def test_strict_posture_prefers_human_approval_signature_verifier(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1035,7 +1077,7 @@ def test_dev_test_posture_can_use_test_human_approval_signature_verifier(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1058,7 +1100,7 @@ def test_strict_posture_rejects_incomplete_signature_verifier_result(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1087,7 +1129,7 @@ def test_strict_posture_rejects_signature_verifier_exception(
     def raise_verification_error(_artifact: dict[str, object]) -> object:
         raise RuntimeError("kms unavailable")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1111,7 +1153,7 @@ def test_strict_posture_rejects_signature_verifier_exception(
 def test_prod_accepts_approved_verifier_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1134,7 +1176,7 @@ def test_prod_accepts_approved_verifier_identity(monkeypatch: pytest.MonkeyPatch
 def test_prod_rejects_missing_verifier_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1159,7 +1201,7 @@ def test_prod_rejects_missing_verifier_id(monkeypatch: pytest.MonkeyPatch) -> No
 def test_prod_rejects_unapproved_verifier_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1184,7 +1226,7 @@ def test_prod_rejects_unapproved_verifier_id(monkeypatch: pytest.MonkeyPatch) ->
 def test_prod_rejects_verifier_key_id_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1211,7 +1253,7 @@ def test_prod_rejects_verifier_policy_hash_mismatch(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1261,7 +1303,7 @@ def test_prod_posture_accepts_signed_artifact_with_production_trust_level(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1287,7 +1329,7 @@ def test_prod_posture_rejects_signed_artifact_missing_verifier_trust_level(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1313,7 +1355,7 @@ def test_prod_posture_rejects_non_production_verifier_trust_level(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1343,7 +1385,7 @@ def test_secure_posture_passes_with_valid_signed_human_approval_artifact(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1369,7 +1411,7 @@ def test_strict_posture_rejects_signed_artifact_with_bad_signature(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1400,7 +1442,7 @@ def test_strict_posture_rejects_signed_artifact_with_tampered_receipt_hash(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1426,7 +1468,7 @@ def test_strict_posture_rejects_signed_artifact_without_verifier(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1495,7 +1537,7 @@ def test_strict_posture_rejects_bool_signature_verifier_result(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1521,7 +1563,7 @@ def test_dev_posture_accepts_bool_signature_verifier_result(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "dev")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1682,7 +1724,7 @@ def test_runtime_does_not_emit_verified_approval_on_metadata_mismatch(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "prod")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1804,7 +1846,7 @@ def test_strict_posture_passes_with_valid_verified_human_approval_proof(
         signer_policy=_signer_policy(),
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1837,7 +1879,7 @@ def test_strict_posture_rejects_tampered_verified_proof_hash(
         signer_policy=_signer_policy(),
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1872,7 +1914,7 @@ def test_strict_posture_rejects_tampered_verified_receipt_hash(
         signer_policy=_signer_policy(),
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1894,7 +1936,7 @@ def test_dev_posture_plain_receipt_compatibility_remains_intact(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", "dev")
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -1954,7 +1996,7 @@ def test_strict_posture_passes_signed_approval_bound_to_same_context(
 ) -> None:
     monkeypatch.setenv("VERITAS_POSTURE", posture)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -2034,7 +2076,7 @@ def test_strict_posture_rejects_signed_approval_reused_across_context(
     }
     runtime_payload.update(runtime_overrides)
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],
@@ -2069,7 +2111,7 @@ def test_dev_posture_unbound_compatibility_state_remains_intact(
         now=datetime(2026, 5, 10, tzinfo=UTC),
     )
 
-    result = RuntimeAuthorityValidator().validate(
+    result = _runtime_validator().validate(
         action_contract=_contract(),
         authority_evidence=_authority(),
         requested_scope=["ledger:debit"],

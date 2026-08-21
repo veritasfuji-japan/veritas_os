@@ -9,7 +9,7 @@ from veritas_os.governance.authority_evidence import AuthorityEvidence, Verifica
 from veritas_os.governance.commit_boundary import CommitBoundaryEvaluator
 
 
-FIXED_NOW = datetime.fromisoformat("2026-04-26T00:00:00")
+FIXED_NOW = datetime.fromisoformat("2026-04-26T00:00:00+00:00")
 
 
 def _contract(**overrides: object) -> ActionClassContract:
@@ -48,14 +48,14 @@ def _authority(**overrides: object) -> AuthorityEvidence:
         "scope_grants": ["customer:risk_escalation", "customer:case_note"],
         "scope_limitations": ["account:freeze", "customer:notification"],
         "validity_window": {
-            "issued_at": "2026-04-25T00:00:00",
-            "valid_from": "2026-04-25T00:00:00",
-            "valid_until": "2026-04-30T00:00:00",
+            "issued_at": "2026-04-25T00:00:00+00:00",
+            "valid_from": "2026-04-25T00:00:00+00:00",
+            "valid_until": "2026-04-30T00:00:00+00:00",
         },
-        "issued_at": "2026-04-25T00:00:00",
-        "valid_from": "2026-04-25T00:00:00",
-        "valid_until": "2026-04-30T00:00:00",
-        "revalidated_at": "2026-04-26T00:00:00",
+        "issued_at": "2026-04-25T00:00:00+00:00",
+        "valid_from": "2026-04-25T00:00:00+00:00",
+        "valid_until": "2026-04-30T00:00:00+00:00",
+        "revalidated_at": "2026-04-26T00:00:00+00:00",
         "policy_snapshot_id": "policy-snapshot-001",
         "evidence_hash": "hash-001",
         "verification_result": VerificationResult.VALID,
@@ -127,7 +127,16 @@ def test_missing_authority_evidence_blocks() -> None:
 
 
 def test_expired_authority_blocks() -> None:
-    result = _evaluate(authority_evidence=_authority(valid_until="2026-04-01T00:00:00"))
+    result = _evaluate(authority_evidence=_authority(
+        issued_at="2026-03-01T00:00:00+00:00",
+        valid_from="2026-03-01T00:00:00+00:00",
+        valid_until="2026-04-01T00:00:00+00:00",
+        validity_window={
+            "issued_at": "2026-03-01T00:00:00+00:00",
+            "valid_from": "2026-03-01T00:00:00+00:00",
+            "valid_until": "2026-04-01T00:00:00+00:00",
+        },
+    ))
 
     assert result.commit_boundary_result == "block"
 

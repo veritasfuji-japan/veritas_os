@@ -13,7 +13,12 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from veritas_os.governance.action_contracts import ActionClassContract
-from veritas_os.governance.authority_evidence import AuthorityEvidence
+from veritas_os.governance.authority_evidence import (
+    AuthorityEvidence,
+    AuthorityEvidenceVerifierPolicy,
+    AuthorityRevocationPolicy,
+    VerifiedAuthorityEvidence,
+)
 from veritas_os.governance.predicates import PredicateResult
 from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
 
@@ -61,6 +66,9 @@ class CommitBoundaryEvaluator:
         actor_identity: str | None,
         human_approval_state: dict[str, Any],
         bind_context_metadata: dict[str, Any],
+        verified_authority_evidence: VerifiedAuthorityEvidence | None = None,
+        authority_verifier_policy: AuthorityEvidenceVerifierPolicy | None = None,
+        authority_revocation_policy: AuthorityRevocationPolicy | None = None,
         now: datetime | None = None,
     ) -> CommitBoundaryResult:
         """Return commit/block/escalate/refuse for irreversible commit boundary."""
@@ -69,10 +77,18 @@ class CommitBoundaryEvaluator:
             required_evidence_metadata=required_evidence_metadata,
             evidence_freshness_metadata=evidence_freshness_metadata,
         )
+        effective_authority = (
+            verified_authority_evidence.authority_evidence
+            if verified_authority_evidence is not None
+            else authority_evidence
+        )
 
         authority_result = self._validator.validate(
             action_contract=action_contract,
             authority_evidence=authority_evidence,
+            verified_authority_evidence=verified_authority_evidence,
+            authority_verifier_policy=authority_verifier_policy,
+            authority_revocation_policy=authority_revocation_policy,
             requested_scope=requested_scope,
             required_evidence_metadata=merged_evidence,
             policy_snapshot_id=policy_snapshot_id,
@@ -106,10 +122,11 @@ class CommitBoundaryEvaluator:
             action_contract_id=action_contract.id if action_contract else "",
             action_contract_version=action_contract.version if action_contract else "",
             authority_evidence_id=(
-                authority_evidence.authority_evidence_id if authority_evidence else ""
+                effective_authority.authority_evidence_id
+                if effective_authority else ""
             ),
             authority_evidence_hash=(
-                authority_evidence.evidence_hash if authority_evidence else ""
+                effective_authority.evidence_hash if effective_authority else ""
             ),
             authority_validation_status=authority_result.status,
             admissibility_predicates=predicates,

@@ -21,7 +21,7 @@ DEFAULT_CONTRACT_PATH = Path("policies/action_contracts/aml_kyc_customer_risk_es
 DEFAULT_FIXTURE_PATH = Path(
     "veritas_os/sample_data/governance/aml_kyc_regulated_action_path/scenarios.json"
 )
-FIXTURE_NOW = datetime.fromisoformat("2026-04-26T00:00:00")
+FIXTURE_NOW = datetime.fromisoformat("2026-04-26T00:00:00+00:00")
 
 
 @dataclass(frozen=True)
