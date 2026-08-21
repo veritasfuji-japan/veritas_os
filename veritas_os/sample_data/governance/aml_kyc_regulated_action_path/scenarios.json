@@ -39,14 +39,14 @@
         "scope_grants": ["create_internal_risk_escalation"],
         "scope_limitations": ["freeze_account", "notify_customer"],
         "validity_window": {
-          "issued_at": "2026-04-25T00:00:00",
-          "valid_from": "2026-04-25T00:00:00",
-          "valid_until": "2026-04-30T00:00:00"
+          "issued_at": "2026-04-25T00:00:00+00:00",
+          "valid_from": "2026-04-25T00:00:00+00:00",
+          "valid_until": "2026-04-30T00:00:00+00:00"
         },
-        "issued_at": "2026-04-25T00:00:00",
-        "valid_from": "2026-04-25T00:00:00",
-        "valid_until": "2026-04-30T00:00:00",
-        "revalidated_at": "2026-04-26T00:00:00",
+        "issued_at": "2026-04-25T00:00:00+00:00",
+        "valid_from": "2026-04-25T00:00:00+00:00",
+        "valid_until": "2026-04-30T00:00:00+00:00",
+        "revalidated_at": "2026-04-26T00:00:00+00:00",
         "verification_result": "valid",
         "evidence_hash": "hash-a"
       }
@@ -63,7 +63,7 @@
       "evidence_freshness_metadata": {"kyc_profile": {"fresh": true}, "sanctions_screening_trace": {"fresh": true}, "transaction_pattern_summary": {"fresh": true}, "policy_snapshot_id": {"fresh": true}, "model_output_hash": {"fresh": true}, "actor_identity": {"fresh": true}, "approval_matrix": {"fresh": true}, "timestamped_evidence_freshness_metadata": {"fresh": true}},
       "human_approval_state": {"approved": true},
       "bind_context_metadata": {"session_id": "bind-b"},
-      "authority_evidence": {"authority_evidence_id": "aev-b", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00"}, "issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00", "revalidated_at": "2026-04-26T00:00:00", "verification_result": "valid", "evidence_hash": "hash-b"}
+      "authority_evidence": {"authority_evidence_id": "aev-b", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00"}, "issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00", "revalidated_at": "2026-04-26T00:00:00+00:00", "verification_result": "valid", "evidence_hash": "hash-b"}
     },
     {
       "scenario_name": "scenario_c_prohibited_customer_notification",
@@ -77,7 +77,7 @@
       "evidence_freshness_metadata": {"kyc_profile": {"fresh": true}, "sanctions_screening_trace": {"fresh": true}, "transaction_pattern_summary": {"fresh": true}, "policy_snapshot_id": {"fresh": true}, "model_output_hash": {"fresh": true}, "actor_identity": {"fresh": true}, "approval_matrix": {"fresh": true}, "timestamped_evidence_freshness_metadata": {"fresh": true}},
       "human_approval_state": {"approved": true},
       "bind_context_metadata": {"session_id": "bind-c"},
-      "authority_evidence": {"authority_evidence_id": "aev-c", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["notify_customer"], "validity_window": {"issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00"}, "issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00", "revalidated_at": "2026-04-26T00:00:00", "verification_result": "valid", "evidence_hash": "hash-c"}
+      "authority_evidence": {"authority_evidence_id": "aev-c", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["notify_customer"], "validity_window": {"issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00"}, "issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00", "revalidated_at": "2026-04-26T00:00:00+00:00", "verification_result": "valid", "evidence_hash": "hash-c"}
     },
     {
       "scenario_name": "scenario_d_stale_sanctions_screening",
@@ -94,7 +94,7 @@
       "contract_overrides": {
         "escalation_conditions": ["stale_evidence"]
       },
-      "authority_evidence": {"authority_evidence_id": "aev-d", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00"}, "issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00", "revalidated_at": "2026-04-26T00:00:00", "verification_result": "valid", "evidence_hash": "hash-d"}
+      "authority_evidence": {"authority_evidence_id": "aev-d", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00"}, "issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00", "revalidated_at": "2026-04-26T00:00:00+00:00", "verification_result": "valid", "evidence_hash": "hash-d"}
     },
     {
       "scenario_name": "scenario_e_missing_authority",
@@ -121,7 +121,7 @@
       "evidence_freshness_metadata": {"kyc_profile": {"fresh": true}, "sanctions_screening_trace": {"fresh": true}, "transaction_pattern_summary": {"fresh": true}, "policy_snapshot_id": {"fresh": true}, "model_output_hash": {"fresh": true}, "actor_identity": {"fresh": true}, "approval_matrix": {"fresh": true}, "timestamped_evidence_freshness_metadata": {"fresh": true}},
       "human_approval_state": {"approved": false},
       "bind_context_metadata": {"session_id": "bind-f"},
-      "authority_evidence": {"authority_evidence_id": "aev-f", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00"}, "issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00", "revalidated_at": "2026-04-26T00:00:00", "verification_result": "valid", "evidence_hash": "hash-f"},
+      "authority_evidence": {"authority_evidence_id": "aev-f", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00"}, "issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00", "revalidated_at": "2026-04-26T00:00:00+00:00", "verification_result": "valid", "evidence_hash": "hash-f"},
       "contract_overrides": {
         "irreversibility": {"boundary": "account_restriction", "level": "high"},
         "human_approval_rules": {"required": true, "minimum_approvals": 1}
@@ -139,7 +139,7 @@
       "evidence_freshness_metadata": {"kyc_profile": {"fresh": true}, "sanctions_screening_trace": {"fresh": true}, "transaction_pattern_summary": {"fresh": true}, "policy_snapshot_id": {"fresh": false}, "model_output_hash": {"fresh": true}, "actor_identity": {"fresh": true}, "approval_matrix": {"fresh": true}, "timestamped_evidence_freshness_metadata": {"fresh": true}},
       "human_approval_state": {"approved": true},
       "bind_context_metadata": {"session_id": "bind-g"},
-      "authority_evidence": {"authority_evidence_id": "aev-g", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00"}, "issued_at": "2026-04-25T00:00:00", "valid_from": "2026-04-25T00:00:00", "valid_until": "2026-04-30T00:00:00", "revalidated_at": "2026-04-26T00:00:00", "verification_result": "valid", "evidence_hash": "hash-g"}
+      "authority_evidence": {"authority_evidence_id": "aev-g", "actor_role": "aml_reviewer", "authority_source_refs": ["policy_snapshot_id"], "role_or_policy_basis": ["role:aml_reviewer"], "scope_grants": ["create_internal_risk_escalation"], "scope_limitations": ["freeze_account"], "validity_window": {"issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00"}, "issued_at": "2026-04-25T00:00:00+00:00", "valid_from": "2026-04-25T00:00:00+00:00", "valid_until": "2026-04-30T00:00:00+00:00", "revalidated_at": "2026-04-26T00:00:00+00:00", "verification_result": "valid", "evidence_hash": "hash-g"}
     }
   ]
 }
