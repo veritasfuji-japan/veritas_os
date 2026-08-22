@@ -442,7 +442,9 @@ def verify_authority_evidence_artifact_to_proof(
     if temporal_failures:
         raise ValueError(temporal_failures[0])
     signed_at = artifact.get("signed_at")
-    _aware_datetime(signed_at, "authority_signed_at_invalid")
+    signed_at_dt = _aware_datetime(signed_at, "authority_signed_at_invalid")
+    if signed_at_dt > current:
+        raise ValueError("authority_signed_at_future")
     revocation = revocation_checker.check(evidence.authority_evidence_id, now=current)
     revocation_failure = _revocation_failure(revocation, revocation_policy, current)
     if revocation_failure:
