@@ -10,11 +10,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
+
+if TYPE_CHECKING:
+    from veritas_os.governance.canonical_decision_artifact import (
+        CanonicalDecisionArtifact,
+    )
 
 
 class DecisionCandidatePromotionStatus(str, Enum):
@@ -43,6 +48,8 @@ class DecisionCandidateRefusalReason(str, Enum):
     RISK_INDETERMINATE = "DECISION_CANDIDATE_RISK_INDETERMINATE"
     RATIONALE_ONLY = "DECISION_CANDIDATE_RATIONALE_ONLY"
     PROMOTABLE = "DECISION_CANDIDATE_PROMOTABLE"
+    CANONICAL_DECISION_INVALID = "CANONICAL_DECISION_ARTIFACT_INVALID"
+    POLICY_SNAPSHOT_MISSING = "POLICY_SNAPSHOT_ID_MISSING"
 
 
 HARD_REQUIRED_FIELDS = (
@@ -584,6 +591,72 @@ def try_promote_decision_candidate_to_execution_intent(
         refusal_reason_codes=[],
         requires_human_review=False,
         fail_closed=False,
+    )
+
+
+def try_promote_verified_canonical_decision_candidate_to_execution_intent(
+    candidate: DecisionCandidate | dict[str, Any],
+    *,
+    canonical_decision_artifact: CanonicalDecisionArtifact | dict[str, Any],
+    policy_snapshot_id: str,
+    ttl_seconds: int | None = None,
+    expected_state_fingerprint: str | None = None,
+    approval_context: dict[str, Any] | None = None,
+    policy_lineage: dict[str, Any] | None = None,
+) -> DecisionCandidatePromotionResult:
+    """Promote structured input using lineage only from an independently verified CDA.
+
+    ``policy_snapshot_id`` remains an explicit, typed caller boundary because
+    CDA-v1 does not assert policy-snapshot provenance. No decision-lineage
+    override parameters are accepted, and this helper performs no I/O or Bind.
+    """
+    from veritas_os.governance.canonical_decision_artifact import (
+        verify_canonical_decision_artifact,
+    )
+
+    normalized = normalize_decision_candidate(candidate)
+    candidate_validation = validate_decision_candidate(normalized)
+    verification = verify_canonical_decision_artifact(canonical_decision_artifact)
+    refusal_reasons: list[str] = []
+    if not verification.is_valid or verification.artifact is None:
+        refusal_reasons.append(
+            DecisionCandidateRefusalReason.CANONICAL_DECISION_INVALID.value
+        )
+    if not isinstance(policy_snapshot_id, str) or not policy_snapshot_id.strip():
+        refusal_reasons.append(
+            DecisionCandidateRefusalReason.POLICY_SNAPSHOT_MISSING.value
+        )
+    if refusal_reasons:
+        validation = DecisionCandidateValidationResult(
+            promotion_status=DecisionCandidatePromotionStatus.REFUSED,
+            promotable=False,
+            requires_human_review=False,
+            fail_closed=True,
+            reason_codes=refusal_reasons,
+            missing_required_fields=list(candidate_validation.missing_required_fields),
+            ambiguity_flags=list(candidate_validation.ambiguity_flags),
+        )
+        return DecisionCandidatePromotionResult(
+            promoted=False,
+            execution_intent=None,
+            validation_result=validation,
+            normalized_candidate=normalized,
+            refusal_reason_codes=refusal_reasons,
+            fail_closed=True,
+        )
+
+    artifact = verification.artifact
+    return try_promote_decision_candidate_to_execution_intent(
+        normalized,
+        decision_id=artifact.decision_id,
+        decision_hash=artifact.decision_hash,
+        decision_ts=artifact.decision_ts,
+        request_id=artifact.request_id,
+        policy_snapshot_id=policy_snapshot_id.strip(),
+        ttl_seconds=ttl_seconds,
+        expected_state_fingerprint=expected_state_fingerprint,
+        approval_context=approval_context,
+        policy_lineage=policy_lineage,
     )
 
 
