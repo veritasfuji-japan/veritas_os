@@ -110,16 +110,77 @@ class AuthorizedBindAdapterFactory(Protocol):
         ...
 
 
+class _BindInvocationTrackingAdapter(BindAdapterContract):
+    """Transparent adapter proxy that records whether ``apply`` was attempted.
+
+    Entering ``execute_bind_adjudication`` is not the same thing as calling the
+    adapter's effect-bearing ``apply`` method.  The proxy preserves the exact
+    adapter behaviour while making that distinction observable in the returned
+    non-secret result.
+    """
+
+    def __init__(self, delegate: BindAdapterContract) -> None:
+        self._delegate = delegate
+        self.apply_attempted = False
+
+    def snapshot(self) -> Any:
+        return self._delegate.snapshot()
+
+    def fingerprint_state(self, snapshot: Any) -> str:
+        return self._delegate.fingerprint_state(snapshot)
+
+    def validate_authority(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        return self._delegate.validate_authority(intent, snapshot)
+
+    def validate_constraints(
+        self,
+        intent: ExecutionIntent,
+        snapshot: Any,
+    ) -> dict[str, bool] | None:
+        return self._delegate.validate_constraints(intent, snapshot)
+
+    def assess_runtime_risk(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        return self._delegate.assess_runtime_risk(intent, snapshot)
+
+    def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        self.apply_attempted = True
+        return self._delegate.apply(intent, snapshot)
+
+    def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        return self._delegate.verify_postconditions(intent, snapshot)
+
+    def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        return self._delegate.revert(intent, snapshot)
+
+    def describe_target(self) -> str:
+        return self._delegate.describe_target()
+
+    def build_idempotency_key(self, intent: ExecutionIntent) -> str:
+        return self._delegate.build_idempotency_key(intent)
+
+
 @dataclass(frozen=True)
 class BindAuthorizationConsumptionResult:
-    """Non-secret evidence returned after one consumed Bind attempt."""
+    """Non-secret evidence returned after one consumed Bind-gate attempt.
+
+    ``bind_core_invoked`` means the existing Bind adjudication core was entered.
+    It does not mean that the adapter ``apply`` boundary was reached and does
+    not mean that an external effect occurred.  ``adapter_apply_attempted`` is
+    the separate observable for the effect-bearing adapter method boundary.
+    """
 
     consumption_record: AuthorizationConsumptionRecord
     bind_receipt: BindReceipt
+    adapter_apply_attempted: bool
     authorization_consumed: bool = True
     credential_material_accessed: bool = True
     authorization_header_constructed: bool = True
-    bind_invoked: bool = True
+    bind_core_invoked: bool = True
+
+    @property
+    def bind_invoked(self) -> bool:
+        """Compatibility alias for Bind-core entry, never proof of adapter apply."""
+        return self.bind_core_invoked
 
 
 def _timestamp(value: datetime | str) -> str:
@@ -221,7 +282,7 @@ async def consume_live_adapter_bind_authorization_and_invoke_bind(
     append_trustlog: bool = True,
     bind_ts: str | None = None,
 ) -> BindAuthorizationConsumptionResult:
-    """Verify, consume once, access secrets, construct auth, then invoke Bind.
+    """Verify, consume once, access secrets, construct auth, then enter Bind core.
 
     Ordering is security critical:
       1. full authorization + temporal verification;
@@ -230,9 +291,10 @@ async def consume_live_adapter_bind_authorization_and_invoke_bind(
       4. credential resolution;
       5. Authorization-header construction;
       6. exact adapter binding validation;
-      7. Bind invocation.
+      7. Bind-core invocation.
 
-    Any failure after step 3 leaves the authorization consumed.
+    The Bind core may still block before adapter ``apply``. Any failure after
+    step 3 leaves the authorization consumed.
     """
     current = _timestamp(now)
     try:
@@ -320,15 +382,17 @@ async def consume_live_adapter_bind_authorization_and_invoke_bind(
         ) from None
     _validate_adapter_binding(authorization, built)
 
+    tracked_adapter = _BindInvocationTrackingAdapter(built.adapter)
     receipt = execute_bind_adjudication(
         execution_intent=intent,
-        adapter=built.adapter,
+        adapter=tracked_adapter,
         bind_ts=bind_ts or current,
         append_trustlog=append_trustlog,
     )
     return BindAuthorizationConsumptionResult(
         consumption_record=record,
         bind_receipt=receipt,
+        adapter_apply_attempted=tracked_adapter.apply_attempted,
     )
 
 
