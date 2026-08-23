@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/live-adapter-bind-authorization-consumption-v1.schema.json",
+  "title": "Live Adapter Bind Authorization Consumption Record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "consumption_id",
+    "consumption_hash",
+    "live_adapter_bind_authorization_id",
+    "live_adapter_bind_authorization_hash",
+    "idempotency_key",
+    "bind_context_hash",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "endpoint_identity_binding_digest",
+    "credential_reference_digest",
+    "credential_scope_binding_digest",
+    "consumed_at",
+    "consumption_state",
+    "single_use_enforced"
+  ],
+  "properties": {
+    "format_version": {"const": "live-adapter-bind-authorization-consumption/v1"},
+    "consumption_id": {"type": "string", "pattern": "^labac:v1:sha256:[0-9a-f]{64}$"},
+    "consumption_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "live_adapter_bind_authorization_id": {"type": "string", "minLength": 1},
+    "live_adapter_bind_authorization_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "idempotency_key": {"type": "string", "minLength": 1},
+    "bind_context_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_intent_id": {"type": "string", "minLength": 1},
+    "execution_intent_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "endpoint_identity_binding_digest": {"type": "string", "minLength": 1},
+    "credential_reference_digest": {"type": "string", "minLength": 1},
+    "credential_scope_binding_digest": {"type": "string", "minLength": 1},
+    "consumed_at": {"type": "string", "minLength": 1},
+    "consumption_state": {"const": "CONSUMED"},
+    "single_use_enforced": {"const": true}
+  }
+}
