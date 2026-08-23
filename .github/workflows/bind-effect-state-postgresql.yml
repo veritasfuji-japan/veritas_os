@@ -1,0 +1,84 @@
+name: Bind Effect State PostgreSQL
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: bind-effect-state-pg-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  effect-state-contention:
+    name: bind-effect-state-postgresql-contention
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip --retries 5 --timeout 60
+          python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
+          python -m pip install --retries 5 --timeout 60 \
+            "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio
+
+      - name: Run Alembic migrations
+        run: |
+          set -euxo pipefail
+          alembic upgrade head
+
+      - name: Prove effect-state compare-and-set
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_pg_bind_effect_state_contention.py \
+            -m "postgresql and contention" \
+            -v \
+            --tb=short \
+            --junitxml=test-reports/bind-effect-state-postgresql.xml
+
+      - name: Upload contention report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bind-effect-state-postgresql-${{ github.run_id }}
+          path: test-reports/bind-effect-state-postgresql.xml
+          if-no-files-found: warn
