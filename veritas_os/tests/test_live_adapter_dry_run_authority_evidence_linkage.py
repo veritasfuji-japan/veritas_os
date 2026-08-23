@@ -47,7 +47,7 @@ def _reference(source=None, **changes):
         "authority_policy_id": "policy:billing:v1",
         "authority_policy_version": "1",
         "authority_scope": "billing-dispatch",
-        "authority_subject": "operator:alice",
+        "authority_subject": source.execution_intent["actor_identity"],
         "authority_issuer": "authority:billing",
         "authority_issued_at": (RECORDED_AT - timedelta(days=1)).isoformat(),
         "authority_expires_at": (RECORDED_AT + timedelta(days=1)).isoformat(),
