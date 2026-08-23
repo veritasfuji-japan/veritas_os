@@ -1,7 +1,7 @@
 """Bind -> Outcome -> TrustLog lineage closure for one consumed authorization.
 
 This module composes the merged authorization-consumption gate with the
-existing BindReceipt and OutcomeReceipt artifacts.  It does not change Bind
+existing BindReceipt and OutcomeReceipt artifacts. It does not change Bind
 admissibility or authorization semantics; it makes the post-bind lineage
 explicit and auditable.
 """
@@ -27,7 +27,9 @@ from veritas_os.policy.bind_artifacts import (
 from veritas_os.policy.bind_core.normalizers import normalize_execution_intent
 from veritas_os.policy.live_adapter_bind_authorization import (
     BindAuthorizationTrustInputs,
+    LiveAdapterBindAuthorizationError,
     RealBindAuthorizationGovernanceInputs,
+    validate_live_adapter_bind_authorization_temporal_validity,
 )
 from veritas_os.policy.live_adapter_bind_authorization_consumption import (
     AuthorizationHeaderConstructor,
@@ -231,19 +233,33 @@ async def consume_bind_and_record_outcome_lineage(
 ) -> BindOutcomeLineageResult:
     """Consume one authorization, invoke Bind, then persist Bind+Outcome lineage.
 
+    The raw input is first canonicalized through the same signed authorization
+    verification boundary used by the consumption gate. The canonical object is
+    then used for both Bind invocation and all post-bind lineage construction.
+
     The underlying consumption gate is invoked with ``append_trustlog=False`` so
     the BindReceipt is first enriched with authorization/consumption lineage and
-    then written exactly once in its final form.  Outcome evidence is appended
+    then written exactly once in its final form. Outcome evidence is appended
     after the linked BindReceipt.
 
     A TrustLog persistence failure can occur after adapter apply has been
     attempted; this function therefore raises rather than pretending the effect
-    did not happen.  Crash/unknown-effect reconciliation is intentionally a
+    did not happen. Crash/unknown-effect reconciliation is intentionally a
     separate boundary.
     """
     current = _now_iso(now)
+    try:
+        authorization = validate_live_adapter_bind_authorization_temporal_validity(
+            artifact,
+            now=current,
+            governance_inputs=governance_inputs,
+            trust_inputs=trust_inputs,
+        )
+    except LiveAdapterBindAuthorizationError:
+        raise BindOutcomeLineageError("BOL_AUTHORIZATION_VERIFICATION_FAILED") from None
+
     consumption = await consume_live_adapter_bind_authorization_and_invoke_bind(
-        artifact,
+        authorization,
         governance_inputs=governance_inputs,
         trust_inputs=trust_inputs,
         now=current,
@@ -255,7 +271,6 @@ async def consume_bind_and_record_outcome_lineage(
         bind_ts=bind_ts or current,
     )
 
-    authorization = artifact
     intent = normalize_execution_intent(authorization.execution_intent)
     enriched_receipt = replace(
         consumption.bind_receipt,
