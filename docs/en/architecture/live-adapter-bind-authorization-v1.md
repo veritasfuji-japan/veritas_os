@@ -2,16 +2,14 @@
 
 ## Boundary
 
-This document defines the first **real Bind authorization** contract, but the
-current scaffold deliberately cannot issue one. The deterministic,
-content-addressed model is intended to grant governance permission for one
-exact future Bind attempt under the exact verified source context only after
-the proof gap below is closed.
+This contract defines VERITAS's first **real Bind Authorization artifact**. It
+sits after the verified Bind Authorization Gate Review and before any future
+authorization-consumption or Bind-invocation boundary.
 
 ```text
 Final Bind Authorization Readiness
         ↓
-Bind Authorization Gate Review (#2130)
+Bind Authorization Gate Review
         ↓
 REAL Bind Authorization Artifact (this boundary)
         ↓
@@ -24,82 +22,109 @@ BindReceipt
 TrustLog
 ```
 
-The builder independently verifies the complete
-`CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket`. It accepts only a
-passed, non-fail-closed review that explicitly accepts future real authorization
-and records no dispatch, invocation, receipt, TrustLog, credential, network, or
-adapter effect. It then binds the verified execution intent, request, adapter
-contract, endpoint, credential scope, AuthorityEvidence and human-approval
-linkage, final readiness, mappings, evidence lineage, replay summary, and every
-upstream hash into the new artifact contract.
+Issuing this artifact creates governance permission for one exact future Bind
+attempt. It does **not** create an execution capability and does not consume the
+authorization.
 
-## Current fail-closed proof gap
+## What must be verified before issuance
 
-The #2130 source chain embeds caller-declared `AuthorityEvidenceReferenceBundle`
-and `HumanApprovalReferenceBundle` metadata. Its linkage reviews explicitly do
-not retrieve or verify the referenced `AuthorityEvidence` or
-`HumanApprovalReceipt`, and the source does not preserve enough first-class
-inputs to rerun `RuntimeAuthorityValidator`. Hash-perfect linkage is not real
-authority verification. Consequently the builder always stops with
-`LABA_ARCHITECTURE_GAP_UNVERIFIED_REAL_GOVERNANCE_PROOF` after source
-verification and creates no authorization artifact.
+The builder independently re-verifies the complete Gate Review packet, then
+requires first-class authenticated governance inputs rather than promoting the
+dry-run chain's declared linkage metadata into authority.
 
-This fail-closed behavior is intentional. A follow-up must add the smallest
-closed proof bundle containing verifiable real governance artifacts and all
-deterministic validator inputs. Only then may the final builder path be enabled
-and its round-trip authorization tests activated. Declared booleans or metadata
-must never substitute for that proof.
+For AuthorityEvidence, the builder receives the original signed artifact and
+re-runs `verify_authority_evidence_artifact_to_proof(...)` against the exact
+Action Class Contract, actor, requested scope, policy snapshot, deployment-owned
+signer/verifier policy, and revocation policy. The resulting process-local proof
+is validated again before issuance. A serialized `VerifiedAuthorityEvidence`
+object is not accepted as portable trust.
 
-Inspection also found no first-class proof that authorizes crossing the future
-credential-resolution and Authorization-header construction boundaries. The
-dry-run credential review proves non-access and metadata linkage, not permission
-to cross either boundary. Those two #2130 requirements therefore remain gaps as
-well; neither a review hash nor an authorizer acknowledgement may satisfy them.
+When the Action Class Contract requires human approval, the original signed
+`HumanApprovalReceipt` artifact must also be supplied. The builder verifies its
+signature through a production-trust verifier policy and checks exact binding to
+the request, decision, execution intent, action class, policy snapshot,
+AuthorityEvidence, and Bind context. When the contract does not require human
+approval, the requirement is recorded as `NOT_REQUIRED`; a caller-provided
+approval cannot silently change that contract decision.
 
-`AuthorityEvidence` remains evidence of organizational/runtime authority. The
-new authorization is a derived, explicit, context-bound permission for one
-exact future Bind attempt. The gate reviewer is not implicitly the Bind
-authorizer: a separate closed `BindAuthorizationDecision` with an explicit
-`GO_AUTHORIZED` confirmation and boundary acknowledgements is required.
+The exact verified inputs are then evaluated by `RuntimeAuthorityValidator`.
+Issuance is possible only when the result is `status=pass` and
+`recommended_outcome=commit`. Action contracts that require arbitrary evidence
+not represented by a first-class proof at this boundary fail closed with
+`LABA_REQUIRED_EVIDENCE_PROOF_UNAVAILABLE`.
 
-## Validity and consumption
+## Explicit human GO and signer separation
 
-The authorization has timezone-aware `authorized_at`, `valid_from`, and
-`valid_until` values. Its window must be ordered, contain the authorization
-instant, and cannot exceed the `ExecutionIntent` lifetime when `decision_ts` and
-`ttl_seconds` provide one. Structural/content verification is deterministic and
-does not consult the clock. The future invocation gate must call the separate
-temporal validation boundary at its supplied invocation time.
+Gate Review is not Bind Authorization. A separate
+`SignedBindAuthorizationDecisionArtifact` is required for the explicit human
+`GO_AUTHORIZED` decision. It is bound to the exact Gate Review hash,
+ExecutionIntent identity/hash, adapter contract identity/hash, endpoint binding,
+credential reference/scope binding, policy snapshot, and validity window.
 
-The proposed artifact is single-use, binds a deterministic idempotency identity, requires
-consumption and replay protection, prohibits duplicate dispatch, and remains
-`NOT_CONSUMED`. This version does not provide a registry and never marks an
-authorization consumed. Before the **Bind Authorization Consumption / Bind
-Invocation Gate**, a focused proof-boundary PR must provide independently
-re-verifiable AuthorityEvidence, conditional signed Human Approval,
-RuntimeAuthorityValidator inputs/results, and credential/header-boundary
-permission. Only after authorization issuance is safely enabled may the
-consumption gate enforce atomic single use.
+The Bind authorizer is authenticated through a deployment-controlled verifier
+and signer policy. The Gate Reviewer and Bind Authorizer must be different
+identities. The verifier policy identity is bound to the trusted public-key
+bytes, so reusing the same key ID with different key material does not preserve
+trust.
+
+After the authorization body is assembled, a separate authorization issuer signs
+the complete content-addressed artifact. Verification re-runs the source,
+governance, authorizer, grants, requirement proofs, content address, and final
+issuer-signature checks.
+
+## Credential and Authorization-header permissions
+
+The artifact contains two narrow future grants:
+
+- `CredentialResolutionGrant`
+- `AuthorizationHeaderConstructionGrant`
+
+They bind permission to the exact credential reference, credential scope,
+ExecutionIntent, adapter contract, endpoint binding, policy snapshot, Gate
+Review, and Bind context. Both state `consumption_required=true`.
+
+These grants are **permission to cross those boundaries later**. Artifact
+creation does not resolve a credential, access secret material, embed a token,
+or construct an Authorization header.
+
+## Validity, idempotency, and replay
+
+`authorized_at`, `valid_from`, and `valid_until` are timezone-aware. The window
+must contain the authorization instant, must not precede Gate Review, and cannot
+outlive the ExecutionIntent TTL, AuthorityEvidence validity, or verified human
+approval expiry when those limits apply.
+
+The artifact is content-addressed, single-use, requires authorization
+consumption, binds a deterministic idempotency key, requires replay protection,
+and prohibits duplicate dispatch. This version does not implement the atomic
+consumption registry or invocation gate; the issued state remains
+`NOT_CONSUMED`.
 
 ## Non-effects and invariants
 
-Authorization artifact creation is governance permission; it does not create an
-execution capability. Credential references and scope digests are bound without
-resolving credential material or constructing an Authorization header. No Bind,
-dispatch, endpoint resolution, DNS, network, Webhook, adapter call, filesystem,
-database, provider, subprocess, operation commit, BindReceipt, or TrustLog write
-occurs here.
+At this boundary all effect-bearing state remains false:
 
-The following separations remain mandatory:
+- no credential material access or embedding;
+- no Authorization-header construction;
+- no endpoint or DNS resolution;
+- no network or Webhook call;
+- no live adapter creation or method call;
+- no request dispatch;
+- no Bind invocation;
+- no operation commit;
+- no BindReceipt creation;
+- no TrustLog write.
+
+The mandatory separations remain:
 
 - **AI Intelligence ≠ Execution Authority**
 - **Gate Review ≠ Bind Authorization**
+- **Bind Authorization ≠ Authorization Consumption**
 - **Bind Authorization ≠ Bind Invocation**
 - **Bind Invocation ≠ Successful External Effect**
 - **BindReceipt ≠ Authorization**
 - `semantic_match ≠ Human Approval ≠ Authority Evidence ≠ Bind Authorization ≠ Execution Authority`
 
-Semantic similarity, model output, confidence, recommendations, and AI-generated
-approval text can never promote themselves into authorization. This contract
-does not claim production certification, customer deployment, external effect,
-or successful Bind execution.
+This artifact establishes authenticated governance permission for one exact
+future attempt. It does not claim production certification, customer deployment,
+regulatory approval, or successful external execution.
