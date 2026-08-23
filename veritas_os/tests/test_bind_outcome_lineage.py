@@ -90,6 +90,33 @@ async def test_complete_lineage_binds_authorization_consumption_bind_and_outcome
     assert result.outcome_trustlog_hash == "c" * 64
 
 
+@pytest.mark.asyncio
+async def test_serialized_authorization_is_canonicalized_before_bind_and_lineage(monkeypatch) -> None:
+    _install_fake_trustlog(monkeypatch)
+    artifact, governance, trust = _build()
+    serialized = artifact.model_dump(mode="json")
+
+    result = await consume_bind_and_record_outcome_lineage(
+        serialized,
+        governance_inputs=governance,
+        trust_inputs=trust,
+        now=VERIFICATION_NOW,
+        consumption_store=InMemoryAtomicAuthorizationConsumptionStore(),
+        credential_resolver=_Resolver(),
+        authorization_header_constructor=_HeaderConstructor(),
+        adapter_factory=_Factory(),
+    )
+
+    identity = result.bind_receipt.governance_identity or {}
+    assert (
+        identity["real_bind_authorization"]["live_adapter_bind_authorization_id"]
+        == artifact.live_adapter_bind_authorization_id
+    )
+    assert result.outcome_receipt.bind_receipt_id == result.bind_receipt.bind_receipt_id
+    assert result.outcome_receipt.outcome_hash == result.outcome_receipt.deterministic_digest()
+    assert result.outcome_trustlog_hash == "c" * 64
+
+
 class _BlockedAdapter(_RecordingAdapter):
     def validate_authority(self, intent, snapshot):
         del intent, snapshot
