@@ -27,6 +27,7 @@ from veritas_os.policy.live_adapter_dry_run_bind_authorization_gate_review impor
     verify_live_adapter_dry_run_bind_authorization_gate_review_packet,
 )
 
+
 def _source(
     value: Any,
 ) -> CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket:
@@ -135,7 +136,28 @@ def _requires_human_approval(contract: ActionClassContract) -> bool:
 def _runtime_result_payload(
     result: RuntimeAuthorityValidationResult,
 ) -> dict[str, Any]:
-    return asdict(result)
+    payload = asdict(result)
+    predicate_times = {
+        item.evaluated_at
+        for predicates in (
+            result.passed_predicates,
+            result.failed_predicates,
+            result.stale_predicates,
+            result.missing_predicates,
+            result.indeterminate_predicates,
+        )
+        for item in predicates
+        if item.evaluated_at
+    }
+    # RuntimeAuthorityValidator currently creates the aggregate result timestamp
+    # separately from the predicate evaluation timestamp.  Bind Authorization
+    # evidence must be reproducible when the same explicit verification instant
+    # is replayed, so canonicalize the redundant aggregate field to the single
+    # verifier-derived predicate instant while still hashing every predicate and
+    # its timestamp.  Ambiguous/mixed predicate times remain unmodified.
+    if len(predicate_times) == 1:
+        payload["evaluated_at"] = next(iter(predicate_times))
+    return payload
 
 
 def _runtime_result_digest(result: RuntimeAuthorityValidationResult) -> str:
