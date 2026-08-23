@@ -4,7 +4,7 @@
 
 This boundary consumes the signed Real Bind Authorization produced by the
 preceding authorization layer and is the first layer permitted to access
-credential material or invoke Bind.
+credential material or enter the Bind adjudication path.
 
 The required ordering is:
 
@@ -15,10 +15,10 @@ The required ordering is:
 5. construct the Authorization header in ephemeral memory;
 6. construct an adapter bound to the exact adapter, endpoint and credential
    digests carried by the authorization;
-7. invoke the existing Bind adjudication core.
+7. enter the existing Bind adjudication core.
 
-No credential access, header construction, adapter construction or Bind call is
-allowed before atomic consumption succeeds.
+No credential access, header construction, adapter construction or Bind-core
+call is allowed before atomic consumption succeeds.
 
 ## Single-use semantics
 
@@ -30,9 +30,17 @@ The in-memory store exists only for deterministic tests and reference use. It
 is process-local and explicitly marks itself `production_safe = False`.
 
 A downstream failure does **not** release an authorization. If credential
-resolution, header construction, adapter construction or Bind fails after the
-atomic consume step, that authorization remains consumed. A new authorization
-must be issued for a new attempt.
+resolution, header construction, adapter construction or Bind processing fails
+after the atomic consume step, that authorization remains consumed. A new
+authorization must be issued for a new attempt.
+
+Real-PostgreSQL contention CI verifies both of these invariants directly
+against PostgreSQL 16:
+
+- many concurrent workers racing the same authorization yield exactly one
+  successful consumer;
+- different authorization IDs sharing one idempotency key still yield exactly
+  one successful consumer.
 
 ## Secret boundary
 
@@ -43,7 +51,7 @@ written into the consumption record or returned in the result.
 
 ## Exact binding
 
-Before Bind invocation the gate checks the adapter factory output against the
+Before Bind-core entry the gate checks the adapter factory output against the
 signed authorization for:
 
 - adapter contract ID and hash;
@@ -53,6 +61,28 @@ signed authorization for:
 
 The ExecutionIntent ID and canonical hash are also rechecked directly from the
 signed authorization.
+
+## Invocation semantics
+
+Entering the Bind adjudication core is not the same event as reaching the
+adapter's effect-bearing `apply` method.
+
+`BindAuthorizationConsumptionResult` therefore exposes separate facts:
+
+- `bind_core_invoked = True` means `execute_bind_adjudication()` was entered;
+- `adapter_apply_attempted = True` means the Bind core actually reached the
+  adapter `apply` boundary;
+- a blocked or escalated Bind can therefore have `bind_core_invoked = True`
+  while `adapter_apply_attempted = False`.
+
+The compatibility property `bind_invoked` maps only to `bind_core_invoked` and
+must never be interpreted as proof that adapter `apply` ran or that an external
+effect occurred.
+
+The gate does not claim a generic `external_effect_attempted` fact because
+`BindAdapterContract.apply()` may represent an in-memory, local, provider, or
+network action. External-effect semantics belong to the concrete adapter and
+its resulting BindReceipt/evidence.
 
 ## Failure semantics
 
@@ -73,19 +103,22 @@ These conditions fail closed after consumption and do not release it:
 ## Relationship to Bind
 
 Real Bind Authorization is permission to attempt one exact future Bind.
-Atomic consumption converts that one-time permission into a single Bind
-attempt. It does not guarantee that Bind commits. The existing Bind core still
-performs live snapshot, authority, constraints, drift, risk, freshness,
-commit-boundary, postcondition and rollback/compensation checks and may return a
-blocked, escalated, failed, rolled-back or committed BindReceipt.
+Atomic consumption converts that one-time permission into a single Bind-gate
+attempt. It does not guarantee that Bind commits and does not guarantee that
+adapter `apply` is reached. The existing Bind core still performs live
+snapshot, authority, constraints, drift, risk, freshness, commit-boundary,
+postcondition and rollback/compensation checks and may return a blocked,
+escalated, failed, rolled-back or committed BindReceipt.
 
 Therefore:
 
 **Authorization != Consumption**
 
-**Consumption != Bind success**
+**Consumption != Bind-core entry**
 
-**Bind invocation != External effect success**
+**Bind-core entry != Adapter apply**
+
+**Adapter apply != Successful external effect**
 
 **BindReceipt records the attempted bind outcome; it does not retroactively
 create authorization.**
