@@ -209,7 +209,7 @@ def _requirement_proofs(
             reason_code=row[4],
         )
         for ordinal, (requirement, row) in enumerate(
-            zip(AUTHORIZATION_REQUIREMENTS, rows), 1
+            zip(AUTHORIZATION_REQUIREMENTS, rows, strict=True), 1
         )
     )
 
