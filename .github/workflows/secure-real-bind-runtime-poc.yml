@@ -32,7 +32,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      VERITAS_DATABASE_URL: postgresql://veritas:veritas@127.0.0.1:5432/veritas_e2e
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:veritas@127.0.0.1:5432/veritas_e2e
       VERITAS_E2E_BEARER_TOKEN: secure-e2e-controlled-token
       VERITAS_E2E_CA_FILE: /tmp/veritas-e2e-tls/ca.crt
       PYTHONUNBUFFERED: "1"
@@ -43,12 +43,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          set -euxo pipefail
+          python -m pip install --upgrade pip --retries 5 --timeout 60
+          python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
+          python -m pip install --retries 5 --timeout 60 \
+            "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
 
       - name: Apply PostgreSQL migrations
         run: alembic upgrade head
@@ -92,13 +95,6 @@ jobs:
             >/tmp/veritas-e2e-fixture.log 2>&1 &
           echo $! >/tmp/veritas-e2e-fixture.pid
           for i in $(seq 1 20); do
-            if curl --silent --fail --cacert "$VERITAS_E2E_CA_FILE" \
-              -H "Authorization: Bearer $VERITAS_E2E_BEARER_TOKEN" \
-              https://api.example.invalid/v1/billing/effects/not-created \
-              >/dev/null 2>&1; then
-              break
-            fi
-            # A TLS HTTP 404 also proves the service is up; curl --fail returns non-zero.
             if curl --silent --cacert "$VERITAS_E2E_CA_FILE" \
               -H "Authorization: Bearer $VERITAS_E2E_BEARER_TOKEN" \
               https://api.example.invalid/v1/billing/effects/not-created \
@@ -132,7 +128,6 @@ jobs:
           assert report["initial_effect_state"] == "EFFECT_UNKNOWN"
           assert report["terminal_effect_state"] == "CONFIRMED_EFFECT"
           assert report["external_ack"]["status"] == "committed"
-          # Do not overclaim the next bridge.
           assert report["decision_lineage_proven"] is False
           PY
 
