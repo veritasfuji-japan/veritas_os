@@ -110,7 +110,7 @@ jobs:
 
       - name: Run secure real-boundary proof
         run: |
-          python scripts/run_secure_real_bind_runtime_poc.py \
+          PYTHONPATH=. python scripts/run_secure_real_bind_runtime_poc.py \
             --report artifacts/secure-real-bind-runtime-poc/report.json
 
       - name: Assert proof claims
