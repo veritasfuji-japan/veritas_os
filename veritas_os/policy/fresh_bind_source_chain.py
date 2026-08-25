@@ -207,7 +207,7 @@ def fresh_bind_proof_report(
             endpoint.adapter_contract_id == root.adapter_contract_id
         ),
         "credential_reference_binding_proven": (
-            credential.credential_reference["adapter_contract_id"]
+            credential.credential_reference.adapter_contract_id
             == root.adapter_contract_id
         ),
         "credential_scope_binding_proven": bool(
