@@ -329,7 +329,7 @@ def canonical_decision_preimage(
         "request_id": artifact.request_id,
         "decision_ts": artifact.decision_ts,
         "source_contract": artifact.source_contract.model_dump(mode="json"),
-        "decision": artifact.decision.model_dump(mode="json", exclude_none=True),
+        "decision": artifact.decision.model_dump(mode="json"),
     }
 
 
@@ -395,7 +395,7 @@ def build_canonical_decision_artifact(
             "request_id": request_id,
             "decision_ts": normalized_ts,
             "source_contract": provisional["source_contract"].model_dump(mode="json"),
-            "decision": decision.model_dump(mode="json", exclude_none=True),
+            "decision": decision.model_dump(mode="json"),
         }
         decision_hash = sha256_hex(strict_canonical_json_bytes(preimage))
         return CanonicalDecisionArtifact(
