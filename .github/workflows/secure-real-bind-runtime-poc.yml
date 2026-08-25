@@ -1,0 +1,142 @@
+name: Secure Real Bind Runtime PoC
+
+on:
+  pull_request:
+    paths:
+      - "scripts/run_secure_real_bind_runtime_poc.py"
+      - "scripts/secure_e2e_https_fixture.py"
+      - "veritas_os/policy/**"
+      - "alembic/**"
+      - ".github/workflows/secure-real-bind-runtime-poc.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secure-real-bind-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas
+          POSTGRES_DB: veritas_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veritas -d veritas_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:veritas@127.0.0.1:5432/veritas_e2e
+      VERITAS_E2E_BEARER_TOKEN: secure-e2e-controlled-token
+      VERITAS_E2E_CA_FILE: /tmp/veritas-e2e-tls/ca.crt
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip --retries 5 --timeout 60
+          python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
+          python -m pip install --retries 5 --timeout 60 \
+            "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
+
+      - name: Apply PostgreSQL migrations
+        run: alembic upgrade head
+
+      - name: Create controlled CA and endpoint certificate
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/veritas-e2e-tls
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout /tmp/veritas-e2e-tls/ca.key \
+            -out /tmp/veritas-e2e-tls/ca.crt \
+            -subj "/CN=VERITAS Secure E2E Test CA"
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout /tmp/veritas-e2e-tls/server.key \
+            -out /tmp/veritas-e2e-tls/server.csr \
+            -subj "/CN=api.example.invalid"
+          cat >/tmp/veritas-e2e-tls/ext.cnf <<'EOF'
+          subjectAltName=DNS:api.example.invalid
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -days 1 \
+            -in /tmp/veritas-e2e-tls/server.csr \
+            -CA /tmp/veritas-e2e-tls/ca.crt \
+            -CAkey /tmp/veritas-e2e-tls/ca.key \
+            -CAcreateserial \
+            -out /tmp/veritas-e2e-tls/server.crt \
+            -extfile /tmp/veritas-e2e-tls/ext.cnf
+
+      - name: Bind authorized hostname to loopback
+        run: echo "127.0.0.1 api.example.invalid" | sudo tee -a /etc/hosts
+
+      - name: Start independent HTTPS effect fixture on authorized endpoint
+        run: |
+          set -euo pipefail
+          sudo -E python scripts/secure_e2e_https_fixture.py \
+            --host 0.0.0.0 \
+            --port 443 \
+            --cert /tmp/veritas-e2e-tls/server.crt \
+            --key /tmp/veritas-e2e-tls/server.key \
+            --token "$VERITAS_E2E_BEARER_TOKEN" \
+            >/tmp/veritas-e2e-fixture.log 2>&1 &
+          echo $! >/tmp/veritas-e2e-fixture.pid
+          for i in $(seq 1 20); do
+            if curl --silent --cacert "$VERITAS_E2E_CA_FILE" \
+              -H "Authorization: Bearer $VERITAS_E2E_BEARER_TOKEN" \
+              https://api.example.invalid/v1/billing/effects/not-created \
+              | grep -q effect_not_found; then
+              break
+            fi
+            sleep 0.5
+          done
+          curl --silent --cacert "$VERITAS_E2E_CA_FILE" \
+            -H "Authorization: Bearer $VERITAS_E2E_BEARER_TOKEN" \
+            https://api.example.invalid/v1/billing/effects/not-created \
+            | grep -q effect_not_found
+
+      - name: Run secure real-boundary proof
+        run: |
+          PYTHONPATH=. python scripts/run_secure_real_bind_runtime_poc.py \
+            --report artifacts/secure-real-bind-runtime-poc/report.json
+
+      - name: Assert proof claims
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/secure-real-bind-runtime-poc/report.json").read_text())
+          assert report["result"] == "PASS"
+          assert report["proof"] == "REAL_BIND_RUNTIME_NETWORK_DB_E2E"
+          assert report["posture"] == "secure"
+          assert report["postgresql_consumption"] is True
+          assert report["postgresql_effect_state"] is True
+          assert report["adapter_apply_attempted"] is True
+          assert report["initial_effect_state"] == "EFFECT_UNKNOWN"
+          assert report["terminal_effect_state"] == "CONFIRMED_EFFECT"
+          assert report["external_ack"]["status"] == "committed"
+          assert report["decision_lineage_proven"] is False
+          PY
+
+      - name: Upload proof report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secure-real-bind-runtime-poc-report
+          path: |
+            artifacts/secure-real-bind-runtime-poc/report.json
+            /tmp/veritas-e2e-fixture.log
+          if-no-files-found: warn
