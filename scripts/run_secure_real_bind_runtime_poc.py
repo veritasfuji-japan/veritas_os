@@ -74,23 +74,57 @@ EXPECTED_PORT = 443
 EXPECTED_PREFIX = "/v1/billing"
 
 
-def _binding_dict(authorization: Any) -> dict[str, Any]:
-    value = authorization.endpoint_identity_binding
+def _as_dict(value: Any, *, label: str) -> dict[str, Any]:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="json")
     if not isinstance(value, dict):
-        raise RuntimeError("endpoint identity binding is not an object")
+        raise RuntimeError(f"{label} is not an object")
     return value
 
 
 def _exact_endpoint(authorization: Any) -> str:
-    binding = _binding_dict(authorization)
-    scheme = str(binding.get("endpoint_scheme") or binding.get("scheme") or "").lower()
-    host = str(binding.get("endpoint_host") or binding.get("host") or "").lower()
-    port = int(binding.get("endpoint_port") or binding.get("port") or 0)
-    prefix = str(
-        binding.get("endpoint_path_prefix") or binding.get("path_prefix") or ""
-    ).rstrip("/")
+    """Resolve only the exact endpoint carried by the verified authorization.
+
+    The endpoint coordinates live in ``endpoint_candidate``.  The separate
+    ``endpoint_identity_binding`` binds that candidate identity to the adapter
+    and allowlist context; it is not itself a URL descriptor.  Never infer a
+    target from the binding object or substitute a different endpoint.
+    """
+
+    candidate = _as_dict(authorization.endpoint_candidate, label="endpoint candidate")
+    binding = _as_dict(
+        authorization.endpoint_identity_binding,
+        label="endpoint identity binding",
+    )
+
+    candidate_id = str(candidate.get("endpoint_candidate_id") or "")
+    adapter_contract_id = str(candidate.get("adapter_contract_id") or "")
+    if not candidate_id or not adapter_contract_id:
+        raise RuntimeError("signed authorization endpoint candidate is incomplete")
+
+    if str(binding.get("endpoint_candidate_id") or "") != candidate_id:
+        raise RuntimeError("endpoint identity binding does not bind the signed candidate")
+    if str(binding.get("adapter_contract_id") or "") != adapter_contract_id:
+        raise RuntimeError("endpoint identity binding does not bind the signed adapter")
+    if adapter_contract_id != str(authorization.adapter_contract_id):
+        raise RuntimeError("endpoint candidate adapter does not match authorization adapter")
+
+    source = _as_dict(
+        authorization.source_gate_review_packet,
+        label="source gate review packet",
+    )
+    if source.get("endpoint_candidate_digest") != authorization.endpoint_candidate_digest:
+        raise RuntimeError("endpoint candidate digest diverged from signed source lineage")
+    if (
+        source.get("endpoint_identity_binding_digest")
+        != authorization.endpoint_identity_binding_digest
+    ):
+        raise RuntimeError("endpoint identity binding digest diverged from signed source lineage")
+
+    scheme = str(candidate.get("endpoint_scheme") or "").lower()
+    host = str(candidate.get("endpoint_host") or "").lower()
+    port = int(candidate.get("endpoint_port") or 0)
+    prefix = str(candidate.get("endpoint_path_prefix") or "").rstrip("/")
     if (scheme, host, port, prefix) != (
         "https",
         EXPECTED_HOST,
@@ -324,7 +358,6 @@ def _configure_secure_posture() -> tuple[_DeterministicAwsClients, str]:
 async def _run(report_path: Path) -> int:
     aws_clients, ca_file = _configure_secure_posture()
     artifact, governance, trust = _build()
-    base_url = _exact_endpoint(artifact)
     token = os.environ["VERITAS_E2E_BEARER_TOKEN"]
     factory = _HttpsFactory(ca_file)
     real_import = importlib.import_module
@@ -351,6 +384,9 @@ async def _run(report_path: Path) -> int:
         raise RuntimeError(
             "generic HTTPS apply must remain EFFECT_UNKNOWN until independent acknowledgement"
         )
+    if factory.adapter is None:
+        raise RuntimeError("authorized HTTPS adapter was not constructed")
+    base_url = factory.adapter.base_url
     consumption = runtime.lineage.consumption_result.consumption_record
     observation = {
         "format_version": "bind-effect-reconciliation-evidence/v1",
