@@ -479,9 +479,6 @@ def _validated_source_projection(source: DecideResponse) -> dict[str, Any]:
             CanonicalDecisionArtifactBuildReason.NON_CANONICAL_JSON_VALUE
         ) from exc
     try:
-        # JSON-mode dumping can coerce non-finite floats under Pydantic's
-        # serialization policy.  Inspect the Python projection first so no
-        # hash-relevant non-finite or unsupported value can be laundered.
         python_projection = source.model_dump(mode="python", include=_SOURCE_FIELDS)
     except (TypeError, ValueError) as exc:
         raise CanonicalDecisionArtifactBuildError(
@@ -513,19 +510,7 @@ def _validated_source_projection(source: DecideResponse) -> dict[str, Any]:
 
 
 def _validate_canonical_json_value(value: Any) -> None:
-    """Recursively require exact CDA-v1 canonical JSON value families.
-
-    Python containers and objects that ``json.dumps`` or Pydantic might coerce
-    are deliberately rejected rather than converted into canonical identity.
-
-    Args:
-        value: Candidate value to validate without normalization.
-
-    Raises:
-        TypeError: If a value, container, or mapping key is not an exact JSON
-            family supported by CDA v1.
-        ValueError: If a floating-point value is non-finite.
-    """
+    """Recursively require exact CDA-v1 canonical JSON value families."""
     value_type = type(value)
     if value is None or value_type is bool or value_type is int or value_type is str:
         return
@@ -550,21 +535,7 @@ def _validate_typed_source_model(
     value: BaseModel | None,
     expected_type: type[BaseModel],
 ) -> None:
-    """Validate raw contents of one explicitly allowed typed source model.
-
-    Only the declared top-level Pydantic source model may cross this boundary.
-    Its known fields and Pydantic extras are inspected before ``model_dump`` so
-    nested Python objects cannot be normalized into a CDA binding.
-
-    Args:
-        value: Current raw source-model value, or ``None``.
-        expected_type: Exact Pydantic model type allowed for this source field.
-
-    Raises:
-        TypeError: If the top-level type is unexpected or any contained value
-            is not an exact canonical JSON family.
-        ValueError: If a contained floating-point value is non-finite.
-    """
+    """Validate raw contents of one explicitly allowed typed source model."""
     if value is None:
         return
     if type(value) is not expected_type:
@@ -662,7 +633,7 @@ def _build_projection(source: dict[str, Any]) -> CanonicalDecisionProjection:
 
 
 def _selected_action_evidence(value: Any) -> CanonicalSelectedActionEvidence | None:
-    """Derive selected-action evidence only from a complete candidate payload."""
+    """Bind a promotable candidate to the exact decision-selected value."""
     if not isinstance(value, dict):
         return None
     try:
@@ -679,9 +650,7 @@ def _selected_action_evidence(value: Any) -> CanonicalSelectedActionEvidence | N
         return None
     return CanonicalSelectedActionEvidence(
         candidate_hash=hash_decision_candidate(candidate),
-        chosen_binding_sha256=_binding_digest(
-            CDA_CHOSEN_BINDING_PROFILE, candidate.to_dict()
-        ),
+        chosen_binding_sha256=_binding_digest(CDA_CHOSEN_BINDING_PROFILE, value),
     )
 
 
