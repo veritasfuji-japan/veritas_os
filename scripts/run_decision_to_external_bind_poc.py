@@ -65,6 +65,7 @@ from veritas_os.policy.bind_artifacts import (  # noqa: E402
     hash_execution_intent,
 )
 from veritas_os.policy.bind_core import execute_bind_adjudication  # noqa: E402
+from veritas_os.policy.compiler import compile_policy_to_bundle  # noqa: E402
 from veritas_os.policy.decision_candidate import (  # noqa: E402
     DecisionCandidate,
     try_promote_verified_canonical_decision_candidate_to_execution_intent,
@@ -72,6 +73,7 @@ from veritas_os.policy.decision_candidate import (  # noqa: E402
 from veritas_os.security.hash import sha256_of_canonical_json  # noqa: E402
 
 DEFAULT_REPORT = REPO_ROOT / "artifacts/decision-to-external-bind-poc/report.json"
+POLICY_SOURCE = REPO_ROOT / "policies/examples/low_risk_route_allow.yaml"
 ACTOR = "test-actor:decision-bind-poc"
 SCOPE = ["synthetic:review:create"]
 NOW = datetime(2026, 8, 21, 12, tzinfo=UTC)
@@ -203,9 +205,24 @@ def _candidate() -> DecisionCandidate:
     )
 
 
-def _decision_request_fixture() -> dict[str, Any]:
-    """Bind the structured execution candidate into the authenticated decision input."""
+def _decision_request_fixture(policy_bundle_dir: Path) -> dict[str, Any]:
+    """Bind the structured execution candidate and verified policy into /v1/decide."""
     payload = _request_fixture()
+    context = dict(payload.get("context") or {})
+    context.update(
+        {
+            "compiled_policy_bundle_dir": policy_bundle_dir.as_posix(),
+            "policy_runtime_enforce": True,
+            "domain": "governance",
+            "route": "/api/decide",
+            "actor": "kernel",
+            "risk": {"level": "low"},
+            "runtime": {"auto_execute": True},
+            "evidence": {"available": ["risk_assessment"]},
+            "approvals": {"approved_by": ["governance_officer"]},
+        }
+    )
+    payload["context"] = context
     selected = _candidate().to_dict()
     selected.update(
         {
@@ -253,6 +270,35 @@ def _configure_secure_test_infrastructure(
         }
     )
     return kms_key_id
+
+
+def _configure_verified_policy_bundle(runtime_root: Path) -> Path:
+    """Create and configure an Ed25519-verified policy bundle for the real pipeline."""
+    private_key = Ed25519PrivateKey.generate()
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_pem = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    verify_key_path = runtime_root / "policy-verify-key.pem"
+    verify_key_path.write_bytes(public_pem)
+    compiled = compile_policy_to_bundle(
+        POLICY_SOURCE,
+        runtime_root / "policy-bundle",
+        compiled_at=NOW.isoformat().replace("+00:00", "Z"),
+        signing_key=private_pem,
+    )
+    os.environ.update(
+        {
+            "VERITAS_POLICY_VERIFY_KEY": str(verify_key_path),
+            "VERITAS_POLICY_REQUIRE_ED25519": "1",
+        }
+    )
+    return compiled.bundle_dir
 
 
 def _verified_authority(
@@ -350,6 +396,7 @@ def _verified_authority(
 def _decide(
     *,
     aws_clients: _DeterministicAwsClients,
+    policy_bundle_dir: Path,
 ) -> tuple[dict[str, Any], bool, dict[str, int]]:
     """Cross the authenticated real HTTP route with controlled provider output."""
     from veritas_os.api import server
@@ -386,7 +433,7 @@ def _decide(
             response = client.post(
                 "/v1/decide",
                 headers={"X-API-Key": os.environ["VERITAS_API_KEY"]},
-                json=_decision_request_fixture(),
+                json=_decision_request_fixture(policy_bundle_dir),
             )
     response.raise_for_status()
     return (
@@ -412,11 +459,13 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
         kms_key_id = _configure_secure_test_infrastructure(runtime_root, api_secret)
         if os.environ.get("VERITAS_POSTURE") != "secure":
             raise RuntimeError("integrated proof requires secure posture")
+        policy_bundle_dir = _configure_verified_policy_bundle(runtime_root)
 
         kms_client = _DeterministicKmsClient(kms_key_id)
         s3_client = _DeterministicObjectLockClient()
         response, pipeline_ok, infrastructure_calls = _decide(
-            aws_clients=_DeterministicAwsClients(kms_client, s3_client)
+            aws_clients=_DeterministicAwsClients(kms_client, s3_client),
+            policy_bundle_dir=policy_bundle_dir,
         )
         raw_cda = response.get("canonical_decision_artifact")
         cda_verification = verify_canonical_decision_artifact(raw_cda)
@@ -535,6 +584,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             "real_runtime_components": [
                 "FastAPI POST /v1/decide",
                 "decision pipeline and kernel",
+                "compiled policy runtime Ed25519 verification",
                 "CanonicalDecisionArtifact verification",
                 "DecisionCandidate promotion",
                 "AuthorityEvidence Ed25519 verification",
@@ -546,6 +596,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             ],
             "controlled_components": [
                 "model provider output",
+                "ephemeral policy signing key",
                 "runtime-injected API secret",
                 "AWS KMS network client",
                 "S3 Object Lock network client",
@@ -563,6 +614,9 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             "decision_candidate_source": selected_candidate.get("source_model"),
             "selected_action_lineage_verified": action_evidence is not None,
             "policy_snapshot_id": policy_snapshot_id,
+            "policy_snapshot_version": policy_evidence.version,
+            "policy_snapshot_signer_id": policy_evidence.signer_id,
+            "policy_snapshot_signature_verified": policy_evidence.signature_verified,
             "policy_snapshot_source": "VERIFIED_CDA_GOVERNANCE_IDENTITY",
             "execution_intent_created": True,
             "execution_intent_id": intent.execution_intent_id,
