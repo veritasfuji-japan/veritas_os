@@ -183,12 +183,14 @@ def fresh_bind_proof_report(
     root = result.root_rehearsal_packet
     endpoint = result.endpoint_packet
     credential = result.credential_packet
+    source_decision = root.source_decision_identity
+    intent = root.execution_intent
     return {
         "decision_lineage_proven": (
-            root.source_decision_identity["decision_id"]
-            == root.execution_intent["decision_id"]
-            and root.source_decision_identity["decision_hash"]
-            == root.execution_intent["decision_hash"]
+            source_decision["canonical_decision_id"] == intent["decision_id"]
+            and source_decision["canonical_decision_hash"] == intent["decision_hash"]
+            and source_decision["canonical_decision_ts"] == intent["decision_ts"]
+            and source_decision["request_id"] == intent["request_id"]
         ),
         "execution_intent_lineage_proven": (
             gate.execution_intent == root.execution_intent
