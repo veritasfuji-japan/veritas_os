@@ -14,7 +14,15 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
 
 from veritas_os.api.schemas import (
     DecideResponse,
@@ -174,11 +182,31 @@ class CanonicalDecisionTransitionRefusalBinding(_FrozenModel):
     sha256: str = Field(pattern=_DIGEST_PATTERN)
 
 
+class CanonicalSelectedActionEvidence(_FrozenModel):
+    """Content address of a normalized structured execution candidate."""
+
+    candidate_hash: str = Field(pattern=_DIGEST_PATTERN)
+    chosen_binding_sha256: str = Field(pattern=_DIGEST_PATTERN)
+
+
+class CanonicalPolicySnapshotEvidence(_FrozenModel):
+    """Policy identity already authenticated by the decision pipeline."""
+
+    snapshot_id: str = Field(pattern=_DIGEST_PATTERN)
+    version: str = Field(min_length=1)
+    semantic_digest: str = Field(pattern=_DIGEST_PATTERN)
+    signature_verified: Literal[True]
+    signer_id: str = Field(min_length=1)
+    verified_at: str = Field(min_length=1)
+
+
 class CanonicalDecisionProjection(_FrozenModel):
     """Exact closed v1 decision projection."""
 
     formation_status: Literal["COMPLETE", "INCOMPLETE"]
     chosen_binding: CanonicalDecisionChosenBinding
+    selected_action_evidence: CanonicalSelectedActionEvidence | None = None
+    policy_snapshot_evidence: CanonicalPolicySnapshotEvidence | None = None
     decision_status: Literal["allow", "modify", "rejected", "block", "abstain"]
     rejection_reason: str | None
     gate_decision: Literal["proceed", "hold", "block", "human_review_required"]
@@ -210,6 +238,18 @@ class CanonicalDecisionProjection(_FrozenModel):
     governance_identity_binding: CanonicalDecisionGovernanceIdentityBinding | None
     lineage_promotability_binding: CanonicalDecisionLineagePromotabilityBinding | None
     transition_refusal_binding: CanonicalDecisionTransitionRefusalBinding | None
+
+    @model_serializer(mode="wrap")
+    def _serialize_optional_evidence(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        """Keep legacy CDA-v1 JSON exact when new evidence is unavailable."""
+        serialized = handler(self)
+        if self.selected_action_evidence is None:
+            serialized.pop("selected_action_evidence", None)
+        if self.policy_snapshot_evidence is None:
+            serialized.pop("policy_snapshot_evidence", None)
+        return serialized
 
     @model_validator(mode="after")
     def _validate_semantics(self) -> "CanonicalDecisionProjection":
@@ -289,7 +329,7 @@ def canonical_decision_preimage(
         "request_id": artifact.request_id,
         "decision_ts": artifact.decision_ts,
         "source_contract": artifact.source_contract.model_dump(mode="json"),
-        "decision": artifact.decision.model_dump(mode="json"),
+        "decision": artifact.decision.model_dump(mode="json", exclude_none=True),
     }
 
 
@@ -355,7 +395,7 @@ def build_canonical_decision_artifact(
             "request_id": request_id,
             "decision_ts": normalized_ts,
             "source_contract": provisional["source_contract"].model_dump(mode="json"),
-            "decision": decision.model_dump(mode="json"),
+            "decision": decision.model_dump(mode="json", exclude_none=True),
         }
         decision_hash = sha256_hex(strict_canonical_json_bytes(preimage))
         return CanonicalDecisionArtifact(
@@ -567,6 +607,8 @@ def _binding_digest(profile: str, value: Any) -> str:
 
 def _build_projection(source: dict[str, Any]) -> CanonicalDecisionProjection:
     governance = source["governance_identity"]
+    selected_action_evidence = _selected_action_evidence(source["chosen"])
+    policy_snapshot_evidence = _policy_snapshot_evidence(governance)
     common = {
         field: source[field]
         for field in (
@@ -593,6 +635,8 @@ def _build_projection(source: dict[str, Any]) -> CanonicalDecisionProjection:
             profile=CDA_CHOSEN_BINDING_PROFILE,
             sha256=_binding_digest(CDA_CHOSEN_BINDING_PROFILE, source["chosen"]),
         ),
+        selected_action_evidence=selected_action_evidence,
+        policy_snapshot_evidence=policy_snapshot_evidence,
         governance_identity_binding=(
             CanonicalDecisionGovernanceIdentityBinding(
                 profile=CDA_GOVERNANCE_IDENTITY_BINDING_PROFILE,
@@ -615,6 +659,49 @@ def _build_projection(source: dict[str, Any]) -> CanonicalDecisionProjection:
         ),
         **common,
     )
+
+
+def _selected_action_evidence(value: Any) -> CanonicalSelectedActionEvidence | None:
+    """Derive selected-action evidence only from a complete candidate payload."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        from veritas_os.policy.decision_candidate import (
+            hash_decision_candidate,
+            normalize_decision_candidate,
+            validate_decision_candidate,
+        )
+
+        candidate = normalize_decision_candidate(value)
+        if not validate_decision_candidate(candidate).promotable:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return CanonicalSelectedActionEvidence(
+        candidate_hash=hash_decision_candidate(candidate),
+        chosen_binding_sha256=_binding_digest(
+            CDA_CHOSEN_BINDING_PROFILE, candidate.to_dict()
+        ),
+    )
+
+
+def _policy_snapshot_evidence(
+    value: Any,
+) -> CanonicalPolicySnapshotEvidence | None:
+    """Project the existing signed governance identity without inventing trust."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        return CanonicalPolicySnapshotEvidence(
+            snapshot_id=value["digest"],
+            version=value["policy_version"],
+            semantic_digest=value["digest"],
+            signature_verified=value["signature_verified"],
+            signer_id=value["signer_id"],
+            verified_at=value["verified_at"],
+        )
+    except (KeyError, TypeError, ValueError, ValidationError):
+        return None
 
 
 def _optional_binding(model: type[_FrozenModel], profile: str, value: Any) -> Any:

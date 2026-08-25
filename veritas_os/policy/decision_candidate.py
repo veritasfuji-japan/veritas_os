@@ -9,6 +9,7 @@ append TrustLog entries, or adjudicate bind eligibility.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -50,6 +51,12 @@ class DecisionCandidateRefusalReason(str, Enum):
     PROMOTABLE = "DECISION_CANDIDATE_PROMOTABLE"
     CANONICAL_DECISION_INVALID = "CANONICAL_DECISION_ARTIFACT_INVALID"
     POLICY_SNAPSHOT_MISSING = "POLICY_SNAPSHOT_ID_MISSING"
+    POLICY_SNAPSHOT_INVALID = "POLICY_SNAPSHOT_PROVENANCE_INVALID"
+    POLICY_SNAPSHOT_STALE = "POLICY_SNAPSHOT_PROVENANCE_STALE"
+    POLICY_SNAPSHOT_MISMATCH = "POLICY_SNAPSHOT_ID_MISMATCH"
+    POLICY_LINEAGE_OVERRIDE = "POLICY_SNAPSHOT_LINEAGE_OVERRIDE_REFUSED"
+    SELECTED_ACTION_MISSING = "SELECTED_ACTION_EVIDENCE_MISSING"
+    SELECTED_ACTION_MISMATCH = "SELECTED_ACTION_BINDING_MISMATCH"
 
 
 HARD_REQUIRED_FIELDS = (
@@ -88,6 +95,7 @@ HUMAN_APPROVAL_TRUE_VALUES = {"true", "yes", "approved", "required"}
 HUMAN_APPROVAL_FALSE_VALUES = {"false", "no", "not_required", "none"}
 REGULATED_TRUE_VALUES = {"true", "yes", "high", "regulated"}
 REGULATED_FALSE_VALUES = {"false", "no", "none"}
+POLICY_SNAPSHOT_MAX_AGE_SECONDS = 300
 
 
 REVIEWER_REDACTION_PROFILE = "reviewer_safe_v1"
@@ -598,7 +606,8 @@ def try_promote_verified_canonical_decision_candidate_to_execution_intent(
     candidate: DecisionCandidate | dict[str, Any],
     *,
     canonical_decision_artifact: CanonicalDecisionArtifact | dict[str, Any],
-    policy_snapshot_id: str,
+    policy_snapshot_id: str | None = None,
+    now: datetime | None = None,
     ttl_seconds: int | None = None,
     expected_state_fingerprint: str | None = None,
     approval_context: dict[str, Any] | None = None,
@@ -606,9 +615,9 @@ def try_promote_verified_canonical_decision_candidate_to_execution_intent(
 ) -> DecisionCandidatePromotionResult:
     """Promote structured input using lineage only from an independently verified CDA.
 
-    ``policy_snapshot_id`` remains an explicit, typed caller boundary because
-    CDA-v1 does not assert policy-snapshot provenance. No decision-lineage
-    override parameters are accepted, and this helper performs no I/O or Bind.
+    The policy identity and selected action are derived exclusively from the
+    independently verified CDA. ``policy_snapshot_id`` is only an optional
+    assertion and can never supply lineage.
     """
     from veritas_os.governance.canonical_decision_artifact import (
         verify_canonical_decision_artifact,
@@ -622,9 +631,64 @@ def try_promote_verified_canonical_decision_candidate_to_execution_intent(
         refusal_reasons.append(
             DecisionCandidateRefusalReason.CANONICAL_DECISION_INVALID.value
         )
-    if not isinstance(policy_snapshot_id, str) or not policy_snapshot_id.strip():
+    artifact = verification.artifact
+    policy_evidence = (
+        artifact.decision.policy_snapshot_evidence if artifact else None
+    )
+    action_evidence = (
+        artifact.decision.selected_action_evidence if artifact else None
+    )
+    if policy_evidence is None:
         refusal_reasons.append(
-            DecisionCandidateRefusalReason.POLICY_SNAPSHOT_MISSING.value
+            DecisionCandidateRefusalReason.POLICY_SNAPSHOT_INVALID.value
+        )
+    if policy_lineage is not None:
+        refusal_reasons.append(
+            DecisionCandidateRefusalReason.POLICY_LINEAGE_OVERRIDE.value
+        )
+    if (
+        policy_evidence is not None
+        and policy_snapshot_id is not None
+        and (
+            not isinstance(policy_snapshot_id, str)
+            or policy_snapshot_id.strip() != policy_evidence.snapshot_id
+        )
+    ):
+        refusal_reasons.append(
+            DecisionCandidateRefusalReason.POLICY_SNAPSHOT_MISMATCH.value
+        )
+    if policy_evidence is not None:
+        try:
+            verified_at = datetime.fromisoformat(
+                policy_evidence.verified_at.replace("Z", "+00:00")
+            )
+            current = now or datetime.now(UTC)
+            if (
+                verified_at.tzinfo is None
+                or verified_at > current
+                or current - verified_at
+                > timedelta(seconds=POLICY_SNAPSHOT_MAX_AGE_SECONDS)
+            ):
+                refusal_reasons.append(
+                    DecisionCandidateRefusalReason.POLICY_SNAPSHOT_STALE.value
+                )
+        except (TypeError, ValueError, OverflowError):
+            refusal_reasons.append(
+                DecisionCandidateRefusalReason.POLICY_SNAPSHOT_INVALID.value
+            )
+    if action_evidence is None:
+        refusal_reasons.append(
+            DecisionCandidateRefusalReason.SELECTED_ACTION_MISSING.value
+        )
+    elif hash_decision_candidate(normalized) != action_evidence.candidate_hash:
+        refusal_reasons.append(
+            DecisionCandidateRefusalReason.SELECTED_ACTION_MISMATCH.value
+        )
+    elif action_evidence.chosen_binding_sha256 != (
+        artifact.decision.chosen_binding.sha256
+    ):
+        refusal_reasons.append(
+            DecisionCandidateRefusalReason.SELECTED_ACTION_MISMATCH.value
         )
     if refusal_reasons:
         validation = DecisionCandidateValidationResult(
@@ -645,18 +709,24 @@ def try_promote_verified_canonical_decision_candidate_to_execution_intent(
             fail_closed=True,
         )
 
-    artifact = verification.artifact
+    assert artifact is not None
+    assert policy_evidence is not None
     return try_promote_decision_candidate_to_execution_intent(
         normalized,
         decision_id=artifact.decision_id,
         decision_hash=artifact.decision_hash,
         decision_ts=artifact.decision_ts,
         request_id=artifact.request_id,
-        policy_snapshot_id=policy_snapshot_id.strip(),
+        policy_snapshot_id=policy_evidence.snapshot_id,
         ttl_seconds=ttl_seconds,
         expected_state_fingerprint=expected_state_fingerprint,
         approval_context=approval_context,
-        policy_lineage=policy_lineage,
+        policy_lineage={
+            "version": policy_evidence.version,
+            "semantic_digest": policy_evidence.semantic_digest,
+            "signer_id": policy_evidence.signer_id,
+            "verified_at": policy_evidence.verified_at,
+        },
     )
 
 
@@ -814,6 +884,64 @@ def canonical_decision_candidate_json(
 def hash_decision_candidate(candidate: DecisionCandidate | dict[str, Any]) -> str:
     """Compute SHA-256 over canonical ``DecisionCandidate`` payload."""
     return sha256_of_canonical_json(normalize_decision_candidate(candidate).to_dict())
+
+
+def verified_canonical_promotion_proof_report(
+    result: DecisionCandidatePromotionResult,
+    canonical_decision_artifact: CanonicalDecisionArtifact | dict[str, Any],
+) -> dict[str, bool]:
+    """Derive narrow, machine-readable claims for a completed promotion.
+
+    Each claim is computed from its own verified relationship. This report
+    makes no Bind, dispatch, effect, or production-readiness claim.
+    """
+    from veritas_os.governance.canonical_decision_artifact import (
+        verify_canonical_decision_artifact,
+    )
+
+    verification = verify_canonical_decision_artifact(canonical_decision_artifact)
+    artifact = verification.artifact
+    intent = result.execution_intent
+    policy = artifact.decision.policy_snapshot_evidence if artifact else None
+    action = artifact.decision.selected_action_evidence if artifact else None
+    decision_lineage = bool(
+        verification.is_valid
+        and artifact
+        and intent
+        and intent.decision_id == artifact.decision_id
+        and intent.decision_hash == artifact.decision_hash
+        and intent.decision_ts == artifact.decision_ts
+        and intent.request_id == artifact.request_id
+    )
+    policy_lineage = bool(
+        intent
+        and policy
+        and intent.policy_snapshot_id == policy.snapshot_id
+        and intent.policy_lineage
+        and intent.policy_lineage.get("version") == policy.version
+        and intent.policy_lineage.get("semantic_digest")
+        == policy.semantic_digest
+    )
+    selected_action_lineage = bool(
+        action
+        and action.candidate_hash
+        == hash_decision_candidate(result.normalized_candidate)
+        and artifact
+        and action.chosen_binding_sha256
+        == artifact.decision.chosen_binding.sha256
+    )
+    return {
+        "policy_snapshot_lineage_proven": policy_lineage,
+        "selected_action_lineage_proven": selected_action_lineage,
+        "decision_lineage_proven": decision_lineage,
+        "execution_intent_lineage_proven": bool(
+            result.promoted
+            and intent
+            and decision_lineage
+            and policy_lineage
+            and selected_action_lineage
+        ),
+    }
 
 
 def canonical_decision_candidate_refusal_artifact_json(

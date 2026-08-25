@@ -65,7 +65,9 @@ from .decision_candidate import (
     promote_decision_candidate_to_execution_intent,
     try_build_decision_candidate_refusal_artifact,
     try_promote_decision_candidate_to_execution_intent,
+    try_promote_verified_canonical_decision_candidate_to_execution_intent,
     validate_decision_candidate,
+    verified_canonical_promotion_proof_report,
 )
 from .bind_revalidation import (
     replay_bind_receipt_admissibility,
@@ -149,6 +151,8 @@ __all__ = [
     "canonical_decision_candidate_json",
     "canonical_decision_candidate_refusal_artifact_json",
     "canonical_decision_candidate_refusal_reviewer_export_json",
+    "try_promote_verified_canonical_decision_candidate_to_execution_intent",
+    "verified_canonical_promotion_proof_report",
     "canonical_bind_receipt_json",
     "compile_policy_to_bundle",
     "build_generated_test_cases",
