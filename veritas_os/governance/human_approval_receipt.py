@@ -558,9 +558,16 @@ def _validate_production_verifier_policy(
         and result.verifier_key_id != approved.verifier_key_id
     ):
         raise ValueError("human_approval_verifier_key_mismatch")
-    if approved.policy_hash is not None and result.verifier_policy_hash is not None:
-        if result.verifier_policy_hash != approved.policy_hash:
-            raise ValueError("human_approval_verifier_policy_hash_mismatch")
+    if (
+        approved.policy_id is not None
+        and result.verifier_policy_id != approved.policy_id
+    ):
+        raise ValueError("human_approval_verifier_policy_id_mismatch")
+    if (
+        approved.policy_hash is not None
+        and result.verifier_policy_hash != approved.policy_hash
+    ):
+        raise ValueError("human_approval_verifier_policy_hash_mismatch")
 
 
 def _validate_signer_policy(
