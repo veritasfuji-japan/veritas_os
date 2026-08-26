@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timedelta
@@ -11,11 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.governance.authority_evidence import (
@@ -34,9 +29,12 @@ from veritas_os.governance.authority_evidence_signing import (
 from veritas_os.governance.human_approval_receipt import (
     ApprovedHumanApprovalVerifier,
     HumanApprovalReceipt,
-    HumanApprovalSignatureVerificationResult,
     HumanApprovalSignerPolicy,
     HumanApprovalVerifierPolicy,
+)
+from veritas_os.governance.human_approval_receipt_signing import (
+    TrustedEd25519HumanApprovalVerifier,
+    human_approval_signature_payload,
 )
 from veritas_os.policy.live_adapter_bind_authorization import (
     ACKNOWLEDGEMENTS,
@@ -61,7 +59,7 @@ from veritas_os.policy.live_adapter_bind_authorization import (
 from veritas_os.policy.live_adapter_bind_authorization_signing import (
     TrustedEd25519BindAuthorizationVerifier,
 )
-from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
+from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.tests.test_live_adapter_dry_run_bind_authorization_gate_review import (
     RECORDED_AT as SOURCE_RECORDED_AT,
     _decision as gate_decision,
@@ -100,80 +98,6 @@ class _Ed25519Signer:
 
     def sign(self, payload: bytes) -> bytes:
         return self.private_key.sign(payload)
-
-
-def _human_approval_signature_payload(artifact: dict[str, Any]) -> str:
-    return canonical_json_dumps(
-        {
-            "domain": "VERITAS:test-human-approval-ed25519:v1:",
-            "artifact_type": artifact.get("artifact_type"),
-            "artifact_version": artifact.get("artifact_version"),
-            "receipt_hash": artifact.get("receipt_hash"),
-            "receipt": artifact.get("receipt"),
-            "signer": artifact.get("signer"),
-            "signed_at": artifact.get("signed_at"),
-        }
-    )
-
-
-class _Ed25519HumanApprovalVerifier:
-    production_verifier = True
-
-    def __init__(
-        self,
-        *,
-        public_key: bytes,
-        key_id: str,
-        signer_identity: str,
-        signer_role: str,
-    ) -> None:
-        self.public_key = public_key
-        self.key_id = key_id
-        self.signer_identity = signer_identity
-        self.signer_role = signer_role
-        self.verifier_id = "human-approval-ed25519-verifier"
-        self.verifier_key_id = key_id
-        self.verifier_policy_id = "human-approval-ed25519-policy-v1"
-        self.verifier_trust_level = "production"
-
-    def policy_hash(self) -> str:
-        return sha256_of_canonical_json(
-            {
-                "id": self.verifier_policy_id,
-                "algorithm": "Ed25519",
-                "domain": "human-approval-test-verifier",
-                "version": "v1",
-                "verifier_id": self.verifier_id,
-                "public_key_sha256": hashlib.sha256(self.public_key).hexdigest(),
-                "signer_identity": self.signer_identity,
-                "signer_role": self.signer_role,
-            }
-        )
-
-    def verify(self, artifact: dict[str, Any]) -> HumanApprovalSignatureVerificationResult:
-        try:
-            signature = base64.urlsafe_b64decode(str(artifact.get("signature", "")))
-            Ed25519PublicKey.from_public_bytes(self.public_key).verify(
-                signature,
-                _human_approval_signature_payload(artifact).encode("utf-8"),
-            )
-        except (ValueError, TypeError, InvalidSignature):
-            return HumanApprovalSignatureVerificationResult(
-                verified=False, reason="bad_signature"
-            )
-        return HumanApprovalSignatureVerificationResult(
-            verified=True,
-            key_id=self.key_id,
-            algorithm="Ed25519",
-            signer_identity=self.signer_identity,
-            signer_role=self.signer_role,
-            reason="signature_valid",
-            verifier_trust_level="production",
-            verifier_id=self.verifier_id,
-            verifier_key_id=self.verifier_key_id,
-            verifier_policy_id=self.verifier_policy_id,
-            verifier_policy_hash=self.policy_hash(),
-        )
 
 
 def _contract(*, human_required: bool = False, required_evidence: list[str] | None = None):
@@ -345,13 +269,16 @@ def _signed_human_approval(contract: ActionClassContract):
         "signed_at": SOURCE_RECORDED_AT.isoformat(),
     }
     artifact["signature"] = base64.urlsafe_b64encode(
-        private_key.sign(_human_approval_signature_payload(artifact).encode("utf-8"))
+        private_key.sign(human_approval_signature_payload(artifact).encode("utf-8"))
     ).decode("ascii")
-    verifier = _Ed25519HumanApprovalVerifier(
-        public_key=public_key,
-        key_id="human-approval-key",
-        signer_identity=ref["approver_id"],
-        signer_role=ref["approver_role"],
+    verifier = TrustedEd25519HumanApprovalVerifier(
+        trusted_public_keys={"human-approval-key": public_key},
+        trusted_signer_identities={
+            "human-approval-key": ref["approver_id"]
+        },
+        trusted_signer_roles={"human-approval-key": ref["approver_role"]},
+        verifier_id="human-approval-ed25519-verifier",
+        verifier_policy_id="human-approval-ed25519-policy-v1",
     )
     signer_policy = HumanApprovalSignerPolicy(
         policy_id="human-approval-signer-policy",
