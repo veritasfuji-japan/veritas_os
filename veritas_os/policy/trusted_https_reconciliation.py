@@ -97,21 +97,18 @@ class ReconciliationVerifierPolicy:
 class _Acknowledgement(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    operation_id: str = Field(min_length=1)
     external_operation_reference: str = Field(min_length=1)
     status: str = Field(min_length=1)
     source_identity: str = Field(min_length=1)
+    veritas_operation_id: str | None = None
     authorization_id: str | None = None
     consumption_id: str | None = None
 
 
 def reconciliation_observation_digest(evidence: ReconciliationEvidence) -> str:
-    """Hash the canonical observation while excluding its digest field."""
+    """Hash all v1 observation fields except ``observation_digest`` itself."""
     payload = evidence.model_dump(mode="json")
     payload.pop("observation_digest")
-    # format_version is a model envelope, not part of the established v1
-    # observation preimage used by existing reconciliation producers.
-    payload.pop("format_version")
     return sha256_of_canonical_json(payload)
 
 
@@ -253,6 +250,8 @@ class TrustedHttpsReconciliationVerifier:
 
     def _validate_evidence(self, evidence: ReconciliationEvidence) -> None:
         endpoint = self._endpoint
+        if evidence.format_version != "bind-effect-reconciliation-evidence/v1":
+            raise TrustedHttpsReconciliationError("RHRV_FORMAT_VERSION_UNSUPPORTED")
         if evidence.source_type != endpoint.source_type:
             raise TrustedHttpsReconciliationError("RHRV_SOURCE_TYPE_UNSUPPORTED")
         if evidence.source_identity != endpoint.source_identity:
@@ -281,7 +280,13 @@ class TrustedHttpsReconciliationVerifier:
                     "RHRV_CREDENTIAL_FAILED"
                 ) from None
         if any(
-            not key or "\n" in key or "\r" in key or "\n" in value or "\r" in value
+            not key
+            or key.lower()
+            in {"host", "content-length", "connection", "transfer-encoding"}
+            or "\n" in key
+            or "\r" in key
+            or "\n" in value
+            or "\r" in value
             for key, value in headers.items()
         ):
             raise TrustedHttpsReconciliationError("RHRV_CREDENTIAL_FAILED")
@@ -318,7 +323,10 @@ class TrustedHttpsReconciliationVerifier:
             != evidence.external_operation_reference
         ):
             raise TrustedHttpsReconciliationError("RHRV_OPERATION_REFERENCE_MISMATCH")
-        if acknowledgement.operation_id != evidence.operation_id:
+        if (
+            acknowledgement.veritas_operation_id is not None
+            and acknowledgement.veritas_operation_id != evidence.operation_id
+        ):
             raise TrustedHttpsReconciliationError("RHRV_OPERATION_ID_MISMATCH")
         if acknowledgement.source_identity != evidence.source_identity:
             raise TrustedHttpsReconciliationError("RHRV_SOURCE_IDENTITY_MISMATCH")

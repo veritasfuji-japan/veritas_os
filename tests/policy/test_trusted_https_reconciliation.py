@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import ipaddress
+import json
+from pathlib import Path
+import ssl
+from threading import Thread
+from typing import Any, Mapping
 
 import httpx
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 
 from veritas_os.policy.bind_effect_reconciliation import (
     BindEffectStateError,
@@ -34,7 +45,7 @@ from veritas_os.policy.trusted_https_reconciliation import (
 from veritas_os.security.hash import sha256_of_canonical_json
 
 ACK = {
-    "operation_id": "consumption-1",
+    "veritas_operation_id": "consumption-1",
     "external_operation_reference": "external-1",
     "status": "committed",
     "source_identity": "trusted-ledger",
@@ -89,6 +100,14 @@ class _Client:
 @dataclass(frozen=True)
 class _Receipt:
     pass
+
+
+@dataclass(frozen=True)
+class _Headers:
+    values: Mapping[str, str]
+
+    async def authorization_headers(self) -> Mapping[str, str]:
+        return self.values
 
 
 def _endpoint(**changes: Any) -> TrustedReconciliationEndpoint:
@@ -169,6 +188,20 @@ async def test_valid_acknowledgement_is_independently_verified() -> None:
 
 
 @pytest.mark.asyncio
+async def test_format_version_is_bound_by_observation_digest() -> None:
+    evidence = _evidence()
+    substituted = evidence.model_copy(
+        update={"format_version": "bind-effect-reconciliation-evidence/v2"}
+    )
+
+    assert reconciliation_observation_digest(substituted) != (
+        reconciliation_observation_digest(evidence)
+    )
+    with pytest.raises(TrustedHttpsReconciliationError, match="FORMAT_VERSION"):
+        await _verifier().verify(substituted)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
@@ -227,6 +260,183 @@ def test_endpoint_substitution_and_unapproved_policy_fail_closed() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "header_name",
+    ["Host", "HOST", "content-length", "Connection", "Transfer-Encoding"],
+)
+async def test_credential_provider_cannot_override_transport_headers(
+    header_name: str,
+) -> None:
+    endpoint = _endpoint()
+    policy_hash = TrustedHttpsReconciliationVerifier.policy_hash_for_config(
+        endpoint=endpoint, verifier_id="reconciliation-verifier-1"
+    )
+    verifier = TrustedHttpsReconciliationVerifier(
+        endpoint=endpoint,
+        verifier_id="reconciliation-verifier-1",
+        verifier_policy=ReconciliationVerifierPolicy(
+            (ApprovedReconciliationVerifier("reconciliation-verifier-1", policy_hash),)
+        ),
+        credential_provider=_Headers({header_name: "attacker-controlled"}),
+    )
+
+    with pytest.raises(TrustedHttpsReconciliationError, match="CREDENTIAL_FAILED"):
+        await verifier.verify(_evidence())
+
+
+def _write_test_certificates(
+    directory: Path, *, certificate_name: str, hostname: str
+) -> tuple[Path, Path, Path]:
+    """Create an ephemeral CA and server certificate for local TLS tests."""
+    now = datetime.now(UTC)
+    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test CA")])
+    ca_cert = (
+        x509.CertificateBuilder()
+        .subject_name(ca_name)
+        .issuer_name(ca_name)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=1))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(ca_key, hashes.SHA256())
+    )
+    server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    server_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostname)])
+    try:
+        san: x509.GeneralName = x509.IPAddress(ipaddress.ip_address(hostname))
+    except ValueError:
+        san = x509.DNSName(hostname)
+    server_cert = (
+        x509.CertificateBuilder()
+        .subject_name(server_name)
+        .issuer_name(ca_cert.subject)
+        .public_key(server_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=1))
+        .add_extension(x509.SubjectAlternativeName([san]), critical=False)
+        .add_extension(
+            x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]),
+            critical=False,
+        )
+        .sign(ca_key, hashes.SHA256())
+    )
+    ca_path = directory / f"{certificate_name}-ca.pem"
+    cert_path = directory / f"{certificate_name}-server.pem"
+    key_path = directory / f"{certificate_name}-server-key.pem"
+    ca_path.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
+    cert_path.write_bytes(server_cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        server_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return ca_path, cert_path, key_path
+
+
+def _start_https_server(
+    cert_path: Path, key_path: Path, acknowledgement: dict[str, Any]
+) -> tuple[ThreadingHTTPServer, Thread]:
+    """Start a real loopback TLS server returning one acknowledgement."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            body = json.dumps(
+                acknowledgement, sort_keys=True, separators=(",", ":")
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert_path, key_path)
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread
+
+
+@pytest.mark.asyncio
+async def test_real_tls_handshake_and_certificate_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise real OpenSSL success, foreign-CA, and hostname failures."""
+    monkeypatch.undo()
+    acknowledgement = {
+        "veritas_operation_id": "internal-operation-1",
+        "external_operation_reference": "provider-operation-9",
+        "status": "committed",
+        "source_identity": "local-trusted-ledger",
+        "authorization_id": "authorization-1",
+        "consumption_id": "consumption-1",
+    }
+    trusted_ca, cert, key = _write_test_certificates(
+        tmp_path, certificate_name="trusted", hostname="127.0.0.1"
+    )
+    foreign_ca, _, _ = _write_test_certificates(
+        tmp_path, certificate_name="foreign", hostname="127.0.0.1"
+    )
+    mismatch_ca, mismatch_cert, mismatch_key = _write_test_certificates(
+        tmp_path, certificate_name="mismatch", hostname="localhost"
+    )
+    trusted_server, trusted_thread = _start_https_server(cert, key, acknowledgement)
+    mismatch_server, mismatch_thread = _start_https_server(
+        mismatch_cert, mismatch_key, acknowledgement
+    )
+
+    def verifier(port: int, ca_file: Path) -> TrustedHttpsReconciliationVerifier:
+        endpoint = _endpoint(
+            host="127.0.0.1",
+            port=port,
+            source_identity="local-trusted-ledger",
+            ca_file=str(ca_file),
+        )
+        policy_hash = TrustedHttpsReconciliationVerifier.policy_hash_for_config(
+            endpoint=endpoint, verifier_id="real-tls-verifier"
+        )
+        return TrustedHttpsReconciliationVerifier(
+            endpoint=endpoint,
+            verifier_id="real-tls-verifier",
+            verifier_policy=ReconciliationVerifierPolicy(
+                (ApprovedReconciliationVerifier("real-tls-verifier", policy_hash),)
+            ),
+        )
+
+    evidence = _evidence(
+        operation_id="internal-operation-1",
+        external_operation_reference="provider-operation-9",
+        source_identity="local-trusted-ledger",
+        external_ack_digest=sha256_of_canonical_json(acknowledgement),
+    )
+    try:
+        verified = await verifier(trusted_server.server_port, trusted_ca).verify(
+            evidence
+        )
+        assert verified.evidence == evidence
+        with pytest.raises(TrustedHttpsReconciliationError, match="ACK_RETRIEVAL"):
+            await verifier(trusted_server.server_port, foreign_ca).verify(evidence)
+        with pytest.raises(TrustedHttpsReconciliationError, match="ACK_RETRIEVAL"):
+            await verifier(mismatch_server.server_port, mismatch_ca).verify(evidence)
+    finally:
+        trusted_server.shutdown()
+        mismatch_server.shutdown()
+        trusted_server.server_close()
+        mismatch_server.server_close()
+        trusted_thread.join(timeout=2)
+        mismatch_thread.join(timeout=2)
+
+
+@pytest.mark.asyncio
 async def test_production_verifier_reconciles_effect_unknown() -> None:
     consumption = build_authorization_consumption_record(
         live_adapter_bind_authorization_id="authorization-1",
@@ -258,7 +468,7 @@ async def test_production_verifier_reconciles_effect_unknown() -> None:
 
     acknowledgement = {
         **ACK,
-        "operation_id": consumption.consumption_id,
+        "veritas_operation_id": consumption.consumption_id,
         "consumption_id": consumption.consumption_id,
     }
     _Client.response = _Response(acknowledgement)
