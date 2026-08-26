@@ -30,6 +30,10 @@ from veritas_os.policy.real_bind_context import (
     derive_verified_real_bind_context_hash,
 )
 
+# Compatibility alias for existing internal and public-facade imports. The
+# single canonical implementation lives in veritas_os.policy.real_bind_context.
+_bind_context_hash = derive_verified_real_bind_context_hash
+
 
 def _source(
     value: Any,
