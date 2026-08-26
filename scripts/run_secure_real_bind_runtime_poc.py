@@ -180,12 +180,14 @@ class _HttpsEffectAdapter(BindAdapterContract):
         authorization_header: ConstructedAuthorizationHeader,
         ca_file: str,
         external_operation_reference: str,
+        authorization_id: str,
         expected_fingerprint: str | None,
     ) -> None:
         self.base_url = base_url
         self.authorization_header = authorization_header
         self.ca_file = ca_file
         self.external_operation_reference = external_operation_reference
+        self.authorization_id = authorization_id
         self.expected_fingerprint = expected_fingerprint
         self.last_ack: dict[str, Any] | None = None
 
@@ -216,7 +218,10 @@ class _HttpsEffectAdapter(BindAdapterContract):
     def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         del intent, snapshot
         body = json.dumps(
-            {"operation_id": self.external_operation_reference},
+            {
+                "external_operation_reference": self.external_operation_reference,
+                "authorization_id": self.authorization_id,
+            },
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -263,6 +268,7 @@ class _HttpsFactory:
             authorization_header=authorization_header,
             ca_file=self.ca_file,
             external_operation_reference=authorization.idempotency_key,
+            authorization_id=authorization.live_adapter_bind_authorization_id,
             expected_fingerprint=authorization.execution_intent.get(
                 "expected_state_fingerprint"
             ),
@@ -297,7 +303,7 @@ class _HttpsReconciliationVerifier:
         )
         with request.urlopen(req, context=context, timeout=10) as response:  # noqa: S310
             ack = json.loads(response.read().decode("utf-8"))
-        if ack.get("operation_id") != self.external_operation_reference:
+        if ack.get("external_operation_reference") != self.external_operation_reference:
             raise RuntimeError("ack operation mismatch")
         if ack.get("status") != "committed":
             raise RuntimeError("ack is not committed")

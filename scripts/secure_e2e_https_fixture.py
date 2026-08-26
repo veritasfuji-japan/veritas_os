@@ -48,20 +48,28 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length) or b"{}")
-            operation_id = str(payload["operation_id"])
+            external_operation_reference = str(payload["external_operation_reference"])
+            authorization_id = str(payload["authorization_id"])
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             self._json(400, {"error": "invalid_payload"})
             return
         with self.state.lock:
-            if operation_id in self.state.effects:
-                self._json(409, {"error": "duplicate_operation", "operation_id": operation_id})
+            if external_operation_reference in self.state.effects:
+                self._json(
+                    409,
+                    {
+                        "error": "duplicate_operation",
+                        "external_operation_reference": external_operation_reference,
+                    },
+                )
                 return
             effect = {
-                "operation_id": operation_id,
+                "external_operation_reference": external_operation_reference,
                 "status": "committed",
-                "effect_count": len(self.state.effects) + 1,
+                "source_identity": "api.example.invalid",
+                "authorization_id": authorization_id,
             }
-            self.state.effects[operation_id] = effect
+            self.state.effects[external_operation_reference] = effect
         self._json(201, effect)
 
     def do_GET(self) -> None:  # noqa: N802
@@ -73,11 +81,17 @@ class _Handler(BaseHTTPRequestHandler):
         if not parsed.path.startswith(prefix):
             self._json(404, {"error": "not_found"})
             return
-        operation_id = parsed.path[len(prefix):]
+        external_operation_reference = parsed.path[len(prefix) :]
         with self.state.lock:
-            effect = self.state.effects.get(operation_id)
+            effect = self.state.effects.get(external_operation_reference)
         if effect is None:
-            self._json(404, {"error": "effect_not_found", "operation_id": operation_id})
+            self._json(
+                404,
+                {
+                    "error": "effect_not_found",
+                    "external_operation_reference": external_operation_reference,
+                },
+            )
             return
         self._json(200, effect)
 
