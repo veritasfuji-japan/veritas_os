@@ -14,7 +14,15 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
 
 from veritas_os.api.schemas import (
     DecideResponse,
@@ -174,11 +182,31 @@ class CanonicalDecisionTransitionRefusalBinding(_FrozenModel):
     sha256: str = Field(pattern=_DIGEST_PATTERN)
 
 
+class CanonicalSelectedActionEvidence(_FrozenModel):
+    """Content address of a normalized structured execution candidate."""
+
+    candidate_hash: str = Field(pattern=_DIGEST_PATTERN)
+    chosen_binding_sha256: str = Field(pattern=_DIGEST_PATTERN)
+
+
+class CanonicalPolicySnapshotEvidence(_FrozenModel):
+    """Policy identity already authenticated by the decision pipeline."""
+
+    snapshot_id: str = Field(pattern=_DIGEST_PATTERN)
+    version: str = Field(min_length=1)
+    semantic_digest: str = Field(pattern=_DIGEST_PATTERN)
+    signature_verified: Literal[True]
+    signer_id: str = Field(min_length=1)
+    verified_at: str = Field(min_length=1)
+
+
 class CanonicalDecisionProjection(_FrozenModel):
     """Exact closed v1 decision projection."""
 
     formation_status: Literal["COMPLETE", "INCOMPLETE"]
     chosen_binding: CanonicalDecisionChosenBinding
+    selected_action_evidence: CanonicalSelectedActionEvidence | None = None
+    policy_snapshot_evidence: CanonicalPolicySnapshotEvidence | None = None
     decision_status: Literal["allow", "modify", "rejected", "block", "abstain"]
     rejection_reason: str | None
     gate_decision: Literal["proceed", "hold", "block", "human_review_required"]
@@ -210,6 +238,18 @@ class CanonicalDecisionProjection(_FrozenModel):
     governance_identity_binding: CanonicalDecisionGovernanceIdentityBinding | None
     lineage_promotability_binding: CanonicalDecisionLineagePromotabilityBinding | None
     transition_refusal_binding: CanonicalDecisionTransitionRefusalBinding | None
+
+    @model_serializer(mode="wrap")
+    def _serialize_optional_evidence(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        """Keep legacy CDA-v1 JSON exact when new evidence is unavailable."""
+        serialized = handler(self)
+        if self.selected_action_evidence is None:
+            serialized.pop("selected_action_evidence", None)
+        if self.policy_snapshot_evidence is None:
+            serialized.pop("policy_snapshot_evidence", None)
+        return serialized
 
     @model_validator(mode="after")
     def _validate_semantics(self) -> "CanonicalDecisionProjection":
@@ -439,9 +479,6 @@ def _validated_source_projection(source: DecideResponse) -> dict[str, Any]:
             CanonicalDecisionArtifactBuildReason.NON_CANONICAL_JSON_VALUE
         ) from exc
     try:
-        # JSON-mode dumping can coerce non-finite floats under Pydantic's
-        # serialization policy.  Inspect the Python projection first so no
-        # hash-relevant non-finite or unsupported value can be laundered.
         python_projection = source.model_dump(mode="python", include=_SOURCE_FIELDS)
     except (TypeError, ValueError) as exc:
         raise CanonicalDecisionArtifactBuildError(
@@ -473,19 +510,7 @@ def _validated_source_projection(source: DecideResponse) -> dict[str, Any]:
 
 
 def _validate_canonical_json_value(value: Any) -> None:
-    """Recursively require exact CDA-v1 canonical JSON value families.
-
-    Python containers and objects that ``json.dumps`` or Pydantic might coerce
-    are deliberately rejected rather than converted into canonical identity.
-
-    Args:
-        value: Candidate value to validate without normalization.
-
-    Raises:
-        TypeError: If a value, container, or mapping key is not an exact JSON
-            family supported by CDA v1.
-        ValueError: If a floating-point value is non-finite.
-    """
+    """Recursively require exact CDA-v1 canonical JSON value families."""
     value_type = type(value)
     if value is None or value_type is bool or value_type is int or value_type is str:
         return
@@ -510,21 +535,7 @@ def _validate_typed_source_model(
     value: BaseModel | None,
     expected_type: type[BaseModel],
 ) -> None:
-    """Validate raw contents of one explicitly allowed typed source model.
-
-    Only the declared top-level Pydantic source model may cross this boundary.
-    Its known fields and Pydantic extras are inspected before ``model_dump`` so
-    nested Python objects cannot be normalized into a CDA binding.
-
-    Args:
-        value: Current raw source-model value, or ``None``.
-        expected_type: Exact Pydantic model type allowed for this source field.
-
-    Raises:
-        TypeError: If the top-level type is unexpected or any contained value
-            is not an exact canonical JSON family.
-        ValueError: If a contained floating-point value is non-finite.
-    """
+    """Validate raw contents of one explicitly allowed typed source model."""
     if value is None:
         return
     if type(value) is not expected_type:
@@ -567,6 +578,8 @@ def _binding_digest(profile: str, value: Any) -> str:
 
 def _build_projection(source: dict[str, Any]) -> CanonicalDecisionProjection:
     governance = source["governance_identity"]
+    selected_action_evidence = _selected_action_evidence(source["chosen"])
+    policy_snapshot_evidence = _policy_snapshot_evidence(governance)
     common = {
         field: source[field]
         for field in (
@@ -593,6 +606,8 @@ def _build_projection(source: dict[str, Any]) -> CanonicalDecisionProjection:
             profile=CDA_CHOSEN_BINDING_PROFILE,
             sha256=_binding_digest(CDA_CHOSEN_BINDING_PROFILE, source["chosen"]),
         ),
+        selected_action_evidence=selected_action_evidence,
+        policy_snapshot_evidence=policy_snapshot_evidence,
         governance_identity_binding=(
             CanonicalDecisionGovernanceIdentityBinding(
                 profile=CDA_GOVERNANCE_IDENTITY_BINDING_PROFILE,
@@ -615,6 +630,47 @@ def _build_projection(source: dict[str, Any]) -> CanonicalDecisionProjection:
         ),
         **common,
     )
+
+
+def _selected_action_evidence(value: Any) -> CanonicalSelectedActionEvidence | None:
+    """Bind a promotable candidate to the exact decision-selected value."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        from veritas_os.policy.decision_candidate import (
+            hash_decision_candidate,
+            normalize_decision_candidate,
+            validate_decision_candidate,
+        )
+
+        candidate = normalize_decision_candidate(value)
+        if not validate_decision_candidate(candidate).promotable:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return CanonicalSelectedActionEvidence(
+        candidate_hash=hash_decision_candidate(candidate),
+        chosen_binding_sha256=_binding_digest(CDA_CHOSEN_BINDING_PROFILE, value),
+    )
+
+
+def _policy_snapshot_evidence(
+    value: Any,
+) -> CanonicalPolicySnapshotEvidence | None:
+    """Project the existing signed governance identity without inventing trust."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        return CanonicalPolicySnapshotEvidence(
+            snapshot_id=value["digest"],
+            version=value["policy_version"],
+            semantic_digest=value["digest"],
+            signature_verified=value["signature_verified"],
+            signer_id=value["signer_id"],
+            verified_at=value["verified_at"],
+        )
+    except (KeyError, TypeError, ValueError, ValidationError):
+        return None
 
 
 def _optional_binding(model: type[_FrozenModel], profile: str, value: Any) -> Any:

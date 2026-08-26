@@ -65,6 +65,7 @@ from veritas_os.policy.bind_artifacts import (  # noqa: E402
     hash_execution_intent,
 )
 from veritas_os.policy.bind_core import execute_bind_adjudication  # noqa: E402
+from veritas_os.policy.compiler import compile_policy_to_bundle  # noqa: E402
 from veritas_os.policy.decision_candidate import (  # noqa: E402
     DecisionCandidate,
     try_promote_verified_canonical_decision_candidate_to_execution_intent,
@@ -72,9 +73,9 @@ from veritas_os.policy.decision_candidate import (  # noqa: E402
 from veritas_os.security.hash import sha256_of_canonical_json  # noqa: E402
 
 DEFAULT_REPORT = REPO_ROOT / "artifacts/decision-to-external-bind-poc/report.json"
+POLICY_SOURCE = REPO_ROOT / "policies/examples/low_risk_route_allow.yaml"
 ACTOR = "test-actor:decision-bind-poc"
 SCOPE = ["synthetic:review:create"]
-POLICY_SNAPSHOT_ID = "controlled-synthetic-policy-v1"
 NOW = datetime(2026, 8, 21, 12, tzinfo=UTC)
 
 
@@ -187,9 +188,11 @@ def _action_contract() -> ActionClassContract:
 
 
 def _candidate() -> DecisionCandidate:
-    """Return explicit typed input; no model prose becomes authority."""
+    """Return the explicit typed candidate submitted to the real decision route."""
     return DecisionCandidate(
+        candidate_id="selected-decision-bind-candidate",
         source_model="CONTROLLED_STRUCTURED_SYNTHETIC_CANDIDATE",
+        source_trace_ref="decision-bind-poc-request-option",
         action_type="synthetic_external_webhook",
         actor_identity=ACTOR,
         target_system="local-synthetic-fixture",
@@ -198,19 +201,48 @@ def _candidate() -> DecisionCandidate:
         required_authority=list(SCOPE),
         required_human_approval=False,
         risk_level="low",
+        metadata={"synthetic_only": True},
     )
+
+
+def _decision_request_fixture(policy_bundle_dir: Path) -> dict[str, Any]:
+    """Bind the structured execution candidate and verified policy into /v1/decide."""
+    payload = _request_fixture()
+    context = dict(payload.get("context") or {})
+    context.update(
+        {
+            "compiled_policy_bundle_dir": policy_bundle_dir.as_posix(),
+            "policy_runtime_enforce": True,
+            "domain": "governance",
+            "route": "/api/decide",
+            "actor": "kernel",
+            "risk": {"level": "low"},
+            "runtime": {"auto_execute": True},
+            "evidence": {"available": ["risk_assessment"]},
+            "approvals": {"approved_by": ["governance_officer"]},
+        }
+    )
+    payload["context"] = context
+    selected = _candidate().to_dict()
+    selected.update(
+        {
+            "id": "synthetic-external-webhook",
+            "title": "Post one synthetic review",
+            "description": (
+                "Structured test-only action candidate for the local external Bind fixture."
+            ),
+            "score": 1.0,
+        }
+    )
+    payload["options"] = [selected]
+    return payload
 
 
 def _configure_secure_test_infrastructure(
     runtime_root: Path,
     api_secret: str,
 ) -> str:
-    """Configure secure posture while isolating external network clients.
-
-    The production AWS KMS signer and S3 Object Lock mirror remain selected.
-    Only their client boundary is replaced during the PoC with implementations
-    that perform Ed25519 signing and enforce retention metadata.
-    """
+    """Configure secure posture while isolating external network clients."""
     kms_key_id = "arn:aws:kms:us-east-1:000000000000:key/decision-bind-poc"
     os.environ.update(
         {
@@ -240,10 +272,39 @@ def _configure_secure_test_infrastructure(
     return kms_key_id
 
 
-def _verified_authority() -> tuple[
-    Any, AuthorityEvidenceVerifierPolicy, AuthorityRevocationPolicy
-]:
-    """Create and cryptographically verify ephemeral AuthorityEvidence."""
+def _configure_verified_policy_bundle(runtime_root: Path) -> Path:
+    """Create and configure an Ed25519-verified policy bundle for the real pipeline."""
+    private_key = Ed25519PrivateKey.generate()
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_pem = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    verify_key_path = runtime_root / "policy-verify-key.pem"
+    verify_key_path.write_bytes(public_pem)
+    compiled = compile_policy_to_bundle(
+        POLICY_SOURCE,
+        runtime_root / "policy-bundle",
+        compiled_at=NOW.isoformat().replace("+00:00", "Z"),
+        signing_key=private_pem,
+    )
+    os.environ.update(
+        {
+            "VERITAS_POLICY_VERIFY_KEY": str(verify_key_path),
+            "VERITAS_POLICY_REQUIRE_ED25519": "1",
+        }
+    )
+    return compiled.bundle_dir
+
+
+def _verified_authority(
+    policy_snapshot_id: str,
+) -> tuple[Any, AuthorityEvidenceVerifierPolicy, AuthorityRevocationPolicy]:
+    """Create AuthorityEvidence bound to the verified CDA policy snapshot."""
     contract = _action_contract()
     private_key = Ed25519PrivateKey.generate()
     public_key = private_key.public_key().public_bytes_raw()
@@ -269,7 +330,7 @@ def _verified_authority() -> tuple[
         valid_from=issued_at,
         valid_until=valid_until,
         revalidated_at=NOW.isoformat(),
-        policy_snapshot_id=POLICY_SNAPSHOT_ID,
+        policy_snapshot_id=policy_snapshot_id,
         evidence_hash="",
         verification_result=VerificationResult.INDETERMINATE,
         failure_reasons=[],
@@ -321,7 +382,7 @@ def _verified_authority() -> tuple[
         action_contract=contract,
         actor_identity=ACTOR,
         requested_scope=list(SCOPE),
-        policy_snapshot_id=POLICY_SNAPSHOT_ID,
+        policy_snapshot_id=policy_snapshot_id,
         signature_verifier=verifier,
         signer_policy=signer_policy,
         verifier_policy=verifier_policy,
@@ -335,6 +396,7 @@ def _verified_authority() -> tuple[
 def _decide(
     *,
     aws_clients: _DeterministicAwsClients,
+    policy_bundle_dir: Path,
 ) -> tuple[dict[str, Any], bool, dict[str, int]]:
     """Cross the authenticated real HTTP route with controlled provider output."""
     from veritas_os.api import server
@@ -358,7 +420,6 @@ def _decide(
         name: str,
         package: str | None = None,
     ) -> Any:
-        """Substitute only boto3 while preserving normal dynamic imports."""
         if name == "boto3":
             return aws_clients
         return real_import_module(name, package)
@@ -366,16 +427,13 @@ def _decide(
     with (
         patch.object(llm_client, "chat", controlled_chat),
         patch.object(decision_kernel, "decide", observed),
-        patch(
-            "importlib.import_module",
-            side_effect=controlled_import_module,
-        ),
+        patch("importlib.import_module", side_effect=controlled_import_module),
     ):
         with TestClient(server.app) as client:
             response = client.post(
                 "/v1/decide",
                 headers={"X-API-Key": os.environ["VERITAS_API_KEY"]},
-                json=_request_fixture(),
+                json=_decision_request_fixture(policy_bundle_dir),
             )
     response.raise_for_status()
     return (
@@ -398,42 +456,54 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
     ) as temporary:
         runtime_root = Path(temporary)
         _configure_environment(runtime_root, api_key, encryption_key)
-        kms_key_id = _configure_secure_test_infrastructure(
-            runtime_root,
-            api_secret,
-        )
+        kms_key_id = _configure_secure_test_infrastructure(runtime_root, api_secret)
         if os.environ.get("VERITAS_POSTURE") != "secure":
             raise RuntimeError("integrated proof requires secure posture")
+        policy_bundle_dir = _configure_verified_policy_bundle(runtime_root)
 
         kms_client = _DeterministicKmsClient(kms_key_id)
         s3_client = _DeterministicObjectLockClient()
         response, pipeline_ok, infrastructure_calls = _decide(
-            aws_clients=_DeterministicAwsClients(kms_client, s3_client)
+            aws_clients=_DeterministicAwsClients(kms_client, s3_client),
+            policy_bundle_dir=policy_bundle_dir,
         )
         raw_cda = response.get("canonical_decision_artifact")
         cda_verification = verify_canonical_decision_artifact(raw_cda)
         if not cda_verification.is_valid or cda_verification.artifact is None:
             raise RuntimeError("HTTP response canonical decision failed verification")
         cda: CanonicalDecisionArtifact = cda_verification.artifact
-        promotion = (
-            try_promote_verified_canonical_decision_candidate_to_execution_intent(
-                _candidate(),
-                canonical_decision_artifact=cda,
-                policy_snapshot_id=POLICY_SNAPSHOT_ID,
-                expected_state_fingerprint=sha256_of_canonical_json(SNAPSHOT),
-                approval_context={"external_webhook_action_approved": True},
-            )
+        policy_evidence = cda.decision.policy_snapshot_evidence
+        action_evidence = cda.decision.selected_action_evidence
+        if policy_evidence is None:
+            raise RuntimeError("verified canonical decision has no policy snapshot evidence")
+        if action_evidence is None:
+            raise RuntimeError("verified canonical decision has no selected-action evidence")
+        selected_candidate = response.get("chosen")
+        if not isinstance(selected_candidate, dict):
+            raise RuntimeError("HTTP response chosen value is not a structured candidate")
+        policy_snapshot_id = policy_evidence.snapshot_id
+        promotion = try_promote_verified_canonical_decision_candidate_to_execution_intent(
+            selected_candidate,
+            canonical_decision_artifact=cda,
+            policy_snapshot_id=policy_snapshot_id,
+            expected_state_fingerprint=sha256_of_canonical_json(SNAPSHOT),
+            approval_context={"external_webhook_action_approved": True},
         )
         if not promotion.promoted or promotion.execution_intent is None:
-            raise RuntimeError("verified canonical decision was not promoted")
+            reasons = ",".join(promotion.refusal_reason_codes)
+            raise RuntimeError(f"verified canonical decision was not promoted: {reasons}")
         intent = promotion.execution_intent
         lineage_ok = (
             intent.decision_id == cda.decision_id
             and intent.decision_hash == cda.decision_hash
             and intent.decision_ts == cda.decision_ts
             and intent.request_id == cda.request_id
+            and intent.policy_snapshot_id == policy_snapshot_id
+            and intent.actor_identity == ACTOR
         )
-        proof, verifier_policy, revocation_policy = _verified_authority()
+        proof, verifier_policy, revocation_policy = _verified_authority(
+            policy_snapshot_id
+        )
         runtime_result = RuntimeAuthorityValidator().validate(
             action_contract=_action_contract(),
             authority_evidence=None,
@@ -442,8 +512,8 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             authority_revocation_policy=revocation_policy,
             requested_scope=list(SCOPE),
             required_evidence_metadata={},
-            policy_snapshot_id=POLICY_SNAPSHOT_ID,
-            actor_identity=ACTOR,
+            policy_snapshot_id=policy_snapshot_id,
+            actor_identity=intent.actor_identity,
             human_approval_state={"approved": False},
             execution_intent_id=intent.execution_intent_id,
             bind_context_metadata={"proof": "decision-to-external-bind-poc"},
@@ -514,6 +584,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             "real_runtime_components": [
                 "FastAPI POST /v1/decide",
                 "decision pipeline and kernel",
+                "compiled policy runtime Ed25519 verification",
                 "CanonicalDecisionArtifact verification",
                 "DecisionCandidate promotion",
                 "AuthorityEvidence Ed25519 verification",
@@ -525,6 +596,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             ],
             "controlled_components": [
                 "model provider output",
+                "ephemeral policy signing key",
                 "runtime-injected API secret",
                 "AWS KMS network client",
                 "S3 Object Lock network client",
@@ -539,9 +611,13 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             "decision_hash": cda.decision_hash,
             "decision_ts": cda.decision_ts,
             "request_id": cda.request_id,
-            "decision_candidate_source": "CONTROLLED_STRUCTURED_SYNTHETIC_CANDIDATE",
-            "policy_snapshot_id": POLICY_SNAPSHOT_ID,
-            "policy_snapshot_source": "CONTROLLED_SYNTHETIC_POLICY_FIXTURE",
+            "decision_candidate_source": selected_candidate.get("source_model"),
+            "selected_action_lineage_verified": action_evidence is not None,
+            "policy_snapshot_id": policy_snapshot_id,
+            "policy_snapshot_version": policy_evidence.version,
+            "policy_snapshot_signer_id": policy_evidence.signer_id,
+            "policy_snapshot_signature_verified": policy_evidence.signature_verified,
+            "policy_snapshot_source": "VERIFIED_CDA_GOVERNANCE_IDENTITY",
             "execution_intent_created": True,
             "execution_intent_id": intent.execution_intent_id,
             "execution_intent_hash": hash_execution_intent(intent),
@@ -551,9 +627,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             "authority_revocation_verified": not invalid_authority,
             "human_approval_state": "NOT_REQUIRED",
             "runtime_authority_status": runtime_result.status,
-            "runtime_authority_recommended_outcome": (
-                runtime_result.recommended_outcome
-            ),
+            "runtime_authority_recommended_outcome": runtime_result.recommended_outcome,
             "bind_adjudication_invoked": bind_invoked,
             "bind_adjudication_call_count": int(bind_invoked),
             "webhook_bind_adapter_invoked": bind_invoked,
@@ -592,9 +666,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             ),
         }
         serialized = json.dumps(report, sort_keys=True, separators=(",", ":"))
-        if any(
-            secret in serialized for secret in (api_key, api_secret, encryption_key)
-        ):
+        if any(secret in serialized for secret in (api_key, api_secret, encryption_key)):
             raise RuntimeError("ephemeral secret leaked into proof report")
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(serialized + "\n", encoding="utf-8")
