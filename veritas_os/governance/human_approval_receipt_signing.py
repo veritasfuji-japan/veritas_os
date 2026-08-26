@@ -114,14 +114,15 @@ class TrustedEd25519HumanApprovalVerifier:
         if not isinstance(signature_value, str) or not signature_value:
             return self._failure("missing_signature")
         try:
+            payload = human_approval_signature_payload(artifact).encode("utf-8")
+        except (ValueError, TypeError):
+            return self._failure("malformed_envelope")
+        try:
             signature = base64.b64decode(
                 signature_value.encode("ascii"), altchars=b"-_", validate=True
             )
             public_key = Ed25519PublicKey.from_public_bytes(key)
-            public_key.verify(
-                signature,
-                human_approval_signature_payload(artifact).encode("utf-8"),
-            )
+            public_key.verify(signature, payload)
         except (ValueError, TypeError, UnicodeEncodeError, binascii.Error):
             return self._failure("malformed_signature")
         except InvalidSignature:

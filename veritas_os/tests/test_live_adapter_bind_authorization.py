@@ -221,6 +221,7 @@ def _authority_bundle(contract: ActionClassContract):
 
 def _signed_human_approval(contract: ActionClassContract):
     source = source_packet()
+    approval_key_id = "human-approval-key"
     ref = source.human_approval_reference_bundle["human_approval_references"][0]
     authority_ref = source.authority_evidence_reference_bundle[
         "authority_evidence_references"
@@ -261,7 +262,7 @@ def _signed_human_approval(contract: ActionClassContract):
         "receipt": receipt_payload,
         "receipt_hash": expected_hash,
         "signer": {
-            "key_id": "human-approval-key",
+            "key_id": approval_key_id,
             "algorithm": "Ed25519",
             "identity": ref["approver_id"],
             "role": ref["approver_role"],
@@ -272,17 +273,17 @@ def _signed_human_approval(contract: ActionClassContract):
         private_key.sign(human_approval_signature_payload(artifact).encode("utf-8"))
     ).decode("ascii")
     verifier = TrustedEd25519HumanApprovalVerifier(
-        trusted_public_keys={"human-approval-key": public_key},
+        trusted_public_keys={approval_key_id: public_key},
         trusted_signer_identities={
-            "human-approval-key": ref["approver_id"]
+            approval_key_id: ref["approver_id"]
         },
-        trusted_signer_roles={"human-approval-key": ref["approver_role"]},
+        trusted_signer_roles={approval_key_id: ref["approver_role"]},
         verifier_id="human-approval-ed25519-verifier",
         verifier_policy_id="human-approval-ed25519-policy-v1",
     )
     signer_policy = HumanApprovalSignerPolicy(
         policy_id="human-approval-signer-policy",
-        allowed_key_ids=["human-approval-key"],
+        allowed_key_ids=[approval_key_id],
         allowed_algorithms=["Ed25519"],
         required_signer_roles=[ref["approver_role"]],
         required_signer_identities=[ref["approver_id"]],
@@ -294,7 +295,7 @@ def _signed_human_approval(contract: ActionClassContract):
             ApprovedHumanApprovalVerifier(
                 verifier_id=verifier.verifier_id,
                 trust_level="production",
-                verifier_key_id=verifier.verifier_key_id,
+                verifier_key_id=approval_key_id,
                 policy_id=verifier.verifier_policy_id,
                 policy_hash=verifier.policy_hash(),
             )

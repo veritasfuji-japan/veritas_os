@@ -152,6 +152,7 @@ def test_trusted_ed25519_verifier_produces_existing_verified_proof() -> None:
     assert proof.signer_identity == IDENTITY
     assert proof.signer_role == ROLE
     assert proof.signer_algorithm == "Ed25519"
+    assert proof.verifier_key_id == KEY_ID
     assert proof.verifier_policy_hash == verifier.policy_hash()
     assert proof.receipt.signature_verified is True
 
