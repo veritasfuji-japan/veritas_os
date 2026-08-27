@@ -10,14 +10,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from veritas_os.governance.canonical_decision_artifact import (
-    CanonicalDecisionArtifact,
-    verify_canonical_decision_artifact,
-)
 from veritas_os.policy.bind_artifacts import ExecutionIntent, hash_execution_intent
 from veritas_os.policy.decision_candidate import (
     POLICY_SNAPSHOT_MAX_AGE_SECONDS,
@@ -26,6 +22,11 @@ from veritas_os.policy.decision_candidate import (
     normalize_decision_candidate,
     validate_decision_candidate,
 )
+
+if TYPE_CHECKING:
+    from veritas_os.governance.canonical_decision_artifact import (
+        CanonicalDecisionArtifact,
+    )
 
 FORMAT_VERSION = "canonical-verified-decision-promotion/v1"
 PROMOTION_MECHANISM = "promote_verified_canonical_decision/v1"
@@ -131,6 +132,10 @@ def _verified_inputs(
     candidate_value: Any,
     promoted_at: datetime,
 ) -> tuple[CanonicalDecisionArtifact, DecisionCandidate]:
+    from veritas_os.governance.canonical_decision_artifact import (
+        verify_canonical_decision_artifact,
+    )
+
     verification = verify_canonical_decision_artifact(artifact_value)
     if not verification.is_valid or verification.artifact is None:
         raise CanonicalVerifiedDecisionPromotionError("CVDP_CDA_INVALID")
