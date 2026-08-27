@@ -15,6 +15,13 @@ from .canonical_decision_handoff import (
     canonical_handoff_assertion_value_digest,
     validate_canonical_decision_handoff,
 )
+from .canonical_verified_decision_promotion import (
+    CanonicalVerifiedDecisionPromotionError,
+    CanonicalVerifiedDecisionPromotionPacket,
+    build_canonical_verified_decision_promotion_packet,
+    canonical_verified_decision_promotion_proof,
+    verify_canonical_verified_decision_promotion_packet,
+)
 from .bind_artifacts import (
     BindReceipt,
     ExecutionIntent,
@@ -99,9 +106,14 @@ __all__ = [
     "CanonicalDecisionHandoffStatus",
     "CanonicalDecisionHandoffValidationContext",
     "CanonicalDecisionHandoffValidationResult",
+    "CanonicalVerifiedDecisionPromotionError",
+    "CanonicalVerifiedDecisionPromotionPacket",
     "TrustedValueAssertion",
     "canonical_handoff_assertion_value_digest",
     "validate_canonical_decision_handoff",
+    "build_canonical_verified_decision_promotion_packet",
+    "canonical_verified_decision_promotion_proof",
+    "verify_canonical_verified_decision_promotion_packet",
     "OutcomeAction",
     "ExecutionIntent",
     "DecisionCandidate",
