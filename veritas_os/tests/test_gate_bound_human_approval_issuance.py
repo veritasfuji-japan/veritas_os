@@ -238,29 +238,36 @@ def test_signer_cannot_override_gate_approver(field, value, reason) -> None:
 def test_gate_tampering_and_action_or_scope_substitution_fail_closed() -> None:
     gate = _gate()
     private_key = Ed25519PrivateKey.generate()
+    contract = _contract(gate)
+    signer = _Ed25519Signer(KEY_ID, IDENTITY, ROLE, private_key)
     raw = gate.model_dump(mode="json")
     raw["execution_intent"]["policy_snapshot_id"] = "foreign"
     with pytest.raises(GateBoundHumanApprovalIssuanceError, match="SOURCE_GATE"):
-        _issue(raw, private_key)
+        issue_gate_bound_human_approval_artifact(
+            raw,
+            action_contract=contract,
+            event=_event(),
+            signer=signer,
+        )
 
-    wrong_contract = replace(_contract(gate), id="foreign-action")
+    wrong_contract = replace(contract, id="foreign-action")
     with pytest.raises(GateBoundHumanApprovalIssuanceError, match="CONTRACT_MISMATCH"):
         issue_gate_bound_human_approval_artifact(
             gate,
             action_contract=wrong_contract,
             event=_event(),
-            signer=_Ed25519Signer(KEY_ID, IDENTITY, ROLE, private_key),
+            signer=signer,
         )
 
     broad_contract = replace(
-        _contract(gate), allowed_scope=["billing-admin"]
+        contract, allowed_scope=["billing-admin"]
     )
     with pytest.raises(GateBoundHumanApprovalIssuanceError, match="SCOPE_INVALID"):
         issue_gate_bound_human_approval_artifact(
             gate,
             action_contract=broad_contract,
             event=_event(),
-            signer=_Ed25519Signer(KEY_ID, IDENTITY, ROLE, private_key),
+            signer=signer,
         )
 
 
@@ -274,8 +281,11 @@ def test_mutation_wrong_key_and_invalid_signature_fail_closed() -> None:
     with pytest.raises(ValueError, match="receipt_hash_mismatch"):
         _verification(gate, mutated, private_key)
 
+    artifact_signed_by_untrusted_key = _issue(
+        gate, Ed25519PrivateKey.generate()
+    )
     with pytest.raises(ValueError, match="signature_verification_failed"):
-        _verification(gate, artifact, Ed25519PrivateKey.generate())
+        _verification(gate, artifact_signed_by_untrusted_key, private_key)
 
     invalid = deepcopy(artifact)
     invalid["signature"] = "AAAAAAAA"
