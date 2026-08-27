@@ -26,6 +26,13 @@ from veritas_os.policy.live_adapter_dry_run_bind_authorization_gate_review impor
     LiveAdapterDryRunBindAuthorizationGateReviewError,
     verify_live_adapter_dry_run_bind_authorization_gate_review_packet,
 )
+from veritas_os.policy.real_bind_context import (
+    derive_verified_real_bind_context_hash,
+)
+
+# Compatibility alias for existing internal and public-facade imports. The
+# single canonical implementation lives in veritas_os.policy.real_bind_context.
+_bind_context_hash = derive_verified_real_bind_context_hash
 
 
 def _source(
@@ -96,30 +103,6 @@ def _source_context(
     if not requested_scope or len(set(requested_scope)) != len(requested_scope):
         raise LiveAdapterBindAuthorizationError("LABA_SOURCE_SCOPE_INVALID")
     return actor, policy_snapshot_id, request_ref, requested_scope, intended_action
-
-
-def _bind_context_hash(
-    source: CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket,
-) -> str:
-    return _digest(
-        DOMAINS["bind_context"],
-        {
-            "source_gate_review_hash": (
-                source.live_adapter_dry_run_bind_authorization_gate_review_hash
-            ),
-            "execution_intent_id": source.execution_intent_id,
-            "execution_intent_hash": source.execution_intent_hash,
-            "adapter_contract_id": source.adapter_contract_id,
-            "adapter_contract_hash": source.adapter_contract_hash,
-            "endpoint_identity_binding_digest": (
-                source.endpoint_identity_binding_digest
-            ),
-            "credential_reference_digest": source.credential_reference_digest,
-            "credential_scope_binding_digest": (
-                source.credential_scope_binding_digest
-            ),
-        },
-    )
 
 
 def _requires_human_approval(contract: ActionClassContract) -> bool:
@@ -291,7 +274,7 @@ def _validate_real_governance_inputs(
             "LABA_AUTHORITY_REFERENCE_SOURCE_MISMATCH"
         )
 
-    bind_context_hash = _bind_context_hash(source)
+    bind_context_hash = derive_verified_real_bind_context_hash(source)
     human_proof: VerifiedHumanApprovalReceipt | None = None
     human_status: Literal["VERIFIED", "NOT_REQUIRED"] = "NOT_REQUIRED"
     needs_human = _requires_human_approval(contract)

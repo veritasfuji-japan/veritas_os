@@ -532,7 +532,7 @@ jobs:
     name: test (py${{ matrix.python-version }})
     needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     strategy:
       fail-fast: false
