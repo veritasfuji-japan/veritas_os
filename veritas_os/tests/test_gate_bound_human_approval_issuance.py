@@ -109,13 +109,17 @@ def _issue(gate, private_key, **signer_changes):
     )
 
 
-def _verification(gate, artifact, private_key):
-    verifier = TrustedEd25519HumanApprovalVerifier(
+def _trusted_verifier(private_key):
+    return TrustedEd25519HumanApprovalVerifier(
         trusted_public_keys={KEY_ID: private_key.public_key().public_bytes_raw()},
         trusted_signer_identities={KEY_ID: IDENTITY},
         trusted_signer_roles={KEY_ID: ROLE},
         verifier_id="gate-bound-human-approval-verifier",
     )
+
+
+def _verification(gate, artifact, private_key):
+    verifier = _trusted_verifier(private_key)
     signer_policy = HumanApprovalSignerPolicy(
         policy_id="gate-bound-signers-v1",
         allowed_key_ids=[KEY_ID],
@@ -284,10 +288,17 @@ def test_mutation_wrong_key_and_invalid_signature_fail_closed() -> None:
     artifact_signed_by_untrusted_key = _issue(
         gate, Ed25519PrivateKey.generate()
     )
-    with pytest.raises(ValueError, match="signature_verification_failed"):
+    verifier = _trusted_verifier(private_key)
+    wrong_key_result = verifier.verify(artifact_signed_by_untrusted_key)
+    assert wrong_key_result.verified is False
+    assert wrong_key_result.reason == "invalid_signature"
+    with pytest.raises(ValueError, match="verifier_key_mismatch"):
         _verification(gate, artifact_signed_by_untrusted_key, private_key)
 
     invalid = deepcopy(artifact)
     invalid["signature"] = "AAAAAAAA"
-    with pytest.raises(ValueError, match="signature_verification_failed"):
+    invalid_result = verifier.verify(invalid)
+    assert invalid_result.verified is False
+    assert invalid_result.reason == "invalid_signature"
+    with pytest.raises(ValueError, match="verifier_key_mismatch"):
         _verification(gate, invalid, private_key)
