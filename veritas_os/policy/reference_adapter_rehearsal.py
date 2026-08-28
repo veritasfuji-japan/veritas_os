@@ -310,9 +310,16 @@ def _intent(raw: dict[str, Any]) -> ExecutionIntent:
 class InMemoryReferenceRehearsalAdapter:
     """Seven-method local adapter with no execution or I/O capabilities."""
 
-    def __init__(self, intent: ExecutionIntent, fixture: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        intent: ExecutionIntent,
+        fixture: dict[str, Any],
+        *,
+        output_domain: str = OUTPUT_DOMAIN,
+    ) -> None:
         self._intent = intent.to_dict()
         self._fixture = fixture
+        self._output_domain = output_domain
 
     def rehearse(self, method: str, ordinal: int) -> dict[str, Any]:
         """Return a deterministic JSON descriptor for one allowlisted method."""
@@ -322,8 +329,8 @@ class InMemoryReferenceRehearsalAdapter:
             "method": method,
             "ordinal": ordinal,
             "mode": "reference_in_memory_no_effect",
-            "intent_digest": _digest(OUTPUT_DOMAIN, self._intent),
-            "fixture_digest": _digest(OUTPUT_DOMAIN, self._fixture),
+            "intent_digest": _digest(self._output_domain, self._intent),
+            "fixture_digest": _digest(self._output_domain, self._fixture),
             "target_system": self._intent["target_system"],
             "target_resource": self._intent["target_resource"],
         }
