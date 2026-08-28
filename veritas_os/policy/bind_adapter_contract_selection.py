@@ -234,9 +234,13 @@ def _intent(raw: dict[str, Any]) -> ExecutionIntent:
     return intent
 
 
-def _descriptor(value: Any, intent: ExecutionIntent) -> BindAdapterContractDescriptor:
+def verify_bind_adapter_contract_descriptor(
+    descriptor_value: Any,
+    execution_intent: ExecutionIntent,
+) -> BindAdapterContractDescriptor:
+    """Verify and content-address the canonical inert adapter descriptor."""
     try:
-        raw = _json_value(value)
+        raw = _json_value(descriptor_value)
         if not isinstance(raw, dict):
             raise BindAdapterContractSelectionError("BAC_DESCRIPTOR_INVALID")
         supplied_id = raw.pop("adapter_contract_id", None)
@@ -252,8 +256,8 @@ def _descriptor(value: Any, intent: ExecutionIntent) -> BindAdapterContractDescr
     except ValidationError as exc:
         raise BindAdapterContractSelectionError("BAC_DESCRIPTOR_INVALID") from exc
     _aware_iso(descriptor.declared_at, "BAC_DESCRIPTOR_INVALID")
-    if (descriptor.target_system != intent.target_system or
-            descriptor.target_resource_scope != intent.target_resource):
+    if (descriptor.target_system != execution_intent.target_system or
+            descriptor.target_resource_scope != execution_intent.target_resource):
         raise BindAdapterContractSelectionError("BAC_DESCRIPTOR_TARGET_MISMATCH")
     if (descriptor.supported_methods != ADAPTER_METHODS or
             descriptor.required_methods != ADAPTER_METHODS or
@@ -264,6 +268,9 @@ def _descriptor(value: Any, intent: ExecutionIntent) -> BindAdapterContractDescr
     if descriptor.descriptor_scope_limitations != DESCRIPTOR_SCOPE_LIMITATIONS:
         raise BindAdapterContractSelectionError("BAC_SCOPE_LIMITATIONS_MISSING")
     return descriptor
+
+
+_descriptor = verify_bind_adapter_contract_descriptor
 
 
 def build_bind_adapter_contract_selection_packet(
@@ -283,7 +290,9 @@ def build_bind_adapter_contract_selection_packet(
         raise BindAdapterContractSelectionError("BAC_EXECUTION_INTENT_ID_MISMATCH")
     if hash_execution_intent(intent) != source_packet.execution_intent_hash:
         raise BindAdapterContractSelectionError("BAC_EXECUTION_INTENT_HASH_MISMATCH")
-    descriptor = _descriptor(adapter_contract_descriptor, intent)
+    descriptor = verify_bind_adapter_contract_descriptor(
+        adapter_contract_descriptor, intent
+    )
     descriptor_raw = descriptor.model_dump(mode="json")
     copied = (
         "source_formation_hash", "source_readiness_hash", "source_eligibility_hash",
@@ -361,7 +370,9 @@ def verify_bind_adapter_contract_selection_packet(
         raise BindAdapterContractSelectionError("BAC_EXECUTION_INTENT_ID_MISMATCH")
     if hash_execution_intent(intent) != candidate.execution_intent_hash:
         raise BindAdapterContractSelectionError("BAC_EXECUTION_INTENT_HASH_MISMATCH")
-    descriptor = _descriptor(candidate.adapter_contract_descriptor, intent)
+    descriptor = verify_bind_adapter_contract_descriptor(
+        candidate.adapter_contract_descriptor, intent
+    )
     if (candidate.adapter_contract_descriptor != descriptor.model_dump(mode="json") or
             candidate.adapter_contract_id != descriptor.adapter_contract_id or
             candidate.adapter_contract_hash != descriptor.adapter_contract_hash or
