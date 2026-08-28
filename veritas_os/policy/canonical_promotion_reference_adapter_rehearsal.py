@@ -347,7 +347,7 @@ def _results(source, fixture: dict[str, Any]) -> list[dict[str, Any]]:
         method = step_raw["planned_adapter_method"]
         ordinal = step_raw["ordinal"]
         summary = adapter.rehearse(method, ordinal)
-        results.append({
+        raw_result = {
             "rehearsal_step_result_id": (
                 f"promotion-reference-rehearsal-result:v1:{ordinal}:"
                 f"{method.replace('_', '-')}"
@@ -373,7 +373,12 @@ def _results(source, fixture: dict[str, Any]) -> list[dict[str, Any]]:
             "output_digest": _digest(OUTPUT_DOMAIN, summary),
             "matched_expected_output_ref": step_raw["expected_output_ref"],
             "rehearsal_scope_limitations": STEP_LIMITATIONS,
-        })
+        }
+        results.append(
+            PromotionReferenceAdapterStepResult.model_validate(
+                raw_result
+            ).model_dump(mode="json")
+        )
     return results
 
 

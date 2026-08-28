@@ -12,6 +12,7 @@ from veritas_os.policy.canonical_promotion_reference_adapter_rehearsal import (
     CanonicalPromotionReferenceAdapterRehearsalError,
     PLANNED_METHODS,
     SCOPE_LIMITATIONS,
+    _results,
     _packet_hash,
     build_canonical_promotion_reference_adapter_in_memory_rehearsal_packet,
     verify_canonical_promotion_reference_adapter_in_memory_rehearsal_packet,
@@ -72,6 +73,13 @@ def test_full_promotion_chain_exact_identity_and_no_effect_rehearsal() -> None:
     assert packet.approval_context["required_human_approval"] is True
     assert "human_approval_receipt_ref" not in packet.model_dump(mode="json")
     assert len(packet.reference_rehearsal_results) == 7
+    packet_json = packet.model_dump(mode="json")
+    reconstructed_results = _results(source, FIXTURE)
+    assert packet_json["reference_rehearsal_results"] == reconstructed_results
+    assert all(
+        isinstance(result["rehearsal_scope_limitations"], list)
+        for result in reconstructed_results
+    )
     assert [item.planned_adapter_method for item in packet.reference_rehearsal_results] == list(PLANNED_METHODS)
     for result in packet.reference_rehearsal_results:
         assert result.reference_adapter_instance_created is True
