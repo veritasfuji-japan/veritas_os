@@ -317,27 +317,55 @@ def _fixture_results(
     supplied: Any,
     planned_steps: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
+    """Validate legacy fixture steps through the shared semantic validator."""
+    return validate_fixture_step_results(
+        supplied,
+        planned_steps,
+        value_domain=VALUE_DOMAIN,
+        result_limitations=RESULT_LIMITATIONS,
+        error_type=AdapterDryRunFixtureResultError,
+        error_code="ADR_FIXTURE_RESULTS_INVALID",
+        live_error_code="ADR_LIVE_RESULT_FORBIDDEN",
+        forbidden_error_code="ADR_FORBIDDEN_EXECUTION_RESULT",
+    )
+
+
+def validate_fixture_step_results(
+    supplied: Any,
+    planned_steps: list[dict[str, Any]],
+    *,
+    value_domain: str,
+    result_limitations: tuple[str, ...],
+    error_type: type[ValueError],
+    error_code: str,
+    live_error_code: str,
+    forbidden_error_code: str,
+) -> list[dict[str, Any]]:
+    """Validate the canonical seven no-effect fixture-step semantics.
+
+    Hash domains and refusal types remain caller-owned so legacy serialization
+    and hashes are unchanged while promotion-native packets share the exact
+    same closed set of fixture claims.
+    """
     raw_results = _json_value(supplied)
     if not isinstance(raw_results, list) or len(raw_results) != len(planned_steps):
-        raise AdapterDryRunFixtureResultError("ADR_FIXTURE_RESULTS_INVALID")
+        raise error_type(error_code)
     results = []
     for raw, step in zip(raw_results, planned_steps, strict=True):
         if not isinstance(raw, dict):
-            raise AdapterDryRunFixtureResultError("ADR_FIXTURE_RESULTS_INVALID")
+            raise error_type(error_code)
         value = dict(raw)
         if value.get("fixture_value_summary") != FIXTURE_VALUE_SUMMARY:
-            raise AdapterDryRunFixtureResultError("ADR_LIVE_RESULT_FORBIDDEN")
-        expected_digest = _digest(VALUE_DOMAIN, value.get("fixture_value_summary"))
+            raise error_type(live_error_code)
+        expected_digest = _digest(value_domain, value.get("fixture_value_summary"))
         supplied_digest = value.get("fixture_value_digest")
         if supplied_digest is not None and supplied_digest != expected_digest:
-            raise AdapterDryRunFixtureResultError("ADR_FIXTURE_RESULTS_INVALID")
+            raise error_type(error_code)
         value["fixture_value_digest"] = expected_digest
         try:
             result = AdapterDryRunFixtureStepResult.model_validate(value)
         except ValidationError as exc:
-            raise AdapterDryRunFixtureResultError(
-                "ADR_FIXTURE_RESULTS_INVALID"
-            ) from exc
+            raise error_type(error_code) from exc
         expected_id = (
             f"dry-run-fixture-result:v1:{step['ordinal']}:"
             f"{step['planned_adapter_method'].replace('_', '-')}"
@@ -349,14 +377,14 @@ def _fixture_results(
             or result.planned_adapter_method != step["planned_adapter_method"]
             or result.matched_expected_output_ref != step["expected_output_ref"]
             or result.refusal_if_missing_later != step["refusal_if_missing_later"]
-            or result.result_scope_limitations != RESULT_LIMITATIONS
+            or result.result_scope_limitations != result_limitations
         ):
-            raise AdapterDryRunFixtureResultError("ADR_FIXTURE_RESULTS_INVALID")
+            raise error_type(error_code)
         results.append(result.model_dump(mode="json"))
     if [item["planned_adapter_method"] for item in results] != list(
         PLANNED_METHODS
     ):
-        raise AdapterDryRunFixtureResultError("ADR_FORBIDDEN_EXECUTION_RESULT")
+        raise error_type(forbidden_error_code)
     return results
 
 
