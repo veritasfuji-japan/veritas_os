@@ -60,9 +60,7 @@ def test_full_chain_preserves_identity_and_constructs_without_dispatch() -> None
     assert packet.adapter_contract_hash == source.adapter_contract_hash
     assert packet.planned_steps == source.planned_steps
     assert packet.fixture_step_results == source.fixture_step_results
-    assert packet.reference_rehearsal_results == tuple(
-        item.model_dump(mode="json") for item in source.reference_rehearsal_results
-    )
+    assert packet.reference_rehearsal_results == source.reference_rehearsal_results
     assert packet.readiness_checks == tuple(
         item.model_dump(mode="json") for item in source.readiness_checks
     )
