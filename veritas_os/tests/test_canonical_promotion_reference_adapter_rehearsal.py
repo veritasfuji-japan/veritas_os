@@ -117,10 +117,32 @@ def test_legacy_and_promotion_rehearsals_share_step_semantics() -> None:
     assert [tuple(getattr(item, field) for field in fields) for item in promotion.reference_rehearsal_results] == [
         tuple(getattr(item, field) for field in fields) for item in legacy.reference_rehearsal_results
     ]
-    summary_fields = ("method", "ordinal", "mode", "target_system", "target_resource")
-    assert [tuple(item.output_summary[key] for key in summary_fields) for item in promotion.reference_rehearsal_results] == [
-        tuple(item.output_summary[key] for key in summary_fields) for item in legacy.reference_rehearsal_results
+    invariant_summary_fields = ("method", "ordinal", "mode")
+    assert [
+        tuple(item.output_summary[key] for key in invariant_summary_fields)
+        for item in promotion.reference_rehearsal_results
+    ] == [
+        tuple(item.output_summary[key] for key in invariant_summary_fields)
+        for item in legacy.reference_rehearsal_results
     ]
+    for item in promotion.reference_rehearsal_results:
+        assert (
+            item.output_summary["target_system"]
+            == promotion.execution_intent["target_system"]
+        )
+        assert (
+            item.output_summary["target_resource"]
+            == promotion.execution_intent["target_resource"]
+        )
+    for item in legacy.reference_rehearsal_results:
+        assert (
+            item.output_summary["target_system"]
+            == legacy.execution_intent["target_system"]
+        )
+        assert (
+            item.output_summary["target_resource"]
+            == legacy.execution_intent["target_resource"]
+        )
 
 
 @pytest.mark.parametrize(("path", "value"), [
