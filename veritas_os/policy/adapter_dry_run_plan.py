@@ -229,7 +229,8 @@ def _intent(raw: dict[str, Any]) -> ExecutionIntent:
     return intent
 
 
-def _planned_steps() -> list[dict[str, Any]]:
+def build_canonical_adapter_dry_run_step_descriptors() -> list[dict[str, Any]]:
+    """Build shared inert step data without resolving or invoking an adapter."""
     result = []
     for ordinal, (phase, method, output, refusal) in enumerate(STEP_SPECS, 1):
         slug = method.replace("_", "-")
@@ -244,6 +245,11 @@ def _planned_steps() -> list[dict[str, Any]]:
             "step_scope_limitations": STEP_LIMITATIONS,
         })
     return result
+
+
+def _planned_steps() -> list[dict[str, Any]]:
+    """Preserve the legacy private entry point and serialized semantics."""
+    return build_canonical_adapter_dry_run_step_descriptors()
 
 
 def build_adapter_dry_run_plan_packet(
