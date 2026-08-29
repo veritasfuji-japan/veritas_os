@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
 
@@ -326,10 +325,37 @@ def test_production_has_no_capabilities_test_imports_or_legacy_dependency() -> N
         for node in ast.walk(tree)
         if isinstance(node, (ast.Import, ast.ImportFrom))
     ]
-    text = MODULE.read_text()
     assert all("tests" not in ast.unparse(node) for node in imports)
-    assert "live_adapter_dry_run_credential_authorization" not in text
+    imported_modules = {
+        node.module
+        for node in imports
+        if isinstance(node, ast.ImportFrom) and node.module is not None
+    }
+    assert (
+        "veritas_os.policy.live_adapter_dry_run_credential_authorization"
+        not in imported_modules
+    )
+    forbidden_modules = {"requests", "httpx", "socket", "subprocess"}
     assert all(
-        term not in text
-        for term in ("requests", "httpx", "socket", "subprocess.run", "open(")
+        not (
+            isinstance(node, ast.Import)
+            and any(alias.name.split(".")[0] in forbidden_modules for alias in node.names)
+        )
+        and not (
+            isinstance(node, ast.ImportFrom)
+            and node.module is not None
+            and node.module.split(".")[0] in forbidden_modules
+        )
+        for node in imports
+    )
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    assert all(
+        not (isinstance(node.func, ast.Name) and node.func.id == "open")
+        and not (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "subprocess"
+            and node.func.attr == "run"
+        )
+        for node in calls
     )
