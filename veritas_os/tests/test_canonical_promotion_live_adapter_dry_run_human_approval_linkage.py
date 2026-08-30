@@ -47,7 +47,7 @@ def _expected(source) -> dict:
         "target_system": source.execution_intent["target_system"],
         "target_resource_scope": credential["target_resource_scope"],
         "purpose": credential["credential_purpose"],
-        "authority_evidence_reference_ids": tuple(
+        "authority_evidence_reference_ids": list(
             source.authority_evidence_reference_digests
         ),
         "authority_evidence_reference_digests": source.authority_evidence_reference_digests,
@@ -131,6 +131,79 @@ def test_full_chain_preserves_source_without_proof_or_effects() -> None:
     assert not any(getattr(packet, field) for field in EFFECT_FIELDS)
 
 
+def test_json_round_trip_preserves_canonical_derived_values() -> None:
+    """Canonical JSON output must independently verify without coercion drift."""
+    packet = _packet()
+    raw = json.loads(packet.model_dump_json())
+    parsed = type(packet).model_validate(raw)
+    verified = verify_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet(
+        parsed
+    )
+    context = packet.human_approval_linkage_context
+    assert isinstance(context["authority_evidence_reference_ids"], list)
+    assert context == raw["human_approval_linkage_context"]
+    assert verified.human_approval_linkage_context == context
+
+
+def test_check_names_describe_human_approval_reference_linkage() -> None:
+    names = [check.name for check in _packet().human_approval_linkage_checks]
+    assert names[0:6] == [
+        "source_promotion_native_authority_evidence_linkage_verified",
+        "source_authority_evidence_linkage_structurally_accepted",
+        "source_request_not_dispatched",
+        "source_not_bound",
+        "source_not_authorized",
+        "required_human_approval_true_preserved",
+    ]
+    assert "exact_authority_evidence_reference_linkage_preserved" in names
+    assert "all_supplied_binding_claims_equal_derived_matrix" in names
+    assert "future_gate_bound_signed_human_approval_required" in names
+    assert not any("bind_pre_dispatch_review_accepted" in name for name in names)
+
+
+def test_required_human_approval_false_fails_closed() -> None:
+    source = authority_packet().model_dump(mode="json")
+    source["approval_context"]["required_human_approval"] = False
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError):
+        build_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet(
+            source, _bundle(), RECORDED_AT
+        )
+
+
+@pytest.mark.parametrize("mutation", ["omission", "addition", "reorder", "mismatch"])
+def test_caller_claim_matrix_mutations_fail_closed(mutation) -> None:
+    bundle = deepcopy(_bundle())
+    claims = bundle["human_approval_binding_claims"]
+    if mutation == "omission":
+        claims.pop()
+    elif mutation == "addition":
+        claims.append(deepcopy(claims[-1]))
+    elif mutation == "reorder":
+        claims[0], claims[1] = claims[1], claims[0]
+    else:
+        claims[0]["actual_value"] = "wrong"
+        claims[0]["matched"] = True
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError):
+        build_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet(
+            authority_packet(), bundle, RECORDED_AT
+        )
+
+
+@pytest.mark.parametrize("mutation", ["ids", "digest"])
+def test_authority_reference_set_mutations_fail_closed(mutation) -> None:
+    bundle = deepcopy(_bundle())
+    reference = bundle["human_approval_references"][0]
+    if mutation == "ids":
+        reference["linked_authority_evidence_reference_ids"] = ["wrong"]
+    else:
+        key = next(iter(reference["linked_authority_evidence_reference_digests"]))
+        reference["linked_authority_evidence_reference_digests"][key] = "wrong"
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError):
+        build_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet(
+            authority_packet(), bundle, RECORDED_AT
+        )
+
+
 @pytest.mark.parametrize(
     ("path", "value"),
     [
@@ -157,13 +230,28 @@ def test_builder_rejects_state_binding_and_expiry(path, value) -> None:
         )
 
 
-def test_verifier_rejects_tamper_and_unknown_shortcut() -> None:
+@pytest.mark.parametrize(
+    "field",
+    [
+        "human_approval_proven",
+        "human_approval_externally_verified",
+        "authority_evidence_proven",
+        "authority_evidence_externally_verified",
+        "execution_authorized",
+        "network_used",
+        "external_effect_used",
+    ],
+)
+def test_verifier_rejects_proof_authority_and_effect_mutations(field) -> None:
     raw = _packet().model_dump(mode="json")
-    raw["human_approval_proven"] = True
+    raw[field] = True
     with pytest.raises(CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError):
         verify_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet(
             raw
         )
+
+
+def test_verifier_rejects_unknown_shortcut() -> None:
     raw = _packet().model_dump(mode="json")
     raw["approved"] = True
     with pytest.raises(CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError):

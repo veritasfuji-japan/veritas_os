@@ -90,27 +90,31 @@ BINDINGS = (
     ),
 )
 CHECK_NAMES = (
-    "source_promotion_native_bind_pre_dispatch_review_verified",
-    "source_bind_pre_dispatch_review_accepted",
+    "source_promotion_native_authority_evidence_linkage_verified",
+    "source_authority_evidence_linkage_structurally_accepted",
     "source_request_not_dispatched",
     "source_not_bound",
+    "source_not_authorized",
+    "required_human_approval_true_preserved",
     "exact_execution_intent_verified",
     "exact_adapter_verified",
     "exact_endpoint_identity_preserved",
     "exact_credential_scope_preserved",
     "exact_operator_review_preserved",
     "exact_bind_pre_dispatch_review_preserved",
-    "authority_reference_bundle_closed_schema_valid",
-    "authority_references_present",
-    "authority_reference_ids_unique",
-    "declared_verification_states_admissible",
-    "pending_state_rejected",
-    "rejected_state_rejected",
-    "expiry_checked",
+    "exact_authority_evidence_reference_linkage_preserved",
+    "human_approval_reference_bundle_closed_schema_valid",
+    "human_approval_references_present",
+    "human_approval_reference_ids_unique",
+    "declared_approval_states_admissible",
+    "pending_approval_state_rejected",
+    "rejected_approval_state_rejected",
+    "approval_expiry_checked",
     *tuple(f"{name}_exact_linked" for name, _ in BINDINGS),
-    "binding_matrix_independently_constructed",
+    "human_approval_binding_matrix_independently_constructed",
+    "all_supplied_binding_claims_equal_derived_matrix",
     "all_binding_claims_matched",
-    "authority_linkage_context_constructed",
+    "human_approval_linkage_context_constructed",
     "human_approval_not_created",
     "human_approval_not_externally_verified",
     "authority_evidence_not_created",
@@ -125,7 +129,8 @@ CHECK_NAMES = (
     "credential_material_not_accessed",
     "future_final_readiness_review_required",
     "future_fresh_source_gate_required",
-    "future_cryptographic_human_approval_verification_required",
+    "future_gate_bound_signed_human_approval_required",
+    "future_cryptographic_authority_evidence_verification_required",
     "future_real_bind_authorization_required",
 )
 FUTURE_REQUIREMENTS = (
@@ -299,7 +304,7 @@ class HumanApprovalReference(BaseModel):
     linked_authority_evidence_linkage_review_id: str
     linked_authority_evidence_linkage_review_hash: str
     linked_authority_evidence_linkage_context_digest: str
-    linked_authority_evidence_reference_ids: tuple[str, ...] = Field(min_length=1)
+    linked_authority_evidence_reference_ids: list[str] = Field(min_length=1)
     linked_authority_evidence_reference_digests: dict[str, str]
 
 
@@ -341,6 +346,7 @@ class HumanApprovalLinkageResult(BaseModel):
     comparison_mode: Literal[CHECK_MODE]
     semantic_match_used: Literal[False]
     creates_authority_evidence: Literal[False]
+    externally_verifies_authority_evidence: Literal[False]
     externally_verifies_human_approval: Literal[False]
     creates_human_approval: Literal[False]
     creates_execution_authority: Literal[False]
@@ -648,8 +654,9 @@ def _validate_source(source: Any) -> None:
         _fail("PLADHAL_ADAPTER_MISMATCH")
 
 
-def _authority_ids(source: Any) -> tuple[str, ...]:
-    return tuple(source.authority_evidence_reference_digests)
+def _authority_ids(source: Any) -> list[str]:
+    """Return the Authority reference IDs in canonical JSON array form."""
+    return list(source.authority_evidence_reference_digests)
 
 
 def _expected_values(source: Any) -> dict[str, Any]:
@@ -781,6 +788,7 @@ def _derived(source: Any, bundle: Any) -> tuple[Any, ...]:
         "creates_human_approval": False,
         "externally_verifies_human_approval": False,
         "creates_authority_evidence": False,
+        "externally_verifies_authority_evidence": False,
         "creates_execution_authority": False,
         "creates_bind_authorization": False,
     }
