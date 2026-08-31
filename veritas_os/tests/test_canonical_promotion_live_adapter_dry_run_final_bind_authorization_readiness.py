@@ -13,6 +13,7 @@ from veritas_os.policy.canonical_promotion_live_adapter_dry_run_final_bind_autho
     ACKNOWLEDGEMENTS,
     EFFECT_FIELDS,
     FUTURE_REQUIREMENTS,
+    COPY_FIELDS,
     OUTCOMES,
     CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessError,
     build_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness_packet,
@@ -68,6 +69,11 @@ def test_accepted_independently_verifies_without_authority_or_effects() -> None:
     )
     assert packet.ready_for_promotion_native_bind_authorization_gate_review
     assert packet.fail_closed is False
+    assert (
+        packet.final_readiness_state
+        == "READY_FOR_FUTURE_PROMOTION_NATIVE_BIND_AUTHORIZATION_GATE"
+    )
+    assert packet.fresh_verified_source_gate_still_required
     assert packet.request_dispatch_state == "NOT_DISPATCHED"
     assert packet.bind_state == "NOT_BOUND"
     assert packet.authority_state == "NOT_AUTHORIZED"
@@ -85,6 +91,11 @@ def test_rejected_independently_verifies_and_fails_closed() -> None:
     )
     assert not packet.ready_for_promotion_native_bind_authorization_gate_review
     assert packet.fail_closed
+    assert (
+        packet.final_readiness_state
+        == "NOT_READY_FOR_FUTURE_PROMOTION_NATIVE_BIND_AUTHORIZATION_GATE"
+    )
+    assert packet.fresh_verified_source_gate_still_required
 
 
 def test_exact_promotion_native_chain_is_preserved() -> None:
@@ -129,6 +140,71 @@ def test_json_round_trip_preserves_derived_structures_and_hashes() -> None:
     )
 
 
+def test_same_outcome_different_review_binds_context_and_packet() -> None:
+    source = source_packet()
+    first = build_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness_packet(
+        source, _decision(), RECORDED_AT
+    )
+    second = build_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness_packet(
+        source,
+        _decision(
+            reviewer_id="operator:bob",
+            reviewer_attestation="I independently reviewed readiness only.",
+            review_reason="independent promotion-native review",
+        ),
+        RECORDED_AT,
+    )
+    assert (
+        first.final_bind_authorization_readiness_review_decision_digest
+        != second.final_bind_authorization_readiness_review_decision_digest
+    )
+    assert (
+        first.final_readiness_context_digest
+        != second.final_readiness_context_digest
+    )
+    assert (
+        first.promotion_live_adapter_dry_run_final_bind_authorization_readiness_hash
+        != second.promotion_live_adapter_dry_run_final_bind_authorization_readiness_hash
+    )
+
+
+def test_context_binds_full_promotion_native_source_and_decision() -> None:
+    source = source_packet()
+    packet = build_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness_packet(
+        source, _decision(), RECORDED_AT
+    )
+    context = packet.final_readiness_context
+    expected = {
+        "source_human_approval_linkage_review_id": source.promotion_live_adapter_dry_run_human_approval_linkage_review_id,
+        "source_human_approval_linkage_review_hash": source.promotion_live_adapter_dry_run_human_approval_linkage_review_hash,
+        "source_human_approval_linkage_context_digest": source.human_approval_linkage_context_digest,
+        "source_authority_linkage_review_id": source.source_authority_evidence_linkage_review_id,
+        "source_authority_linkage_review_hash": source.source_authority_evidence_linkage_review_hash,
+        "source_authority_linkage_context_digest": source.authority_evidence_linkage_context_digest,
+        "source_bind_pre_dispatch_review_id": source.source_bind_pre_dispatch_review_id,
+        "source_bind_pre_dispatch_review_hash": source.source_bind_pre_dispatch_review_hash,
+        "source_operator_review_id": source.source_operator_review_id,
+        "source_operator_review_hash": source.source_operator_review_hash,
+        "source_credential_authorization_id": source.source_credential_authorization_id,
+        "source_credential_authorization_hash": source.source_credential_authorization_hash,
+        "source_endpoint_allowlist_evaluation_id": source.source_endpoint_allowlist_evaluation_id,
+        "source_endpoint_allowlist_evaluation_hash": source.source_endpoint_allowlist_evaluation_hash,
+        "policy_snapshot_lineage": source.policy_snapshot_lineage,
+        "policy_lineage": source.policy_lineage,
+        "approval_context": source.approval_context,
+        "final_readiness_decision_digest": packet.final_bind_authorization_readiness_review_decision_digest,
+    }
+    assert all(context[name] == value for name, value in expected.items())
+
+
+def test_complete_upstream_preservation_surface_is_exact() -> None:
+    source = source_packet()
+    packet = build_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness_packet(
+        source, _decision(), RECORDED_AT
+    )
+    assert all(getattr(packet, field) == getattr(source, field) for field in COPY_FIELDS)
+
+
 @pytest.mark.parametrize(
     ("path", "value"),
     [
@@ -144,11 +220,20 @@ def test_json_round_trip_preserves_derived_structures_and_hashes() -> None:
         (("final_bind_authorization_readiness_result_digest",), "tampered"),
         (("final_readiness_context_digest",), "tampered"),
         (("final_bind_authorization_readiness_check_digest",), "tampered"),
-        (("future_requirement_digest",), "tampered"),
+        (("future_bind_authorization_requirement_digest",), "tampered"),
+        (("future_bind_invocation_requirement_digest",), "tampered"),
         (("network_used",), True),
         (("request_dispatched",), True),
         (("bind_invoked",), True),
         (("external_effect_used",), True),
+        (("policy_snapshot_lineage",), {"tampered": True}),
+        (("policy_lineage",), {"tampered": True}),
+        (("approval_context",), {"required_human_approval": True}),
+        (("source_human_approval_linkage_review_id",), "tampered"),
+        (("source_authority_evidence_linkage_review_id",), "tampered"),
+        (("adapter_contract_version",), "tampered"),
+        (("adapter_contract_descriptor", "adapter_contract_version"), "tampered"),
+        (("execution_intent", "decision_id"), "plausible-but-wrong"),
     ],
 )
 def test_verifier_rejects_chain_digest_and_effect_tamper(path, value) -> None:
@@ -210,12 +295,27 @@ def test_naive_and_invalid_timestamp_ordering_are_rejected() -> None:
 
 def test_all_future_requirements_remain_unsatisfied() -> None:
     packet = _packet()
-    assert tuple(item.name for item in packet.future_requirements) == FUTURE_REQUIREMENTS
+    requirements = (
+        *packet.future_bind_authorization_requirements,
+        *packet.future_bind_invocation_requirements,
+    )
+    assert tuple(item.name for item in requirements) == FUTURE_REQUIREMENTS
     assert all(
         item.separate_future_artifact_required
         and not item.satisfied_by_this_packet
-        for item in packet.future_requirements
+        for item in requirements
     )
+
+
+def test_required_human_approval_false_fails_closed() -> None:
+    raw = source_packet().model_dump(mode="json")
+    raw["approval_context"]["required_human_approval"] = False
+    with pytest.raises(
+        CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessError
+    ):
+        build_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness_packet(
+            raw, _decision(), RECORDED_AT
+        )
 
 
 def test_production_module_has_no_test_or_capability_imports() -> None:
