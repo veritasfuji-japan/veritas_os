@@ -20,6 +20,7 @@ from veritas_os.policy.bind_adapter_contract_selection import (
 )
 from veritas_os.policy.bind_artifacts import ExecutionIntent, hash_execution_intent
 from veritas_os.policy.canonical_promotion_live_adapter_dry_run_human_approval_linkage import (
+    PRESERVED_FIELDS as UPSTREAM_PRESERVED_FIELDS,
     CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError,
     CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageReviewPacket,
     verify_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet,
@@ -45,7 +46,10 @@ OUTCOMES = (
 PREFIX = "veritas.promotion-live-adapter-dry-run-final-bind-authorization-readiness"
 DOMAINS = {
     name: f"{PREFIX}.{name}/v1"
-    for name in ("decision", "result", "context", "checks", "future", "packet")
+    for name in (
+        "decision", "result", "context", "checks", "authorization",
+        "invocation", "packet",
+    )
 }
 ACKNOWLEDGEMENTS = (
     "acknowledged_not_bind_authorization",
@@ -55,11 +59,15 @@ ACKNOWLEDGEMENTS = (
     "acknowledged_no_dispatch",
     "acknowledged_no_execution_authority",
     "acknowledged_no_human_approval_creation",
+    "acknowledged_no_human_approval_verification",
     "acknowledged_no_authority_evidence_creation",
+    "acknowledged_no_authority_evidence_verification",
     "acknowledged_no_credential_access",
     "acknowledged_no_authorization_header",
     "acknowledged_no_network_call",
-    "acknowledged_semantic_match_not_authority",
+    "acknowledged_final_fresh_source_gate_still_required",
+    "acknowledged_gate_bound_human_approval_still_required",
+    "acknowledged_cryptographic_authority_verification_still_required",
 )
 CHECK_NAMES = (
     "source_human_approval_reference_linkage_verified",
@@ -83,7 +91,7 @@ CHECK_NAMES = (
     "network_access_absent",
     "external_effect_absent",
 )
-FUTURE_REQUIREMENTS = (
+AUTHORIZATION_REQUIREMENTS = (
     "promotion_native_bind_authorization_gate_review",
     "fresh_verified_source_gate",
     "exact_bind_context_hash_derivation",
@@ -96,6 +104,8 @@ FUTURE_REQUIREMENTS = (
     "cryptographic_authority_evidence_verification",
     "revocation_verification_where_applicable",
     "real_bind_authorization",
+)
+INVOCATION_REQUIREMENTS = (
     "authorization_consumption",
     "single_use_consumption",
     "credential_material_resolution",
@@ -108,23 +118,6 @@ FUTURE_REQUIREMENTS = (
     "reconciliation",
     "outcome_receipt",
 )
-UPSTREAM_PRESERVED_FIELDS = (
-    "request_descriptor", "execution_intent", "execution_intent_id",
-    "execution_intent_hash", "adapter_contract_descriptor",
-    "adapter_contract_id", "adapter_contract_hash", "adapter_contract_version",
-    "endpoint_candidate", "endpoint_candidate_digest",
-    "endpoint_identity_binding", "endpoint_identity_binding_digest",
-    "credential_reference", "credential_reference_digest",
-    "credential_scope_binding", "credential_scope_binding_digest",
-    "operator_review_binding", "operator_review_binding_digest",
-    "bind_boundary_preconditions", "bind_boundary_precondition_digest",
-    "authority_evidence_reference_bundle",
-    "authority_evidence_reference_bundle_digest",
-    "authority_evidence_binding_matrix",
-    "authority_evidence_binding_matrix_digest",
-    "authority_evidence_linkage_context",
-    "authority_evidence_linkage_context_digest",
-)
 HUMAN_APPROVAL_LINKAGE_FIELDS = (
     "human_approval_reference_bundle",
     "human_approval_reference_digests",
@@ -132,6 +125,7 @@ HUMAN_APPROVAL_LINKAGE_FIELDS = (
     "human_approval_binding_matrix",
     "human_approval_binding_matrix_digest",
     "human_approval_linkage_result",
+    "human_approval_linkage_result_digest",
     "human_approval_linkage_context",
     "human_approval_linkage_context_digest",
 )
@@ -182,34 +176,47 @@ class FinalBindAuthorizationReadinessReviewDecision(BaseModel):
     reviewed_at: str
     review_outcome: Literal[*OUTCOMES]
     review_reason: str = Field(min_length=1)
-    acknowledged_not_bind_authorization: bool
-    acknowledged_no_bind_invocation: bool
-    acknowledged_no_bind_receipt: bool
-    acknowledged_no_trustlog_write: bool
-    acknowledged_no_dispatch: bool
-    acknowledged_no_execution_authority: bool
-    acknowledged_no_human_approval_creation: bool
-    acknowledged_no_authority_evidence_creation: bool
-    acknowledged_no_credential_access: bool
-    acknowledged_no_authorization_header: bool
-    acknowledged_no_network_call: bool
-    acknowledged_semantic_match_not_authority: bool
+    acknowledged_not_bind_authorization: Literal[True]
+    acknowledged_no_bind_invocation: Literal[True]
+    acknowledged_no_bind_receipt: Literal[True]
+    acknowledged_no_trustlog_write: Literal[True]
+    acknowledged_no_dispatch: Literal[True]
+    acknowledged_no_execution_authority: Literal[True]
+    acknowledged_no_human_approval_creation: Literal[True]
+    acknowledged_no_human_approval_verification: Literal[True]
+    acknowledged_no_authority_evidence_creation: Literal[True]
+    acknowledged_no_authority_evidence_verification: Literal[True]
+    acknowledged_no_credential_access: Literal[True]
+    acknowledged_no_authorization_header: Literal[True]
+    acknowledged_no_network_call: Literal[True]
+    acknowledged_final_fresh_source_gate_still_required: Literal[True]
+    acknowledged_gate_bound_human_approval_still_required: Literal[True]
+    acknowledged_cryptographic_authority_verification_still_required: Literal[True]
 
 
 class FinalReadinessResult(BaseModel):
     """Final local comparison result with no proof or authorization semantics."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    review_outcome: Literal[*OUTCOMES]
-    ready_for_promotion_native_bind_authorization_gate_review: bool
+    source_human_approval_reference_linkage_passed: Literal[True]
+    source_authority_evidence_reference_linkage_passed: Literal[True]
+    source_bind_pre_dispatch_review_passed: Literal[True]
+    exact_execution_intent_preserved: Literal[True]
+    exact_adapter_preserved: Literal[True]
+    exact_endpoint_binding_preserved: Literal[True]
+    exact_credential_scope_binding_preserved: Literal[True]
+    all_required_local_linkage_artifacts_present: Literal[True]
+    all_required_local_linkage_artifacts_verified: Literal[True]
+    accepted_for_future_promotion_native_bind_authorization_gate_review: bool
     rejection_reasons: tuple[str, ...]
     comparison_mode: Literal[CHECK_MODE]
-    human_approval_proven: Literal[False]
-    human_approval_externally_verified: Literal[False]
-    authority_evidence_proven: Literal[False]
-    authority_evidence_externally_verified: Literal[False]
-    execution_authorized: Literal[False]
-    bind_authorization_issued: Literal[False]
+    semantic_match_used: Literal[False]
+    creates_bind_authorization: Literal[False]
+    creates_execution_authority: Literal[False]
+    creates_human_approval: Literal[False]
+    externally_verifies_human_approval: Literal[False]
+    creates_authority_evidence: Literal[False]
+    externally_verifies_authority_evidence: Literal[False]
 
 
 class ReadinessCheck(BaseModel):
@@ -227,7 +234,7 @@ class FutureRequirement(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     ordinal: int = Field(ge=1)
-    name: Literal[*FUTURE_REQUIREMENTS]
+    name: Literal[*AUTHORIZATION_REQUIREMENTS, *INVOCATION_REQUIREMENTS]
     separate_future_artifact_required: Literal[True]
     satisfied_by_this_packet: Literal[False]
 
@@ -252,14 +259,21 @@ class _FinalBindAuthorizationReadinessPacketBase(BaseModel):
     final_readiness_context_digest: str
     final_bind_authorization_readiness_checks: tuple[ReadinessCheck, ...]
     final_bind_authorization_readiness_check_digest: str
-    future_requirements: tuple[FutureRequirement, ...]
-    future_requirement_digest: str
+    future_bind_authorization_requirements: tuple[FutureRequirement, ...]
+    future_bind_authorization_requirement_digest: str
+    future_bind_invocation_requirements: tuple[FutureRequirement, ...]
+    future_bind_invocation_requirement_digest: str
     final_bind_authorization_readiness_status: Literal[STATUS]
     request_dispatch_state: Literal["NOT_DISPATCHED"]
     bind_state: Literal["NOT_BOUND"]
     authority_state: Literal["NOT_AUTHORIZED"]
     human_approval_state: Literal["NOT_APPROVED"]
+    final_readiness_state: Literal[
+        "READY_FOR_FUTURE_PROMOTION_NATIVE_BIND_AUTHORIZATION_GATE",
+        "NOT_READY_FOR_FUTURE_PROMOTION_NATIVE_BIND_AUTHORIZATION_GATE",
+    ]
     ready_for_promotion_native_bind_authorization_gate_review: bool
+    fresh_verified_source_gate_still_required: Literal[True]
     fail_closed: bool
     human_approval_proven: Literal[False]
     human_approval_externally_verified: Literal[False]
@@ -409,6 +423,7 @@ def _validate_source(
         source.authority_state == "NOT_AUTHORIZED",
         source.human_approval_state == "NOT_APPROVED",
         source.ready_for_promotion_native_final_bind_authorization_readiness_review,
+        source.approval_context.get("required_human_approval") is True,
         not source.fail_closed,
     )
     if not all(required) or any(getattr(source, field) for field in EFFECT_FIELDS):
@@ -427,6 +442,8 @@ def _validate_source(
         raise CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessError(
             "CPLADFBAR_SOURCE_BINDING_INVALID"
         ) from exc
+    if intent.to_dict() != source.execution_intent:
+        _fail("CPLADFBAR_EXECUTION_INTENT_INVALID")
     if hash_execution_intent(intent) != source.execution_intent_hash:
         _fail("CPLADFBAR_EXECUTION_INTENT_INVALID")
     if intent.execution_intent_id != source.execution_intent_id:
@@ -434,6 +451,10 @@ def _validate_source(
     if descriptor.adapter_contract_id != source.adapter_contract_id:
         _fail("CPLADFBAR_ADAPTER_INVALID")
     if descriptor.adapter_contract_hash != source.adapter_contract_hash:
+        _fail("CPLADFBAR_ADAPTER_INVALID")
+    if descriptor.adapter_contract_version != source.adapter_contract_version:
+        _fail("CPLADFBAR_ADAPTER_INVALID")
+    if descriptor.model_dump(mode="json") != source.adapter_contract_descriptor:
         _fail("CPLADFBAR_ADAPTER_INVALID")
 
 
@@ -456,24 +477,66 @@ def _decision(value: Any) -> FinalBindAuthorizationReadinessReviewDecision:
 
 def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
     accepted = decision.review_outcome == OUTCOMES[0]
+    decision_digest = _digest(DOMAINS["decision"], decision)
     result = {
-        "review_outcome": decision.review_outcome,
-        "ready_for_promotion_native_bind_authorization_gate_review": accepted,
+        "source_human_approval_reference_linkage_passed": True,
+        "source_authority_evidence_reference_linkage_passed": True,
+        "source_bind_pre_dispatch_review_passed": True,
+        "exact_execution_intent_preserved": True,
+        "exact_adapter_preserved": True,
+        "exact_endpoint_binding_preserved": True,
+        "exact_credential_scope_binding_preserved": True,
+        "all_required_local_linkage_artifacts_present": True,
+        "all_required_local_linkage_artifacts_verified": True,
+        "accepted_for_future_promotion_native_bind_authorization_gate_review": accepted,
         "rejection_reasons": [] if accepted else ["FINAL_READINESS_REVIEW_REJECTED"],
         "comparison_mode": CHECK_MODE,
-        "human_approval_proven": False,
-        "human_approval_externally_verified": False,
-        "authority_evidence_proven": False,
-        "authority_evidence_externally_verified": False,
-        "execution_authorized": False,
-        "bind_authorization_issued": False,
+        "semantic_match_used": False,
+        "creates_bind_authorization": False,
+        "creates_execution_authority": False,
+        "creates_human_approval": False,
+        "externally_verifies_human_approval": False,
+        "creates_authority_evidence": False,
+        "externally_verifies_authority_evidence": False,
     }
     context = {
-        field: _json(getattr(source, field))
-        for field in COPY_FIELDS
-        if field.endswith(("_id", "_hash", "_digest"))
+        "source_human_approval_linkage_review_id": source.promotion_live_adapter_dry_run_human_approval_linkage_review_id,
+        "source_human_approval_linkage_review_hash": source.promotion_live_adapter_dry_run_human_approval_linkage_review_hash,
+        "source_human_approval_linkage_context_digest": source.human_approval_linkage_context_digest,
+        "source_authority_evidence_linkage_review_id": source.source_authority_evidence_linkage_review_id,
+        "source_authority_evidence_linkage_review_hash": source.source_authority_evidence_linkage_review_hash,
+        "source_authority_evidence_linkage_context_digest": source.source_authority_evidence_linkage_context_digest,
+        "source_bind_pre_dispatch_review_id": source.source_bind_pre_dispatch_review_id,
+        "source_bind_pre_dispatch_review_hash": source.source_bind_pre_dispatch_review_hash,
+        "source_operator_review_id": source.source_operator_review_id,
+        "source_operator_review_hash": source.source_operator_review_hash,
+        "source_credential_authorization_id": source.source_credential_authorization_id,
+        "source_credential_authorization_hash": source.source_credential_authorization_hash,
+        "source_endpoint_allowlist_evaluation_id": source.source_endpoint_allowlist_evaluation_id,
+        "source_endpoint_allowlist_evaluation_hash": source.source_endpoint_allowlist_evaluation_hash,
+        "execution_intent_id": source.execution_intent_id,
+        "execution_intent_hash": source.execution_intent_hash,
+        "adapter_contract_id": source.adapter_contract_id,
+        "adapter_contract_hash": source.adapter_contract_hash,
+        "endpoint_candidate_id": source.endpoint_candidate["endpoint_candidate_id"],
+        "endpoint_candidate_digest": source.endpoint_candidate_digest,
+        "endpoint_identity_binding_digest": source.endpoint_identity_binding_digest,
+        "credential_reference_id": source.credential_reference["credential_reference_id"],
+        "credential_reference_digest": source.credential_reference_digest,
+        "credential_scope_binding_digest": source.credential_scope_binding_digest,
+        "operator_review_binding_digest": source.operator_review_binding_digest,
+        "bind_boundary_precondition_digest": source.bind_boundary_precondition_digest,
+        "authority_evidence_reference_bundle_digest": source.authority_evidence_reference_bundle_digest,
+        "authority_evidence_binding_matrix_digest": source.authority_evidence_binding_matrix_digest,
+        "authority_evidence_linkage_context_digest": source.authority_evidence_linkage_context_digest,
+        "human_approval_reference_bundle_digest": source.human_approval_reference_bundle_digest,
+        "human_approval_binding_matrix_digest": source.human_approval_binding_matrix_digest,
+        "human_approval_linkage_context_digest": source.human_approval_linkage_context_digest,
+        "final_bind_authorization_readiness_review_decision_digest": decision_digest,
+        "policy_snapshot_lineage": _json(source.policy_snapshot_lineage),
+        "policy_lineage": _json(source.policy_lineage),
+        "approval_context": _json(source.approval_context),
     }
-    context["review_outcome"] = decision.review_outcome
     checks = [
         {
             "ordinal": ordinal,
@@ -483,23 +546,34 @@ def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
         }
         for ordinal, name in enumerate(CHECK_NAMES, 1)
     ]
-    future = [
+    authorization = [
         {
             "ordinal": ordinal,
             "name": name,
             "separate_future_artifact_required": True,
             "satisfied_by_this_packet": False,
         }
-        for ordinal, name in enumerate(FUTURE_REQUIREMENTS, 1)
+        for ordinal, name in enumerate(AUTHORIZATION_REQUIREMENTS, 1)
     ]
-    return result, context, checks, future
+    invocation = [
+        {
+            "ordinal": ordinal,
+            "name": name,
+            "separate_future_artifact_required": True,
+            "satisfied_by_this_packet": False,
+        }
+        for ordinal, name in enumerate(INVOCATION_REQUIREMENTS, 1)
+    ]
+    return decision_digest, result, context, checks, authorization, invocation
 
 
 def _assemble(source: Any, decision: Any, recorded_at: str) -> dict[str, Any]:
     source_raw = source.model_dump(mode="json")
-    result, context, checks, future = _derived(source, decision)
+    decision_digest, result, context, checks, authorization, invocation = _derived(
+        source, decision
+    )
     accepted = result[
-        "ready_for_promotion_native_bind_authorization_gate_review"
+        "accepted_for_future_promotion_native_bind_authorization_gate_review"
     ]
     raw = {
         "format_version": FORMAT_VERSION,
@@ -512,9 +586,7 @@ def _assemble(source: Any, decision: Any, recorded_at: str) -> dict[str, Any]:
         "final_bind_authorization_readiness_review_decision": decision.model_dump(
             mode="json"
         ),
-        "final_bind_authorization_readiness_review_decision_digest": _digest(
-            DOMAINS["decision"], decision
-        ),
+        "final_bind_authorization_readiness_review_decision_digest": decision_digest,
         "final_bind_authorization_readiness_result": result,
         "final_bind_authorization_readiness_result_digest": _digest(
             DOMAINS["result"], result
@@ -525,14 +597,26 @@ def _assemble(source: Any, decision: Any, recorded_at: str) -> dict[str, Any]:
         "final_bind_authorization_readiness_check_digest": _digest(
             DOMAINS["checks"], checks
         ),
-        "future_requirements": future,
-        "future_requirement_digest": _digest(DOMAINS["future"], future),
+        "future_bind_authorization_requirements": authorization,
+        "future_bind_authorization_requirement_digest": _digest(
+            DOMAINS["authorization"], authorization
+        ),
+        "future_bind_invocation_requirements": invocation,
+        "future_bind_invocation_requirement_digest": _digest(
+            DOMAINS["invocation"], invocation
+        ),
         "final_bind_authorization_readiness_status": STATUS,
         "request_dispatch_state": "NOT_DISPATCHED",
         "bind_state": "NOT_BOUND",
         "authority_state": "NOT_AUTHORIZED",
         "human_approval_state": "NOT_APPROVED",
+        "final_readiness_state": (
+            "READY_FOR_FUTURE_PROMOTION_NATIVE_BIND_AUTHORIZATION_GATE"
+            if accepted
+            else "NOT_READY_FOR_FUTURE_PROMOTION_NATIVE_BIND_AUTHORIZATION_GATE"
+        ),
         "ready_for_promotion_native_bind_authorization_gate_review": accepted,
+        "fresh_verified_source_gate_still_required": True,
         "fail_closed": not accepted,
         **{field: False for field in EFFECT_FIELDS},
     }
