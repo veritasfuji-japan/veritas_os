@@ -26,6 +26,10 @@ from veritas_os.policy.canonical_promotion_live_adapter_dry_run_final_bind_autho
     CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessPacket,
     verify_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness_packet,
 )
+from veritas_os.policy.canonical_promotion_live_adapter_dry_run_human_approval_linkage import (
+    CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError,
+    verify_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet,
+)
 
 FORMAT_VERSION = "canonical-promotion-live-adapter-dry-run-bind-authorization-gate-review/v1"
 MECHANISM = (
@@ -497,38 +501,38 @@ def _validate_source_requirements(
 def _verified_linkage_identity(
     source: CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessPacket,
 ) -> dict[str, str]:
-    """Derive linkage identities only from the already verified embedded source."""
+    """Verify the embedded Human Approval linkage and derive exact lineage IDs."""
 
-    embedded = source.source_human_approval_linkage_review_packet
-    final_context = source.final_readiness_context
     try:
-        identity = {
-            "source_human_approval_linkage_review_id": embedded[
-                "promotion_live_adapter_dry_run_human_approval_linkage_review_id"
-            ],
-            "source_human_approval_linkage_review_hash": embedded[
-                "promotion_live_adapter_dry_run_human_approval_linkage_review_hash"
-            ],
-            "source_human_approval_linkage_context_digest": embedded[
-                "human_approval_linkage_context_digest"
-            ],
-            "source_authority_evidence_linkage_review_id": embedded[
-                "source_authority_evidence_linkage_review_id"
-            ],
-            "source_authority_evidence_linkage_review_hash": embedded[
-                "source_authority_evidence_linkage_review_hash"
-            ],
-            "source_authority_evidence_linkage_context_digest": embedded[
-                "source_authority_evidence_linkage_context_digest"
-            ],
-        }
-    except (KeyError, TypeError) as exc:
+        embedded = verify_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet(
+            source.source_human_approval_linkage_review_packet
+        )
+    except (
+        CanonicalPromotionLiveAdapterDryRunHumanApprovalLinkageError,
+        TypeError,
+        ValueError,
+    ) as exc:
         raise CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(
-            "CPLADBAGR_SOURCE_LINKAGE_IDENTITY_INVALID"
+            "CPLADBAGR_SOURCE_HUMAN_LINKAGE_PACKET_INVALID"
         ) from exc
 
-    required_strings = tuple(identity.values())
-    if not all(isinstance(value, str) and value for value in required_strings):
+    identity = {
+        "source_human_approval_linkage_review_id": embedded.promotion_live_adapter_dry_run_human_approval_linkage_review_id,
+        "source_human_approval_linkage_review_hash": embedded.promotion_live_adapter_dry_run_human_approval_linkage_review_hash,
+        "source_human_approval_linkage_context_digest": embedded.human_approval_linkage_context_digest,
+        "source_authority_evidence_linkage_review_id": embedded.source_authority_evidence_linkage_review_id,
+        "source_authority_evidence_linkage_review_hash": embedded.source_authority_evidence_linkage_review_hash,
+        "source_authority_evidence_linkage_context_digest": embedded.source_authority_evidence_linkage_context_digest,
+        "source_bind_pre_dispatch_review_id": embedded.source_bind_pre_dispatch_review_id,
+        "source_bind_pre_dispatch_review_hash": embedded.source_bind_pre_dispatch_review_hash,
+        "source_operator_review_id": embedded.source_operator_review_id,
+        "source_operator_review_hash": embedded.source_operator_review_hash,
+        "source_credential_authorization_id": embedded.source_credential_authorization_id,
+        "source_credential_authorization_hash": embedded.source_credential_authorization_hash,
+        "source_endpoint_allowlist_evaluation_id": embedded.source_endpoint_allowlist_evaluation_id,
+        "source_endpoint_allowlist_evaluation_hash": embedded.source_endpoint_allowlist_evaluation_hash,
+    }
+    if not all(isinstance(value, str) and value for value in identity.values()):
         _fail("CPLADBAGR_SOURCE_LINKAGE_IDENTITY_INVALID")
 
     if (
@@ -538,9 +542,16 @@ def _verified_linkage_identity(
         != source.source_human_approval_linkage_review_hash
         or identity["source_human_approval_linkage_context_digest"]
         != source.human_approval_linkage_context_digest
+        or identity["source_authority_evidence_linkage_context_digest"]
+        != source.authority_evidence_linkage_context_digest
+        or identity["source_endpoint_allowlist_evaluation_id"]
+        != source.source_endpoint_allowlist_evaluation_id
+        or identity["source_endpoint_allowlist_evaluation_hash"]
+        != source.source_endpoint_allowlist_evaluation_hash
     ):
-        _fail("CPLADBAGR_SOURCE_HUMAN_LINKAGE_IDENTITY_MISMATCH")
+        _fail("CPLADBAGR_SOURCE_LINKAGE_IDENTITY_MISMATCH")
 
+    final_context = source.final_readiness_context
     for key, value in identity.items():
         if final_context.get(key) != value:
             _fail("CPLADBAGR_FINAL_READINESS_LINKAGE_CONTEXT_MISMATCH")
@@ -668,14 +679,6 @@ def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
         "source_final_readiness_authorization_requirements_digest": source.future_bind_authorization_requirement_digest,
         "source_final_readiness_invocation_requirements_digest": source.future_bind_invocation_requirement_digest,
         **linkage_identity,
-        "source_bind_pre_dispatch_review_id": source.source_bind_pre_dispatch_review_id,
-        "source_bind_pre_dispatch_review_hash": source.source_bind_pre_dispatch_review_hash,
-        "source_operator_review_id": source.source_operator_review_id,
-        "source_operator_review_hash": source.source_operator_review_hash,
-        "source_credential_authorization_id": source.source_credential_authorization_id,
-        "source_credential_authorization_hash": source.source_credential_authorization_hash,
-        "source_endpoint_allowlist_evaluation_id": source.source_endpoint_allowlist_evaluation_id,
-        "source_endpoint_allowlist_evaluation_hash": source.source_endpoint_allowlist_evaluation_hash,
         "execution_intent_id": source.execution_intent_id,
         "execution_intent_hash": source.execution_intent_hash,
         "adapter_contract_id": source.adapter_contract_id,
