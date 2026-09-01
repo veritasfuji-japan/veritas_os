@@ -1,8 +1,9 @@
 """Review the promotion-native Bind authorization gate without granting authority.
 
-The boundary is deterministic and local.  It independently verifies the
-Human Approval reference-linkage source and preserves its promotion-native
-bindings, but creates no proof, authority, authorization, dispatch, or effect.
+The boundary is deterministic and local. It independently verifies the
+promotion-native Final Bind Authorization Readiness source and preserves its
+bindings, but creates no proof, authority, authorization, bind context,
+dispatch, or external effect.
 """
 
 from __future__ import annotations
@@ -27,12 +28,13 @@ from veritas_os.policy.canonical_promotion_live_adapter_dry_run_final_bind_autho
 )
 
 FORMAT_VERSION = "canonical-promotion-live-adapter-dry-run-bind-authorization-gate-review/v1"
-MECHANISM = "review_promotion_native_bind_authorization_gate_without_authorization_creation_or_external_effect/v1"
+MECHANISM = (
+    "review_promotion_native_bind_authorization_gate_without_"
+    "authorization_creation_or_external_effect/v1"
+)
 STATUS = "PROMOTION_NATIVE_BIND_AUTHORIZATION_GATE_REVIEWED_NOT_AUTHORIZED"
 SOURCE_STATUS = "PROMOTION_NATIVE_FINAL_BIND_AUTHORIZATION_READINESS_RECORDED_NOT_AUTHORIZED"
-CHECK_MODE = (
-    "deterministic_local_promotion_native_bind_authorization_gate_review_only"
-)
+CHECK_MODE = "deterministic_local_promotion_native_bind_authorization_gate_review_only"
 OUTCOMES = (
     "PASSED_FOR_FUTURE_PROMOTION_NATIVE_FRESH_VERIFIED_SOURCE_GATE",
     "FAILED_FOR_FUTURE_PROMOTION_NATIVE_FRESH_VERIFIED_SOURCE_GATE",
@@ -41,10 +43,16 @@ PREFIX = "veritas.promotion-live-adapter-dry-run-bind-authorization-gate-review"
 DOMAINS = {
     name: f"{PREFIX}.{name}/v1"
     for name in (
-        "decision", "result", "context", "checks", "authorization",
-        "invocation", "packet",
+        "decision",
+        "result",
+        "context",
+        "checks",
+        "authorization",
+        "invocation",
+        "packet",
     )
 }
+
 ACKNOWLEDGEMENTS = (
     "acknowledged_not_real_bind_authorization",
     "acknowledged_no_bind_invocation",
@@ -113,61 +121,91 @@ INVOCATION_REQUIREMENTS = (
     "reconciliation",
     "outcome_receipt",
 )
+SOURCE_AUTHORIZATION_REQUIREMENTS = (
+    "promotion_native_bind_authorization_gate_review",
+    *AUTHORIZATION_REQUIREMENTS,
+)
+
+# Final Readiness evidence preserved under its original names. The source
+# future-requirement fields are deliberately excluded because the Gate owns
+# fields with those names for the remaining lifecycle requirements.
 FINAL_READINESS_EVIDENCE_FIELDS = (
     "final_bind_authorization_readiness_review_decision",
     "final_bind_authorization_readiness_review_decision_digest",
     "final_bind_authorization_readiness_result",
     "final_bind_authorization_readiness_result_digest",
-    "final_readiness_context", "final_readiness_context_digest",
+    "final_readiness_context",
+    "final_readiness_context_digest",
     "final_bind_authorization_readiness_checks",
     "final_bind_authorization_readiness_check_digest",
-    "future_bind_authorization_requirements",
-    "future_bind_authorization_requirement_digest",
-    "future_bind_invocation_requirements",
-    "future_bind_invocation_requirement_digest",
     "source_human_approval_linkage_review_id",
     "source_human_approval_linkage_review_hash",
 )
 PRESERVED_FIELDS = tuple(
-    dict.fromkeys(
-        (
-            *UPSTREAM_PRESERVED_FIELDS,
-            *FINAL_READINESS_EVIDENCE_FIELDS,
-        )
-    )
+    dict.fromkeys((*UPSTREAM_PRESERVED_FIELDS, *FINAL_READINESS_EVIDENCE_FIELDS))
 )
 COPY_FIELDS = PRESERVED_FIELDS
+SOURCE_REQUIREMENT_FIELD_MAP = {
+    "source_final_bind_authorization_requirements": "future_bind_authorization_requirements",
+    "source_final_bind_authorization_requirement_digest": "future_bind_authorization_requirement_digest",
+    "source_final_bind_invocation_requirements": "future_bind_invocation_requirements",
+    "source_final_bind_invocation_requirement_digest": "future_bind_invocation_requirement_digest",
+}
 EFFECT_FIELDS = (
-    "human_approval_created", "human_approval_externally_verified",
-    "human_approval_proven", "authority_evidence_created",
-    "authority_evidence_externally_verified", "authority_evidence_proven",
-    "execution_authority_created", "execution_authorized",
-    "bind_authorization_created", "bind_authorization_issued",
-    "credential_resolved", "credential_material_accessed",
-    "credential_material_embedded", "credential_store_accessed",
-    "authorization_header_constructed", "token_embedded", "secret_embedded",
-    "cookie_embedded", "password_embedded", "private_key_embedded",
-    "endpoint_resolved", "endpoint_contacted", "dns_used", "network_used",
-    "webhook_invoked", "live_adapter_instantiated",
-    "live_adapter_method_invoked", "request_dispatched", "bind_invoked",
-    "bind_receipt_created", "trustlog_written", "filesystem_used",
-    "database_used", "provider_called", "subprocess_used",
-    "external_effect_used", "operation_committed", "apply_performed",
-    "postcondition_verified", "rollback_or_revert_performed",
-    "ready_for_real_bind", "ready_for_network_dispatch",
+    "human_approval_created",
+    "human_approval_externally_verified",
+    "human_approval_proven",
+    "authority_evidence_created",
+    "authority_evidence_externally_verified",
+    "authority_evidence_proven",
+    "execution_authority_created",
+    "execution_authorized",
+    "bind_authorization_created",
+    "bind_authorization_issued",
+    "credential_resolved",
+    "credential_material_accessed",
+    "credential_material_embedded",
+    "credential_store_accessed",
+    "authorization_header_constructed",
+    "token_embedded",
+    "secret_embedded",
+    "cookie_embedded",
+    "password_embedded",
+    "private_key_embedded",
+    "endpoint_resolved",
+    "endpoint_contacted",
+    "dns_used",
+    "network_used",
+    "webhook_invoked",
+    "live_adapter_instantiated",
+    "live_adapter_method_invoked",
+    "request_dispatched",
+    "bind_invoked",
+    "bind_receipt_created",
+    "trustlog_written",
+    "filesystem_used",
+    "database_used",
+    "provider_called",
+    "subprocess_used",
+    "external_effect_used",
+    "operation_committed",
+    "apply_performed",
+    "postcondition_verified",
+    "rollback_or_revert_performed",
+    "ready_for_real_bind",
+    "ready_for_network_dispatch",
 )
 
 
-class CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(
-    ValueError
-):
-    """Stable fail-closed error for invalid final readiness evidence."""
+class CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(ValueError):
+    """Stable fail-closed error for invalid promotion-native Gate evidence."""
 
 
 class BindAuthorizationGateReviewDecision(BaseModel):
     """Closed reviewer decision which expressly grants no authority."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+
     bind_authorization_gate_review_decision_id: str = Field(min_length=1)
     reviewer_id: str = Field(min_length=1)
     reviewer_role: str = Field(min_length=1)
@@ -196,9 +234,10 @@ class BindAuthorizationGateReviewDecision(BaseModel):
 
 
 class BindAuthorizationGateReviewResult(BaseModel):
-    """Final local comparison result with no proof or authorization semantics."""
+    """Deterministic local Gate result with explicit non-authority semantics."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+
     source_human_approval_reference_linkage_passed: Literal[True]
     source_authority_evidence_reference_linkage_passed: Literal[True]
     source_bind_pre_dispatch_review_passed: Literal[True]
@@ -220,6 +259,7 @@ class BindAuthorizationGateReviewResult(BaseModel):
     externally_verifies_human_approval: Literal[False]
     creates_authority_evidence: Literal[False]
     externally_verifies_authority_evidence: Literal[False]
+    derives_bind_context_hash: Literal[False]
 
 
 class GateReviewCheck(BaseModel):
@@ -243,9 +283,10 @@ class FutureRequirement(BaseModel):
 
 
 class _BindAuthorizationGateReviewPacketBase(BaseModel):
-    """Content-addressed promotion-native final readiness evidence."""
+    """Content-addressed promotion-native Bind Gate Review evidence."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+
     format_version: Literal[FORMAT_VERSION]
     promotion_live_adapter_dry_run_bind_authorization_gate_review_id: str
     promotion_live_adapter_dry_run_bind_authorization_gate_review_hash: str
@@ -330,20 +371,26 @@ _PRESERVED_PACKET_FIELDS = {
     )
     for field_name in PRESERVED_FIELDS
 }
-
-CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewPacket = (
-    create_model(
-        "CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewPacket",
-        __base__=_BindAuthorizationGateReviewPacketBase,
-        **_PRESERVED_PACKET_FIELDS,
+_SOURCE_REQUIREMENT_PACKET_FIELDS = {
+    target_name: (
+        CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessPacket
+        .model_fields[source_name]
+        .annotation,
+        ...,
     )
+    for target_name, source_name in SOURCE_REQUIREMENT_FIELD_MAP.items()
+}
+
+CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewPacket = create_model(
+    "CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewPacket",
+    __base__=_BindAuthorizationGateReviewPacketBase,
+    **_PRESERVED_PACKET_FIELDS,
+    **_SOURCE_REQUIREMENT_PACKET_FIELDS,
 )
 
 
 def _fail(code: str) -> None:
-    raise CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(
-        code
-    )
+    raise CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(code)
 
 
 def _timestamp(value: Any) -> str:
@@ -364,7 +411,8 @@ def _json(value: Any) -> Any:
     if value is None or isinstance(value, (str, bool, int)):
         return value
     if isinstance(value, float) and value == value and value not in (
-        float("inf"), float("-inf")
+        float("inf"),
+        float("-inf"),
     ):
         return value
     if isinstance(value, datetime):
@@ -415,6 +463,37 @@ def _source(
         ) from exc
 
 
+def _requirement_names(items: Any) -> tuple[str, ...]:
+    try:
+        return tuple(item.name for item in items)
+    except (AttributeError, TypeError) as exc:
+        raise CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(
+            "CPLADBAGR_SOURCE_REQUIREMENTS_INVALID"
+        ) from exc
+
+
+def _validate_source_requirements(
+    source: CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessPacket,
+) -> None:
+    if _requirement_names(source.future_bind_authorization_requirements) != (
+        SOURCE_AUTHORIZATION_REQUIREMENTS
+    ):
+        _fail("CPLADBAGR_SOURCE_AUTHORIZATION_REQUIREMENTS_MISMATCH")
+    if _requirement_names(source.future_bind_invocation_requirements) != (
+        INVOCATION_REQUIREMENTS
+    ):
+        _fail("CPLADBAGR_SOURCE_INVOCATION_REQUIREMENTS_MISMATCH")
+    source_requirements = (
+        *source.future_bind_authorization_requirements,
+        *source.future_bind_invocation_requirements,
+    )
+    if any(
+        not item.separate_future_artifact_required or item.satisfied_by_this_packet
+        for item in source_requirements
+    ):
+        _fail("CPLADBAGR_SOURCE_REQUIREMENT_STATE_INVALID")
+
+
 def _validate_source(
     source: CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessPacket,
 ) -> None:
@@ -430,14 +509,18 @@ def _validate_source(
         source.fresh_verified_source_gate_still_required,
         source.final_bind_authorization_readiness_result
         .accepted_for_future_promotion_native_bind_authorization_gate_review,
+        source.approval_context.get("required_human_approval") is True,
         not source.fail_closed,
     )
     if not all(required) or any(getattr(source, field) for field in EFFECT_FIELDS):
         _fail("CPLADBAGR_SOURCE_STATE_INVALID")
+    _validate_source_requirements(source)
+
     try:
         intent = ExecutionIntent(**source.execution_intent)
         descriptor = verify_bind_adapter_contract_descriptor(
-            source.adapter_contract_descriptor, intent
+            source.adapter_contract_descriptor,
+            intent,
         )
     except (
         TypeError,
@@ -448,27 +531,25 @@ def _validate_source(
         raise CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(
             "CPLADBAGR_SOURCE_BINDING_INVALID"
         ) from exc
-    if intent.to_dict() != source.execution_intent:
+
+    if (
+        intent.to_dict() != source.execution_intent
+        or hash_execution_intent(intent) != source.execution_intent_hash
+        or intent.execution_intent_id != source.execution_intent_id
+    ):
         _fail("CPLADBAGR_EXECUTION_INTENT_INVALID")
-    if hash_execution_intent(intent) != source.execution_intent_hash:
-        _fail("CPLADBAGR_EXECUTION_INTENT_INVALID")
-    if intent.execution_intent_id != source.execution_intent_id:
-        _fail("CPLADBAGR_EXECUTION_INTENT_INVALID")
-    if descriptor.adapter_contract_id != source.adapter_contract_id:
-        _fail("CPLADBAGR_ADAPTER_INVALID")
-    if descriptor.adapter_contract_hash != source.adapter_contract_hash:
-        _fail("CPLADBAGR_ADAPTER_INVALID")
-    if descriptor.adapter_contract_version != source.adapter_contract_version:
-        _fail("CPLADBAGR_ADAPTER_INVALID")
-    if descriptor.model_dump(mode="json") != source.adapter_contract_descriptor:
+    if (
+        descriptor.adapter_contract_id != source.adapter_contract_id
+        or descriptor.adapter_contract_hash != source.adapter_contract_hash
+        or descriptor.adapter_contract_version != source.adapter_contract_version
+        or descriptor.model_dump(mode="json") != source.adapter_contract_descriptor
+    ):
         _fail("CPLADBAGR_ADAPTER_INVALID")
 
 
 def _decision(value: Any) -> BindAuthorizationGateReviewDecision:
     try:
-        decision = BindAuthorizationGateReviewDecision.model_validate(
-            _json(value)
-        )
+        decision = BindAuthorizationGateReviewDecision.model_validate(_json(value))
         decision = decision.model_copy(
             update={"reviewed_at": _timestamp(decision.reviewed_at)}
         )
@@ -479,6 +560,18 @@ def _decision(value: Any) -> BindAuthorizationGateReviewDecision:
     if not all(getattr(decision, field) for field in ACKNOWLEDGEMENTS):
         _fail("CPLADBAGR_ACKNOWLEDGEMENT_MISSING")
     return decision
+
+
+def _future_requirements(names: tuple[str, ...]) -> list[dict[str, Any]]:
+    return [
+        {
+            "ordinal": ordinal,
+            "name": name,
+            "separate_future_artifact_required": True,
+            "satisfied_by_this_packet": False,
+        }
+        for ordinal, name in enumerate(names, 1)
+    ]
 
 
 def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
@@ -497,7 +590,9 @@ def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
         "source_final_readiness_passed": True,
         "gate_review_passed": accepted,
         "accepted_for_future_promotion_native_fresh_verified_source_gate": accepted,
-        "rejection_reasons": [] if accepted else ["BIND_AUTHORIZATION_GATE_REVIEW_FAILED"],
+        "rejection_reasons": []
+        if accepted
+        else ["BIND_AUTHORIZATION_GATE_REVIEW_FAILED"],
         "comparison_mode": CHECK_MODE,
         "semantic_match_used": False,
         "creates_bind_authorization": False,
@@ -506,6 +601,7 @@ def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
         "externally_verifies_human_approval": False,
         "creates_authority_evidence": False,
         "externally_verifies_authority_evidence": False,
+        "derives_bind_context_hash": False,
     }
     context = {
         "source_final_bind_authorization_readiness_id": source.promotion_live_adapter_dry_run_final_bind_authorization_readiness_id,
@@ -516,6 +612,8 @@ def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
         "source_final_readiness_check_digest": source.final_bind_authorization_readiness_check_digest,
         "source_final_readiness_authorization_requirements_digest": source.future_bind_authorization_requirement_digest,
         "source_final_readiness_invocation_requirements_digest": source.future_bind_invocation_requirement_digest,
+        "source_human_approval_linkage_review_id": source.source_human_approval_linkage_review_id,
+        "source_human_approval_linkage_review_hash": source.source_human_approval_linkage_review_hash,
         "source_human_approval_linkage_context_digest": source.human_approval_linkage_context_digest,
         "source_authority_evidence_linkage_review_id": source.source_authority_evidence_linkage_review_id,
         "source_authority_evidence_linkage_review_hash": source.source_authority_evidence_linkage_review_hash,
@@ -560,25 +658,14 @@ def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
         }
         for ordinal, name in enumerate(CHECK_NAMES, 1)
     ]
-    authorization = [
-        {
-            "ordinal": ordinal,
-            "name": name,
-            "separate_future_artifact_required": True,
-            "satisfied_by_this_packet": False,
-        }
-        for ordinal, name in enumerate(AUTHORIZATION_REQUIREMENTS, 1)
-    ]
-    invocation = [
-        {
-            "ordinal": ordinal,
-            "name": name,
-            "separate_future_artifact_required": True,
-            "satisfied_by_this_packet": False,
-        }
-        for ordinal, name in enumerate(INVOCATION_REQUIREMENTS, 1)
-    ]
-    return decision_digest, result, context, checks, authorization, invocation
+    return (
+        decision_digest,
+        result,
+        context,
+        checks,
+        _future_requirements(AUTHORIZATION_REQUIREMENTS),
+        _future_requirements(INVOCATION_REQUIREMENTS),
+    )
 
 
 def _assemble(source: Any, decision: Any, recorded_at: str) -> dict[str, Any]:
@@ -597,16 +684,20 @@ def _assemble(source: Any, decision: Any, recorded_at: str) -> dict[str, Any]:
         "source_final_bind_authorization_readiness_hash": source.promotion_live_adapter_dry_run_final_bind_authorization_readiness_hash,
         "source_final_bind_authorization_readiness_packet": source_raw,
         **{field: source_raw[field] for field in COPY_FIELDS},
-        "bind_authorization_gate_review_decision": decision.model_dump(
-            mode="json"
-        ),
+        **{
+            target_name: source_raw[source_name]
+            for target_name, source_name in SOURCE_REQUIREMENT_FIELD_MAP.items()
+        },
+        "bind_authorization_gate_review_decision": decision.model_dump(mode="json"),
         "bind_authorization_gate_review_decision_digest": decision_digest,
         "bind_authorization_gate_review_result": result,
         "bind_authorization_gate_review_result_digest": _digest(
             DOMAINS["result"], result
         ),
         "bind_authorization_gate_review_context": context,
-        "bind_authorization_gate_review_context_digest": _digest(DOMAINS["context"], context),
+        "bind_authorization_gate_review_context_digest": _digest(
+            DOMAINS["context"], context
+        ),
         "bind_authorization_gate_review_checks": checks,
         "bind_authorization_gate_review_check_digest": _digest(
             DOMAINS["checks"], checks
@@ -633,12 +724,10 @@ def _assemble(source: Any, decision: Any, recorded_at: str) -> dict[str, Any]:
         **{field: False for field in EFFECT_FIELDS},
     }
     digest = _packet_hash(raw)
-    raw[
-        "promotion_live_adapter_dry_run_bind_authorization_gate_review_hash"
-    ] = digest
-    raw[
-        "promotion_live_adapter_dry_run_bind_authorization_gate_review_id"
-    ] = f"pladbagr:v1:sha256:{digest}"
+    raw["promotion_live_adapter_dry_run_bind_authorization_gate_review_hash"] = digest
+    raw["promotion_live_adapter_dry_run_bind_authorization_gate_review_id"] = (
+        f"pladbagr:v1:sha256:{digest}"
+    )
     return raw
 
 
@@ -647,15 +736,15 @@ def build_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_revie
     bind_authorization_gate_review_decision: Any,
     bind_authorization_gate_review_recorded_at: datetime,
 ) -> CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewPacket:
-    """Build self-verifying final readiness evidence without granting authority."""
+    """Build self-verifying Gate Review evidence without granting authority."""
+
     source = _source(_json(source_final_bind_authorization_readiness_packet))
     _validate_source(source)
     decision = _decision(bind_authorization_gate_review_decision)
     recorded_at = _timestamp(bind_authorization_gate_review_recorded_at)
     source_at = _timestamp(source.final_bind_authorization_readiness_recorded_at)
-    if _timestamp(decision.reviewed_at) < source_at or recorded_at < _timestamp(
-        decision.reviewed_at
-    ):
+    reviewed_at = _timestamp(decision.reviewed_at)
+    if reviewed_at < source_at or recorded_at < reviewed_at:
         _fail("CPLADBAGR_TIMESTAMP_ORDER_INVALID")
     return verify_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_review_packet(
         _assemble(source, decision, recorded_at)
@@ -666,6 +755,7 @@ def verify_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_revi
     raw: Any,
 ) -> CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewPacket:
     """Independently reconstruct and verify the source, bindings, and hashes."""
+
     try:
         value = raw.model_dump(mode="json") if isinstance(raw, BaseModel) else raw
         packet = CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewPacket.model_validate(
@@ -675,6 +765,7 @@ def verify_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_revi
         raise CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(
             "CPLADBAGR_PACKET_INVALID"
         ) from exc
+
     source = _source(packet.source_final_bind_authorization_readiness_packet)
     _validate_source(source)
     decision = _decision(packet.bind_authorization_gate_review_decision)
@@ -683,6 +774,7 @@ def verify_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_revi
     recorded_at = _timestamp(packet.bind_authorization_gate_review_recorded_at)
     if reviewed_at < source_at or recorded_at < reviewed_at:
         _fail("CPLADBAGR_TIMESTAMP_ORDER_INVALID")
+
     expected = _assemble(source, decision, recorded_at)
     if packet.model_dump(mode="json") != expected:
         _fail("CPLADBAGR_RECONSTRUCTION_MISMATCH")
