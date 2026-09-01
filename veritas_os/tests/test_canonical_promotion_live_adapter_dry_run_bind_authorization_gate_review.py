@@ -123,7 +123,10 @@ def test_complete_typed_preservation_and_json_round_trip():
         packet_json
     )
     assert verified == packet
-    assert verified.bind_authorization_gate_review_context == packet.bind_authorization_gate_review_context
+    assert (
+        verified.bind_authorization_gate_review_context
+        == packet.bind_authorization_gate_review_context
+    )
     assert (
         verified.promotion_live_adapter_dry_run_bind_authorization_gate_review_hash
         == packet.promotion_live_adapter_dry_run_bind_authorization_gate_review_hash
@@ -155,30 +158,44 @@ def test_source_to_gate_requirement_transition_is_exact():
 
 def test_human_and_authority_linkage_identity_are_directly_bound_in_context():
     source = source_packet()
+    embedded = source.source_human_approval_linkage_review_packet
     context = _packet().bind_authorization_gate_review_context
+
     assert (
         context["source_human_approval_linkage_review_id"]
         == source.source_human_approval_linkage_review_id
+        == embedded["promotion_live_adapter_dry_run_human_approval_linkage_review_id"]
     )
     assert (
         context["source_human_approval_linkage_review_hash"]
         == source.source_human_approval_linkage_review_hash
+        == embedded["promotion_live_adapter_dry_run_human_approval_linkage_review_hash"]
     )
     assert (
         context["source_human_approval_linkage_context_digest"]
         == source.human_approval_linkage_context_digest
+        == embedded["human_approval_linkage_context_digest"]
     )
     assert (
         context["source_authority_evidence_linkage_review_id"]
-        == source.source_authority_evidence_linkage_review_id
+        == embedded["source_authority_evidence_linkage_review_id"]
+        == source.final_readiness_context[
+            "source_authority_evidence_linkage_review_id"
+        ]
     )
     assert (
         context["source_authority_evidence_linkage_review_hash"]
-        == source.source_authority_evidence_linkage_review_hash
+        == embedded["source_authority_evidence_linkage_review_hash"]
+        == source.final_readiness_context[
+            "source_authority_evidence_linkage_review_hash"
+        ]
     )
     assert (
         context["source_authority_evidence_linkage_context_digest"]
-        == source.source_authority_evidence_linkage_context_digest
+        == embedded["source_authority_evidence_linkage_context_digest"]
+        == source.final_readiness_context[
+            "source_authority_evidence_linkage_context_digest"
+        ]
     )
 
 
@@ -294,13 +311,39 @@ def test_source_invocation_requirement_lifecycle_drift_fails():
         "final_readiness_context_digest",
         "source_human_approval_linkage_review_id",
         "source_human_approval_linkage_review_hash",
-        "source_authority_evidence_linkage_review_id",
-        "source_authority_evidence_linkage_review_hash",
     ],
 )
 def test_source_scalar_tamper_fails(field):
     raw = _source_raw()
     raw[field] = "0" * 64
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError):
+        _build_from_source_raw(raw)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "source_authority_evidence_linkage_review_id",
+        "source_authority_evidence_linkage_review_hash",
+        "source_authority_evidence_linkage_context_digest",
+    ],
+)
+def test_nested_authority_linkage_identity_tamper_fails(field):
+    raw = _source_raw()
+    raw["source_human_approval_linkage_review_packet"] = dict(
+        raw["source_human_approval_linkage_review_packet"]
+    )
+    raw["source_human_approval_linkage_review_packet"][field] = "0" * 64
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError):
+        _build_from_source_raw(raw)
+
+
+def test_final_readiness_authority_identity_context_tamper_fails():
+    raw = _source_raw()
+    raw["final_readiness_context"] = dict(raw["final_readiness_context"])
+    raw["final_readiness_context"]["source_authority_evidence_linkage_review_id"] = (
+        "authority-linkage:tampered"
+    )
     with pytest.raises(CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError):
         _build_from_source_raw(raw)
 
