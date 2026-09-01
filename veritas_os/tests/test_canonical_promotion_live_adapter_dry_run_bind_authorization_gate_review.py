@@ -156,47 +156,91 @@ def test_source_to_gate_requirement_transition_is_exact():
     )
 
 
-def test_human_and_authority_linkage_identity_are_directly_bound_in_context():
+def test_human_and_nested_lineage_identity_are_directly_bound_in_context():
     source = source_packet()
     embedded = source.source_human_approval_linkage_review_packet
     context = _packet().bind_authorization_gate_review_context
 
+    expected = {
+        "source_human_approval_linkage_review_id": embedded[
+            "promotion_live_adapter_dry_run_human_approval_linkage_review_id"
+        ],
+        "source_human_approval_linkage_review_hash": embedded[
+            "promotion_live_adapter_dry_run_human_approval_linkage_review_hash"
+        ],
+        "source_human_approval_linkage_context_digest": embedded[
+            "human_approval_linkage_context_digest"
+        ],
+        "source_authority_evidence_linkage_review_id": embedded[
+            "source_authority_evidence_linkage_review_id"
+        ],
+        "source_authority_evidence_linkage_review_hash": embedded[
+            "source_authority_evidence_linkage_review_hash"
+        ],
+        "source_authority_evidence_linkage_context_digest": embedded[
+            "source_authority_evidence_linkage_context_digest"
+        ],
+        "source_bind_pre_dispatch_review_id": embedded[
+            "source_bind_pre_dispatch_review_id"
+        ],
+        "source_bind_pre_dispatch_review_hash": embedded[
+            "source_bind_pre_dispatch_review_hash"
+        ],
+        "source_operator_review_id": embedded["source_operator_review_id"],
+        "source_operator_review_hash": embedded["source_operator_review_hash"],
+        "source_credential_authorization_id": embedded[
+            "source_credential_authorization_id"
+        ],
+        "source_credential_authorization_hash": embedded[
+            "source_credential_authorization_hash"
+        ],
+        "source_endpoint_allowlist_evaluation_id": embedded[
+            "source_endpoint_allowlist_evaluation_id"
+        ],
+        "source_endpoint_allowlist_evaluation_hash": embedded[
+            "source_endpoint_allowlist_evaluation_hash"
+        ],
+    }
+    for key, value in expected.items():
+        assert context[key] == value, key
+        assert source.final_readiness_context[key] == value, key
+
     assert (
         context["source_human_approval_linkage_review_id"]
         == source.source_human_approval_linkage_review_id
-        == embedded["promotion_live_adapter_dry_run_human_approval_linkage_review_id"]
     )
     assert (
         context["source_human_approval_linkage_review_hash"]
         == source.source_human_approval_linkage_review_hash
-        == embedded["promotion_live_adapter_dry_run_human_approval_linkage_review_hash"]
     )
     assert (
-        context["source_human_approval_linkage_context_digest"]
-        == source.human_approval_linkage_context_digest
-        == embedded["human_approval_linkage_context_digest"]
+        context["source_endpoint_allowlist_evaluation_id"]
+        == source.source_endpoint_allowlist_evaluation_id
     )
     assert (
-        context["source_authority_evidence_linkage_review_id"]
-        == embedded["source_authority_evidence_linkage_review_id"]
-        == source.final_readiness_context[
-            "source_authority_evidence_linkage_review_id"
-        ]
+        context["source_endpoint_allowlist_evaluation_hash"]
+        == source.source_endpoint_allowlist_evaluation_hash
     )
-    assert (
-        context["source_authority_evidence_linkage_review_hash"]
-        == embedded["source_authority_evidence_linkage_review_hash"]
-        == source.final_readiness_context[
-            "source_authority_evidence_linkage_review_hash"
-        ]
+
+
+def test_non_promoted_lineage_is_derived_from_verified_embedded_packet():
+    source = source_packet()
+    embedded = source.source_human_approval_linkage_review_packet
+    context = _packet().bind_authorization_gate_review_context
+
+    non_promoted = (
+        "source_authority_evidence_linkage_review_id",
+        "source_authority_evidence_linkage_review_hash",
+        "source_bind_pre_dispatch_review_id",
+        "source_bind_pre_dispatch_review_hash",
+        "source_operator_review_id",
+        "source_operator_review_hash",
+        "source_credential_authorization_id",
+        "source_credential_authorization_hash",
     )
-    assert (
-        context["source_authority_evidence_linkage_context_digest"]
-        == embedded["source_authority_evidence_linkage_context_digest"]
-        == source.final_readiness_context[
-            "source_authority_evidence_linkage_context_digest"
-        ]
-    )
+    for field in non_promoted:
+        assert field not in source.model_fields, field
+        assert context[field] == embedded[field], field
 
 
 def test_decision_is_bound_to_context_and_packet_hash():
@@ -326,9 +370,17 @@ def test_source_scalar_tamper_fails(field):
         "source_authority_evidence_linkage_review_id",
         "source_authority_evidence_linkage_review_hash",
         "source_authority_evidence_linkage_context_digest",
+        "source_bind_pre_dispatch_review_id",
+        "source_bind_pre_dispatch_review_hash",
+        "source_operator_review_id",
+        "source_operator_review_hash",
+        "source_credential_authorization_id",
+        "source_credential_authorization_hash",
+        "source_endpoint_allowlist_evaluation_id",
+        "source_endpoint_allowlist_evaluation_hash",
     ],
 )
-def test_nested_authority_linkage_identity_tamper_fails(field):
+def test_nested_lineage_identity_tamper_fails(field):
     raw = _source_raw()
     raw["source_human_approval_linkage_review_packet"] = dict(
         raw["source_human_approval_linkage_review_packet"]
@@ -336,6 +388,45 @@ def test_nested_authority_linkage_identity_tamper_fails(field):
     raw["source_human_approval_linkage_review_packet"][field] = "0" * 64
     with pytest.raises(CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError):
         _build_from_source_raw(raw)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "source_authority_evidence_linkage_review_id",
+        "source_bind_pre_dispatch_review_id",
+        "source_operator_review_id",
+        "source_credential_authorization_id",
+        "source_endpoint_allowlist_evaluation_id",
+    ],
+)
+def test_gate_helper_rejects_final_readiness_context_lineage_mismatch(field):
+    source = source_packet()
+    context = dict(source.final_readiness_context)
+    context[field] = "lineage:tampered"
+    modified = source.model_copy(update={"final_readiness_context": context})
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError):
+        gate_module._verified_linkage_identity(modified)
+
+
+def test_gate_helper_rejects_human_linkage_top_level_identity_mismatch():
+    source = source_packet()
+    modified = source.model_copy(
+        update={"source_human_approval_linkage_review_id": "pladhal:tampered"}
+    )
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError):
+        gate_module._verified_linkage_identity(modified)
+
+
+def test_gate_helper_rejects_unverified_nested_human_linkage_packet():
+    source = source_packet()
+    embedded = dict(source.source_human_approval_linkage_review_packet)
+    embedded["source_operator_review_id"] = "operator-review:tampered"
+    modified = source.model_copy(
+        update={"source_human_approval_linkage_review_packet": embedded}
+    )
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError):
+        gate_module._verified_linkage_identity(modified)
 
 
 def test_final_readiness_authority_identity_context_tamper_fails():
