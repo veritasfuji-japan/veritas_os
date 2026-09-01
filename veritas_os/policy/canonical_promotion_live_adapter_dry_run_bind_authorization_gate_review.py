@@ -494,6 +494,59 @@ def _validate_source_requirements(
         _fail("CPLADBAGR_SOURCE_REQUIREMENT_STATE_INVALID")
 
 
+def _verified_linkage_identity(
+    source: CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessPacket,
+) -> dict[str, str]:
+    """Derive linkage identities only from the already verified embedded source."""
+
+    embedded = source.source_human_approval_linkage_review_packet
+    final_context = source.final_readiness_context
+    try:
+        identity = {
+            "source_human_approval_linkage_review_id": embedded[
+                "promotion_live_adapter_dry_run_human_approval_linkage_review_id"
+            ],
+            "source_human_approval_linkage_review_hash": embedded[
+                "promotion_live_adapter_dry_run_human_approval_linkage_review_hash"
+            ],
+            "source_human_approval_linkage_context_digest": embedded[
+                "human_approval_linkage_context_digest"
+            ],
+            "source_authority_evidence_linkage_review_id": embedded[
+                "source_authority_evidence_linkage_review_id"
+            ],
+            "source_authority_evidence_linkage_review_hash": embedded[
+                "source_authority_evidence_linkage_review_hash"
+            ],
+            "source_authority_evidence_linkage_context_digest": embedded[
+                "source_authority_evidence_linkage_context_digest"
+            ],
+        }
+    except (KeyError, TypeError) as exc:
+        raise CanonicalPromotionLiveAdapterDryRunBindAuthorizationGateReviewError(
+            "CPLADBAGR_SOURCE_LINKAGE_IDENTITY_INVALID"
+        ) from exc
+
+    required_strings = tuple(identity.values())
+    if not all(isinstance(value, str) and value for value in required_strings):
+        _fail("CPLADBAGR_SOURCE_LINKAGE_IDENTITY_INVALID")
+
+    if (
+        identity["source_human_approval_linkage_review_id"]
+        != source.source_human_approval_linkage_review_id
+        or identity["source_human_approval_linkage_review_hash"]
+        != source.source_human_approval_linkage_review_hash
+        or identity["source_human_approval_linkage_context_digest"]
+        != source.human_approval_linkage_context_digest
+    ):
+        _fail("CPLADBAGR_SOURCE_HUMAN_LINKAGE_IDENTITY_MISMATCH")
+
+    for key, value in identity.items():
+        if final_context.get(key) != value:
+            _fail("CPLADBAGR_FINAL_READINESS_LINKAGE_CONTEXT_MISMATCH")
+    return identity
+
+
 def _validate_source(
     source: CanonicalPromotionLiveAdapterDryRunFinalBindAuthorizationReadinessPacket,
 ) -> None:
@@ -515,6 +568,7 @@ def _validate_source(
     if not all(required) or any(getattr(source, field) for field in EFFECT_FIELDS):
         _fail("CPLADBAGR_SOURCE_STATE_INVALID")
     _validate_source_requirements(source)
+    _verified_linkage_identity(source)
 
     try:
         intent = ExecutionIntent(**source.execution_intent)
@@ -577,6 +631,7 @@ def _future_requirements(names: tuple[str, ...]) -> list[dict[str, Any]]:
 def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
     accepted = decision.review_outcome == OUTCOMES[0]
     decision_digest = _digest(DOMAINS["decision"], decision)
+    linkage_identity = _verified_linkage_identity(source)
     result = {
         "source_human_approval_reference_linkage_passed": True,
         "source_authority_evidence_reference_linkage_passed": True,
@@ -612,12 +667,7 @@ def _derived(source: Any, decision: Any) -> tuple[Any, ...]:
         "source_final_readiness_check_digest": source.final_bind_authorization_readiness_check_digest,
         "source_final_readiness_authorization_requirements_digest": source.future_bind_authorization_requirement_digest,
         "source_final_readiness_invocation_requirements_digest": source.future_bind_invocation_requirement_digest,
-        "source_human_approval_linkage_review_id": source.source_human_approval_linkage_review_id,
-        "source_human_approval_linkage_review_hash": source.source_human_approval_linkage_review_hash,
-        "source_human_approval_linkage_context_digest": source.human_approval_linkage_context_digest,
-        "source_authority_evidence_linkage_review_id": source.source_authority_evidence_linkage_review_id,
-        "source_authority_evidence_linkage_review_hash": source.source_authority_evidence_linkage_review_hash,
-        "source_authority_evidence_linkage_context_digest": source.source_authority_evidence_linkage_context_digest,
+        **linkage_identity,
         "source_bind_pre_dispatch_review_id": source.source_bind_pre_dispatch_review_id,
         "source_bind_pre_dispatch_review_hash": source.source_bind_pre_dispatch_review_hash,
         "source_operator_review_id": source.source_operator_review_id,
