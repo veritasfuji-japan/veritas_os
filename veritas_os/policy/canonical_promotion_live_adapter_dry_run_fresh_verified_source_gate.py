@@ -229,6 +229,10 @@ def _json(value: Any) -> Any:
         value = value.model_dump(mode="json")
     if value is None or isinstance(value, (str, bool, int)):
         return value
+    if isinstance(value, float):
+        if value != value or value in (float("inf"), float("-inf")):
+            _fail("CPLADFVS_JSON_INVALID")
+        return value
     if isinstance(value, datetime):
         return _timestamp(value)
     if isinstance(value, (list, tuple)):
