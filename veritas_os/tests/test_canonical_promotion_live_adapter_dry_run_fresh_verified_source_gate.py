@@ -60,6 +60,18 @@ def test_valid_pass_source_round_trips_and_preserves_exact_typed_fields():
     )
 
 
+def test_json_accepts_finite_float_and_rejects_non_finite_values():
+    assert fresh_module._json(1.25) == 1.25
+    assert fresh_module._json({"nested": [0.5, -2.75]}) == {
+        "nested": [0.5, -2.75]
+    }
+    for value in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(
+            CanonicalPromotionLiveAdapterDryRunFreshVerifiedSourceGateError
+        ):
+            fresh_module._json(value)
+
+
 def test_requirement_transition_consumes_only_fresh_source_gate():
     source = source_packet()
     packet = _packet(source=source)
