@@ -37,6 +37,7 @@ def verify_decision_report(report: dict[str, Any]) -> None:
         "route": "POST /v1/decide",
         "permission_decide_exercised": True,
         "request_validation_exercised": True,
+        "gate_decision": "proceed",
         "outbound_provider_network_calls": 0,
         "trustlog_append_verified": True,
         "trustlog_chain_verified": True,

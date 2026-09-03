@@ -140,7 +140,8 @@ def _project_report(
         "response_artifact_digest": _digest(response),
         "request_id": "<runtime-request-id>",
         "decision_status": response.get("decision_status", "not_available"),
-        "gate_decision": gate.get("decision", gate.get("status", "not_available")),
+        "gate_decision": response.get("gate_decision")
+        or gate.get("decision", gate.get("status", "not_available")),
         "business_decision": response.get("business_decision", "not_available"),
         "next_action": response.get("next_action", "not_available"),
         "human_review_required": bool(response.get("human_review_required")),

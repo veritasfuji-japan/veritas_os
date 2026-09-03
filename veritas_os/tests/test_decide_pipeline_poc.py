@@ -52,6 +52,7 @@ def test_real_decide_route_generates_strict_evidence(tmp_path: Path) -> None:
     assert report["kernel_decide_calls"] > 0
     assert report["kernel_decide_successful_calls"] > 0
     assert report["outbound_provider_network_calls"] == 0
+    assert report["gate_decision"] == "proceed"
     assert report["trustlog_append_verified"]
     assert report["trustlog_chain_verified"]
     assert report["replay_artifact_verified"]
