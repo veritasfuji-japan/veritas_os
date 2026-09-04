@@ -244,8 +244,6 @@ def test_vector_memory_add_and_search_performance():
     assert search_time < 5.0
 
 
-
-
 def test_warn_for_legacy_pickle_artifacts_scans_recursively(tmp_path: Path, caplog):
     """ランタイム配下を再帰走査して危険拡張子を検知する。"""
     import logging
@@ -374,20 +372,25 @@ def test_load_model_is_thread_safe(monkeypatch):
     import threading
     import types
 
+    import veritas_os.core.config as config_module
+
     init_calls = {"count": 0}
-    barrier = threading.Barrier(2, timeout=5)
+    constructor_entered = threading.Event()
+    release_constructor = threading.Event()
 
     class SlowSentenceTransformer:
         def __init__(self, model_name):
             init_calls["count"] += 1
-            try:
-                barrier.wait()
-            except threading.BrokenBarrierError:
-                pass
+            constructor_entered.set()
+            assert release_constructor.wait(timeout=5)
             self.model_name = model_name
 
+    # Other tests reload config_module, so the memory facade can retain an older
+    # capability_cfg object. _load_model intentionally resolves the current
+    # config at call time; patch that authoritative object instead.
+    current_capability_cfg = config_module.capability_cfg
     monkeypatch.setattr(
-        memory.capability_cfg,
+        current_capability_cfg,
         "enable_memory_sentence_transformers",
         False,
     )
@@ -397,18 +400,24 @@ def test_load_model_is_thread_safe(monkeypatch):
     fake_module.SentenceTransformer = SlowSentenceTransformer
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
     monkeypatch.setattr(
-        memory.capability_cfg,
+        current_capability_cfg,
         "enable_memory_sentence_transformers",
         True,
     )
 
     vm.model = None
 
-    threads = [threading.Thread(target=vm._load_model) for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    first_thread = threading.Thread(target=vm._load_model)
+    second_thread = threading.Thread(target=vm._load_model)
+    first_thread.start()
+    assert constructor_entered.wait(timeout=5)
+    second_thread.start()
+    release_constructor.set()
 
+    threads = [first_thread, second_thread]
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert all(not thread.is_alive() for thread in threads)
     assert init_calls["count"] == 1
     assert isinstance(vm.model, SlowSentenceTransformer)

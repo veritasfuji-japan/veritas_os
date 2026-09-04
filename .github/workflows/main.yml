@@ -425,7 +425,13 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements.txt
-          python -m pip install --upgrade "fastapi>=0.121,<0.123" "pydantic>=2.10,<2.12"
+          # Starlette 0.49.1 still imports anyio.abc.BlockingPortal. AnyIO 4.15
+          # deprecates that alias, so keep this preview on the last warning-clean
+          # AnyIO 4.x range until Starlette removes the upstream reference.
+          python -m pip install --upgrade \
+            "fastapi>=0.121,<0.123" \
+            "pydantic>=2.10,<2.12" \
+            "anyio<4.15"
 
       - name: Print resolved dependency versions
         run: |
@@ -434,10 +440,12 @@ jobs:
           import fastapi
           import pydantic
           import starlette
+          from importlib.metadata import version
 
           print(f"fastapi {fastapi.__version__}")
           print(f"pydantic {pydantic.__version__}")
           print(f"starlette {starlette.__version__}")
+          print(f"anyio {version('anyio')}")
           PY
           python -m pip check
 
@@ -480,6 +488,7 @@ jobs:
             echo "### Dry-run ranges"
             echo "- fastapi: \`>=0.121,<0.123\`"
             echo "- pydantic: \`>=2.10,<2.12\`"
+            echo "- anyio: \`<4.15\` (temporary Starlette 0.49.1 compatibility ceiling)"
             echo ""
             echo "### Resolved versions"
             echo "\`\`\`text"
