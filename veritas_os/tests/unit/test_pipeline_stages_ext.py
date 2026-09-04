@@ -7454,8 +7454,11 @@ def test_pipeline_bridge_enforcement_updates_fuji_status(tmp_path: Path) -> None
 
 
 def test_pipeline_bridge_warns_when_not_enforced(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("VERITAS_SAFETY_MODE", "heuristic")
     compiled = compile_policy_to_bundle(
         EXAMPLES_DIR / "external_tool_usage_denied.yaml",
         tmp_path,
@@ -7635,8 +7638,10 @@ def test_pipeline_bridge_env_var_enforcement_fallback(
 
 def test_pipeline_bridge_string_false_enforcement_not_enforced(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """String 'false' in context correctly disables enforcement (not bool-truthy)."""
+    monkeypatch.setenv("VERITAS_SAFETY_MODE", "heuristic")
     compiled = compile_policy_to_bundle(
         EXAMPLES_DIR / "external_tool_usage_denied.yaml",
         tmp_path,
@@ -7701,8 +7706,11 @@ def test_pipeline_bridge_enforcement_logs_audit_info(
     )
 
 
-def test_pipeline_bridge_canary_rollout_skips_enforcement_outside_bucket() -> None:
+def test_pipeline_bridge_canary_rollout_skips_enforcement_outside_bucket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Canary strategy should observe-only when request is outside canary bucket."""
+    monkeypatch.setenv("VERITAS_SAFETY_MODE", "heuristic")
     from unittest.mock import patch
 
     from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
