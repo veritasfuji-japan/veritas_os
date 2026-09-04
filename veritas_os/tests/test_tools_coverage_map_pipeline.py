@@ -192,3 +192,4 @@ def test___main___entrypoint_executes_isolated(tmp_path: Path):
     assert "[pipeline]" in r.stdout
     assert "missing_lines=" in r.stdout
 
+
