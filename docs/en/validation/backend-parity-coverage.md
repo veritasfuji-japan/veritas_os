@@ -171,8 +171,8 @@ or know which backend is active.
 
 | CI Job | Backend | What it tests |
 |---|---|---|
-| `test (py3.11)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
-| `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
+| `test (py3.11)` | JSONL/JSON (default) | Full non-slow test suite in duration-balanced shards (includes PG-focused tests with mock pool) |
+| `test (py3.12)` | JSONL/JSON (default) | Full non-slow test suite in duration-balanced shards + combined 85% coverage gate (includes PG-focused tests with mock pool) |
 | `governance-backend-fast` | Governance file + PG-selection path | Fast governance backend invariants: backend selection, rollback/four-eyes, invalid-backend fail-fast, audit completeness |
 | `test-postgresql` | PostgreSQL (mock + **real PG**) | Backend parity + contract tests (mock-pool) **+ real PostgreSQL advisory-lock contention tests** (`-m "postgresql and contention"`) |
 | `test-slow` | Default | Slow/heavy tests |

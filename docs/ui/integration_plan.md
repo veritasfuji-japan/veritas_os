@@ -149,7 +149,7 @@ python -m uvicorn veritas_os.api.server:app --reload --port 8000
 - **あり**（GitHub Actions）
   - `.github/workflows/main.yml`
     - lint（ruff, bandit）
-    - test（pytest + coverage, Python 3.11/3.12）
+    - test（pytest、Python 3.11/3.12の時間均衡shard + Python 3.12統合coverage）
   - `.github/workflows/publish-ghcr.yml`
     - GHCR publish 系
 
