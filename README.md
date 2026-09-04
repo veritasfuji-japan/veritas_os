@@ -1818,7 +1818,8 @@ Additional CI workflows:
 - Ruff lint + Bandit + architecture/security script checks
 - Dependency CVE audit (Python + Node)
 - **`governance-smoke`**: explicit fast smoke gate (`pytest -m smoke`, ~2 min)
-- Full unit test matrix (Python 3.11 + 3.12, 85% coverage gate)
+- Full unit test matrix (Python 3.11 + 3.12, duration-balanced shards;
+  combined Python 3.12 coverage must remain at least 85%)
 - Frontend lint / Vitest / Playwright E2E
 
 **Tier 2** (`release-gate.yml`) — every `v*` tag is blocked until all of the following pass:

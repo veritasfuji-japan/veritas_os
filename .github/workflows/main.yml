@@ -4,7 +4,7 @@
 # Tier Model (see docs/en/validation/production-validation.md for full explanation):
 #   Tier 1 — lint + governance-smoke   Fast gates, blocking on every PR (~5-8 min)
 #   Tier 1 — dependency-audit          CVE scan, blocking on every PR
-#   Tier 1 — test (py matrix)          Full unit tests + 85% coverage gate
+#   Tier 1 — test (py/shard matrix)    Full unit tests + 85% coverage gate
 #   Tier 1 — test-slow                 Heavy tests (parallel, non-blocking on matrix)
 #   Tier 1 — frontend-quality-gate     Lint / unit / E2E
 #   Tier 2 — release-gate.yml          Production validation, blocking on v* tags
@@ -269,7 +269,7 @@ jobs:
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install -r veritas_os/requirements-ci.txt
 
       - name: "[Tier 1] Check bind coverage evidence freshness"
         run: python -m scripts.governance.check_bind_coverage_evidence_freshness
@@ -342,7 +342,7 @@ jobs:
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install -r veritas_os/requirements-ci.txt
 
       - name: "[Tier 1] Verify YAML dependency from declared requirements"
         run: |
@@ -529,15 +529,17 @@ jobs:
   # [Tier 1] Test matrix
   # ============================================================
   test:
-    name: test (py${{ matrix.python-version }})
+    name: test (py${{ matrix.python-version }}, shard ${{ matrix.shard }}/4)
     needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
+      max-parallel: 8
       matrix:
         python-version: ["3.11", "3.12"]
+        shard: [1, 2, 3, 4]
 
     env:
       PYTHONUNBUFFERED: "1"
@@ -547,6 +549,7 @@ jobs:
       VERITAS_API_KEY: "DUMMY_FOR_CI"
       COVERAGE_FAIL_UNDER: "85"
       PYTEST_MARKEXPR: "not slow"
+      PYTEST_SHARD_COUNT: "4"
 
     steps:
       - name: Checkout
@@ -582,57 +585,144 @@ jobs:
 
           pip_retry "python -m pip install --upgrade pip --retries 5 --timeout 60"
 
-          # プロジェクト依存をインストール
-          pip_retry "python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt"
-
-          # テスト用追加パッケージ
+          # Keep the exact production pins while omitting the optional ML
+          # profile. ML/full dependency installation remains covered by the
+          # slow and future-compatibility lanes.
           pip_retry "python -m pip install --retries 5 --timeout 60 \
-            httpx \
-            anyio \
-            pytest \
-            pytest-cov \
-            pytest-asyncio"
+            -r veritas_os/requirements-ci.txt"
 
-      - name: Run tests (with coverage)
+      - name: Select duration-balanced test shard
+        run: |
+          set -euxo pipefail
+          python scripts/ci/select_pytest_shard.py \
+            --shard-index "${{ matrix.shard }}" \
+            --shard-count "${PYTEST_SHARD_COUNT}" \
+            > pytest-files.txt
+          test -s pytest-files.txt
+          echo "Selected $(wc -l < pytest-files.txt) test files."
+
+      - name: Run test shard
         id: pytest
         run: |
           set -euxo pipefail
-          mkdir -p test-reports coverage-html
+          mkdir -p test-reports
+          mapfile -t test_files < pytest-files.txt
 
-          # Full Python test discovery roots are explicit to avoid skipping
-          # either repository-level tests/ or package-level veritas_os/tests/.
-          pytest -q veritas_os/tests tests \
-            --cov=veritas_os \
-            --cov-config=veritas_os/tests/.coveragerc \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-report=html:coverage-html \
-            --cov-fail-under=${COVERAGE_FAIL_UNDER} \
-            -m "${PYTEST_MARKEXPR}" \
-            --durations=20 \
-            --junitxml=test-reports/pytest.xml \
+          pytest_args=(
+            -q
+            "${test_files[@]}"
+            -m "${PYTEST_MARKEXPR}"
+            --durations=20
+            --junitxml="test-reports/pytest.xml"
             --tb=short
+          )
+
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            export COVERAGE_FILE=".coverage.${{ matrix.shard }}"
+            pytest "${pytest_args[@]}" \
+              --cov=veritas_os \
+              --cov-config=veritas_os/tests/.coveragerc \
+              --cov-report= \
+              --cov-fail-under=0
+          else
+            pytest "${pytest_args[@]}"
+          fi
 
       - name: Upload test report (junit)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-${{ matrix.python-version }}
+          name: pytest-${{ matrix.python-version }}-${{ matrix.shard }}
           path: test-reports/pytest.xml
           if-no-files-found: warn
 
-      - name: Upload coverage (xml + html)
+      - name: Upload Python 3.12 coverage shard
+        if: ${{ always() && matrix.python-version == '3.12' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data-${{ matrix.python-version }}-${{ matrix.shard }}
+          path: .coverage.${{ matrix.shard }}
+          if-no-files-found: warn
+          include-hidden-files: true
+
+  coverage:
+    name: coverage (py3.12 combined)
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      COVERAGE_FAIL_UNDER: "85"
+      PYTEST_SHARD_COUNT: "4"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage tooling
+        run: python -m pip install pytest-cov==6.0.0
+
+      - name: Download Python 3.12 coverage shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-3.12-*
+          path: coverage-data
+          merge-multiple: true
+
+      - name: Combine coverage and enforce threshold
+        run: |
+          set -euxo pipefail
+          test "$(find coverage-data -maxdepth 1 -type f -name '.coverage.*' | wc -l)" -eq "${PYTEST_SHARD_COUNT}"
+          python -m coverage combine coverage-data
+          python -m coverage report \
+            --rcfile=veritas_os/tests/.coveragerc \
+            --fail-under="${COVERAGE_FAIL_UNDER}"
+          python -m coverage xml \
+            --rcfile=veritas_os/tests/.coveragerc \
+            -o coverage.xml
+          python -m coverage html \
+            --rcfile=veritas_os/tests/.coveragerc \
+            -d coverage-html
+
+      - name: Upload combined coverage (xml + html)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.python-version }}
+          name: coverage-3.12-combined
           path: |
             coverage.xml
             coverage-html
           if-no-files-found: warn
 
-      # Removed: "Fail job if tests failed" guard — pytest step now fails
-      # the job directly (continue-on-error removed).
+  # Preserve the existing required check names while the implementation runs
+  # as a shard matrix. Both compatibility checks fail closed if any shard or
+  # the combined Python 3.12 coverage gate fails.
+  test-result:
+    name: test (py${{ matrix.python-version }})
+    needs: [test, coverage]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Verify all Python shards and coverage passed
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+        run: |
+          set -euxo pipefail
+          test "${TEST_RESULT}" = "success"
+          test "${COVERAGE_RESULT}" = "success"
 
 
   # ============================================================
@@ -708,9 +798,8 @@ jobs:
           }
 
           pip_retry "python -m pip install --upgrade pip --retries 5 --timeout 60"
-          pip_retry "python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt"
-          pip_retry "python -m pip install --retries 5 --timeout 60 \"psycopg[binary]\" psycopg-pool"
-          pip_retry "python -m pip install --retries 5 --timeout 60 httpx anyio pytest pytest-cov pytest-asyncio"
+          pip_retry "python -m pip install --retries 5 --timeout 60 \
+            -r veritas_os/requirements-ci.txt"
 
       - name: Run Alembic migrations
         run: |

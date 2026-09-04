@@ -241,7 +241,8 @@ pnpm --filter frontend e2e   # Playwright E2E
 
 These checks run in CI and must pass:
 
-1. `pytest` with `--cov-fail-under=85` (Python 3.11/3.12 matrix)
+1. Full `pytest` non-slow suite in duration-balanced Python 3.11/3.12 shards,
+   with combined Python 3.12 coverage enforced at `--fail-under=85`
 2. CodeQL security scan
 3. `scripts/architecture/check_responsibility_boundaries.py`
 4. `scripts/architecture/check_core_complexity_budget.py`
