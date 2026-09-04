@@ -527,10 +527,13 @@ jobs:
 
   # ============================================================
   # [Tier 1] Test matrix
+  # The dependency audit remains an independent blocking check. Keep it out of
+  # test-lane `needs` so an upstream registry outage cannot suppress test
+  # evidence while the audit itself still fails closed.
   # ============================================================
   test:
     name: test (py${{ matrix.python-version }}, shard ${{ matrix.shard }}/4)
-    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
+    needs: [lint, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -739,7 +742,7 @@ jobs:
   # ============================================================
   test-postgresql:
     name: test-postgresql (py3.12)
-    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
+    needs: [lint, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -871,7 +874,7 @@ jobs:
 
   test-slow:
     name: test-slow (py3.12)
-    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
+    needs: [lint, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     # test-slow installs the full requirements.txt which includes heavy optional
     # ML wheels (e.g. torch, torchvision). On a cold runner cache these can take
@@ -937,7 +940,7 @@ jobs:
   # ============================================================
   frontend-quality-gate:
     name: frontend-${{ matrix.gate }}
-    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
+    needs: [lint, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
