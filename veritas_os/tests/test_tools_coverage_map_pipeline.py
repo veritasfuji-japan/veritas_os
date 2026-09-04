@@ -168,6 +168,17 @@ def test___main___entrypoint_executes_isolated(tmp_path: Path):
 
     env = dict(os.environ)
     env["PYTHONPATH"] = str(tmp_proj) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    # This subprocess intentionally executes a generated mini-project. Do not
+    # let pytest-cov treat its temporary ``veritas_os`` package as production
+    # source, because that source no longer exists in the coverage-report job.
+    for name in (
+        "COV_CORE_SOURCE",
+        "COV_CORE_CONFIG",
+        "COV_CORE_DATAFILE",
+        "COV_CORE_BRANCH",
+        "COV_CORE_CONTEXT",
+    ):
+        env.pop(name, None)
 
     r = subprocess.run(
         [sys.executable, "-m", "veritas_os.tools.coverage_map_pipeline"],
@@ -180,6 +191,3 @@ def test___main___entrypoint_executes_isolated(tmp_path: Path):
     assert r.returncode == 0, r.stderr
     assert "[pipeline]" in r.stdout
     assert "missing_lines=" in r.stdout
-
-
-
