@@ -51,3 +51,22 @@ v0.3の独立入力欠落は拒否します。
 これらは前提条件であり、権限署名、失効・鮮度、必要な署名済み人間承認、明示的なauthorizer GO、
 許可されたissuerと署名検証の代わりにはなりません。テストは一時鍵と実際のEd25519検証を使用します。
 発行結果は未消費のauthorizationです。Bind呼び出し、credential解決、request送信、外部効果は行いません。
+
+## 消費時点のgovernance再検証
+
+temporal validatorは二段階の評価を行います。`governance_inputs.verification_now`では署名済みの
+発行時証跡を変更せず再構築・検証します。authorizationの有効期間を確認した後、同じ独立source、
+契約、署名済み権限証拠、必要な人間承認を消費時刻`now`で再検証します。失効情報の鮮度と
+runtime-authority評価もこの時刻を使用します。時刻によって変わる新しいproof hashを発行時hashと
+比較したり、発行時hashへ上書きしたりしません。発行時の検証より前への時刻巻き戻しは拒否します。
+
+`now`はpacketからではなく、呼び出し元の信頼できる実行時計から取得してください。この関数自体は
+時計の真正性を認証せず、registryから最新ポリシーを取得するものでもありません。独立した信頼入力と
+検証サービスはdeployment側の責任です。再検証失敗時は消費・credential取得より前に拒否し、
+過去の検証成功を現在の評価の代用にしません。
+
+ローカルv0.3統合テストは、発行済みauthorizationから一回限りの消費、Bind判定、OutcomeReceiptの
+対応関係、effect-state記録まで接続します。一時鍵、メモリ内store、テスト用adapter／credential provider、
+偽のTrustLog保存先を使用します。apply前の拒否はCONFIRMED_NO_EFFECT、汎用applyの成功だけでは
+独立した外部確認がないためEFFECT_UNKNOWNです。実際の/v1/decideから外部効果までの統合、
+本番監査保存の永続性、実顧客の操作を実証したものではありません。
