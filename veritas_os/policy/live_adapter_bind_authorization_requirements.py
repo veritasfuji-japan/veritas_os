@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from veritas_os.policy.canonical_promotion_live_adapter_dry_run_runtime_risk_review import (
+    verify_canonical_promotion_live_adapter_dry_run_runtime_risk_review_packet,
+)
+from veritas_os.policy.canonical_promotion_real_bind_authorization_contract import (
+    RequirementRoute,
+)
 
 from veritas_os.policy.live_adapter_bind_authorization_contracts import (
     COPIED_FIELDS,
@@ -124,7 +134,9 @@ def _requirement_proofs(
         ),
         (
             governance.human_approval_status,
-            "verified_human_approval" if governance.human_approval_proof else "action_contract",
+            "verified_human_approval"
+            if governance.human_approval_proof
+            else "action_contract",
             human_id,
             human_digest,
             (
@@ -283,3 +295,168 @@ def _copied_source_fields(
     for field in COPIED_FIELDS:
         result[field] = raw[field]
     return result
+
+
+class PromotionIdempotencyReplayReview(BaseModel):
+    """Inert review of replay requirements, never proof of an unused key.
+
+    The final authorization key needs the signed decision and validity window
+    and therefore cannot be issued at this stage. Atomic consumption remains
+    mandatory before credential access. This artifact makes no store query,
+    reservation, duplicate-absence claim, or execution-authority claim.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    format_version: Literal["promotion-idempotency-replay-review/v1"]
+    review_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_runtime_risk_review_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_projection_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reviewed_at: str
+    valid_until: str
+    requirement: Literal["idempotency_and_replay_review"]
+    requirement_satisfied: Literal[True]
+    remaining_authorization_routes: tuple[RequirementRoute, ...]
+    remaining_invocation_routes: tuple[RequirementRoute, ...]
+    next_authorization_requirement: Literal["signed_gate_bound_human_approval_issuance"]
+    final_authorization_key_required: Literal[True]
+    final_authorization_key_owner: Literal[
+        "veritas_os.policy.live_adapter_bind_authorization_checks"
+    ]
+    atomic_consumption_owner: Literal[
+        "veritas_os.policy.live_adapter_bind_authorization_consumption"
+    ]
+    atomic_consumption_before_credentials_required: Literal[True]
+    single_use_required: Literal[True]
+    duplicate_dispatch_prohibited: Literal[True]
+    bind_time_runtime_risk_recheck_required: Literal[True]
+    duplicate_absence_verified: Literal[False]
+    authorization_consumed: Literal[False]
+    execution_authorized: Literal[False]
+    bind_invoked: Literal[False]
+    request_dispatched: Literal[False]
+
+
+def _promotion_review_time(value: datetime) -> datetime:
+    if (
+        not isinstance(value, datetime)
+        or value.tzinfo is None
+        or value.utcoffset() is None
+    ):
+        raise LiveAdapterBindAuthorizationError("LABA_PROMOTION_REVIEW_TIME_INVALID")
+    return value.astimezone(timezone.utc)
+
+
+def review_promotion_idempotency_and_replay(
+    runtime_risk_review: Any,
+    source_final_credential_scope_recheck_packet: Any,
+    *,
+    reviewed_at: datetime,
+) -> PromotionIdempotencyReplayReview:
+    """Verify a fresh passing source and preserve existing consumption owners.
+
+    Raises:
+        LiveAdapterBindAuthorizationError: Source is invalid, blocked, expired,
+            or does not route through the existing replay/consumption owners.
+    """
+    current = _promotion_review_time(reviewed_at)
+    try:
+        source = (
+            verify_canonical_promotion_live_adapter_dry_run_runtime_risk_review_packet(
+                runtime_risk_review, source_final_credential_scope_recheck_packet
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        raise LiveAdapterBindAuthorizationError(
+            "LABA_PROMOTION_RISK_SOURCE_INVALID"
+        ) from exc
+    if (
+        source.fail_closed
+        or not source.runtime_risk_requirement_satisfied
+        or not source.ready_for_remaining_real_bind_authorization_requirements
+    ):
+        raise LiveAdapterBindAuthorizationError("LABA_PROMOTION_RISK_NOT_PASSED")
+    recorded = datetime.fromisoformat(source.runtime_risk_review_recorded_at)
+    deadline = datetime.fromisoformat(source.runtime_risk_review_decision.valid_until)
+    if not recorded <= current < deadline:
+        raise LiveAdapterBindAuthorizationError("LABA_PROMOTION_RISK_NOT_FRESH")
+    routes = source.remaining_authorization_routes
+    invocation = {
+        route.requirement: route for route in source.remaining_invocation_routes
+    }
+    owner = "veritas_os.policy.live_adapter_bind_authorization_consumption"
+    if (
+        len(routes) < 2
+        or routes[0].requirement != "idempotency_and_replay_review"
+        or routes[0].implementation_owner != __name__
+        or routes[1].requirement != "signed_gate_bound_human_approval_issuance"
+        or any(
+            name not in invocation or invocation[name].implementation_owner != owner
+            for name in ("authorization_consumption", "single_use_consumption")
+        )
+    ):
+        raise LiveAdapterBindAuthorizationError("LABA_PROMOTION_REPLAY_ROUTE_INVALID")
+    body = {
+        "format_version": "promotion-idempotency-replay-review/v1",
+        "source_runtime_risk_review_hash": source.promotion_live_adapter_dry_run_runtime_risk_review_hash,
+        "source_projection_digest": source.source_authorization_projection_digest,
+        "reviewed_at": current.isoformat(),
+        "valid_until": deadline.astimezone(timezone.utc).isoformat(),
+        "requirement": "idempotency_and_replay_review",
+        "requirement_satisfied": True,
+        "remaining_authorization_routes": routes[1:],
+        "remaining_invocation_routes": source.remaining_invocation_routes,
+        "next_authorization_requirement": routes[1].requirement,
+        "final_authorization_key_required": True,
+        "final_authorization_key_owner": "veritas_os.policy.live_adapter_bind_authorization_checks",
+        "atomic_consumption_owner": owner,
+        "atomic_consumption_before_credentials_required": True,
+        "single_use_required": True,
+        "duplicate_dispatch_prohibited": True,
+        "bind_time_runtime_risk_recheck_required": True,
+        "duplicate_absence_verified": False,
+        "authorization_consumed": False,
+        "execution_authorized": False,
+        "bind_invoked": False,
+        "request_dispatched": False,
+    }
+    candidate = PromotionIdempotencyReplayReview(review_hash="0" * 64, **body)
+    canonical = candidate.model_dump(mode="json", exclude={"review_hash"})
+    return candidate.model_copy(
+        update={
+            "review_hash": _digest("promotion-idempotency-replay-review/v1", canonical)
+        }
+    )
+
+
+def verify_promotion_idempotency_replay_review(
+    review: Any,
+    runtime_risk_review: Any,
+    source_final_credential_scope_recheck_packet: Any,
+    *,
+    now: datetime,
+) -> PromotionIdempotencyReplayReview:
+    """Reconstruct against full independent sources and check freshness now."""
+    current = _promotion_review_time(now)
+    try:
+        raw = (
+            review.model_dump(mode="json") if isinstance(review, BaseModel) else review
+        )
+        if not isinstance(raw, dict):
+            raise ValueError("review must be a mapping")
+        recorded = datetime.fromisoformat(raw["reviewed_at"])
+        expected = review_promotion_idempotency_and_replay(
+            runtime_risk_review,
+            source_final_credential_scope_recheck_packet,
+            reviewed_at=recorded,
+        )
+        if _digest("promotion-replay-verification/v1", raw) != _digest(
+            "promotion-replay-verification/v1", expected.model_dump(mode="json")
+        ):
+            raise ValueError("review reconstruction mismatch")
+        if not recorded <= current < datetime.fromisoformat(expected.valid_until):
+            raise ValueError("review expired or not yet valid")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise LiveAdapterBindAuthorizationError(
+            "LABA_PROMOTION_REPLAY_REVIEW_INVALID"
+        ) from exc
+    return expected
