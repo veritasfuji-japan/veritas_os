@@ -183,8 +183,15 @@ def _validate_contract_binding(
             "HARR_ACTION_CONTRACT_SOURCE_MISMATCH"
         )
 
-    scope_raw = source.authority_evidence_reference_bundle.get("bundle_scope")
-    if not isinstance(scope_raw, list):
+    bundle = source.authority_evidence_reference_bundle
+    scope_raw = (
+        bundle.bundle_scope
+        if hasattr(bundle, "bundle_scope")
+        else bundle.get("bundle_scope")
+        if isinstance(bundle, dict)
+        else None
+    )
+    if not isinstance(scope_raw, (list, tuple)):
         raise HumanApprovalRequirementResolutionError("HARR_SOURCE_SCOPE_INVALID")
     requested_scope = tuple(
         str(item).strip() for item in scope_raw if str(item).strip()
