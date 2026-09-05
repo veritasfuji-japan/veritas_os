@@ -43,6 +43,26 @@ def _eligibility():
     )
 
 
+def _eligibility_without_approval():
+    handoff = json.loads(VECTOR.read_text())["input"]
+    handoff["human_approval_requirement"] = {
+        "resolved": True,
+        "required": False,
+        "policy_ref": "fixture-policy",
+    }
+    handoff["human_approval_evidence"] = None
+    for record in handoff["provenance"]:
+        if record["field_path"] == "human_approval_requirement":
+            record["value"] = deepcopy(handoff["human_approval_requirement"])
+            record["provenance_class"] = "VERIFIED_POLICY_ARTIFACT"
+        elif record["field_path"] == "human_approval_evidence":
+            record["value"] = None
+            record["provenance_class"] = "VERIFIED_POLICY_ARTIFACT"
+    return build_guarded_promotion_eligibility_packet(
+        handoff, _complete_context(handoff), NOW, NOW
+    )
+
+
 def _canonical_replay_eligibility(*, semantic_match: bool, fields_changed: list[str]):
     """Build eligibility with explicit, distinct canonical replay identities."""
     handoff = json.loads(VECTOR.read_text())["input"]
@@ -87,6 +107,48 @@ def _resign_eligibility(raw: dict) -> dict:
     raw["eligibility_hash"] = eligibility_digest(ELIGIBILITY_PACKET_DOMAIN, preimage)
     raw["eligibility_id"] = f"gpe:v1:sha256:{raw['eligibility_hash']}"
     return raw
+
+
+def test_approval_not_required_maps_authoritative_context_without_receipt() -> None:
+    eligibility = _eligibility_without_approval()
+    packet = build_execution_intent_formation_readiness_packet(eligibility, NOW)
+    mapping = packet.source_to_execution_intent_mapping
+
+    assert eligibility.evidence_lineage["human_approval_receipt_ref"] is None
+    assert eligibility.evidence_lineage["human_approval_receipt_hash"] is None
+    assert mapping["approval_context"] == {
+        "required_human_approval": False,
+        "requirement_state": "NOT_REQUIRED_BY_CANONICAL_HANDOFF",
+        "requirement_policy_ref": "fixture-policy",
+    }
+    assert None not in mapping["evidence_refs"]
+    assert mapping["evidence_refs"] == [
+        eligibility.evidence_lineage["trustlog_artifact_ref"],
+        eligibility.evidence_lineage["replay_artifact_ref"],
+        eligibility.evidence_lineage["authority_evidence_ref"],
+        eligibility.evidence_lineage["expected_state_source_ref"],
+    ]
+    assert verify_execution_intent_formation_readiness_packet(packet) == packet
+
+    schema = json.loads(
+        Path("schemas/execution-intent-formation-readiness-v1.schema.json").read_text()
+    )
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(
+        packet.model_dump(mode="json")
+    )
+
+
+def test_approval_not_required_rejects_injected_receipt() -> None:
+    raw = _eligibility_without_approval().model_dump(mode="json")
+    raw["evidence_lineage"]["human_approval_receipt_ref"] = "fake-receipt"
+    raw["evidence_lineage"]["human_approval_receipt_hash"] = "fake-hash"
+    with pytest.raises(
+        ExecutionIntentFormationReadinessError,
+        match="EIFR_ELIGIBILITY_INVALID",
+    ):
+        build_execution_intent_formation_readiness_packet(
+            _resign_eligibility(raw), NOW
+        )
 
 
 def test_build_verify_mapping_and_content_addressing() -> None:
