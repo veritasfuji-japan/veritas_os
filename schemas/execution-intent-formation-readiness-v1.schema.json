@@ -246,22 +246,47 @@
           "minLength": 1
         },
         "approval_context": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "human_approval_receipt_ref",
-            "human_approval_receipt_hash"
-          ],
-          "properties": {
-            "human_approval_receipt_ref": {
-              "type": "string",
-              "minLength": 1
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "human_approval_receipt_ref",
+                "human_approval_receipt_hash"
+              ],
+              "properties": {
+                "human_approval_receipt_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "human_approval_receipt_hash": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
             },
-            "human_approval_receipt_hash": {
-              "type": "string",
-              "minLength": 1
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "required_human_approval",
+                "requirement_state",
+                "requirement_policy_ref"
+              ],
+              "properties": {
+                "required_human_approval": {
+                  "const": false
+                },
+                "requirement_state": {
+                  "const": "NOT_REQUIRED_BY_CANONICAL_HANDOFF"
+                },
+                "requirement_policy_ref": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
             }
-          }
+          ]
         },
         "policy_lineage": {
           "type": "object",
@@ -475,12 +500,26 @@
           "minLength": 1
         },
         "human_approval_receipt_ref": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "human_approval_receipt_hash": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "policy_snapshot_id": {
           "type": "string",
@@ -902,10 +941,24 @@
               "type": "string"
             },
             "human_approval_receipt_ref": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "human_approval_receipt_hash": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "policy_snapshot_id": {
               "type": "string"
