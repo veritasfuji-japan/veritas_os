@@ -95,6 +95,7 @@ def issue_gate_bound_human_approval_artifact(
     action_contract: ActionClassContract,
     event: HumanApprovalEvent,
     signer: HumanApprovalArtifactSigner,
+    expected_source: Any = None,
 ) -> dict[str, Any]:
     """Construct and sign approval derived only from an exact verified gate.
 
@@ -104,7 +105,9 @@ def issue_gate_bound_human_approval_artifact(
 
     Args:
         source_gate_review_packet: Exact source gate to verify and approve.
-        action_contract: Contract used only to resolve gate action semantics.
+        action_contract: Independently trusted policy, also the v0.3 gate anchor.
+        expected_source: Independent Authority Evidence Linkage source required
+            for v0.3. Never obtain this from the candidate gate's snapshot.
         event: Approval decision, timing, basis, and non-security metadata.
         signer: Deployment-controlled signing backend and signer provenance.
 
@@ -117,9 +120,13 @@ def issue_gate_bound_human_approval_artifact(
     """
     try:
         source = verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
-            source_gate_review_packet
+            source_gate_review_packet,
+            expected_source=expected_source,
+            expected_contract=action_contract,
         )
-        bind_context_hash = derive_verified_real_bind_context_hash(source)
+        bind_context_hash = derive_verified_real_bind_context_hash(
+            source, expected_source=expected_source, expected_contract=action_contract
+        )
     except (TypeError, ValueError) as exc:
         raise GateBoundHumanApprovalIssuanceError("GBHA_SOURCE_GATE_INVALID") from exc
 

@@ -61,7 +61,9 @@ def build_live_adapter_bind_authorization_artifact(
     authorization_issuer_signer: BindAuthorizationSigner,
 ) -> CanonicalLiveAdapterBindAuthorizationArtifact:
     """Issue one signed authorization without consuming it or invoking Bind."""
-    source = _source(_json(source_gate_review_packet))
+    source = _source(
+        _json(source_gate_review_packet), governance_inputs=governance_inputs
+    )
     _validate_source(source)
     governance = _validate_real_governance_inputs(source, governance_inputs)
 

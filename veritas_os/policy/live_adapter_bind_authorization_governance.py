@@ -37,9 +37,24 @@ _bind_context_hash = derive_verified_real_bind_context_hash
 
 def _source(
     value: Any,
+    *,
+    governance_inputs: RealBindAuthorizationGovernanceInputs | None = None,
 ) -> CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket:
+    """Verify with deployment-supplied anchors; None permits only legacy v1."""
+    if governance_inputs is not None and not isinstance(
+        governance_inputs, RealBindAuthorizationGovernanceInputs
+    ):
+        raise LiveAdapterBindAuthorizationError("LABA_GOVERNANCE_INPUTS_REQUIRED")
     try:
-        return verify_live_adapter_dry_run_bind_authorization_gate_review_packet(value)
+        return verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
+            value,
+            expected_source=(
+                governance_inputs.expected_source if governance_inputs else None
+            ),
+            expected_contract=(
+                governance_inputs.action_contract if governance_inputs else None
+            ),
+        )
     except (
         LiveAdapterDryRunBindAuthorizationGateReviewError,
         TypeError,
@@ -274,7 +289,11 @@ def _validate_real_governance_inputs(
             "LABA_AUTHORITY_REFERENCE_SOURCE_MISMATCH"
         )
 
-    bind_context_hash = derive_verified_real_bind_context_hash(source)
+    bind_context_hash = derive_verified_real_bind_context_hash(
+        source,
+        expected_source=inputs.expected_source,
+        expected_contract=contract,
+    )
     human_proof: VerifiedHumanApprovalReceipt | None = None
     human_status: Literal["VERIFIED", "NOT_REQUIRED"] = "NOT_REQUIRED"
     needs_human = _requires_human_approval(contract)

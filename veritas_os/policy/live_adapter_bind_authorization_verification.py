@@ -66,7 +66,9 @@ def verify_live_adapter_bind_authorization_artifact(
     except (ValidationError, TypeError, LiveAdapterBindAuthorizationError) as exc:
         raise LiveAdapterBindAuthorizationError("LABA_ARTIFACT_INVALID") from exc
 
-    source = _source(artifact.source_gate_review_packet)
+    source = _source(
+        artifact.source_gate_review_packet, governance_inputs=governance_inputs
+    )
     _validate_source(source)
     _compare_exact_source(artifact, source)
 

@@ -37,11 +37,31 @@ Pass `result.authority_linkage_packet` and that same trusted contract as
 `derive_verified_real_bind_context_hash(result.verified_gate_review_packet, ...)`.
 The helper reverifies the whole gate before deriving its context digest.
 Missing anchors or same-ID/version policy substitution fail closed for v0.3.
-This connects only the non-effecting path: existing approval/authorization
-issuers have not been enabled for v0.3 and still reject gates without anchors.
+This composition itself remains non-effecting. The separate approval and
+authorization issuers accept v0.3 with the independent inputs described below.
 No trusted policy registry, credential access, or execution capability is added.
 
-Integration tests exercise the real nested metadata-linkage chain without
+## Explicit v0.3 issuance inputs
+
+`issue_gate_bound_human_approval_artifact` accepts `expected_source` separately
+from the gate and uses its existing `action_contract` argument as trusted policy.
+An explicit approval event, matching approval reference and deployment signer
+remain mandatory. NOT_REQUIRED does not generate or infer a Human Approval Receipt.
+
+For Bind authorization, set `RealBindAuthorizationGovernanceInputs.expected_source`
+to the independently acquired authority linkage source and `action_contract` to
+the trusted contract. The decision-to-authorization entry point, authorization
+builder, verifier and governance context derivation propagate those same inputs.
+Do not populate either from embedded snapshots in an untrusted gate or artifact.
+Legacy v1 inputs remain compatible; missing anchors fail closed for v0.3.
+
+These are prerequisites, not a replacement for signed authority verification,
+revocation/freshness checks, required signed Human Approval, explicit authorizer
+GO, approved issuer identity or signature checks. Local tests use ephemeral keys
+and real Ed25519 verification. Issuance produces an unconsumed authorization;
+it does not invoke Bind, resolve credentials, dispatch requests or create effects.
+
+Requirement-resolution integration tests exercise the nested metadata chain without
 mocking its verifier. They do not claim cryptographic authority authentication.
 Authority signature/revocation verification and human approval verification
-remain separate boundaries. No execution or approval authority is created.
+remain separate boundaries. The requirement-resolution layer creates no authority.

@@ -16,9 +16,9 @@ embedded snapshotへのフォールバックはしません。さらに先の呼
 v0.3 gateを消費できません。有効化する際は信頼済み入力を明示的に渡す必要があります。
 検証対象packetから期待値を取り出してはいけません。解決時刻は記録値であり現在の鮮度の証明ではありません。
 
-統合テストではソース検証器をモックせず、実際の入れ子のmetadata-linkageチェーンを使います。
+承認要否の統合テストではソース検証器をモックせず、実際の入れ子のmetadata-linkageチェーンを使います。
 権限証拠の暗号学的認証を実証するものではありません。権限署名・失効検証、人間承認検証は
-別の境界として引き続き必要です。実行権限や承認は生成しません。
+別の境界として引き続き必要です。承認要否の解決層自体は実行権限や承認を生成しません。
 
 ## 非実行のfresh composition
 
@@ -32,6 +32,22 @@ REQUIREDでは呼び出し元の人間承認参照メタデータが必要です
 `derive_verified_real_bind_context_hash(result.verified_gate_review_packet, ...)`には
 `expected_source=result.authority_linkage_packet`と同じ信頼済み契約を`expected_contract`に渡します。
 gate全体を再検証してからcontext digestを導出します。v0.3の独立入力欠落や同一ID/versionでの
-契約差し替えは拒否します。接続対象は非実行経路のみです。既存の承認・authorization発行経路は
-v0.3向けに有効化せず、独立入力なしのgateを引き続き拒否します。
+契約差し替えは拒否します。このcomposition自体は非実行です。別の承認・authorization発行経路は
+下記の独立入力がある場合にv0.3を扱い、入力なしのgateは引き続き拒否します。
 trusted policy registry、credential access、実行機能は追加していません。
+
+## v0.3発行経路の明示的な信頼入力
+
+`issue_gate_bound_human_approval_artifact`へ`expected_source`をgateと独立して渡し、
+既存の`action_contract`には信頼できる契約を渡します。明示的な承認イベント、一致する承認参照、
+deployment管理のsignerは引き続き必須です。NOT_REQUIREDからHuman Approval Receiptを生成・推測しません。
+
+Bind authorizationでは`RealBindAuthorizationGovernanceInputs.expected_source`へ独立取得した
+authority linkage source、`action_contract`へ信頼できる契約を設定します。decisionからの発行入口、
+authorization builder、verifier、governanceのcontext導出まで同じ入力を伝播します。
+未信頼のgateやartifact内のsnapshotから期待値を取り出してはいけません。既存v1は互換性を維持し、
+v0.3の独立入力欠落は拒否します。
+
+これらは前提条件であり、権限署名、失効・鮮度、必要な署名済み人間承認、明示的なauthorizer GO、
+許可されたissuerと署名検証の代わりにはなりません。テストは一時鍵と実際のEd25519検証を使用します。
+発行結果は未消費のauthorizationです。Bind呼び出し、credential解決、request送信、外部効果は行いません。
