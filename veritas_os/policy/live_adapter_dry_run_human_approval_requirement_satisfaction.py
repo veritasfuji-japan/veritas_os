@@ -684,14 +684,21 @@ def build_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
         f"ladhars:v1:sha256:{digest}"
     )
     return verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
-        raw
+        raw, expected_source=source, expected_contract=contract
     )
 
 
 def verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
     raw: Any,
+    *,
+    expected_source: Any,
+    expected_contract: ActionClassContract,
 ) -> CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket:
-    """Reverify source, contract requirement, branch choice, and packet hash."""
+    """Reconstruct using independent trusted inputs, never embedded anchors.
+
+    Callers must obtain expected_source and expected_contract independently of
+    this packet. Embedded snapshots are compared, not used to select policy.
+    """
     try:
         value = raw.model_dump(mode="json") if isinstance(raw, BaseModel) else raw
         packet = CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket.model_validate(
@@ -707,8 +714,16 @@ def verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
         ) from exc
 
     actual = packet.model_dump(mode="json")
-    source = _authority_source(packet.source_authority_evidence_linkage_review_packet)
-    contract = _contract(packet.action_contract_snapshot)
+    source = _authority_source(expected_source)
+    contract = _contract(expected_contract)
+    if _digest(
+        DOMAIN, packet.source_authority_evidence_linkage_review_packet
+    ) != _digest(DOMAIN, source.model_dump(mode="json")) or _digest(
+        DOMAIN, packet.action_contract_snapshot
+    ) != _digest(DOMAIN, contract.to_dict()):
+        raise LiveAdapterDryRunHumanApprovalRequirementSatisfactionError(
+            "LADHARS_EXPECTED_BINDING_MISMATCH"
+        )
     resolution = _resolution(
         packet.human_approval_requirement_resolution_packet, source, contract
     )

@@ -7,9 +7,14 @@
 Requirement Satisfactionのbuilderとverifierも新しい呼び出しを使用します。
 
 期待する契約は信頼できるポリシー設定から取得してください。攻撃者が差し替えた契約を
-信頼の根拠にしてはいけません。Satisfaction packet内の契約snapshotは整合性情報であり、
-信頼済みポリシーとして選択された証明ではありません。利用側で信頼済みポリシーと照合する
-必要があります。解決時刻も記録値であり、現在の鮮度の証明ではありません。
+信頼の根拠にしてはいけません。Satisfaction verifierはキーワード引数`expected_source`と
+`expected_contract`を必須とし、埋め込まれた完全なソース・契約と独立入力を照合します。
+再構築されたresolutionだけを後段の導出に使用します。同一ID・versionでの契約差し替えも拒否します。
+Final Bind ReadinessとBind Gate Reviewのbuilder・verifierも、自己検証を含め同じ引数を伝播します。
+省略できるのは既存v1 linkage経路だけです。v0.3 satisfaction経路では片方でも欠ければ拒否し、
+embedded snapshotへのフォールバックはしません。さらに先の呼び出し元が独立入力を渡さない場合も
+v0.3 gateを消費できません。有効化する際は信頼済み入力を明示的に渡す必要があります。
+検証対象packetから期待値を取り出してはいけません。解決時刻は記録値であり現在の鮮度の証明ではありません。
 
 統合テストではソース検証器をモックせず、実際の入れ子のmetadata-linkageチェーンを使います。
 権限証拠の暗号学的認証を実証するものではありません。権限署名・失効検証、人間承認検証は
