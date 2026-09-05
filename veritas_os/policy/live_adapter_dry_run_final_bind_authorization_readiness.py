@@ -19,6 +19,12 @@ from veritas_os.policy.live_adapter_dry_run_human_approval_linkage import (
     LiveAdapterDryRunHumanApprovalLinkageError,
     verify_live_adapter_dry_run_human_approval_linkage_review_packet,
 )
+from veritas_os.policy.live_adapter_dry_run_human_approval_requirement_satisfaction import (
+    STATUS as REQUIREMENT_SATISFACTION_STATUS,
+    CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket,
+    LiveAdapterDryRunHumanApprovalRequirementSatisfactionError,
+    verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet,
+)
 
 FORMAT_VERSION = "canonical-live-adapter-dry-run-final-bind-authorization-readiness/v1"
 MECHANISM = (
@@ -353,16 +359,33 @@ def _packet_hash(raw: dict[str, Any]) -> str:
     return _digest(DOMAINS["packet"], {key: value for key, value in raw.items() if key not in omitted})
 
 
-def _source(value: Any) -> CanonicalLiveAdapterDryRunHumanApprovalLinkageReviewPacket:
+HumanApprovalLinkageSource = (
+    CanonicalLiveAdapterDryRunHumanApprovalLinkageReviewPacket
+    | CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket
+)
+
+
+def _source(value: Any) -> HumanApprovalLinkageSource:
     try:
         return verify_live_adapter_dry_run_human_approval_linkage_review_packet(value)
-    except (LiveAdapterDryRunHumanApprovalLinkageError, TypeError, ValueError) as exc:
-        raise LiveAdapterDryRunFinalBindAuthorizationReadinessError(
-            "LADFBAR_SOURCE_INVALID"
-        ) from exc
+    except (LiveAdapterDryRunHumanApprovalLinkageError, TypeError, ValueError):
+        try:
+            return (
+                verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
+                    value
+                )
+            )
+        except (
+            LiveAdapterDryRunHumanApprovalRequirementSatisfactionError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise LiveAdapterDryRunFinalBindAuthorizationReadinessError(
+                "LADFBAR_SOURCE_INVALID"
+            ) from exc
 
 
-def _validate_source(source: CanonicalLiveAdapterDryRunHumanApprovalLinkageReviewPacket) -> None:
+def _validate_source(source: HumanApprovalLinkageSource) -> None:
     if source.request_dispatch_state != "NOT_DISPATCHED" or source.request_dispatched:
         raise LiveAdapterDryRunFinalBindAuthorizationReadinessError("LADFBAR_SOURCE_DISPATCHED")
     if source.bind_state != "NOT_BOUND" or source.bind_invoked:
@@ -371,9 +394,27 @@ def _validate_source(source: CanonicalLiveAdapterDryRunHumanApprovalLinkageRevie
         raise LiveAdapterDryRunFinalBindAuthorizationReadinessError("LADFBAR_SOURCE_AUTHORIZED")
     if source.human_approval_state != "NOT_APPROVED":
         raise LiveAdapterDryRunFinalBindAuthorizationReadinessError("LADFBAR_SOURCE_APPROVED")
-    if source.human_approval_linkage_status != SOURCE_STATUS:
+    expected_status = (
+        REQUIREMENT_SATISFACTION_STATUS
+        if isinstance(
+            source,
+            CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket,
+        )
+        else SOURCE_STATUS
+    )
+    if source.human_approval_linkage_status != expected_status:
         raise LiveAdapterDryRunFinalBindAuthorizationReadinessError("LADFBAR_SOURCE_STATUS")
     human = source.human_approval_linkage_result
+    if (
+        isinstance(
+            source,
+            CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket,
+        )
+        and not human.approval_requirement_satisfied
+    ):
+        raise LiveAdapterDryRunFinalBindAuthorizationReadinessError(
+            "LADFBAR_APPROVAL_REQUIREMENT_UNSATISFIED"
+        )
     authority = source.authority_evidence_linkage_result
     bind = source.source_authority_evidence_linkage_review_packet[
         "source_bind_pre_dispatch_review_packet"
@@ -409,8 +450,10 @@ def _requirements(names: tuple[str, ...]) -> list[dict[str, Any]]:
             for ordinal, name in enumerate(names, 1)]
 
 
-def _derived(source: CanonicalLiveAdapterDryRunHumanApprovalLinkageReviewPacket,
-             decision: FinalBindAuthorizationReadinessReviewDecision) -> tuple[Any, ...]:
+def _derived(
+    source: HumanApprovalLinkageSource,
+    decision: FinalBindAuthorizationReadinessReviewDecision,
+) -> tuple[Any, ...]:
     accepted = decision.review_outcome == OUTCOMES[0]
     result = {
         "source_human_approval_linkage_passed": True,

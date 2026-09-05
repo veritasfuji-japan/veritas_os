@@ -154,3 +154,22 @@ def test_hash_tamper_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
         match="HARR_HASH_MISMATCH",
     ):
         resolution.verify_human_approval_requirement_resolution_packet(raw)
+
+def test_typed_authority_bundle_scope_is_supported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_source_verifier(monkeypatch)
+    source = _source()
+    source.authority_evidence_reference_bundle = SimpleNamespace(
+        bundle_scope=("payments:transfer",)
+    )
+
+    packet = resolution.build_human_approval_requirement_resolution_packet(
+        source,
+        _contract(required=False),
+        datetime(2026, 9, 5, 0, 6, tzinfo=timezone.utc),
+    )
+
+    assert packet.requested_scope == ("payments:transfer",)
+    assert packet.requirement_state == "NOT_REQUIRED_BY_ACTION_CONTRACT"
+
