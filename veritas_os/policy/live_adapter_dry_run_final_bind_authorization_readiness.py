@@ -365,14 +365,18 @@ HumanApprovalLinkageSource = (
 )
 
 
-def _source(value: Any) -> HumanApprovalLinkageSource:
+def _source(
+    value: Any, *, expected_source: Any = None, expected_contract: Any = None
+) -> HumanApprovalLinkageSource:
     try:
         return verify_live_adapter_dry_run_human_approval_linkage_review_packet(value)
     except (LiveAdapterDryRunHumanApprovalLinkageError, TypeError, ValueError):
         try:
             return (
                 verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
-                    value
+                    value,
+                    expected_source=expected_source,
+                    expected_contract=expected_contract
                 )
             )
         except (
@@ -482,9 +486,16 @@ def build_live_adapter_dry_run_final_bind_authorization_readiness_packet(
     source_human_approval_linkage_review_packet: Any,
     final_bind_authorization_readiness_review_decision: Any,
     final_bind_authorization_readiness_recorded_at: datetime,
+    *,
+    expected_source: Any = None,
+    expected_contract: Any = None,
 ) -> CanonicalLiveAdapterDryRunFinalBindAuthorizationReadinessPacket:
     """Build and self-verify deterministic final readiness evidence."""
-    source = _source(_json(source_human_approval_linkage_review_packet))
+    source = _source(
+        _json(source_human_approval_linkage_review_packet),
+        expected_source=expected_source,
+        expected_contract=expected_contract,
+    )
     _validate_source(source)
     decision = _decision(final_bind_authorization_readiness_review_decision)
     recorded_at = _timestamp(final_bind_authorization_readiness_recorded_at)
@@ -533,11 +544,18 @@ def build_live_adapter_dry_run_final_bind_authorization_readiness_packet(
     digest = _packet_hash(raw)
     raw["live_adapter_dry_run_final_bind_authorization_readiness_hash"] = digest
     raw["live_adapter_dry_run_final_bind_authorization_readiness_id"] = f"ladfbar:v1:sha256:{digest}"
-    return verify_live_adapter_dry_run_final_bind_authorization_readiness_packet(raw)
+    return verify_live_adapter_dry_run_final_bind_authorization_readiness_packet(
+        raw,
+        expected_source=expected_source,
+        expected_contract=expected_contract,
+    )
 
 
 def verify_live_adapter_dry_run_final_bind_authorization_readiness_packet(
     raw: Any,
+    *,
+    expected_source: Any = None,
+    expected_contract: Any = None,
 ) -> CanonicalLiveAdapterDryRunFinalBindAuthorizationReadinessPacket:
     """Reverify source, derived content, digests, packet hash, and packet ID."""
     try:
@@ -546,7 +564,11 @@ def verify_live_adapter_dry_run_final_bind_authorization_readiness_packet(
     except (ValidationError, TypeError, LiveAdapterDryRunFinalBindAuthorizationReadinessError) as exc:
         raise LiveAdapterDryRunFinalBindAuthorizationReadinessError("LADFBAR_PACKET_INVALID") from exc
     actual = packet.model_dump(mode="json")
-    source = _source(packet.source_human_approval_linkage_review_packet)
+    source = _source(
+        packet.source_human_approval_linkage_review_packet,
+        expected_source=expected_source,
+        expected_contract=expected_contract,
+    )
     _validate_source(source)
     source_raw = source.model_dump(mode="json")
     identities = (
