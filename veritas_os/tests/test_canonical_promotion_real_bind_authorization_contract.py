@@ -129,7 +129,7 @@ def test_only_runtime_risk_requires_new_pre_authorization_implementation(
     )
 
 
-def test_all_declared_reuse_owners_are_existing_importable_modules(projection):
+def test_all_declared_owners_are_existing_importable_modules(projection):
     owners = {
         route.implementation_owner
         for route in (
@@ -141,7 +141,7 @@ def test_all_declared_reuse_owners_are_existing_importable_modules(projection):
 
     assert owners
     assert all(importlib.util.find_spec(owner) is not None for owner in owners)
-    assert importlib.util.find_spec(RUNTIME_RISK_ARTIFACT_OWNER) is None
+    assert importlib.util.find_spec(RUNTIME_RISK_ARTIFACT_OWNER) is not None
 
 
 def test_runtime_risk_contract_preserves_just_in_time_bind_recheck(projection):
