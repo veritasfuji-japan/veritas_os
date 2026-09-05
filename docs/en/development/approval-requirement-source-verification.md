@@ -61,6 +61,30 @@ GO, approved issuer identity or signature checks. Local tests use ephemeral keys
 and real Ed25519 verification. Issuance produces an unconsumed authorization;
 it does not invoke Bind, resolve credentials, dispatch requests or create effects.
 
+## Consumption-time governance recheck
+
+The temporal validator separates two evaluations. `governance_inputs.verification_now`
+reconstructs and verifies the signed issuance proofs unchanged. After checking
+the authorization validity window, it revalidates the same independent source,
+contract, signed authority and required Human Approval at the explicit consumption
+`now`, including revocation freshness and runtime-authority evaluation. New
+time-dependent proof hashes are not compared to or written over historical hashes.
+Backdating consumption before the issuance verification time is rejected.
+
+The caller must obtain `now` from its trusted execution clock, not packet data.
+This function does not authenticate a caller's clock or re-read policy from a
+registry. Independent trust inputs and live verification dependencies remain the
+deployment's responsibility. Any failed recheck stops before consumption and
+credential resolution; no historical pass can substitute for the new evaluation.
+
+Local v0.3 integration tests connect issued authorization to single-use consumption,
+Bind adjudication, OutcomeReceipt lineage and effect-state recording. They use
+ephemeral signing keys, in-memory stores, a synthetic adapter/credential provider,
+and a fake TrustLog sink. Blocked apply records CONFIRMED_NO_EFFECT; a successful
+generic apply remains EFFECT_UNKNOWN without an independently verified external
+acknowledgement. These tests do not prove live /v1/decide-to-effect integration,
+durable production audit storage or a real customer operation.
+
 Requirement-resolution integration tests exercise the nested metadata chain without
 mocking its verifier. They do not claim cryptographic authority authentication.
 Authority signature/revocation verification and human approval verification

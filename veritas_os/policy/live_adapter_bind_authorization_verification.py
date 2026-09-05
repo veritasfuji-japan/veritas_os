@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -235,17 +236,43 @@ def validate_live_adapter_bind_authorization_temporal_validity(
     governance_inputs: RealBindAuthorizationGovernanceInputs,
     trust_inputs: BindAuthorizationTrustInputs,
 ) -> CanonicalLiveAdapterBindAuthorizationArtifact:
-    """Verify an authorization and enforce its validity window at a supplied time."""
+    """Verify immutable issuance evidence, then recheck governance at consumption.
+
+    verification_now belongs to reproducible issuance proof reconstruction.
+    The independently supplied consumption clock must also drive a fresh
+    authority/revocation, Human Approval and runtime-authority evaluation.
+    Fresh time-dependent proof hashes must not replace the signed historical
+    hashes. Failure occurs before atomic consumption or credential access.
+    The caller must supply now from its trusted execution clock.
+    """
+    current = datetime.fromisoformat(_timestamp(now))
+    if not isinstance(governance_inputs, RealBindAuthorizationGovernanceInputs):
+        raise LiveAdapterBindAuthorizationError("LABA_GOVERNANCE_INPUTS_REQUIRED")
+    if current < datetime.fromisoformat(
+        _timestamp(governance_inputs.verification_now)
+    ):
+        raise LiveAdapterBindAuthorizationError("LABA_CONSUMPTION_BEFORE_VERIFICATION")
     verified = verify_live_adapter_bind_authorization_artifact(
         artifact,
         governance_inputs=governance_inputs,
         trust_inputs=trust_inputs,
     )
-    current = datetime.fromisoformat(_timestamp(now))
     if not (
         datetime.fromisoformat(verified.valid_from)
         <= current
         < datetime.fromisoformat(verified.valid_until)
     ):
         raise LiveAdapterBindAuthorizationError("LABA_NOT_CURRENTLY_VALID")
+    current_inputs = replace(governance_inputs, verification_now=current)
+    source = _source(
+        verified.source_gate_review_packet, governance_inputs=current_inputs
+    )
+    _validate_source(source)
+    current_governance = _validate_real_governance_inputs(source, current_inputs)
+    if (
+        current_governance.bind_context_hash != verified.bind_context_hash
+        or current_governance.human_approval_status
+        != verified.human_approval_requirement_status
+    ):
+        raise LiveAdapterBindAuthorizationError("LABA_CURRENT_GOVERNANCE_MISMATCH")
     return verified
