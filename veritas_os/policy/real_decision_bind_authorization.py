@@ -128,8 +128,12 @@ def issue_verified_real_decision_bind_authorization(
     ):
         raise RealDecisionBindAuthorizationError("RDBA_DECISION_LINEAGE_MISMATCH")
 
+    if not isinstance(governance_inputs, RealBindAuthorizationGovernanceInputs):
+        raise RealDecisionBindAuthorizationError("RDBA_GOVERNANCE_INPUTS_REQUIRED")
     source = verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
-        source_gate_review_packet
+        source_gate_review_packet,
+        expected_source=governance_inputs.expected_source,
+        expected_contract=governance_inputs.action_contract,
     )
     _require_exact_intent(
         intent,
