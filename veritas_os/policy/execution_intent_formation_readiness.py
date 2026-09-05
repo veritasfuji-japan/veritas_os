@@ -178,8 +178,6 @@ def _require_source_fields(
             "replay_artifact_hash",
             "authority_evidence_ref",
             "authority_evidence_hash",
-            "human_approval_receipt_ref",
-            "human_approval_receipt_hash",
             "policy_snapshot_id",
             "policy_version",
             "policy_semantic_digest",
@@ -194,6 +192,38 @@ def _require_source_fields(
             for field in fields
         ):
             raise ExecutionIntentFormationReadinessError("EIFR_SOURCE_FIELD_MISSING")
+    approval_requirement = eligibility.source_handoff.get(
+        "human_approval_requirement"
+    )
+    if (
+        not isinstance(approval_requirement, dict)
+        or approval_requirement.get("resolved") is not True
+        or type(approval_requirement.get("required")) is not bool
+    ):
+        raise ExecutionIntentFormationReadinessError(
+            "EIFR_APPROVAL_REQUIREMENT_INVALID"
+        )
+    receipt_ref = eligibility.evidence_lineage.get("human_approval_receipt_ref")
+    receipt_hash = eligibility.evidence_lineage.get("human_approval_receipt_hash")
+    if approval_requirement["required"]:
+        if any(
+            not isinstance(value, str) or not value.strip()
+            for value in (receipt_ref, receipt_hash)
+        ):
+            raise ExecutionIntentFormationReadinessError(
+                "EIFR_APPROVAL_RECEIPT_REQUIRED"
+            )
+    else:
+        if receipt_ref is not None or receipt_hash is not None:
+            raise ExecutionIntentFormationReadinessError(
+                "EIFR_APPROVAL_RECEIPT_UNEXPECTED"
+            )
+        policy_ref = approval_requirement.get("policy_ref")
+        if not isinstance(policy_ref, str) or not policy_ref.strip():
+            raise ExecutionIntentFormationReadinessError(
+                "EIFR_APPROVAL_NOT_REQUIRED_SOURCE_MISSING"
+            )
+
     _aware_iso(
         eligibility.source_decision_identity["canonical_decision_ts"],
         "EIFR_SOURCE_FIELD_MISSING",
@@ -212,6 +242,28 @@ def _mapping(
     source = eligibility.source_decision_identity
     candidate = eligibility.candidate_identity
     evidence = eligibility.evidence_lineage
+    approval_requirement = eligibility.source_handoff["human_approval_requirement"]
+    approval_required = approval_requirement["required"]
+    evidence_refs = [
+        evidence["trustlog_artifact_ref"],
+        evidence["replay_artifact_ref"],
+        evidence["authority_evidence_ref"],
+    ]
+    if approval_required:
+        evidence_refs.append(evidence["human_approval_receipt_ref"])
+    evidence_refs.append(evidence["expected_state_source_ref"])
+    approval_context = (
+        {
+            "human_approval_receipt_ref": evidence["human_approval_receipt_ref"],
+            "human_approval_receipt_hash": evidence["human_approval_receipt_hash"],
+        }
+        if approval_required
+        else {
+            "required_human_approval": False,
+            "requirement_state": "NOT_REQUIRED_BY_CANONICAL_HANDOFF",
+            "requirement_policy_ref": approval_requirement["policy_ref"],
+        }
+    )
     return {
         "decision_id": source["canonical_decision_id"],
         "request_id": source["request_id"],
@@ -220,21 +272,12 @@ def _mapping(
         "target_system": candidate["target_system"],
         "target_resource": candidate["target_resource"],
         "intended_action": candidate["action_contract_id"],
-        "evidence_refs": [
-            evidence["trustlog_artifact_ref"],
-            evidence["replay_artifact_ref"],
-            evidence["authority_evidence_ref"],
-            evidence["human_approval_receipt_ref"],
-            evidence["expected_state_source_ref"],
-        ],
+        "evidence_refs": evidence_refs,
         "decision_hash": source["canonical_decision_hash"],
         "decision_ts": source["canonical_decision_ts"],
         "ttl_seconds": None,
         "expected_state_fingerprint": evidence["expected_state_fingerprint"],
-        "approval_context": {
-            "human_approval_receipt_ref": evidence["human_approval_receipt_ref"],
-            "human_approval_receipt_hash": evidence["human_approval_receipt_hash"],
-        },
+        "approval_context": approval_context,
         "policy_lineage": {
             "policy_snapshot_id": evidence["policy_snapshot_id"],
             "policy_version": evidence["policy_version"],
