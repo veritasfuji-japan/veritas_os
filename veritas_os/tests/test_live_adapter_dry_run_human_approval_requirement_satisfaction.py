@@ -223,7 +223,7 @@ def test_contract_snapshot_tamper_fails_closed() -> None:
 
     with pytest.raises(
         LiveAdapterDryRunHumanApprovalRequirementSatisfactionError,
-        match="LADHARS_REQUIREMENT_RESOLUTION_BINDING_MISMATCH",
+        match="LADHARS_REQUIREMENT_RESOLUTION_INVALID",
     ):
         verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
             raw
