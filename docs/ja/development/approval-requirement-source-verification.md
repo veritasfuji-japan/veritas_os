@@ -70,3 +70,28 @@ runtime-authority評価もこの時刻を使用します。時刻によって変
 偽のTrustLog保存先を使用します。apply前の拒否はCONFIRMED_NO_EFFECT、汎用applyの成功だけでは
 独立した外部確認がないためEFFECT_UNKNOWNです。実際の/v1/decideから外部効果までの統合、
 本番監査保存の永続性、実顧客の操作を実証したものではありません。
+
+## 実decision接続：残っているsource境界
+
+`issue_verified_real_decision_bind_authorization`は、既存のcanonical promotion builderを使い、
+内容から決まる同一のExecutionIntentを再構築します。従来の汎用promotion helperは呼び出すたびに
+新しいUUIDを生成するため、事前に構築したsource intentとの完全一致が成立しませんでした。
+ポリシー鮮度は独立入力`governance_inputs.verification_now`で評価します。policy IDと任意の
+approval contextは検証済みpromotionとの比較用であり、policy lineageの上書きは禁止します。
+
+独立プロセスのHTTP統合テストで、実際の認証済み`/v1/decide`、kernel、コンパイル済みpolicyの
+署名検証、CDA生成を実行します。モデル出力とクラウドクライアントはテスト用です。返却された
+CDAとchosen candidateを変更せず、canonical promotion、readiness、pre-bind、preflight、
+native adapter selectionまで接続します。benchmarkの期待結果や、無条件に成功するpacket verifierは
+この対応関係の根拠にしません。
+
+このテストは未接続箇所を確認するもので、実行成功の証明ではありません。
+`build_fresh_bind_source_chain`はhandoff由来のselection形式のみ受け付けるため、独立したtrusted
+contractを渡してもpromotion由来のselection形式を拒否します。別途有効なv0.3 fixture gateも、
+実decisionのintentと異なるため署名前に拒否します。この実decisionについてauthorization発行、
+Human Approval Receipt生成、credential取得、adapter実行、Bind／outcome receipt生成は行いません。
+
+次の実装では、promotion由来のsourceと独立source／contractを、requirement resolution／satisfactionから
+authorization verifierまで維持する必要があります。native packetの形式名だけを書き換えたり、
+旧schemaを満たすためにhandoffのreplay／approval証拠を作ったりしてはいけません。
+既存のfixture起点のv0.3消費テストと、この実decision接続テストは別の検証です。

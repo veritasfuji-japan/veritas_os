@@ -95,6 +95,8 @@ def test_public_boundary_has_no_caller_lineage_override_parameters() -> None:
 def test_decision_lineage_mismatch_stops_before_source_verification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from veritas_os.tests.test_live_adapter_bind_authorization import _governance_inputs
+
     cda = SimpleNamespace(
         decision_id="cda:v1:sha256:" + "a" * 64,
         decision_hash="a" * 64,
@@ -109,10 +111,9 @@ def test_decision_lineage_mismatch_stops_before_source_verification(
     )
     monkeypatch.setattr(
         "veritas_os.policy.real_decision_bind_authorization."
-        "try_promote_verified_canonical_decision_candidate_to_execution_intent",
+        "build_canonical_verified_decision_promotion_packet",
         lambda *args, **kwargs: SimpleNamespace(
-            promoted=True,
-            execution_intent=foreign,
+            exact_execution_intent=foreign.to_dict(),
         ),
     )
     source_called = False
@@ -139,7 +140,7 @@ def test_decision_lineage_mismatch_stops_before_source_verification(
             signed_authorization_decision_artifact={},
             valid_from="2026-08-25T00:00:00Z",
             valid_until="2026-08-25T00:05:00Z",
-            governance_inputs=SimpleNamespace(),
+            governance_inputs=_governance_inputs(),
             trust_inputs=SimpleNamespace(),
             authorization_issuer_signer=SimpleNamespace(),
         )
@@ -167,8 +168,8 @@ def test_decision_entry_forwards_independent_anchors_before_issuance(monkeypatch
     )
     monkeypatch.setattr(
         module
-        + "try_promote_verified_canonical_decision_candidate_to_execution_intent",
-        lambda *args, **kwargs: SimpleNamespace(promoted=True, execution_intent=intent),
+        + "build_canonical_verified_decision_promotion_packet",
+        lambda *args, **kwargs: SimpleNamespace(exact_execution_intent=intent.to_dict()),
     )
 
     class StopAtVerifiedBoundary(ValueError):
