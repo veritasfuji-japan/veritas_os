@@ -233,9 +233,7 @@ def test_contract_snapshot_tamper_fails_closed() -> None:
 def test_packet_hash_tamper_fails_closed() -> None:
     _, _, _, _, satisfaction = _build_satisfaction(required=False)
     raw = deepcopy(satisfaction.model_dump(mode="json"))
-    raw["human_approval_linkage_review_recorded_at"] = (
-        SATISFACTION_RECORDED_AT + timedelta(seconds=1)
-    ).isoformat()
+    raw["live_adapter_dry_run_human_approval_linkage_review_hash"] = "0" * 64
 
     with pytest.raises(
         LiveAdapterDryRunHumanApprovalRequirementSatisfactionError,
