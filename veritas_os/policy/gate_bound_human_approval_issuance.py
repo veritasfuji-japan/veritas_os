@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from veritas_os.governance.action_contracts import ActionClassContract
@@ -120,10 +121,26 @@ def issue_gate_bound_human_approval_artifact(
         )
         bind_context_hash = derive_verified_real_bind_context_hash(source)
     except (TypeError, ValueError) as exc:
-        raise GateBoundHumanApprovalIssuanceError(
-            "GBHA_SOURCE_GATE_INVALID"
-        ) from exc
+        raise GateBoundHumanApprovalIssuanceError("GBHA_SOURCE_GATE_INVALID") from exc
 
+    return _issue_verified_approval(
+        source,
+        bind_context_hash,
+        action_contract=action_contract,
+        event=event,
+        signer=signer,
+    )
+
+
+def _issue_verified_approval(
+    source: Any,
+    bind_context_hash: str,
+    *,
+    action_contract: ActionClassContract,
+    event: HumanApprovalEvent,
+    signer: HumanApprovalArtifactSigner,
+) -> dict[str, Any]:
+    """Reuse receipt construction only after a public entry verifies its source."""
     intent = source.execution_intent
     if not isinstance(intent, dict):
         raise GateBoundHumanApprovalIssuanceError("GBHA_INTENT_INVALID")
@@ -154,18 +171,12 @@ def issue_gate_bound_human_approval_artifact(
         or any(item not in action_contract.allowed_scope for item in scope)
     ):
         raise GateBoundHumanApprovalIssuanceError("GBHA_APPROVAL_SCOPE_INVALID")
-    approval_scope = _required_text(
-        human_ref, "approval_scope", "GBHA_HUMAN_REFERENCE"
-    )
+    approval_scope = _required_text(human_ref, "approval_scope", "GBHA_HUMAN_REFERENCE")
     if approval_scope not in scope:
         raise GateBoundHumanApprovalIssuanceError("GBHA_APPROVAL_SCOPE_MISMATCH")
 
-    approver_identity = _required_text(
-        human_ref, "approver_id", "GBHA_HUMAN_REFERENCE"
-    )
-    approver_role = _required_text(
-        human_ref, "approver_role", "GBHA_HUMAN_REFERENCE"
-    )
+    approver_identity = _required_text(human_ref, "approver_id", "GBHA_HUMAN_REFERENCE")
+    approver_role = _required_text(human_ref, "approver_role", "GBHA_HUMAN_REFERENCE")
     signer_fields = (signer.key_id, signer.identity, signer.role, signer.algorithm)
     if any(not isinstance(item, str) or not item.strip() for item in signer_fields):
         raise GateBoundHumanApprovalIssuanceError("GBHA_SIGNER_METADATA_INVALID")
@@ -234,9 +245,115 @@ def issue_gate_bound_human_approval_artifact(
     return artifact
 
 
+def issue_promotion_gate_bound_human_approval_artifact(
+    replay_review: Any,
+    runtime_risk_review: Any,
+    source_final_credential_scope_recheck_packet: Any,
+    *,
+    action_contract: ActionClassContract,
+    event: HumanApprovalEvent,
+    signer: HumanApprovalArtifactSigner,
+    now: datetime,
+) -> dict[str, Any]:
+    """Sign exact promotion approval after fresh, independently verified reviews.
+
+    A trusted caller must supply an actual human decision, deployment-controlled
+    signer, contract, and current clock. This function does not manufacture a
+    human decision or establish signer trust. The existing receipt verifier
+    remains a separate mandatory boundary; issuing a signature does not grant
+    execution authority or consume authorization.
+
+    Raises:
+        GateBoundHumanApprovalIssuanceError: Invalid source, event, timing, or
+            attempted override of reserved signed promotion lineage.
+    """
+    from veritas_os.policy.live_adapter_bind_authorization_requirements import (
+        verify_promotion_idempotency_replay_review,
+    )
+    from veritas_os.policy.canonical_promotion_real_bind_authorization_contract import (
+        project_verified_promotion_authorization_source,
+    )
+
+    try:
+        review = verify_promotion_idempotency_replay_review(
+            replay_review,
+            runtime_risk_review,
+            source_final_credential_scope_recheck_packet,
+            now=now,
+        )
+        source = project_verified_promotion_authorization_source(
+            source_final_credential_scope_recheck_packet
+        )
+    except (TypeError, ValueError) as exc:
+        raise GateBoundHumanApprovalIssuanceError(
+            "GBHA_PROMOTION_SOURCE_INVALID"
+        ) from exc
+    if not isinstance(event, HumanApprovalEvent):
+        raise GateBoundHumanApprovalIssuanceError("GBHA_PROMOTION_EVENT_INVALID")
+    try:
+        approved, signed, expires = (
+            datetime.fromisoformat(value)
+            for value in (event.approved_at, event.signed_at, event.expires_at)
+        )
+        if any(
+            value.tzinfo is None or value.utcoffset() is None
+            for value in (approved, signed, expires)
+        ):
+            raise ValueError("naive event time")
+        if not (
+            datetime.fromisoformat(review.reviewed_at)
+            <= approved
+            <= signed
+            <= now
+            < expires
+            <= datetime.fromisoformat(review.valid_until)
+        ):
+            raise ValueError("approval outside verified review window")
+    except (TypeError, ValueError) as exc:
+        raise GateBoundHumanApprovalIssuanceError(
+            "GBHA_PROMOTION_EVENT_TIME_INVALID"
+        ) from exc
+    if event.approval_result not in ("approved", "denied", "expired", "indeterminate"):
+        raise GateBoundHumanApprovalIssuanceError("GBHA_PROMOTION_RESULT_INVALID")
+    if event.metadata is not None and not isinstance(event.metadata, dict):
+        raise GateBoundHumanApprovalIssuanceError("GBHA_PROMOTION_METADATA_INVALID")
+    metadata = dict(event.metadata or {})
+    if "promotion_approval_binding" in metadata:
+        raise GateBoundHumanApprovalIssuanceError("GBHA_PROMOTION_BINDING_OVERRIDE")
+    metadata["promotion_approval_binding"] = {
+        "version": "promotion-human-approval-binding/v1",
+        "idempotency_replay_review_hash": review.review_hash,
+        "runtime_risk_review_hash": review.source_runtime_risk_review_hash,
+        "source_projection_digest": review.source_projection_digest,
+        "final_credential_scope_recheck_hash": source.source_final_credential_scope_recheck_hash,
+        "final_endpoint_identity_binding_digest": source.final_endpoint_identity_binding_digest,
+        "final_credential_scope_binding_digest": source.final_credential_scope_binding_digest,
+        "execution_intent_hash": source.execution_intent_hash,
+        "adapter_contract_hash": source.adapter_contract_hash,
+        "bind_context_hash": source.bind_context_hash,
+        "human_approval_receipt_verification_required": True,
+        "execution_authorized": False,
+    }
+    bound_event = replace(
+        event,
+        metadata=metadata,
+        approved_at=approved.astimezone(timezone.utc).isoformat(),
+        signed_at=signed.astimezone(timezone.utc).isoformat(),
+        expires_at=expires.astimezone(timezone.utc).isoformat(),
+    )
+    return _issue_verified_approval(
+        source,
+        source.bind_context_hash,
+        action_contract=action_contract,
+        event=bound_event,
+        signer=signer,
+    )
+
+
 __all__ = [
     "GateBoundHumanApprovalIssuanceError",
     "HumanApprovalArtifactSigner",
     "HumanApprovalEvent",
     "issue_gate_bound_human_approval_artifact",
+    "issue_promotion_gate_bound_human_approval_artifact",
 ]
