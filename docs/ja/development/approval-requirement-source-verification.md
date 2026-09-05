@@ -19,3 +19,19 @@ v0.3 gateを消費できません。有効化する際は信頼済み入力を�
 統合テストではソース検証器をモックせず、実際の入れ子のmetadata-linkageチェーンを使います。
 権限証拠の暗号学的認証を実証するものではありません。権限署名・失効検証、人間承認検証は
 別の境界として引き続き必要です。実行権限や承認は生成しません。
+
+## 非実行のfresh composition
+
+`build_fresh_bind_source_chain(..., expected_contract=trusted_contract)`でv0.3の
+承認要否検証を選択します。契約は`FreshBindSourceChainInputs`の外の信頼できる設定から渡し、
+検証対象gateから選択しません。authority sourceは検証済みの前提チェーンから内部で新規構築します。
+REQUIREDでは呼び出し元の人間承認参照メタデータが必要です。NOT_REQUIREDでは
+`human_approval_reference_bundle=None`を渡せます。Receiptを推測しません。
+契約を省略すると既存v1経路を維持します。
+
+`derive_verified_real_bind_context_hash(result.verified_gate_review_packet, ...)`には
+`expected_source=result.authority_linkage_packet`と同じ信頼済み契約を`expected_contract`に渡します。
+gate全体を再検証してからcontext digestを導出します。v0.3の独立入力欠落や同一ID/versionでの
+契約差し替えは拒否します。接続対象は非実行経路のみです。既存の承認・authorization発行経路は
+v0.3向けに有効化せず、独立入力なしのgateを引き続き拒否します。
+trusted policy registry、credential access、実行機能は追加していません。
