@@ -13,7 +13,7 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
     PostgresAtomicAuthorizationConsumptionStore,
     build_authorization_consumption_record,
 )
-from veritas_os.storage.db import get_pool
+from veritas_os.storage.db import close_pool, get_pool
 from veritas_os.policy.native_bind_authorization_consumption import (
     consume_native_bind_authorization,
     NativeAuthorizationConsumptionResult,
@@ -98,14 +98,20 @@ async def test_real_postgres_allows_exactly_one_concurrent_consumer() -> None:
     record = _record(token)
     store = PostgresAtomicAuthorizationConsumptionStore()
 
-    outcomes = await asyncio.gather(*(store.consume_once(record) for _ in range(32)))
+    try:
+        # Create and close pool workers on this test's event loop. Opening once
+        # also keeps the race focused on consumption, not lazy pool creation.
+        await get_pool()
+        outcomes = await asyncio.gather(*(store.consume_once(record) for _ in range(32)))
 
-    assert outcomes.count(True) == 1
-    assert outcomes.count(False) == 31
-    assert (
-        await _count_rows(authorization_id=record.live_adapter_bind_authorization_id)
-        == 1
-    )
+        assert outcomes.count(True) == 1
+        assert outcomes.count(False) == 31
+        assert (
+            await _count_rows(authorization_id=record.live_adapter_bind_authorization_id)
+            == 1
+        )
+    finally:
+        await close_pool()
 
 
 @pytest.mark.asyncio
@@ -128,13 +134,17 @@ async def test_real_postgres_idempotency_key_is_unique_across_authorizations() -
     )
 
     store = PostgresAtomicAuthorizationConsumptionStore()
-    outcomes = await asyncio.gather(
-        store.consume_once(first),
-        store.consume_once(second),
-    )
+    try:
+        await get_pool()
+        outcomes = await asyncio.gather(
+            store.consume_once(first),
+            store.consume_once(second),
+        )
 
-    assert sorted(outcomes) == [False, True]
-    assert await _count_rows(idempotency_key=shared_idempotency_key) == 1
+        assert sorted(outcomes) == [False, True]
+        assert await _count_rows(idempotency_key=shared_idempotency_key) == 1
+    finally:
+        await close_pool()
 
 
 @pytest.mark.skipif(
@@ -144,11 +154,9 @@ async def test_real_postgres_idempotency_key_is_unique_across_authorizations() -
 @pytest.mark.asyncio
 async def test_native_v2_real_verification_and_postgres_race(consumable) -> None:
     """Genuine API lineage, real signatures and four full consumers: one row."""
-    from veritas_os.storage.db import close_pool
-
     authorization, inputs, _ = consumable
-    await close_pool()
     try:
+        await get_pool()
         store = PostgresAtomicAuthorizationConsumptionStore()
         outcomes = await asyncio.gather(
             *(
