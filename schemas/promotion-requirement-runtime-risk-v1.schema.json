@@ -1,0 +1,444 @@
+{
+  "$defs": {
+    "RequirementRuntimeRiskDecision": {
+      "additionalProperties": false,
+      "description": "Closed caller evidence bound to one exact verified recheck result.",
+      "properties": {
+        "acknowledged_bind_time_risk_recheck_required": {
+          "const": true,
+          "title": "Acknowledged Bind Time Risk Recheck Required",
+          "type": "boolean"
+        },
+        "acknowledged_caller_evidence_only": {
+          "const": true,
+          "title": "Acknowledged Caller Evidence Only",
+          "type": "boolean"
+        },
+        "acknowledged_no_authorization": {
+          "const": true,
+          "title": "Acknowledged No Authorization",
+          "type": "boolean"
+        },
+        "action_contract_digest": {
+          "title": "Action Contract Digest",
+          "type": "string"
+        },
+        "bind_context_hash": {
+          "title": "Bind Context Hash",
+          "type": "string"
+        },
+        "expected_state_fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected State Fingerprint"
+        },
+        "observed_state_fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed State Fingerprint"
+        },
+        "review_id": {
+          "minLength": 1,
+          "title": "Review Id",
+          "type": "string"
+        },
+        "reviewed_at": {
+          "title": "Reviewed At",
+          "type": "string"
+        },
+        "reviewer_id": {
+          "minLength": 1,
+          "title": "Reviewer Id",
+          "type": "string"
+        },
+        "risk_reason": {
+          "minLength": 1,
+          "title": "Risk Reason",
+          "type": "string"
+        },
+        "runtime_risk_evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Runtime Risk Evidence Refs",
+          "type": "array"
+        },
+        "runtime_risk_signal": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Runtime Risk Signal"
+        },
+        "source_final_recheck_hash": {
+          "title": "Source Final Recheck Hash",
+          "type": "string"
+        },
+        "source_final_recheck_id": {
+          "title": "Source Final Recheck Id",
+          "type": "string"
+        },
+        "valid_until": {
+          "title": "Valid Until",
+          "type": "string"
+        }
+      },
+      "required": [
+        "review_id",
+        "reviewer_id",
+        "risk_reason",
+        "reviewed_at",
+        "valid_until",
+        "source_final_recheck_id",
+        "source_final_recheck_hash",
+        "bind_context_hash",
+        "action_contract_digest",
+        "expected_state_fingerprint",
+        "observed_state_fingerprint",
+        "runtime_risk_signal",
+        "runtime_risk_evidence_refs",
+        "acknowledged_caller_evidence_only",
+        "acknowledged_no_authorization",
+        "acknowledged_bind_time_risk_recheck_required"
+      ],
+      "title": "RequirementRuntimeRiskDecision",
+      "type": "object"
+    },
+    "RuntimeRiskReviewResult": {
+      "additionalProperties": false,
+      "description": "Deterministic, fail-closed interpretation of supplied risk evidence.",
+      "properties": {
+        "bind_time_runtime_risk_recheck_required": {
+          "const": true,
+          "title": "Bind Time Runtime Risk Recheck Required",
+          "type": "boolean"
+        },
+        "caller_supplied_evidence_only": {
+          "const": true,
+          "title": "Caller Supplied Evidence Only",
+          "type": "boolean"
+        },
+        "creates_bind_authorization": {
+          "const": false,
+          "title": "Creates Bind Authorization",
+          "type": "boolean"
+        },
+        "creates_execution_authority": {
+          "const": false,
+          "title": "Creates Execution Authority",
+          "type": "boolean"
+        },
+        "dispatches_request": {
+          "const": false,
+          "title": "Dispatches Request",
+          "type": "boolean"
+        },
+        "evidence_refs_present": {
+          "const": true,
+          "title": "Evidence Refs Present",
+          "type": "boolean"
+        },
+        "exact_context_binding_verified": {
+          "const": true,
+          "title": "Exact Context Binding Verified",
+          "type": "boolean"
+        },
+        "expected_state_fingerprint_present": {
+          "title": "Expected State Fingerprint Present",
+          "type": "boolean"
+        },
+        "external_evidence_authenticity_claimed": {
+          "const": false,
+          "title": "External Evidence Authenticity Claimed",
+          "type": "boolean"
+        },
+        "intent_expires_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Intent Expires At"
+        },
+        "intent_fresh_for_review_window": {
+          "title": "Intent Fresh For Review Window",
+          "type": "boolean"
+        },
+        "intent_ttl_present": {
+          "title": "Intent Ttl Present",
+          "type": "boolean"
+        },
+        "invokes_bind": {
+          "const": false,
+          "title": "Invokes Bind",
+          "type": "boolean"
+        },
+        "observed_state_fingerprint_present": {
+          "title": "Observed State Fingerprint Present",
+          "type": "boolean"
+        },
+        "outcome": {
+          "enum": [
+            "PASS_FOR_REMAINING_AUTHORIZATION",
+            "BLOCKED_BY_RUNTIME_RISK",
+            "INDETERMINATE_FAIL_CLOSED"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "review_window_verified": {
+          "const": true,
+          "title": "Review Window Verified",
+          "type": "boolean"
+        },
+        "runtime_risk_acceptable": {
+          "title": "Runtime Risk Acceptable",
+          "type": "boolean"
+        },
+        "runtime_risk_signal_passed": {
+          "title": "Runtime Risk Signal Passed",
+          "type": "boolean"
+        },
+        "runtime_risk_signal_present": {
+          "title": "Runtime Risk Signal Present",
+          "type": "boolean"
+        },
+        "source_projection_verified": {
+          "const": true,
+          "title": "Source Projection Verified",
+          "type": "boolean"
+        },
+        "state_fingerprint_matches": {
+          "title": "State Fingerprint Matches",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "outcome",
+        "runtime_risk_acceptable",
+        "reason_codes",
+        "runtime_risk_signal_present",
+        "runtime_risk_signal_passed",
+        "expected_state_fingerprint_present",
+        "observed_state_fingerprint_present",
+        "state_fingerprint_matches",
+        "intent_ttl_present",
+        "intent_fresh_for_review_window",
+        "intent_expires_at",
+        "source_projection_verified",
+        "exact_context_binding_verified",
+        "review_window_verified",
+        "evidence_refs_present",
+        "caller_supplied_evidence_only",
+        "external_evidence_authenticity_claimed",
+        "creates_execution_authority",
+        "creates_bind_authorization",
+        "invokes_bind",
+        "dispatches_request",
+        "bind_time_runtime_risk_recheck_required"
+      ],
+      "title": "RuntimeRiskReviewResult",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Compact evidence requiring the independent complete source to verify.",
+  "properties": {
+    "action_contract_digest": {
+      "title": "Action Contract Digest",
+      "type": "string"
+    },
+    "authority_evidence_proven": {
+      "const": false,
+      "title": "Authority Evidence Proven",
+      "type": "boolean"
+    },
+    "bind_authorization_created": {
+      "const": false,
+      "title": "Bind Authorization Created",
+      "type": "boolean"
+    },
+    "bind_context_hash": {
+      "title": "Bind Context Hash",
+      "type": "string"
+    },
+    "bind_invoked": {
+      "const": false,
+      "title": "Bind Invoked",
+      "type": "boolean"
+    },
+    "bind_receipt_created": {
+      "const": false,
+      "title": "Bind Receipt Created",
+      "type": "boolean"
+    },
+    "bind_time_runtime_risk_recheck_required": {
+      "const": true,
+      "title": "Bind Time Runtime Risk Recheck Required",
+      "type": "boolean"
+    },
+    "credential_material_accessed": {
+      "const": false,
+      "title": "Credential Material Accessed",
+      "type": "boolean"
+    },
+    "execution_authority_created": {
+      "const": false,
+      "title": "Execution Authority Created",
+      "type": "boolean"
+    },
+    "execution_intent_hash": {
+      "title": "Execution Intent Hash",
+      "type": "string"
+    },
+    "execution_intent_id": {
+      "title": "Execution Intent Id",
+      "type": "string"
+    },
+    "external_effect_occurred": {
+      "const": false,
+      "title": "External Effect Occurred",
+      "type": "boolean"
+    },
+    "fail_closed": {
+      "title": "Fail Closed",
+      "type": "boolean"
+    },
+    "format_version": {
+      "const": "promotion-requirement-runtime-risk/v1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "future_authorization_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Future Authorization Requirements",
+      "type": "array"
+    },
+    "future_invocation_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Future Invocation Requirements",
+      "type": "array"
+    },
+    "human_approval_created": {
+      "const": false,
+      "title": "Human Approval Created",
+      "type": "boolean"
+    },
+    "human_approval_proven": {
+      "const": false,
+      "title": "Human Approval Proven",
+      "type": "boolean"
+    },
+    "network_used": {
+      "const": false,
+      "title": "Network Used",
+      "type": "boolean"
+    },
+    "packet_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Hash",
+      "type": "string"
+    },
+    "packet_id": {
+      "title": "Packet Id",
+      "type": "string"
+    },
+    "ready_for_real_bind": {
+      "const": false,
+      "title": "Ready For Real Bind",
+      "type": "boolean"
+    },
+    "ready_for_remaining_authorization_requirements": {
+      "title": "Ready For Remaining Authorization Requirements",
+      "type": "boolean"
+    },
+    "recorded_at": {
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "required_human_approval": {
+      "title": "Required Human Approval",
+      "type": "boolean"
+    },
+    "risk_decision": {
+      "$ref": "#/$defs/RequirementRuntimeRiskDecision"
+    },
+    "risk_result": {
+      "$ref": "#/$defs/RuntimeRiskReviewResult"
+    },
+    "source_final_recheck_hash": {
+      "title": "Source Final Recheck Hash",
+      "type": "string"
+    },
+    "source_final_recheck_id": {
+      "title": "Source Final Recheck Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format_version",
+    "packet_id",
+    "packet_hash",
+    "recorded_at",
+    "source_final_recheck_id",
+    "source_final_recheck_hash",
+    "bind_context_hash",
+    "action_contract_digest",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "required_human_approval",
+    "risk_decision",
+    "risk_result",
+    "future_authorization_requirements",
+    "future_invocation_requirements",
+    "fail_closed",
+    "ready_for_remaining_authorization_requirements",
+    "bind_time_runtime_risk_recheck_required",
+    "human_approval_created",
+    "human_approval_proven",
+    "authority_evidence_proven",
+    "execution_authority_created",
+    "bind_authorization_created",
+    "bind_invoked",
+    "bind_receipt_created",
+    "credential_material_accessed",
+    "network_used",
+    "external_effect_occurred",
+    "ready_for_real_bind"
+  ],
+  "title": "PromotionRequirementRuntimeRiskPacket",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
