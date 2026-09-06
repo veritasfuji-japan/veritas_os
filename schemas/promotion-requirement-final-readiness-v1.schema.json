@@ -1,0 +1,274 @@
+{
+  "$defs": {
+    "RequirementBindReviewDecision": {
+      "additionalProperties": false,
+      "description": "Explicit local review; no signed human approval is asserted.",
+      "properties": {
+        "review_id": {
+          "minLength": 1,
+          "title": "Review Id",
+          "type": "string"
+        },
+        "reviewer_id": {
+          "minLength": 1,
+          "title": "Reviewer Id",
+          "type": "string"
+        },
+        "review_reason": {
+          "minLength": 1,
+          "title": "Review Reason",
+          "type": "string"
+        },
+        "reviewed_at": {
+          "title": "Reviewed At",
+          "type": "string"
+        },
+        "accepted": {
+          "title": "Accepted",
+          "type": "boolean"
+        },
+        "acknowledged_no_authorization": {
+          "const": true,
+          "title": "Acknowledged No Authorization",
+          "type": "boolean"
+        },
+        "acknowledged_no_human_approval_proof": {
+          "const": true,
+          "title": "Acknowledged No Human Approval Proof",
+          "type": "boolean"
+        },
+        "acknowledged_no_authority_evidence_proof": {
+          "const": true,
+          "title": "Acknowledged No Authority Evidence Proof",
+          "type": "boolean"
+        },
+        "acknowledged_no_external_effect": {
+          "const": true,
+          "title": "Acknowledged No External Effect",
+          "type": "boolean"
+        },
+        "acknowledged_independent_policy_binding": {
+          "const": true,
+          "title": "Acknowledged Independent Policy Binding",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "review_id",
+        "reviewer_id",
+        "review_reason",
+        "reviewed_at",
+        "accepted",
+        "acknowledged_no_authorization",
+        "acknowledged_no_human_approval_proof",
+        "acknowledged_no_authority_evidence_proof",
+        "acknowledged_no_external_effect",
+        "acknowledged_independent_policy_binding"
+      ],
+      "title": "RequirementBindReviewDecision",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Final readiness derived from verified native requirement satisfaction.",
+  "properties": {
+    "packet_id": {
+      "title": "Packet Id",
+      "type": "string"
+    },
+    "packet_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Hash",
+      "type": "string"
+    },
+    "recorded_at": {
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "review_decision": {
+      "$ref": "#/$defs/RequirementBindReviewDecision"
+    },
+    "source_packet": {
+      "additionalProperties": true,
+      "title": "Source Packet",
+      "type": "object"
+    },
+    "source_packet_id": {
+      "title": "Source Packet Id",
+      "type": "string"
+    },
+    "source_packet_hash": {
+      "title": "Source Packet Hash",
+      "type": "string"
+    },
+    "source_authority_evidence_linkage_review_id": {
+      "title": "Source Authority Evidence Linkage Review Id",
+      "type": "string"
+    },
+    "source_authority_evidence_linkage_review_hash": {
+      "title": "Source Authority Evidence Linkage Review Hash",
+      "type": "string"
+    },
+    "action_contract_digest": {
+      "title": "Action Contract Digest",
+      "type": "string"
+    },
+    "requirement_resolution_hash": {
+      "title": "Requirement Resolution Hash",
+      "type": "string"
+    },
+    "required_human_approval": {
+      "title": "Required Human Approval",
+      "type": "boolean"
+    },
+    "requirement_state": {
+      "enum": [
+        "REQUIRED",
+        "NOT_REQUIRED_BY_ACTION_CONTRACT"
+      ],
+      "title": "Requirement State",
+      "type": "string"
+    },
+    "satisfaction_state": {
+      "enum": [
+        "SATISFIED_BY_VERIFIED_HUMAN_APPROVAL_LINKAGE",
+        "SATISFIED_AS_NOT_REQUIRED_BY_ACTION_CONTRACT"
+      ],
+      "title": "Satisfaction State",
+      "type": "string"
+    },
+    "execution_intent": {
+      "additionalProperties": true,
+      "title": "Execution Intent",
+      "type": "object"
+    },
+    "execution_intent_id": {
+      "title": "Execution Intent Id",
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "title": "Execution Intent Hash",
+      "type": "string"
+    },
+    "future_authorization_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Future Authorization Requirements",
+      "type": "array"
+    },
+    "future_invocation_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Future Invocation Requirements",
+      "type": "array"
+    },
+    "fail_closed": {
+      "title": "Fail Closed",
+      "type": "boolean"
+    },
+    "human_approval_created": {
+      "const": false,
+      "title": "Human Approval Created",
+      "type": "boolean"
+    },
+    "human_approval_proven": {
+      "const": false,
+      "title": "Human Approval Proven",
+      "type": "boolean"
+    },
+    "authority_evidence_proven": {
+      "const": false,
+      "title": "Authority Evidence Proven",
+      "type": "boolean"
+    },
+    "execution_authority_created": {
+      "const": false,
+      "title": "Execution Authority Created",
+      "type": "boolean"
+    },
+    "bind_authorization_created": {
+      "const": false,
+      "title": "Bind Authorization Created",
+      "type": "boolean"
+    },
+    "bind_invoked": {
+      "const": false,
+      "title": "Bind Invoked",
+      "type": "boolean"
+    },
+    "bind_receipt_created": {
+      "const": false,
+      "title": "Bind Receipt Created",
+      "type": "boolean"
+    },
+    "credential_material_accessed": {
+      "const": false,
+      "title": "Credential Material Accessed",
+      "type": "boolean"
+    },
+    "network_used": {
+      "const": false,
+      "title": "Network Used",
+      "type": "boolean"
+    },
+    "external_effect_occurred": {
+      "const": false,
+      "title": "External Effect Occurred",
+      "type": "boolean"
+    },
+    "ready_for_real_bind": {
+      "const": false,
+      "title": "Ready For Real Bind",
+      "type": "boolean"
+    },
+    "format_version": {
+      "const": "promotion-requirement-final-readiness/v1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "ready_for_bind_authorization_gate_review": {
+      "title": "Ready For Bind Authorization Gate Review",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "packet_id",
+    "packet_hash",
+    "recorded_at",
+    "review_decision",
+    "source_packet",
+    "source_packet_id",
+    "source_packet_hash",
+    "source_authority_evidence_linkage_review_id",
+    "source_authority_evidence_linkage_review_hash",
+    "action_contract_digest",
+    "requirement_resolution_hash",
+    "required_human_approval",
+    "requirement_state",
+    "satisfaction_state",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "future_authorization_requirements",
+    "future_invocation_requirements",
+    "fail_closed",
+    "human_approval_created",
+    "human_approval_proven",
+    "authority_evidence_proven",
+    "execution_authority_created",
+    "bind_authorization_created",
+    "bind_invoked",
+    "bind_receipt_created",
+    "credential_material_accessed",
+    "network_used",
+    "external_effect_occurred",
+    "ready_for_real_bind",
+    "format_version",
+    "ready_for_bind_authorization_gate_review"
+  ],
+  "title": "PromotionRequirementFinalReadinessPacket",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

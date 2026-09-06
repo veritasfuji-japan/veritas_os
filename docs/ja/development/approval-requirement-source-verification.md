@@ -118,6 +118,29 @@ native Human Approval linkageへ接続します。REQUIREDには完全に同じa
 参照メタデータはテスト用です。新しい境界はHuman Approval Receiptや実行権限を生成しません。
 
 新packetは`promotion-human-approval-requirement-satisfaction/v1`であり、legacy packetの形式名変更では
-ありません。native Final Bind Readiness／Gateとauthorization issuerはまだこのpacketを受け取れません。
-そこへの独立入力の伝播と、その後の実decisionによる一回限りの実行・結果記録の統合が残っています。
+ありません。以下の承認要件対応Final Readiness／Gate経路がこのpacketを受け取ります。
 既存のlegacy fresh-source形式拒否テストも引き続き有効です。
+
+## 承認要件に対応するnative Final ReadinessとGate
+
+`promotion_requirement_bind_readiness`は検証済みsatisfactionを
+`PromotionRequirementFinalReadinessPacket`と`PromotionRequirementBindGatePacket`へ接続します。
+全builder／verifierで独立した`expected_source`と`expected_contract`が必須です。
+Gateからreadiness、satisfaction、resolutionまで同じ独立入力を渡し、embedded snapshotを
+信頼の根拠に戻しません。派生項目を再構築し、verifierは再構築したオブジェクトを返します。
+完全なsource chainで元のintent、endpoint、credential scope、authority linkage、必要な場合の
+human linkageを保持し、legacy用の項目を作りません。
+
+REQUIRED／NOT_REQUIREDの両方に対応します。後続の人間承認要件は検証済みresolutionだけから
+決まり、他のauthorization／invocation前提は未充足として残ります。readiness拒否時はGateへ進めず、
+Gate拒否もfail-closedです。明示的なローカルレビュー確認事項はメタデータであり、署名済み
+Human Approval Receiptではありません。
+
+専用の閉じたschemaにより、既存のlinkage専用native v1とlegacy v0.3 APIを維持します。
+モデル・クラウドクライアントを制御した実際の認証済み`/v1/decide`から、新Gateまで両状態を
+テストします。同一契約ID／versionでsourceやpolicyを差し替え、全hashを作り直しても両境界で拒否します。
+
+新Gateは**Fresh Verified Source Gate、最終endpoint／credential再検査、authorization issuerには
+まだ接続されていません**。これらへの独立入力の伝播と、実decisionによる一回限りの実行・結果記録の
+統合検証が残っています。このレビュー処理は実行許可、credentialアクセス、network dispatch、
+external effectを作りません。
