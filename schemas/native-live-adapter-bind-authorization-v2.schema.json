@@ -1,0 +1,771 @@
+{
+  "$defs": {
+    "AuthorizationHeaderConstructionGrant": {
+      "additionalProperties": false,
+      "description": "Permission to construct auth material later, after authorization consumption.",
+      "properties": {
+        "grant_version": {
+          "const": "authorization-header-construction-grant/v1",
+          "title": "Grant Version",
+          "type": "string"
+        },
+        "allowed": {
+          "const": true,
+          "title": "Allowed",
+          "type": "boolean"
+        },
+        "credential_reference_digest": {
+          "minLength": 1,
+          "title": "Credential Reference Digest",
+          "type": "string"
+        },
+        "credential_scope_binding_digest": {
+          "minLength": 1,
+          "title": "Credential Scope Binding Digest",
+          "type": "string"
+        },
+        "execution_intent_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Execution Intent Hash",
+          "type": "string"
+        },
+        "adapter_contract_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Adapter Contract Hash",
+          "type": "string"
+        },
+        "endpoint_identity_binding_digest": {
+          "minLength": 1,
+          "title": "Endpoint Identity Binding Digest",
+          "type": "string"
+        },
+        "policy_snapshot_id": {
+          "minLength": 1,
+          "title": "Policy Snapshot Id",
+          "type": "string"
+        },
+        "source_gate_review_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Gate Review Hash",
+          "type": "string"
+        },
+        "bind_context_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Bind Context Hash",
+          "type": "string"
+        },
+        "consumption_required": {
+          "const": true,
+          "title": "Consumption Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "grant_version",
+        "allowed",
+        "credential_reference_digest",
+        "credential_scope_binding_digest",
+        "execution_intent_hash",
+        "adapter_contract_hash",
+        "endpoint_identity_binding_digest",
+        "policy_snapshot_id",
+        "source_gate_review_hash",
+        "bind_context_hash",
+        "consumption_required"
+      ],
+      "title": "AuthorizationHeaderConstructionGrant",
+      "type": "object"
+    },
+    "BindAuthorizationDecision": {
+      "additionalProperties": false,
+      "description": "Exact signed GO decision for one reviewed future Bind context.",
+      "properties": {
+        "source_gate_review_id": {
+          "minLength": 1,
+          "title": "Source Gate Review Id",
+          "type": "string"
+        },
+        "source_gate_review_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Gate Review Hash",
+          "type": "string"
+        },
+        "execution_intent_id": {
+          "minLength": 1,
+          "title": "Execution Intent Id",
+          "type": "string"
+        },
+        "execution_intent_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Execution Intent Hash",
+          "type": "string"
+        },
+        "adapter_contract_id": {
+          "minLength": 1,
+          "title": "Adapter Contract Id",
+          "type": "string"
+        },
+        "adapter_contract_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Adapter Contract Hash",
+          "type": "string"
+        },
+        "endpoint_identity_binding_digest": {
+          "minLength": 1,
+          "title": "Endpoint Identity Binding Digest",
+          "type": "string"
+        },
+        "credential_reference_digest": {
+          "minLength": 1,
+          "title": "Credential Reference Digest",
+          "type": "string"
+        },
+        "credential_scope_binding_digest": {
+          "minLength": 1,
+          "title": "Credential Scope Binding Digest",
+          "type": "string"
+        },
+        "policy_snapshot_id": {
+          "minLength": 1,
+          "title": "Policy Snapshot Id",
+          "type": "string"
+        },
+        "valid_from": {
+          "title": "Valid From",
+          "type": "string"
+        },
+        "valid_until": {
+          "title": "Valid Until",
+          "type": "string"
+        },
+        "authorizer_id": {
+          "minLength": 1,
+          "title": "Authorizer Id",
+          "type": "string"
+        },
+        "authorizer_role": {
+          "minLength": 1,
+          "title": "Authorizer Role",
+          "type": "string"
+        },
+        "authorizer_attestation": {
+          "minLength": 1,
+          "title": "Authorizer Attestation",
+          "type": "string"
+        },
+        "authorized_at": {
+          "title": "Authorized At",
+          "type": "string"
+        },
+        "authorization_reason": {
+          "minLength": 1,
+          "title": "Authorization Reason",
+          "type": "string"
+        },
+        "explicit_go_no_go_confirmation": {
+          "const": "GO_AUTHORIZED",
+          "title": "Explicit Go No Go Confirmation",
+          "type": "string"
+        },
+        "acknowledged_exact_source_context_only": {
+          "const": true,
+          "title": "Acknowledged Exact Source Context Only",
+          "type": "boolean"
+        },
+        "acknowledged_authorization_does_not_invoke_bind": {
+          "const": true,
+          "title": "Acknowledged Authorization Does Not Invoke Bind",
+          "type": "boolean"
+        },
+        "acknowledged_authorization_does_not_dispatch_request": {
+          "const": true,
+          "title": "Acknowledged Authorization Does Not Dispatch Request",
+          "type": "boolean"
+        },
+        "acknowledged_authorization_does_not_access_credentials": {
+          "const": true,
+          "title": "Acknowledged Authorization Does Not Access Credentials",
+          "type": "boolean"
+        },
+        "acknowledged_authorization_does_not_construct_authorization_header": {
+          "const": true,
+          "title": "Acknowledged Authorization Does Not Construct Authorization Header",
+          "type": "boolean"
+        },
+        "acknowledged_authorization_does_not_create_bind_receipt": {
+          "const": true,
+          "title": "Acknowledged Authorization Does Not Create Bind Receipt",
+          "type": "boolean"
+        },
+        "acknowledged_authorization_does_not_write_trustlog": {
+          "const": true,
+          "title": "Acknowledged Authorization Does Not Write Trustlog",
+          "type": "boolean"
+        },
+        "acknowledged_semantic_match_is_not_authority": {
+          "const": true,
+          "title": "Acknowledged Semantic Match Is Not Authority",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_gate_review_id",
+        "source_gate_review_hash",
+        "execution_intent_id",
+        "execution_intent_hash",
+        "adapter_contract_id",
+        "adapter_contract_hash",
+        "endpoint_identity_binding_digest",
+        "credential_reference_digest",
+        "credential_scope_binding_digest",
+        "policy_snapshot_id",
+        "valid_from",
+        "valid_until",
+        "authorizer_id",
+        "authorizer_role",
+        "authorizer_attestation",
+        "authorized_at",
+        "authorization_reason",
+        "explicit_go_no_go_confirmation",
+        "acknowledged_exact_source_context_only",
+        "acknowledged_authorization_does_not_invoke_bind",
+        "acknowledged_authorization_does_not_dispatch_request",
+        "acknowledged_authorization_does_not_access_credentials",
+        "acknowledged_authorization_does_not_construct_authorization_header",
+        "acknowledged_authorization_does_not_create_bind_receipt",
+        "acknowledged_authorization_does_not_write_trustlog",
+        "acknowledged_semantic_match_is_not_authority"
+      ],
+      "title": "BindAuthorizationDecision",
+      "type": "object"
+    },
+    "CredentialResolutionGrant": {
+      "additionalProperties": false,
+      "description": "Permission to resolve one exact credential reference only after consumption.",
+      "properties": {
+        "grant_version": {
+          "const": "credential-resolution-grant/v1",
+          "title": "Grant Version",
+          "type": "string"
+        },
+        "allowed": {
+          "const": true,
+          "title": "Allowed",
+          "type": "boolean"
+        },
+        "credential_reference_digest": {
+          "minLength": 1,
+          "title": "Credential Reference Digest",
+          "type": "string"
+        },
+        "credential_scope_binding_digest": {
+          "minLength": 1,
+          "title": "Credential Scope Binding Digest",
+          "type": "string"
+        },
+        "execution_intent_id": {
+          "minLength": 1,
+          "title": "Execution Intent Id",
+          "type": "string"
+        },
+        "execution_intent_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Execution Intent Hash",
+          "type": "string"
+        },
+        "adapter_contract_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Adapter Contract Hash",
+          "type": "string"
+        },
+        "endpoint_identity_binding_digest": {
+          "minLength": 1,
+          "title": "Endpoint Identity Binding Digest",
+          "type": "string"
+        },
+        "policy_snapshot_id": {
+          "minLength": 1,
+          "title": "Policy Snapshot Id",
+          "type": "string"
+        },
+        "source_gate_review_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Gate Review Hash",
+          "type": "string"
+        },
+        "bind_context_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Bind Context Hash",
+          "type": "string"
+        },
+        "consumption_required": {
+          "const": true,
+          "title": "Consumption Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "grant_version",
+        "allowed",
+        "credential_reference_digest",
+        "credential_scope_binding_digest",
+        "execution_intent_id",
+        "execution_intent_hash",
+        "adapter_contract_hash",
+        "endpoint_identity_binding_digest",
+        "policy_snapshot_id",
+        "source_gate_review_hash",
+        "bind_context_hash",
+        "consumption_required"
+      ],
+      "title": "CredentialResolutionGrant",
+      "type": "object"
+    },
+    "SignatureSignerDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "key_id": {
+          "minLength": 1,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "algorithm": {
+          "minLength": 1,
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "identity": {
+          "minLength": 1,
+          "title": "Identity",
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "algorithm",
+        "identity",
+        "role"
+      ],
+      "title": "SignatureSignerDescriptor",
+      "type": "object"
+    },
+    "SignedBindAuthorizationDecisionArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "bind_authorizer_decision",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "artifact_version": {
+          "const": "v1",
+          "title": "Artifact Version",
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/BindAuthorizationDecision"
+        },
+        "decision_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Decision Hash",
+          "type": "string"
+        },
+        "signer": {
+          "$ref": "#/$defs/SignatureSignerDescriptor"
+        },
+        "signed_at": {
+          "title": "Signed At",
+          "type": "string"
+        },
+        "signature": {
+          "minLength": 16,
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "artifact_version",
+        "decision",
+        "decision_hash",
+        "signer",
+        "signed_at",
+        "signature"
+      ],
+      "title": "SignedBindAuthorizationDecisionArtifact",
+      "type": "object"
+    },
+    "VerifiedSignatureBinding": {
+      "additionalProperties": false,
+      "description": "Verifier-derived signer identity stored as evidence, not caller authority.",
+      "properties": {
+        "purpose": {
+          "enum": [
+            "authorizer_decision",
+            "authorization_issuer"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "key_id": {
+          "minLength": 1,
+          "title": "Key Id",
+          "type": "string"
+        },
+        "algorithm": {
+          "minLength": 1,
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "signer_identity": {
+          "minLength": 1,
+          "title": "Signer Identity",
+          "type": "string"
+        },
+        "signer_role": {
+          "minLength": 1,
+          "title": "Signer Role",
+          "type": "string"
+        },
+        "signer_policy_id": {
+          "minLength": 1,
+          "title": "Signer Policy Id",
+          "type": "string"
+        },
+        "signer_policy_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Signer Policy Hash",
+          "type": "string"
+        },
+        "verifier_id": {
+          "minLength": 1,
+          "title": "Verifier Id",
+          "type": "string"
+        },
+        "verifier_trust_level": {
+          "const": "production",
+          "title": "Verifier Trust Level",
+          "type": "string"
+        },
+        "verifier_key_id": {
+          "minLength": 1,
+          "title": "Verifier Key Id",
+          "type": "string"
+        },
+        "verifier_policy_id": {
+          "minLength": 1,
+          "title": "Verifier Policy Id",
+          "type": "string"
+        },
+        "verifier_policy_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Verifier Policy Hash",
+          "type": "string"
+        },
+        "verified_at": {
+          "title": "Verified At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "purpose",
+        "key_id",
+        "algorithm",
+        "signer_identity",
+        "signer_role",
+        "signer_policy_id",
+        "signer_policy_hash",
+        "verifier_id",
+        "verifier_trust_level",
+        "verifier_key_id",
+        "verifier_policy_id",
+        "verifier_policy_hash",
+        "verified_at"
+      ],
+      "title": "VerifiedSignatureBinding",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Signed, unconsumed native permission; rejected by the v1 consumer.",
+  "properties": {
+    "format_version": {
+      "const": "native-live-adapter-bind-authorization/v2",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "live_adapter_bind_authorization",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "artifact_version": {
+      "const": "v2",
+      "title": "Artifact Version",
+      "type": "string"
+    },
+    "authorization_id": {
+      "pattern": "^laba:v2:sha256:[0-9a-f]{64}$",
+      "title": "Authorization Id",
+      "type": "string"
+    },
+    "authorization_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authorization Hash",
+      "type": "string"
+    },
+    "source_runtime_risk_packet": {
+      "additionalProperties": true,
+      "title": "Source Runtime Risk Packet",
+      "type": "object"
+    },
+    "source_final_recheck_hash": {
+      "title": "Source Final Recheck Hash",
+      "type": "string"
+    },
+    "source_gate_hash": {
+      "title": "Source Gate Hash",
+      "type": "string"
+    },
+    "bind_context_hash": {
+      "title": "Bind Context Hash",
+      "type": "string"
+    },
+    "action_contract_digest": {
+      "title": "Action Contract Digest",
+      "type": "string"
+    },
+    "execution_intent": {
+      "additionalProperties": true,
+      "title": "Execution Intent",
+      "type": "object"
+    },
+    "execution_intent_id": {
+      "title": "Execution Intent Id",
+      "type": "string"
+    },
+    "execution_intent_hash": {
+      "title": "Execution Intent Hash",
+      "type": "string"
+    },
+    "signed_authority_evidence_artifact": {
+      "additionalProperties": true,
+      "title": "Signed Authority Evidence Artifact",
+      "type": "object"
+    },
+    "authority_verification_proof_digest": {
+      "title": "Authority Verification Proof Digest",
+      "type": "string"
+    },
+    "signed_human_approval_artifact": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Signed Human Approval Artifact"
+    },
+    "human_approval_verification_proof_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Human Approval Verification Proof Digest"
+    },
+    "human_approval_requirement_status": {
+      "enum": [
+        "VERIFIED",
+        "NOT_REQUIRED"
+      ],
+      "title": "Human Approval Requirement Status",
+      "type": "string"
+    },
+    "runtime_authority_result_digest": {
+      "title": "Runtime Authority Result Digest",
+      "type": "string"
+    },
+    "authorization_decision_artifact": {
+      "$ref": "#/$defs/SignedBindAuthorizationDecisionArtifact"
+    },
+    "authorizer_verification": {
+      "$ref": "#/$defs/VerifiedSignatureBinding"
+    },
+    "credential_resolution_grant": {
+      "$ref": "#/$defs/CredentialResolutionGrant"
+    },
+    "authorization_header_construction_grant": {
+      "$ref": "#/$defs/AuthorizationHeaderConstructionGrant"
+    },
+    "authorized_at": {
+      "title": "Authorized At",
+      "type": "string"
+    },
+    "valid_from": {
+      "title": "Valid From",
+      "type": "string"
+    },
+    "valid_until": {
+      "title": "Valid Until",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "pattern": "^laba-idem:v2:sha256:[0-9a-f]{64}$",
+      "title": "Idempotency Key",
+      "type": "string"
+    },
+    "single_use": {
+      "const": true,
+      "title": "Single Use",
+      "type": "boolean"
+    },
+    "authorization_consumption_required": {
+      "const": true,
+      "title": "Authorization Consumption Required",
+      "type": "boolean"
+    },
+    "duplicate_dispatch_prohibited": {
+      "const": true,
+      "title": "Duplicate Dispatch Prohibited",
+      "type": "boolean"
+    },
+    "duplicate_absence_verified": {
+      "const": false,
+      "title": "Duplicate Absence Verified",
+      "type": "boolean"
+    },
+    "bind_time_runtime_risk_recheck_required": {
+      "const": true,
+      "title": "Bind Time Runtime Risk Recheck Required",
+      "type": "boolean"
+    },
+    "bind_authorization_created": {
+      "const": true,
+      "title": "Bind Authorization Created",
+      "type": "boolean"
+    },
+    "authorization_consumption_state": {
+      "const": "NOT_CONSUMED",
+      "title": "Authorization Consumption State",
+      "type": "string"
+    },
+    "execution_authority_created": {
+      "const": false,
+      "title": "Execution Authority Created",
+      "type": "boolean"
+    },
+    "human_approval_created": {
+      "const": false,
+      "title": "Human Approval Created",
+      "type": "boolean"
+    },
+    "bind_invoked": {
+      "const": false,
+      "title": "Bind Invoked",
+      "type": "boolean"
+    },
+    "bind_receipt_created": {
+      "const": false,
+      "title": "Bind Receipt Created",
+      "type": "boolean"
+    },
+    "credential_material_accessed": {
+      "const": false,
+      "title": "Credential Material Accessed",
+      "type": "boolean"
+    },
+    "authorization_header_constructed": {
+      "const": false,
+      "title": "Authorization Header Constructed",
+      "type": "boolean"
+    },
+    "network_used": {
+      "const": false,
+      "title": "Network Used",
+      "type": "boolean"
+    },
+    "external_effect_occurred": {
+      "const": false,
+      "title": "External Effect Occurred",
+      "type": "boolean"
+    },
+    "authorization_issuer_signer": {
+      "$ref": "#/$defs/SignatureSignerDescriptor"
+    },
+    "authorization_issuer_verification": {
+      "$ref": "#/$defs/VerifiedSignatureBinding"
+    },
+    "authorization_signed_at": {
+      "title": "Authorization Signed At",
+      "type": "string"
+    },
+    "authorization_signature": {
+      "minLength": 16,
+      "title": "Authorization Signature",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format_version",
+    "artifact_type",
+    "artifact_version",
+    "authorization_id",
+    "authorization_hash",
+    "source_runtime_risk_packet",
+    "source_final_recheck_hash",
+    "source_gate_hash",
+    "bind_context_hash",
+    "action_contract_digest",
+    "execution_intent",
+    "execution_intent_id",
+    "execution_intent_hash",
+    "signed_authority_evidence_artifact",
+    "authority_verification_proof_digest",
+    "signed_human_approval_artifact",
+    "human_approval_verification_proof_digest",
+    "human_approval_requirement_status",
+    "runtime_authority_result_digest",
+    "authorization_decision_artifact",
+    "authorizer_verification",
+    "credential_resolution_grant",
+    "authorization_header_construction_grant",
+    "authorized_at",
+    "valid_from",
+    "valid_until",
+    "idempotency_key",
+    "single_use",
+    "authorization_consumption_required",
+    "duplicate_dispatch_prohibited",
+    "duplicate_absence_verified",
+    "bind_time_runtime_risk_recheck_required",
+    "bind_authorization_created",
+    "authorization_consumption_state",
+    "execution_authority_created",
+    "human_approval_created",
+    "bind_invoked",
+    "bind_receipt_created",
+    "credential_material_accessed",
+    "authorization_header_constructed",
+    "network_used",
+    "external_effect_occurred",
+    "authorization_issuer_signer",
+    "authorization_issuer_verification",
+    "authorization_signed_at",
+    "authorization_signature"
+  ],
+  "title": "NativeBindAuthorizationArtifact",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

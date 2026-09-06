@@ -200,6 +200,30 @@ def _validate_real_governance_inputs(
     source: CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket,
     inputs: RealBindAuthorizationGovernanceInputs,
 ) -> _GovernanceOutcome:
+    """Legacy entry point: derive context with the existing source verifier."""
+    if not isinstance(inputs, RealBindAuthorizationGovernanceInputs):
+        raise LiveAdapterBindAuthorizationError("LABA_GOVERNANCE_INPUTS_REQUIRED")
+    return _validate_governance_for_verified_context(
+        source, inputs,
+        bind_context_hash=derive_verified_real_bind_context_hash(
+            source,
+            expected_source=inputs.expected_source,
+            expected_contract=inputs.action_contract,
+        ),
+    )
+
+
+def _validate_governance_for_verified_context(
+    source: Any,
+    inputs: RealBindAuthorizationGovernanceInputs,
+    *,
+    bind_context_hash: str,
+) -> _GovernanceOutcome:
+    """Shared cryptographic checks, internal to independently verified issuers.
+
+    This function is not a source verifier. Each issuer must reconstruct its
+    own source and context from external trust anchors before calling it.
+    """
     if not isinstance(inputs, RealBindAuthorizationGovernanceInputs):
         raise LiveAdapterBindAuthorizationError("LABA_GOVERNANCE_INPUTS_REQUIRED")
     now = inputs.verification_now
@@ -289,11 +313,6 @@ def _validate_real_governance_inputs(
             "LABA_AUTHORITY_REFERENCE_SOURCE_MISMATCH"
         )
 
-    bind_context_hash = derive_verified_real_bind_context_hash(
-        source,
-        expected_source=inputs.expected_source,
-        expected_contract=contract,
-    )
     human_proof: VerifiedHumanApprovalReceipt | None = None
     human_status: Literal["VERIFIED", "NOT_REQUIRED"] = "NOT_REQUIRED"
     needs_human = _requires_human_approval(contract)

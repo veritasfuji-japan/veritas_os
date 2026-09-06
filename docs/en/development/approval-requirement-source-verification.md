@@ -218,7 +218,8 @@ Real authenticated `/v1/decide` tests reach final metadata rechecks for both
 approval states with controlled model/cloud clients and explicit test metadata.
 The older native and legacy APIs remain unchanged. The requirement-aware
 runtime-risk boundary below consumes the final packet. Authorization issuance,
-real-decision single-use execution and outcome validation remain incomplete.
+real-decision single-use execution and outcome validation are separate boundaries;
+native v2 issuance is described below, while consumption remains incomplete.
 
 ## Runtime-risk review from verified final rechecks
 
@@ -241,7 +242,7 @@ evidence cannot replace the external expected decision.
 results and rejects BLOCK or INDETERMINATE before later composition. Only PASS
 consumes the runtime-risk requirement. Other authorization and all invocation
 requirements remain outstanding, including the independent Bind-time risk check.
-The actual authorization issuer does not yet call this guard.
+The native v2 authorization issuer below calls this guard before issuance.
 
 Risk signals, observed state and evidence references are caller-supplied inputs,
 not authenticated sensor results. This boundary neither obtains nor invents
@@ -251,3 +252,44 @@ CDA/candidate data; cases without that metadata remain indeterminate. Controlled
 model/cloud clients and synthetic runtime observations are test fixtures only.
 No Human Approval Receipt, execution authority, Bind authorization, credential
 access, network dispatch, BindReceipt, or external effect is produced.
+
+## Native authorization v2 (issuance only)
+
+`native_bind_authorization.issue_native_bind_authorization` composes this PASS
+guard with existing cryptographic Authority Evidence, revocation, signed Human
+Approval Receipt, RuntimeAuthority, signed GO decision, grant and idempotency
+checks. The complete final recheck and independent expected review, times and
+current metadata are mandatory `NativeAuthorizationSourceInputs`. Trusted
+Authority Evidence Linkage source, ActionClassContract and verification clock
+come independently from `RealBindAuthorizationGovernanceInputs`, never from an
+embedded snapshot. Only rebuilt verifier outputs feed downstream derivation.
+
+The issuer requires an existing signed receipt for REQUIRED and rejects supplied
+receipts for NOT_REQUIRED. It creates no human approval. Authority/receipt/GO
+signatures use the existing deployment-owned verifier policies. The GO signer
+must differ from both gate and risk reviewers. The authorization validity window
+must fit the current risk review, intent and signed evidence windows.
+Only boolean `required` and integer `minimum_approvals` (0 or 1) are supported
+here. Quorum requirements and additional approval rules are rejected, not
+silently treated as satisfied by a single receipt.
+
+The closed `native-live-adapter-bind-authorization/v2` artifact preserves native
+source hashes and signs all fields using a distinct v2 domain. Its internal
+context projection only reuses existing check interfaces: it is not a fabricated
+legacy packet and contains no invented handoff/replay evidence. Ed25519 issuer
+verification requires explicit `authorization_artifact_version="v2"` and a
+matching deployment policy hash. The default v1 verifier and v1 artifact schema
+reject v2; existing v1/v0.3 paths are retained.
+
+`verify_native_bind_authorization` re-verifies signatures and reconstructs every
+field at the independently supplied issuance verification time. This is not a
+consumer or a current execution permission. The v2 consumer is not implemented.
+Idempotency commits the signed decision/context, risk hash, contract and window;
+single-use policy is signed, but unused-key status is **not** proven. Atomic
+consumption and fresh Bind-time governance/risk checks remain mandatory future
+work. No credential resolution, header construction, network, Bind invocation,
+BindReceipt or external effect is performed by this issuance boundary.
+
+Test keys and signed authority/approval artifacts are synthetic; they do not
+represent operational human consent. Caller risk evidence remains unauthenticated
+sensor input, and the injected cryptographic backends must be non-effecting.
