@@ -140,7 +140,36 @@ Human Approval Receiptではありません。
 モデル・クラウドクライアントを制御した実際の認証済み`/v1/decide`から、新Gateまで両状態を
 テストします。同一契約ID／versionでsourceやpolicyを差し替え、全hashを作り直しても両境界で拒否します。
 
-新Gateは**Fresh Verified Source Gate、最終endpoint／credential再検査、authorization issuerには
-まだ接続されていません**。これらへの独立入力の伝播と、実decisionによる一回限りの実行・結果記録の
-統合検証が残っています。このレビュー処理は実行許可、credentialアクセス、network dispatch、
+新Gateは以下の承認要件対応fresh検証と最終再検査へ接続します。
+このレビュー処理は実行許可、credentialアクセス、network dispatch、
 external effectを作りません。
+
+## Fresh source検証と最終メタデータ再検査
+
+`promotion_requirement_final_rechecks`は承認要件対応Gateを受け取り、旧linkage専用packetへ
+変換しません。`PromotionRequirementFreshSourcePacket`は独立したsourceとcontractを使って
+Gateの完全なチェーンを再検証し、Gate hash、authority source、要件判定、契約、intent、adapter、
+endpoint、credential bindingを結び付けた厳密なBind contextを再計算します。
+verifierには独立した検証時刻も必要です。拒否されたGateは受け付けません。
+
+`PromotionRequirementFinalRecheckPacket`は再構築済みfresh packetを受け取り、呼び出し元が
+渡した現在のendpointメタデータ、credential参照、必要scopeを検証済みsourceと比較します。
+完全一致が必要であり、scopeの包含関係は推測しません。verifierには同じ独立入力と現在の
+メタデータ、および期待する再検査時刻が必須です。packet内のendpoint／参照／時刻を代用しません。
+endpointやscopeが変化していれば、以前は有効だったpacketも拒否します。context、source、
+同一ID／versionの契約、時刻を書き換えて再ハッシュした場合も拒否します。
+両verifierとも再構築した結果を返します。
+
+fresh packetではfresh検証と厳密なcontext導出を完了し、final packetではendpoint、credentialの
+順に再検査します。残るauthorization要件の先頭はruntime risk reviewです。人間承認に関する
+後続要件は検証済みActionClassContractによって決まり、実行要件は未充足のまま維持します。
+
+これはローカルのメタデータ検査です。fresh検証は実際のpolicy更新や失効状態を確認しません。
+endpoint再検査はサーバーへ接続せずTLS peerも検証しません。credential再検査はproviderへ
+アクセスせず、実際の権限と参照メタデータの一致も証明しません。これらのフラグと
+`ready_for_real_bind`はfalseのままです。
+
+モデル・クラウドクライアントを制御し、明示的なテスト用メタデータを使う実際の認証済み
+`/v1/decide`から、承認必須／不要の両方で最終メタデータ再検査まで接続します。
+旧native／legacy APIは変更しません。**runtime riskとauthorization issuerはまだ新packet形式を
+受け取れません**。実decisionによる一回限りの実行・結果記録までの統合検証は未完了です。
