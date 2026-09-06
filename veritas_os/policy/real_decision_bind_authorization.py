@@ -17,9 +17,10 @@ from veritas_os.governance.canonical_decision_artifact import (
     verify_canonical_decision_artifact,
 )
 from veritas_os.policy.bind_artifacts import ExecutionIntent, hash_execution_intent
-from veritas_os.policy.decision_candidate import (
-    DecisionCandidate,
-    try_promote_verified_canonical_decision_candidate_to_execution_intent,
+from veritas_os.policy.decision_candidate import DecisionCandidate
+from veritas_os.policy.canonical_verified_decision_promotion import (
+    CanonicalVerifiedDecisionPromotionError,
+    build_canonical_verified_decision_promotion_packet,
 )
 from veritas_os.policy.live_adapter_bind_authorization import (
     BindAuthorizationSigner,
@@ -99,6 +100,14 @@ def issue_verified_real_decision_bind_authorization(
     source packet and independently verified authorization must contain the
     exact same intent object, identity, and content-derived hash.
 
+    Promotion uses the existing content-addressed canonical promotion builder,
+    so reconstruction cannot mint a new random intent ID. The supplied trusted
+    governance clock checks policy freshness. Context arguments are assertions,
+    not replacements for CDA/candidate-derived policy or approval context.
+
+    The source verifier still accepts only its existing handoff-native gate
+    formats. This does not bridge promotion-native packets into that schema.
+
     Raises:
         RealDecisionBindAuthorizationError: If verification or lineage differs.
         LiveAdapterBindAuthorizationError: If existing governance fails closed.
@@ -108,18 +117,25 @@ def issue_verified_real_decision_bind_authorization(
         raise RealDecisionBindAuthorizationError("RDBA_CANONICAL_DECISION_INVALID")
     cda = cda_result.artifact
 
-    promotion = try_promote_verified_canonical_decision_candidate_to_execution_intent(
-        candidate,
-        canonical_decision_artifact=cda,
-        policy_snapshot_id=policy_snapshot_id,
-        ttl_seconds=ttl_seconds,
-        expected_state_fingerprint=expected_state_fingerprint,
-        approval_context=approval_context,
-        policy_lineage=policy_lineage,
-    )
-    if not promotion.promoted or promotion.execution_intent is None:
-        raise RealDecisionBindAuthorizationError("RDBA_PROMOTION_REFUSED")
-    intent = promotion.execution_intent
+    if not isinstance(governance_inputs, RealBindAuthorizationGovernanceInputs):
+        raise RealDecisionBindAuthorizationError("RDBA_GOVERNANCE_INPUTS_REQUIRED")
+    if policy_lineage is not None:
+        raise RealDecisionBindAuthorizationError("RDBA_POLICY_LINEAGE_OVERRIDE")
+    try:
+        promotion = build_canonical_verified_decision_promotion_packet(
+            cda,
+            candidate,
+            promoted_at=governance_inputs.verification_now,
+            ttl_seconds=ttl_seconds,
+            expected_state_fingerprint=expected_state_fingerprint,
+        )
+    except CanonicalVerifiedDecisionPromotionError as exc:
+        raise RealDecisionBindAuthorizationError("RDBA_PROMOTION_REFUSED") from exc
+    intent = ExecutionIntent(**promotion.exact_execution_intent)
+    if policy_snapshot_id != intent.policy_snapshot_id:
+        raise RealDecisionBindAuthorizationError("RDBA_POLICY_SNAPSHOT_MISMATCH")
+    if approval_context is not None and approval_context != intent.approval_context:
+        raise RealDecisionBindAuthorizationError("RDBA_APPROVAL_CONTEXT_OVERRIDE")
     if (
         intent.decision_id != cda.decision_id
         or intent.decision_hash != cda.decision_hash
@@ -128,8 +144,6 @@ def issue_verified_real_decision_bind_authorization(
     ):
         raise RealDecisionBindAuthorizationError("RDBA_DECISION_LINEAGE_MISMATCH")
 
-    if not isinstance(governance_inputs, RealBindAuthorizationGovernanceInputs):
-        raise RealDecisionBindAuthorizationError("RDBA_GOVERNANCE_INPUTS_REQUIRED")
     source = verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
         source_gate_review_packet,
         expected_source=governance_inputs.expected_source,

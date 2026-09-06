@@ -89,3 +89,36 @@ Requirement-resolution integration tests exercise the nested metadata chain with
 mocking its verifier. They do not claim cryptographic authority authentication.
 Authority signature/revocation verification and human approval verification
 remain separate boundaries. The requirement-resolution layer creates no authority.
+
+## Real decision connection: remaining source boundary
+
+`issue_verified_real_decision_bind_authorization` now reconstructs the intent
+with the existing canonical, content-addressed promotion builder. The previous
+generic promotion helper allocated a new UUID on each invocation, making exact
+comparison with a previously constructed source intent impossible. Policy
+freshness uses the independently supplied `governance_inputs.verification_now`.
+The policy ID and optional approval context are assertions against the verified
+promotion; caller policy-lineage overrides remain forbidden.
+
+An isolated HTTP integration test invokes the real authenticated `/v1/decide`
+route, kernel, compiled-policy signature verification and CDA construction.
+Only model output and cloud clients are controlled. The returned CDA and chosen
+candidate are used unchanged by canonical promotion, readiness, pre-bind,
+preflight and native adapter selection. No benchmark expected outcomes or
+accepting packet-verifier doubles supply this lineage.
+
+This test exposes an unfinished connection, not a completed execution proof:
+`build_fresh_bind_source_chain` still accepts handoff-native adapter selection;
+it rejects the promotion-native selection format even when a trusted contract
+is supplied. A separately valid v0.3 fixture gate is also rejected because its
+intent differs from the real decision. The tests require both refusals before
+authorization signing. They do not issue an authorization, create a Human
+Approval Receipt, consume credentials, invoke an adapter or create Bind/outcome
+receipts for this real decision.
+
+The next implementation must preserve the native promotion source through
+requirement resolution/satisfaction and the authorization verifier, including
+independent source/contract anchors. It must not relabel native packets as
+handoff packets or synthesize handoff replay/approval evidence to satisfy the
+older schema. Existing fixture-based v0.3 consumption tests remain separate
+from this real-decision connection test.
