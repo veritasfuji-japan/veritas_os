@@ -90,7 +90,7 @@ mocking its verifier. They do not claim cryptographic authority authentication.
 Authority signature/revocation verification and human approval verification
 remain separate boundaries. The requirement-resolution layer creates no authority.
 
-## Real decision connection: remaining source boundary
+## Real decision connection: source boundary identified in #2189
 
 `issue_verified_real_decision_bind_authorization` now reconstructs the intent
 with the existing canonical, content-addressed promotion builder. The previous
@@ -116,9 +116,43 @@ authorization signing. They do not issue an authorization, create a Human
 Approval Receipt, consume credentials, invoke an adapter or create Bind/outcome
 receipts for this real decision.
 
-The next implementation must preserve the native promotion source through
-requirement resolution/satisfaction and the authorization verifier, including
-independent source/contract anchors. It must not relabel native packets as
+Further integration must preserve the native promotion source through
+the authorization verifier, including independent source/contract anchors.
+It must not relabel native packets as
 handoff packets or synthesize handoff replay/approval evidence to satisfy the
 older schema. Existing fixture-based v0.3 consumption tests remain separate
 from this real-decision connection test.
+
+## Native source requirement resolution and satisfaction
+
+The HARR builder/verifier now dispatches explicitly on the Authority Evidence
+Linkage source format and invokes the corresponding full native or legacy
+verifier. It retains the original source identity/hash; no handoff fields are
+invented. Native resolution cannot predate its source. Legacy packet identity
+and verification semantics are preserved.
+
+`build_promotion_human_approval_requirement_satisfaction_packet` connects this
+rebuilt resolution to native Human Approval linkage. REQUIRED needs a verified
+native linkage with the exact same complete authority source; NOT_REQUIRED
+requires no linkage. Both states are metadata evidence only, with
+`human_approval_proven=false` and `ready_for_real_bind=false`.
+
+`verify_promotion_human_approval_requirement_satisfaction_packet` requires
+keyword-only `expected_source` and `expected_contract` from independent trusted
+inputs. It reconstructs every field, including the full source, contract snapshot,
+contract digest, intent and requirement state, and returns the rebuilt packet.
+Embedded snapshots are never trust anchors. Fully rebuilt and rehashed same-ID/
+version contract substitutions and source/linkage substitutions are rejected.
+
+Real authenticated `/v1/decide` integration now reaches native authority linkage,
+HARR and satisfaction for both required and not-required inputs. The existing
+native linkage rule still requires the candidate's declared approval flag on
+the REQUIRED path; no flag is changed in returned CDA/candidate data. Model/cloud
+clients and reference metadata remain controlled test inputs. No Human Approval
+Receipt or execution authority is produced by this new boundary.
+
+This is a distinct native packet (`promotion-human-approval-requirement-satisfaction/v1`),
+not a relabeled legacy satisfaction packet. Native Final Bind Readiness/Gate and
+the authorization issuer do not yet consume it. That downstream propagation,
+followed by real-decision single-use execution/outcome integration, remains work
+to complete; the legacy fresh-source format-refusal test remains valid.

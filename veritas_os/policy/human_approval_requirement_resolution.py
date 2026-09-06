@@ -22,6 +22,16 @@ from veritas_os.policy.live_adapter_dry_run_authority_evidence_linkage import (
     LiveAdapterDryRunAuthorityEvidenceLinkageError,
     verify_live_adapter_dry_run_authority_evidence_linkage_review_packet,
 )
+from veritas_os.policy.canonical_promotion_live_adapter_dry_run_authority_evidence_linkage import (
+    FORMAT_VERSION as PROMOTION_SOURCE_FORMAT,
+    CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket,
+    verify_canonical_promotion_live_adapter_dry_run_authority_evidence_linkage_review_packet,
+)
+
+AuthorityLinkageSource = (
+    CanonicalLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+    | CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+)
 
 FORMAT_VERSION = "human-approval-requirement-resolution/v1"
 MECHANISM = "resolve_human_approval_requirement_from_action_contract/v1"
@@ -150,11 +160,17 @@ def _digest(value: Any) -> str:
 
 def _verified_source(
     value: Any,
-) -> CanonicalLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket:
+) -> AuthorityLinkageSource:
     try:
-        return verify_live_adapter_dry_run_authority_evidence_linkage_review_packet(
-            value
-        )
+        raw = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+        if (
+            isinstance(raw, dict)
+            and raw.get("format_version") == PROMOTION_SOURCE_FORMAT
+        ):
+            return verify_canonical_promotion_live_adapter_dry_run_authority_evidence_linkage_review_packet(
+                raw
+            )
+        return verify_live_adapter_dry_run_authority_evidence_linkage_review_packet(raw)
     except (
         LiveAdapterDryRunAuthorityEvidenceLinkageError,
         TypeError,
@@ -163,8 +179,23 @@ def _verified_source(
         raise HumanApprovalRequirementResolutionError("HARR_SOURCE_INVALID") from exc
 
 
+def _source_identity(source: AuthorityLinkageSource) -> tuple[str, str]:
+    """Read identities only from the corresponding independently verified type."""
+    if isinstance(
+        source, CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+    ):
+        return (
+            source.promotion_live_adapter_dry_run_authority_evidence_linkage_review_id,
+            source.promotion_live_adapter_dry_run_authority_evidence_linkage_review_hash,
+        )
+    return (
+        source.live_adapter_dry_run_authority_evidence_linkage_review_id,
+        source.live_adapter_dry_run_authority_evidence_linkage_review_hash,
+    )
+
+
 def _validate_contract_binding(
-    source: CanonicalLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket,
+    source: AuthorityLinkageSource,
     contract: ActionClassContract,
 ) -> tuple[str, ...]:
     intent = source.execution_intent
@@ -205,6 +236,14 @@ def build_human_approval_requirement_resolution_packet(
 ) -> CanonicalHumanApprovalRequirementResolutionPacket:
     """Build a fail-closed, non-authorizing requirement-resolution packet."""
     source = _verified_source(source_authority_evidence_linkage_review_packet)
+    source_id, source_hash = _source_identity(source)
+    if isinstance(
+        source, CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+    ):
+        if datetime.fromisoformat(_timestamp(resolved_at)) < datetime.fromisoformat(
+            source.authority_evidence_linkage_review_recorded_at
+        ):
+            raise HumanApprovalRequirementResolutionError("HARR_RESOLVED_BEFORE_SOURCE")
     if source.fail_closed:
         raise HumanApprovalRequirementResolutionError("HARR_SOURCE_FAIL_CLOSED")
     result = source.authority_evidence_linkage_result
@@ -232,12 +271,8 @@ def build_human_approval_requirement_resolution_packet(
         "format_version": FORMAT_VERSION,
         "resolution_mechanism": MECHANISM,
         "resolved_at": _timestamp(resolved_at),
-        "source_authority_evidence_linkage_review_id": (
-            source.live_adapter_dry_run_authority_evidence_linkage_review_id
-        ),
-        "source_authority_evidence_linkage_review_hash": (
-            source.live_adapter_dry_run_authority_evidence_linkage_review_hash
-        ),
+        "source_authority_evidence_linkage_review_id": source_id,
+        "source_authority_evidence_linkage_review_hash": source_hash,
         "source_execution_intent_id": source.execution_intent_id,
         "source_execution_intent_hash": source.execution_intent_hash,
         "action_contract_id": action_contract.id,

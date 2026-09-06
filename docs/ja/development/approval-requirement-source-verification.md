@@ -71,7 +71,7 @@ runtime-authority評価もこの時刻を使用します。時刻によって変
 独立した外部確認がないためEFFECT_UNKNOWNです。実際の/v1/decideから外部効果までの統合、
 本番監査保存の永続性、実顧客の操作を実証したものではありません。
 
-## 実decision接続：残っているsource境界
+## 実decision接続：#2189で確認したsource境界
 
 `issue_verified_real_decision_bind_authorization`は、既存のcanonical promotion builderを使い、
 内容から決まる同一のExecutionIntentを再構築します。従来の汎用promotion helperは呼び出すたびに
@@ -91,7 +91,33 @@ contractを渡してもpromotion由来のselection形式を拒否します。別
 実decisionのintentと異なるため署名前に拒否します。この実decisionについてauthorization発行、
 Human Approval Receipt生成、credential取得、adapter実行、Bind／outcome receipt生成は行いません。
 
-次の実装では、promotion由来のsourceと独立source／contractを、requirement resolution／satisfactionから
-authorization verifierまで維持する必要があります。native packetの形式名だけを書き換えたり、
+続く統合では、promotion由来のsourceと独立source／contractを、authorization verifierまで
+維持する必要があります。native packetの形式名だけを書き換えたり、
 旧schemaを満たすためにhandoffのreplay／approval証拠を作ったりしてはいけません。
 既存のfixture起点のv0.3消費テストと、この実decision接続テストは別の検証です。
+
+## Native sourceの承認要件判定と充足検証
+
+HARRのbuilder／verifierはAuthority Evidence Linkageのsource形式を明示的に判別し、
+native／legacyそれぞれの完全なverifierを実行します。元のsource ID・hashを保持し、handoff用の
+項目を作りません。nativeの判定時刻がsourceより前なら拒否します。legacyのpacket IDと検証動作は維持します。
+
+`build_promotion_human_approval_requirement_satisfaction_packet`は、再構築済みの判定を
+native Human Approval linkageへ接続します。REQUIREDには完全に同じauthority sourceを持つ
+検証済みnative linkageが必要です。NOT_REQUIREDではlinkageを受け付けません。
+どちらもメタデータ証拠であり、`human_approval_proven=false`、`ready_for_real_bind=false`です。
+
+`verify_promotion_human_approval_requirement_satisfaction_packet`の`expected_source`と
+`expected_contract`は必須の独立入力です。完全なsource、契約snapshot・digest、intent、要件状態を
+すべて再構築し、その検証済み結果を返します。packet内のsnapshotを信頼の根拠にしません。
+同一ID・versionの契約差し替えやsource／linkage差し替えは、全hashを再計算しても拒否します。
+
+実際の認証済み`/v1/decide`からnative authority linkage、HARR、satisfactionまで、承認必須・不要の
+両方を統合テストで接続しました。REQUIRED経路では既存native linkageのcandidate承認フラグ要件も
+維持します。返却済みCDA／candidateのフラグは変更しません。モデル・クラウドクライアントと
+参照メタデータはテスト用です。新しい境界はHuman Approval Receiptや実行権限を生成しません。
+
+新packetは`promotion-human-approval-requirement-satisfaction/v1`であり、legacy packetの形式名変更では
+ありません。native Final Bind Readiness／Gateとauthorization issuerはまだこのpacketを受け取れません。
+そこへの独立入力の伝播と、その後の実decisionによる一回限りの実行・結果記録の統合が残っています。
+既存のlegacy fresh-source形式拒否テストも引き続き有効です。

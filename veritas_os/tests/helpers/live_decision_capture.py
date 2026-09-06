@@ -19,7 +19,7 @@ from unittest.mock import patch
 from scripts import run_decision_to_external_bind_poc as poc
 
 
-def capture(output: Path) -> None:
+def capture(output: Path, *, required_human_approval: bool = False) -> None:
     """Write only the synthetic decision and infrastructure observations."""
     runtime = output.parent / "runtime"
     runtime.mkdir()
@@ -35,7 +35,9 @@ def capture(output: Path) -> None:
     from veritas_os.core import pipeline
 
     candidate = replace(
-        poc._candidate(), evidence_refs=["synthetic:local-review-input"]
+        poc._candidate(),
+        evidence_refs=["synthetic:local-review-input"],
+        required_human_approval=required_human_approval,
     )
     with (
         patch.object(poc, "_candidate", return_value=candidate),
@@ -63,4 +65,6 @@ def capture(output: Path) -> None:
 
 
 if __name__ == "__main__":
-    capture(Path(sys.argv[1]))
+    capture(
+        Path(sys.argv[1]), required_human_approval="--human-required" in sys.argv[2:]
+    )
