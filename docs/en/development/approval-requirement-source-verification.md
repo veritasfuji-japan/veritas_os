@@ -216,6 +216,38 @@ All such claims and `ready_for_real_bind` remain false.
 
 Real authenticated `/v1/decide` tests reach final metadata rechecks for both
 approval states with controlled model/cloud clients and explicit test metadata.
-The older native and legacy APIs remain unchanged. The **runtime-risk and
-authorization issuer consumers are not yet wired to these new packet formats**;
+The older native and legacy APIs remain unchanged. The requirement-aware
+runtime-risk boundary below consumes the final packet. Authorization issuance,
 real-decision single-use execution and outcome validation remain incomplete.
+
+## Runtime-risk review from verified final rechecks
+
+`promotion_requirement_runtime_risk` re-verifies the complete independently
+supplied final recheck using trusted source/contract, current endpoint/credential
+metadata, required scope, and expected verification/recheck times. Its compact
+packet references the exact source hash, Bind context, policy and intent.
+The full source is required separately for verification; it is not embedded.
+
+The review must bind that exact source/context/contract and the intent's expected
+state fingerprint. The existing runtime-risk evaluator is shared with the older
+native path: negative risk or state drift blocks; missing risk, state evidence,
+or TTL is indeterminate and fail-closed. The review window is at most 300 seconds
+and must fit within the intent's TTL for PASS. Verification also requires an
+independent expected risk decision, expected record time, and current time;
+an unchanged packet is rejected at or after review expiry. Embedded review
+evidence cannot replace the external expected decision.
+
+`require_promotion_requirement_runtime_risk_pass` returns only rebuilt PASS
+results and rejects BLOCK or INDETERMINATE before later composition. Only PASS
+consumes the runtime-risk requirement. Other authorization and all invocation
+requirements remain outstanding, including the independent Bind-time risk check.
+The actual authorization issuer does not yet call this guard.
+
+Risk signals, observed state and evidence references are caller-supplied inputs,
+not authenticated sensor results. This boundary neither obtains nor invents
+them. Real authenticated API tests explicitly supply TTL and synthetic state
+at the supported promotion boundary for PASS cases, without editing returned
+CDA/candidate data; cases without that metadata remain indeterminate. Controlled
+model/cloud clients and synthetic runtime observations are test fixtures only.
+No Human Approval Receipt, execution authority, Bind authorization, credential
+access, network dispatch, BindReceipt, or external effect is produced.

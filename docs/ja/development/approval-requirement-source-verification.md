@@ -171,5 +171,30 @@ endpoint再検査はサーバーへ接続せずTLS peerも検証しません。c
 
 モデル・クラウドクライアントを制御し、明示的なテスト用メタデータを使う実際の認証済み
 `/v1/decide`から、承認必須／不要の両方で最終メタデータ再検査まで接続します。
-旧native／legacy APIは変更しません。**runtime riskとauthorization issuerはまだ新packet形式を
-受け取れません**。実decisionによる一回限りの実行・結果記録までの統合検証は未完了です。
+旧native／legacy APIは変更しません。以下の承認要件対応runtime risk境界がfinal packetを受け取ります。
+authorization発行と、実decisionによる一回限りの実行・結果記録までの統合検証は未完了です。
+
+## 検証済み最終再検査からのruntime risk review
+
+`promotion_requirement_runtime_risk`は、独立入力の完全なfinal recheckを、trusted source／contract、
+現在のendpoint／credentialメタデータ、必要scope、期待する検証／再検査時刻で再検証します。
+コンパクトなpacketは厳密なsource hash、Bind context、契約、intentを参照します。
+完全なsourceは検証時に別途必要であり、packetには埋め込みません。
+
+レビューはそのsource／context／契約と、intentが持つ期待する状態fingerprintに一致する必要があります。
+旧native経路と共通のリスク判定を使い、否定的なリスク判定や状態変化はBLOCK、リスク・状態証拠・TTLの
+欠落は判定不能としてfail-closedにします。レビューの有効期間は最大300秒で、PASSにはintentのTTL内に
+収まることも必要です。verifierには独立した期待するリスク判定・記録時刻・現在時刻も必須です。
+packetを変更しなくてもレビューの期限到達後は拒否します。packet内のレビュー情報を外部入力の代用にしません。
+
+`require_promotion_requirement_runtime_risk_pass`は再構築済みPASSだけを返し、後続の処理に入る前に
+BLOCK／判定不能を拒否します。runtime risk要件を完了できるのはPASSだけで、他のauthorization要件と
+全実行要件は未充足のままです。Bind直前の独立したリスク再検査も必要です。
+実際のauthorization issuerは、まだこのguardを呼び出しません。
+
+リスク信号、観測状態、証拠参照は呼び出し元が提供する情報であり、認証済みセンサー結果ではありません。
+この境界はそれらを取得・推測しません。実際の認証済みAPIのPASSテストでは、サポートされているpromotion
+境界でTTLとテスト用状態を明示的に渡し、返却済みCDA／candidateを変更しません。
+そのメタデータを渡さないケースは判定不能のままです。モデル・クラウドクライアントと観測状態は
+テスト用に制御しています。Human Approval Receipt、実行権限、Bind authorization、credentialアクセス、
+network dispatch、BindReceipt、external effectは生成しません。

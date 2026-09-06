@@ -437,19 +437,42 @@ def _result(
     reviewed_at: datetime,
     valid_until: datetime,
 ) -> dict[str, Any]:
-    expected = decision.expected_state_fingerprint
-    observed = decision.observed_state_fingerprint
+    return _evaluate_runtime_risk_inputs(
+        projection.execution_intent,
+        expected=decision.expected_state_fingerprint,
+        observed=decision.observed_state_fingerprint,
+        signal=decision.runtime_risk_signal,
+        reviewed_at=reviewed_at,
+        valid_until=valid_until,
+    )
+
+
+def _evaluate_runtime_risk_inputs(
+    execution_intent: dict[str, Any],
+    *,
+    expected: str | None,
+    observed: str | None,
+    signal: bool | None,
+    reviewed_at: datetime,
+    valid_until: datetime,
+) -> dict[str, Any]:
+    """Shared interpretation after callers verify source, bindings and window.
+
+    This internal helper does not verify evidence authenticity. Both native
+    source formats must establish the returned source/context preconditions
+    before calling it; no accepting source conversion is performed here.
+    """
     expected_present = isinstance(expected, str) and bool(expected.strip())
     observed_present = isinstance(observed, str) and bool(observed.strip())
     fingerprint_matches = expected_present and observed_present and expected == observed
 
-    ttl = projection.execution_intent.get("ttl_seconds")
+    ttl = execution_intent.get("ttl_seconds")
     ttl_present = isinstance(ttl, int) and not isinstance(ttl, bool) and ttl > 0
     intent_expires_at = None
     intent_fresh = False
     if ttl_present:
         decision_at = _aware(
-            projection.execution_intent.get("decision_ts"),
+            execution_intent.get("decision_ts"),
             "CPLADRRR_INTENT_DECISION_TIME_INVALID",
         )
         expiry = decision_at + timedelta(seconds=ttl)
@@ -458,9 +481,9 @@ def _result(
 
     block_reasons = []
     missing_reasons = []
-    if decision.runtime_risk_signal is False:
+    if signal is False:
         block_reasons.append("CPLADRRR_RUNTIME_RISK_UNACCEPTABLE")
-    elif decision.runtime_risk_signal is None:
+    elif signal is None:
         missing_reasons.append("CPLADRRR_RUNTIME_RISK_SIGNAL_MISSING")
     if not expected_present:
         missing_reasons.append("CPLADRRR_EXPECTED_STATE_FINGERPRINT_MISSING")
@@ -487,8 +510,8 @@ def _result(
         "outcome": outcome,
         "runtime_risk_acceptable": outcome == PASS_OUTCOME,
         "reason_codes": reasons,
-        "runtime_risk_signal_present": decision.runtime_risk_signal is not None,
-        "runtime_risk_signal_passed": decision.runtime_risk_signal is True,
+        "runtime_risk_signal_present": signal is not None,
+        "runtime_risk_signal_passed": signal is True,
         "expected_state_fingerprint_present": expected_present,
         "observed_state_fingerprint_present": observed_present,
         "state_fingerprint_matches": fingerprint_matches,
