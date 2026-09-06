@@ -172,7 +172,7 @@ endpoint再検査はサーバーへ接続せずTLS peerも検証しません。c
 モデル・クラウドクライアントを制御し、明示的なテスト用メタデータを使う実際の認証済み
 `/v1/decide`から、承認必須／不要の両方で最終メタデータ再検査まで接続します。
 旧native／legacy APIは変更しません。以下の承認要件対応runtime risk境界がfinal packetを受け取ります。
-authorization発行と、実decisionによる一回限りの実行・結果記録までの統合検証は未完了です。
+native v2のauthorization発行は下記の別境界です。実decisionによる単回消費・実行・結果記録の統合は未完了です。
 
 ## 検証済み最終再検査からのruntime risk review
 
@@ -190,7 +190,7 @@ packetを変更しなくてもレビューの期限到達後は拒否します�
 `require_promotion_requirement_runtime_risk_pass`は再構築済みPASSだけを返し、後続の処理に入る前に
 BLOCK／判定不能を拒否します。runtime risk要件を完了できるのはPASSだけで、他のauthorization要件と
 全実行要件は未充足のままです。Bind直前の独立したリスク再検査も必要です。
-実際のauthorization issuerは、まだこのguardを呼び出しません。
+下記のnative v2 authorization issuerは、発行前にこのguardを呼び出します。
 
 リスク信号、観測状態、証拠参照は呼び出し元が提供する情報であり、認証済みセンサー結果ではありません。
 この境界はそれらを取得・推測しません。実際の認証済みAPIのPASSテストでは、サポートされているpromotion
@@ -198,3 +198,38 @@ BLOCK／判定不能を拒否します。runtime risk要件を完了できるの
 そのメタデータを渡さないケースは判定不能のままです。モデル・クラウドクライアントと観測状態は
 テスト用に制御しています。Human Approval Receipt、実行権限、Bind authorization、credentialアクセス、
 network dispatch、BindReceipt、external effectは生成しません。
+
+## Native authorization v2（発行のみ）
+
+`native_bind_authorization.issue_native_bind_authorization`は、このPASS guardを既存の
+暗号学的Authority Evidence・失効・署名済みHuman Approval Receipt・RuntimeAuthority・
+署名済みGO判断・grant・idempotency検証へ接続します。`NativeAuthorizationSourceInputs`には
+完全なfinal recheckと、独立した期待するレビュー・時刻・現在のメタデータが必須です。
+trusted Authority Evidence Linkage source、ActionClassContract、検証時計は
+`RealBindAuthorizationGovernanceInputs`で独立して渡し、埋め込みsnapshotで代用しません。
+後続の導出にはverifierが再構築した結果だけを使用します。
+
+REQUIREDには既存の署名済みReceiptが必須で、NOT_REQUIREDへのReceipt供給は拒否します。
+人間承認は生成しません。Authority／Receipt／GOの署名は既存のdeployment側検証ポリシーを使います。
+GO署名者はgate reviewerおよびrisk reviewerと別人である必要があります。有効期間は現在の
+risk review、intent、署名済み証拠の有効期間内に限定します。
+対応する承認ルールはbooleanの`required`と、整数0／1の`minimum_approvals`だけです。
+複数人承認や追加ルールは拒否し、Receipt一枚で充足した扱いにしません。
+
+閉じた`native-live-adapter-bind-authorization/v2` artifactはnative source hashを保持し、
+専用v2 domainで全項目を署名します。内部context projectionは既存の検証インターフェースを
+再利用するためだけのもので、legacy packetやhandoff／replay証拠を捏造しません。
+Ed25519 issuer verifierには明示的な`authorization_artifact_version="v2"`と、それに一致する
+deployment policy hashが必要です。既定v1 verifierとv1 artifact schemaはv2を拒否します。
+既存v1／v0.3経路は維持します。
+
+`verify_native_bind_authorization`は独立入力の発行検証時刻で署名・全項目を再検証・再構築します。
+これはconsumerでも現在の実行許可でもなく、v2 consumerは未実装です。idempotencyは署名済み
+判断／context・risk hash・契約・有効期間を固定しますが、未使用keyであることは証明しません。
+単回消費ポリシーを署名しても、atomic consumptionとBind直前の最新governance／risk再検査は
+今後の必須作業です。この発行境界でcredential取得・header構築・network・Bind実行・
+BindReceipt・外部効果は行いません。
+
+テスト用鍵・署名済みAuthority／Approval artifactは合成fixtureであり、実運用の人間同意を
+意味しません。呼び出し元のrisk evidenceは認証済みセンサー入力ではありません。
+注入する暗号処理backendには、外部効果を起こさない実装が必要です。

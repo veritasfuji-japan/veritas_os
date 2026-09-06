@@ -21,6 +21,9 @@ from veritas_os.policy.live_adapter_bind_authorization import (
     bind_authorizer_decision_signature_payload,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
+from veritas_os.policy.live_adapter_bind_authorization_codec import (
+    native_bind_authorization_signature_payload,
+)
 
 Purpose = Literal["authorizer_decision", "authorization_issuer"]
 
@@ -36,6 +39,7 @@ class TrustedEd25519BindAuthorizationVerifier:
     purpose: Purpose
     trust_level: str = "production"
     verifier_policy_id: str = "bind-authorization-verifier-v1"
+    authorization_artifact_version: Literal["v1", "v2"] = "v1"
 
     def policy_hash(self) -> str:
         """Bind verifier policy identity to the exact trusted public-key bytes."""
@@ -60,6 +64,11 @@ class TrustedEd25519BindAuthorizationVerifier:
                 "verifier_id": self.verifier_id,
                 "trust_level": self.trust_level,
                 "keys": keys,
+                **(
+                    {"authorization_artifact_version": "v2"}
+                    if self.authorization_artifact_version == "v2"
+                    else {}
+                ),
             }
         )
 
@@ -72,6 +81,14 @@ class TrustedEd25519BindAuthorizationVerifier:
             return bind_authorizer_decision_signature_payload(artifact)
         if artifact.get("artifact_type") != AUTHORIZATION_ARTIFACT_TYPE:
             return None
+        if self.authorization_artifact_version == "v2":
+            if (
+                artifact.get("artifact_version") != "v2"
+                or artifact.get("format_version")
+                != "native-live-adapter-bind-authorization/v2"
+            ):
+                return None
+            return native_bind_authorization_signature_payload(artifact)
         if artifact.get("artifact_version") != AUTHORIZATION_ARTIFACT_VERSION:
             return None
         return bind_authorization_artifact_signature_payload(artifact)
@@ -99,9 +116,7 @@ class TrustedEd25519BindAuthorizationVerifier:
             else "authorization_signature"
         )
         try:
-            signature = base64.urlsafe_b64decode(
-                str(artifact.get(signature_field, ""))
-            )
+            signature = base64.urlsafe_b64decode(str(artifact.get(signature_field, "")))
             Ed25519PublicKey.from_public_bytes(key).verify(
                 signature, payload.encode("utf-8")
             )

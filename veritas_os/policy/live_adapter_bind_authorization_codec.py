@@ -10,10 +10,13 @@ from typing import Any
 from pydantic import BaseModel
 
 from veritas_os.policy.live_adapter_bind_authorization_contracts import (
-    AUTHORIZATION_SIGNATURE_DOMAIN, AUTHORIZER_SIGNATURE_DOMAIN, DOMAINS,
+    AUTHORIZATION_SIGNATURE_DOMAIN,
+    AUTHORIZER_SIGNATURE_DOMAIN,
+    DOMAINS,
     LiveAdapterBindAuthorizationError,
 )
 from veritas_os.security.hash import canonical_json_dumps
+
 
 def _json(value: Any) -> Any:
     if isinstance(value, BaseModel):
@@ -86,4 +89,16 @@ def bind_authorization_artifact_signature_payload(artifact: dict[str, Any]) -> s
     }
     return canonical_json_dumps(
         {"domain": AUTHORIZATION_SIGNATURE_DOMAIN, "artifact": unsigned}
+    )
+
+
+def native_bind_authorization_signature_payload(artifact: dict[str, Any]) -> str:
+    """Separate native v2 signatures from all legacy authorization payloads."""
+    return canonical_json_dumps(
+        {
+            "domain": "VERITAS:live-adapter-bind-authorization:v2:",
+            "artifact": {
+                k: v for k, v in artifact.items() if k != "authorization_signature"
+            },
+        }
     )
