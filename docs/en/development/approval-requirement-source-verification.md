@@ -178,8 +178,44 @@ v0.3 APIs. Real authenticated `/v1/decide` tests reach the new Gate for both sta
 with controlled model/cloud clients. Fully rehashed source/policy substitutions
 under identical contract ID/version are rejected at both review boundaries.
 
-The new Gate is **not yet consumed by Fresh Verified Source Gate, final endpoint/
-credential rechecks, or the authorization issuer**. Wiring those consumers with
-independent anchors and validating real-decision single-use execution/outcomes
-remains required. No authorization, credential access, network dispatch, or
+The new Gate feeds the requirement-aware fresh verification and final rechecks
+described below. No authorization, credential access, network dispatch, or
 external effect is created by these review stages.
+
+## Fresh source verification and final metadata rechecks
+
+`promotion_requirement_final_rechecks` consumes the verified requirement-aware
+Gate without converting it into the older linkage-only packet format.
+`PromotionRequirementFreshSourcePacket` re-verifies the full Gate chain against
+independent source and contract inputs, then derives an exact Bind context
+committing the Gate hash, authority source, requirement resolution, contract,
+intent, adapter, endpoint and credential bindings. Its verifier also requires
+the independently supplied verification time. A failed Gate cannot enter.
+
+`PromotionRequirementFinalRecheckPacket` consumes this rebuilt fresh packet and
+compares caller-supplied current endpoint metadata, credential reference and
+required credential scope with the fully verified source. All metadata must
+match exactly; scope containment is never inferred. Its verifier requires the
+same independent anchors and current metadata, plus the expected recheck time.
+Embedded endpoint/reference/time fields cannot substitute for these inputs.
+Changing endpoint identity or credential scope rejects an otherwise valid old
+packet. Rehashed context, source, same-ID/version contract, or time substitutions
+are also rejected. Both verifiers return rebuilt results.
+
+The fresh packet consumes fresh verification and exact context derivation;
+the final packet consumes endpoint and credential rechecks in that order.
+Remaining authorization work begins with runtime risk review. Approval-related
+future requirements remain conditional on the verified ActionClassContract;
+invocation requirements remain unchanged and unsatisfied.
+
+These are local metadata checks. Fresh verification does not establish live
+policy freshness or revocation status. Endpoint recheck does not contact a
+server or verify a TLS peer. Credential recheck does not access a credential
+provider or prove that its actual permissions match its reference metadata.
+All such claims and `ready_for_real_bind` remain false.
+
+Real authenticated `/v1/decide` tests reach final metadata rechecks for both
+approval states with controlled model/cloud clients and explicit test metadata.
+The older native and legacy APIs remain unchanged. The **runtime-risk and
+authorization issuer consumers are not yet wired to these new packet formats**;
+real-decision single-use execution and outcome validation remain incomplete.
