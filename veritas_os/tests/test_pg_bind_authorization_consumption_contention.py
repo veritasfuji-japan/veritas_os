@@ -14,6 +14,20 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
     build_authorization_consumption_record,
 )
 from veritas_os.storage.db import get_pool
+from veritas_os.policy.native_bind_authorization_consumption import (
+    consume_native_bind_authorization,
+    NativeAuthorizationConsumptionResult,
+    NativeAuthorizationConsumptionError,
+)
+from veritas_os.tests.test_native_bind_authorization_consumption import (
+    consumable as native_consumable_fixture,
+    issued as native_issued_fixture,
+    api_risk_source as native_source_fixture,
+)
+
+consumable = native_consumable_fixture
+issued = native_issued_fixture
+api_risk_source = native_source_fixture
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.contention]
 
@@ -28,7 +42,12 @@ def _require_real_postgresql() -> None:
         pytest.skip("real PostgreSQL service container is required")
 
 
-def _record(token: str, *, authorization_id: str | None = None, idempotency_key: str | None = None):
+def _record(
+    token: str,
+    *,
+    authorization_id: str | None = None,
+    idempotency_key: str | None = None,
+):
     auth_hash = _digest("authorization:" + token)
     return build_authorization_consumption_record(
         live_adapter_bind_authorization_id=(
@@ -48,7 +67,9 @@ def _record(token: str, *, authorization_id: str | None = None, idempotency_key:
     )
 
 
-async def _count_rows(*, authorization_id: str | None = None, idempotency_key: str | None = None) -> int:
+async def _count_rows(
+    *, authorization_id: str | None = None, idempotency_key: str | None = None
+) -> int:
     pool = await get_pool()
     async with pool.connection() as conn:
         if authorization_id is not None:
@@ -82,9 +103,7 @@ async def test_real_postgres_allows_exactly_one_concurrent_consumer() -> None:
     assert outcomes.count(True) == 1
     assert outcomes.count(False) == 31
     assert (
-        await _count_rows(
-            authorization_id=record.live_adapter_bind_authorization_id
-        )
+        await _count_rows(authorization_id=record.live_adapter_bind_authorization_id)
         == 1
     )
 
@@ -103,7 +122,10 @@ async def test_real_postgres_idempotency_key_is_unique_across_authorizations() -
         token + ":b",
         idempotency_key=shared_idempotency_key,
     )
-    assert first.live_adapter_bind_authorization_id != second.live_adapter_bind_authorization_id
+    assert (
+        first.live_adapter_bind_authorization_id
+        != second.live_adapter_bind_authorization_id
+    )
 
     store = PostgresAtomicAuthorizationConsumptionStore()
     outcomes = await asyncio.gather(
@@ -113,3 +135,46 @@ async def test_real_postgres_idempotency_key_is_unique_across_authorizations() -
 
     assert sorted(outcomes) == [False, True]
     assert await _count_rows(idempotency_key=shared_idempotency_key) == 1
+
+
+@pytest.mark.skipif(
+    not os.getenv("VERITAS_DATABASE_URL", "").startswith("postgresql"),
+    reason="real PostgreSQL service container is required",
+)
+@pytest.mark.asyncio
+async def test_native_v2_real_verification_and_postgres_race(consumable) -> None:
+    """Genuine API lineage, real signatures and four full consumers: one row."""
+    from veritas_os.storage.db import close_pool
+
+    authorization, inputs, _ = consumable
+    await close_pool()
+    try:
+        store = PostgresAtomicAuthorizationConsumptionStore()
+        outcomes = await asyncio.gather(
+            *(
+                consume_native_bind_authorization(
+                    authorization,
+                    **inputs,
+                    consumption_store=store,
+                )
+                for _ in range(4)
+            ),
+            return_exceptions=True,
+        )
+        winners = [
+            x for x in outcomes if isinstance(x, NativeAuthorizationConsumptionResult)
+        ]
+        assert len(winners) == 1, outcomes
+        assert winners[0].durable_store_used
+        losers = [
+            x for x in outcomes if isinstance(x, NativeAuthorizationConsumptionError)
+        ]
+        assert len(losers) == 3
+        assert all(str(x) == "NABC_ALREADY_CONSUMED" for x in losers)
+        assert await _count_rows(authorization_id=authorization.authorization_id) == 1
+        assert await _count_rows(idempotency_key=authorization.idempotency_key) == 1
+        assert not winners[0].credential_material_accessed
+        assert not winners[0].bind_invoked
+        assert not winners[0].external_action_executed
+    finally:
+        await close_pool()
