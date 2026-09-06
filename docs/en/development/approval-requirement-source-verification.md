@@ -152,7 +152,34 @@ clients and reference metadata remain controlled test inputs. No Human Approval
 Receipt or execution authority is produced by this new boundary.
 
 This is a distinct native packet (`promotion-human-approval-requirement-satisfaction/v1`),
-not a relabeled legacy satisfaction packet. Native Final Bind Readiness/Gate and
-the authorization issuer do not yet consume it. That downstream propagation,
-followed by real-decision single-use execution/outcome integration, remains work
-to complete; the legacy fresh-source format-refusal test remains valid.
+not a relabeled legacy satisfaction packet. The dedicated requirement-aware
+Final Readiness/Gate path below consumes it. The legacy fresh-source
+format-refusal test remains valid.
+
+## Requirement-aware native Final Readiness and Gate
+
+`promotion_requirement_bind_readiness` connects verified satisfaction to
+`PromotionRequirementFinalReadinessPacket` and `PromotionRequirementBindGatePacket`.
+Every builder and verifier requires independent `expected_source` and
+`expected_contract`. Gate verification propagates those inputs through readiness,
+satisfaction, and resolution; no embedded snapshot becomes a trust anchor.
+All derived fields are reconstructed, and verifiers return the rebuilt objects.
+The complete source chain retains the original intent, endpoint, credential scope,
+authority linkage, and optional human linkage without synthesizing legacy fields.
+
+Both REQUIRED and NOT_REQUIRED states are supported. Conditional future human
+approval requirements come only from the verified resolution; other authorization
+and invocation prerequisites remain outstanding. Rejected readiness cannot enter
+Gate review. Rejected Gate review remains fail-closed. Local review acknowledgements
+are explicit metadata, not signed Human Approval Receipts.
+
+The separate closed schemas preserve existing linkage-only native v1 and legacy
+v0.3 APIs. Real authenticated `/v1/decide` tests reach the new Gate for both states
+with controlled model/cloud clients. Fully rehashed source/policy substitutions
+under identical contract ID/version are rejected at both review boundaries.
+
+The new Gate is **not yet consumed by Fresh Verified Source Gate, final endpoint/
+credential rechecks, or the authorization issuer**. Wiring those consumers with
+independent anchors and validating real-decision single-use execution/outcomes
+remains required. No authorization, credential access, network dispatch, or
+external effect is created by these review stages.
