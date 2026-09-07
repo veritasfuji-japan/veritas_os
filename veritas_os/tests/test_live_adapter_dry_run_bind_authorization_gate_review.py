@@ -75,9 +75,9 @@ def test_builder_creates_valid_verified_packet_and_reverifies_source(monkeypatch
     )
     calls = []
 
-    def recording(value):
+    def recording(value, **kwargs):
         calls.append(value)
-        return actual(value)
+        return actual(value, **kwargs)
 
     monkeypatch.setattr(
         module,

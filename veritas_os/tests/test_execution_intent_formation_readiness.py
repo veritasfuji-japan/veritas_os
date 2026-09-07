@@ -151,6 +151,36 @@ def test_approval_not_required_rejects_injected_receipt() -> None:
         )
 
 
+@pytest.mark.parametrize("required", [True, False])
+def test_schema_preserves_branch_specific_evidence_minimum(required: bool) -> None:
+    """Only verified no-approval metadata permits the four-reference shape."""
+    eligibility = _eligibility() if required else _eligibility_without_approval()
+    raw = build_execution_intent_formation_readiness_packet(
+        eligibility, NOW
+    ).model_dump(mode="json")
+    schema = json.loads(
+        Path("schemas/execution-intent-formation-readiness-v1.schema.json").read_text()
+    )
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    validator.validate(raw)
+    refs = raw["source_to_execution_intent_mapping"]["evidence_refs"]
+    assert len(refs) == (5 if required else 4)
+    refs.pop()
+    assert any(error.validator == "minItems" for error in validator.iter_errors(raw))
+
+
+def test_rehashed_readiness_cannot_downgrade_approval_required_source() -> None:
+    """Recomputed hashes cannot replace the verified source's approval decision."""
+    raw = _packet().model_dump(mode="json")
+    forged_mapping = build_execution_intent_formation_readiness_packet(
+        _eligibility_without_approval(), NOW
+    ).source_to_execution_intent_mapping
+    raw["source_to_execution_intent_mapping"] = forged_mapping
+    raw["mapping_value_digest"] = _digest(MAPPING_DOMAIN, forged_mapping)
+    with pytest.raises(ExecutionIntentFormationReadinessError):
+        verify_execution_intent_formation_readiness_packet(_resign(raw))
+
+
 def test_build_verify_mapping_and_content_addressing() -> None:
     eligibility = _eligibility()
     packet = build_execution_intent_formation_readiness_packet(eligibility, NOW)

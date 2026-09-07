@@ -464,10 +464,13 @@ def _packet_hash(raw: dict[str, Any]) -> str:
 
 def _source(
     value: Any,
+    *,
+    expected_source: Any = None,
+    expected_contract: Any = None,
 ) -> CanonicalLiveAdapterDryRunFinalBindAuthorizationReadinessPacket:
     try:
         return verify_live_adapter_dry_run_final_bind_authorization_readiness_packet(
-            value
+            value, expected_source=expected_source, expected_contract=expected_contract
         )
     except (
         LiveAdapterDryRunFinalBindAuthorizationReadinessError,
@@ -588,9 +591,16 @@ def build_live_adapter_dry_run_bind_authorization_gate_review_packet(
     source_final_bind_authorization_readiness_packet: Any,
     bind_authorization_gate_review_decision: Any,
     bind_authorization_gate_review_recorded_at: datetime,
+    *,
+    expected_source: Any = None,
+    expected_contract: Any = None,
 ) -> CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket:
     """Build and self-verify deterministic, non-authorizing gate review evidence."""
-    source = _source(_json(source_final_bind_authorization_readiness_packet))
+    source = _source(
+        _json(source_final_bind_authorization_readiness_packet),
+        expected_source=expected_source,
+        expected_contract=expected_contract,
+    )
     _validate_source(source)
     decision = _decision(bind_authorization_gate_review_decision)
     recorded_at = _timestamp(bind_authorization_gate_review_recorded_at)
@@ -674,11 +684,18 @@ def build_live_adapter_dry_run_bind_authorization_gate_review_packet(
     raw["live_adapter_dry_run_bind_authorization_gate_review_id"] = (
         f"ladbagr:v1:sha256:{digest}"
     )
-    return verify_live_adapter_dry_run_bind_authorization_gate_review_packet(raw)
+    return verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
+        raw,
+        expected_source=expected_source,
+        expected_contract=expected_contract,
+    )
 
 
 def verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
     raw: Any,
+    *,
+    expected_source: Any = None,
+    expected_contract: Any = None,
 ) -> CanonicalLiveAdapterDryRunBindAuthorizationGateReviewPacket:
     """Reverify the embedded source and every deterministic derived field."""
     try:
@@ -697,7 +714,11 @@ def verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
             "LADBAGR_PACKET_INVALID"
         ) from exc
     actual = packet.model_dump(mode="json")
-    source = _source(packet.source_final_bind_authorization_readiness_packet)
+    source = _source(
+        packet.source_final_bind_authorization_readiness_packet,
+        expected_source=expected_source,
+        expected_contract=expected_contract,
+    )
     _validate_source(source)
     source_raw = source.model_dump(mode="json")
     if (

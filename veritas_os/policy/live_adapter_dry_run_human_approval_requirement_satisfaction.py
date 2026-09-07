@@ -52,7 +52,9 @@ FORMAT_VERSION = (
 MECHANISM = "satisfy_human_approval_requirement_without_authority_creation/v1"
 STATUS = "LIVE_ADAPTER_DRY_RUN_HUMAN_APPROVAL_REQUIREMENT_SATISFIED_NOT_APPROVED"
 CHECK_MODE = "deterministic_local_human_approval_requirement_satisfaction_only"
-DOMAIN = "veritas.live-adapter-dry-run-human-approval-requirement-satisfaction.packet/v1"
+DOMAIN = (
+    "veritas.live-adapter-dry-run-human-approval-requirement-satisfaction.packet/v1"
+)
 RESULT_DOMAIN = (
     "veritas.live-adapter-dry-run-human-approval-requirement-satisfaction.result/v1"
 )
@@ -231,9 +233,14 @@ def _json(value: Any) -> Any:
         value = value.model_dump(mode="python")
     if value is None or isinstance(value, (str, bool, int)):
         return value
-    if isinstance(value, float) and value == value and value not in (
-        float("inf"),
-        float("-inf"),
+    if (
+        isinstance(value, float)
+        and value == value
+        and value
+        not in (
+            float("inf"),
+            float("-inf"),
+        )
     ):
         return value
     if isinstance(value, datetime):
@@ -298,9 +305,13 @@ def _authority_source(
 
 def _resolution(
     value: Any,
+    source: CanonicalLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket,
+    contract: ActionClassContract,
 ) -> CanonicalHumanApprovalRequirementResolutionPacket:
     try:
-        return verify_human_approval_requirement_resolution_packet(value)
+        return verify_human_approval_requirement_resolution_packet(
+            value, source, contract
+        )
     except (
         HumanApprovalRequirementResolutionError,
         TypeError,
@@ -313,7 +324,9 @@ def _resolution(
 
 def _contract(value: Any) -> ActionClassContract:
     try:
-        raw = value.to_dict() if isinstance(value, ActionClassContract) else _json(value)
+        raw = (
+            value.to_dict() if isinstance(value, ActionClassContract) else _json(value)
+        )
         return validate_action_class_contract(raw)
     except (
         ActionClassContractValidationError,
@@ -349,9 +362,7 @@ def _validate_resolution_binding(
     expected_state = (
         "REQUIRED" if expected_required else "NOT_REQUIRED_BY_ACTION_CONTRACT"
     )
-    expected_scope = tuple(
-        source.authority_evidence_reference_bundle.bundle_scope
-    )
+    expected_scope = tuple(source.authority_evidence_reference_bundle.bundle_scope)
     checks = (
         resolution.source_authority_evidence_linkage_review_id
         == source.live_adapter_dry_run_authority_evidence_linkage_review_id,
@@ -463,15 +474,13 @@ def _derive(
         bundle = _json(child["human_approval_reference_bundle"])
         matrix = _json(child["human_approval_binding_matrix"])
         rejected = tuple(
-            child["human_approval_linkage_result"][
-                "rejected_approval_reference_ids"
-            ]
+            child["human_approval_linkage_result"]["rejected_approval_reference_ids"]
         )
-        reasons = tuple(
-            child["human_approval_linkage_result"]["rejection_reasons"]
-        )
+        reasons = tuple(child["human_approval_linkage_result"]["rejection_reasons"])
         satisfaction_state = "SATISFIED_BY_VERIFIED_HUMAN_APPROVAL_LINKAGE"
-        child_id = required_linkage.live_adapter_dry_run_human_approval_linkage_review_id
+        child_id = (
+            required_linkage.live_adapter_dry_run_human_approval_linkage_review_id
+        )
         child_hash = (
             required_linkage.live_adapter_dry_run_human_approval_linkage_review_hash
         )
@@ -573,8 +582,10 @@ def build_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
 ) -> CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket:
     """Build a fail-closed bridge for both REQUIRED and NOT_REQUIRED paths."""
     source = _authority_source(_json(source_authority_evidence_linkage_review_packet))
-    resolution = _resolution(_json(human_approval_requirement_resolution_packet))
     contract = _contract(action_contract)
+    resolution = _resolution(
+        _json(human_approval_requirement_resolution_packet), source, contract
+    )
     _validate_resolution_binding(source, resolution, contract)
 
     required_linkage = (
@@ -673,19 +684,25 @@ def build_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
         f"ladhars:v1:sha256:{digest}"
     )
     return verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
-        raw
+        raw, expected_source=source, expected_contract=contract
     )
 
 
 def verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
     raw: Any,
+    *,
+    expected_source: Any,
+    expected_contract: ActionClassContract,
 ) -> CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket:
-    """Reverify source, contract requirement, branch choice, and packet hash."""
+    """Reconstruct using independent trusted inputs, never embedded anchors.
+
+    Callers must obtain expected_source and expected_contract independently of
+    this packet. Embedded snapshots are compared, not used to select policy.
+    """
     try:
         value = raw.model_dump(mode="json") if isinstance(raw, BaseModel) else raw
-        packet = (
-            CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket
-            .model_validate(_json(value))
+        packet = CanonicalLiveAdapterDryRunHumanApprovalRequirementSatisfactionPacket.model_validate(
+            _json(value)
         )
     except (
         ValidationError,
@@ -697,9 +714,19 @@ def verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
         ) from exc
 
     actual = packet.model_dump(mode="json")
-    source = _authority_source(packet.source_authority_evidence_linkage_review_packet)
-    resolution = _resolution(packet.human_approval_requirement_resolution_packet)
-    contract = _contract(packet.action_contract_snapshot)
+    source = _authority_source(expected_source)
+    contract = _contract(expected_contract)
+    if _digest(
+        DOMAIN, packet.source_authority_evidence_linkage_review_packet
+    ) != _digest(DOMAIN, source.model_dump(mode="json")) or _digest(
+        DOMAIN, packet.action_contract_snapshot
+    ) != _digest(DOMAIN, contract.to_dict()):
+        raise LiveAdapterDryRunHumanApprovalRequirementSatisfactionError(
+            "LADHARS_EXPECTED_BINDING_MISMATCH"
+        )
+    resolution = _resolution(
+        packet.human_approval_requirement_resolution_packet, source, contract
+    )
     _validate_resolution_binding(source, resolution, contract)
 
     child = (
@@ -755,18 +782,15 @@ def verify_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
 
     expected = (
         _json(packet.human_approval_reference_bundle) == _json(bundle),
-        packet.human_approval_reference_bundle_digest
-        == _digest(BUNDLE_DOMAIN, bundle),
+        packet.human_approval_reference_bundle_digest == _digest(BUNDLE_DOMAIN, bundle),
         _json(packet.human_approval_linkage_result)
         == _json(result.model_dump(mode="json")),
-        packet.human_approval_linkage_result_digest
-        == _digest(RESULT_DOMAIN, result),
+        packet.human_approval_linkage_result_digest == _digest(RESULT_DOMAIN, result),
         _json(packet.human_approval_binding_matrix) == _json(matrix),
         packet.human_approval_binding_matrix_digest == _digest(MATRIX_DOMAIN, matrix),
         _json(packet.human_approval_linkage_checks) == _json(checks),
         packet.human_approval_linkage_check_digest == _digest(CHECKS_DOMAIN, checks),
-        _json(packet.future_bind_authorization_requirements)
-        == _json(requirements),
+        _json(packet.future_bind_authorization_requirements) == _json(requirements),
         packet.future_bind_authorization_requirement_digest
         == _digest(REQUIREMENTS_DOMAIN, requirements),
         packet.scope_limitations == SCOPE_LIMITATIONS,

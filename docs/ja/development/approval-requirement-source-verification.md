@@ -1,0 +1,258 @@
+# 承認要否の元ソース検証
+
+`verify_human_approval_requirement_resolution_packet(packet, source, contract)`
+には、完全なAuthority Evidence Linkageソースと期待するAction Class Contractが必要です。
+引数1個のハッシュ検証のみの呼び出しは廃止します。ソースを再検証し、契約と合わせて全項目を
+再構築します。偽のNOT_REQUIRED結果を再ハッシュしても、この照合は通過しません。
+Requirement Satisfactionのbuilderとverifierも新しい呼び出しを使用します。
+
+期待する契約は信頼できるポリシー設定から取得してください。攻撃者が差し替えた契約を
+信頼の根拠にしてはいけません。Satisfaction verifierはキーワード引数`expected_source`と
+`expected_contract`を必須とし、埋め込まれた完全なソース・契約と独立入力を照合します。
+再構築されたresolutionだけを後段の導出に使用します。同一ID・versionでの契約差し替えも拒否します。
+Final Bind ReadinessとBind Gate Reviewのbuilder・verifierも、自己検証を含め同じ引数を伝播します。
+省略できるのは既存v1 linkage経路だけです。v0.3 satisfaction経路では片方でも欠ければ拒否し、
+embedded snapshotへのフォールバックはしません。さらに先の呼び出し元が独立入力を渡さない場合も
+v0.3 gateを消費できません。有効化する際は信頼済み入力を明示的に渡す必要があります。
+検証対象packetから期待値を取り出してはいけません。解決時刻は記録値であり現在の鮮度の証明ではありません。
+
+承認要否の統合テストではソース検証器をモックせず、実際の入れ子のmetadata-linkageチェーンを使います。
+権限証拠の暗号学的認証を実証するものではありません。権限署名・失効検証、人間承認検証は
+別の境界として引き続き必要です。承認要否の解決層自体は実行権限や承認を生成しません。
+
+## 非実行のfresh composition
+
+`build_fresh_bind_source_chain(..., expected_contract=trusted_contract)`でv0.3の
+承認要否検証を選択します。契約は`FreshBindSourceChainInputs`の外の信頼できる設定から渡し、
+検証対象gateから選択しません。authority sourceは検証済みの前提チェーンから内部で新規構築します。
+REQUIREDでは呼び出し元の人間承認参照メタデータが必要です。NOT_REQUIREDでは
+`human_approval_reference_bundle=None`を渡せます。Receiptを推測しません。
+契約を省略すると既存v1経路を維持します。
+
+`derive_verified_real_bind_context_hash(result.verified_gate_review_packet, ...)`には
+`expected_source=result.authority_linkage_packet`と同じ信頼済み契約を`expected_contract`に渡します。
+gate全体を再検証してからcontext digestを導出します。v0.3の独立入力欠落や同一ID/versionでの
+契約差し替えは拒否します。このcomposition自体は非実行です。別の承認・authorization発行経路は
+下記の独立入力がある場合にv0.3を扱い、入力なしのgateは引き続き拒否します。
+trusted policy registry、credential access、実行機能は追加していません。
+
+## v0.3発行経路の明示的な信頼入力
+
+`issue_gate_bound_human_approval_artifact`へ`expected_source`をgateと独立して渡し、
+既存の`action_contract`には信頼できる契約を渡します。明示的な承認イベント、一致する承認参照、
+deployment管理のsignerは引き続き必須です。NOT_REQUIREDからHuman Approval Receiptを生成・推測しません。
+
+Bind authorizationでは`RealBindAuthorizationGovernanceInputs.expected_source`へ独立取得した
+authority linkage source、`action_contract`へ信頼できる契約を設定します。decisionからの発行入口、
+authorization builder、verifier、governanceのcontext導出まで同じ入力を伝播します。
+未信頼のgateやartifact内のsnapshotから期待値を取り出してはいけません。既存v1は互換性を維持し、
+v0.3の独立入力欠落は拒否します。
+
+これらは前提条件であり、権限署名、失効・鮮度、必要な署名済み人間承認、明示的なauthorizer GO、
+許可されたissuerと署名検証の代わりにはなりません。テストは一時鍵と実際のEd25519検証を使用します。
+発行結果は未消費のauthorizationです。Bind呼び出し、credential解決、request送信、外部効果は行いません。
+
+## 消費時点のgovernance再検証
+
+temporal validatorは二段階の評価を行います。`governance_inputs.verification_now`では署名済みの
+発行時証跡を変更せず再構築・検証します。authorizationの有効期間を確認した後、同じ独立source、
+契約、署名済み権限証拠、必要な人間承認を消費時刻`now`で再検証します。失効情報の鮮度と
+runtime-authority評価もこの時刻を使用します。時刻によって変わる新しいproof hashを発行時hashと
+比較したり、発行時hashへ上書きしたりしません。発行時の検証より前への時刻巻き戻しは拒否します。
+
+`now`はpacketからではなく、呼び出し元の信頼できる実行時計から取得してください。この関数自体は
+時計の真正性を認証せず、registryから最新ポリシーを取得するものでもありません。独立した信頼入力と
+検証サービスはdeployment側の責任です。再検証失敗時は消費・credential取得より前に拒否し、
+過去の検証成功を現在の評価の代用にしません。
+
+ローカルv0.3統合テストは、発行済みauthorizationから一回限りの消費、Bind判定、OutcomeReceiptの
+対応関係、effect-state記録まで接続します。一時鍵、メモリ内store、テスト用adapter／credential provider、
+偽のTrustLog保存先を使用します。apply前の拒否はCONFIRMED_NO_EFFECT、汎用applyの成功だけでは
+独立した外部確認がないためEFFECT_UNKNOWNです。実際の/v1/decideから外部効果までの統合、
+本番監査保存の永続性、実顧客の操作を実証したものではありません。
+
+## 実decision接続：#2189で確認したsource境界
+
+`issue_verified_real_decision_bind_authorization`は、既存のcanonical promotion builderを使い、
+内容から決まる同一のExecutionIntentを再構築します。従来の汎用promotion helperは呼び出すたびに
+新しいUUIDを生成するため、事前に構築したsource intentとの完全一致が成立しませんでした。
+ポリシー鮮度は独立入力`governance_inputs.verification_now`で評価します。policy IDと任意の
+approval contextは検証済みpromotionとの比較用であり、policy lineageの上書きは禁止します。
+
+独立プロセスのHTTP統合テストで、実際の認証済み`/v1/decide`、kernel、コンパイル済みpolicyの
+署名検証、CDA生成を実行します。モデル出力とクラウドクライアントはテスト用です。返却された
+CDAとchosen candidateを変更せず、canonical promotion、readiness、pre-bind、preflight、
+native adapter selectionまで接続します。benchmarkの期待結果や、無条件に成功するpacket verifierは
+この対応関係の根拠にしません。
+
+このテストは未接続箇所を確認するもので、実行成功の証明ではありません。
+`build_fresh_bind_source_chain`はhandoff由来のselection形式のみ受け付けるため、独立したtrusted
+contractを渡してもpromotion由来のselection形式を拒否します。別途有効なv0.3 fixture gateも、
+実decisionのintentと異なるため署名前に拒否します。この実decisionについてauthorization発行、
+Human Approval Receipt生成、credential取得、adapter実行、Bind／outcome receipt生成は行いません。
+
+続く統合では、promotion由来のsourceと独立source／contractを、authorization verifierまで
+維持する必要があります。native packetの形式名だけを書き換えたり、
+旧schemaを満たすためにhandoffのreplay／approval証拠を作ったりしてはいけません。
+既存のfixture起点のv0.3消費テストと、この実decision接続テストは別の検証です。
+
+## Native sourceの承認要件判定と充足検証
+
+HARRのbuilder／verifierはAuthority Evidence Linkageのsource形式を明示的に判別し、
+native／legacyそれぞれの完全なverifierを実行します。元のsource ID・hashを保持し、handoff用の
+項目を作りません。nativeの判定時刻がsourceより前なら拒否します。legacyのpacket IDと検証動作は維持します。
+
+`build_promotion_human_approval_requirement_satisfaction_packet`は、再構築済みの判定を
+native Human Approval linkageへ接続します。REQUIREDには完全に同じauthority sourceを持つ
+検証済みnative linkageが必要です。NOT_REQUIREDではlinkageを受け付けません。
+どちらもメタデータ証拠であり、`human_approval_proven=false`、`ready_for_real_bind=false`です。
+
+`verify_promotion_human_approval_requirement_satisfaction_packet`の`expected_source`と
+`expected_contract`は必須の独立入力です。完全なsource、契約snapshot・digest、intent、要件状態を
+すべて再構築し、その検証済み結果を返します。packet内のsnapshotを信頼の根拠にしません。
+同一ID・versionの契約差し替えやsource／linkage差し替えは、全hashを再計算しても拒否します。
+
+実際の認証済み`/v1/decide`からnative authority linkage、HARR、satisfactionまで、承認必須・不要の
+両方を統合テストで接続しました。REQUIRED経路では既存native linkageのcandidate承認フラグ要件も
+維持します。返却済みCDA／candidateのフラグは変更しません。モデル・クラウドクライアントと
+参照メタデータはテスト用です。新しい境界はHuman Approval Receiptや実行権限を生成しません。
+
+新packetは`promotion-human-approval-requirement-satisfaction/v1`であり、legacy packetの形式名変更では
+ありません。以下の承認要件対応Final Readiness／Gate経路がこのpacketを受け取ります。
+既存のlegacy fresh-source形式拒否テストも引き続き有効です。
+
+## 承認要件に対応するnative Final ReadinessとGate
+
+`promotion_requirement_bind_readiness`は検証済みsatisfactionを
+`PromotionRequirementFinalReadinessPacket`と`PromotionRequirementBindGatePacket`へ接続します。
+全builder／verifierで独立した`expected_source`と`expected_contract`が必須です。
+Gateからreadiness、satisfaction、resolutionまで同じ独立入力を渡し、embedded snapshotを
+信頼の根拠に戻しません。派生項目を再構築し、verifierは再構築したオブジェクトを返します。
+完全なsource chainで元のintent、endpoint、credential scope、authority linkage、必要な場合の
+human linkageを保持し、legacy用の項目を作りません。
+
+REQUIRED／NOT_REQUIREDの両方に対応します。後続の人間承認要件は検証済みresolutionだけから
+決まり、他のauthorization／invocation前提は未充足として残ります。readiness拒否時はGateへ進めず、
+Gate拒否もfail-closedです。明示的なローカルレビュー確認事項はメタデータであり、署名済み
+Human Approval Receiptではありません。
+
+専用の閉じたschemaにより、既存のlinkage専用native v1とlegacy v0.3 APIを維持します。
+モデル・クラウドクライアントを制御した実際の認証済み`/v1/decide`から、新Gateまで両状態を
+テストします。同一契約ID／versionでsourceやpolicyを差し替え、全hashを作り直しても両境界で拒否します。
+
+新Gateは以下の承認要件対応fresh検証と最終再検査へ接続します。
+このレビュー処理は実行許可、credentialアクセス、network dispatch、
+external effectを作りません。
+
+## Fresh source検証と最終メタデータ再検査
+
+`promotion_requirement_final_rechecks`は承認要件対応Gateを受け取り、旧linkage専用packetへ
+変換しません。`PromotionRequirementFreshSourcePacket`は独立したsourceとcontractを使って
+Gateの完全なチェーンを再検証し、Gate hash、authority source、要件判定、契約、intent、adapter、
+endpoint、credential bindingを結び付けた厳密なBind contextを再計算します。
+verifierには独立した検証時刻も必要です。拒否されたGateは受け付けません。
+
+`PromotionRequirementFinalRecheckPacket`は再構築済みfresh packetを受け取り、呼び出し元が
+渡した現在のendpointメタデータ、credential参照、必要scopeを検証済みsourceと比較します。
+完全一致が必要であり、scopeの包含関係は推測しません。verifierには同じ独立入力と現在の
+メタデータ、および期待する再検査時刻が必須です。packet内のendpoint／参照／時刻を代用しません。
+endpointやscopeが変化していれば、以前は有効だったpacketも拒否します。context、source、
+同一ID／versionの契約、時刻を書き換えて再ハッシュした場合も拒否します。
+両verifierとも再構築した結果を返します。
+
+fresh packetではfresh検証と厳密なcontext導出を完了し、final packetではendpoint、credentialの
+順に再検査します。残るauthorization要件の先頭はruntime risk reviewです。人間承認に関する
+後続要件は検証済みActionClassContractによって決まり、実行要件は未充足のまま維持します。
+
+これはローカルのメタデータ検査です。fresh検証は実際のpolicy更新や失効状態を確認しません。
+endpoint再検査はサーバーへ接続せずTLS peerも検証しません。credential再検査はproviderへ
+アクセスせず、実際の権限と参照メタデータの一致も証明しません。これらのフラグと
+`ready_for_real_bind`はfalseのままです。
+
+モデル・クラウドクライアントを制御し、明示的なテスト用メタデータを使う実際の認証済み
+`/v1/decide`から、承認必須／不要の両方で最終メタデータ再検査まで接続します。
+旧native／legacy APIは変更しません。以下の承認要件対応runtime risk境界がfinal packetを受け取ります。
+native v2のauthorization発行は下記の別境界です。実decisionによる単回消費・実行・結果記録の統合は未完了です。
+
+## 検証済み最終再検査からのruntime risk review
+
+`promotion_requirement_runtime_risk`は、独立入力の完全なfinal recheckを、trusted source／contract、
+現在のendpoint／credentialメタデータ、必要scope、期待する検証／再検査時刻で再検証します。
+コンパクトなpacketは厳密なsource hash、Bind context、契約、intentを参照します。
+完全なsourceは検証時に別途必要であり、packetには埋め込みません。
+
+レビューはそのsource／context／契約と、intentが持つ期待する状態fingerprintに一致する必要があります。
+旧native経路と共通のリスク判定を使い、否定的なリスク判定や状態変化はBLOCK、リスク・状態証拠・TTLの
+欠落は判定不能としてfail-closedにします。レビューの有効期間は最大300秒で、PASSにはintentのTTL内に
+収まることも必要です。verifierには独立した期待するリスク判定・記録時刻・現在時刻も必須です。
+packetを変更しなくてもレビューの期限到達後は拒否します。packet内のレビュー情報を外部入力の代用にしません。
+
+`require_promotion_requirement_runtime_risk_pass`は再構築済みPASSだけを返し、後続の処理に入る前に
+BLOCK／判定不能を拒否します。runtime risk要件を完了できるのはPASSだけで、他のauthorization要件と
+全実行要件は未充足のままです。Bind直前の独立したリスク再検査も必要です。
+下記のnative v2 authorization issuerは、発行前にこのguardを呼び出します。
+
+リスク信号、観測状態、証拠参照は呼び出し元が提供する情報であり、認証済みセンサー結果ではありません。
+この境界はそれらを取得・推測しません。実際の認証済みAPIのPASSテストでは、サポートされているpromotion
+境界でTTLとテスト用状態を明示的に渡し、返却済みCDA／candidateを変更しません。
+そのメタデータを渡さないケースは判定不能のままです。モデル・クラウドクライアントと観測状態は
+テスト用に制御しています。Human Approval Receipt、実行権限、Bind authorization、credentialアクセス、
+network dispatch、BindReceipt、external effectは生成しません。
+
+## Native authorization v2（発行のみ）
+
+`native_bind_authorization.issue_native_bind_authorization`は、このPASS guardを既存の
+暗号学的Authority Evidence・失効・署名済みHuman Approval Receipt・RuntimeAuthority・
+署名済みGO判断・grant・idempotency検証へ接続します。`NativeAuthorizationSourceInputs`には
+完全なfinal recheckと、独立した期待するレビュー・時刻・現在のメタデータが必須です。
+trusted Authority Evidence Linkage source、ActionClassContract、検証時計は
+`RealBindAuthorizationGovernanceInputs`で独立して渡し、埋め込みsnapshotで代用しません。
+後続の導出にはverifierが再構築した結果だけを使用します。
+
+REQUIREDには既存の署名済みReceiptが必須で、NOT_REQUIREDへのReceipt供給は拒否します。
+人間承認は生成しません。Authority／Receipt／GOの署名は既存のdeployment側検証ポリシーを使います。
+GO署名者はgate reviewerおよびrisk reviewerと別人である必要があります。有効期間は現在の
+risk review、intent、署名済み証拠の有効期間内に限定します。
+対応する承認ルールはbooleanの`required`と、整数0／1の`minimum_approvals`だけです。
+複数人承認や追加ルールは拒否し、Receipt一枚で充足した扱いにしません。
+
+閉じた`native-live-adapter-bind-authorization/v2` artifactはnative source hashを保持し、
+専用v2 domainで全項目を署名します。内部context projectionは既存の検証インターフェースを
+再利用するためだけのもので、legacy packetやhandoff／replay証拠を捏造しません。
+Ed25519 issuer verifierには明示的な`authorization_artifact_version="v2"`と、それに一致する
+deployment policy hashが必要です。既定v1 verifierとv1 artifact schemaはv2を拒否します。
+既存v1／v0.3経路は維持します。
+
+`verify_native_bind_authorization`は独立入力の発行検証時刻で署名・全項目を再検証・再構築します。
+これはconsumerでも現在の実行許可でもありません。下記の消費専用APIが現在時刻の独立検証を行います。idempotencyは署名済み
+判断／context・risk hash・契約・有効期間を固定しますが、未使用keyであることは証明しません。
+atomic consumptionは下記の別境界で実装し、Bind直前の最新governance／risk再検査は
+今後の実行境界でも必須です。この発行境界でcredential取得・header構築・network・Bind実行・
+BindReceipt・外部効果は行いません。
+
+テスト用鍵・署名済みAuthority／Approval artifactは合成fixtureであり、実運用の人間同意を
+意味しません。呼び出し元のrisk evidenceは認証済みセンサー入力ではありません。
+注入する暗号処理backendには、外部効果を起こさない実装が必要です。
+
+## Native v2の消費専用境界
+
+`consume_native_bind_authorization`は独立した発行時入力で署名済みartifactを再検証し、
+過去へ戻した時計・期限切れを拒否します。続いて別途渡す現在のsource／risk入力から再構築します。
+新しいreview時刻と記録時刻はtrusted消費時刻と一致する必要があります。BLOCK・判定不能・
+状態変化・入力欠落・発行時レビューの再利用はDB記録前に拒否します。intent・Bind context・gate・
+契約は署名済みauthorizationと一致させます。元のAuthority Evidenceと必須のHuman Approval Receiptの
+署名、失効状態、RuntimeAuthorityを消費時刻で再検証します。発行時の署名済みproof hashは変更せず、
+現在のproofを別に返します。呼び出し元の観測値が認証済みセンサー値になるわけではありません。
+
+既存PostgreSQL storeのauthorization ID／idempotency key一意制約で一回だけ原子的に記録します。
+既存record schemaはnative `laba:v2` IDを保持でき、legacy sourceの捏造は不要です。
+既定ではPostgreSQL必須で、メモリstoreは明示的なテスト用opt-inが必要です。結果にも非永続と表示します。
+未知のstoreによるproduction-safe自己申告は認めません。重複やDB応答の失敗・不確定状態では成功を返さず、
+commit後の応答喪失を含め、失敗しても消費を解除しません。
+
+意図する書き込みは設定済みの消費DBだけです。アクション用credential取得、header、adapter、Bind実行、
+BindReceipt、外部アクション送信は行いません。返す消費結果は監査用の系譜であり、再利用可能な実行権限ではありません。
+指定時計は検証時刻を表し、DB commit時刻の証明ではありません。今後の実行境界では保存済み結果だけを信用せず、
+最新policy／riskと永続化された消費の系譜を再検証する必要があります。
+承認必須／不要の両方に実verifierテストと、既存DB CI jobでのPostgreSQL競合テストを追加します。
+本番配備やdecisionから外部効果までの統合完了を意味しません。

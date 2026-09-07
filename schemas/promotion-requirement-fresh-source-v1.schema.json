@@ -1,0 +1,297 @@
+{
+  "$defs": {
+    "ExactRequirementBindContext": {
+      "additionalProperties": false,
+      "description": "Commit native identities and independent policy without legacy fields.",
+      "properties": {
+        "action_contract_digest": {
+          "title": "Action Contract Digest",
+          "type": "string"
+        },
+        "adapter_contract_hash": {
+          "title": "Adapter Contract Hash",
+          "type": "string"
+        },
+        "adapter_contract_id": {
+          "title": "Adapter Contract Id",
+          "type": "string"
+        },
+        "adapter_contract_version": {
+          "title": "Adapter Contract Version",
+          "type": "string"
+        },
+        "authority_source_hash": {
+          "title": "Authority Source Hash",
+          "type": "string"
+        },
+        "credential_authorization_result_digest": {
+          "title": "Credential Authorization Result Digest",
+          "type": "string"
+        },
+        "credential_policy_snapshot_hash": {
+          "title": "Credential Policy Snapshot Hash",
+          "type": "string"
+        },
+        "credential_reference_digest": {
+          "title": "Credential Reference Digest",
+          "type": "string"
+        },
+        "credential_scope_binding_digest": {
+          "title": "Credential Scope Binding Digest",
+          "type": "string"
+        },
+        "endpoint_candidate_digest": {
+          "title": "Endpoint Candidate Digest",
+          "type": "string"
+        },
+        "endpoint_identity_binding_digest": {
+          "title": "Endpoint Identity Binding Digest",
+          "type": "string"
+        },
+        "execution_intent_hash": {
+          "title": "Execution Intent Hash",
+          "type": "string"
+        },
+        "execution_intent_id": {
+          "title": "Execution Intent Id",
+          "type": "string"
+        },
+        "gate_packet_hash": {
+          "title": "Gate Packet Hash",
+          "type": "string"
+        },
+        "required_human_approval": {
+          "title": "Required Human Approval",
+          "type": "boolean"
+        },
+        "requirement_resolution_hash": {
+          "title": "Requirement Resolution Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gate_packet_hash",
+        "authority_source_hash",
+        "action_contract_digest",
+        "requirement_resolution_hash",
+        "required_human_approval",
+        "execution_intent_id",
+        "execution_intent_hash",
+        "adapter_contract_id",
+        "adapter_contract_hash",
+        "adapter_contract_version",
+        "endpoint_candidate_digest",
+        "endpoint_identity_binding_digest",
+        "credential_reference_digest",
+        "credential_scope_binding_digest",
+        "credential_policy_snapshot_hash",
+        "credential_authorization_result_digest"
+      ],
+      "title": "ExactRequirementBindContext",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Full Gate reverification and exact context derivation at caller time.",
+  "properties": {
+    "authority_evidence_proven": {
+      "const": false,
+      "title": "Authority Evidence Proven",
+      "type": "boolean"
+    },
+    "bind_authorization_created": {
+      "const": false,
+      "title": "Bind Authorization Created",
+      "type": "boolean"
+    },
+    "bind_context_hash": {
+      "title": "Bind Context Hash",
+      "type": "string"
+    },
+    "bind_context_hash_derived": {
+      "const": true,
+      "title": "Bind Context Hash Derived",
+      "type": "boolean"
+    },
+    "bind_invoked": {
+      "const": false,
+      "title": "Bind Invoked",
+      "type": "boolean"
+    },
+    "bind_receipt_created": {
+      "const": false,
+      "title": "Bind Receipt Created",
+      "type": "boolean"
+    },
+    "credential_material_accessed": {
+      "const": false,
+      "title": "Credential Material Accessed",
+      "type": "boolean"
+    },
+    "credential_provider_verified": {
+      "const": false,
+      "title": "Credential Provider Verified",
+      "type": "boolean"
+    },
+    "credential_scope_rechecked": {
+      "const": false,
+      "title": "Credential Scope Rechecked",
+      "type": "boolean"
+    },
+    "endpoint_rechecked": {
+      "const": false,
+      "title": "Endpoint Rechecked",
+      "type": "boolean"
+    },
+    "exact_bind_context": {
+      "$ref": "#/$defs/ExactRequirementBindContext"
+    },
+    "execution_authority_created": {
+      "const": false,
+      "title": "Execution Authority Created",
+      "type": "boolean"
+    },
+    "execution_intent": {
+      "additionalProperties": true,
+      "title": "Execution Intent",
+      "type": "object"
+    },
+    "external_effect_occurred": {
+      "const": false,
+      "title": "External Effect Occurred",
+      "type": "boolean"
+    },
+    "external_policy_freshness_verified": {
+      "const": false,
+      "title": "External Policy Freshness Verified",
+      "type": "boolean"
+    },
+    "fail_closed": {
+      "const": false,
+      "title": "Fail Closed",
+      "type": "boolean"
+    },
+    "format_version": {
+      "const": "promotion-requirement-fresh-source/v1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "fresh_source_reverified": {
+      "const": true,
+      "title": "Fresh Source Reverified",
+      "type": "boolean"
+    },
+    "fresh_verified_at": {
+      "title": "Fresh Verified At",
+      "type": "string"
+    },
+    "future_authorization_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Future Authorization Requirements",
+      "type": "array"
+    },
+    "future_invocation_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Future Invocation Requirements",
+      "type": "array"
+    },
+    "human_approval_created": {
+      "const": false,
+      "title": "Human Approval Created",
+      "type": "boolean"
+    },
+    "human_approval_proven": {
+      "const": false,
+      "title": "Human Approval Proven",
+      "type": "boolean"
+    },
+    "network_used": {
+      "const": false,
+      "title": "Network Used",
+      "type": "boolean"
+    },
+    "packet_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Packet Hash",
+      "type": "string"
+    },
+    "packet_id": {
+      "title": "Packet Id",
+      "type": "string"
+    },
+    "ready_for_real_bind": {
+      "const": false,
+      "title": "Ready For Real Bind",
+      "type": "boolean"
+    },
+    "required_human_approval": {
+      "title": "Required Human Approval",
+      "type": "boolean"
+    },
+    "revocation_verified": {
+      "const": false,
+      "title": "Revocation Verified",
+      "type": "boolean"
+    },
+    "source_packet": {
+      "additionalProperties": true,
+      "title": "Source Packet",
+      "type": "object"
+    },
+    "source_packet_hash": {
+      "title": "Source Packet Hash",
+      "type": "string"
+    },
+    "source_packet_id": {
+      "title": "Source Packet Id",
+      "type": "string"
+    },
+    "tls_peer_verified": {
+      "const": false,
+      "title": "Tls Peer Verified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "packet_id",
+    "packet_hash",
+    "source_packet",
+    "source_packet_id",
+    "source_packet_hash",
+    "exact_bind_context",
+    "bind_context_hash",
+    "execution_intent",
+    "required_human_approval",
+    "future_authorization_requirements",
+    "future_invocation_requirements",
+    "fail_closed",
+    "human_approval_created",
+    "human_approval_proven",
+    "authority_evidence_proven",
+    "execution_authority_created",
+    "bind_authorization_created",
+    "bind_invoked",
+    "bind_receipt_created",
+    "credential_material_accessed",
+    "network_used",
+    "external_effect_occurred",
+    "ready_for_real_bind",
+    "external_policy_freshness_verified",
+    "revocation_verified",
+    "tls_peer_verified",
+    "credential_provider_verified",
+    "format_version",
+    "fresh_verified_at",
+    "fresh_source_reverified",
+    "bind_context_hash_derived",
+    "endpoint_rechecked",
+    "credential_scope_rechecked"
+  ],
+  "title": "PromotionRequirementFreshSourcePacket",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

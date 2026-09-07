@@ -548,7 +548,7 @@ def patched_pipeline(monkeypatch, tmp_path):
 
 
 @pytest.mark.anyio
-async def test_run_decide_pipeline_happy_path(patched_pipeline):
+async def test_run_decide_pipeline_happy_path_with_trust_receipt(patched_pipeline):
     pipeline = patched_pipeline
 
     body = {"query": "Test veritas agi research", "context": {"user_id": "u1"}, "options": []}
@@ -736,7 +736,7 @@ async def test_run_decide_pipeline_fast_mode_flags(patched_pipeline):
 
 
 @pytest.mark.anyio
-async def test_run_decide_pipeline_with_explicit_options_and_no_ml_gate(monkeypatch, patched_pipeline):
+async def test_run_decide_pipeline_explicit_options_preserve_ids_without_ml_gate(monkeypatch, patched_pipeline):
     """
     explicit options を渡したとき alternatives の id が維持される（opt1/opt2）か、
     もしくは core_alt が残ることを担保する回帰テスト。
@@ -760,7 +760,7 @@ async def test_run_decide_pipeline_with_explicit_options_and_no_ml_gate(monkeypa
         return pipeline.veritas_core.decide(*args, **kwargs)
 
     m_kernel.decide = kernel_decide
-    sys.modules["veritas_os.core.kernel"] = m_kernel
+    monkeypatch.setitem(sys.modules, "veritas_os.core.kernel", m_kernel)
 
     # --- 明示 options ---
     body = {

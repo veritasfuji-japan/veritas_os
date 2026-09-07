@@ -189,7 +189,12 @@ class BindAuthorizationVerifierPolicy:
 
 @dataclass(frozen=True)
 class RealBindAuthorizationGovernanceInputs:
-    """Original signed governance artifacts plus deployment verification dependencies."""
+    """Original artifacts and independent deployment trust inputs.
+
+    For v0.3, expected_source must be acquired independently of the candidate
+    gate, and action_contract must come from trusted policy configuration.
+    These anchors are not reconstructed from embedded artifact snapshots.
+    """
 
     action_contract: ActionClassContract
     signed_authority_evidence_artifact: dict[str, Any]
@@ -203,6 +208,9 @@ class RealBindAuthorizationGovernanceInputs:
     human_approval_signature_verifier: HumanApprovalSignatureVerifier | None = None
     human_approval_signer_policy: HumanApprovalSignerPolicy | None = None
     human_approval_verifier_policy: HumanApprovalVerifierPolicy | None = None
+    # Independent source anchor for v0.3; never extract from the candidate gate.
+    # action_contract above is the corresponding trusted policy anchor.
+    expected_source: Any = None
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from veritas_os.governance.action_contracts import ActionClassContract
+from veritas_os.policy.human_approval_requirement_resolution import (
+    build_human_approval_requirement_resolution_packet,
+)
+from veritas_os.policy.live_adapter_dry_run_human_approval_requirement_satisfaction import (
+    build_live_adapter_dry_run_human_approval_requirement_satisfaction_packet,
+)
+
 from veritas_os.policy.adapter_dry_run_plan import build_adapter_dry_run_plan_packet
 from veritas_os.policy.adapter_dry_run_result import (
     build_adapter_dry_run_fixture_result_packet,
@@ -104,6 +112,7 @@ def build_fresh_bind_source_chain(
     inputs: FreshBindSourceChainInputs,
     *,
     built_at: datetime,
+    expected_contract: ActionClassContract | None = None,
 ) -> FreshBindSourceChainResult:
     """Construct and independently verify a new root and prerequisite chain.
 
@@ -111,6 +120,12 @@ def build_fresh_bind_source_chain(
     adapter-contract selection is independently verified and required to carry
     the exact supplied intent; the production plan, fixture-result, and
     rehearsal builders then create a new content-addressed root.
+
+    Supplying a contract from independent trusted policy configuration selects
+    v0.3 requirement satisfaction. Its source anchor is the authority packet
+    freshly built here, never a snapshot extracted from a candidate gate.
+    Omitting the contract preserves legacy v1. This creates no approval receipt
+    or authorization; human references remain caller-supplied metadata.
     """
     selection = verify_bind_adapter_contract_selection_packet(
         inputs.adapter_contract_selection_packet
@@ -152,16 +167,37 @@ def build_fresh_bind_source_chain(
     authority = build_live_adapter_dry_run_authority_evidence_linkage_review_packet(
         pre_dispatch, inputs.authority_evidence_reference_bundle, built_at
     )
-    human = build_live_adapter_dry_run_human_approval_linkage_review_packet(
-        authority, inputs.human_approval_reference_bundle, built_at
-    )
+    anchors: dict[str, Any] = {}
+    if expected_contract is None:
+        human = build_live_adapter_dry_run_human_approval_linkage_review_packet(
+            authority, inputs.human_approval_reference_bundle, built_at
+        )
+    else:
+        resolution = build_human_approval_requirement_resolution_packet(
+            authority, expected_contract, built_at
+        )
+        child = (
+            build_live_adapter_dry_run_human_approval_linkage_review_packet(
+                authority, inputs.human_approval_reference_bundle, built_at
+            )
+            if inputs.human_approval_reference_bundle is not None
+            else None
+        )
+        human = (
+            build_live_adapter_dry_run_human_approval_requirement_satisfaction_packet(
+                authority, resolution, expected_contract, child, built_at
+            )
+        )
+        anchors = {"expected_source": authority, "expected_contract": expected_contract}
     final = build_live_adapter_dry_run_final_bind_authorization_readiness_packet(
-        human, inputs.final_readiness_review_decision, built_at
+        human, inputs.final_readiness_review_decision, built_at, **anchors
     )
     gate = build_live_adapter_dry_run_bind_authorization_gate_review_packet(
-        final, inputs.gate_review_decision, built_at
+        final, inputs.gate_review_decision, built_at, **anchors
     )
-    verified = verify_live_adapter_dry_run_bind_authorization_gate_review_packet(gate)
+    verified = verify_live_adapter_dry_run_bind_authorization_gate_review_packet(
+        gate, **anchors
+    )
     _require_exact_intent(
         execution_intent, verified, "FBS_FINAL_EXECUTION_INTENT_MISMATCH"
     )

@@ -9,7 +9,9 @@ from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.policy import human_approval_requirement_resolution as resolution
 
 
-def _contract(*, required: bool, minimum_approvals: int = 0, level: str = "low") -> ActionClassContract:
+def _contract(
+    *, required: bool, minimum_approvals: int = 0, level: str = "low"
+) -> ActionClassContract:
     return ActionClassContract(
         id="payments.transfer",
         version="1",
@@ -48,9 +50,7 @@ def _source() -> SimpleNamespace:
         execution_intent={"intended_action": "payments.transfer"},
         execution_intent_id="execution-intent-1",
         execution_intent_hash="b" * 64,
-        authority_evidence_reference_bundle={
-            "bundle_scope": ["payments:transfer"]
-        },
+        authority_evidence_reference_bundle={"bundle_scope": ["payments:transfer"]},
     )
 
 
@@ -62,7 +62,9 @@ def _patch_source_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_explicit_required_contract_resolves_required(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_explicit_required_contract_resolves_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _patch_source_verifier(monkeypatch)
     packet = resolution.build_human_approval_requirement_resolution_packet(
         _source(),
@@ -75,7 +77,12 @@ def test_explicit_required_contract_resolves_required(monkeypatch: pytest.Monkey
     assert packet.human_approval_created is False
     assert packet.bind_authorization_created is False
     assert packet.network_used is False
-    assert resolution.verify_human_approval_requirement_resolution_packet(packet) == packet
+    assert (
+        resolution.verify_human_approval_requirement_resolution_packet(
+            packet, _source(), _contract(required=True)
+        )
+        == packet
+    )
 
 
 def test_not_required_contract_resolves_without_fabricated_approval(
@@ -111,9 +118,7 @@ def test_high_irreversibility_with_minimum_approval_is_required(
 def test_contract_action_mismatch_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_source_verifier(monkeypatch)
     contract = _contract(required=False)
-    mismatched = ActionClassContract(
-        **{**contract.to_dict(), "id": "payments.refund"}
-    )
+    mismatched = ActionClassContract(**{**contract.to_dict(), "id": "payments.refund"})
     with pytest.raises(
         resolution.HumanApprovalRequirementResolutionError,
         match="HARR_ACTION_CONTRACT_SOURCE_MISMATCH",
@@ -153,7 +158,10 @@ def test_hash_tamper_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
         resolution.HumanApprovalRequirementResolutionError,
         match="HARR_HASH_MISMATCH",
     ):
-        resolution.verify_human_approval_requirement_resolution_packet(raw)
+        resolution.verify_human_approval_requirement_resolution_packet(
+            raw, _source(), _contract(required=False)
+        )
+
 
 def test_typed_authority_bundle_scope_is_supported(
     monkeypatch: pytest.MonkeyPatch,
@@ -172,4 +180,3 @@ def test_typed_authority_bundle_scope_is_supported(
 
     assert packet.requested_scope == ("payments:transfer",)
     assert packet.requirement_state == "NOT_REQUIRED_BY_ACTION_CONTRACT"
-

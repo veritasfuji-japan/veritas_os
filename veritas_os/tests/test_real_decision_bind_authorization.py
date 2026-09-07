@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -94,6 +95,8 @@ def test_public_boundary_has_no_caller_lineage_override_parameters() -> None:
 def test_decision_lineage_mismatch_stops_before_source_verification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from veritas_os.tests.test_live_adapter_bind_authorization import _governance_inputs
+
     cda = SimpleNamespace(
         decision_id="cda:v1:sha256:" + "a" * 64,
         decision_hash="a" * 64,
@@ -108,10 +111,9 @@ def test_decision_lineage_mismatch_stops_before_source_verification(
     )
     monkeypatch.setattr(
         "veritas_os.policy.real_decision_bind_authorization."
-        "try_promote_verified_canonical_decision_candidate_to_execution_intent",
+        "build_canonical_verified_decision_promotion_packet",
         lambda *args, **kwargs: SimpleNamespace(
-            promoted=True,
-            execution_intent=foreign,
+            exact_execution_intent=foreign.to_dict(),
         ),
     )
     source_called = False
@@ -138,8 +140,61 @@ def test_decision_lineage_mismatch_stops_before_source_verification(
             signed_authorization_decision_artifact={},
             valid_from="2026-08-25T00:00:00Z",
             valid_until="2026-08-25T00:05:00Z",
-            governance_inputs=SimpleNamespace(),
+            governance_inputs=_governance_inputs(),
             trust_inputs=SimpleNamespace(),
             authorization_issuer_signer=SimpleNamespace(),
         )
     assert source_called is False
+
+
+def test_decision_entry_forwards_independent_anchors_before_issuance(monkeypatch):
+    """Unit-level wiring check; signature integration is tested separately."""
+    from veritas_os.tests.test_live_adapter_bind_authorization import _governance_inputs
+
+    intent = _intent()
+    cda = SimpleNamespace(
+        decision_id=intent.decision_id,
+        decision_hash=intent.decision_hash,
+        decision_ts=intent.decision_ts,
+        request_id=intent.request_id,
+    )
+    independent_source = object()
+    candidate_gate = object()
+    governance = replace(_governance_inputs(), expected_source=independent_source)
+    module = "veritas_os.policy.real_decision_bind_authorization."
+    monkeypatch.setattr(
+        module + "verify_canonical_decision_artifact",
+        lambda value: SimpleNamespace(is_valid=True, artifact=cda),
+    )
+    monkeypatch.setattr(
+        module
+        + "build_canonical_verified_decision_promotion_packet",
+        lambda *args, **kwargs: SimpleNamespace(exact_execution_intent=intent.to_dict()),
+    )
+
+    class StopAtVerifiedBoundary(ValueError):
+        pass
+
+    def check_source(value, *, expected_source, expected_contract):
+        assert value is candidate_gate
+        assert expected_source is independent_source
+        assert expected_contract is governance.action_contract
+        raise StopAtVerifiedBoundary()
+
+    monkeypatch.setattr(
+        module + "verify_live_adapter_dry_run_bind_authorization_gate_review_packet",
+        check_source,
+    )
+    with pytest.raises(StopAtVerifiedBoundary):
+        issue_verified_real_decision_bind_authorization(
+            canonical_decision_artifact={},
+            candidate={},
+            policy_snapshot_id="policy-live-v1",
+            source_gate_review_packet=candidate_gate,
+            signed_authorization_decision_artifact={},
+            valid_from="2026-08-25T00:00:00Z",
+            valid_until="2026-08-25T00:05:00Z",
+            governance_inputs=governance,
+            trust_inputs=SimpleNamespace(),
+            authorization_issuer_signer=SimpleNamespace(),
+        )

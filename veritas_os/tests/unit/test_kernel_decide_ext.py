@@ -475,7 +475,7 @@ def test_score_alternatives_with_value_core_and_persona(monkeypatch):
 # ============================================================
 
 @pytest.mark.anyio
-async def test_decide_simple_qa_time():
+async def test_decide_simple_qa_time_response_contract():
     ctx = {"user_id": "test-user"}
     res = await kernel.decide(ctx, "今何時？", alternatives=None)
 

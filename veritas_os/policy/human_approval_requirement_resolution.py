@@ -22,6 +22,16 @@ from veritas_os.policy.live_adapter_dry_run_authority_evidence_linkage import (
     LiveAdapterDryRunAuthorityEvidenceLinkageError,
     verify_live_adapter_dry_run_authority_evidence_linkage_review_packet,
 )
+from veritas_os.policy.canonical_promotion_live_adapter_dry_run_authority_evidence_linkage import (
+    FORMAT_VERSION as PROMOTION_SOURCE_FORMAT,
+    CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket,
+    verify_canonical_promotion_live_adapter_dry_run_authority_evidence_linkage_review_packet,
+)
+
+AuthorityLinkageSource = (
+    CanonicalLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+    | CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+)
 
 FORMAT_VERSION = "human-approval-requirement-resolution/v1"
 MECHANISM = "resolve_human_approval_requirement_from_action_contract/v1"
@@ -58,9 +68,7 @@ class CanonicalHumanApprovalRequirementResolutionPacket(BaseModel):
     human_approval_requirement_resolution_id: str = Field(
         pattern=r"^harr:v1:sha256:[0-9a-f]{64}$"
     )
-    human_approval_requirement_resolution_hash: str = Field(
-        pattern=r"^[0-9a-f]{64}$"
-    )
+    human_approval_requirement_resolution_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     resolution_mechanism: Literal[MECHANISM]
     resolved_at: str
 
@@ -98,9 +106,7 @@ def requires_human_approval_for_action_contract(
 ) -> bool:
     """Return the canonical contract-derived Human Approval requirement."""
     if not isinstance(contract, ActionClassContract):
-        raise HumanApprovalRequirementResolutionError(
-            "HARR_ACTION_CONTRACT_REQUIRED"
-        )
+        raise HumanApprovalRequirementResolutionError("HARR_ACTION_CONTRACT_REQUIRED")
     rules = contract.human_approval_rules
     minimum_approvals = int(rules.get("minimum_approvals", 0) or 0)
     if bool(rules.get("required", False)):
@@ -112,13 +118,9 @@ def _timestamp(value: Any) -> str:
     try:
         parsed = value if isinstance(value, datetime) else datetime.fromisoformat(value)
     except (TypeError, ValueError) as exc:
-        raise HumanApprovalRequirementResolutionError(
-            "HARR_TIMESTAMP_INVALID"
-        ) from exc
+        raise HumanApprovalRequirementResolutionError("HARR_TIMESTAMP_INVALID") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise HumanApprovalRequirementResolutionError(
-            "HARR_TIMESTAMP_INVALID"
-        )
+        raise HumanApprovalRequirementResolutionError("HARR_TIMESTAMP_INVALID")
     return parsed.astimezone(timezone.utc).isoformat()
 
 
@@ -127,9 +129,14 @@ def _json(value: Any) -> Any:
         value = value.model_dump(mode="python")
     if value is None or isinstance(value, (str, bool, int)):
         return value
-    if isinstance(value, float) and value == value and value not in (
-        float("inf"),
-        float("-inf"),
+    if (
+        isinstance(value, float)
+        and value == value
+        and value
+        not in (
+            float("inf"),
+            float("-inf"),
+        )
     ):
         return value
     if isinstance(value, datetime):
@@ -153,31 +160,48 @@ def _digest(value: Any) -> str:
 
 def _verified_source(
     value: Any,
-) -> CanonicalLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket:
+) -> AuthorityLinkageSource:
     try:
-        return verify_live_adapter_dry_run_authority_evidence_linkage_review_packet(
-            value
-        )
+        raw = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+        if (
+            isinstance(raw, dict)
+            and raw.get("format_version") == PROMOTION_SOURCE_FORMAT
+        ):
+            return verify_canonical_promotion_live_adapter_dry_run_authority_evidence_linkage_review_packet(
+                raw
+            )
+        return verify_live_adapter_dry_run_authority_evidence_linkage_review_packet(raw)
     except (
         LiveAdapterDryRunAuthorityEvidenceLinkageError,
         TypeError,
         ValueError,
     ) as exc:
-        raise HumanApprovalRequirementResolutionError(
-            "HARR_SOURCE_INVALID"
-        ) from exc
+        raise HumanApprovalRequirementResolutionError("HARR_SOURCE_INVALID") from exc
+
+
+def _source_identity(source: AuthorityLinkageSource) -> tuple[str, str]:
+    """Read identities only from the corresponding independently verified type."""
+    if isinstance(
+        source, CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+    ):
+        return (
+            source.promotion_live_adapter_dry_run_authority_evidence_linkage_review_id,
+            source.promotion_live_adapter_dry_run_authority_evidence_linkage_review_hash,
+        )
+    return (
+        source.live_adapter_dry_run_authority_evidence_linkage_review_id,
+        source.live_adapter_dry_run_authority_evidence_linkage_review_hash,
+    )
 
 
 def _validate_contract_binding(
-    source: CanonicalLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket,
+    source: AuthorityLinkageSource,
     contract: ActionClassContract,
 ) -> tuple[str, ...]:
     intent = source.execution_intent
     intended_action = str(intent.get("intended_action") or "").strip()
     if not intended_action:
-        raise HumanApprovalRequirementResolutionError(
-            "HARR_INTENDED_ACTION_MISSING"
-        )
+        raise HumanApprovalRequirementResolutionError("HARR_INTENDED_ACTION_MISSING")
     if contract.id != intended_action:
         raise HumanApprovalRequirementResolutionError(
             "HARR_ACTION_CONTRACT_SOURCE_MISMATCH"
@@ -212,10 +236,16 @@ def build_human_approval_requirement_resolution_packet(
 ) -> CanonicalHumanApprovalRequirementResolutionPacket:
     """Build a fail-closed, non-authorizing requirement-resolution packet."""
     source = _verified_source(source_authority_evidence_linkage_review_packet)
+    source_id, source_hash = _source_identity(source)
+    if isinstance(
+        source, CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket
+    ):
+        if datetime.fromisoformat(_timestamp(resolved_at)) < datetime.fromisoformat(
+            source.authority_evidence_linkage_review_recorded_at
+        ):
+            raise HumanApprovalRequirementResolutionError("HARR_RESOLVED_BEFORE_SOURCE")
     if source.fail_closed:
-        raise HumanApprovalRequirementResolutionError(
-            "HARR_SOURCE_FAIL_CLOSED"
-        )
+        raise HumanApprovalRequirementResolutionError("HARR_SOURCE_FAIL_CLOSED")
     result = source.authority_evidence_linkage_result
     if not (
         result.all_required_references_present
@@ -227,9 +257,7 @@ def build_human_approval_requirement_resolution_packet(
         )
 
     if not isinstance(action_contract, ActionClassContract):
-        raise HumanApprovalRequirementResolutionError(
-            "HARR_ACTION_CONTRACT_REQUIRED"
-        )
+        raise HumanApprovalRequirementResolutionError("HARR_ACTION_CONTRACT_REQUIRED")
     requested_scope = _validate_contract_binding(source, action_contract)
     required = requires_human_approval_for_action_contract(action_contract)
     state = "REQUIRED" if required else "NOT_REQUIRED_BY_ACTION_CONTRACT"
@@ -243,12 +271,8 @@ def build_human_approval_requirement_resolution_packet(
         "format_version": FORMAT_VERSION,
         "resolution_mechanism": MECHANISM,
         "resolved_at": _timestamp(resolved_at),
-        "source_authority_evidence_linkage_review_id": (
-            source.live_adapter_dry_run_authority_evidence_linkage_review_id
-        ),
-        "source_authority_evidence_linkage_review_hash": (
-            source.live_adapter_dry_run_authority_evidence_linkage_review_hash
-        ),
+        "source_authority_evidence_linkage_review_id": source_id,
+        "source_authority_evidence_linkage_review_hash": source_hash,
         "source_execution_intent_id": source.execution_intent_id,
         "source_execution_intent_hash": source.execution_intent_hash,
         "action_contract_id": action_contract.id,
@@ -274,9 +298,7 @@ def build_human_approval_requirement_resolution_packet(
     }
     packet_hash = _digest(payload)
     return CanonicalHumanApprovalRequirementResolutionPacket(
-        human_approval_requirement_resolution_id=(
-            f"harr:v1:sha256:{packet_hash}"
-        ),
+        human_approval_requirement_resolution_id=(f"harr:v1:sha256:{packet_hash}"),
         human_approval_requirement_resolution_hash=packet_hash,
         **payload,
     )
@@ -284,13 +306,17 @@ def build_human_approval_requirement_resolution_packet(
 
 def verify_human_approval_requirement_resolution_packet(
     value: Any,
+    source_authority_evidence_linkage_review_packet: Any,
+    action_contract: ActionClassContract,
 ) -> CanonicalHumanApprovalRequirementResolutionPacket:
-    """Verify schema, state consistency, non-effect flags, and packet hash."""
+    """Reconstruct against independent source and trusted policy contract.
+
+    Hash integrity alone does not authenticate authority or policy. Callers
+    must obtain the expected source and contract independently of this packet.
+    """
     try:
-        packet = (
-            value
-            if isinstance(value, CanonicalHumanApprovalRequirementResolutionPacket)
-            else CanonicalHumanApprovalRequirementResolutionPacket.model_validate(value)
+        packet = CanonicalHumanApprovalRequirementResolutionPacket.model_validate(
+            _json(value)
         )
     except ValidationError as exc:
         raise HumanApprovalRequirementResolutionError(
@@ -324,4 +350,13 @@ def verify_human_approval_requirement_resolution_packet(
     expected = _digest(raw)
     if packet_hash != expected or packet_id != f"harr:v1:sha256:{expected}":
         raise HumanApprovalRequirementResolutionError("HARR_HASH_MISMATCH")
-    return packet
+    rebuilt = build_human_approval_requirement_resolution_packet(
+        source_authority_evidence_linkage_review_packet,
+        action_contract,
+        datetime.fromisoformat(_timestamp(packet.resolved_at)),
+    )
+    if _digest(_json(value)) != _digest(rebuilt.model_dump(mode="json")):
+        raise HumanApprovalRequirementResolutionError(
+            "HARR_SOURCE_RECONSTRUCTION_MISMATCH"
+        )
+    return rebuilt
