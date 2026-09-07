@@ -32,6 +32,24 @@ def _ready():
     return handoff, _complete_context(handoff)
 
 
+def _ready_without_approval():
+    handoff = json.loads(VECTOR.read_text())["input"]
+    handoff["human_approval_requirement"] = {
+        "resolved": True,
+        "required": False,
+        "policy_ref": "fixture-policy",
+    }
+    handoff["human_approval_evidence"] = None
+    for record in handoff["provenance"]:
+        if record["field_path"] == "human_approval_requirement":
+            record["value"] = deepcopy(handoff["human_approval_requirement"])
+            record["provenance_class"] = "VERIFIED_POLICY_ARTIFACT"
+        elif record["field_path"] == "human_approval_evidence":
+            record["value"] = None
+            record["provenance_class"] = "VERIFIED_POLICY_ARTIFACT"
+    return handoff, _complete_context(handoff)
+
+
 def _packet():
     handoff, context = _ready()
     return build_guarded_promotion_eligibility_packet(handoff, context, NOW, NOW)
@@ -46,6 +64,27 @@ def _resign(raw: dict, *, context_changed: bool = False) -> dict:
     raw["eligibility_hash"] = _packet_hash(raw)
     raw["eligibility_id"] = f"gpe:v1:sha256:{raw['eligibility_hash']}"
     return raw
+
+
+def test_ready_without_approval_preserves_absent_receipt_without_fabrication() -> None:
+    handoff, context = _ready_without_approval()
+    packet = build_guarded_promotion_eligibility_packet(
+        handoff, context, NOW, NOW
+    )
+
+    assert packet.validation_status == "READY_FOR_GUARDED_PROMOTION"
+    assert packet.evidence_lineage["human_approval_receipt_ref"] is None
+    assert packet.evidence_lineage["human_approval_receipt_hash"] is None
+    assert packet.source_handoff["human_approval_requirement"]["required"] is False
+    assert packet.source_handoff["human_approval_evidence"] is None
+    assert verify_guarded_promotion_eligibility_packet(packet) == packet
+
+    schema = json.loads(
+        Path("schemas/guarded-promotion-eligibility-packet-v1.schema.json").read_text()
+    )
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(
+        packet.model_dump(mode="json")
+    )
 
 
 def test_ready_packet_is_deterministic_verified_and_has_no_authority() -> None:

@@ -226,6 +226,7 @@ def _identities(handoff: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     replay = handoff["replay_lineage"]
     authority = handoff["authority_evidence"]
     approval = handoff["human_approval_evidence"]
+    approval_requirement = handoff["human_approval_requirement"]
     policy = handoff["policy_lineage"]
     state = handoff["expected_state"]
     source_identity = {key: source[key] for key in (
@@ -247,14 +248,23 @@ def _identities(handoff: dict[str, Any]) -> tuple[dict[str, Any], ...]:
         "replay_artifact_hash": replay["artifact_hash"],
         "authority_evidence_ref": authority["evidence_ref"],
         "authority_evidence_hash": authority["evidence_hash"],
-        "human_approval_receipt_ref": approval["receipt_ref"],
-        "human_approval_receipt_hash": approval["receipt_hash"],
+        "human_approval_receipt_ref": (
+            approval["receipt_ref"] if approval is not None else None
+        ),
+        "human_approval_receipt_hash": (
+            approval["receipt_hash"] if approval is not None else None
+        ),
         "policy_snapshot_id": policy["snapshot_id"],
         "policy_version": policy["version"],
         "policy_semantic_digest": policy["semantic_digest"],
         "expected_state_fingerprint": state["fingerprint"],
         "expected_state_source_ref": state["source_ref"],
     }
+    if approval_requirement.get("required") is True and approval is None:
+        raise GuardedPromotionEligibilityError("GPE_APPROVAL_REQUIRED_BUT_MISSING")
+    if approval_requirement.get("required") is False and approval is not None:
+        raise GuardedPromotionEligibilityError("GPE_APPROVAL_UNEXPECTED_WHEN_NOT_REQUIRED")
+
     replay_summary = {key: replay.get(key) for key in (
         "original_decision_id", "replay_decision_id", "original_request_id",
         "replay_request_id", "semantic_profile", "semantic_match",

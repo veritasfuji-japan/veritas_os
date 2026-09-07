@@ -288,10 +288,24 @@
           "type": "string"
         },
         "human_approval_receipt_ref": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "human_approval_receipt_hash": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "policy_snapshot_id": {
           "type": "string"
