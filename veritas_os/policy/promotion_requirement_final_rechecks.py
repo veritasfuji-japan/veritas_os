@@ -19,7 +19,7 @@ from veritas_os.policy.promotion_requirement_bind_readiness import (
     verify_promotion_requirement_bind_gate_packet as verify_gate,
 )
 from veritas_os.policy.canonical_promotion_live_adapter_dry_run_authority_evidence_linkage import (
-    verify_canonical_promotion_live_adapter_dry_run_authority_evidence_linkage_review_packet as verify_authority_source,
+    CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket,
 )
 from veritas_os.policy.canonical_promotion_live_adapter_dry_run_final_endpoint_identity_recheck import (
     _candidate as validate_endpoint,
@@ -192,6 +192,21 @@ def _common(source: Any, context: ExactRequirementBindContext) -> dict[str, Any]
     }
 
 
+def _authority_from_rebuilt_gate(
+    gate: dict[str, Any],
+) -> CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket:
+    """Project a child only after the parent verifier fully reconstructs it.
+
+    This helper performs no admission. Both callers first run the complete gate
+    chain against their mandatory external source and contract. An input packet,
+    matching hash, model type, or embedded snapshot never substitutes for that.
+    """
+    satisfaction = gate["source_packet"]["source_packet"]
+    return CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket.model_validate(
+        satisfaction["source_authority_evidence_linkage_review_packet"],
+    )
+
+
 def build_promotion_requirement_fresh_source_packet(
     gate: Any,
     fresh_verified_at: datetime,
@@ -205,7 +220,7 @@ def build_promotion_requirement_fresh_source_packet(
     )
     if verified.fail_closed or not verified.ready_for_fresh_verified_source_gate:
         raise PromotionRequirementRecheckError("PRRC_GATE_REJECTED")
-    source = verify_authority_source(expected_source)
+    source = _authority_from_rebuilt_gate(verified.model_dump(mode="json"))
     _ordered(verified.recorded_at, fresh_verified_at)
     context = ExactRequirementBindContext(
         gate_packet_hash=verified.packet_hash,
@@ -275,7 +290,7 @@ def build_promotion_requirement_final_recheck_packet(
         expected_contract=expected_contract,
         expected_verified_at=expected_verified_at,
     )
-    source = verify_authority_source(expected_source)
+    source = _authority_from_rebuilt_gate(verified.source_packet)
     endpoint = validate_endpoint(current_endpoint)
     reference = validate_reference(current_credential_reference)
     scope = validate_scope(required_credential_scope)

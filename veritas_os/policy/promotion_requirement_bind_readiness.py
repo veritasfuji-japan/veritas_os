@@ -202,9 +202,10 @@ def build_promotion_requirement_bind_gate_packet(
     )
     if verified.fail_closed or not verified.ready_for_bind_authorization_gate_review:
         raise PromotionRequirementBindReviewError("PRBR_READINESS_REJECTED")
-    satisfaction = verify_satisfaction(
+    # The readiness verifier returned a full reconstruction against the external
+    # anchors above. Project its reconstructed child, never readiness.source_packet.
+    satisfaction = PromotionHumanApprovalRequirementSatisfactionPacket.model_validate(
         verified.source_packet,
-        expected_source=expected_source, expected_contract=expected_contract,
     )
     return PromotionRequirementBindGatePacket.model_validate(
         _assemble(verified, satisfaction, decision, recorded_at, gate=True)

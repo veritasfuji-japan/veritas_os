@@ -48,11 +48,8 @@ from veritas_os.policy.live_adapter_bind_authorization_governance import (
 from veritas_os.policy.live_adapter_bind_authorization_requirements import (
     _approved_issuer_binding,
 )
-from veritas_os.policy.promotion_requirement_final_rechecks import (
-    verify_promotion_requirement_final_recheck_packet,
-)
 from veritas_os.policy.promotion_requirement_runtime_risk import (
-    require_promotion_requirement_runtime_risk_pass,
+    _require_runtime_risk_pass_and_source,
 )
 
 DOMAIN = "veritas.native-live-adapter-bind-authorization/v2"
@@ -178,16 +175,12 @@ def _verified_source(
         current_credential_reference=source_inputs.current_credential_reference,
         required_credential_scope=source_inputs.required_credential_scope,
     )
-    verified_risk = require_promotion_requirement_runtime_risk_pass(
+    verified_risk, final = _require_runtime_risk_pass_and_source(
         risk,
         source_inputs.final_recheck,
         expected_risk_decision=source_inputs.expected_risk_decision,
         expected_recorded_at=source_inputs.expected_recorded_at,
         verification_now=governance_inputs.verification_now,
-        **anchors,
-    )
-    final = verify_promotion_requirement_final_recheck_packet(
-        source_inputs.final_recheck,
         **anchors,
     )
     # Traverse only the freshly reconstructed chain, not the input objects.

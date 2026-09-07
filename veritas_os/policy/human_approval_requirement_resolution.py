@@ -125,6 +125,9 @@ def _timestamp(value: Any) -> str:
 
 
 def _json(value: Any) -> Any:
+    # Exact JSON scalars cannot be models; avoid Pydantic's metaclass per leaf.
+    if value is None or type(value) in (str, bool, int):
+        return value
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="python")
     if value is None or isinstance(value, (str, bool, int)):
@@ -235,6 +238,18 @@ def build_human_approval_requirement_resolution_packet(
     resolved_at: datetime,
 ) -> CanonicalHumanApprovalRequirementResolutionPacket:
     """Build a fail-closed, non-authorizing requirement-resolution packet."""
+    packet, _ = _build_resolution_and_source(
+        source_authority_evidence_linkage_review_packet, action_contract, resolved_at,
+    )
+    return packet
+
+
+def _build_resolution_and_source(
+    source_authority_evidence_linkage_review_packet: Any,
+    action_contract: ActionClassContract,
+    resolved_at: datetime,
+) -> tuple[CanonicalHumanApprovalRequirementResolutionPacket, AuthorityLinkageSource]:
+    """Reconstruct the complete source and retain it with the derived resolution."""
     source = _verified_source(source_authority_evidence_linkage_review_packet)
     source_id, source_hash = _source_identity(source)
     if isinstance(
@@ -297,11 +312,12 @@ def build_human_approval_requirement_resolution_packet(
         "scope_limitations": SCOPE_LIMITATIONS,
     }
     packet_hash = _digest(payload)
-    return CanonicalHumanApprovalRequirementResolutionPacket(
+    packet = CanonicalHumanApprovalRequirementResolutionPacket(
         human_approval_requirement_resolution_id=(f"harr:v1:sha256:{packet_hash}"),
         human_approval_requirement_resolution_hash=packet_hash,
         **payload,
     )
+    return packet, source
 
 
 def verify_human_approval_requirement_resolution_packet(
@@ -313,6 +329,22 @@ def verify_human_approval_requirement_resolution_packet(
 
     Hash integrity alone does not authenticate authority or policy. Callers
     must obtain the expected source and contract independently of this packet.
+    """
+    rebuilt, _ = _verify_resolution_and_source(
+        value, source_authority_evidence_linkage_review_packet, action_contract,
+    )
+    return rebuilt
+
+
+def _verify_resolution_and_source(
+    value: Any,
+    source_authority_evidence_linkage_review_packet: Any,
+    action_contract: ActionClassContract,
+) -> tuple[CanonicalHumanApprovalRequirementResolutionPacket, AuthorityLinkageSource]:
+    """Verify every field and return the source reconstructed in this call.
+
+    Independent source and contract remain mandatory. This is not a cache or a
+    path accepting preverified caller objects; every invocation rebuilds both.
     """
     try:
         packet = CanonicalHumanApprovalRequirementResolutionPacket.model_validate(
@@ -350,7 +382,7 @@ def verify_human_approval_requirement_resolution_packet(
     expected = _digest(raw)
     if packet_hash != expected or packet_id != f"harr:v1:sha256:{expected}":
         raise HumanApprovalRequirementResolutionError("HARR_HASH_MISMATCH")
-    rebuilt = build_human_approval_requirement_resolution_packet(
+    rebuilt, source = _build_resolution_and_source(
         source_authority_evidence_linkage_review_packet,
         action_contract,
         datetime.fromisoformat(_timestamp(packet.resolved_at)),
@@ -359,4 +391,4 @@ def verify_human_approval_requirement_resolution_packet(
         raise HumanApprovalRequirementResolutionError(
             "HARR_SOURCE_RECONSTRUCTION_MISMATCH"
         )
-    return rebuilt
+    return rebuilt, source

@@ -224,4 +224,37 @@ materialは表示を伏せる`SecretBytes`で保持します。結果は汎用JS
 
 Authorization header・Bind・network dispatch・外部作用・Human Approval・BindReceipt・Outcomeは
 作成しません。将来のsenderは使用時に所有・期限・現在条件を再検証し、送信意図を永続化する必要があります。
-試験は合成credentialと制御した時計を使用します。実providerの真正性と実時計での性能は未実証です。
+試験は合成credentialを使用します。限定的なホスト実時計での測定を13節に示します。
+実providerの真正性と配備環境での性能は未実証です。
+
+## 13. ホスト実時計での限定検証
+
+再検証1秒、保守的な確認上限2秒、providerとdescriptorの5秒制限を維持します。
+各公開verifierは独立したsource/contractを必須とし、全項目を再構築します。同じ呼び出し内では、
+HARRが再構築したsourceをnative satisfactionへ返し、readinessと最終再検証は完全に再構築した
+親packetの子要素を使用し、native risk検証は自身が再構築した最終sourceを保持します。
+グローバル・呼び出し間の検証キャッシュや、callerのverifiedフラグによる省略はありません。
+現在のpolicy・失効・署名・時間区間両端の再検証を維持します。JSONの組み込みscalar値では
+不要なPydanticモデル判定を省きますが、各境界の正規化・時刻処理・不正値拒否は維持します。
+
+明示実行する性能試験は実際の`datetime.now(timezone.utc)`と`time.monotonic()`、
+本物のnative verifier、署名した合成artifactを使用し、測定区間内で新しいrisk証拠を生成します。
+coverageやprofilingと同時に実行せず、次のコマンドで測定します。
+
+```sh
+VERITAS_RUN_SANDBOX_TIMING=1 python -m pytest veritas_os/tests/test_sandbox_real_clock.py -q -s --no-cov -o junit_family=xunit1 --junitxml=/tmp/sandbox-timing.xml
+```
+
+2026-09-07のPython 3.12開発ホストでは、正常3回の計9回の再検証が各0.603〜0.770秒、
+credential継続処理全体が2.592〜2.749秒でした。fixture発行と消費の時間は全体測定に含めません。
+descriptorの経過時間は1.287〜1.456秒で、既存の5秒制限以内でした。
+source取得へ1.05秒、providerのdescribe/resolveへ5.05秒の遅延を入れると拒否され、
+消費と試行を保持し、再試行しません。単一ホストの観測であり、スループットや配備性能の保証ではありません。
+性能試験は各測定値を出力し、対象段階へ到達できない場合や正常処理が既存制限を超えた場合に失敗します。
+
+storeは明示指定のin-memory、material/providerは合成、時計の健全性と誤差ゼロはfixture入力です。
+実provider・PostgreSQL遅延・認証された時刻源・外部作用は測定していません。
+時計誤差が非ゼロの場合には時間モデル上の課題も残ります。`checked.now`で記録する新しいrisk証拠が、
+検証に使う不確実性の下限より未来になるため、誤差50ミリ秒のケースはprovider接続前にfail-closedします。
+このcheckpointではその規則を維持します。この課題の解消と、配備環境の時計/providerの検証が、
+sandbox外部実行前の確認事項として残ります。
