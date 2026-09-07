@@ -231,3 +231,44 @@ Human Approval creation or BindReceipt/Outcome generation. A future executor mus
 enforce ownership and repeat current checks after credential work at the actual
 send boundary. The one-second budget is enforced, not a measured performance
 guarantee; deployment throughput and trusted callback configuration remain gates.
+
+## 12. Credential continuation contract
+
+`prepare_and_resolve_sandbox_credential` performs preparation itself. It accepts
+the original authorization and independent deployment/source/governance inputs,
+never a caller's prepared result or consumed flag. An existing attempt cannot be
+resumed through this entry point. PostgreSQL remains the default requirement.
+
+The trusted executor supplies one `SandboxCredentialProvider`. Its `describe`
+operation returns no secret. Its `resolve` operation must authenticate the provider,
+atomically check the expected metadata digest and current revocation/version, and
+return material bound to that exact metadata. No `authenticated=true` packet flag
+substitutes for that integration contract. The local code does not establish a
+provider trust root, select a vendor, read environment tokens or contact a service.
+Provider/hosting configuration and real-provider tests remain deployment gates.
+
+The request pins the credential reference, provider, version, exact scope,
+environment and HTTPS origin audience derived from the verified action binding.
+Metadata must identify a bearer credential, explicitly report non-revocation and
+cover the entire checked time-uncertainty interval. Missing/malformed/stale metadata,
+same-reference version changes, different audience, wider scope, expiry and provider
+errors stop the call. Each provider operation times out after five seconds with no
+retry; descriptor age across the continuation is also bounded to five seconds.
+
+The continuation reads the exact attempt row and repeats the #2200 current checks
+after metadata inspection before secret access, and again after resolution. Failed
+checks never return material or release the attempt/consumption. Current checks
+reuse the existing verifier implementation; embedded snapshots remain untrusted.
+
+Material uses a redacted `SecretBytes` wrapper. The result has no generic JSON,
+dataclass or pickle serialization; explicit trusted code can access bytes through
+`material.get_secret_value()`. `close()` drops the result's reference; it does not
+promise Python memory erasure or control a provider's internal logs. Public failures
+contain a fixed code and do not retain provider exception context. Audit data carries
+only the preparation and a metadata digest, never a token or token hash.
+
+No Authorization header, Bind, network dispatch, external effect, Human Approval,
+BindReceipt or Outcome is created. A future sender must recheck ownership, expiry
+and current governance at use, then persist dispatch intent. Tests use synthetic
+credentials and deterministic clocks; real-provider authenticity and real-clock
+performance have not been demonstrated by this implementation.

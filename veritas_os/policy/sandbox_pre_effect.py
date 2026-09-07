@@ -7,7 +7,7 @@ Failures after claim leave the row intact; recovery cannot acquire it again.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import math
 from typing import Any, Callable
@@ -29,7 +29,8 @@ from veritas_os.policy.live_adapter_bind_authorization_governance import (
     _validate_governance_for_verified_context,
 )
 from veritas_os.policy.native_bind_authorization import (
-    NativeAuthorizationSourceInputs, _supported_approval_rules, _verified_source,
+    NativeAuthorizationSourceInputs, NativeBindAuthorizationArtifact,
+    _VerifiedContext, _supported_approval_rules, _verified_source,
     verify_native_bind_authorization,
 )
 from veritas_os.policy.sandbox_action_binding import (
@@ -74,6 +75,9 @@ class SandboxPreparedAttempt:
     runtime_risk_hash: str
     checked_at: str
     durable_store_used: bool
+    authorization: NativeBindAuthorizationArtifact = field(repr=False)
+    issued_context: _VerifiedContext = field(repr=False)
+    clock: SandboxClockReading = field(repr=False)
 
 
 def _clock(reading: SandboxClockReading) -> datetime:
@@ -184,6 +188,33 @@ async def prepare_sandbox_attempt(
         raise SandboxPreEffectError("SPE_CLAIM_FAILED_OR_UNKNOWN") from None
     if claimed is not True:
         raise SandboxPreEffectError("SPE_ATTEMPT_ALREADY_EXISTS")
+    risk_hash, finished = _recheck_sandbox_current(
+        verified=verified, binding=binding, issued_context=issued_context,
+        payload_json=payload_json, deployment=deployment, started=started,
+        trusted_clock=trusted_clock, load_current_inputs=load_current_inputs,
+    )
+    return SandboxPreparedAttempt(
+        binding, attempt, risk_hash, _timestamp(finished.now), durable,
+        verified, issued_context, finished,
+    )
+
+
+def _recheck_sandbox_current(
+    *,
+    verified: NativeBindAuthorizationArtifact,
+    binding: VerifiedSandboxActionBinding,
+    issued_context: _VerifiedContext,
+    payload_json: str,
+    deployment: SandboxDeployment,
+    started: SandboxClockReading,
+    trusted_clock: Callable[[], SandboxClockReading],
+    load_current_inputs: Callable[[datetime], SandboxCurrentInputs],
+) -> tuple[str, SandboxClockReading]:
+    """Repeat the same checks inside an owning call, never from request claims.
+
+    Shared by preparation and its credential continuation. This private helper
+    grants no ownership; the continuation must itself create the unique attempt.
+    """
     try:
         checked = trusted_clock()
         lower, _ = _window(checked, verified)
@@ -240,6 +271,4 @@ async def prepare_sandbox_attempt(
     except Exception:
         # Provider errors can contain private registry/connection details.
         raise SandboxPreEffectError("SPE_RECHECK_FAILED_ATTEMPT_RETAINED") from None
-    return SandboxPreparedAttempt(
-        binding, attempt, risk.packet_hash, _timestamp(finished.now), durable,
-    )
+    return risk.packet_hash, finished

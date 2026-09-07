@@ -193,3 +193,35 @@ packet内snapshotを信頼源にしません。時刻・健全性callbackは信�
 Human Approval作成・BindReceipt/Outcome生成は行いません。将来のexecutorは実際の送信境界で
 試行所有を強制し、credential処理後に再検証する必要があります。1秒制限は強制条件であり、
 測定済み性能保証ではありません。配備性能と信頼callbackの設定確認は引き続き必須です。
+
+## 12. Credential解決の継続処理
+
+`prepare_and_resolve_sandbox_credential`が試行準備自体を実行します。元の認可と独立した
+deployment/source/governance入力を受け取り、callerのprepared結果やconsumedフラグは受け取りません。
+既存の試行をこの入口から再開できません。標準では引き続きPostgreSQLが必須です。
+
+信頼されたexecutorが一つの`SandboxCredentialProvider`を指定します。`describe`は秘密値を返さず、
+`resolve`はproviderを認証し、期待するmetadata digestと現在の失効・versionを原子的に照合して、
+そのmetadataに結び付いたmaterialを返す契約です。packetの`authenticated=true`は代用になりません。
+ローカル処理はprovider信頼源の確立・vendor選択・環境変数tokenの読取・サービス接続を行いません。
+provider/hosting設定と実providerでの試験は配備前の確認事項です。
+
+検証済み操作のbindingからcredential参照・provider・version・完全一致するscope・environment・
+HTTPS origin audienceを固定します。metadataにはbearer種別と非失効状態の明示が必要で、
+有効期間は確認した時刻の不確実性区間全体を含む必要があります。欠落・形式不正・陳腐化・
+同じ参照のversion変更・宛先違い・過大scope・期限切れ・provider障害は停止します。
+provider呼び出しは各5秒でtimeoutし、再試行しません。継続処理全体でdescriptorの経過時間も5秒以内です。
+
+metadata確認後の秘密値取得直前と、取得後の両方で試行レコード全体を読み直し、#2200の
+現在条件の再検証を行います。検証失敗時はmaterialを返さず、試行・消費も解放しません。
+既存verifierを再利用し、埋め込みsnapshotを信頼源へ戻しません。
+
+materialは表示を伏せる`SecretBytes`で保持します。結果は汎用JSON・dataclass・pickleで
+シリアライズできません。信頼されたコードが明示的に`material.get_secret_value()`を呼ぶとbytesへ
+アクセスできます。`close()`は結果の参照を破棄しますが、Pythonのメモリ消去やprovider内部ログの
+制御は保証しません。公開例外は固定コードのみで、provider例外のcontextを保持しません。
+監査情報は準備結果とmetadata digestだけで、token自体やtokenのhashを含めません。
+
+Authorization header・Bind・network dispatch・外部作用・Human Approval・BindReceipt・Outcomeは
+作成しません。将来のsenderは使用時に所有・期限・現在条件を再検証し、送信意図を永続化する必要があります。
+試験は合成credentialと制御した時計を使用します。実providerの真正性と実時計での性能は未実証です。
