@@ -199,3 +199,35 @@ The provider credential version is a deployment pin committed before issuance;
 authenticating that version and its expiry/revocation remains a resolver task.
 This module does not authenticate TLS, time health, provider data or payload truth,
 and does not implement an execution claim, credential access or external effect.
+
+## 11. No-effect attempt preparation
+
+`prepare_sandbox_attempt` reads the durable consumption row and reconstructs all
+lineage fields from independently verified native authorization/source inputs.
+It reuses `bind_effect_states` to create one permanent `IN_FLIGHT` attempt per
+consumption/authorization; uniqueness is enforced in PostgreSQL. Existing v1
+execution entry points are unchanged. Process-local stores require explicit test
+opt-in and cannot establish cross-process guarantees.
+
+After the claim commits, an executor-configured callback loads independent current
+source, contract, credential metadata, authority/approval and runtime-risk inputs.
+Native verifiers check them against the original action. No packet snapshot becomes
+a trust anchor. Clock/health callbacks are trusted deployment inputs: health age
+must be at most 30 seconds, uncertainty at most one second, and both UTC and
+monotonic elapsed recheck time at most one second. Rollback fails closed. Validity
+is checked from the lower uncertainty bound through a conservative two-second end
+horizon (one second of work plus maximum uncertainty). Short remaining validity
+therefore stops preparation. Authenticity of host time/health is assumed, not proven.
+
+Read failure, missing consumption or lineage mismatch stops before claiming.
+Claim acknowledgement loss or any later verification failure never releases the
+attempt or rolls back consumption. A later caller cannot reclaim even an abandoned
+attempt. `IN_FLIGHT` does not assert dispatch or success; crash recovery and
+independent reconciliation remain required before making any outcome claim.
+
+The returned preparation result is audit data only. This implementation performs
+no credential resolution, dispatch-intent persistence, Bind, external request,
+Human Approval creation or BindReceipt/Outcome generation. A future executor must
+enforce ownership and repeat current checks after credential work at the actual
+send boundary. The one-second budget is enforced, not a measured performance
+guarantee; deployment throughput and trusted callback configuration remain gates.

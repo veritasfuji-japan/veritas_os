@@ -15,6 +15,7 @@ from veritas_os.policy.bind_effect_reconciliation import (
 )
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
     build_authorization_consumption_record,
+    PostgresAtomicAuthorizationConsumptionStore,
 )
 
 pytestmark = [pytest.mark.postgresql, pytest.mark.contention]
@@ -81,3 +82,29 @@ async def test_real_postgres_effect_state_transition_has_one_winner() -> None:
     assert stored is not None
     assert stored.state == EffectExecutionState.EFFECT_UNKNOWN
     assert stored.revision == 2
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_consumption_read_and_attempt_creation_have_one_winner() -> None:
+    """Separate store instances share durable ownership, including after restart."""
+    _require_real_postgresql()
+    consumption = _consumption(uuid4().hex)
+    consumptions = PostgresAtomicAuthorizationConsumptionStore()
+    assert await consumptions.get(consumption.live_adapter_bind_authorization_id) is None
+    assert await consumptions.consume_once(consumption)
+    assert await PostgresAtomicAuthorizationConsumptionStore().get(
+        consumption.live_adapter_bind_authorization_id
+    ) == consumption
+    attempt = _build_record(
+        consumption=consumption, state=EffectExecutionState.IN_FLIGHT,
+        revision=1, updated_at=consumption.consumed_at,
+        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+    )
+    outcomes = await asyncio.gather(*(
+        PostgresAtomicEffectStateStore().create_in_flight(attempt) for _ in range(32)
+    ))
+    assert outcomes.count(True) == 1
+    assert outcomes.count(False) == 31
+    restarted = PostgresAtomicEffectStateStore()
+    assert await restarted.get(attempt.operation_id) == attempt
+    assert not await restarted.create_in_flight(attempt)
