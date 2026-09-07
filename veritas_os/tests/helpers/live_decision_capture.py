@@ -19,7 +19,10 @@ from unittest.mock import patch
 from scripts import run_decision_to_external_bind_poc as poc
 
 
-def capture(output: Path, *, required_human_approval: bool = False) -> None:
+def capture(
+    output: Path, *, required_human_approval: bool = False,
+    candidate_overrides: dict | None = None,
+) -> None:
     """Write only the synthetic decision and infrastructure observations."""
     runtime = output.parent / "runtime"
     runtime.mkdir()
@@ -39,6 +42,8 @@ def capture(output: Path, *, required_human_approval: bool = False) -> None:
         evidence_refs=["synthetic:local-review-input"],
         required_human_approval=required_human_approval,
     )
+    if candidate_overrides:
+        candidate = replace(candidate, **candidate_overrides)
     with (
         patch.object(poc, "_candidate", return_value=candidate),
         patch.object(pipeline, "REPLAY_SOURCE_DIR", runtime / "replay-sources"),

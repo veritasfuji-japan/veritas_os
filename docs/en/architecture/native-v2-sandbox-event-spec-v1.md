@@ -176,3 +176,26 @@ database durability/retention and read-only lookup access. Confirm synthetic pay
 and failure-injection scope. These are mandatory deployment inputs. Until provided
 and reviewed, implementation may use inert tests, but must not access credentials,
 deploy infrastructure or send external requests.
+
+## 10. Initial metadata binding implementation
+
+`veritas_os/policy/sandbox_action_binding.py` supplies the opt-in local binding
+boundary. `build_sandbox_action_binding` validates the two-string payload and
+explicit deployment pins and returns a `sandbox-action:v1:sha256:` reference.
+Include exactly one such reference in the decision candidate's `evidence_refs`
+before decision capture, promotion and authorization issuance. It commits to POST,
+the exact endpoint, payload digest, full contract digest and credential metadata
+pins without introducing a circular dependency on a later authorization digest.
+
+`verify_sandbox_action_binding` calls the native authorization verifier with
+independent source/governance/trust inputs, then reconstructs the reference and
+checks the verified intent, endpoint and credential metadata. It preserves the
+authorization's original idempotency key. The returned immutable association is
+not executable permission and is not accepted in place of native verification.
+No existing native entry point is rerouted: a future sandbox executor must require
+this boundary as well as consumption and final pre-effect checks.
+
+The provider credential version is a deployment pin committed before issuance;
+authenticating that version and its expiry/revocation remains a resolver task.
+This module does not authenticate TLS, time health, provider data or payload truth,
+and does not implement an execution claim, credential access or external effect.

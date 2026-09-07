@@ -152,3 +152,20 @@ sandbox origin/TLS identityと管理者、credential provider/ref/scope、信頼
 時刻健全性の取得元と実測上限、DB永続性・保持条件・読取専用照合権限を記録します。
 合成payloadと障害注入の範囲も確定します。これらは必須の配備入力です。
 供給・レビューが済むまでは、作用のないテストによる実装準備に限定し、秘密取得・インフラ配備・外部要求を行いません。
+
+## 10. 最初のmetadata binding実装
+
+`veritas_os/policy/sandbox_action_binding.py`に、明示的に呼び出すローカル検証境界を設けます。
+`build_sandbox_action_binding`は2文字列のpayloadと明示的な配備設定を検証し、
+`sandbox-action:v1:sha256:`参照を返します。この参照をdecision記録・promotion・認可発行より前に、
+候補の `evidence_refs` に正確に1つ含めます。POST・正確なendpoint・payload digest・契約全体のdigest・
+credential metadataの固定値を含み、後から生成される認可digestとの循環依存は作りません。
+
+`verify_sandbox_action_binding`は独立したsource/governance/trust入力でnative認可verifierを呼び、
+参照を再構築して検証済みintent・endpoint・credential metadataに照合します。
+元の認可のidempotency keyを維持します。不変の関連付け結果は実行許可ではなく、native検証の代用にもなりません。
+既存のnative入口の経路は変更しません。将来のsandbox executorは、この境界に加えて消費・実行直前再確認を必須にします。
+
+credential versionは発行前に結び付ける配備固定値です。providerに対するversion・expiry・revocationの
+真正性確認はresolverの作業として残ります。本モジュールはTLS・時刻健全性・provider情報・payloadの真実性を
+認証せず、実行担当取得・秘密情報取得・外部作用も実装しません。
