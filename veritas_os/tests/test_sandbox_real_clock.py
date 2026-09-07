@@ -40,7 +40,7 @@ issued = issued_fixture
 
 
 class _Clock:
-    """Sample the actual host clocks; health/zero uncertainty are fixture inputs."""
+    """Sample actual host clocks; health and uncertainty are fixture inputs."""
 
     def __init__(self, uncertainty=0.0):
         self.readings = []
@@ -111,6 +111,7 @@ class _Provider:
         "slow_describe",
         "slow_resolve",
         "uncertain_clock",
+        "maximum_uncertainty",
     ],
 )
 async def test_real_clock_budget_and_fail_closed(
@@ -146,13 +147,13 @@ async def test_real_clock_budget_and_fail_closed(
         consumption_store=consumption,
         allow_in_memory_for_testing=True,
     )
-    clock = _Clock(0.05 if mode == "uncertain_clock" else 0.0)
+    clock = _Clock({"uncertain_clock": 0.05, "maximum_uncertainty": 1.0}.get(mode, 0.0))
     effects = preparation.InMemoryAtomicEffectStateStore()
     provider = _Provider(artifact, mode)
     recheck_seconds = []
     load_seconds = []
     completed_clocks = []
-    uncertain_risk_rejected = []
+    recheck_failures = []
     original = preparation._recheck_sandbox_current
 
     def measured(**kwargs):
@@ -162,10 +163,19 @@ async def test_real_clock_budget_and_fail_closed(
             completed_clocks.append(result[1])
             return result
         except preparation.SandboxPreEffectError as exc:
-            if mode == "uncertain_clock":
-                uncertain_risk_rejected.append(
-                    str(exc.__context__) == "PRRR_REVIEW_NOT_CURRENT"
-                )
+            # Record only allowlisted fixed codes, never a provider's message.
+            cause = str(exc.__context__)
+            recheck_failures.append(
+                cause
+                if cause
+                in {
+                    "SPE_RECHECK_DELAY_OR_ROLLBACK",
+                    "SPE_FRESH_RISK_REQUIRED",
+                    "SPE_AUTHORIZATION_OUTSIDE_TIME_WINDOW",
+                    "PRRR_REVIEW_NOT_CURRENT",
+                }
+                else type(exc.__context__).__name__
+            )
             raise
         finally:
             recheck_seconds.append(time.perf_counter() - start)
@@ -209,6 +219,7 @@ async def test_real_clock_budget_and_fail_closed(
         "outcome": "resolved" if resolved else "rejected",
         "continuation_seconds": round(elapsed, 6),
         "recheck_seconds": [round(x, 6) for x in recheck_seconds],
+        "recheck_failures": recheck_failures,
         "source_load_seconds": [round(x, 6) for x in load_seconds],
         "provider_calls": provider.calls,
         "declared_uncertainty_seconds": clock.uncertainty,
@@ -230,7 +241,7 @@ async def test_real_clock_budget_and_fail_closed(
             b.now > a.now and b.monotonic_seconds > a.monotonic_seconds
             for a, b in zip(clock.readings, clock.readings[1:], strict=False)
         )
-        if mode == "valid":
+        if mode in ("valid", "uncertain_clock", "maximum_uncertainty"):
             assert error is None and resolved is not None, measurement
             assert resolved.material.get_secret_value() == TOKEN
             assert len(recheck_seconds) == 3 and max(recheck_seconds) <= 1
@@ -243,13 +254,9 @@ async def test_real_clock_budget_and_fail_closed(
                 "slow_source": [],
                 "slow_describe": ["describe"],
                 "slow_resolve": ["describe", "resolve"],
-                "uncertain_clock": [],
             }
             assert provider.calls == expected[mode]
-            if mode == "uncertain_clock":
-                assert uncertain_risk_rejected == [True]
-            else:
-                assert elapsed >= (1 if mode == "slow_source" else 5)
+            assert elapsed >= (1 if mode == "slow_source" else 5)
     finally:
         if resolved is not None:
             resolved.close()

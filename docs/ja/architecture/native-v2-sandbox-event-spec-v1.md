@@ -252,9 +252,37 @@ source取得へ1.05秒、providerのdescribe/resolveへ5.05秒の遅延を入れ
 消費と試行を保持し、再試行しません。単一ホストの観測であり、スループットや配備性能の保証ではありません。
 性能試験は各測定値を出力し、対象段階へ到達できない場合や正常処理が既存制限を超えた場合に失敗します。
 
-storeは明示指定のin-memory、material/providerは合成、時計の健全性と誤差ゼロはfixture入力です。
-実provider・PostgreSQL遅延・認証された時刻源・外部作用は測定していません。
-時計誤差が非ゼロの場合には時間モデル上の課題も残ります。`checked.now`で記録する新しいrisk証拠が、
-検証に使う不確実性の下限より未来になるため、誤差50ミリ秒のケースはprovider接続前にfail-closedします。
-このcheckpointではその規則を維持します。この課題の解消と、配備環境の時計/providerの検証が、
-sandbox外部実行前の確認事項として残ります。
+このcheckpointの測定は明示指定のin-memory store、合成material/provider、
+健全性と誤差ゼロを宣言した時計を使用しました。実provider・PostgreSQL遅延・認証された時刻源・
+外部作用は測定していません。当時の誤差50ミリ秒のケースは、`checked.now`で記録する新しいrisk証拠が
+検証に使う誤差下限より未来になるため、provider接続前に拒否されました。
+この時間検証に限定した修正を14節で定義します。
+
+## 14. 因果順序を示す観測時刻と独立した有効期間
+
+executorは恒久的に所有する試行内で`checked.now`を取得し、その後に信頼された同期型の
+current-input loaderを呼びます。再構築したrisk decisionの`reviewed_at`とpacketの`recorded_at`は、
+両方ともこの時刻と厳密に一致する必要があります。これは今回の呼び出しの観測を示す時刻であり、
+外部からの権限付与の有効開始時刻ではありません。risk/sourceは独立したsource/contract入力を
+すべて必須として`checked.now`で再構築します。verifierによる証拠の過去への日付変更・再ハッシュや、
+callerのverifiedフラグによる受け入れは行いません。
+
+この規則はsandboxの所有呼び出し内に限定します。共通のnative/risk verifierは従来の厳密な
+単一時刻の検証を維持し、指定された検証時刻より未来に記録されたpacketを拒否します。
+全項目とhashを再構築しても、今回の観測時刻から1マイクロ秒ずれたrisk packetは拒否します。
+時計誤差の範囲内にあることは再利用の許可ではありません。
+
+Authorizationと署名付きAuthority/Approvalは、引き続き時計誤差の下限で検証します。
+riskの期限・Authorization・governanceは、既存の保守的上限`checked.now + 2秒`でも
+有効でなければなりません。処理時間はUTCとmonotonicの両方で1秒以内、完了時の時計は健全かつ
+認可の有効期間内である必要があります。未来の署名付き権限・期限切れ・巻き戻り・過大な遅延は
+引き続きfail-closedです。TTLの延長、時計誤差1秒・健全性確認の経過30秒・credential providerと
+descriptorの5秒制限の緩和はしません。credential継続処理の両方の再検証にも同じ規則を適用し、
+失敗時は消費と試行を保持します。
+
+明示実行する実時計試験は、誤差ゼロと遅延拒否に加え、宣言誤差50ミリ秒・1秒の正常継続を必須にします。
+決定的な試験では、再構築済みpacketの時刻差し替え、合成Ed25519署名付きAuthorityの有効期間境界、
+credential取得後の検証失敗を確認します。これらは時計やproviderの真正性を認証する試験ではありません。
+executor設定のloaderには本当に現在の入力を取得する責務があり、時刻一致と署名だけでは入力の真実性を
+証明できません。配備環境の時計/provider検証、送信意図、Bind、外部作用、結果照合はこの修正の範囲外です。
+credential継続処理の成功も、それらの実行許可にはなりません。

@@ -116,9 +116,11 @@ async def test_missing_consumption_is_not_replaced_by_caller_claim(prepared_inpu
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("uncertainty", [0.0, 0.05])
 @pytest.mark.parametrize("mode", ["contract", "endpoint", "scope", "revoked", "stale_risk", "provider_error"])
-async def test_post_claim_drift_stops_and_preserves_attempt(prepared_inputs, mode):
+async def test_post_claim_drift_stops_and_preserves_attempt(prepared_inputs, mode, uncertainty):
     artifact, args = await _args(prepared_inputs)
+    args["trusted_clock"] = lambda: replace(prepared_inputs[4], uncertainty_seconds=uncertainty)
     _, inputs, record, current, _ = prepared_inputs
     if mode == "contract":
         contract = replace(current.governance.action_contract, human_approval_rules={"required": True})

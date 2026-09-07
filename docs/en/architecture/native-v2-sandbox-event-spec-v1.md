@@ -304,11 +304,45 @@ These are observations on one host, not throughput or deployment guarantees.
 The opt-in test reports each measurement and fails if the requested phase cannot
 be reached or the normal continuation exceeds the unchanged limits.
 
-Stores are explicitly in-memory, material/provider are synthetic, and clock health
-and zero uncertainty are fixture declarations. No provider service, PostgreSQL
-latency, authenticated time source or external effect is measured. Nonzero clock
-uncertainty exposes a remaining temporal-model limitation: fresh risk stamped at
-`checked.now` is later than the lower uncertainty bound used to verify it. The
-50-millisecond uncertainty case therefore fails closed before provider access.
-This checkpoint preserves that rule; its resolution and actual deployment
-clock/provider validation remain gates before sandbox external execution.
+Those checkpoint measurements used explicitly in-memory stores, synthetic
+material/provider and declared clock health with zero uncertainty. They did not
+measure a provider service, PostgreSQL latency, authenticated time or external
+effect. At that checkpoint, the 50-millisecond uncertainty case failed before
+provider access because fresh risk stamped at `checked.now` was later than the
+lower uncertainty bound. Section 14 defines the focused temporal correction.
+
+## 14. Causal observation time and independent validity windows
+
+The executor samples `checked.now` and only then invokes its trusted synchronous
+current-input loader, inside the permanently owning attempt. The reconstructed
+risk decision's `reviewed_at` and packet's `recorded_at` must both equal that exact
+sample. These are causal observation markers for this invocation, not an external
+not-before grant. Risk/source reconstruction runs at `checked.now`, using all
+mandatory independent source/contract inputs. No artifact is backdated, rehashed
+by the verifier, or accepted through a caller-supplied verified flag.
+
+This rule is confined to the sandbox owning call. General native/risk verifiers
+retain their exact point-in-time semantics and still reject a packet recorded
+after their supplied verification time. Even a fully rebuilt risk packet whose
+timestamp differs from the current invocation by one microsecond is rejected;
+being inside the uncertainty interval is not permission to replay it.
+
+Authorization and signed authority/approval continue to be verified at the lower
+uncertainty bound. Risk expiry, authorization and governance must also survive
+the unchanged conservative horizon `checked.now + 2 seconds`. UTC and monotonic
+work must each finish within one second, and the completion clock must be healthy
+and inside authorization validity. Future signed grants, expired grants, rollback
+and excessive delay remain fail-closed. This correction neither extends TTLs nor
+relaxes the one-second uncertainty cap, 30-second health age, or five-second
+credential-provider/descriptor bounds. Both credential-continuation rechecks use
+the same rule and retain consumption/attempt state on failure.
+
+The opt-in host-clock test now requires normal continuation with both 50 ms and
+one second of declared uncertainty, in addition to zero uncertainty and delay
+rejection cases. Deterministic tests cover reconstructed timestamp substitution,
+real synthetic Ed25519 authority validity boundaries and post-resolution failure.
+These tests do not authenticate a clock or provider. The executor-configured
+loader must acquire genuinely current inputs; timestamp equality and signatures
+alone cannot prove input truth. Actual clock/provider deployment validation,
+dispatch intent, Bind, external effect and outcome reconciliation remain outside
+this correction and are not authorized by a successful credential continuation.
