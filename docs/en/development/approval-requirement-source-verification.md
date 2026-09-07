@@ -219,7 +219,8 @@ approval states with controlled model/cloud clients and explicit test metadata.
 The older native and legacy APIs remain unchanged. The requirement-aware
 runtime-risk boundary below consumes the final packet. Authorization issuance,
 real-decision single-use execution and outcome validation are separate boundaries;
-native v2 issuance is described below, while consumption remains incomplete.
+native v2 issuance and consume-only boundaries are described below. Integration
+with action execution and outcome validation remains incomplete.
 
 ## Runtime-risk review from verified final rechecks
 
@@ -283,13 +284,45 @@ reject v2; existing v1/v0.3 paths are retained.
 
 `verify_native_bind_authorization` re-verifies signatures and reconstructs every
 field at the independently supplied issuance verification time. This is not a
-consumer or a current execution permission. The v2 consumer is not implemented.
+consumer or a current execution permission. The consume-only API below performs
+the independent current-time checks.
 Idempotency commits the signed decision/context, risk hash, contract and window;
 single-use policy is signed, but unused-key status is **not** proven. Atomic
-consumption and fresh Bind-time governance/risk checks remain mandatory future
-work. No credential resolution, header construction, network, Bind invocation,
+consumption is implemented separately below; fresh Bind-time governance/risk checks
+remain mandatory for future execution. No credential resolution, header construction, network, Bind invocation,
 BindReceipt or external effect is performed by this issuance boundary.
 
 Test keys and signed authority/approval artifacts are synthetic; they do not
 represent operational human consent. Caller risk evidence remains unauthenticated
 sensor input, and the injected cryptographic backends must be non-effecting.
+
+## Native v2 consume-only boundary
+
+`consume_native_bind_authorization` verifies the unchanged signed issuance
+artifact with independent issuance inputs, rejects backdated/expired clocks,
+then reconstructs the current source from separately supplied source/risk inputs.
+The fresh review and record times must equal the trusted consumption time.
+BLOCK, INDETERMINATE, drift, missing inputs and reused issuance reviews fail
+before storage. Exact intent, Bind context, gate and contract must match the
+signed authorization. Original authority and required human receipt signatures,
+revocation status and RuntimeAuthority are reverified at consumption time.
+Historical signed proof hashes remain unchanged; current proofs are returned
+separately. Caller-supplied observations are still not authenticated sensors.
+
+The existing PostgreSQL store atomically records one consumption using unique
+authorization-ID and idempotency-key constraints. The existing record schema
+can carry native `laba:v2` IDs without fabricating legacy source data. PostgreSQL
+is required by default; in-memory storage requires explicit test-only opt-in and
+is reported as non-durable. Unknown stores cannot self-assert production safety.
+Duplicate attempts and failed/ambiguous store acknowledgements return no success.
+No consumption is released after failure, including commit followed by lost ACK.
+
+The only intended write is the configured consumption database. No action
+credential, authorization header, adapter, Bind invocation, BindReceipt or
+external-action dispatch is involved. The consumption result is audit lineage,
+not a reusable execution capability. The supplied clock establishes validation
+time, not database commit time; future action execution must recheck current
+policy/risk and durable consumed lineage rather than trusting a saved result.
+Both approval states have real-verifier tests and PostgreSQL contention tests
+in the existing database CI job; this does not claim production deployment or
+completed decision-to-external-effect integration.

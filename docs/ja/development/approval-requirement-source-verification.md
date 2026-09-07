@@ -224,12 +224,35 @@ deployment policy hashが必要です。既定v1 verifierとv1 artifact schema�
 既存v1／v0.3経路は維持します。
 
 `verify_native_bind_authorization`は独立入力の発行検証時刻で署名・全項目を再検証・再構築します。
-これはconsumerでも現在の実行許可でもなく、v2 consumerは未実装です。idempotencyは署名済み
+これはconsumerでも現在の実行許可でもありません。下記の消費専用APIが現在時刻の独立検証を行います。idempotencyは署名済み
 判断／context・risk hash・契約・有効期間を固定しますが、未使用keyであることは証明しません。
-単回消費ポリシーを署名しても、atomic consumptionとBind直前の最新governance／risk再検査は
-今後の必須作業です。この発行境界でcredential取得・header構築・network・Bind実行・
+atomic consumptionは下記の別境界で実装し、Bind直前の最新governance／risk再検査は
+今後の実行境界でも必須です。この発行境界でcredential取得・header構築・network・Bind実行・
 BindReceipt・外部効果は行いません。
 
 テスト用鍵・署名済みAuthority／Approval artifactは合成fixtureであり、実運用の人間同意を
 意味しません。呼び出し元のrisk evidenceは認証済みセンサー入力ではありません。
 注入する暗号処理backendには、外部効果を起こさない実装が必要です。
+
+## Native v2の消費専用境界
+
+`consume_native_bind_authorization`は独立した発行時入力で署名済みartifactを再検証し、
+過去へ戻した時計・期限切れを拒否します。続いて別途渡す現在のsource／risk入力から再構築します。
+新しいreview時刻と記録時刻はtrusted消費時刻と一致する必要があります。BLOCK・判定不能・
+状態変化・入力欠落・発行時レビューの再利用はDB記録前に拒否します。intent・Bind context・gate・
+契約は署名済みauthorizationと一致させます。元のAuthority Evidenceと必須のHuman Approval Receiptの
+署名、失効状態、RuntimeAuthorityを消費時刻で再検証します。発行時の署名済みproof hashは変更せず、
+現在のproofを別に返します。呼び出し元の観測値が認証済みセンサー値になるわけではありません。
+
+既存PostgreSQL storeのauthorization ID／idempotency key一意制約で一回だけ原子的に記録します。
+既存record schemaはnative `laba:v2` IDを保持でき、legacy sourceの捏造は不要です。
+既定ではPostgreSQL必須で、メモリstoreは明示的なテスト用opt-inが必要です。結果にも非永続と表示します。
+未知のstoreによるproduction-safe自己申告は認めません。重複やDB応答の失敗・不確定状態では成功を返さず、
+commit後の応答喪失を含め、失敗しても消費を解除しません。
+
+意図する書き込みは設定済みの消費DBだけです。アクション用credential取得、header、adapter、Bind実行、
+BindReceipt、外部アクション送信は行いません。返す消費結果は監査用の系譜であり、再利用可能な実行権限ではありません。
+指定時計は検証時刻を表し、DB commit時刻の証明ではありません。今後の実行境界では保存済み結果だけを信用せず、
+最新policy／riskと永続化された消費の系譜を再検証する必要があります。
+承認必須／不要の両方に実verifierテストと、既存DB CI jobでのPostgreSQL競合テストを追加します。
+本番配備やdecisionから外部効果までの統合完了を意味しません。

@@ -19,6 +19,7 @@ memory.py 分岐カバレッジ強化テスト
 from __future__ import annotations
 
 import json
+from copy import copy
 import logging
 import threading
 import time
@@ -162,10 +163,21 @@ class FakeVecOldSig:
 class TestVectorMemoryLoadModel:
     """_load_model: ImportError fallback / config mismatch / success."""
 
-    def test_importerror_fallback_when_not_explicitly_enabled(self, monkeypatch):
+    @pytest.fixture(params=["current", "replaced"])
+    def capability_config(self, request, monkeypatch):
+        """Patch the call-time config, including a simulated reload generation."""
+        from veritas_os.core import config
+
+        if request.param == "replaced":
+            monkeypatch.setattr(config, "capability_cfg", copy(config.capability_cfg))
+        return config.capability_cfg
+
+    def test_importerror_fallback_when_not_explicitly_enabled(
+        self, monkeypatch, capability_config
+    ):
         """sentence-transformers unavailable + default config → warning + model=None."""
         monkeypatch.setattr(
-            mem_mod.capability_cfg,
+            capability_config,
             "enable_memory_sentence_transformers",
             True,
         )
@@ -189,10 +201,12 @@ class TestVectorMemoryLoadModel:
         vm._load_model()
         assert vm.model is None
 
-    def test_importerror_raises_when_explicitly_enabled(self, monkeypatch):
+    def test_importerror_raises_when_explicitly_enabled(
+        self, monkeypatch, capability_config
+    ):
         """sentence-transformers unavailable + explicit enable → RuntimeError."""
         monkeypatch.setattr(
-            mem_mod.capability_cfg,
+            capability_config,
             "enable_memory_sentence_transformers",
             True,
         )
@@ -215,10 +229,12 @@ class TestVectorMemoryLoadModel:
         with pytest.raises(RuntimeError, match="sentence-transformers is required"):
             vm._load_model()
 
-    def test_capability_disabled_skips_load(self, monkeypatch):
+    def test_capability_disabled_skips_load(
+        self, monkeypatch, capability_config
+    ):
         """enable_memory_sentence_transformers=False → model stays None."""
         monkeypatch.setattr(
-            mem_mod.capability_cfg,
+            capability_config,
             "enable_memory_sentence_transformers",
             False,
         )
@@ -230,10 +246,12 @@ class TestVectorMemoryLoadModel:
         vm._load_model()
         assert vm.model is None
 
-    def test_model_load_success_with_fake(self, monkeypatch):
+    def test_model_load_success_with_fake(
+        self, monkeypatch, capability_config
+    ):
         """Model loads successfully with a fake SentenceTransformer."""
         monkeypatch.setattr(
-            mem_mod.capability_cfg,
+            capability_config,
             "enable_memory_sentence_transformers",
             True,
         )
@@ -258,10 +276,12 @@ class TestVectorMemoryLoadModel:
         vm._load_model()
         assert vm.model is fake_model
 
-    def test_oserror_during_load_sets_model_none(self, monkeypatch):
+    def test_oserror_during_load_sets_model_none(
+        self, monkeypatch, capability_config
+    ):
         """OSError during SentenceTransformer() → model=None (no raise)."""
         monkeypatch.setattr(
-            mem_mod.capability_cfg,
+            capability_config,
             "enable_memory_sentence_transformers",
             True,
         )

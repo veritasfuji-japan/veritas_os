@@ -413,7 +413,7 @@ def verify_native_bind_authorization(
     """Reconstruct the entire signed artifact using external anchors and clock.
 
     This verifies issuance evidence at governance_inputs.verification_now, not
-    permission to consume. A future v2 consumer must independently recheck all
+    permission to consume. The v2 consume-only API must independently recheck all
     governance and current runtime conditions before atomic consumption.
     """
     candidate = NativeBindAuthorizationArtifact.model_validate(_json(artifact))

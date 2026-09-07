@@ -887,11 +887,11 @@ jobs:
     runs-on: ubuntu-latest
     # test-slow installs the full requirements.txt which includes heavy optional
     # ML wheels (e.g. torch, torchvision). On a cold runner cache these can take
-    # 8-12 minutes to install before pytest even starts. The 20-minute ceiling
-    # provides headroom without masking genuine test hangs; do not reduce below
-    # 15 minutes without first verifying that the full wheel install completes
-    # within the new limit on a cache-miss run.
-    timeout-minutes: 20
+    # 8-12 minutes to install before pytest even starts. On PR #2195 the expanded
+    # slow suite reached only 63% before the previous 20-minute job limit.
+    # Allow 60 minutes for installation and the full suite, retaining a bounded
+    # timeout and normal failure propagation. Revisit using completed durations.
+    timeout-minutes: 60
 
     env:
       PYTHONUNBUFFERED: "1"
