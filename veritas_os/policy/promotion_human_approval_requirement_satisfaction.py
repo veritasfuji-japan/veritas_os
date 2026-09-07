@@ -19,10 +19,10 @@ from veritas_os.governance.action_contracts import (
 from veritas_os.policy.human_approval_requirement_resolution import (
     _json,
     _timestamp,
-    verify_human_approval_requirement_resolution_packet,
+    _verify_resolution_and_source,
 )
 from veritas_os.policy.canonical_promotion_live_adapter_dry_run_authority_evidence_linkage import (
-    verify_canonical_promotion_live_adapter_dry_run_authority_evidence_linkage_review_packet as verify_source,
+    CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket,
 )
 from veritas_os.policy.canonical_promotion_live_adapter_dry_run_human_approval_linkage import (
     verify_canonical_promotion_live_adapter_dry_run_human_approval_linkage_review_packet as verify_linkage,
@@ -100,10 +100,11 @@ def build_promotion_human_approval_requirement_satisfaction_packet(
             "PHARS_CONTRACT_REQUIRED"
         )
     contract = validate_action_class_contract(contract.to_dict())
-    source = verify_source(source)
-    resolution = verify_human_approval_requirement_resolution_packet(
+    resolution, source = _verify_resolution_and_source(
         resolution, source, contract
     )
+    if not isinstance(source, CanonicalPromotionLiveAdapterDryRunAuthorityEvidenceLinkageReviewPacket):
+        raise PromotionHumanApprovalRequirementSatisfactionError("PHARS_NATIVE_SOURCE_REQUIRED")
     recorded = _timestamp(recorded_at)
     if datetime.fromisoformat(recorded) < datetime.fromisoformat(
         resolution.resolved_at

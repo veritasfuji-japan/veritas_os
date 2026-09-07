@@ -284,6 +284,9 @@ class CanonicalPromotionLiveAdapterDryRunRequestReadinessPacket(BaseModel):
 
 
 def _json(value: Any) -> Any:
+    # Exact JSON scalars cannot be models; avoid Pydantic's metaclass per leaf.
+    if value is None or type(value) in (str, bool, int):
+        return value
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
     if value is None or isinstance(value, (str, bool, int)):

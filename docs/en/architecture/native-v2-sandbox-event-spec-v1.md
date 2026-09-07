@@ -270,5 +270,45 @@ only the preparation and a metadata digest, never a token or token hash.
 No Authorization header, Bind, network dispatch, external effect, Human Approval,
 BindReceipt or Outcome is created. A future sender must recheck ownership, expiry
 and current governance at use, then persist dispatch intent. Tests use synthetic
-credentials and deterministic clocks; real-provider authenticity and real-clock
-performance have not been demonstrated by this implementation.
+credentials. Section 13 describes a limited host-clock measurement; real-provider
+authenticity and deployment performance remain unproven.
+
+## 13. Bounded host-clock validation
+
+The timing checkpoint preserves the one-second recheck, two-second conservative
+horizon and five-second provider/descriptor limits. Each public verifier still
+requires its independent source/contract and reconstructs every field. Within that
+same call, HARR returns its reconstructed source to native satisfaction, readiness
+and final rechecks project children of fully rebuilt parents, and native risk
+verification retains the final source it just reconstructed. There is no global or
+cross-call verification cache, no caller-supplied verified flag, and no shortcut for
+current policy, revocation, signatures or either temporal recheck. Exact built-in
+JSON scalar leaves avoid an unnecessary Pydantic model test; boundary-specific
+normalization, timestamp handling and invalid-value rejection are retained.
+
+The opt-in timing test uses actual `datetime.now(timezone.utc)` and `time.monotonic()`
+samples, real native verifiers and signed synthetic artifacts. It builds fresh risk
+evidence inside each measured recheck. Run it separately from coverage/profiling:
+
+```sh
+VERITAS_RUN_SANDBOX_TIMING=1 python -m pytest veritas_os/tests/test_sandbox_real_clock.py -q -s --no-cov -o junit_family=xunit1 --junitxml=/tmp/sandbox-timing.xml
+```
+
+On the 2026-09-07 Python 3.12 development host, three successful runs measured
+0.603–0.770 seconds for each of their nine rechecks and 2.592–2.749 seconds for the
+whole credential continuation (excluding fixture issuance and consumption).
+Descriptor age was 1.287–1.456 seconds against the unchanged five-second limit.
+Injected source delay of 1.05 seconds and provider describe/resolve delays of 5.05
+seconds were rejected with consumption and the attempt retained; no retry occurred.
+These are observations on one host, not throughput or deployment guarantees.
+The opt-in test reports each measurement and fails if the requested phase cannot
+be reached or the normal continuation exceeds the unchanged limits.
+
+Stores are explicitly in-memory, material/provider are synthetic, and clock health
+and zero uncertainty are fixture declarations. No provider service, PostgreSQL
+latency, authenticated time source or external effect is measured. Nonzero clock
+uncertainty exposes a remaining temporal-model limitation: fresh risk stamped at
+`checked.now` is later than the lower uncertainty bound used to verify it. The
+50-millisecond uncertainty case therefore fails closed before provider access.
+This checkpoint preserves that rule; its resolution and actual deployment
+clock/provider validation remain gates before sandbox external execution.

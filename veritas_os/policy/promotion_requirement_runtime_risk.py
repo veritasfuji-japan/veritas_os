@@ -15,6 +15,7 @@ from veritas_os.governance.action_contracts import ActionClassContract
 from veritas_os.policy.human_approval_requirement_resolution import _json, _timestamp
 from veritas_os.policy.promotion_requirement_final_rechecks import (
     ABSENT_FIELDS,
+    PromotionRequirementFinalRecheckPacket,
     verify_promotion_requirement_final_recheck_packet as verify_rechecks,
 )
 from veritas_os.policy.canonical_promotion_live_adapter_dry_run_runtime_risk_review import (
@@ -202,19 +203,34 @@ def verify_promotion_requirement_runtime_risk_packet(
     required_credential_scope: str,
 ) -> PromotionRequirementRuntimeRiskPacket:
     """Rebuild against independent review/source and reject expired consumption."""
-    candidate = PromotionRequirementRuntimeRiskPacket.model_validate(_json(packet))
-    rebuilt = build_promotion_requirement_runtime_risk_packet(
-        final_recheck,
-        expected_risk_decision,
-        expected_recorded_at,
-        expected_source=expected_source,
-        expected_contract=expected_contract,
+    rebuilt, _ = _verify_runtime_risk_and_source(
+        packet, final_recheck,
+        expected_risk_decision=expected_risk_decision,
+        expected_recorded_at=expected_recorded_at, verification_now=verification_now,
+        expected_source=expected_source, expected_contract=expected_contract,
         expected_verified_at=expected_verified_at,
         expected_rechecked_at=expected_rechecked_at,
         current_endpoint=current_endpoint,
         current_credential_reference=current_credential_reference,
         required_credential_scope=required_credential_scope,
     )
+    return rebuilt
+
+
+def _verify_runtime_risk_and_source(
+    packet: Any, final_recheck: Any, *, expected_risk_decision: Any,
+    expected_recorded_at: datetime, verification_now: datetime,
+    **source_inputs: Any,
+) -> tuple[PromotionRequirementRuntimeRiskPacket, PromotionRequirementFinalRecheckPacket]:
+    """Return both reconstructions from this call, with no reusable trust cache.
+
+    The final recheck is verified against every mandatory external anchor before
+    deriving risk. Native callers project only this reconstructed source; no
+    caller-provided 'already verified' result or embedded trust anchor is accepted.
+    """
+    candidate = PromotionRequirementRuntimeRiskPacket.model_validate(_json(packet))
+    source = verify_rechecks(final_recheck, **source_inputs)
+    rebuilt = _assemble(source, expected_risk_decision, expected_recorded_at)
     if _json(candidate) != _json(rebuilt):
         raise PromotionRequirementRuntimeRiskError("PRRR_RECONSTRUCTION_MISMATCH")
     now = datetime.fromisoformat(_timestamp(verification_now))
@@ -224,7 +240,7 @@ def verify_promotion_requirement_runtime_risk_packet(
         < datetime.fromisoformat(rebuilt.risk_decision.valid_until)
     ):
         raise PromotionRequirementRuntimeRiskError("PRRR_REVIEW_NOT_CURRENT")
-    return rebuilt
+    return rebuilt, source
 
 
 def require_promotion_requirement_runtime_risk_pass(
@@ -237,12 +253,22 @@ def require_promotion_requirement_runtime_risk_pass(
     The verifier enforces all mandatory keyword inputs. This guard grants no
     execution authority and does not replace the independent Bind-time check.
     """
-    verified = verify_promotion_requirement_runtime_risk_packet(
+    verified, _ = _require_runtime_risk_pass_and_source(
         packet, final_recheck, **verification_inputs
+    )
+    return verified
+
+
+def _require_runtime_risk_pass_and_source(
+    packet: Any, final_recheck: Any, **verification_inputs: Any,
+) -> tuple[PromotionRequirementRuntimeRiskPacket, PromotionRequirementFinalRecheckPacket]:
+    """Apply the identical PASS guard while retaining its verified source."""
+    verified, source = _verify_runtime_risk_and_source(
+        packet, final_recheck, **verification_inputs,
     )
     if (
         verified.fail_closed
         or not verified.ready_for_remaining_authorization_requirements
     ):
         raise PromotionRequirementRuntimeRiskError("PRRR_RISK_NOT_ACCEPTABLE")
-    return verified
+    return verified, source
