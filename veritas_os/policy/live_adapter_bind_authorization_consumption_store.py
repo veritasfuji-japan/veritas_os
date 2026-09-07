@@ -120,6 +120,27 @@ class PostgresAtomicAuthorizationConsumptionStore:
 
     production_safe = True
 
+    async def get(
+        self, live_adapter_bind_authorization_id: str
+    ) -> AuthorizationConsumptionRecord | None:
+        """Read durable lineage; callers must reconstruct and compare its fields."""
+        try:
+            from veritas_os.storage.db import get_pool
+
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT record FROM bind_authorization_consumptions "
+                    "WHERE authorization_id=%s",
+                    (live_adapter_bind_authorization_id,),
+                )
+                row = await cur.fetchone()
+                return None if row is None else AuthorizationConsumptionRecord.model_validate(row[0])
+        except Exception:
+            raise AuthorizationConsumptionStoreError(
+                "LABAC_POSTGRES_CONSUMPTION_READ_FAILED"
+            ) from None
+
     async def consume_once(self, record: AuthorizationConsumptionRecord) -> bool:
         try:
             from psycopg.types.json import Jsonb
