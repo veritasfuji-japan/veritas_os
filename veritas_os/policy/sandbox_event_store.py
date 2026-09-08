@@ -125,18 +125,23 @@ The DDL is installed separately, never by serving a request.
         if (operation_id is None) == (key is None):
             raise ValueError("SSE_ONE_LOOKUP_REQUIRED")
         if operation_id is not None:
-            value, column = validate_uuid(operation_id), "operation_id"
+            value = validate_uuid(operation_id)
+            query = (
+                "SELECT operation_id, idempotency_key, event_id, payload_digest "
+                "FROM sandbox_events WHERE operation_id=%s"
+            )
         else:
-            value, column = validate_key(key), "idempotency_key"
+            value = validate_key(key)
+            query = (
+                "SELECT operation_id, idempotency_key, event_id, payload_digest "
+                "FROM sandbox_events WHERE idempotency_key=%s"
+            )
         try:
             async with self._pool.connection() as conn:
                 async with conn.transaction():
                     await conn.execute("SET TRANSACTION READ ONLY")
                     await conn.execute("SET LOCAL statement_timeout = '4000ms'")
-                    cur = await conn.execute(
-                        "SELECT operation_id, idempotency_key, event_id, payload_digest "
-                        f"FROM sandbox_events WHERE {column}=%s", (value,),
-                    )
+                    cur = await conn.execute(query, (value,))
                     row = await cur.fetchone()
                     result = None if row is None else _operation(row)
             return result
