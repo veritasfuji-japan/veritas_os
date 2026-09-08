@@ -1,0 +1,13 @@
+{
+  "request": {
+    "event_id": "9d914b43-0cb6-4c48-84fa-d4f7a05231ca",
+    "message": "synthetic"
+  },
+  "operation": {
+    "operation_id": "0e5328ae-7004-4c91-a002-e3f528ec09ae",
+    "idempotency_key": "synthetic-original-key",
+    "event_id": "9d914b43-0cb6-4c48-84fa-d4f7a05231ca",
+    "payload_digest": "6055bbb39389f08acd180c8e7adafc65363ffa476005ec5b74208e3b6a1598de",
+    "state": "PERSISTED"
+  }
+}

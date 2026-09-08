@@ -341,3 +341,42 @@ transport応答を権限や外部作用の証拠として解釈しません。�
 実HTTPS送信、PostgreSQLの遅延、sandbox側の永続性、正式Receipt/Outcome連携、reconciliationは
 未検証・未完了です。これらは後続の必須工程であり、この試験で保証されたものではありません。
 外部へ接続するには引き続き第9節の配備条件の確定が必要です。
+
+## 17. 独立したsandbox eventサービス
+
+`create_sandbox_event_service`は独立ASGIアプリを作成します。main APIへの組込みや
+デフォルトapp・listenerはありません。ユーザーが承認し規約に明記した限定例外として、
+このサービスはBearer認証、既存VERITAS APIは引き続きX-API-Key認証を使用します。
+operatorが信頼された設定から、有効期限付きの別々のwriter（登録・参照）とreader
+（参照のみ）tokenを渡します。tokenの生成、providerからの解決、環境変数へのfallback、
+operationへの記録は行いません。設定欠落・不正は起動時に拒否し、未認証・期限切れの
+リクエストはbody処理・DBアクセス前に拒否します。現在のrotationは新設定でappを再作成する
+方式です。実credentialの配布・失効反映、TLS終端、ネットワーク制御は配備前の必須条件です。
+
+operatorは専用psycopg async poolを渡し、sandbox専用DBに
+`veritas_os/policy/sandbox_events.sql`を適用します。main API用migrationには追加しません。
+同じ不変行がeventとoperationを表し、operation ID・元のkey・event IDに一意制約を設けます。
+実行用DB principalはSELECT/INSERTのみ、独立reconcilerは読取りのみとしてください。
+lookupのtransactionはread-onlyです。
+
+`POST /v1/events`は固定JSON payloadと単一`Idempotency-Key`ヘッダーを受け取ります。
+JSONキー重複、余分なfield、不正UUID・UTF-8、NUL、body・messageの上限超過は保存前に拒否します。
+keyはASCII英数字・ピリオド・アンダースコア・コロン・ハイフンの1〜256文字です。
+READ COMMITTED transaction内でINSERT ON CONFLICT DO NOTHINGを実行後、別のSQL文で
+元のkeyを読みます。同じkey・同じpayloadは元のoperationを200で返し、新規commitは201です。
+同じkey・異なるpayload、または同じevent ID・異なるkeyは409となり、2件目を保存しません。
+commitと接続contextの終了後にだけ成功を返し、登録ではsynchronous_commitを有効にします。
+SQL実行は4秒に制限し、timeoutやcommit不明は503です。自動再試行・成功推測は行いません。
+TTL・削除・リセットAPIもありません。
+
+参照は`GET /v1/operations/{operation_id}`または
+`GET /v1/operations?idempotency_key=<元のkey>`です。認証を必須とし、operation ID・元のkey・
+event ID・canonical payload digest・`PERSISTED`を返します。message・credentialは返しません。
+全応答をno-storeとします。未発見の404は「作用なしの証拠」ではなく、DB障害は503です。
+POST応答が失われても元のkeyで調査できます。サービスのPERSISTED観測はVERITASの確定Outcomeや
+BindReceiptではありません。独立照合と、結果不明中の代替authorization抑止は送信側の後続課題です。
+
+ASGI試験は合成tokenとSQL doubleを使用します。別の実PostgreSQL試験では、隔離した一時schemaで
+同一要求・競合要求の同時実行、rollback、commit応答消失を検証し、既存PostgreSQL CIへ追加します。
+ローカルmockを永続性の証明とは扱いません。HTTPS transport、実配備・provider設定、native
+Receipt/Outcome/reconciliationは、このサービス実装ではまだ接続していません。

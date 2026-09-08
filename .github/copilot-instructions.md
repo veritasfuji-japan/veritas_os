@@ -222,6 +222,10 @@ pnpm --filter frontend e2e   # Playwright E2E
 - [ ] No wildcard CORS origins with credentials
 - [ ] TrustLog entries go through encrypt pipeline
 - [ ] New endpoints have `X-API-Key` authentication
+- Exception approved for the independent sandbox event service only:
+  `create_sandbox_event_service` uses distinct, expiring Bearer writer/reader
+  tokens. It must not be mounted into the main VERITAS API. Missing authentication
+  configuration fails closed; no external deployment is implied.
 - [ ] Governance endpoints have RBAC guard
 - [ ] Web search results pass toxicity filter
 - [ ] Schema/config changes include sample artifact updates and roundtrip drift tests.
