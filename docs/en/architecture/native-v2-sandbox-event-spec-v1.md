@@ -373,3 +373,43 @@ change: the current host also passed a pre-optimization zero-uncertainty control
 (0.622–0.784 second rechecks). These observations demonstrate this host's result,
 not a portable latency guarantee. Deployments still must validate their own time,
 provider and database configuration under expected load.
+
+## 16. Owning dispatch seam (inert validation only)
+
+`execute_sandbox_bind` owns preparation and credential resolution itself; it
+does not accept a returned credential or preparation object as authorization.
+It repeats independent current governance and ownership checks, then uses the
+existing effect-state compare-and-set to persist `EFFECT_UNKNOWN` with reason
+`SANDBOX_DISPATCH_INTENT_PERSISTED_EFFECT_UNCONFIRMED` before entering transport.
+This record links the consumed authorization and its original idempotency key;
+the authorization commits to the action/payload binding. Commit acknowledgement
+loss, failed CAS or mismatched readback prevents transport entry. No state,
+consumption or exclusive attempt is released, reset or retried.
+
+The final ownership read, governance reconstruction, intent persistence/readback
+and transport preparation share a one-second UTC/monotonic budget. The secret
+handoff callback rechecks that budget, clock health, authorization window and
+the original credential descriptor validity/age. It may be called only once.
+Transport entry has a five-second total timeout. Material references are closed
+on return, failure or cancellation; Python memory erasure is not claimed.
+
+`SandboxDispatchTransport` is a trusted executor-injected **interface**, not an
+implemented HTTPS adapter. It must invoke the callback immediately before its
+only send, preserve canonical payload and the original key, verify TLS, and
+disable redirects, proxies and retries. An arbitrary/dishonest implementation
+could retain material or send after its deadline: this interface cannot prove
+otherwise. A reviewed concrete transport and real-clock send tests are mandatory
+before enabling network effects. No default transport or API route is installed.
+
+Transport responses are not parsed as authority or effect evidence. The returned
+`SandboxDispatchObservation` always says `UNKNOWN`; durable state also remains
+`EFFECT_UNKNOWN`, including on apparent transport success. This local result is
+not a BindReceipt, Outcome or acknowledgement. Cancellation raises a sanitized
+cancellation with the same durable uncertainty retained. A recovery process must
+look up the original idempotency key and must not blindly resend.
+
+This checkpoint tests synthetic material and an inert transport using real
+native verifiers. It does not establish real HTTPS delivery, PostgreSQL timing,
+sandbox durability, formal Receipt/Outcome integration or reconciliation. Those
+remain required steps, not guarantees implied by these tests. The deployment
+decisions in section 9 are still required before any external connection.

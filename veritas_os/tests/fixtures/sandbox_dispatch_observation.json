@@ -1,0 +1,10 @@
+{
+  "attempt_id": "synthetic-attempt",
+  "authorization_id": "synthetic-authorization",
+  "consumption_id": "synthetic-consumption",
+  "dispatch_intent_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "payload_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "idempotency_key": "synthetic-original-key",
+  "state": "UNKNOWN",
+  "reason_code": "TRANSPORT_RETURNED_UNVERIFIED"
+}

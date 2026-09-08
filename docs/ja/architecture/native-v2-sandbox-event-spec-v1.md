@@ -307,3 +307,37 @@ source再構築、署名・失効確認は維持します。小さいruntime-ris
 現在のホストでは最適化前の誤差ゼロの対照試験も成功し、再検証は0.622〜0.784秒でした。
 これらはこのホストでの結果であり、全環境の遅延保証ではありません。
 配備先では想定負荷の下で、時計・provider・データベースの設定を検証する必要があります。
+
+## 16. 所有呼出し内のdispatch接続点（非通信試験のみ）
+
+`execute_sandbox_bind`は準備とcredential解決を自身で実行し、呼出し側が渡した
+解決済みcredentialや準備結果を認可として受け取りません。独立した現在のgovernanceと
+所有権を再検証し、既存effect-stateのcompare-and-setで`EFFECT_UNKNOWN`とreason
+`SANDBOX_DISPATCH_INTENT_PERSISTED_EFFECT_UNCONFIRMED`を永続化してからtransportへ
+進みます。記録は消費済みauthorizationと元のidempotency keyに結び付き、authorizationが
+action/payload bindingへ結び付きます。commit応答消失、CAS失敗、読戻し不一致では
+transportを呼びません。状態・消費・専有attemptを解放、リセット、再試行しません。
+
+最後の所有権読出し、governance再構築、intent書込み・読戻し、transport準備に共通の
+UTC/monotonic 1秒上限を適用します。material受渡しcallbackでその上限、時計の健全性、
+authorizationの有効区間、元のcredential descriptorの有効期限・経過時間を再検証します。
+callbackは1回限りです。transport呼出し全体のtimeoutは5秒です。成功・失敗・キャンセルで
+material参照をcloseしますが、Pythonメモリの消去は保証しません。
+
+`SandboxDispatchTransport`は信頼されたexecutor設定から注入するインターフェースであり、
+実HTTPS adapterではありません。唯一の送信の直前にcallbackを呼び、canonical payloadと
+元のkeyを保持し、TLS検証とredirect・proxy・retry無効化を実装する必要があります。
+不正な実装がmaterialを保持したり期限後に送信することを、このインターフェースだけで
+防いだとは主張しません。外部作用を有効にする前に、具体的transportのレビューと実時計の
+送信試験が必須です。デフォルトtransportやAPI routeは追加していません。
+
+transport応答を権限や外部作用の証拠として解釈しません。返却する
+`SandboxDispatchObservation`は常に`UNKNOWN`で、見かけ上のtransport成功でも永続状態は
+`EFFECT_UNKNOWN`のままです。このローカル結果はBindReceipt・Outcome・外部acknowledgement
+ではありません。キャンセルでは秘匿済み例外を返し、永続的な不確実状態を保持します。
+復旧処理は元のidempotency keyで照合し、盲目的に再送してはいけません。
+
+この工程は合成materialと非通信transportを実native verifierで試験するものです。
+実HTTPS送信、PostgreSQLの遅延、sandbox側の永続性、正式Receipt/Outcome連携、reconciliationは
+未検証・未完了です。これらは後続の必須工程であり、この試験で保証されたものではありません。
+外部へ接続するには引き続き第9節の配備条件の確定が必要です。

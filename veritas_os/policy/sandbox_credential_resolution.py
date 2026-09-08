@@ -112,14 +112,20 @@ class SandboxResolvedCredential:
     A future sender must recheck ownership/governance after this function returns.
     """
 
-    __slots__ = ("preparation", "metadata_digest", "_material")
+    __slots__ = ("preparation", "metadata_digest", "_material", "_metadata", "_descriptor_started", "_request")
 
     def __init__(
         self, preparation: SandboxPreparedAttempt, metadata_digest: str, material: SecretBytes,
+        *, metadata: SandboxCredentialMetadata | None = None,
+        descriptor_started: SandboxClockReading | None = None,
+        request: SandboxCredentialRequest | None = None,
     ) -> None:
         self.preparation = preparation
         self.metadata_digest = metadata_digest
         self._material: SecretBytes | None = material
+        self._metadata = metadata
+        self._descriptor_started = descriptor_started
+        self._request = request
 
     def __repr__(self) -> str:
         return "SandboxResolvedCredential(material=<redacted>)"
@@ -137,6 +143,7 @@ class SandboxResolvedCredential:
     def close(self) -> None:
         """Drop this object's material reference without claiming memory erasure."""
         self._material = None
+        self._metadata = self._descriptor_started = self._request = None
 
 
 def _validate_metadata(
@@ -264,7 +271,10 @@ async def prepare_and_resolve_sandbox_credential(
             trusted_clock=trusted_clock, load_current_inputs=load_current_inputs,
         )
         _validate_metadata(actual, request, descriptor_started, prepared.clock)
-        return SandboxResolvedCredential(prepared, digest, response.material)
+        return SandboxResolvedCredential(
+            prepared, digest, response.material, metadata=actual,
+            descriptor_started=descriptor_started, request=request,
+        )
     except asyncio.CancelledError:
         cancelled = True
     except Exception:
