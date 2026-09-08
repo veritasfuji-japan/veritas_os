@@ -119,6 +119,22 @@ async def _read_observation(
     Chunked, encoded, duplicate-header, interim and malformed responses remain
     unknown. This deliberately narrow client does not follow response locations.
     """
+    status, headers, raw = await _read_bounded_response(reader)
+    if status == 409:
+        return "HTTP_409_CONFLICT"
+    if status == 503:
+        return "HTTP_503_UNKNOWN"
+    if status not in {200, 201}:
+        return "HTTP_RESPONSE_UNKNOWN"
+    operation = _parse_operation(headers, raw)
+    if (operation.idempotency_key != request.idempotency_key
+            or operation.event_id != event_id or operation.payload_digest != request.payload_digest):
+        raise ValueError("binding")
+    return "HTTP_201_MATCHING_ACK" if status == 201 else "HTTP_200_MATCHING_ACK"
+
+
+async def _read_bounded_response(reader: asyncio.StreamReader) -> tuple[int, dict[bytes, bytes], bytes]:
+    """Bound HTTP framing only; callers independently interpret and bind content."""
     head = await reader.readuntil(b"\r\n\r\n")
     if len(head) > 8192:
         raise ValueError("headers")
@@ -137,19 +153,18 @@ async def _read_observation(
             or b"transfer-encoding" in headers or b"content-encoding" in headers):
         raise ValueError("framing")
     raw = await reader.readexactly(int(length))
-    if status == 409:
-        return "HTTP_409_CONFLICT"
-    if status == 503:
-        return "HTTP_503_UNKNOWN"
-    if status not in {200, 201}:
-        return "HTTP_RESPONSE_UNKNOWN"
+    return status, headers, raw
+
+
+def _parse_operation(headers: dict[bytes, bytes], raw: bytes) -> SandboxOperation:
+    """Parse service shape only, never authority or independent effect evidence."""
     if headers.get(b"content-type", b"").split(b";")[0].lower() != b"application/json":
         raise ValueError("type")
-    operation = SandboxOperation.model_validate(
-        json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object),
-    )
+    payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+    if type(payload) is not dict or set(payload) != {
+        "operation_id", "idempotency_key", "event_id", "payload_digest", "state",
+    }:
+        raise ValueError("operation fields")
+    operation = SandboxOperation.model_validate(payload)
     validate_uuid(operation.operation_id)
-    if (operation.idempotency_key != request.idempotency_key
-            or operation.event_id != event_id or operation.payload_digest != request.payload_digest):
-        raise ValueError("binding")
-    return "HTTP_201_MATCHING_ACK" if status == 201 else "HTTP_200_MATCHING_ACK"
+    return operation
