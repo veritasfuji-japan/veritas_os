@@ -493,3 +493,53 @@ they do not establish a real TLS handshake, real HTTPS delivery or receiver comm
 Real TLS/host-clock and combined PostgreSQL/receiver fault tests are still required
 before enabling external effects. Section 9 prerequisites remain mandatory.
 Reconciliation must use the original key, not infer success from these observations.
+
+## 19. Owning read-only sandbox reconciliation
+
+`reconcile_sandbox_effect` receives the original authorization/payload and independent
+archived source/governance/trust inputs. It re-verifies native issuance and rebuilds
+the exact action and complete consumption row. Only the matching revision-2 sandbox
+dispatch-intent EFFECT_UNKNOWN record is eligible. Missing, substituted, terminal or
+non-sandbox records fail closed. No execution attempt or consumption is created.
+
+Current operator configuration supplies a separate reader credential reference,
+version, provider, environment and CA roots. Its fixed scope is
+`sandbox.operation.lookup.v1`; the writer reference is rejected. The exact reader,
+CA and original deployment/action configuration must be approved through an independent
+`ReconciliationVerifierPolicy`. Provider metadata is revalidated before and after
+resolution and after TLS, including audience, scope, version, non-revocation,
+expiry and trusted clock health. Separate references do not themselves prove separate
+principals: the configured provider/service must enforce this deployment property.
+
+The only network operation is GET at the original origin's `/v1/operations`, using
+the original key as its single query parameter. There is no POST, redirect, proxy,
+retry or response-selected destination. Provider plus lookup work has a five-second
+budget. The existing bounded HTTP framing parser is reused, but interpretation and
+binding are independently performed here. A matching 200 PERSISTED operation must
+contain the original key, event ID and payload digest and a valid remote operation UUID.
+The UUID is learned from the independent lookup, never from the dispatch response.
+All five operation fields, including explicit PERSISTED state, are mandatory;
+neither dispatch nor lookup may infer that state from a model default.
+
+The canonical retrieved operation digest, all observation lineage/time fields,
+approved policy hash, original record hash and reader metadata digest form the
+returned verified evidence. Only then does an existing effect-store CAS advance to
+CONFIRMED_EFFECT, with commit readback required before returning confirmation.
+404/401/503/redirects and other non-200 statuses preserve the original UNKNOWN row;
+malformed replies, mismatches, timeouts and persistence uncertainty raise sanitized
+errors without returning success. A lost CAS acknowledgement can leave a committed
+terminal record; callers must inspect trusted storage, never reset or resend.
+
+Archived issuance verification and current reader authorization are distinct: the
+original grant can expire without preventing investigation of its earlier effect.
+No current execution authority is restored. Terminal calls are rejected rather than
+rewritten. Independent means independent of dispatch, not of the sandbox operator.
+
+The effect store retains the verified-evidence digest; full returned evidence still
+needs durable archival in the later Receipt/Outcome pipeline. Crash-safe atomic
+evidence/receipt publication, replacement-authorization blocking and automatic
+terminal recovery remain separate work. This is not the complete E2E proof.
+Tests use real native verifiers with synthetic provider/streams and in-memory stores
+under explicit test opt-in. Real TLS and PostgreSQL composition and all section 9
+deployment prerequisites remain required. No live credentials or external requests
+are authorized by these tests.

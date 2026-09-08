@@ -168,3 +168,17 @@ async def test_timeout_after_write_does_not_retry(monkeypatch):
     with pytest.raises(module.SandboxHTTPTransportError):
         await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(request(), take_material=take)
     assert len(writer.writes) == len(calls) == 1 and writer.aborted
+
+
+@pytest.mark.asyncio
+async def test_missing_persisted_state_is_not_inferred(monkeypatch):
+    raw = response()
+    header, body = raw.split(b"\r\n\r\n", 1)
+    payload = json.loads(body)
+    payload.pop("state")
+    body = json.dumps(payload).encode()
+    raw = (f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+           f"Content-Length: {len(body)}\r\n\r\n").encode() + body
+    writer, calls, taken, take = setup(monkeypatch, raw)
+    with pytest.raises(module.SandboxHTTPTransportError):
+        await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(request(), take_material=take)

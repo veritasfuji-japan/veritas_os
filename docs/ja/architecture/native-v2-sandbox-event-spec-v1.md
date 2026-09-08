@@ -405,3 +405,42 @@ canonical payload・digest・元のkeyを検証し、TLS完了後、唯一のwri
 外部作用の有効化前には実TLS・host clock・PostgreSQLとreceiverの結合障害試験、
 および第9節の配備条件の確認が必要です。Reconciliationでは元のkeyを使い、
 HTTP観測から成功を推測しません。
+
+## 19. 独立したread-only sandbox reconciliation
+
+`reconcile_sandbox_effect`は元のauthorization・payloadと独立した過去時点の
+source/governance/trust入力でnative issuance、action binding、消費行全体を再構築します。
+対象は一致するrevision 2のsandbox dispatch-intent EFFECT_UNKNOWN行のみです。
+欠落・差替え・terminal・別経路の行は拒否し、新たな消費や実行attemptは作りません。
+
+現在のoperator設定から、送信用とは別のreader reference・version・provider・environment・
+CAを渡します。scopeは`sandbox.operation.lookup.v1`固定で、writer referenceは拒否します。
+reader・CA・元のdeployment/action設定全体への独立したReconciliationVerifierPolicy承認を
+必須とします。providerのaudience・scope・version・失効・有効期限・clock healthは
+解決前後とTLS後に再検証します。referenceの違いだけではprincipal分離の証明にならず、
+provider/serviceでread-only権限と別principalを強制する配備が必要です。
+
+元のoriginの`/v1/operations`へ、元のkeyだけをqueryに指定したGETを行います。
+POST・redirect・proxy・retry・応答指定の宛先は使いません。providerと照会全体を5秒に制限します。
+bounded HTTP framingのみ既存parserを再利用し、内容解釈とbindingは独立に検証します。
+200 PERSISTEDのkey・event ID・digestの一致とremote operation UUIDの形式を確認します。
+remote UUIDは独立lookupから取得し、dispatch応答には依存しません。
+明示的なPERSISTED stateを含む全5項目を必須とし、送信側・照合側ともに
+モデルの既定値からstateを補って成功を推測しません。
+
+取得operationのcanonical digest、全観測lineage・時刻、承認policy hash、元の行hash、
+reader metadata digestを検証済み証拠へ結び付けた後、CASでCONFIRMED_EFFECTへ進めます。
+commit readbackが確認できた場合だけ確認済みを返します。404・401・503・redirectなど
+200以外は元のUNKNOWNを保持します。不正応答・不一致・timeout・保存不明は成功を返しません。
+CAS応答喪失時にはterminal行だけcommit済みの可能性があり、resetや再送ではなく
+trusted storageの調査が必要です。
+
+過去のissuance検証と現在のreader認可は分離し、元の認可が失効していても過去の作用を
+調査できます。実行権限は復元しません。terminal行は書換えず拒否します。
+独立とはdispatch応答からの独立であり、sandbox operatorからの独立ではありません。
+
+effect storeに保持するのは証拠digestで、返した証拠全文の永続保管は後続Receipt/Outcome
+工程に残ります。証拠・receiptのatomic保存、代替認可抑止、terminal自動復旧も未完です。
+完全なE2E証明ではありません。試験は実native verifier、合成provider/stream、明示許可した
+in-memory storeを使用します。実TLS・PostgreSQL結合試験と第9節の配備条件は引き続き必須です。
+実credential・外部送信は、この試験では許可しません。

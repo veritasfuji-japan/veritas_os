@@ -1,0 +1,7 @@
+{
+  "credential_reference_id": "synthetic-readonly-reference",
+  "credential_version": "reader-v1",
+  "credential_provider_type": "synthetic",
+  "credential_environment": "sandbox",
+  "ca_pem": null
+}
