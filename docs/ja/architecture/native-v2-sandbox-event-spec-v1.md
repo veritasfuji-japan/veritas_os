@@ -472,3 +472,34 @@ commit応答喪失時は、両方が保存済みでも例外を返す可能性�
 結合したE2E証明ではありません。Receipt/Outcome発行、代替認可による重複実行の抑止、自動障害復旧、
 実TLS/provider/host-clockの結合検証は未完です。第9節の配備条件は引き続き適用し、実外部アクセスは
 有効化しません。
+
+## 21. 保存済み証拠からのBindReceipt / Outcome発行
+
+publish_sandbox_receiptsは独立した過去時点のsource/governance/trust入力で元のnative認可と
+sandbox actionを再検証します。消費行全体と確定effect行を再構築し、保存archiveを検証して、
+event ID・payload digest・originが認可されたactionと一致することを確認します。保存時の
+reconciliation policy設定全体への承認も必要です。呼出側が作ったreceiptや送信ACKは受け付けません。
+
+既存のBindReceiptとOutcomeReceipt形式を再利用します。BindReceiptは事後の記録で、bind_tsは
+保存済みdispatch-intentの時刻です。実行時の検証時刻を捏造しません。保存されていないconstraint・
+drift・riskの検証結果はLIVE_RESULTS_NOT_ARCHIVEDとし、新しい適格性や実行許可を主張しません。
+COMMITTEDとoutcomeのpostcondition passedは、対象sandbox eventの保存を独立照合で確認した意味に
+限定します。前後のシステム状態fingerprintは補いません。過去の人間承認statusとproof digestを
+関連付けますが、新しい承認receiptは作りません。
+
+両receiptに認可・消費・intent/decision・payload・外部operation・確定行・保存証拠hashを結び付け、
+OutcomeからBindReceipt hashを参照します。IDと時刻は元の記録から決定的に導出し、bundle hashで
+組全体を結び付けます。返却dictを変更しても保存値は変わりません。event message・credential・
+生HTTPデータはコピーしません。
+
+migration 0007は同じeffect行にnullableのsandbox_receipt_bundle列を追加します。元の確定行と
+archiveの完全一致を条件に、一つのUPDATEで組全体を一度だけ保存します。同一入力の再呼出しは
+同じ組を返し、異なる保存内容・証拠欠落・readback失敗は情報を漏らさない例外にします。commit応答
+喪失時は保存済みの可能性があります。同じ独立検証入力で再呼出しすると、POST・lookup・追加消費・
+effect状態変更なしで組を回収できます。effect行の元の記録とarchiveは変更しません。利用前に
+migration 0007を適用し、列を削除するdowngrade前にはreceiptを保持方針に従って保存します。
+
+これにより確定sandbox effectとDB保存されたartifactを接続します。TrustLogへは発行せず、
+trustlog_hashは空、metadataはNOT_PUBLISHEDを明示します。障害に強いTrustLogへの一度だけの配信、
+完全な自動復旧、代替認可による重複実行抑止、実Decision-to-Effect E2Eは未完です。これらと第9節の
+配備条件は別工程に残ります。本実装と合成試験は実credential・外部作用を許可しません。

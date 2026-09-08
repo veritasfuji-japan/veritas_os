@@ -578,3 +578,45 @@ They establish storage behavior, not the combined real-TLS/receiver E2E proof.
 Receipt/Outcome publication, replacement-authorization blocking, automated crash
 recovery and real TLS/provider/host-clock composition remain outstanding. Section
 9 deployment prerequisites continue to apply; no live external access is enabled.
+
+## 21. Retrospective BindReceipt / Outcome publication
+
+`publish_sandbox_receipts` re-verifies the original native authorization and exact
+sandbox action against independent historical source/governance/trust inputs. It
+rebuilds the complete consumption row and confirmed effect record, validates the
+stored archive, matches its event ID/payload digest/origin to the authorized action,
+and requires approval of the exact archived reconciliation policy configuration.
+Neither caller-supplied receipts nor dispatch acknowledgements are accepted.
+
+The publisher reuses the existing BindReceipt and OutcomeReceipt schemas. The
+BindReceipt is explicitly retrospective: `bind_ts` is the stored dispatch-intent
+time, not an invented timestamp of a live check. Missing live constraint, drift
+and risk results are marked `LIVE_RESULTS_NOT_ARCHIVED`; no new admissibility or
+execution permission is asserted. COMMITTED and the passed outcome postcondition
+mean only the independently reconciled persistence of the bound sandbox event.
+No before/after system-state fingerprints are invented. Historical human-approval
+status and proof digest are linked without creating another approval receipt.
+
+Both receipts bind authorization, consumption, intent/decision, exact payload,
+external operation, confirmed record and archived evidence hashes. Outcome links
+the BindReceipt hash. IDs and times are deterministic from original records; a
+bundle hash covers the complete pair. The returned dictionaries are detached from
+stored values. Event messages, credentials and raw HTTP data are not copied.
+
+Migration 0007 adds a nullable `sandbox_receipt_bundle` to the same effect row.
+One conditional UPDATE stores the pair only once against the exact confirmed
+record and archive. Identical repeat publishers return the same pair; differing
+stored contents, missing evidence and readback failures raise sanitized errors.
+A commit acknowledgement can be lost after publication. Repeating the publisher
+with the same independently verified inputs recovers the pair without another
+POST, lookup, consumption or effect-state transition. Publication does not change
+the effect record or reconciliation archive. Apply migration 0007 before using this
+publisher; retain receipt data before any downgrade that removes the column.
+
+This closes the database-backed artifact connection for confirmed sandbox effects.
+It does not publish TrustLog entries: `trustlog_hash` remains empty and metadata
+explicitly records `NOT_PUBLISHED`. It does not claim crash-safe exactly-once
+TrustLog delivery, a complete automatic recovery coordinator, replacement-grant
+blocking, or real Decision-to-Effect E2E completion. Those and section 9 deployment
+prerequisites remain separate work. No live credentials or external effects are
+authorized by this implementation or its synthetic tests.
