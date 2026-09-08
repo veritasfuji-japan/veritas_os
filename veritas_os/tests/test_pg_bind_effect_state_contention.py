@@ -172,3 +172,60 @@ async def test_real_postgres_archive_atomicity_contention_and_restart(monkeypatc
         await conn.execute("UPDATE bind_effect_states SET reconciliation_archive=NULL WHERE operation_id=%s", (original.operation_id,))
     with pytest.raises(BindEffectStateError):
         await store.get_reconciliation(original.operation_id)
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_receipt_pair_write_once_rollback_and_lost_ack(monkeypatch):
+    """Storage semantics for an owning publisher's already reconstructed pair."""
+    from contextlib import asynccontextmanager
+    from veritas_os.storage import db
+    from veritas_os.policy.sandbox_receipt_store import _persist_receipts
+    from veritas_os.tests.test_sandbox_reconciliation_archive import archive_case
+
+    _require_real_postgresql()
+    original, record, archive = archive_case(uuid4().hex)
+    store = PostgresAtomicEffectStateStore()
+    assert await store.create_in_flight(original)
+    assert await store.confirm_reconciliation(expected=original, record=record, archive=archive)
+    # Synthetic pair sent only to the internal storage seam, never claimed as verified artifacts.
+    pair = {"bind_receipt": {"test": "bind"}, "outcome_receipt": {"test": "outcome"}}
+    real_get_pool = db.get_pool
+    pool = await real_get_pool()
+
+    class FaultPool:
+        def __init__(self, mode):
+            self.mode = mode
+
+        @asynccontextmanager
+        async def connection(self):
+            async with pool.connection() as conn:
+                yield conn
+                if self.mode == "rollback":
+                    raise RuntimeError("synthetic rollback")
+            if self.mode == "lost_ack":
+                raise RuntimeError("synthetic lost acknowledgement")
+
+    for mode in ("rollback", "lost_ack"):
+        async def faulty_pool(mode=mode):
+            return FaultPool(mode)
+        monkeypatch.setattr(db, "get_pool", faulty_pool)
+        with pytest.raises(RuntimeError):
+            await _persist_receipts(store, record=record, archive=archive, bundle=pair)
+        monkeypatch.setattr(db, "get_pool", real_get_pool)
+        async with pool.connection() as conn:
+            cur = await conn.execute("SELECT sandbox_receipt_bundle FROM bind_effect_states WHERE operation_id=%s", (record.operation_id,))
+            assert (await cur.fetchone())[0] == (None if mode == "rollback" else pair)
+        assert await store.get(record.operation_id) == record
+        assert await store.get_reconciliation(record.operation_id) == archive
+
+    await _persist_receipts(PostgresAtomicEffectStateStore(), record=record, archive=archive, bundle=pair)
+    with pytest.raises(ValueError):
+        await _persist_receipts(store, record=record, archive=archive, bundle={"different": True})
+    original, record, archive = archive_case(uuid4().hex)
+    assert await store.create_in_flight(original)
+    assert await store.confirm_reconciliation(expected=original, record=record, archive=archive)
+    await asyncio.gather(*(_persist_receipts(PostgresAtomicEffectStateStore(), record=record, archive=archive, bundle=pair) for _ in range(16)))
+    async with pool.connection() as conn:
+        cur = await conn.execute("SELECT sandbox_receipt_bundle FROM bind_effect_states WHERE operation_id=%s", (record.operation_id,))
+        assert (await cur.fetchone())[0] == pair
+    assert await store.get(record.operation_id) == record

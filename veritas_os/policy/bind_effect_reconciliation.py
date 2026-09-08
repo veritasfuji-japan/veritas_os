@@ -174,6 +174,7 @@ class InMemoryAtomicEffectStateStore:
         self._lock = asyncio.Lock()
         self._records: dict[str, EffectStateRecord] = {}
         self._archives: dict[str, SandboxReconciliationArchive] = {}
+        self._sandbox_receipts: dict[str, str] = {}
 
     async def create_in_flight(self, record: EffectStateRecord) -> bool:
         async with self._lock:
