@@ -346,3 +346,30 @@ loader must acquire genuinely current inputs; timestamp equality and signatures
 alone cannot prove input truth. Actual clock/provider deployment validation,
 dispatch intent, Bind, external effect and outcome reconciliation remain outside
 this correction and are not authorized by a successful credential continuation.
+
+## 15. Avoiding repeated normalization after reconstruction
+
+Profiling identified repeated recursive JSON normalization of complete nested
+packets as a significant cost inside current rechecks. Satisfaction, readiness,
+gate, fresh-source and final-recheck verifiers now compare their complete Python
+model dumps after input normalization, schema validation and independent full
+reconstruction. Those five packet builders produce JSON-valued fields. Input
+normalization, every field comparison, hashes, source reconstruction at both time
+checks, signatures and revocation checks remain present. The compact runtime-risk
+packet retains its existing normalization because its result contains typed
+datetimes; this is not a generic model-comparison shortcut.
+
+Regression tests cover both approval-requirement states, unchanged canonical
+values/hashes, fresh returned objects, malformed nested dictionary/model inputs,
+and changed approval requirements with attacker-recomputed hashes.
+
+On the 2026-09-08 Python 3.12 development host, the final opt-in clock suite passed
+all eight cases: three zero-uncertainty continuations, 50 ms and one-second
+uncertainty continuations, and three injected-delay rejections. The fifteen normal
+rechecks measured 0.529–0.680 seconds; continuation took 2.184–2.426 seconds and
+descriptor age was 1.103–1.261 seconds. All original deadlines were enforced.
+The earlier host's 1.4–1.7 second failures cannot be attributed solely to this
+change: the current host also passed a pre-optimization zero-uncertainty control
+(0.622–0.784 second rechecks). These observations demonstrate this host's result,
+not a portable latency guarantee. Deployments still must validate their own time,
+provider and database configuration under expected load.
