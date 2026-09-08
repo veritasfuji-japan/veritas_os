@@ -59,6 +59,14 @@ Do not paste:
 - unpublished internal strategy
 - non-public security details
 
+## Independent Sandbox Authentication Exception
+
+The user-approved independent sandbox event service uses Bearer authentication
+with distinct expiring registration and read-only tokens. This exception applies
+only to `create_sandbox_event_service`; never mount it into the existing VERITAS
+API or change that API's X-API-Key authentication. Missing configuration rejects
+requests. Runtime implementation does not authorize deployment or live credentials.
+
 ## References
 
 - `CLAUDE.md` — project architecture, safety rules, testing, and quality gates

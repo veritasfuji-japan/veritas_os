@@ -413,3 +413,53 @@ native verifiers. It does not establish real HTTPS delivery, PostgreSQL timing,
 sandbox durability, formal Receipt/Outcome integration or reconciliation. Those
 remain required steps, not guarantees implied by these tests. The deployment
 decisions in section 9 are still required before any external connection.
+
+## 17. Independent sandbox event service
+
+`create_sandbox_event_service` constructs a separate ASGI application; it is not
+mounted into the main API and there is no default application/listener. As the
+user-approved narrow exception recorded in the repository instructions, this
+service uses Bearer authentication while existing VERITAS APIs retain X-API-Key.
+An operator supplies two distinct, expiring tokens through trusted configuration:
+writer (registration and lookup) and reader (lookup only). No token is generated,
+resolved from a provider, read from an environment fallback, or recorded in an
+operation. Missing/invalid configuration rejects startup; unauthorized or expired
+requests stop before body processing and database access. Rotation currently
+requires rebuilding the application with new configuration. Live provisioning,
+revocation distribution, TLS termination and network policy remain deployment gates.
+
+The operator must supply a dedicated psycopg async pool and install
+`veritas_os/policy/sandbox_events.sql` in that sandbox database. This is deliberately
+not a main-API migration. A single immutable row represents both event and operation;
+primary/unique constraints cover operation ID, original key and event ID. Runtime
+writer database privileges should be SELECT/INSERT only; independent reconciler
+credentials should permit only read access. Lookup transactions are read-only.
+
+`POST /v1/events` accepts the fixed JSON payload and one `Idempotency-Key` header.
+Duplicate JSON keys, extra fields, invalid UUIDs, invalid UTF-8, NUL, oversized bodies
+or messages are rejected before persistence. Idempotency keys use 1–256 ASCII
+letters, digits, dot, underscore, colon or hyphen. Within one READ COMMITTED
+transaction, registration uses INSERT ON CONFLICT DO NOTHING followed by a fresh
+statement reading the original key. Same key and exact payload returns the original
+operation (200); a new committed row returns 201. Same key/different payload or
+same event ID/different key returns 409, with no second event. Success is returned
+only after commit/context exit; synchronous_commit is enabled for registration.
+Statement duration is bounded to four seconds; timeout or uncertain commit returns
+503 with no automatic retry or success inference. No TTL/delete/reset API exists.
+
+Lookup uses `GET /v1/operations/{operation_id}` or
+`GET /v1/operations?idempotency_key=<original-key>`. Both require authentication
+and return operation ID, original key, event ID, canonical payload digest and
+`PERSISTED`, without the message or credentials. All responses use no-store.
+A missing row returns 404, explicitly not proof of no effect; DB lookup failure
+returns 503. A lost POST response can be investigated by the original key.
+The service's PERSISTED observation is not a VERITAS confirmed Outcome/BindReceipt.
+Independent reconciliation and prevention of replacement authorizations while
+the earlier outcome is unknown remain sender-side work.
+
+ASGI tests use synthetic tokens and a SQL double. Separate real PostgreSQL tests
+exercise concurrent identical/conflicting requests, rollback and commit-response
+loss in disposable isolated schemas and are included in the existing PostgreSQL
+CI job. Local mocks are not claimed as durability proof. HTTPS transport, actual
+deployment/provider configuration and native Receipt/Outcome/reconciliation are
+still not connected by this service implementation.
