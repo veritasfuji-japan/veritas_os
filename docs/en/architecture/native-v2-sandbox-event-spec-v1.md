@@ -463,3 +463,33 @@ loss in disposable isolated schemas and are included in the existing PostgreSQL
 CI job. Local mocks are not claimed as durability proof. HTTPS transport, actual
 deployment/provider configuration and native Receipt/Outcome/reconciliation are
 still not connected by this service implementation.
+
+## 18. Opt-in HTTPS transport (synthetic stream validation)
+
+`SandboxHTTPSTransport` can now be explicitly supplied to `execute_sandbox_bind`.
+No default transport, endpoint, provider, listener or deployment is installed.
+The executor independently configures the exact HTTPS event endpoint and reviewed
+CA roots (system roots by default). A fresh verified TLS connection uses that DNS
+name as the peer identity, with TLS 1.2 or later and HTTP/1.1. This is CA/hostname
+verification, not certificate fingerprint pinning or DNS/IP attestation.
+
+The transport checks canonical payload/digest and the original key, completes TLS,
+then invokes the owning one-use material callback immediately before its single
+write, without an intervening await. Connection delay therefore cannot bypass the
+existing final send window. There are no proxies, redirects or retries. The total
+request limit is five seconds. Responses require bounded headers (8 KiB) and a
+Content-Length body (4 KiB); chunking, encoding and duplicate headers fail closed.
+This is a deliberately restricted protocol, not a general HTTP adapter.
+
+Matching 201/200 JSON acknowledgements require the original key, event ID and digest
+plus a valid operation UUID. The returned observation records a fixed classification
+only; raw bodies, headers, remote operation IDs and errors are not retained. 409 and
+503 are distinct observations, never evidence of absence or confirmed success.
+All durable states remain EFFECT_UNKNOWN, including matching acknowledgements.
+Existing transports returning None retain their earlier observation behavior.
+
+Tests use synthetic provider material, real native verifiers and simulated streams;
+they do not establish a real TLS handshake, real HTTPS delivery or receiver commit.
+Real TLS/host-clock and combined PostgreSQL/receiver fault tests are still required
+before enabling external effects. Section 9 prerequisites remain mandatory.
+Reconciliation must use the original key, not infer success from these observations.

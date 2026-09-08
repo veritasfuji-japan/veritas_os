@@ -1,4 +1,4 @@
-"""Owning native v2 dispatch seam; no concrete network adapter is installed.
+"""Owning native v2 dispatch seam; no network adapter is installed by default.
 
 Only executor-configured transports may implement this contract. They must use
 TLS, the exact request, no redirects/retries and call take_material immediately
@@ -38,6 +38,10 @@ from veritas_os.policy.sandbox_pre_effect import (
 from veritas_os.security.hash import sha256_of_canonical_json
 
 REQUEST_TIMEOUT_SECONDS = 5
+SandboxHTTPObservation = Literal[
+    "HTTP_201_MATCHING_ACK", "HTTP_200_MATCHING_ACK", "HTTP_409_CONFLICT",
+    "HTTP_503_UNKNOWN", "HTTP_RESPONSE_UNKNOWN",
+]
 
 
 class SandboxBindExecutionError(ValueError):
@@ -63,13 +67,13 @@ The implementation must authenticate the pinned TLS identity, disable redirects,
 proxies and retries, bound response size, and never log secrets or exceptions.
 It must call take_material once, immediately before sending the exact request,
 and stop on callback failure/cancellation. It must not keep the returned material.
-Its return is deliberately ignored: acknowledgement is NOT confirmed effect.
+Only fixed observation codes may be retained: acknowledgement is NOT confirmed effect.
 A concrete implementation and its timing/TLS tests are a deployment prerequisite.
 """
 
     async def send_once(
         self, request: SandboxDispatchRequest, *, take_material: Callable[[], SecretBytes],
-    ) -> None:
+    ) -> SandboxHTTPObservation | None:
         ...
 
 
@@ -84,7 +88,7 @@ class SandboxDispatchObservation(BaseModel):
     payload_digest: str
     idempotency_key: str
     state: Literal["UNKNOWN"] = "UNKNOWN"
-    reason_code: Literal["TRANSPORT_RETURNED_UNVERIFIED", "TRANSPORT_FAILED_OR_UNKNOWN"]
+    reason_code: Literal["TRANSPORT_RETURNED_UNVERIFIED", "TRANSPORT_FAILED_OR_UNKNOWN"] | SandboxHTTPObservation
 
 
 async def execute_sandbox_bind(
@@ -182,9 +186,14 @@ never upgraded from an HTTP response. Reconciliation/receipts remain separate.
         reason = "TRANSPORT_FAILED_OR_UNKNOWN"
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
-                await transport.send_once(request, take_material=take_material)
+                response = await transport.send_once(request, take_material=take_material)
             if taken:
                 reason = "TRANSPORT_RETURNED_UNVERIFIED"
+                if type(response) is str and response in {
+                    "HTTP_201_MATCHING_ACK", "HTTP_200_MATCHING_ACK", "HTTP_409_CONFLICT",
+                    "HTTP_503_UNKNOWN", "HTTP_RESPONSE_UNKNOWN",
+                }:
+                    reason = response
         except asyncio.CancelledError:
             raise
         except Exception:

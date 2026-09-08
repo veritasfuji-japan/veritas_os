@@ -6,5 +6,5 @@
   "payload_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "idempotency_key": "synthetic-original-key",
   "state": "UNKNOWN",
-  "reason_code": "TRANSPORT_RETURNED_UNVERIFIED"
+  "reason_code": "HTTP_201_MATCHING_ACK"
 }
