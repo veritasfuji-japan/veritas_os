@@ -203,3 +203,52 @@ async def test_missing_transport_stops_before_claim_or_provider(prepared_inputs)
     with pytest.raises(module.SandboxBindExecutionError):
         await run(artifact, args, provider, None)
     assert not provider.calls and not args["effect_store"]._records
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [201, 200, 409, 503])
+async def test_concrete_transport_preserves_owning_unknown_state(prepared_inputs, monkeypatch, status):
+    from pydantic import SecretBytes
+    from veritas_os.policy import sandbox_https_transport as https
+    from veritas_os.tests.test_sandbox_https_transport import Writer, TOKEN as HTTP_TOKEN
+
+    artifact, args = await _args(prepared_inputs)
+    provider = Provider(prepared_inputs, args)
+    original_resolve = provider.resolve
+
+    async def resolve(request, **kwargs):
+        credential = await original_resolve(request, **kwargs)
+        return credential.model_copy(update={"material": SecretBytes(HTTP_TOKEN)})
+
+    provider.resolve = resolve
+    writer = Writer()
+    connections = []
+
+    async def connect(*positional, **kwargs):
+        connections.append(True)
+        row = await args["effect_store"].get(prepared_inputs[2].consumption_id)
+        assert row.state == module.EffectExecutionState.EFFECT_UNKNOWN
+        body = json.dumps(dict(
+            operation_id="22222222-2222-4222-8222-222222222222",
+            event_id=PAYLOAD["event_id"], payload_digest=module.sha256_of_canonical_json(PAYLOAD),
+            idempotency_key=artifact.idempotency_key, state="PERSISTED",
+        )).encode()
+        reader = asyncio.StreamReader()
+        reader.feed_data((f"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\n"
+                          f"Content-Length: {len(body)}\r\n\r\n").encode() + body)
+        reader.feed_eof()
+        return reader, writer
+
+    monkeypatch.setattr(https.asyncio, "open_connection", connect)
+    transport = https.SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+    result = await run(artifact, args, provider, transport)
+    assert result.state == "UNKNOWN"
+    assert result.reason_code == {201: "HTTP_201_MATCHING_ACK", 200: "HTTP_200_MATCHING_ACK",
+                                  409: "HTTP_409_CONFLICT", 503: "HTTP_503_UNKNOWN"}[status]
+    assert len(writer.writes) == len(connections) == 1
+    assert HTTP_TOKEN.decode() not in result.model_dump_json()
+    row = await args["effect_store"].get(result.attempt_id)
+    assert row.state == module.EffectExecutionState.EFFECT_UNKNOWN
+    with pytest.raises(module.SandboxBindExecutionError):
+        await run(artifact, args, provider, transport)
+    assert len(writer.writes) == 1

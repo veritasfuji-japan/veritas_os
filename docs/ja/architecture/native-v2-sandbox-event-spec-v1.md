@@ -380,3 +380,28 @@ ASGI試験は合成tokenとSQL doubleを使用します。別の実PostgreSQL試
 同一要求・競合要求の同時実行、rollback、commit応答消失を検証し、既存PostgreSQL CIへ追加します。
 ローカルmockを永続性の証明とは扱いません。HTTPS transport、実配備・provider設定、native
 Receipt/Outcome/reconciliationは、このサービス実装ではまだ接続していません。
+
+## 18. 明示設定するHTTPS transport（合成stream試験）
+
+`SandboxHTTPSTransport`を`execute_sandbox_bind`へ明示的に渡せるようにします。
+default transport・宛先・provider・listener・配備は追加しません。
+executorが独立した信頼設定から正確なHTTPS宛先とCA（既定はsystem roots）を指定します。
+毎回新しい接続でDNS名をTLS peer identityとして検証し、TLS 1.2以上・HTTP/1.1を使用します。
+これはCAとhostnameの検証であり、証明書fingerprint pinningやDNS/IPの証明ではありません。
+
+canonical payload・digest・元のkeyを検証し、TLS完了後、唯一のwrite直前に既存の
+一回限りのmaterial callbackを呼びます。その間にawaitは挟みません。
+接続遅延も既存の送信期限検証対象です。proxy・redirect・retryは使いません。
+全体5秒、応答header 8 KiB・Content-Length body 4 KiBに制限し、chunked・encoding・
+重複headerは拒否します。汎用HTTP adapterではなく限定protocolです。
+
+201/200は元のkey・event ID・digest・正しいoperation UUIDが一致した場合のみ
+固定の観測分類を返します。生body・header・remote operation ID・例外は保持しません。
+409と503も区別しますが、作用なしや成功の証明にはしません。
+永続状態は常にEFFECT_UNKNOWNのままです。Noneを返す既存transportの動作は維持します。
+
+試験は合成credential、実native verifier、模擬streamを使用します。
+実TLS handshake・実HTTPS送信・receiver commitの証明ではありません。
+外部作用の有効化前には実TLS・host clock・PostgreSQLとreceiverの結合障害試験、
+および第9節の配備条件の確認が必要です。Reconciliationでは元のkeyを使い、
+HTTP観測から成功を推測しません。
