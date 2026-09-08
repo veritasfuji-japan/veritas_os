@@ -267,7 +267,9 @@ def verify_promotion_requirement_fresh_source_packet(
         expected_source=expected_source,
         expected_contract=expected_contract,
     )
-    if _json(candidate) != _json(rebuilt):
+    # Input was normalized before schema validation; builders return JSON-valued
+    # fields. Compare every field without recursively normalizing both again.
+    if candidate.model_dump(mode="python") != rebuilt.model_dump(mode="python"):
         raise PromotionRequirementRecheckError("PRRC_RECONSTRUCTION_MISMATCH")
     return rebuilt
 
@@ -350,6 +352,8 @@ def verify_promotion_requirement_final_recheck_packet(
         current_credential_reference=current_credential_reference,
         required_credential_scope=required_credential_scope,
     )
-    if _json(candidate) != _json(rebuilt):
+    # Input was normalized before schema validation; builders return JSON-valued
+    # fields. Compare every field without recursively normalizing both again.
+    if candidate.model_dump(mode="python") != rebuilt.model_dump(mode="python"):
         raise PromotionRequirementRecheckError("PRRC_RECONSTRUCTION_MISMATCH")
     return rebuilt

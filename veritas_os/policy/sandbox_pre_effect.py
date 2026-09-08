@@ -214,6 +214,13 @@ def _recheck_sandbox_current(
 
     Shared by preparation and its credential continuation. This private helper
     grants no ownership; the continuation must itself create the unique attempt.
+
+    Fresh risk timestamps are causal observation markers from this synchronous
+    loader invocation, not independent UTC not-before grants. Reconstruct risk at
+    the exact executor sample and require both timestamps to equal that sample.
+    Authorization and signed governance still cover the lower uncertainty bound;
+    risk and governance must also survive the conservative completion horizon.
+    No artifact is backdated and no general verifier accepts clock tolerance.
     """
     try:
         checked = trusted_clock()
@@ -229,7 +236,8 @@ def _recheck_sandbox_current(
         ) != binding.binding:
             raise SandboxPreEffectError("SPE_ACTION_CHANGED")
         risk, final, context = _verified_source(
-            current.runtime_risk_packet, current.source, gov,
+            current.runtime_risk_packet, current.source,
+            replace(gov, verification_now=checked.now),
         )
         if (
             final.bind_context_hash != verified.bind_context_hash

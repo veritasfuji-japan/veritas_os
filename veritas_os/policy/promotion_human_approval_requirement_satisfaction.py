@@ -195,7 +195,9 @@ def verify_promotion_human_approval_requirement_satisfaction_packet(
         candidate.required_human_approval_linkage_packet,
         datetime.fromisoformat(_timestamp(candidate.recorded_at)),
     )
-    if _json(candidate) != _json(rebuilt):
+    # Input was normalized before schema validation; builders return JSON-valued
+    # fields. Compare every field without recursively normalizing both again.
+    if candidate.model_dump(mode="python") != rebuilt.model_dump(mode="python"):
         raise PromotionHumanApprovalRequirementSatisfactionError(
             "PHARS_RECONSTRUCTION_MISMATCH"
         )

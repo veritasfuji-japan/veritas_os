@@ -187,7 +187,9 @@ def verify_promotion_requirement_final_readiness_packet(
         datetime.fromisoformat(_timestamp(candidate.recorded_at)),
         expected_source=expected_source, expected_contract=expected_contract,
     )
-    if _json(candidate) != _json(rebuilt):
+    # Input was normalized before schema validation; builders return JSON-valued
+    # fields. Compare every field without recursively normalizing both again.
+    if candidate.model_dump(mode="python") != rebuilt.model_dump(mode="python"):
         raise PromotionRequirementBindReviewError("PRBR_RECONSTRUCTION_MISMATCH")
     return rebuilt
 
@@ -222,6 +224,8 @@ def verify_promotion_requirement_bind_gate_packet(
         datetime.fromisoformat(_timestamp(candidate.recorded_at)),
         expected_source=expected_source, expected_contract=expected_contract,
     )
-    if _json(candidate) != _json(rebuilt):
+    # Input was normalized before schema validation; builders return JSON-valued
+    # fields. Compare every field without recursively normalizing both again.
+    if candidate.model_dump(mode="python") != rebuilt.model_dump(mode="python"):
         raise PromotionRequirementBindReviewError("PRBR_RECONSTRUCTION_MISMATCH")
     return rebuilt
