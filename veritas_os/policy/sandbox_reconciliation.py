@@ -36,6 +36,7 @@ from veritas_os.policy.sandbox_action_binding import SandboxDeployment, verify_s
 from veritas_os.policy.sandbox_credential_resolution import (
     SandboxCredentialProvider, SandboxCredentialRequest, SandboxProviderCredential, _validate_metadata,
 )
+from veritas_os.policy.sandbox_reconciliation_archive import SandboxReconciliationArchive
 from veritas_os.policy.sandbox_event_store import parse_event, validate_key
 from veritas_os.policy.sandbox_https_transport import _parse_operation, _read_bounded_response
 from veritas_os.policy.sandbox_pre_effect import SandboxClockReading, _clock
@@ -81,9 +82,8 @@ def sandbox_reconciliation_policy_hash(deployment: SandboxDeployment, reader: Sa
 class SandboxReconciliationResult:
     """Local record and independently retrieved evidence, not a Receipt/Outcome.
 
-    Existing effect storage persists the evidence digest. Callers must retain the
-    full returned evidence in their audit pipeline; durable evidence archival and
-    atomic Receipt/Outcome publication are not implemented by this result.
+    Effect storage atomically persists the full verified evidence and its proof
+    inputs with the confirmed state. Receipt/Outcome publication remains separate.
     """
 
     record: EffectStateRecord
@@ -245,9 +245,12 @@ async def reconcile_sandbox_effect(
             raise ValueError("changed attempt")
         if not verifier_policy.approves(VERIFIER_ID, policy_hash):
             raise ValueError("withdrawn policy")
-        if await effect_store.transition(
-            operation_id=current.operation_id, expected_state=EffectExecutionState.EFFECT_UNKNOWN, record=record,
-        ) is not True or await effect_store.get(current.operation_id) != record:
+        archive = SandboxReconciliationArchive(
+            original_record=current, operation=operation, reader_metadata_digest=digest, proof=proof,
+        )
+        if await effect_store.confirm_reconciliation(
+            expected=current, record=record, archive=archive,
+        ) is not True or await effect_store.get_reconciliation(current.operation_id) != archive:
             raise ValueError("confirmation not durable")
         return SandboxReconciliationResult(record, proof)
     except asyncio.CancelledError:

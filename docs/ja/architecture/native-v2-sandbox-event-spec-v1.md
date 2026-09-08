@@ -444,3 +444,31 @@ effect storeに保持するのは証拠digestで、返した証拠全文の永�
 完全なE2E証明ではありません。試験は実native verifier、合成provider/stream、明示許可した
 in-memory storeを使用します。実TLS・PostgreSQL結合試験と第9節の配備条件は引き続き必須です。
 実credential・外部送信は、この試験では許可しません。
+
+## 20. 照合証拠と確定状態の原子的保存
+
+本節は第19節の「digestのみ保存」という制限を更新します。migration 0006の適用後、
+sandbox reconciliationはCONFIRMED_EFFECT行と証拠全文SandboxReconciliationArchiveを
+bind_effect_statesの一つのSQL UPDATEで保存します。CASは元のJSON行全体・hash・state・
+revisionの一致とarchive列が空であることを要求します。CAS不成立時はどちらも保存せず、
+archive保存済みの行は既存transitionからも更新できません。
+
+archiveには検証済み証拠、元のUNKNOWN行、取得operationの5項目、reader metadata digestを
+保持し、observation・acknowledgement・元の行・verification proofのhashを再計算できます。
+token・Authorization header・生応答・event messageは保存しません。get_reconciliationは
+状態と証拠を一緒に読み、schema・hash・時刻・lineageを検証します。commitと検証済みreadbackが
+成功した場合だけreconcile_sandbox_effectは確定を返します。証拠欠落や不整合は拒否し、
+既存のterminal行へ架空の証拠を補完しません。
+
+commit応答喪失時は、両方が保存済みでも例外を返す可能性があります。その後operatorは
+新しいlookup・POST・認可・状態変更なしで証拠を取得できます。これは保存内容の整合性検証で、
+自動復旧・HTTPS再検証・Receipt/Outcome発行ではありません。hashは署名ではなく、DB管理者が
+関連データ全体を書き換える攻撃は防ぎません。sandbox/providerとDBの信頼は前提に残ります。
+
+既存transitionを含め、このコードの利用前にmigration 0006を適用します。nullable列の追加で
+旧行とhashは維持します。downgradeは証拠を削除するため、operatorは先に保持方針に従って
+保存する必要があります。effect-state CIの実PostgreSQL試験はrollback・commit応答喪失・
+競合・別storeからの読戻し・証拠欠落を検証します。これは保存処理の試験であり、実TLSとreceiverを
+結合したE2E証明ではありません。Receipt/Outcome発行、代替認可による重複実行の抑止、自動障害復旧、
+実TLS/provider/host-clockの結合検証は未完です。第9節の配備条件は引き続き適用し、実外部アクセスは
+有効化しません。

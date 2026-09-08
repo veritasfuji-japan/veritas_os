@@ -543,3 +543,38 @@ Tests use real native verifiers with synthetic provider/streams and in-memory st
 under explicit test opt-in. Real TLS and PostgreSQL composition and all section 9
 deployment prerequisites remain required. No live credentials or external requests
 are authorized by these tests.
+
+## 20. Atomic reconciliation evidence archival
+
+This section supersedes section 19's digest-only storage limitation. After migration
+0006, the sandbox reconciliation owner commits the CONFIRMED_EFFECT record and a
+full `SandboxReconciliationArchive` in one SQL UPDATE on `bind_effect_states`.
+The compare-and-set checks the exact original JSON record, hash, state and revision,
+and requires an empty archive column. A failed CAS writes neither value. Existing
+transition methods cannot rewrite a row once its archive has been committed.
+
+The archive contains the verified evidence, original UNKNOWN record, five-field
+retrieved operation and reader metadata digest. These are sufficient to recompute
+its observation, acknowledgement, original-record and verification-proof hashes.
+It contains no token, Authorization header, raw response or event message.
+`get_reconciliation` reads the state/archive pair together and validates schemas,
+hashes, times and lineage. Only a successful commit and validated readback allow
+`reconcile_sandbox_effect` to return confirmation. Missing or inconsistent evidence
+fails closed; legacy terminal rows are never backfilled with invented proof.
+
+A lost commit acknowledgement can still raise after both values were committed.
+An operator can subsequently read the archived evidence without a new lookup,
+POST, authorization or state transition. This is integrity-checked retrieval,
+not automatic recovery, renewed HTTPS verification or a Receipt/Outcome. Hashes
+are not signatures and do not protect against a database operator rewriting all
+bound data. The trusted sandbox/provider and database remain trust assumptions.
+
+Deploy migration 0006 before this code, including use of legacy transition methods.
+The nullable column preserves old records and hashes. A downgrade drops archived
+evidence; operators must preserve it under the applicable retention policy first.
+Real PostgreSQL tests in the effect-state CI workflow exercise rollback, lost
+commit acknowledgement, contention, fresh-store readback and missing evidence.
+They establish storage behavior, not the combined real-TLS/receiver E2E proof.
+Receipt/Outcome publication, replacement-authorization blocking, automated crash
+recovery and real TLS/provider/host-clock composition remain outstanding. Section
+9 deployment prerequisites continue to apply; no live external access is enabled.
