@@ -179,7 +179,7 @@ async def test_reader_metadata_fail_closed(prepared_inputs, monkeypatch, changes
 async def test_failure_never_returns_confirmed_result(prepared_inputs, monkeypatch, mode):
     artifact, args, current, writer, calls = await setup_case(prepared_inputs, monkeypatch)
     store = args["effect_store"]
-    original = store.transition
+    original = store.confirm_reconciliation
 
     async def transition(**kwargs):
         if mode == "false":
@@ -191,7 +191,7 @@ async def test_failure_never_returns_confirmed_result(prepared_inputs, monkeypat
             store._records[current.operation_id] = current
         return result
 
-    monkeypatch.setattr(store, "transition", transition)
+    monkeypatch.setattr(store, "confirm_reconciliation", transition)
     if mode in {"cancel", "tls"}:
         async def fail(*args, **kwargs):
             if mode == "cancel":
@@ -287,3 +287,26 @@ async def test_lookup_timeout_retains_unknown_without_resend(prepared_inputs, mo
     assert TOKEN.decode() not in str(caught.value) and caught.value.__context__ is None
     assert len(calls) == len(writer.writes) == 1
     assert await args["effect_store"].get(current.operation_id) == current
+
+
+@pytest.mark.asyncio
+async def test_lost_commit_ack_retains_full_evidence_without_new_lookup(prepared_inputs, monkeypatch):
+    artifact, args, current, writer, calls = await setup_case(prepared_inputs, monkeypatch)
+    store = args["effect_store"]
+    commit = store.confirm_reconciliation
+
+    async def lost_ack(**kwargs):
+        assert await commit(**kwargs)
+        raise RuntimeError(TOKEN.decode())
+
+    monkeypatch.setattr(store, "confirm_reconciliation", lost_ack)
+    with pytest.raises(module.SandboxReconciliationError):
+        await reconcile(artifact, args)
+    archive = await store.get_reconciliation(current.operation_id)
+    assert archive.original_record == current
+    assert archive.proof.deterministic_digest() == (await store.get(current.operation_id)).reconciliation_evidence_hash
+    assert TOKEN.decode() not in archive.model_dump_json()
+    assert len(calls) == len(writer.writes) == 1
+    with pytest.raises(module.SandboxReconciliationError):
+        await reconcile(artifact, args)
+    assert len(calls) == 1

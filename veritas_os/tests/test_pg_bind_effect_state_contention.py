@@ -108,3 +108,67 @@ async def test_real_postgres_consumption_read_and_attempt_creation_have_one_winn
     restarted = PostgresAtomicEffectStateStore()
     assert await restarted.get(attempt.operation_id) == attempt
     assert not await restarted.create_in_flight(attempt)
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_archive_atomicity_contention_and_restart(monkeypatch):
+    """A failed commit preserves UNKNOWN; an acknowledged-lost commit retains both."""
+    from contextlib import asynccontextmanager
+    from veritas_os.storage import db
+    from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
+    from veritas_os.tests.test_sandbox_reconciliation_archive import archive_case
+
+    _require_real_postgresql()
+    real_get_pool = db.get_pool
+    pool = await real_get_pool()
+    original, terminal, archive = archive_case(uuid4().hex)
+    store = PostgresAtomicEffectStateStore()
+    assert await store.create_in_flight(original)
+
+    class FaultPool:
+        def __init__(self, mode):
+            self.mode = mode
+
+        @asynccontextmanager
+        async def connection(self):
+            async with pool.connection() as conn:
+                yield conn
+                if self.mode == "rollback":
+                    raise RuntimeError("synthetic commit failure")
+            if self.mode == "lost_ack":
+                raise RuntimeError("synthetic acknowledgement loss")
+
+    for mode in ("rollback", "lost_ack"):
+        async def faulty_pool(mode=mode):
+            return FaultPool(mode)
+
+        monkeypatch.setattr(db, "get_pool", faulty_pool)
+        with pytest.raises(BindEffectStateError) as caught:
+            await store.confirm_reconciliation(expected=original, record=terminal, archive=archive)
+        assert caught.value.__context__ is None
+        monkeypatch.setattr(db, "get_pool", real_get_pool)
+        restarted = PostgresAtomicEffectStateStore()
+        if mode == "rollback":
+            assert await restarted.get(original.operation_id) == original
+            async with pool.connection() as conn:
+                cur = await conn.execute("SELECT reconciliation_archive FROM bind_effect_states WHERE operation_id=%s", (original.operation_id,))
+                assert (await cur.fetchone())[0] is None
+        else:
+            assert await restarted.get(original.operation_id) == terminal
+            assert await restarted.get_reconciliation(original.operation_id) == archive
+            assert not await restarted.confirm_reconciliation(expected=original, record=terminal, archive=archive)
+            assert not await restarted.transition(operation_id=terminal.operation_id, expected_state=terminal.state,
+                                                  record=terminal.model_copy(update={"revision": 4}))
+
+    original, terminal, archive = archive_case(uuid4().hex)
+    assert await store.create_in_flight(original)
+    outcomes = await asyncio.gather(*(PostgresAtomicEffectStateStore().confirm_reconciliation(
+        expected=original, record=terminal, archive=archive,
+    ) for _ in range(16)))
+    assert outcomes.count(True) == 1
+    assert await PostgresAtomicEffectStateStore().get_reconciliation(original.operation_id) == archive
+    # Corrupt the persisted evidence while retaining the terminal row: reads must fail.
+    async with pool.connection() as conn:
+        await conn.execute("UPDATE bind_effect_states SET reconciliation_archive=NULL WHERE operation_id=%s", (original.operation_id,))
+    with pytest.raises(BindEffectStateError):
+        await store.get_reconciliation(original.operation_id)

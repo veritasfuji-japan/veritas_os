@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,6 +25,9 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
     AuthorizationConsumptionStoreError,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
+
+if TYPE_CHECKING:
+    from veritas_os.policy.sandbox_reconciliation_archive import SandboxReconciliationArchive
 
 _HASH = r"^[0-9a-f]{64}$"
 
@@ -170,6 +173,7 @@ class InMemoryAtomicEffectStateStore:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._records: dict[str, EffectStateRecord] = {}
+        self._archives: dict[str, SandboxReconciliationArchive] = {}
 
     async def create_in_flight(self, record: EffectStateRecord) -> bool:
         async with self._lock:
@@ -187,12 +191,42 @@ class InMemoryAtomicEffectStateStore:
     ) -> bool:
         async with self._lock:
             current = self._records.get(operation_id)
-            if current is None or current.state != expected_state:
+            if current is None or current.state != expected_state or operation_id in self._archives:
                 return False
             if record.revision != current.revision + 1:
                 return False
             self._records[operation_id] = record
             return True
+
+    async def confirm_reconciliation(
+        self, *, expected: EffectStateRecord, record: EffectStateRecord,
+        archive: SandboxReconciliationArchive,
+    ) -> bool:
+        """Test-only atomic state and archive commit under the same lock."""
+        from veritas_os.policy.sandbox_reconciliation_archive import validate_archive
+
+        archive = validate_archive(record, archive)
+        if archive.original_record != expected:
+            raise BindEffectStateError("BES_ARCHIVE_EXPECTED_MISMATCH")
+        async with self._lock:
+            if self._records.get(expected.operation_id) != expected or expected.operation_id in self._archives:
+                return False
+            self._archives[expected.operation_id] = archive
+            self._records[expected.operation_id] = record
+            return True
+
+    async def get_reconciliation(self, operation_id: str) -> SandboxReconciliationArchive | None:
+        """Read and integrity-check the record/archive pair under one lock."""
+        from veritas_os.policy.sandbox_reconciliation_archive import validate_archive
+
+        async with self._lock:
+            record = self._records.get(operation_id)
+            archive = self._archives.get(operation_id)
+            if record is None and archive is None:
+                return None
+            if record is None or archive is None or record.operation_id != operation_id:
+                raise BindEffectStateError("BES_ARCHIVE_MISSING_OR_MISMATCHED")
+            return validate_archive(record, archive)
 
     async def get(self, operation_id: str) -> EffectStateRecord | None:
         async with self._lock:
@@ -248,7 +282,7 @@ class PostgresAtomicEffectStateStore:
                 cur = await conn.execute(
                     "UPDATE bind_effect_states SET state=%s, revision=%s, record_hash=%s, "
                     "updated_at=%s, record=%s WHERE operation_id=%s AND state=%s "
-                    "AND revision=%s RETURNING operation_id",
+                    "AND revision=%s AND reconciliation_archive IS NULL RETURNING operation_id",
                     (
                         record.state.value,
                         record.revision,
@@ -263,6 +297,69 @@ class PostgresAtomicEffectStateStore:
                 return await cur.fetchone() is not None
         except Exception:
             raise BindEffectStateError("BES_POSTGRES_TRANSITION_FAILED") from None
+
+    async def confirm_reconciliation(
+        self, *, expected: EffectStateRecord, record: EffectStateRecord,
+        archive: SandboxReconciliationArchive,
+    ) -> bool:
+        """One SQL CAS commits full evidence and terminal state together.
+
+        This storage method checks integrity, not external truth. Only the owning
+        verifier may supply evidence. No nested transaction or caller connection
+        is accepted; pool context exit commits before a result is returned.
+        """
+        try:
+            from psycopg.types.json import Jsonb
+            from veritas_os.storage.db import get_pool
+            from veritas_os.policy.sandbox_reconciliation_archive import validate_archive
+
+            archive = validate_archive(record, archive)
+            if archive.original_record != expected:
+                raise ValueError("expected record")
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                cur = await conn.execute(
+                    "UPDATE bind_effect_states SET state=%s, revision=%s, record_hash=%s, "
+                    "updated_at=%s, record=%s, reconciliation_archive=%s "
+                    "WHERE operation_id=%s AND state=%s AND revision=%s AND record_hash=%s "
+                    "AND record::jsonb=%s::jsonb AND reconciliation_archive IS NULL "
+                    "RETURNING operation_id",
+                    (record.state.value, record.revision, record.record_hash, record.updated_at,
+                     Jsonb(record.model_dump(mode="json")), Jsonb(archive.model_dump(mode="json")),
+                     expected.operation_id, expected.state.value, expected.revision, expected.record_hash,
+                     Jsonb(expected.model_dump(mode="json"))),
+                )
+                changed = await cur.fetchone() is not None
+            return changed
+        except Exception:
+            pass
+        raise BindEffectStateError("BES_ARCHIVE_COMMIT_FAILED")
+
+    async def get_reconciliation(self, operation_id: str) -> SandboxReconciliationArchive | None:
+        """Read both values in one snapshot; never return unvalidated evidence."""
+        try:
+            from veritas_os.storage.db import get_pool
+            from veritas_os.policy.sandbox_reconciliation_archive import (
+                SandboxReconciliationArchive, validate_archive,
+            )
+
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT record, reconciliation_archive FROM bind_effect_states WHERE operation_id=%s",
+                    (operation_id,),
+                )
+                row = await cur.fetchone()
+            if row is None:
+                return None
+            record = EffectStateRecord.model_validate(row[0])
+            # Missing archives (including legacy terminal rows) are not invented.
+            if record.operation_id != operation_id or row[1] is None:
+                raise ValueError("missing archive")
+            return validate_archive(record, SandboxReconciliationArchive.model_validate(row[1]))
+        except Exception:
+            pass
+        raise BindEffectStateError("BES_ARCHIVE_READ_FAILED")
 
     async def get(self, operation_id: str) -> EffectStateRecord | None:
         try:
