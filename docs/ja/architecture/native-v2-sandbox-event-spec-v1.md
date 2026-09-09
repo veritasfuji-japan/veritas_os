@@ -501,5 +501,36 @@ migration 0007を適用し、列を削除するdowngrade前にはreceiptを保�
 
 これにより確定sandbox effectとDB保存されたartifactを接続します。TrustLogへは発行せず、
 trustlog_hashは空、metadataはNOT_PUBLISHEDを明示します。障害に強いTrustLogへの一度だけの配信、
-完全な自動復旧、代替認可による重複実行抑止、実Decision-to-Effect E2Eは未完です。これらと第9節の
-配備条件は別工程に残ります。本実装と合成試験は実credential・外部作用を許可しません。
+完全な自動復旧、実Decision-to-Effect E2Eは未完です。これらと第9節の配備条件は別工程に残ります。
+本実装と合成試験は実credential・外部作用を許可しません。
+
+## 22. 同一business eventのreplacement execution抑止
+
+migration 0008は`bind_effect_states`にnullableかつuniqueな`business_event_key`列を追加します。
+このkeyは実行ownership用metadataであり、既存Evidence hashを変えないためhash対象の
+`EffectStateRecord` JSONには追加しません。新しいsandbox attemptはdomain separator、sandbox action、
+target system、正確なHTTPS endpoint、event UUIDからkeyを導出します。message本文・authorization ID・
+idempotency keyは含めません。そのため同じeventについて新しいauthorizationを発行しても、これらの値を
+変えるだけでは既存claimを回避できません。
+
+`prepare_sandbox_attempt`はeffect-state行をclaimする同じatomic INSERTへbusiness-event keyを渡します。
+cross-processの競合はPostgreSQLのunique制約が裁定し、in-memory storeは明示的なtest時だけ同じ挙動を
+再現します。事前の「存在しない」というreadを実行許可として扱いません。claim失敗や結果不明は
+fail closedです。同じconsumed authorizationのreplayは従来どおり`SPE_ATTEMPT_ALREADY_EXISTS`、
+別operationが同じbusiness eventに衝突した場合は`SPE_BUSINESS_EVENT_ALREADY_CLAIMED`として、
+current-governance再確認・credential resolution・transportより前に拒否します。
+
+`IN_FLIGHT`と`EFFECT_UNKNOWN`はbusiness-event claimを保持します。`CONFIRMED_EFFECT`も永久に保持し、
+同じsandbox business eventへの二重作用を防ぎます。独立した証拠により`CONFIRMED_NO_EFFECT`へ遷移する
+場合だけ、同じstate UPDATE内でunique keyを解放し、後続authorizationが新たなclaimを取得できるように
+します。storage ambiguityはno-effectを意味せず、replacementを許可しません。
+
+このguardは意図的にexecution-claim boundaryへ置きます。同じeventのnative authorization artifactが
+発行済み・存在済みでも、競合するdurable claimが残る間はexecution permissionにはなりません。
+issuance自体を禁止するのは別のpolicy surfaceであり、「replacementがcredential/network executionへ
+到達しない」という本safety propertyには必須ではありません。
+
+migration 0008はlegacy行へ架空のbusiness-event identityをbackfillしません。このsandbox execution pathを
+有効化する前にmigrationを適用し、migration前のsandbox attemptが存在する場合はdeployment手順で確認します。
+完全なautomatic recovery coordinator、実TLS/provider/host-clock/PostgreSQLの配備結合、TrustLogの
+exactly-once発行、passing real Decision-to-Effect E2E proofは引き続き未完です。
