@@ -1,64 +1,74 @@
-# Real Decision-to-Effect E2E — Stop Report
+# Decision-to-Effect E2E — Historical Stop Record
 
 ## Status
 
-The controlled real Decision-to-Effect E2E proof is **stopped** at base commit
-`e039496cefad9793f342f261940e4009806e5859` (merge commit for PR #2142).
-No passing `report.json` has been produced.
+The stop condition documented here originated at merge commit
+`e039496cefad9793f342f261940e4009806e5859` (PR #2142 era).
 
-## Missing production prerequisite
+It is **superseded for the controlled CI proof scope**.
 
-The reconciliation boundary exposes only the
-`ReconciliationEvidenceVerifier` protocol. The repository has no reusable,
-non-test implementation that independently observes and authenticates an
-external acknowledgement before producing `VerifiedReconciliationEvidence`.
+The repository now has later native-v2 sandbox primitives for certificate-
+validated HTTPS dispatch, independent read-only reconciliation, durable
+reconciliation evidence, atomic BindReceipt / Outcome publication, replacement
+business-event blocking, crash recovery, and controlled real-TLS /
+real-PostgreSQL composition.
 
-`reconcile_effect_unknown(...)` accepts a verifier implementing that protocol,
-but it cannot itself establish that:
+TASK-007 adds a dedicated workflow:
 
-- the acknowledgement came from the authorization-bound TLS endpoint;
-- the acknowledgement digest equals `external_ack_digest`;
-- the observation digest is derived from the independently retrieved response;
-- the external operation reference in the response matches the evidence; or
-- a deployment-controlled verifier policy approved the observation source.
+`.github/workflows/reproducible-decision-to-effect-e2e.yml`
 
-The existing controlled TLS runner fills this gap with the private
-`_HttpsReconciliationVerifier`. That runner-local implementation directly
-constructs `VerifiedReconciliationEvidence`; it is not a production verifier
-primitive and does not validate the evidence's acknowledgement or observation
-digests against the retrieved acknowledgement. Unit tests similarly use a
-private `_Verifier` that returns a verified object without external
-observation.
+That workflow must generate a passing, source-SHA-bound:
 
-Promoting either private implementation into the requested E2E would violate
-the requirements prohibiting test-only reconciliation trust and fake or
-mismatched acknowledgement acceptance.
+- `report.json`; and
+- `evidence.json`
 
-## Smallest prerequisite PR
+under the runtime artifact path `artifacts/real-decision-to-effect-e2e/` and
+upload them as the `reproducible-decision-to-effect-e2e` GitHub Actions
+artifact.
 
-Add one production reconciliation verifier, with focused fail-closed tests,
-that:
+## What resolved this stop for the controlled scope
 
-1. accepts deployment-controlled HTTPS endpoint trust and verifier-policy
-   configuration;
-2. performs certificate-validated, independent acknowledgement retrieval;
-3. canonicalizes the retrieved acknowledgement and verifies
-   `external_ack_digest` and `observation_digest`;
-4. binds operation, authorization, consumption, external reference, source,
-   and observation time;
-5. returns `VerifiedReconciliationEvidence` only after every binding passes;
-6. rejects endpoint substitution, malformed responses, mismatched digests,
-   mismatched operation references, and unapproved verifier policy; and
-7. never accepts bearer material through an artifact or emits it in evidence.
+The controlled proof no longer relies on the old runner-local reconciliation
+shortcut described below. It uses the current sandbox execution/reconciliation
+path and requires the full proof conjunction to pass:
 
-After that prerequisite merges, the Decision-to-Effect composition can use
-the production verifier through `reconcile_effect_unknown(...)` and can
-legitimately derive `reconciliation_evidence_verified`,
-`terminal_effect_confirmed`, and the final E2E conjunction.
+1. current `/v1/decide` route exercised with controlled model output;
+2. CanonicalDecisionArtifact independently verified;
+3. selected sandbox action and deterministic promotion verified;
+4. native v2 authorization verified against that exact promoted intent;
+5. single-use authorization consumed in real PostgreSQL;
+6. current governance rechecks exercised;
+7. one certificate-validated TLS POST reaches the pinned sandbox endpoint;
+8. the synthetic event is durably persisted in a dedicated PostgreSQL database;
+9. independent read-only reconciliation confirms the persisted operation;
+10. reconciliation evidence is archived;
+11. BindReceipt and Outcome link back to the original decision and intent;
+12. a lost-response + lookup-outage fault preserves `EFFECT_UNKNOWN`;
+13. no blind redispatch occurs; and
+14. repeat recovery does not perform another POST or reconciliation lookup.
 
-## Security warning
+The workflow fails unless every controlled proof conjunction is true.
 
-Claiming `CONFIRMED_EFFECT` with the current runner-local verifier would allow
-an acknowledgement/evidence digest mismatch to cross the reconciliation trust
-boundary. The final E2E claim must remain false until the missing verifier is
-implemented and independently tested.
+## Scope boundary
+
+This resolution is intentionally narrower than production validation.
+
+A passing controlled proof does **not** establish:
+
+- production readiness;
+- real customer credentials;
+- a real customer endpoint;
+- independent production infrastructure ownership;
+- external UTC clock trust;
+- TrustLog exactly-once publication;
+- regulatory approval or certification.
+
+Therefore this file must not be interpreted as a production-readiness marker.
+
+## Historical context
+
+The original stop report stated that the then-current proof path could not
+independently authenticate external effect evidence strongly enough to support a
+Decision-to-Effect claim. That warning was correct for that historical commit.
+It is retained here as provenance, but current status must be determined from
+the current source SHA and the dedicated Decision-to-Effect workflow result.
