@@ -115,7 +115,9 @@ class ReconciliationEvidenceVerifier(Protocol):
 
 
 class AtomicEffectStateStore(Protocol):
-    async def create_in_flight(self, record: EffectStateRecord) -> bool:
+    async def create_in_flight(
+        self, record: EffectStateRecord, *, business_event_key: str | None = None,
+    ) -> bool:
         ...
 
     async def transition(
@@ -175,12 +177,21 @@ class InMemoryAtomicEffectStateStore:
         self._records: dict[str, EffectStateRecord] = {}
         self._archives: dict[str, SandboxReconciliationArchive] = {}
         self._sandbox_receipts: dict[str, str] = {}
+        self._business_events: dict[str, str] = {}
+        self._operation_business_events: dict[str, str] = {}
 
-    async def create_in_flight(self, record: EffectStateRecord) -> bool:
+    async def create_in_flight(
+        self, record: EffectStateRecord, *, business_event_key: str | None = None,
+    ) -> bool:
         async with self._lock:
             if record.operation_id in self._records:
                 return False
+            if business_event_key is not None and business_event_key in self._business_events:
+                return False
             self._records[record.operation_id] = record
+            if business_event_key is not None:
+                self._business_events[business_event_key] = record.operation_id
+                self._operation_business_events[record.operation_id] = business_event_key
             return True
 
     async def transition(
@@ -197,6 +208,10 @@ class InMemoryAtomicEffectStateStore:
             if record.revision != current.revision + 1:
                 return False
             self._records[operation_id] = record
+            if record.state == EffectExecutionState.CONFIRMED_NO_EFFECT:
+                business_event_key = self._operation_business_events.pop(operation_id, None)
+                if business_event_key is not None:
+                    self._business_events.pop(business_event_key, None)
             return True
 
     async def confirm_reconciliation(
@@ -214,6 +229,10 @@ class InMemoryAtomicEffectStateStore:
                 return False
             self._archives[expected.operation_id] = archive
             self._records[expected.operation_id] = record
+            if record.state == EffectExecutionState.CONFIRMED_NO_EFFECT:
+                business_event_key = self._operation_business_events.pop(expected.operation_id, None)
+                if business_event_key is not None:
+                    self._business_events.pop(business_event_key, None)
             return True
 
     async def get_reconciliation(self, operation_id: str) -> SandboxReconciliationArchive | None:
@@ -239,7 +258,9 @@ class PostgresAtomicEffectStateStore:
 
     production_safe = True
 
-    async def create_in_flight(self, record: EffectStateRecord) -> bool:
+    async def create_in_flight(
+        self, record: EffectStateRecord, *, business_event_key: str | None = None,
+    ) -> bool:
         try:
             from psycopg.types.json import Jsonb
             from veritas_os.storage.db import get_pool
@@ -249,8 +270,8 @@ class PostgresAtomicEffectStateStore:
                 cur = await conn.execute(
                     "INSERT INTO bind_effect_states "
                     "(operation_id, authorization_id, consumption_id, state, revision, "
-                    "record_hash, updated_at, record) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                    "record_hash, updated_at, record, business_event_key) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT DO NOTHING RETURNING operation_id",
                     (
                         record.operation_id,
@@ -261,6 +282,7 @@ class PostgresAtomicEffectStateStore:
                         record.record_hash,
                         record.updated_at,
                         Jsonb(record.model_dump(mode="json")),
+                        business_event_key,
                     ),
                 )
                 return await cur.fetchone() is not None
@@ -282,7 +304,9 @@ class PostgresAtomicEffectStateStore:
             async with pool.connection() as conn:
                 cur = await conn.execute(
                     "UPDATE bind_effect_states SET state=%s, revision=%s, record_hash=%s, "
-                    "updated_at=%s, record=%s WHERE operation_id=%s AND state=%s "
+                    "updated_at=%s, record=%s, "
+                    "business_event_key=CASE WHEN %s THEN NULL ELSE business_event_key END "
+                    "WHERE operation_id=%s AND state=%s "
                     "AND revision=%s AND reconciliation_archive IS NULL RETURNING operation_id",
                     (
                         record.state.value,
@@ -290,6 +314,7 @@ class PostgresAtomicEffectStateStore:
                         record.record_hash,
                         record.updated_at,
                         Jsonb(record.model_dump(mode="json")),
+                        record.state == EffectExecutionState.CONFIRMED_NO_EFFECT,
                         operation_id,
                         expected_state.value,
                         record.revision - 1,
@@ -321,12 +346,14 @@ class PostgresAtomicEffectStateStore:
             async with pool.connection() as conn:
                 cur = await conn.execute(
                     "UPDATE bind_effect_states SET state=%s, revision=%s, record_hash=%s, "
-                    "updated_at=%s, record=%s, reconciliation_archive=%s "
+                    "updated_at=%s, record=%s, reconciliation_archive=%s, "
+                    "business_event_key=CASE WHEN %s THEN NULL ELSE business_event_key END "
                     "WHERE operation_id=%s AND state=%s AND revision=%s AND record_hash=%s "
                     "AND record::jsonb=%s::jsonb AND reconciliation_archive IS NULL "
                     "RETURNING operation_id",
                     (record.state.value, record.revision, record.record_hash, record.updated_at,
                      Jsonb(record.model_dump(mode="json")), Jsonb(archive.model_dump(mode="json")),
+                     record.state == EffectExecutionState.CONFIRMED_NO_EFFECT,
                      expected.operation_id, expected.state.value, expected.revision, expected.record_hash,
                      Jsonb(expected.model_dump(mode="json"))),
                 )
