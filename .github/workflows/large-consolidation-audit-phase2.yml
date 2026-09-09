@@ -1,0 +1,124 @@
+name: Large Consolidation Audit Phase 2
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  large-consolidation-audit-phase2:
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce non-destructive Phase 2 scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+
+          base = os.environ["BASE_SHA"]
+          head = os.environ["HEAD_SHA"]
+          changed = subprocess.check_output(
+              ["git", "diff", "--name-only", base, head],
+              text=True,
+          ).splitlines()
+
+          allowed_exact = {
+              ".github/workflows/large-consolidation-audit-phase2.yml",
+              "scripts/audit_large_consolidation_phase2.py",
+              "veritas_os/tests/test_large_consolidation_audit_phase2.py",
+          }
+          allowed_prefixes = (
+              "artifacts/consolidation-audit/",
+          )
+
+          unexpected = [
+              path
+              for path in changed
+              if path not in allowed_exact
+              and not path.startswith(allowed_prefixes)
+          ]
+          if unexpected:
+              raise SystemExit(
+                  "Phase 2 audit PR must be non-destructive; unexpected paths: "
+                  + ", ".join(unexpected)
+              )
+          print("changed paths:", changed)
+          PY
+
+      - name: Generate Phase 2 evidence
+        run: |
+          python scripts/audit_large_consolidation_phase2.py             --output artifacts/consolidation-audit/phase2-generated.json
+
+      - name: Validate generated evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/consolidation-audit/phase2-generated.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+
+          assert data["format_version"] == "large-consolidation-audit-phase2/v1"
+          assert data["mode"] == "NON_DESTRUCTIVE"
+          assert data["source_main"] == "52752dbf766d9994f2f3267af47e904748d347a6"
+          assert data["frozen_proof_anchor"] == "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc"
+
+          closure = data["frozen_dependency_closure"]
+          assert closure["runtime_closure_count"] >= closure["runtime_seed_count"]
+          assert closure["proof_closure_count"] >= closure["proof_seed_count"]
+          assert "veritas_os/policy/native_bind_authorization.py" in closure["runtime_closure"]
+          assert "veritas_os/policy/sandbox_recovery.py" in closure["runtime_closure"]
+
+          legacy = data["legacy_policy_sha256"]
+          assert legacy["classification"] == "DEAD_CANDIDATE"
+          assert legacy["supported_runtime_script_workflow_consumers"] == []
+          assert legacy["deletion_permitted"] is False
+
+          dry = data["dry_run_family_matrix"]
+          assert len(dry["paired_suffixes"]) == 11
+          assert dry["canonical_only"] == [
+              "bind_context_hash_derivation",
+              "final_credential_scope_recheck",
+              "final_endpoint_identity_recheck",
+              "fresh_verified_source_gate",
+              "runtime_risk_review",
+          ]
+          assert dry["live_only"] == ["human_approval_requirement_satisfaction"]
+          assert dry["deletion_permitted"] is False
+
+          trust = {row["symbol"]: row for row in data["trustlog_role_matrix"]}
+          assert trust["verify_trust_log"]["classification"] == "ACTIVE_NON_CORE"
+          assert trust["verify_trustlogs"]["classification"] == "ACTIVE_NON_CORE"
+          assert trust["verify_entries"]["classification"] == "COMPATIBILITY_CANDIDATE"
+          assert all(row["deletion_permitted"] is False for row in trust.values())
+
+          overlaps = data["plan8_plan17_matrix"]["known_overlap_groups"]
+          assert len(overlaps) >= 5
+          assert any(
+              row["behavior"] == "replay_decision_query_param_failure_defaults_mock_true"
+              and row["classification"] == "DUPLICATE_CANDIDATE"
+              for row in overlaps
+          )
+          PY
+
+      - name: Upload Phase 2 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: large-consolidation-audit-phase2
+          path: |
+            artifacts/consolidation-audit/phase2-generated.json
+            artifacts/consolidation-audit/2026-09-10-phase2-baseline.json
+            artifacts/consolidation-audit/2026-09-10-phase2-report.md
+          if-no-files-found: error
