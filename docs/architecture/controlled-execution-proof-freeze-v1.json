@@ -1,0 +1,69 @@
+{
+  "format_version": "controlled-execution-proof-architecture-freeze/v1",
+  "status": "FROZEN_CONTROLLED_PROOF_SCOPE",
+  "freeze_anchor_commit": "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc",
+  "proof_pr": 2215,
+  "required_check": "reproducible-decision-to-effect-e2e",
+  "proof_scope": "controlled-current-head-decision-to-effect-sandbox",
+  "external_effect_scope": "synthetic-sandbox-event-persistence",
+  "frozen_invariants": [
+    "authorization_issuance_is_not_execution_permission",
+    "single_use_consumption_is_required",
+    "current_governance_rechecks_precede_effect",
+    "dispatch_intent_is_durable_before_transport",
+    "effect_unknown_is_not_failure",
+    "lookup_absence_is_not_no_effect",
+    "blind_redispatch_is_prohibited",
+    "replacement_business_event_is_blocked_while_unresolved_or_confirmed",
+    "reconciliation_is_read_only",
+    "receipt_outcome_are_retrospective_evidence_not_authority",
+    "recovery_never_resends_external_effect",
+    "decision_authorization_receipt_lineage_is_preserved"
+  ],
+  "required_files": [
+    ".github/workflows/reproducible-decision-to-effect-e2e.yml",
+    "veritas_os/tests/test_decision_to_effect_controlled_e2e.py",
+    "veritas_os/policy/canonical_verified_decision_promotion.py",
+    "veritas_os/policy/native_bind_authorization.py",
+    "veritas_os/policy/native_bind_authorization_consumption.py",
+    "veritas_os/policy/sandbox_action_binding.py",
+    "veritas_os/policy/sandbox_pre_effect.py",
+    "veritas_os/policy/sandbox_credential_resolution.py",
+    "veritas_os/policy/sandbox_bind_execution.py",
+    "veritas_os/policy/sandbox_reconciliation.py",
+    "veritas_os/policy/sandbox_receipt_outcome.py",
+    "veritas_os/policy/sandbox_recovery.py",
+    "artifacts/real-decision-to-effect-e2e/README.md",
+    "artifacts/real-decision-to-effect-e2e/STOP.md"
+  ],
+  "permitted_post_freeze_changes": [
+    "security_fix",
+    "correctness_fix",
+    "contract_preserving_consolidation",
+    "dead_or_duplicate_path_removal_with_evidence",
+    "dependency_maintenance",
+    "test_strengthening",
+    "documentation_and_review_artifacts",
+    "benchmark_instrumentation_without_semantic_change"
+  ],
+  "requires_architecture_reopen": [
+    "weaken_fail_closed_behavior",
+    "change_authorization_or_consumption_semantics",
+    "change_effect_unknown_or_retry_semantics",
+    "widen_credential_or_network_authority",
+    "change_decision_authorization_receipt_lineage",
+    "add_external_effect_path_to_frozen_claim",
+    "change_definition_of_confirmed_effect",
+    "treat_controlled_ci_proof_as_production_validation",
+    "merge_trustlog_exactly_once_into_frozen_claim_without_separate_proof"
+  ],
+  "explicit_non_claims": [
+    "production_readiness",
+    "real_customer_credentials",
+    "real_customer_endpoint",
+    "independent_production_infrastructure",
+    "external_utc_clock_trust",
+    "trustlog_exactly_once_publication",
+    "regulatory_approval_or_certification"
+  ]
+}
