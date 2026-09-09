@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+import json
 import math
 from typing import Any, Callable
 
@@ -34,13 +35,39 @@ from veritas_os.policy.native_bind_authorization import (
     verify_native_bind_authorization,
 )
 from veritas_os.policy.sandbox_action_binding import (
-    SandboxDeployment, VerifiedSandboxActionBinding,
+    ACTION, SandboxDeployment, VerifiedSandboxActionBinding,
     build_sandbox_action_binding, verify_sandbox_action_binding,
 )
+from veritas_os.security.hash import sha256_of_canonical_json
 
 
 class SandboxPreEffectError(ValueError):
     """Sanitized preparation error; never a retry authorization."""
+
+
+def _sandbox_business_event_key(
+    canonical_payload_json: str, deployment: SandboxDeployment,
+) -> str:
+    """Scope one immutable business-event identity to the exact sandbox target.
+
+    The message and authorization/idempotency identifiers are deliberately not
+    part of this key. A replacement authorization for the same event UUID cannot
+    escape the durable claim by changing payload text or authorization identity.
+    """
+    try:
+        payload = json.loads(canonical_payload_json)
+        event_id = payload["event_id"]
+        if type(event_id) is not str:
+            raise ValueError("event id")
+    except Exception:
+        raise SandboxPreEffectError("SPE_BUSINESS_EVENT_IDENTITY_INVALID") from None
+    return "sandbox-business-event:v1:sha256:" + sha256_of_canonical_json({
+        "domain": "veritas.sandbox-business-event/v1",
+        "action": ACTION,
+        "target_system": deployment.target_system,
+        "endpoint_url": deployment.endpoint_url,
+        "event_id": event_id,
+    })
 
 
 @dataclass(frozen=True)
@@ -144,6 +171,9 @@ async def prepare_sandbox_attempt(
         source_inputs=issuance_source_inputs, governance_inputs=governance_inputs,
         trust_inputs=trust_inputs,
     )
+    business_event_key = _sandbox_business_event_key(
+        binding.binding.payload_json, deployment,
+    )
     verified = verify_native_bind_authorization(
         authorization, source_inputs=issuance_source_inputs,
         governance_inputs=governance_inputs, trust_inputs=trust_inputs,
@@ -183,11 +213,22 @@ async def prepare_sandbox_attempt(
         reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
     )
     try:
-        claimed = await effect_store.create_in_flight(attempt)
+        claimed = await effect_store.create_in_flight(
+            attempt, business_event_key=business_event_key,
+        )
     except Exception:
         raise SandboxPreEffectError("SPE_CLAIM_FAILED_OR_UNKNOWN") from None
     if claimed is not True:
-        raise SandboxPreEffectError("SPE_ATTEMPT_ALREADY_EXISTS")
+        # Distinguish replay of the same consumed authorization from a new
+        # authorization colliding on the same business event. The unique store
+        # claim remains the race arbiter; this read is classification only.
+        try:
+            existing_attempt = await effect_store.get(attempt.operation_id)
+        except Exception:
+            raise SandboxPreEffectError("SPE_CLAIM_FAILED_OR_UNKNOWN") from None
+        if existing_attempt is not None:
+            raise SandboxPreEffectError("SPE_ATTEMPT_ALREADY_EXISTS")
+        raise SandboxPreEffectError("SPE_BUSINESS_EVENT_ALREADY_CLAIMED")
     risk_hash, finished = _recheck_sandbox_current(
         verified=verified, binding=binding, issued_context=issued_context,
         payload_json=payload_json, deployment=deployment, started=started,
