@@ -85,9 +85,8 @@ async def test_pre_dispatch_crash_closes_no_effect_without_reader_or_resend(prep
     assert result.receipt_bundle is None
 
     stored = await args["effect_store"].get(operation_id)
-    assert stored == result.model_copy(
-        update={},
-    ) or stored.state == module.EffectExecutionState.CONFIRMED_NO_EFFECT
+    assert stored is not None
+    assert stored.state == module.EffectExecutionState.CONFIRMED_NO_EFFECT
     assert stored.reason_code == "SANDBOX_RECOVERY_PRE_DISPATCH_CONFIRMED_NO_EFFECT"
 
     # Idempotent restart: terminal no-effect is returned without any reader access.
