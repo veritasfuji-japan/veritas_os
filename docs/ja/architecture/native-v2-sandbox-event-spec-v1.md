@@ -509,8 +509,8 @@ trustlog_hashは空、metadataはNOT_PUBLISHEDを明示します。障害に強�
 migration 0008は`bind_effect_states`にnullableかつuniqueな`business_event_key`列を追加します。
 このkeyは実行ownership用metadataであり、既存Evidence hashを変えないためhash対象の
 `EffectStateRecord` JSONには追加しません。新しいsandbox attemptはdomain separator、sandbox action、
-target system、正確なHTTPS endpoint、event UUIDからkeyを導出します。message本文・authorization ID・
-idempotency keyは含めません。そのため同じeventについて新しいauthorizationを発行しても、これらの値を
+正確なHTTPS endpoint、event UUIDからkeyを導出します。message本文・target-system label・
+authorization ID・idempotency keyは含めません。そのため同じeventについて新しいauthorizationを発行しても、これらの値を
 変えるだけでは既存claimを回避できません。
 
 `prepare_sandbox_attempt`はeffect-state行をclaimする同じatomic INSERTへbusiness-event keyを渡します。
