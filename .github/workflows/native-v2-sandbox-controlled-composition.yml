@@ -1,0 +1,171 @@
+name: Native v2 Sandbox Controlled Composition
+
+on:
+  pull_request:
+    paths:
+      - "scripts/run_native_v2_sandbox_service.py"
+      - "veritas_os/tests/test_sandbox_controlled_composition.py"
+      - "veritas_os/policy/sandbox_*.py"
+      - "veritas_os/policy/bind_effect_reconciliation.py"
+      - "veritas_os/policy/native_bind_authorization_consumption.py"
+      - "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+      - "alembic/versions/0005_bind_effect_states.py"
+      - "alembic/versions/0006_sandbox_reconciliation_archive.py"
+      - "alembic/versions/0007_sandbox_receipt_bundle.py"
+      - "alembic/versions/0008_sandbox_business_event_claim.py"
+      - "docs/en/architecture/native-v2-sandbox-event-spec-v1.md"
+      - "docs/ja/architecture/native-v2-sandbox-event-spec-v1.md"
+      - ".github/workflows/native-v2-sandbox-controlled-composition.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-v2-sandbox-controlled-composition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas
+          POSTGRES_DB: veritas_controlled
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veritas -d veritas_controlled"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:veritas@127.0.0.1:5432/veritas_controlled
+      VERITAS_SANDBOX_DATABASE_URL: postgresql://veritas:veritas@127.0.0.1:5432/veritas_sandbox
+      VERITAS_SANDBOX_WRITER_TOKEN: controlled-writer-token-0123456789abcdef0123456789
+      VERITAS_SANDBOX_READER_TOKEN: controlled-reader-token-fedcba9876543210fedcba9876
+      VERITAS_SANDBOX_CA_FILE: /tmp/veritas-native-v2-sandbox/ca.crt
+      VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG: /tmp/veritas-native-v2-sandbox/lookup-outage
+      VERITAS_SANDBOX_COMPOSITION_REPORT: artifacts/native-v2-sandbox-controlled-composition/report.json
+      VERITAS_SANDBOX_COMPOSITION: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install controlled composition dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip --retries 5 --timeout 60
+          python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
+          python -m pip install --retries 5 --timeout 60             "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
+
+      - name: Create dedicated sandbox database
+        run: |
+          python - <<'PY'
+          import psycopg
+          conn = psycopg.connect(
+              "postgresql://veritas:veritas@127.0.0.1:5432/postgres",
+              autocommit=True,
+          )
+          try:
+              conn.execute("CREATE DATABASE veritas_sandbox")
+          finally:
+              conn.close()
+          PY
+
+      - name: Apply VERITAS PostgreSQL migrations
+        run: alembic upgrade head
+
+      - name: Create controlled CA and sandbox endpoint certificate
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/veritas-native-v2-sandbox
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1             -keyout /tmp/veritas-native-v2-sandbox/ca.key             -out /tmp/veritas-native-v2-sandbox/ca.crt             -subj "/CN=VERITAS Native v2 Sandbox Controlled CA"
+          openssl req -newkey rsa:2048 -nodes             -keyout /tmp/veritas-native-v2-sandbox/server.key             -out /tmp/veritas-native-v2-sandbox/server.csr             -subj "/CN=sandbox.example.invalid"
+          cat >/tmp/veritas-native-v2-sandbox/ext.cnf <<'EOF'
+          subjectAltName=DNS:sandbox.example.invalid
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -days 1             -in /tmp/veritas-native-v2-sandbox/server.csr             -CA /tmp/veritas-native-v2-sandbox/ca.crt             -CAkey /tmp/veritas-native-v2-sandbox/ca.key             -CAcreateserial             -out /tmp/veritas-native-v2-sandbox/server.crt             -extfile /tmp/veritas-native-v2-sandbox/ext.cnf
+          chmod 600 /tmp/veritas-native-v2-sandbox/ca.key /tmp/veritas-native-v2-sandbox/server.key
+
+      - name: Bind authorization-pinned sandbox hostname to loopback
+        run: echo "127.0.0.1 sandbox.example.invalid" | sudo tee -a /etc/hosts
+
+      - name: Start independent native v2 sandbox HTTPS service
+        run: |
+          set -euo pipefail
+          sudo -E env PYTHONPATH="$GITHUB_WORKSPACE" "$(which python)"             scripts/run_native_v2_sandbox_service.py             --host 0.0.0.0             --port 443             --cert /tmp/veritas-native-v2-sandbox/server.crt             --key /tmp/veritas-native-v2-sandbox/server.key             >/tmp/veritas-native-v2-sandbox/service.log 2>&1 &
+          echo $! >/tmp/veritas-native-v2-sandbox/service.pid
+
+          for i in $(seq 1 30); do
+            status="$(curl --silent --show-error               --cacert "$VERITAS_SANDBOX_CA_FILE"               -H "Authorization: Bearer $VERITAS_SANDBOX_READER_TOKEN"               -o /tmp/veritas-native-v2-sandbox/health.json               -w '%{http_code}'               'https://sandbox.example.invalid/v1/operations?idempotency_key=not-created'               || true)"
+            if [ "$status" = "404" ]; then
+              break
+            fi
+            sleep 0.5
+          done
+
+          test "$status" = "404"
+          grep -q "SSE_NOT_FOUND_NOT_PROOF_OF_NO_EFFECT"             /tmp/veritas-native-v2-sandbox/health.json
+
+      - name: Run native v2 controlled composition
+        run: |
+          set -euxo pipefail
+          PYTHONPATH=. pytest             veritas_os/tests/test_sandbox_controlled_composition.py             -v -s --tb=short
+
+      - name: Assert controlled proof claims
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("artifacts/native-v2-sandbox-controlled-composition/report.json").read_text()
+          )
+          assert report["result"] == "PASS"
+          assert report["proof"] == "CONTROLLED_NATIVE_V2_SANDBOX_TLS_POSTGRES_COMPOSITION"
+          assert report["production_claim"] is False
+          assert report["decision_lineage_source"] == "SIGNED_SYNTHETIC_NATIVE_FIXTURE"
+          assert report["main_postgresql"] is True
+          assert report["sandbox_postgresql"] is True
+          assert report["alembic_head"] == "0008"
+          assert report["real_tls_transport"] is True
+          assert report["writer_reader_credentials_distinct"] is True
+          assert report["dispatch_intent_state"] == "EFFECT_UNKNOWN"
+          assert report["controlled_lost_response"] is True
+          assert report["lookup_outage_state"] == "EFFECT_UNKNOWN"
+          assert report["lookup_outage_retry_permitted"] is False
+          assert report["terminal_effect_state"] == "CONFIRMED_EFFECT"
+          assert report["external_event_rows"] == 1
+          assert report["no_blind_redispatch"] is True
+          assert report["repeat_recovery_avoids_lookup"] is True
+          assert report["trustlog_exactly_once_proven"] is False
+          assert report["real_decision_to_effect_e2e_proven"] is False
+          PY
+
+      - name: Upload controlled composition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-v2-sandbox-controlled-composition
+          path: |
+            artifacts/native-v2-sandbox-controlled-composition/report.json
+            /tmp/veritas-native-v2-sandbox/service.log
+          if-no-files-found: warn
+
+      - name: Stop controlled sandbox service
+        if: always()
+        run: |
+          if [ -f /tmp/veritas-native-v2-sandbox/service.pid ]; then
+            sudo kill "$(cat /tmp/veritas-native-v2-sandbox/service.pid)" || true
+          fi
+          rm -f "$VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG"
