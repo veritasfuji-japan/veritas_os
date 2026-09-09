@@ -1,7 +1,7 @@
 # Native v2 sandbox event integration specification v1
 
-Status: implementation proposal for human review; no runtime implementation or deployment authorization.
-Baseline: `33460417782b3659a32a1ecfbc20714edc5943bc` (#2197 merged).
+Status: implemented controlled proof path; architecture frozen for the controlled sandbox claim.
+Freeze anchor: `ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc` (#2215 merged).
 Japanese companion: [日本語版](../../ja/architecture/native-v2-sandbox-event-spec-v1.md).
 
 ## 1. Purpose and boundary
@@ -9,8 +9,10 @@ Japanese companion: [日本語版](../../ja/architecture/native-v2-sandbox-event
 Demonstrate one native v2 execution path that durably registers one synthetic event
 in a dedicated sandbox. The effect is insertion of a sandbox event row, not receipt
 creation or an HTTP acknowledgement. No production API, payment, customer data or
-general adapter framework is included. This document specifies future behavior;
-it does not claim that credential resolution, native v2 Bind or reconciliation works today.
+general adapter framework is included. Sections 10–25 document the implemented
+controlled path through credential resolution, native v2 Bind, reconciliation,
+receipt/outcome publication and reproducible Decision-to-Effect proof. This remains
+a controlled CI claim, not production deployment validation.
 
 Existing code anchors:
 
