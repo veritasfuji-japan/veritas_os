@@ -754,7 +754,56 @@ A passing controlled-composition report proves the repository components can be
 joined under one isolated, reproducible TLS/PostgreSQL environment with the
 specified fault behavior. It **does not** prove production readiness, real
 customer credentials, independent infrastructure ownership, external clock
-trust, TrustLog exactly-once publication, or a real Decision-to-Effect E2E
-lineage. The authorization remains a signed synthetic native fixture. Production
-deployment validation and the later current-head Decision-to-Effect proof remain
-separate milestones.
+trust, or TrustLog exactly-once publication. Section 25 adds the separate
+current-head Decision-to-Effect lineage proof on top of this composition.
+Production deployment validation remains a later environment-specific milestone.
+
+
+## 25. Reproducible controlled Decision-to-Effect E2E
+
+TASK-007 adds a dedicated current-head proof workflow that starts before native
+authorization, at the actual `POST /v1/decide` route. Model output and external
+infrastructure fixtures remain controlled and synthetic, but the HTTP route,
+decision kernel, signed policy verification, CanonicalDecisionArtifact
+construction/verification, deterministic promotion, native v2 issuance and the
+sandbox execution path all use the repository's current production code paths.
+
+For each proof case the runner binds the exact sandbox action reference into the
+selected decision candidate before capture. It then independently verifies the
+CDA, reconstructs the deterministic promotion packet, builds the native authority
+source chain, issues and re-verifies the native v2 authorization, and requires
+the authorization's exact execution intent ID/hash and source decision ID/hash to
+match the promotion and CDA.
+
+The proof then reuses section 24's controlled environment:
+
+`/v1/decide -> verified CDA -> promotion -> native v2 authorization ->
+PostgreSQL consumption -> current governance rechecks -> credential resolution ->
+durable dispatch intent -> certificate-validated TLS POST -> dedicated PostgreSQL
+event persistence -> read-only TLS reconciliation -> archived evidence ->
+BindReceipt / Outcome -> recovery`.
+
+Two independently captured decisions are required. The normal case receives a
+matching HTTP 201 observation but still remains `EFFECT_UNKNOWN` until the
+read-only reconciliation path independently confirms the persisted operation.
+The fault case commits a second event, deliberately loses the caller-side
+response, forces read-only lookup to 503, and requires `EFFECT_UNKNOWN` plus
+`external_effect_retry_permitted=false`. After lookup availability returns, the
+same operation must be confirmed without another POST. Repeating recovery after
+confirmation must not perform another reconciliation lookup.
+
+The generated `report.json` records the exact source/base SHAs, deployment hash,
+controlled CA digest, migration revision, decision/promotion/authorization
+identities, external operation references, reconciliation evidence hashes,
+receipt bundle hashes and a machine-checkable proof conjunction. The companion
+`evidence.json` contains the synthetic CDA, promotion packet, native
+authorization, consumption record, reconciliation archive and receipt bundle for
+both cases. A hash of the evidence bundle and a proof-manifest hash bind the
+generated artifacts. Bearer material and private keys are explicitly excluded.
+
+A passing dedicated check establishes **controlled current-head
+Decision-to-Effect E2E reproducibility** for this sandbox scope. It does not
+establish production readiness, real customer credentials/endpoints, independent
+production infrastructure, external UTC clock trust, TrustLog exactly-once
+publication, or regulatory approval/certification. Those remain separate claims
+and gates.
