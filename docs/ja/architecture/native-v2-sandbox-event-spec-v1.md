@@ -612,6 +612,49 @@ reconciliation proof digest、receipt bundle hashを記録します。Bearer mat
 passing controlled-composition reportが証明するのは、repository componentが指定した
 fault behaviorを保ちながらisolatedで再現可能なTLS/PostgreSQL環境へ結合できることです。
 **production readiness、実顧客credential、独立infrastructure ownership、外部clock trust、
-TrustLog exactly-once publication、real Decision-to-Effect E2E lineageは証明しません。**
-authorizationは引き続きsigned synthetic native fixtureです。production deployment validationと
-current-head Decision-to-Effect proofは後続milestoneに残ります。
+TrustLog exactly-once publicationは証明しません。** 第25節でこのcompositionの上に
+current-head Decision-to-Effect lineage proofを追加します。production deployment validationは
+後続のenvironment-specific milestoneに残ります。
+
+
+## 25. Reproducible controlled Decision-to-Effect E2E
+
+TASK-007ではnative authorizationより上流の実`POST /v1/decide` routeから開始する
+current-head専用proof workflowを追加します。model outputと外部infrastructure fixtureは
+controlled / syntheticですが、HTTP route、decision kernel、signed policy verification、
+CanonicalDecisionArtifactの生成・検証、deterministic promotion、native v2 issuance、
+sandbox execution pathはrepositoryのcurrent production code pathを通します。
+
+各proof caseではdecision captureより前にexact sandbox action referenceをselected candidateへ
+bindingします。その後CDAを独立検証し、deterministic promotion packetを再構築し、
+native authority source chainを作り、native v2 authorizationをissueして再検証します。
+authorizationのexecution intent ID/hashとsource decision ID/hashがpromotionおよびCDAへ
+完全一致することを必須にします。
+
+その後、第24節のcontrolled environmentを再利用して次を接続します。
+
+`/v1/decide -> verified CDA -> promotion -> native v2 authorization ->
+PostgreSQL consumption -> current governance rechecks -> credential resolution ->
+durable dispatch intent -> certificate-validated TLS POST -> dedicated PostgreSQL
+event persistence -> read-only TLS reconciliation -> archived evidence ->
+BindReceipt / Outcome -> recovery`
+
+独立にcaptureした2つのdecisionを使います。normal caseではmatching HTTP 201を観測しても、
+read-only reconciliationがpersisted operationを独立確認するまでは`EFFECT_UNKNOWN`です。
+fault caseでは2件目eventをcommitした後caller-side responseを意図的に失わせ、read-only lookupを
+503へ落とし、`EFFECT_UNKNOWN`と`external_effect_retry_permitted=false`を要求します。
+lookup復旧後は同じoperationを追加POSTなしで確認し、confirmation後のrepeat recoveryでは
+reconciliation lookupも再実行しません。
+
+生成する`report.json`にはexact source/base SHA、deployment hash、controlled CA digest、
+migration revision、decision/promotion/authorization identity、external operation reference、
+reconciliation evidence hash、receipt bundle hash、machine-checkable proof conjunctionを記録します。
+`evidence.json`には両caseのsynthetic CDA、promotion packet、native authorization、
+consumption record、reconciliation archive、receipt bundleを格納します。evidence bundle hashと
+proof-manifest hashでartifactをbindingし、Bearer materialとprivate keyは明示的に除外します。
+
+dedicated checkのPASSが証明するのは、このsandbox scopeにおける
+**controlled current-head Decision-to-Effect E2E reproducibility**です。
+production readiness、実顧客credential/endpoint、独立production infrastructure、
+external UTC clock trust、TrustLog exactly-once publication、規制上の承認・認証は証明しません。
+これらは別のclaim / gateとして残ります。
