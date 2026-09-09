@@ -301,7 +301,10 @@ async def _migration_head() -> str:
 
 
 def _load_current(inputs):
+    calls = {"count": 0}
+
     def load(now: datetime) -> SandboxCurrentInputs:
+        calls["count"] += 1
         risk, source = _fresh(inputs, now)
         return SandboxCurrentInputs(
             source=source,
@@ -309,7 +312,7 @@ def _load_current(inputs):
             runtime_risk_packet=risk,
         )
 
-    return load
+    return load, calls
 
 
 def _reader_inputs(config, ca_pem: str, token: str, suffix: str):
@@ -370,6 +373,7 @@ async def _run_normal_case(case, *, ca_pem: str, writer_token: str, reader_token
     effect_store = PostgresAtomicEffectStateStore()
     writer = ControlledCredentialProvider(writer_token)
     transport = SandboxHTTPSTransport(endpoint_url=config.endpoint_url, ca_pem=ca_pem)
+    load_current, governance_calls = _load_current(inputs)
 
     dispatch = await execute_sandbox_bind(
         artifact,
@@ -381,7 +385,7 @@ async def _run_normal_case(case, *, ca_pem: str, writer_token: str, reader_token
         consumption_store=consumption_store,
         effect_store=effect_store,
         trusted_clock=_clock,
-        load_current_inputs=_load_current(inputs),
+        load_current_inputs=load_current,
         provider=writer,
         transport=transport,
     )
@@ -423,6 +427,7 @@ async def _run_normal_case(case, *, ca_pem: str, writer_token: str, reader_token
         "archive": archive,
         "consumption": consumption,
         "reader_calls": reader.describe_calls,
+        "governance_recheck_calls": governance_calls["count"],
     }
 
 
@@ -441,6 +446,7 @@ async def _run_fault_case(
     transport = LoseObservedResponseTransport(
         SandboxHTTPSTransport(endpoint_url=config.endpoint_url, ca_pem=ca_pem)
     )
+    load_current, governance_calls = _load_current(inputs)
 
     dispatch = await execute_sandbox_bind(
         artifact,
@@ -452,7 +458,7 @@ async def _run_fault_case(
         consumption_store=consumption_store,
         effect_store=effect_store,
         trusted_clock=_clock,
-        load_current_inputs=_load_current(inputs),
+        load_current_inputs=load_current,
         provider=writer,
         transport=transport,
     )
@@ -544,6 +550,7 @@ async def _run_fault_case(
         "transport_delegate_observation": transport.delegate_observation,
         "reader_calls_after_confirmation": reader_calls_after_confirmation,
         "reader_calls_after_repeat": reader.describe_calls,
+        "governance_recheck_calls": governance_calls["count"],
     }
 
 
@@ -618,7 +625,10 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
         "execution_intent_lineage_proven": True,
         "native_v2_authorizations_verified": True,
         "real_postgresql_consumption": True,
-        "current_governance_rechecks_exercised": True,
+        "current_governance_rechecks_exercised": (
+            normal["governance_recheck_calls"] >= 3
+            and fault["governance_recheck_calls"] >= 3
+        ),
         "real_certificate_validated_tls_post": True,
         "dedicated_postgresql_effect_persistence": True,
         "read_only_reconciliation_confirmed": True,
@@ -660,6 +670,7 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
             "external_operation_reference": normal["archive"].operation.operation_id,
             "reconciliation_evidence_hash": normal["archive"].proof.deterministic_digest(),
             "receipt_bundle_hash": normal["recovered"].receipt_bundle.bundle_hash,
+            "governance_recheck_calls": normal["governance_recheck_calls"],
         },
         "fault": {
             "decision_id": fault_case["cda"].decision_id,
@@ -676,6 +687,7 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
             "reconciliation_evidence_hash": fault["archive"].proof.deterministic_digest(),
             "receipt_bundle_hash": fault["recovered"].receipt_bundle.bundle_hash,
             "transport_calls": fault["transport_calls"],
+            "governance_recheck_calls": fault["governance_recheck_calls"],
         },
         "sandbox_rows_added": rows_after_fault - rows_before,
         "evidence_hash": evidence_hash,
