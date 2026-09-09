@@ -1,15 +1,17 @@
 # Native v2 sandboxイベント連携仕様 v1
 
-状態: 人間レビュー用の実装提案。実行処理の実装済み宣言・デプロイ許可ではありません。
-基準: `33460417782b3659a32a1ecfbc20714edc5943bc`（#2197マージ後）。
+状態: controlled proof path実装済み。controlled sandbox claimについてArchitecture Freeze対象です。
+Freeze anchor: `ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc`（#2215マージ後）。
 英語版: [English](../../en/architecture/native-v2-sandbox-event-spec-v1.md)。
 
 ## 1. 目的と境界
 
 native v2経路から、専用sandboxへ合成イベント1件を永続登録することを実証します。
 外部作用はsandboxのイベント行の挿入です。Receipt作成やHTTP応答だけではありません。
-本番API・送金・顧客データ・汎用adapter frameworkは対象外です。本書は将来の仕様で、
-credential resolution・native v2 Bind・reconciliationの実装完了を主張しません。
+本番API・送金・顧客データ・汎用adapter frameworkは対象外です。第10〜25節は
+credential resolution、native v2 Bind、reconciliation、Receipt/Outcome発行、
+reproducible Decision-to-Effect proofまでのcontrolled実装を記録します。
+これはcontrolled CI claimであり、production deployment validationではありません。
 
 照合した既存コード:
 
