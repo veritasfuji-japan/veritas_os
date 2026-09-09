@@ -627,8 +627,8 @@ Migration 0008 adds a nullable unique `business_event_key` column to
 `bind_effect_states`. The key is execution ownership metadata and is deliberately
 kept outside the hashed `EffectStateRecord` JSON so existing evidence hashes do
 not change. New sandbox attempts derive the key from a domain separator, the
-sandbox action, target system, exact HTTPS endpoint and event UUID. Message text,
-authorization ID and idempotency key are excluded. A newly issued authorization
+sandbox action, exact HTTPS endpoint and event UUID. Message text, target-system
+label, authorization ID and idempotency key are excluded. A newly issued authorization
 therefore cannot escape an existing same-event claim merely by changing those
 values.
 
