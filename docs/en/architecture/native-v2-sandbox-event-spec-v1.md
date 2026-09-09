@@ -660,3 +660,49 @@ sandbox attempts have been handled under deployment procedures. The repository
 still does not claim a complete automatic recovery coordinator, real
 TLS/provider/host-clock/PostgreSQL deployment composition, TrustLog exactly-once
 publication, or a passing real Decision-to-Effect E2E proof.
+
+
+## 23. Automatic crash recovery coordinator
+
+`recover_sandbox_attempt` is the owning recovery composition for the native v2
+sandbox path. It is deliberately not a scheduler and never creates a new execution
+attempt. Every invocation re-verifies the original native authorization/action and
+durable consumption lineage, then reads the stored effect state before selecting a
+recovery action. The coordinator has no POST/re-dispatch path and never re-consumes
+the authorization.
+
+An exact revision-1 `IN_FLIGHT` row with reason
+`SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED` may be closed as
+`CONFIRMED_NO_EFFECT`. This is safe because `execute_sandbox_bind` cannot enter
+transport until that same row has durably advanced to revision-2
+`EFFECT_UNKNOWN` and a matching readback has succeeded. A durable revision-1
+read therefore proves that this attempt did not cross the transport-entry gate.
+The no-effect transition uses compare-and-set, requires committed readback, and
+releases the business-event claim in the existing atomic state update. A lost
+transition acknowledgement is recovered from a fresh durable read rather than
+from the return value.
+
+`EFFECT_UNKNOWN` never becomes no-effect from absence. The coordinator delegates
+one read-only GET attempt to `reconcile_sandbox_effect`. Matching persisted
+evidence advances to `CONFIRMED_EFFECT`; 404, lookup outage and other non-confirming
+results remain `EFFECT_UNKNOWN`. No blind resend, replacement authorization,
+writer credential or dispatch transport is used.
+
+A durable `CONFIRMED_EFFECT` row is handed to `publish_sandbox_receipts`, which
+revalidates the archived reconciliation lineage and returns/persists the same
+deterministic BindReceipt/Outcome pair. Repeating recovery after a lost receipt
+publication acknowledgement does not perform another lookup or external effect.
+`CONFIRMED_NO_EFFECT` created by the exact pre-dispatch recovery rule is returned
+idempotently. Unexpected terminal provenance, substituted lineage, storage
+ambiguity or cancellation fails closed and never sets
+`external_effect_retry_permitted`.
+
+Synthetic composition tests cover pre-dispatch crash, lost transition
+acknowledgement, non-confirming lookup, unknown-to-confirmed recovery, terminal
+restart and receipt reuse without POST. A real PostgreSQL test covers the
+pre-dispatch terminal transition, fresh-store readback and business-event claim
+release. These tests close the repository's automatic recovery coordinator for the
+sandbox path; they do not establish real TLS/provider/host-clock deployment
+composition, TrustLog exactly-once publication, or a passing real
+Decision-to-Effect E2E proof. Section 9 deployment prerequisites remain required
+before any live external effect.
