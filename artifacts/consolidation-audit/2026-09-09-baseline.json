@@ -1,0 +1,145 @@
+{
+  "format_version": "large-consolidation-audit-baseline/v1",
+  "audit_status": "INITIAL_INVENTORY",
+  "audit_mode": "NON_DESTRUCTIVE",
+  "source_main": "fb5f2bd4cbf6229148efe97586e8c019d2a625c9",
+  "frozen_proof_anchor": "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc",
+  "architecture_freeze_pr": 2216,
+  "classification_vocabulary": [
+    "FROZEN_CORE",
+    "ACTIVE_NON_CORE",
+    "DUPLICATE_CANDIDATE",
+    "DEAD_CANDIDATE",
+    "COMPATIBILITY_CANDIDATE",
+    "UNCERTAIN"
+  ],
+  "repository_metrics": {
+    "files": 2220,
+    "python_files": 1128,
+    "runtime_python_files": 432,
+    "test_python_files": 471,
+    "scripts_python_files": 87,
+    "workflows": 15,
+    "docs": 568
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "category": "frozen-core",
+      "classification": "FROZEN_CORE",
+      "confidence": "HIGH",
+      "scope": "controlled Decision-to-Effect proof path",
+      "evidence": [
+        "docs/architecture/controlled-execution-proof-freeze-v1.json",
+        ".github/workflows/reproducible-decision-to-effect-e2e.yml",
+        "veritas_os/tests/test_decision_to_effect_controlled_e2e.py"
+      ],
+      "observation": "The architecture-freeze manifest explicitly protects the current controlled proof path and its required files.",
+      "proposed_action": "Treat manifest-required files and proven semantics as protected baseline. Expand to transitive dependency closure before any broad consolidation.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "F-002",
+      "category": "similar-test-duplication",
+      "classification": "DUPLICATE_CANDIDATE",
+      "confidence": "MEDIUM",
+      "scope": "veritas_os/tests/unit/test_plan8_* through test_plan17_*",
+      "evidence": [
+        "10 files",
+        "55,659 bytes total",
+        "Repeated focus on pipeline/routes/rate edge and abnormal-path coverage",
+        "Sequential plan-number naming rather than stable behavior-domain naming"
+      ],
+      "observation": "The ten sequential coverage-plan suites repeatedly exercise overlapping pipeline, replay-route, and rate-limiting abnormal branches. Sample inspection shows repeated fixtures and neighboring failure modes, but not every assertion is duplicate.",
+      "proposed_action": "Build a target-function/test-case matrix, then consolidate only exact or fixture-level duplication into behavior-oriented suites.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "F-003",
+      "category": "historical-compatibility",
+      "classification": "COMPATIBILITY_CANDIDATE",
+      "confidence": "MEDIUM",
+      "scope": "veritas_os/policy/signing.py::verify_manifest_sha256",
+      "evidence": [
+        "Function docstring explicitly labels it legacy SHA-256 integrity verification",
+        "Repository search found tests and review documentation",
+        "No supported runtime caller was found by the initial code-search pass"
+      ],
+      "observation": "The legacy SHA-256 verifier may be removable if no runtime, CLI, packaging, or migration consumer remains.",
+      "proposed_action": "Confirm with static import/symbol reachability plus entry-point search. If zero supported consumers remain, deprecate/remove in a separate PR with policy-signing tests updated.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "F-004",
+      "category": "duplicate-verifier",
+      "classification": "UNCERTAIN",
+      "confidence": "HIGH",
+      "scope": "TrustLog verification surfaces",
+      "evidence": [
+        "31 Python files with trustlog/trust_log in path",
+        "495,393 bytes total across those files",
+        "veritas_os/logging/trust_log.py::verify_trust_log has active runtime/test callers",
+        "veritas_os/audit/trustlog_verify.py::verify_trustlogs has active CLI/script/test callers",
+        "veritas_os/scripts/verify_trust_log.py::verify_entries is separately tested"
+      ],
+      "observation": "There are multiple TrustLog verification surfaces, but initial evidence shows different ledger/CLI roles. Treating them as duplicates now would be unsafe.",
+      "proposed_action": "Create a role/ledger/consumer matrix before any verifier unification. Separate full encrypted ledger, signed witness/unified verifier, and script-local verification responsibilities.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "F-005",
+      "category": "redundant-implementation",
+      "classification": "UNCERTAIN",
+      "confidence": "HIGH",
+      "scope": "parallel live-adapter dry-run packet families",
+      "evidence": [
+        "16 canonical_promotion_live_adapter_dry_run_* runtime files",
+        "493,702 bytes total",
+        "12 live_adapter_dry_run_* runtime files",
+        "334,003 bytes total",
+        "Native v2 authorization/final-recheck code imports parts of these lineages"
+      ],
+      "observation": "The parallel naming and large volume strongly justify consolidation review, but the frozen proof path currently depends on this lineage. Size or naming similarity is not evidence of removability.",
+      "proposed_action": "Compute frozen transitive dependency closure and packet responsibility matrix. Only then identify canonical/legacy pairs with behaviorally equivalent contracts.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "F-006",
+      "category": "oversized-schema",
+      "classification": "UNCERTAIN",
+      "confidence": "MEDIUM",
+      "scope": "veritas_os/api/schemas.py",
+      "evidence": [
+        "78,331 bytes",
+        "Among the largest runtime Python modules",
+        "Used by API tests and the /v1/decide surface"
+      ],
+      "observation": "The API schema module is large enough to merit boundary review, but it is connected to the actual decision route used by the frozen E2E proof.",
+      "proposed_action": "Map schema classes to API routes/clients/tests before considering a split. Prefer mechanical module split with compatibility imports only if consumer mapping shows low risk.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "F-007",
+      "category": "test-sprawl",
+      "classification": "DUPLICATE_CANDIDATE",
+      "confidence": "LOW",
+      "scope": "coverage-oriented test families",
+      "evidence": [
+        "471 test Python files versus 432 runtime Python files",
+        "Several very large coverage/ext suites: test_pipeline_stages_ext.py 277,589 bytes, test_server_api.py 182,859 bytes, test_fuji_gate.py 131,189 bytes, test_kernel_decide_ext.py 129,743 bytes, test_coverage_consolidated_ext.py 117,478 bytes"
+      ],
+      "observation": "Test volume alone is not a defect, but coverage-driven extension suites are likely to contain fixture and scenario duplication that increases maintenance cost.",
+      "proposed_action": "Use AST/test-name/target-function grouping to find exact fixture and assertion overlap. Preserve distinct safety-boundary tests even when setup is similar.",
+      "deletion_permitted": false
+    }
+  ],
+  "next_audit_steps": [
+    "Compute frozen-core transitive Python dependency closure.",
+    "Generate inbound-import and test/doc reference counts for candidate modules.",
+    "Build behavior-role matrix for TrustLog verifiers.",
+    "Build target-function matrix for plan8-plan17 tests.",
+    "Verify runtime/CLI/entry-point consumers of verify_manifest_sha256.",
+    "Map canonical-promotion vs live-adapter dry-run packet responsibilities.",
+    "Produce ranked follow-up PR sequence; broad deletion remains prohibited until evidence is reviewed."
+  ]
+}
