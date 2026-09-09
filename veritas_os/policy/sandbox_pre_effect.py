@@ -64,7 +64,6 @@ def _sandbox_business_event_key(
     return "sandbox-business-event:v1:sha256:" + sha256_of_canonical_json({
         "domain": "veritas.sandbox-business-event/v1",
         "action": ACTION,
-        "target_system": deployment.target_system,
         "endpoint_url": deployment.endpoint_url,
         "event_id": event_id,
     })
