@@ -469,8 +469,8 @@ commit応答喪失時は、両方が保存済みでも例外を返す可能性�
 旧行とhashは維持します。downgradeは証拠を削除するため、operatorは先に保持方針に従って
 保存する必要があります。effect-state CIの実PostgreSQL試験はrollback・commit応答喪失・
 競合・別storeからの読戻し・証拠欠落を検証します。これは保存処理の試験であり、実TLSとreceiverを
-結合したE2E証明ではありません。Receipt/Outcome発行、代替認可による重複実行の抑止、自動障害復旧、
-実TLS/provider/host-clockの結合検証は未完です。第9節の配備条件は引き続き適用し、実外部アクセスは
+結合したE2E証明ではありません。Receipt/Outcome発行と代替認可による重複実行の抑止は実装済みで、自動障害復旧は第23節で
+compositionします。実TLS/provider/host-clockの結合検証は未完です。第9節の配備条件は引き続き適用し、実外部アクセスは
 有効化しません。
 
 ## 21. 保存済み証拠からのBindReceipt / Outcome発行
@@ -500,8 +500,8 @@ effect状態変更なしで組を回収できます。effect行の元の記録�
 migration 0007を適用し、列を削除するdowngrade前にはreceiptを保持方針に従って保存します。
 
 これにより確定sandbox effectとDB保存されたartifactを接続します。TrustLogへは発行せず、
-trustlog_hashは空、metadataはNOT_PUBLISHEDを明示します。障害に強いTrustLogへの一度だけの配信、
-完全な自動復旧、実Decision-to-Effect E2Eは未完です。これらと第9節の配備条件は別工程に残ります。
+trustlog_hashは空、metadataはNOT_PUBLISHEDを明示します。このpublisher単体では障害に強いTrustLogへの一度だけの配信や完全な復旧compositionを
+主張しません。復旧pathは第23節でcompositionします。実Decision-to-Effect E2Eは未完です。これらと第9節の配備条件は別工程に残ります。
 本実装と合成試験は実credential・外部作用を許可しません。
 
 ## 22. 同一business eventのreplacement execution抑止
@@ -532,8 +532,8 @@ issuance自体を禁止するのは別のpolicy surfaceであり、「replacemen
 
 migration 0008はlegacy行へ架空のbusiness-event identityをbackfillしません。このsandbox execution pathを
 有効化する前にmigrationを適用し、migration前のsandbox attemptが存在する場合はdeployment手順で確認します。
-完全なautomatic recovery coordinator、実TLS/provider/host-clock/PostgreSQLの配備結合、TrustLogの
-exactly-once発行、passing real Decision-to-Effect E2E proofは引き続き未完です。
+automatic recovery coordinatorは第23節でcompositionします。実TLS/provider/host-clock/PostgreSQLの
+配備結合、TrustLogのexactly-once発行、passing real Decision-to-Effect E2E proofは引き続き未完です。
 
 
 ## 23. Automatic crash recovery coordinator
