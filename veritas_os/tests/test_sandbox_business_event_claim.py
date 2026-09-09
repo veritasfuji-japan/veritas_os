@@ -1,6 +1,7 @@
 """Durable sandbox business-event claims block replacement execution attempts."""
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -55,7 +56,9 @@ def test_business_event_identity_ignores_message_and_authorization_metadata():
         **PAYLOAD,
         "event_id": "12345678-1234-4234-8234-123456789abd",
     })
+    changed_label = _key(config=replace(deployment(), target_system="renamed-sandbox"))
     assert original == changed_message
+    assert original == changed_label
     assert original != changed_event
     assert original.startswith("sandbox-business-event:v1:sha256:")
 
