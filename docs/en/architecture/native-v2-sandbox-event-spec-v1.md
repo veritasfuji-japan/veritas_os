@@ -706,3 +706,55 @@ sandbox path; they do not establish real TLS/provider/host-clock deployment
 composition, TrustLog exactly-once publication, or a passing real
 Decision-to-Effect E2E proof. Section 9 deployment prerequisites remain required
 before any live external effect.
+
+
+## 24. Controlled deployment composition target
+
+The next proof step uses a **controlled CI integration environment**, not a
+production deployment. The environment binds the authorization-pinned
+`sandbox.example.invalid` hostname to runner loopback, creates a one-run test
+CA and matching server certificate, starts the existing independent sandbox
+event service on real TLS port 443, and uses two PostgreSQL databases on the
+same isolated PostgreSQL service: one for VERITAS durable governance/effect
+state and one dedicated to sandbox event persistence.
+
+The workflow applies the current Alembic head to the VERITAS database and
+installs `sandbox_events.sql` into the dedicated sandbox database through the
+CI-only service runner. Writer and reader bearer materials are distinct
+synthetic values supplied only by workflow environment configuration. The
+production sandbox service contract is not changed: the fault-injection seam is
+a runner-only middleware that can force read-only lookup requests to return
+503 when a local flag file exists.
+
+The controlled composition proof executes the native v2 path with:
+
+`signed synthetic native authorization -> PostgreSQL consumption -> current
+governance rechecks -> credential resolution -> durable dispatch intent -> real
+certificate-validated TLS POST -> dedicated PostgreSQL event persistence ->
+read-only TLS reconciliation -> archived evidence -> BindReceipt / Outcome ->
+automatic recovery`.
+
+The primary fault scenario deliberately lets the real HTTPS POST commit and
+receive a matching service acknowledgement, then discards that observation at
+the caller boundary to model a lost response. Durable sender state remains
+`EFFECT_UNKNOWN`. The workflow then enables a controlled lookup outage; recovery
+performs a real TLS GET, receives 503, remains `EFFECT_UNKNOWN`, and explicitly
+keeps external-effect retry prohibited. After the outage flag is removed, a
+fresh read-only GET confirms the same persisted operation and recovery publishes
+the deterministic receipt pair. A repeated recovery must use stored
+reconciliation/receipt state and must not issue another POST or lookup.
+
+The evidence report records the deployment configuration hash, CA digest,
+Alembic revision, real-TLS/real-PostgreSQL assertions, unknown/terminal states,
+external operation reference, reconciliation proof digest and receipt bundle
+hash. It never records bearer material or private keys. CI artifacts may include
+the report and non-secret service log only.
+
+A passing controlled-composition report proves the repository components can be
+joined under one isolated, reproducible TLS/PostgreSQL environment with the
+specified fault behavior. It **does not** prove production readiness, real
+customer credentials, independent infrastructure ownership, external clock
+trust, TrustLog exactly-once publication, or a real Decision-to-Effect E2E
+lineage. The authorization remains a signed synthetic native fixture. Production
+deployment validation and the later current-head Decision-to-Effect proof remain
+separate milestones.

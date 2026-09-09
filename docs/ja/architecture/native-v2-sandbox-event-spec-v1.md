@@ -571,3 +571,47 @@ business-event claim解放を確認します。これによりsandbox pathのaut
 coordinatorはrepository上で閉じますが、実TLS/provider/host-clockのdeployment composition、
 TrustLog exactly-once publication、passing real Decision-to-Effect E2E proofは未完です。
 live external effectの前には第9節のdeployment prerequisitesが引き続き必要です。
+
+
+## 24. Controlled deployment composition target
+
+次のproof stepは**controlled CI integration environment**を使い、production
+deploymentとは扱いません。authorizationに固定された
+`sandbox.example.invalid`をrunnerのloopbackへ結び、1 run限定のtest CAと
+server certificateを生成し、既存の独立sandbox event serviceを実TLS port 443で
+起動します。PostgreSQLは同じisolated service上で2つのdatabaseを分離し、一方を
+VERITASのdurable governance/effect state、もう一方をsandbox event persistence専用にします。
+
+workflowはVERITAS DBへcurrent Alembic headを適用し、CI専用service runnerから
+sandbox DBへ`sandbox_events.sql`をinstallします。writer / readerのBearer materialは
+workflow環境だけから渡す別々のsynthetic valueです。product側sandbox service contractは
+変更しません。read-only lookupを503へ落とすfault injectionは、local flag fileを読む
+runner-only middlewareであり、product APIには追加しません。
+
+controlled composition proofは次を1本に接続します。
+
+`signed synthetic native authorization -> PostgreSQL consumption -> current
+governance rechecks -> credential resolution -> durable dispatch intent -> real
+certificate-validated TLS POST -> dedicated PostgreSQL event persistence ->
+read-only TLS reconciliation -> archived evidence -> BindReceipt / Outcome ->
+automatic recovery`
+
+主fault scenarioでは、real HTTPS POSTを実際にcommitし、serviceからmatching acknowledgementを
+受け取った直後にcaller側でその観測を意図的に捨て、lost responseを再現します。senderの
+durable stateは`EFFECT_UNKNOWN`のままです。続いてcontrolled lookup outageを有効化し、
+recoveryがreal TLS GETで503を受けても`EFFECT_UNKNOWN`を維持し、external-effect retryを
+明示的に禁止します。outage flagを解除後、fresh read-only GETが同じpersisted operationを
+確認し、recoveryがdeterministic receipt pairを発行します。さらにrepeat recoveryでは
+保存済みreconciliation/receipt stateだけを使い、POSTもlookupも再実行しないことを要求します。
+
+evidence reportにはdeployment configuration hash、CA digest、Alembic revision、
+real TLS / real PostgreSQLの確認、unknown/terminal state、external operation reference、
+reconciliation proof digest、receipt bundle hashを記録します。Bearer materialやprivate keyは
+記録しません。CI artifactへ出すのはreportとnon-secret service logだけです。
+
+passing controlled-composition reportが証明するのは、repository componentが指定した
+fault behaviorを保ちながらisolatedで再現可能なTLS/PostgreSQL環境へ結合できることです。
+**production readiness、実顧客credential、独立infrastructure ownership、外部clock trust、
+TrustLog exactly-once publication、real Decision-to-Effect E2E lineageは証明しません。**
+authorizationは引き続きsigned synthetic native fixtureです。production deployment validationと
+current-head Decision-to-Effect proofは後続milestoneに残ります。
