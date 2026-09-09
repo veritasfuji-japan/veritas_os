@@ -149,13 +149,62 @@ async def test_post_claim_drift_stops_and_preserves_attempt(prepared_inputs, mod
 
 
 @pytest.mark.asyncio
+async def test_prior_same_business_event_blocks_replacement_before_current_recheck(prepared_inputs):
+    artifact, args = await _args(prepared_inputs)
+    record = prepared_inputs[2]
+    binding = module.verify_sandbox_action_binding(
+        artifact, json.dumps(PAYLOAD), deployment=args["deployment"],
+        source_inputs=args["issuance_source_inputs"],
+        governance_inputs=args["governance_inputs"], trust_inputs=args["trust_inputs"],
+    )
+    key = module._sandbox_business_event_key(binding.binding.payload_json, args["deployment"])
+    prior_consumption = module.build_authorization_consumption_record(
+        live_adapter_bind_authorization_id="replacement-prior-authorization",
+        live_adapter_bind_authorization_hash="d" * 64,
+        idempotency_key="replacement-prior-idempotency",
+        bind_context_hash="e" * 64,
+        execution_intent_id="replacement-prior-intent",
+        execution_intent_hash="f" * 64,
+        endpoint_identity_binding_digest="endpoint",
+        credential_reference_digest="credential",
+        credential_scope_binding_digest="scope",
+        consumed_at=record.consumed_at,
+    )
+    prior = module._build_record(
+        consumption=prior_consumption, state=module.EffectExecutionState.IN_FLIGHT,
+        revision=1, updated_at=record.consumed_at,
+        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+    )
+    assert await args["effect_store"].create_in_flight(prior, business_event_key=key)
+    unknown = module._build_record(
+        consumption=prior_consumption, state=module.EffectExecutionState.EFFECT_UNKNOWN,
+        revision=2, updated_at=record.consumed_at,
+        reason_code="SANDBOX_DISPATCH_INTENT_PERSISTED_EFFECT_UNCONFIRMED",
+    )
+    assert await args["effect_store"].transition(
+        operation_id=prior.operation_id,
+        expected_state=module.EffectExecutionState.IN_FLIGHT,
+        record=unknown,
+    )
+
+    def must_not_load(_now):
+        pytest.fail("replacement block must happen before current-governance recheck")
+
+    args["load_current_inputs"] = must_not_load
+    with pytest.raises(module.SandboxPreEffectError, match="^SPE_BUSINESS_EVENT_ALREADY_CLAIMED$"):
+        await _prepare(artifact, args)
+    assert await args["effect_store"].get(record.consumption_id) is None
+    assert await args["effect_store"].get(prior.operation_id) == unknown
+
+
+@pytest.mark.asyncio
 async def test_lost_claim_acknowledgement_never_returns_prepared_result(prepared_inputs, monkeypatch):
     artifact, args = await _args(prepared_inputs)
     store = args["effect_store"]
     create = store.create_in_flight
 
-    async def lost(record):
-        await create(record)
+    async def lost(record, **kwargs):
+        await create(record, **kwargs)
         raise RuntimeError("secret-dsn")
 
     monkeypatch.setattr(store, "create_in_flight", lost)

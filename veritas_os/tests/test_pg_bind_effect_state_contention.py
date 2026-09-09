@@ -111,6 +111,58 @@ async def test_real_postgres_consumption_read_and_attempt_creation_have_one_winn
 
 
 @pytest.mark.asyncio
+async def test_real_postgres_business_event_claim_blocks_replacement_until_no_effect() -> None:
+    _require_real_postgresql()
+    key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
+    first = _consumption(uuid4().hex)
+    replacement = _consumption(uuid4().hex)
+    store = PostgresAtomicEffectStateStore()
+    original = _build_record(
+        consumption=first, state=EffectExecutionState.IN_FLIGHT,
+        revision=1, updated_at=first.consumed_at,
+        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+    )
+    assert await store.create_in_flight(original, business_event_key=key)
+    unknown = _build_record(
+        consumption=first, state=EffectExecutionState.EFFECT_UNKNOWN,
+        revision=2, updated_at="2026-08-24T00:00:01+00:00",
+        reason_code="SANDBOX_DISPATCH_INTENT_PERSISTED_EFFECT_UNCONFIRMED",
+    )
+    assert await store.transition(
+        operation_id=original.operation_id,
+        expected_state=EffectExecutionState.IN_FLIGHT,
+        record=unknown,
+    )
+    replacement_record = _build_record(
+        consumption=replacement, state=EffectExecutionState.IN_FLIGHT,
+        revision=1, updated_at=replacement.consumed_at,
+        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+    )
+    results = await asyncio.gather(*(
+        PostgresAtomicEffectStateStore().create_in_flight(
+            replacement_record, business_event_key=key,
+        )
+        for _ in range(8)
+    ))
+    assert results == [False] * 8
+    assert await store.get(replacement_record.operation_id) is None
+
+    no_effect = _build_record(
+        consumption=first, state=EffectExecutionState.CONFIRMED_NO_EFFECT,
+        revision=3, updated_at="2026-08-24T00:00:02+00:00",
+        reason_code="VERIFIED_EXTERNAL_NO_EFFECT_CONFIRMED",
+    )
+    assert await store.transition(
+        operation_id=unknown.operation_id,
+        expected_state=EffectExecutionState.EFFECT_UNKNOWN,
+        record=no_effect,
+    )
+    assert await PostgresAtomicEffectStateStore().create_in_flight(
+        replacement_record, business_event_key=key,
+    )
+
+
+@pytest.mark.asyncio
 async def test_real_postgres_archive_atomicity_contention_and_restart(monkeypatch):
     """A failed commit preserves UNKNOWN; an acknowledged-lost commit retains both."""
     from contextlib import asynccontextmanager
