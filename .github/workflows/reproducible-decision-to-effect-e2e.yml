@@ -1,0 +1,210 @@
+name: Reproducible Decision-to-Effect E2E
+
+on:
+  pull_request:
+    paths:
+      - "veritas_os/tests/test_decision_to_effect_controlled_e2e.py"
+      - "veritas_os/tests/helpers/live_decision_capture.py"
+      - "scripts/run_native_v2_sandbox_service.py"
+      - "veritas_os/policy/canonical_verified_decision_promotion.py"
+      - "veritas_os/policy/native_bind_authorization.py"
+      - "veritas_os/policy/native_bind_authorization_consumption.py"
+      - "veritas_os/policy/sandbox_*.py"
+      - "veritas_os/policy/bind_effect_reconciliation.py"
+      - "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+      - "alembic/**"
+      - ".github/workflows/reproducible-decision-to-effect-e2e.yml"
+      - "artifacts/real-decision-to-effect-e2e/**"
+      - "docs/en/architecture/native-v2-sandbox-event-spec-v1.md"
+      - "docs/ja/architecture/native-v2-sandbox-event-spec-v1.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproducible-decision-to-effect-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas
+          POSTGRES_DB: veritas_decision_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veritas -d veritas_decision_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:veritas@127.0.0.1:5432/veritas_decision_e2e
+      VERITAS_SANDBOX_DATABASE_URL: postgresql://veritas:veritas@127.0.0.1:5432/veritas_decision_e2e_sandbox
+      VERITAS_SANDBOX_WRITER_TOKEN: decision-e2e-writer-token-0123456789abcdef0123456789
+      VERITAS_SANDBOX_READER_TOKEN: decision-e2e-reader-token-fedcba9876543210fedcba9876
+      VERITAS_SANDBOX_CA_FILE: /tmp/veritas-decision-e2e/ca.crt
+      VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG: /tmp/veritas-decision-e2e/lookup-outage
+      VERITAS_DECISION_TO_EFFECT_REPORT: artifacts/real-decision-to-effect-e2e/report.json
+      VERITAS_DECISION_TO_EFFECT_EVIDENCE: artifacts/real-decision-to-effect-e2e/evidence.json
+      VERITAS_DECISION_TO_EFFECT_E2E: "1"
+      VERITAS_E2E_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      VERITAS_E2E_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install proof dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip --retries 5 --timeout 60
+          python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
+          python -m pip install --retries 5 --timeout 60 \
+            "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
+
+      - name: Create dedicated sandbox database
+        run: |
+          python - <<'PY'
+          import psycopg
+          conn = psycopg.connect(
+              "postgresql://veritas:veritas@127.0.0.1:5432/postgres",
+              autocommit=True,
+          )
+          try:
+              conn.execute("CREATE DATABASE veritas_decision_e2e_sandbox")
+          finally:
+              conn.close()
+          PY
+
+      - name: Apply current VERITAS PostgreSQL migrations
+        run: alembic upgrade head
+
+      - name: Create controlled CA and authorization-pinned certificate
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/veritas-decision-e2e
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout /tmp/veritas-decision-e2e/ca.key \
+            -out /tmp/veritas-decision-e2e/ca.crt \
+            -subj "/CN=VERITAS Decision-to-Effect Controlled CA"
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout /tmp/veritas-decision-e2e/server.key \
+            -out /tmp/veritas-decision-e2e/server.csr \
+            -subj "/CN=sandbox.example.invalid"
+          cat >/tmp/veritas-decision-e2e/ext.cnf <<'EOF'
+          subjectAltName=DNS:sandbox.example.invalid
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -days 1 \
+            -in /tmp/veritas-decision-e2e/server.csr \
+            -CA /tmp/veritas-decision-e2e/ca.crt \
+            -CAkey /tmp/veritas-decision-e2e/ca.key \
+            -CAcreateserial \
+            -out /tmp/veritas-decision-e2e/server.crt \
+            -extfile /tmp/veritas-decision-e2e/ext.cnf
+          chmod 600 /tmp/veritas-decision-e2e/ca.key /tmp/veritas-decision-e2e/server.key
+
+      - name: Bind authorization-pinned sandbox hostname to loopback
+        run: echo "127.0.0.1 sandbox.example.invalid" | sudo tee -a /etc/hosts
+
+      - name: Start independent sandbox HTTPS service
+        run: |
+          set -euo pipefail
+          sudo -E env PYTHONPATH="$GITHUB_WORKSPACE" "$(which python)" \
+            scripts/run_native_v2_sandbox_service.py \
+            --host 0.0.0.0 \
+            --port 443 \
+            --cert /tmp/veritas-decision-e2e/server.crt \
+            --key /tmp/veritas-decision-e2e/server.key \
+            >/tmp/veritas-decision-e2e/service.log 2>&1 &
+          echo $! >/tmp/veritas-decision-e2e/service.pid
+
+          status=""
+          for i in $(seq 1 30); do
+            status="$(curl --silent --show-error \
+              --cacert "$VERITAS_SANDBOX_CA_FILE" \
+              -H "Authorization: Bearer $VERITAS_SANDBOX_READER_TOKEN" \
+              -o /tmp/veritas-decision-e2e/health.json \
+              -w '%{http_code}' \
+              'https://sandbox.example.invalid/v1/operations?idempotency_key=not-created' \
+              || true)"
+            if [ "$status" = "404" ]; then
+              break
+            fi
+            sleep 0.5
+          done
+
+          test "$status" = "404"
+          grep -q "SSE_NOT_FOUND_NOT_PROOF_OF_NO_EFFECT" \
+            /tmp/veritas-decision-e2e/health.json
+
+      - name: Run current-head Decision-to-Effect proof
+        run: |
+          set -euxo pipefail
+          PYTHONPATH=. pytest \
+            veritas_os/tests/test_decision_to_effect_controlled_e2e.py \
+            -v -s --tb=short
+
+      - name: Assert proof conjunction
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("artifacts/real-decision-to-effect-e2e/report.json").read_text()
+          )
+          evidence = json.loads(
+              Path("artifacts/real-decision-to-effect-e2e/evidence.json").read_text()
+          )
+
+          assert report["result"] == "PASS"
+          assert report["proof"] == "CONTROLLED_CURRENT_HEAD_DECISION_TO_EFFECT_E2E"
+          assert report["production_claim"] is False
+          assert report["controlled_decision_to_effect_e2e_proven"] is True
+          assert report["production_decision_to_effect_e2e_proven"] is False
+          assert report["trustlog_exactly_once_proven"] is False
+          assert report["production_validation_proven"] is False
+          assert report["alembic_head"] == "0008"
+          assert report["normal"]["dispatch_reason"] == "HTTP_201_MATCHING_ACK"
+          assert report["normal"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
+          assert report["fault"]["dispatch_reason"] == "TRANSPORT_FAILED_OR_UNKNOWN"
+          assert report["fault"]["transport_delegate_observation"] == "HTTP_201_MATCHING_ACK"
+          assert report["fault"]["lookup_outage_state"] == "EFFECT_UNKNOWN"
+          assert report["fault"]["lookup_outage_retry_permitted"] is False
+          assert report["fault"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
+          assert report["fault"]["transport_calls"] == 1
+          assert report["sandbox_rows_added"] == 2
+          assert all(report["proof_conjunction"].values())
+          assert evidence["source_sha"] == report["source_sha"]
+          assert evidence["base_sha"] == report["base_sha"]
+          PY
+
+      - name: Upload Decision-to-Effect proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproducible-decision-to-effect-e2e
+          path: |
+            artifacts/real-decision-to-effect-e2e/report.json
+            artifacts/real-decision-to-effect-e2e/evidence.json
+            /tmp/veritas-decision-e2e/service.log
+          if-no-files-found: warn
+
+      - name: Stop controlled sandbox service
+        if: always()
+        run: |
+          if [ -f /tmp/veritas-decision-e2e/service.pid ]; then
+            sudo kill "$(cat /tmp/veritas-decision-e2e/service.pid)" || true
+          fi
+          rm -f "$VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG"
