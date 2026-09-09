@@ -469,8 +469,8 @@ commit応答喪失時は、両方が保存済みでも例外を返す可能性�
 旧行とhashは維持します。downgradeは証拠を削除するため、operatorは先に保持方針に従って
 保存する必要があります。effect-state CIの実PostgreSQL試験はrollback・commit応答喪失・
 競合・別storeからの読戻し・証拠欠落を検証します。これは保存処理の試験であり、実TLSとreceiverを
-結合したE2E証明ではありません。Receipt/Outcome発行、代替認可による重複実行の抑止、自動障害復旧、
-実TLS/provider/host-clockの結合検証は未完です。第9節の配備条件は引き続き適用し、実外部アクセスは
+結合したE2E証明ではありません。Receipt/Outcome発行と代替認可による重複実行の抑止は実装済みで、自動障害復旧は第23節で
+compositionします。実TLS/provider/host-clockの結合検証は未完です。第9節の配備条件は引き続き適用し、実外部アクセスは
 有効化しません。
 
 ## 21. 保存済み証拠からのBindReceipt / Outcome発行
@@ -500,8 +500,8 @@ effect状態変更なしで組を回収できます。effect行の元の記録�
 migration 0007を適用し、列を削除するdowngrade前にはreceiptを保持方針に従って保存します。
 
 これにより確定sandbox effectとDB保存されたartifactを接続します。TrustLogへは発行せず、
-trustlog_hashは空、metadataはNOT_PUBLISHEDを明示します。障害に強いTrustLogへの一度だけの配信、
-完全な自動復旧、実Decision-to-Effect E2Eは未完です。これらと第9節の配備条件は別工程に残ります。
+trustlog_hashは空、metadataはNOT_PUBLISHEDを明示します。このpublisher単体では障害に強いTrustLogへの一度だけの配信や完全な復旧compositionを
+主張しません。復旧pathは第23節でcompositionします。実Decision-to-Effect E2Eは未完です。これらと第9節の配備条件は別工程に残ります。
 本実装と合成試験は実credential・外部作用を許可しません。
 
 ## 22. 同一business eventのreplacement execution抑止
@@ -532,5 +532,42 @@ issuance自体を禁止するのは別のpolicy surfaceであり、「replacemen
 
 migration 0008はlegacy行へ架空のbusiness-event identityをbackfillしません。このsandbox execution pathを
 有効化する前にmigrationを適用し、migration前のsandbox attemptが存在する場合はdeployment手順で確認します。
-完全なautomatic recovery coordinator、実TLS/provider/host-clock/PostgreSQLの配備結合、TrustLogの
-exactly-once発行、passing real Decision-to-Effect E2E proofは引き続き未完です。
+automatic recovery coordinatorは第23節でcompositionします。実TLS/provider/host-clock/PostgreSQLの
+配備結合、TrustLogのexactly-once発行、passing real Decision-to-Effect E2E proofは引き続き未完です。
+
+
+## 23. Automatic crash recovery coordinator
+
+`recover_sandbox_attempt`はnative v2 sandbox pathのowning recovery compositionです。
+schedulerではなく、新しいexecution attemptを作りません。呼出しごとに元のnative authorization/actionと
+durable consumption lineageを再検証し、保存済みeffect stateを読んでから復旧経路を決めます。
+POST・re-dispatch経路は持たず、authorizationを再消費しません。
+
+revision 1、reasonが`SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED`の完全一致する
+`IN_FLIGHT`だけは`CONFIRMED_NO_EFFECT`へ閉じられます。
+`execute_sandbox_bind`は同じ行をrevision 2の`EFFECT_UNKNOWN`へ永続化し、
+一致するreadbackを確認するまでtransportへ入れないため、durableなrevision 1の読出しは
+このattemptがtransport-entry gateを越えていないことを示します。no-effect遷移はCASと
+commit後readbackを要求し、既存のatomic state updateでbusiness-event claimを解放します。
+transition応答を失ってもreturn valueではなくfresh durable readから復旧します。
+
+`EFFECT_UNKNOWN`は「見つからない」ことからno-effectを推論しません。
+coordinatorは`reconcile_sandbox_effect`へread-only GETを1回委譲します。
+一致するpersisted evidenceがあれば`CONFIRMED_EFFECT`へ進み、404・lookup outage・
+非確定応答は`EFFECT_UNKNOWN`のままです。blind resend、replacement authorization、
+writer credential、dispatch transportは使用しません。
+
+durableな`CONFIRMED_EFFECT`は`publish_sandbox_receipts`へ渡し、保存済みreconciliation
+lineageを再検証して同じdeterministic BindReceipt/Outcome pairを返し、必要ならwrite-once保存します。
+receipt publicationの応答喪失後に再実行しても、新しいlookupやexternal effectは発生しません。
+正確なpre-dispatch recoveryで作られた`CONFIRMED_NO_EFFECT`はidempotentに返します。
+想定外terminal provenance、lineage置換、storage ambiguity、cancellationはfail closedで、
+`external_effect_retry_permitted`をtrueにしません。
+
+synthetic composition testはpre-dispatch crash、transition応答喪失、lookup非確定、
+unknownからconfirmedへの復旧、terminal restart、POSTなしのreceipt再利用を確認します。
+実PostgreSQL testはpre-dispatch terminal transition、別storeからのreadback、
+business-event claim解放を確認します。これによりsandbox pathのautomatic recovery
+coordinatorはrepository上で閉じますが、実TLS/provider/host-clockのdeployment composition、
+TrustLog exactly-once publication、passing real Decision-to-Effect E2E proofは未完です。
+live external effectの前には第9節のdeployment prerequisitesが引き続き必要です。

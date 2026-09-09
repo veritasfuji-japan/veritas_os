@@ -281,3 +281,44 @@ async def test_real_postgres_receipt_pair_write_once_rollback_and_lost_ack(monke
         cur = await conn.execute("SELECT sandbox_receipt_bundle FROM bind_effect_states WHERE operation_id=%s", (record.operation_id,))
         assert (await cur.fetchone())[0] == pair
     assert await store.get(record.operation_id) == record
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_pre_dispatch_recovery_releases_business_event_claim() -> None:
+    """Crash recovery closes only exact pre-dispatch state and permits a fresh claim."""
+    from veritas_os.policy.sandbox_recovery import _confirm_pre_dispatch_no_effect
+
+    _require_real_postgresql()
+    key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
+    first = _consumption(uuid4().hex)
+    replacement = _consumption(uuid4().hex)
+    store = PostgresAtomicEffectStateStore()
+    inflight = _build_record(
+        consumption=first,
+        state=EffectExecutionState.IN_FLIGHT,
+        revision=1,
+        updated_at=first.consumed_at,
+        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+    )
+    assert await store.create_in_flight(inflight, business_event_key=key)
+
+    terminal = await _confirm_pre_dispatch_no_effect(
+        consumption=first,
+        current=inflight,
+        effect_store=PostgresAtomicEffectStateStore(),
+        observed_at="2026-08-24T00:00:01+00:00",
+    )
+    assert terminal.state == EffectExecutionState.CONFIRMED_NO_EFFECT
+    assert await PostgresAtomicEffectStateStore().get(inflight.operation_id) == terminal
+
+    replacement_record = _build_record(
+        consumption=replacement,
+        state=EffectExecutionState.IN_FLIGHT,
+        revision=1,
+        updated_at=replacement.consumed_at,
+        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+    )
+    assert await PostgresAtomicEffectStateStore().create_in_flight(
+        replacement_record,
+        business_event_key=key,
+    )
