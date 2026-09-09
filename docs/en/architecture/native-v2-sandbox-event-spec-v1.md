@@ -616,7 +616,47 @@ publisher; retain receipt data before any downgrade that removes the column.
 This closes the database-backed artifact connection for confirmed sandbox effects.
 It does not publish TrustLog entries: `trustlog_hash` remains empty and metadata
 explicitly records `NOT_PUBLISHED`. It does not claim crash-safe exactly-once
-TrustLog delivery, a complete automatic recovery coordinator, replacement-grant
-blocking, or real Decision-to-Effect E2E completion. Those and section 9 deployment
-prerequisites remain separate work. No live credentials or external effects are
-authorized by this implementation or its synthetic tests.
+TrustLog delivery, a complete automatic recovery coordinator, or real
+Decision-to-Effect E2E completion. Those and section 9 deployment prerequisites
+remain separate work. No live credentials or external effects are authorized by
+this implementation or its synthetic tests.
+
+## 22. Replacement business-event execution blocking
+
+Migration 0008 adds a nullable unique `business_event_key` column to
+`bind_effect_states`. The key is execution ownership metadata and is deliberately
+kept outside the hashed `EffectStateRecord` JSON so existing evidence hashes do
+not change. New sandbox attempts derive the key from a domain separator, the
+sandbox action, target system, exact HTTPS endpoint and event UUID. Message text,
+authorization ID and idempotency key are excluded. A newly issued authorization
+therefore cannot escape an existing same-event claim merely by changing those
+values.
+
+`prepare_sandbox_attempt` supplies the key to the same atomic INSERT that claims
+the effect-state row. PostgreSQL uniqueness is the cross-process race arbiter; the
+in-memory store mirrors this only for explicit tests. No preflight "absence"
+observation is accepted as permission. A failed or ambiguous claim fails closed.
+A replay of the same consumed authorization remains `SPE_ATTEMPT_ALREADY_EXISTS`;
+a different operation colliding on the same business event is rejected as
+`SPE_BUSINESS_EVENT_ALREADY_CLAIMED` before current-governance rechecks,
+credential resolution or transport.
+
+`IN_FLIGHT` and `EFFECT_UNKNOWN` retain the business-event claim.
+`CONFIRMED_EFFECT` also retains it permanently, preventing a second effect for
+the same sandbox business event. A transition to independently established
+`CONFIRMED_NO_EFFECT` releases the unique key in the same state UPDATE, allowing
+a later authorization to make a fresh claim. Storage ambiguity never implies
+no-effect and therefore never authorizes a replacement.
+
+This guard is intentionally at the execution-claim boundary. Native authorization
+artifacts may still be issued or exist for the same event; they do not become
+execution permission while a conflicting durable claim remains. Blocking issuance
+itself would be a separate policy surface and is not required for the safety
+property that no replacement reaches credential or network execution.
+
+Migration 0008 does not invent business-event identities for legacy rows. Apply it
+before enabling this sandbox execution path and confirm that any pre-migration
+sandbox attempts have been handled under deployment procedures. The repository
+still does not claim a complete automatic recovery coordinator, real
+TLS/provider/host-clock/PostgreSQL deployment composition, TrustLog exactly-once
+publication, or a passing real Decision-to-Effect E2E proof.
