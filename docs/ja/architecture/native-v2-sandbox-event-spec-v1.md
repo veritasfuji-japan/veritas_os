@@ -534,3 +534,40 @@ migration 0008はlegacy行へ架空のbusiness-event identityをbackfillしま�
 有効化する前にmigrationを適用し、migration前のsandbox attemptが存在する場合はdeployment手順で確認します。
 完全なautomatic recovery coordinator、実TLS/provider/host-clock/PostgreSQLの配備結合、TrustLogの
 exactly-once発行、passing real Decision-to-Effect E2E proofは引き続き未完です。
+
+
+## 23. Automatic crash recovery coordinator
+
+`recover_sandbox_attempt`はnative v2 sandbox pathのowning recovery compositionです。
+schedulerではなく、新しいexecution attemptを作りません。呼出しごとに元のnative authorization/actionと
+durable consumption lineageを再検証し、保存済みeffect stateを読んでから復旧経路を決めます。
+POST・re-dispatch経路は持たず、authorizationを再消費しません。
+
+revision 1、reasonが`SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED`の完全一致する
+`IN_FLIGHT`だけは`CONFIRMED_NO_EFFECT`へ閉じられます。
+`execute_sandbox_bind`は同じ行をrevision 2の`EFFECT_UNKNOWN`へ永続化し、
+一致するreadbackを確認するまでtransportへ入れないため、durableなrevision 1の読出しは
+このattemptがtransport-entry gateを越えていないことを示します。no-effect遷移はCASと
+commit後readbackを要求し、既存のatomic state updateでbusiness-event claimを解放します。
+transition応答を失ってもreturn valueではなくfresh durable readから復旧します。
+
+`EFFECT_UNKNOWN`は「見つからない」ことからno-effectを推論しません。
+coordinatorは`reconcile_sandbox_effect`へread-only GETを1回委譲します。
+一致するpersisted evidenceがあれば`CONFIRMED_EFFECT`へ進み、404・lookup outage・
+非確定応答は`EFFECT_UNKNOWN`のままです。blind resend、replacement authorization、
+writer credential、dispatch transportは使用しません。
+
+durableな`CONFIRMED_EFFECT`は`publish_sandbox_receipts`へ渡し、保存済みreconciliation
+lineageを再検証して同じdeterministic BindReceipt/Outcome pairを返し、必要ならwrite-once保存します。
+receipt publicationの応答喪失後に再実行しても、新しいlookupやexternal effectは発生しません。
+正確なpre-dispatch recoveryで作られた`CONFIRMED_NO_EFFECT`はidempotentに返します。
+想定外terminal provenance、lineage置換、storage ambiguity、cancellationはfail closedで、
+`external_effect_retry_permitted`をtrueにしません。
+
+synthetic composition testはpre-dispatch crash、transition応答喪失、lookup非確定、
+unknownからconfirmedへの復旧、terminal restart、POSTなしのreceipt再利用を確認します。
+実PostgreSQL testはpre-dispatch terminal transition、別storeからのreadback、
+business-event claim解放を確認します。これによりsandbox pathのautomatic recovery
+coordinatorはrepository上で閉じますが、実TLS/provider/host-clockのdeployment composition、
+TrustLog exactly-once publication、passing real Decision-to-Effect E2E proofは未完です。
+live external effectの前には第9節のdeployment prerequisitesが引き続き必要です。
