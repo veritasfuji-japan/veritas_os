@@ -105,13 +105,23 @@ jobs:
           assert trust["verify_entries"]["classification"] == "COMPATIBILITY_CANDIDATE"
           assert all(row["deletion_permitted"] is False for row in trust.values())
 
-          overlaps = data["plan8_plan17_matrix"]["known_overlap_groups"]
+          overlaps = {
+              row["behavior"]: row
+              for row in data["plan8_plan17_matrix"]["known_overlap_groups"]
+          }
           assert len(overlaps) >= 5
-          assert any(
-              row["behavior"] == "replay_decision_query_param_failure_defaults_mock_true"
-              and row["classification"] == "DUPLICATE_CANDIDATE"
-              for row in overlaps
-          )
+          assert overlaps[
+              "replay_decision_query_param_failure_defaults_mock_true"
+          ]["resolution"] == "CONSOLIDATED"
+          assert overlaps[
+              "unknown_rollout_strategy_safe_full"
+          ]["resolution"] == "CONSOLIDATED"
+          assert overlaps[
+              "pipeline_unavailable_lazy_state_reset"
+          ]["resolution"] == "PRESERVE_DISTINCT_VARIANTS"
+          assert overlaps[
+              "nonce_cleanup_scheduler_failure_handling"
+          ]["resolution"] == "PARTIALLY_CONSOLIDATED_PRESERVE_DISTINCT_STATES"
           PY
 
       - name: Upload Phase 2 evidence

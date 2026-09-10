@@ -74,37 +74,6 @@ def test_call_fuji_falls_back_to_positional_validate_action() -> None:
     assert result["action"] == "approve"
 
 
-@pytest.mark.anyio
-async def test_replay_decision_endpoint_defaults_mock_true_on_query_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Replay endpoint should fail-safe to mock_external_apis=True on query parsing errors."""
-
-    class _DummyPipeline:
-        async def replay_decision(self, *, decision_id: str, mock_external_apis: bool) -> dict[str, Any]:
-            return {"decision_id": decision_id, "mock_external_apis": mock_external_apis}
-
-    class _DummyServer:
-        @staticmethod
-        def get_decision_pipeline() -> _DummyPipeline:
-            return _DummyPipeline()
-
-    class _BrokenQuery:
-        @staticmethod
-        def get(_key: str) -> str:
-            raise RuntimeError("query unavailable")
-
-    class _DummyRequest:
-        query_params = _BrokenQuery()
-
-    monkeypatch.setattr(rd, "_get_server", lambda: _DummyServer())
-
-    response = await rd.replay_decision_endpoint("decision-1", _DummyRequest())
-
-    assert response["decision_id"] == "decision-1"
-    assert response["mock_external_apis"] is True
-
-
 def test_fuji_validate_returns_500_when_core_interface_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

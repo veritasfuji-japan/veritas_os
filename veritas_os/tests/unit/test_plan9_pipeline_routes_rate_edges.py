@@ -34,29 +34,6 @@ def test_rollback_metadata_skips_non_triggered_or_invalid_metadata() -> None:
     assert pp._resolve_rollback_metadata(decision) == {}
 
 
-def test_rollout_enforcement_unknown_strategy_defaults_to_safe_full(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Unknown rollout strategy should fail safe to full enforcement."""
-    monkeypatch.setattr(pp, "_coerce_policy_enforce_flag", lambda _raw: True)
-
-    decision = {
-        "policy_results": [
-            {
-                "triggered": True,
-                "metadata": {
-                    "rollout_controls": {"strategy": "mystery_mode"},
-                },
-            }
-        ]
-    }
-
-    enabled, state = pp._is_enforcement_enabled_for_rollout({}, decision)
-
-    assert enabled is True
-    assert state == "full_unknown_strategy"
-
-
 def test_rollout_enforcement_canary_skip_when_bucket_outside_percent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

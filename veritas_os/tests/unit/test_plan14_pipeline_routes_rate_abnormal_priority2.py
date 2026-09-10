@@ -87,6 +87,7 @@ def test_rate_nonce_scheduler_logs_when_cleanup_raises(
     )
 
     started = {"value": False}
+    created: list[Any] = []
 
     class _DummyTimer:
         daemon = False
@@ -94,6 +95,7 @@ def test_rate_nonce_scheduler_logs_when_cleanup_raises(
         def __init__(self, _interval: float, _cb: Any) -> None:
             self.interval = _interval
             self.cb = _cb
+            created.append(self)
 
         def start(self) -> None:
             started["value"] = True
@@ -109,4 +111,6 @@ def test_rate_nonce_scheduler_logs_when_cleanup_raises(
         rl._nonce_cleanup_timer = old_timer
 
     assert "nonce cleanup failed" in caplog.text
+    assert len(created) == 1
+    assert created[0].interval == 60.0
     assert started["value"] is True

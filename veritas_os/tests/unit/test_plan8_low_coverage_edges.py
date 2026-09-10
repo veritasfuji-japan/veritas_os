@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
@@ -14,55 +13,6 @@ from veritas_os.core.pipeline import pipeline_execute as pe
 from veritas_os.core.pipeline import pipeline_gate as pg
 from veritas_os.core.pipeline import pipeline_response as pr
 from veritas_os.core.pipeline.pipeline_types import PipelineContext
-
-
-@dataclass
-class _DummyPipeline:
-    """Minimal replay pipeline stub used by replay endpoint tests."""
-
-    seen_mock_external_apis: bool | None = None
-
-    async def replay_decision(
-        self,
-        *,
-        decision_id: str,
-        mock_external_apis: bool,
-    ) -> dict[str, Any]:
-        self.seen_mock_external_apis = mock_external_apis
-        return {
-            "decision_id": decision_id,
-            "mock_external_apis": mock_external_apis,
-        }
-
-
-class _BrokenQueryParams:
-    def get(self, _key: str) -> str:
-        raise RuntimeError("query params unavailable")
-
-
-class _DummyRequest:
-    query_params = _BrokenQueryParams()
-
-
-@pytest.mark.anyio
-async def test_replay_decision_endpoint_query_params_error_defaults_true(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """When query param access fails, replay endpoint should fail closed to True."""
-    dummy_pipeline = _DummyPipeline()
-
-    class _DummyServer:
-        @staticmethod
-        def get_decision_pipeline() -> _DummyPipeline:
-            return dummy_pipeline
-
-    monkeypatch.setattr(rd, "_get_server", lambda: _DummyServer())
-
-    out = await rd.replay_decision_endpoint("dec-1", _DummyRequest())
-
-    assert out["decision_id"] == "dec-1"
-    assert out["mock_external_apis"] is True
-    assert dummy_pipeline.seen_mock_external_apis is True
 
 
 def test_finalize_evidence_invalid_payload_falls_back_to_empty_list() -> None:
