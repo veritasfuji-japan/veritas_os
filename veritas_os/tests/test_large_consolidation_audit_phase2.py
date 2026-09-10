@@ -104,7 +104,7 @@ def test_phase2_trustlog_role_matrix_prevents_false_duplicate_conclusion() -> No
     assert all(row["deletion_permitted"] is False for row in roles.values())
 
 
-def test_phase2_plan_overlap_matrix_distinguishes_duplicates_from_branch_coverage() -> None:
+def test_phase2_plan_overlap_matrix_records_resolved_duplicates_and_preserved_variants() -> None:
     module = _load_module()
     data = module.build_phase2()
     matrix = data["plan8_plan17_matrix"]
@@ -113,18 +113,38 @@ def test_phase2_plan_overlap_matrix_distinguishes_duplicates_from_branch_coverag
     overlaps = {row["behavior"]: row for row in matrix["known_overlap_groups"]}
 
     replay = overlaps["replay_decision_query_param_failure_defaults_mock_true"]
-    assert replay["classification"] == "DUPLICATE_CANDIDATE"
-    assert replay["confidence"] == "HIGH"
-    assert len(replay["tests"]) == 3
+    assert replay["classification"] == "ACTIVE_NON_CORE"
+    assert replay["resolution"] == "CONSOLIDATED"
+    assert replay["tests"] == [
+        "test_routes_replay_decision_query_param_error_defaults_to_mock_true"
+    ]
+    assert len(replay["consolidated_from"]) == 2
 
     rollout = overlaps["unknown_rollout_strategy_safe_full"]
-    assert rollout["classification"] == "DUPLICATE_CANDIDATE"
-    assert len(rollout["tests"]) == 2
+    assert rollout["classification"] == "ACTIVE_NON_CORE"
+    assert rollout["resolution"] == "CONSOLIDATED"
+    assert rollout["tests"] == [
+        "test_pipeline_rollout_unknown_strategy_falls_back_to_safe_full"
+    ]
+
+    pipeline = overlaps["pipeline_unavailable_lazy_state_reset"]
+    assert pipeline["resolution"] == "PRESERVE_DISTINCT_VARIANTS"
+    assert len(pipeline["tests"]) == 2
+
+    scheduler = overlaps["nonce_cleanup_scheduler_failure_handling"]
+    assert (
+        scheduler["resolution"]
+        == "PARTIALLY_CONSOLIDATED_PRESERVE_DISTINCT_STATES"
+    )
+    assert len(scheduler["tests"]) == 2
+    assert scheduler["consolidated_from"] == [
+        "test_schedule_nonce_cleanup_reschedules_even_after_cleanup_error"
+    ]
 
     nonce = overlaps["effective_nonce_max_override_fallbacks"]
     assert nonce["classification"] == "ACTIVE_NON_CORE"
+    assert nonce["resolution"] == "PRESERVE_DISTINCT_BRANCHES"
     assert len(nonce["tests"]) == 3
-
 
 def test_phase2_dry_run_matrix_records_parallelism_without_authorizing_collapse() -> None:
     module = _load_module()
