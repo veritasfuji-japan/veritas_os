@@ -80,65 +80,11 @@ def test_sha256_manifest_hex_deterministic() -> None:
     assert len(sha256_manifest_hex(data)) == 64
 
 
-def test_verify_manifest_sha256_uses_constant_time_comparison(tmp_path: Path) -> None:
-    """SHA-256 verification must use constant-time comparison (hmac.compare_digest)."""
-    from veritas_os.policy.signing import verify_manifest_sha256
+def test_signing_module_does_not_expose_duplicate_sha256_verifier() -> None:
+    """Legacy SHA-256 verification is centralized in runtime_adapter."""
+    import veritas_os.policy.signing as signing
 
-    manifest_path = tmp_path / "manifest.json"
-    manifest_path.write_bytes(b'{"policy_id": "test"}')
-
-    import hashlib
-
-    expected_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-    sig_path = tmp_path / "manifest.sig"
-    sig_path.write_text(expected_hash, encoding="utf-8")
-
-    assert verify_manifest_sha256(manifest_path) is True
-
-    # Tampered signature must fail
-    sig_path.write_text("0" * 64, encoding="utf-8")
-    assert verify_manifest_sha256(manifest_path) is False
-
-
-def test_verify_manifest_sha256_returns_false_on_unreadable_files(
-    tmp_path: Path,
-) -> None:
-    """verify_manifest_sha256 must return False (not raise) when files vanish
-    between the existence check and the actual read (TOCTOU resilience)."""
-    from unittest.mock import patch
-    from veritas_os.policy.signing import verify_manifest_sha256
-
-    manifest_path = tmp_path / "manifest.json"
-    manifest_path.write_bytes(b'{"policy_id": "test"}')
-
-    import hashlib
-
-    sig_path = tmp_path / "manifest.sig"
-    sig_path.write_text(
-        hashlib.sha256(manifest_path.read_bytes()).hexdigest(), encoding="utf-8"
-    )
-
-    # Simulate manifest becoming unreadable after exists() returns True
-    original_read_bytes = Path.read_bytes
-
-    def _fail_read_bytes(self):
-        if self.name == "manifest.json":
-            raise OSError("simulated read failure")
-        return original_read_bytes(self)
-
-    with patch.object(Path, "read_bytes", _fail_read_bytes):
-        assert verify_manifest_sha256(manifest_path) is False
-
-    # Simulate signature file becoming unreadable
-    original_read_text = Path.read_text
-
-    def _fail_read_text(self, *args, **kwargs):
-        if self.name == "manifest.sig":
-            raise OSError("simulated sig read failure")
-        return original_read_text(self, *args, **kwargs)
-
-    with patch.object(Path, "read_text", _fail_read_text):
-        assert verify_manifest_sha256(manifest_path) is False
+    assert not hasattr(signing, "verify_manifest_sha256")
 
 
 # --- compiler + Ed25519 integration tests ---

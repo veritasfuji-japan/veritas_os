@@ -85,9 +85,9 @@ def test_phase2_legacy_sha256_candidate_has_no_supported_consumer() -> None:
     candidate = data["legacy_policy_sha256"]
 
     assert candidate["classification"] == "DEAD_CANDIDATE"
+    assert candidate["status"] == "REMOVED"
     assert candidate["supported_runtime_script_workflow_consumers"] == []
     assert candidate["deletion_permitted"] is False
-    assert "test" in candidate["references"]
 
 
 def test_phase2_trustlog_role_matrix_prevents_false_duplicate_conclusion() -> None:

@@ -164,6 +164,19 @@ def _category(path: str) -> str:
     return "other"
 
 
+def _defines_top_level_symbol(relative_path: str, symbol: str) -> bool:
+    path = ROOT / relative_path
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, SyntaxError):
+        return False
+    return any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        and node.name == symbol
+        for node in tree.body
+    )
+
+
 def _text_references(symbol: str, *, definition_path: str | None = None) -> dict[str, list[str]]:
     refs: dict[str, list[str]] = defaultdict(list)
     for path in _iter_files():
@@ -358,9 +371,14 @@ def build_phase2() -> dict[str, Any]:
     runtime_closure = _closure(runtime_seeds, edges)
     proof_closure = _closure(proof_seeds, edges)
 
+    legacy_definition = "veritas_os/policy/signing.py"
+    legacy_symbol_present = _defines_top_level_symbol(
+        legacy_definition,
+        "verify_manifest_sha256",
+    )
     legacy_refs = _text_references(
         "verify_manifest_sha256",
-        definition_path="veritas_os/policy/signing.py",
+        definition_path=legacy_definition,
     )
     legacy_runtime_consumers = sorted(
         legacy_refs.get("runtime", [])
@@ -397,7 +415,8 @@ def build_phase2() -> dict[str, Any]:
         },
         "legacy_policy_sha256": {
             "symbol": "verify_manifest_sha256",
-            "definition": "veritas_os/policy/signing.py",
+            "definition": legacy_definition,
+            "status": "PRESENT" if legacy_symbol_present else "REMOVED",
             "classification": (
                 "DEAD_CANDIDATE" if not legacy_runtime_consumers
                 else "COMPATIBILITY_CANDIDATE"
@@ -433,7 +452,10 @@ def build_phase2() -> dict[str, Any]:
                 ),
                 "confidence": "HIGH" if not legacy_runtime_consumers else "MEDIUM",
                 "blast_radius": "LOW",
+                "status": "PRESENT" if legacy_symbol_present else "REMOVED",
                 "action": (
+                    "Already removed from this source tree; retain runtime_adapter SHA-256 verification."
+                    if not legacy_symbol_present else
                     "Prepare narrow removal/deprecation PR only after Human CEO review."
                     if not legacy_runtime_consumers else
                     "Preserve; investigate remaining supported consumers."
