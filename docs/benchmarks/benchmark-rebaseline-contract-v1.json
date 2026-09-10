@@ -1,0 +1,124 @@
+{
+  "format_version": "benchmark-rebaseline-contract/v1",
+  "status": "PHASE_A_CONTRACT_FROZEN",
+  "source_commit": "53e8e2974123024348b92ddfb7155cd645371620",
+  "frozen_controlled_e2e_anchor": "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc",
+  "task": "TASK-011",
+  "phase": "A",
+  "publication_gate": {
+    "new_benchmark_numbers_permitted": false,
+    "reason": "Phase A freezes benchmark inventory, canonical harnesses, inputs, environment requirements, and claim boundaries before current-head measurements are published."
+  },
+  "canonical_surfaces": [
+    {
+      "id": "local_deterministic_smoke",
+      "role": "CANONICAL_PERFORMANCE_HARNESS",
+      "harness": "scripts/benchmarks/run_performance_metrics.py",
+      "schema_version": "performance_metrics.v1",
+      "exact_command": "python scripts/benchmarks/run_performance_metrics.py --iterations 100 --warmup 10 --output docs/en/benchmarks/local-performance-metrics.latest.json",
+      "input_identity": {
+        "type": "embedded_deterministic_fixture",
+        "location": "scripts/benchmarks/run_performance_metrics.py::_run_iteration",
+        "scenario": "local_deterministic_smoke"
+      },
+      "required_runtime_identity": {
+        "python_family": "CPython",
+        "canonical_python_minor": "3.12",
+        "platform_class": "Linux x86_64",
+        "capture_exact_platform_in_output": true
+      },
+      "external_network_required": false,
+      "external_llm_or_api_allowed": false,
+      "claim_scope": "lightweight deterministic local function-path timing only"
+    },
+    {
+      "id": "evidence_axes_fixture",
+      "role": "CANONICAL_EVIDENCE_HARNESS",
+      "harness": "veritas_os/scripts/evidence_benchmark.py",
+      "metrics_definition": "veritas_os/benchmarks/evidence/metrics_definition.yaml",
+      "output_schema": "veritas_os/benchmarks/evidence/output_schema.json",
+      "fixture": "veritas_os/benchmarks/evidence/fixtures/sample_cases.jsonl",
+      "exact_command": "python -m veritas_os.scripts.evidence_benchmark --fixtures veritas_os/benchmarks/evidence/fixtures/sample_cases.jsonl --output /tmp/veritas-evidence-benchmark.json",
+      "input_identity": {
+        "type": "repository_fixture_at_source_commit",
+        "fixture_case_count": 2,
+        "systems": ["veritas", "generic"],
+        "synthetic_comparison": true
+      },
+      "required_runtime_identity": {
+        "python_family": "CPython",
+        "canonical_python_minor": "3.12"
+      },
+      "external_network_required": false,
+      "external_llm_or_api_allowed": false,
+      "claim_scope": "deterministic fixture scoring for auditability, fail-closed safety, governance change control, replay/divergence visibility, and TrustLog integrity"
+    }
+  ],
+  "supporting_noncanonical_surfaces": [
+    {
+      "id": "one_day_poc_http",
+      "path": "scripts/demo/one_day_poc_benchmark.py",
+      "classification": "POC_SUPPORTING_NOT_PHASE_A_CANONICAL",
+      "reason": "Measures configured HTTP PoC endpoints, requires VERITAS_API_KEY, and depends on server/environment configuration."
+    },
+    {
+      "id": "enhanced_yaml_decide_runner",
+      "path": "veritas_os/scripts/run_benchmarks_enhanced.py",
+      "classification": "LEGACY_MAINTENANCE_NOT_REBASELINE_CANONICAL",
+      "reason": "Posts YAML cases to /v1/decide and writes runtime benchmark logs; it is not the canonical deterministic Phase B measurement harness."
+    }
+  ],
+  "existing_published_artifacts": [
+    {
+      "path": "docs/en/benchmarks/local-performance-metrics.latest.json",
+      "classification": "STALE_PRE_REBASELINE_REFERENCE",
+      "generated_at": "2026-05-09T02:05:00.659731+00:00",
+      "source_commit_recorded": false,
+      "current_head_claim_permitted": false
+    },
+    {
+      "path": "docs/en/benchmarks/local-performance-metrics.latest.md",
+      "classification": "STALE_PRE_REBASELINE_REFERENCE",
+      "current_head_claim_permitted": false
+    }
+  ],
+  "required_phase_b_measurements": [
+    "local deterministic smoke latency",
+    "/v1/decide controlled route latency without external providers",
+    "Bind-boundary decision/current-governance-recheck overhead",
+    "TrustLog append latency split by JSONL and PostgreSQL where available",
+    "controlled Decision-to-Effect timing components"
+  ],
+  "required_artifact_fields": [
+    "source_commit_sha",
+    "schema_version",
+    "run_timestamp",
+    "environment",
+    "exact_command",
+    "iterations_or_run_count",
+    "warmup_when_relevant",
+    "raw_machine_readable_result",
+    "summary",
+    "failure_count",
+    "claim_boundary",
+    "reproducibility_instructions"
+  ],
+  "non_claims": [
+    "production latency",
+    "customer-environment performance",
+    "real customer credentials or endpoints",
+    "independent infrastructure validation",
+    "third-party certification",
+    "regulatory approval",
+    "production SLA",
+    "superiority over named vendors",
+    "third-party competitive validation from synthetic generic fixtures"
+  ],
+  "phase_a_exit": {
+    "canonical_surfaces_identified": true,
+    "stale_artifacts_explicitly_classified": true,
+    "claim_boundary_frozen": true,
+    "benchmark_values_updated": false,
+    "next_phase": "PHASE_B_CURRENT_HEAD_DETERMINISTIC_MEASUREMENTS"
+  }
+}
