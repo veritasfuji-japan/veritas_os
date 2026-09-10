@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import logging
-from pathlib import Path
 from typing import Tuple
 
 logger = logging.getLogger(__name__)
@@ -143,22 +141,3 @@ def verify_manifest_ed25519(
 def sha256_manifest_hex(manifest_bytes: bytes) -> str:
     """Compute SHA-256 hex digest of manifest payload (legacy mode)."""
     return hashlib.sha256(manifest_bytes).hexdigest()
-
-
-def verify_manifest_sha256(manifest_path: Path) -> bool:
-    """Legacy SHA-256 hash-integrity check for bundles without Ed25519 keys."""
-    sig_path = manifest_path.parent / "manifest.sig"
-    if not manifest_path.exists() or not sig_path.exists():
-        return False
-    try:
-        manifest_bytes = manifest_path.read_bytes()
-    except OSError as exc:
-        logger.warning("failed to read manifest for SHA-256 verification: %s", exc)
-        return False
-    try:
-        observed = sig_path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        logger.warning("failed to read signature file for SHA-256 verification: %s", exc)
-        return False
-    expected = hashlib.sha256(manifest_bytes).hexdigest()
-    return hmac.compare_digest(expected, observed)
