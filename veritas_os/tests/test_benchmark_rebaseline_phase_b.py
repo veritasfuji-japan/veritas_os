@@ -24,7 +24,7 @@ def test_phase_b_record_is_pinned_to_phase_a_merge() -> None:
     data = _load(PHASE_B_RECORD)
 
     assert data["format_version"] == "benchmark-rebaseline-phase-b/v1"
-    assert data["status"] == "IMPLEMENTATION_REVIEW"
+    assert data["status"] == "MEASUREMENT_PROTOCOL_DEFINED"
     assert data["task"] == "TASK-011"
     assert data["phase"] == "B"
     assert (
@@ -36,6 +36,7 @@ def test_phase_b_record_is_pinned_to_phase_a_merge() -> None:
         == "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc"
     )
     assert data["runtime_integrity"]["runtime_semantics_changed"] is False
+    assert len(data["phase_b_exit"]["completion_conditions"]) >= 6
 
 
 def test_phase_b_cli_emits_required_source_bound_provenance(tmp_path: Path) -> None:
