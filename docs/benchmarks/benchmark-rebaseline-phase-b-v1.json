@@ -1,6 +1,6 @@
 {
   "format_version": "benchmark-rebaseline-phase-b/v1",
-  "status": "IMPLEMENTATION_REVIEW",
+  "status": "MEASUREMENT_PROTOCOL_DEFINED",
   "task": "TASK-011",
   "phase": "B",
   "baseline_source_commit": "ad92ec663b962183327b1b96192378fd562da794",
@@ -63,12 +63,15 @@
     "superiority over named vendors"
   ],
   "phase_b_exit": {
-    "implementation_merged": false,
-    "main_current_head_artifact_generated": false,
-    "source_sha_bound": true,
-    "exact_command_recorded": true,
-    "environment_recorded": true,
-    "claim_boundary_recorded": true,
+    "completion_conditions": [
+      "the Phase B workflow is merged",
+      "a push-to-main run completes successfully",
+      "the uploaded artifact source_commit_sha equals the measured main commit",
+      "failure_count is zero",
+      "exact command and environment are present",
+      "the non-production claim boundary remains present",
+      "the frozen Decision-to-Effect proof and required repository CI remain green"
+    ],
     "next_phase_after_success": "PHASE_C_EVIDENCE_BENCHMARK_REBASELINE"
   }
 }
