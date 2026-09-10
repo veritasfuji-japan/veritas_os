@@ -104,4 +104,4 @@ artifact identity requirements are implemented.
 - `scripts/benchmarks/run_performance_metrics.py` is the canonical deterministic local performance harness for TASK-011.
 - `scripts/demo/one_day_poc_benchmark.py` measures local/configured HTTP PoC endpoints and requires `VERITAS_API_KEY`; it is a supporting PoC benchmark, not the canonical Phase A/initial Phase B harness.
 - `veritas_os/scripts/run_benchmarks_enhanced.py` remains a maintenance YAML `/v1/decide` runner and is not the canonical deterministic rebaseline harness.
-- None of these benchmark surfaces establishes a production SLA or third-party certification.
+- These benchmark surfaces are not a production SLA and do not establish third-party certification.
