@@ -80,7 +80,14 @@ def test_sha256_manifest_hex_deterministic() -> None:
     assert len(sha256_manifest_hex(data)) == 64
 
 
-def test_signing_module_does_not_expose_duplicate_sha256_verifier() -> None:\n    """Legacy SHA-256 verification is centralized in runtime_adapter."""\n    import veritas_os.policy.signing as signing\n\n    assert not hasattr(signing, "verify_manifest_sha256")\n\n\n# --- compiler + Ed25519 integration tests ---
+def test_signing_module_does_not_expose_duplicate_sha256_verifier() -> None:
+    """Legacy SHA-256 verification is centralized in runtime_adapter."""
+    import veritas_os.policy.signing as signing
+
+    assert not hasattr(signing, "verify_manifest_sha256")
+
+
+# --- compiler + Ed25519 integration tests ---
 
 
 def test_compile_with_ed25519_signing_produces_signed_bundle(tmp_path: Path) -> None:
