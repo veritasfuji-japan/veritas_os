@@ -7,10 +7,15 @@ and writes a stable JSON report for reproducible benchmarking workflows.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import os
 import platform
+import re
+import shlex
 import statistics
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -29,6 +34,10 @@ from veritas_os.security.wat_verifier import (
     score_drift,
 )
 
+_COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+_DEFAULT_SCENARIO = "local_deterministic_smoke"
+_HARNESS_PATH = "scripts/benchmarks/run_performance_metrics.py"
+
 
 def _positive_int(value: str) -> int:
     """Parse CLI integer argument that must be >= 1."""
@@ -44,6 +53,58 @@ def _non_negative_int(value: str) -> int:
     if parsed < 0:
         raise argparse.ArgumentTypeError("must be >= 0")
     return parsed
+
+
+def _normalize_commit_sha(value: str | None) -> str | None:
+    """Return a normalized full commit SHA or ``None`` when invalid."""
+    if value is None:
+        return None
+    candidate = value.strip()
+    if not _COMMIT_SHA_RE.fullmatch(candidate):
+        return None
+    return candidate.lower()
+
+
+def _resolve_source_commit(explicit: str | None = None) -> str:
+    """Resolve the exact Git commit measured by this benchmark.
+
+    Resolution deliberately prefers an explicit override and then the checked
+    out Git tree. ``GITHUB_SHA`` is only a final fallback because pull-request
+    events can otherwise point at a synthetic merge commit rather than the
+    checked-out benchmark source.
+    """
+    for candidate in (explicit, os.getenv("VERITAS_BENCHMARK_SOURCE_COMMIT")):
+        normalized = _normalize_commit_sha(candidate)
+        if candidate is not None and normalized is None:
+            raise ValueError("source commit must be a full 40-character Git SHA")
+        if normalized is not None:
+            return normalized
+
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT_DIR,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        completed = None
+
+    if completed is not None and completed.returncode == 0:
+        normalized = _normalize_commit_sha(completed.stdout)
+        if normalized is not None:
+            return normalized
+
+    github_sha = _normalize_commit_sha(os.getenv("GITHUB_SHA"))
+    if github_sha is not None:
+        return github_sha
+
+    raise RuntimeError(
+        "unable to resolve measured source commit; run from a Git checkout or "
+        "pass --source-commit"
+    )
 
 
 def _percentile(sorted_values: list[float], percentile: float) -> float:
@@ -151,9 +212,95 @@ def collect_metrics(iterations: int, warmup: int, scenario: str) -> dict[str, An
             "No external LLM/API calls.",
             "Not a production SLA.",
             "Not third-party certified.",
+            "Not a customer environment measurement.",
         ],
     }
     return report
+
+
+def _build_exact_command(args: argparse.Namespace) -> str:
+    """Build the canonical, copyable command represented by parsed arguments."""
+    command = [
+        "python",
+        _HARNESS_PATH,
+        "--iterations",
+        str(args.iterations),
+        "--warmup",
+        str(args.warmup),
+    ]
+    if args.output is not None:
+        command.extend(["--output", args.output.as_posix()])
+    if args.scenario != _DEFAULT_SCENARIO:
+        command.extend(["--scenario", args.scenario])
+    if args.source_commit is not None:
+        command.extend(["--source-commit", args.source_commit])
+    return shlex.join(command)
+
+
+def _attach_provenance(
+    report: dict[str, Any],
+    *,
+    args: argparse.Namespace,
+    source_commit_sha: str,
+) -> None:
+    """Attach Phase B provenance without changing measured runtime behavior."""
+    exact_command = _build_exact_command(args)
+    harness_sha256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    metrics = dict(report["metrics"])
+    counters = dict(report["counters"])
+
+    report.update(
+        {
+            "source_commit_sha": source_commit_sha,
+            "run_timestamp": report["generated_at"],
+            "exact_command": exact_command,
+            "iterations_or_run_count": args.iterations,
+            "warmup_when_relevant": args.warmup,
+            "failure_count": counters["failure"],
+            "harness_identity": {
+                "path": _HARNESS_PATH,
+                "sha256": harness_sha256,
+            },
+            "input_identity": {
+                "type": "embedded_deterministic_fixture",
+                "location": f"{_HARNESS_PATH}::_run_iteration",
+                "scenario": args.scenario,
+            },
+            "raw_machine_readable_result": {
+                "metrics": metrics,
+                "counters": counters,
+            },
+            "summary": {
+                "scenario": args.scenario,
+                "mean_ms": metrics["mean_ms"],
+                "p95_ms": metrics["p95_ms"],
+                "p99_ms": metrics["p99_ms"],
+                "success_count": counters["success"],
+                "failure_count": counters["failure"],
+            },
+            "claim_boundary": {
+                "scope": "lightweight deterministic local function-path timing only",
+                "external_network_required": False,
+                "external_llm_or_api_allowed": False,
+                "non_claims": [
+                    "production latency",
+                    "production SLA",
+                    "customer-environment performance",
+                    "real customer endpoint performance",
+                    "external provider latency",
+                    "third-party certification",
+                    "regulatory approval",
+                    "superiority over named vendors",
+                ],
+            },
+            "reproducibility_instructions": {
+                "checkout": f"git checkout {source_commit_sha}",
+                "command": exact_command,
+                "canonical_python_minor": "3.12",
+                "platform_class": "Linux x86_64",
+            },
+        }
+    )
 
 
 def main() -> int:
@@ -162,10 +309,16 @@ def main() -> int:
     parser.add_argument("--iterations", type=_positive_int, default=100)
     parser.add_argument("--warmup", type=_non_negative_int, default=10)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--scenario", default="local_deterministic_smoke")
+    parser.add_argument("--scenario", default=_DEFAULT_SCENARIO)
+    parser.add_argument(
+        "--source-commit",
+        help="Optional full Git SHA override for source-bound benchmark provenance.",
+    )
     args = parser.parse_args()
 
+    source_commit_sha = _resolve_source_commit(args.source_commit)
     report = collect_metrics(args.iterations, args.warmup, args.scenario)
+    _attach_provenance(report, args=args, source_commit_sha=source_commit_sha)
     rendered = json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2)
 
     if args.output:
