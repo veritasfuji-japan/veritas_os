@@ -1,0 +1,188 @@
+name: Benchmark Rebaseline Phase B
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-rebaseline-phase-b-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  current-head-local:
+    name: benchmark-rebaseline-phase-b
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout measured source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements-ci.txt
+
+      - name: Run canonical Phase B measurement
+        id: benchmark
+        run: |
+          set -euxo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          python scripts/benchmarks/run_performance_metrics.py --iterations 100 --warmup 10 --output docs/en/benchmarks/local-performance-metrics.latest.json
+
+      - name: Validate source-bound benchmark contract
+        env:
+          SOURCE_SHA: ${{ steps.benchmark.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          artifact_path = Path("docs/en/benchmarks/local-performance-metrics.latest.json")
+          contract_path = Path("docs/benchmarks/benchmark-rebaseline-contract-v1.json")
+          phase_b_path = Path("docs/benchmarks/benchmark-rebaseline-phase-b-v1.json")
+
+          artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+          contract = json.loads(contract_path.read_text(encoding="utf-8"))
+          phase_b = json.loads(phase_b_path.read_text(encoding="utf-8"))
+
+          source_sha = os.environ["SOURCE_SHA"]
+          if artifact["source_commit_sha"] != source_sha:
+              raise SystemExit(
+                  "benchmark source SHA mismatch: "
+                  f"{artifact['source_commit_sha']} != {source_sha}"
+              )
+
+          required = set(contract["required_artifact_fields"])
+          missing = sorted(required.difference(artifact))
+          if missing:
+              raise SystemExit(f"missing required artifact fields: {missing}")
+
+          expected_command = phase_b["canonical_measurement"]["exact_command"]
+          if artifact["exact_command"] != expected_command:
+              raise SystemExit(
+                  "benchmark command mismatch: "
+                  f"{artifact['exact_command']!r} != {expected_command!r}"
+              )
+
+          if artifact["failure_count"] != 0:
+              raise SystemExit("benchmark recorded failures")
+          if artifact["counters"]["failure"] != 0:
+              raise SystemExit("benchmark counters recorded failures")
+          if artifact["iterations"] != 100 or artifact["warmup"] != 10:
+              raise SystemExit("benchmark iteration/warmup contract mismatch")
+          if artifact["iterations_or_run_count"] != 100:
+              raise SystemExit("benchmark run-count provenance mismatch")
+          if artifact["warmup_when_relevant"] != 10:
+              raise SystemExit("benchmark warmup provenance mismatch")
+          if artifact["environment"]["implementation"] != "cpython":
+              raise SystemExit("Phase B canonical implementation must be CPython")
+          if not artifact["environment"]["python_version"].startswith("3.12."):
+              raise SystemExit("Phase B canonical Python minor must be 3.12")
+          if artifact["claim_boundary"]["external_network_required"] is not False:
+              raise SystemExit("Phase B benchmark must not require external network")
+          if artifact["claim_boundary"]["external_llm_or_api_allowed"] is not False:
+              raise SystemExit("Phase B benchmark must not allow external LLM/API calls")
+
+          required_non_claims = {
+              "production latency",
+              "production SLA",
+              "customer-environment performance",
+              "third-party certification",
+              "superiority over named vendors",
+          }
+          if not required_non_claims.issubset(
+              set(artifact["claim_boundary"]["non_claims"])
+          ):
+              raise SystemExit("Phase B benchmark claim boundary is incomplete")
+
+          print(
+              json.dumps(
+                  {
+                      "source_commit_sha": source_sha,
+                      "mean_ms": artifact["metrics"]["mean_ms"],
+                      "p95_ms": artifact["metrics"]["p95_ms"],
+                      "p99_ms": artifact["metrics"]["p99_ms"],
+                      "failure_count": artifact["failure_count"],
+                  },
+                  sort_keys=True,
+              )
+          )
+          PY
+
+      - name: Package source-bound artifact and run manifest
+        env:
+          SOURCE_SHA: ${{ steps.benchmark.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/benchmark-rebaseline/phase-b
+          cp docs/en/benchmarks/local-performance-metrics.latest.json \
+            "artifacts/benchmark-rebaseline/phase-b/local-performance-metrics.${SOURCE_SHA}.json"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          source_sha = os.environ["SOURCE_SHA"]
+          root = Path("artifacts/benchmark-rebaseline/phase-b")
+          artifact = root / f"local-performance-metrics.{source_sha}.json"
+          digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+          report = json.loads(artifact.read_text(encoding="utf-8"))
+
+          manifest = {
+              "format_version": "benchmark-rebaseline-phase-b-run/v1",
+              "source_commit_sha": source_sha,
+              "benchmark_artifact": artifact.name,
+              "benchmark_artifact_sha256": digest,
+              "schema_version": report["schema_version"],
+              "run_timestamp": report["run_timestamp"],
+              "exact_command": report["exact_command"],
+              "environment": report["environment"],
+              "iterations_or_run_count": report["iterations_or_run_count"],
+              "warmup_when_relevant": report["warmup_when_relevant"],
+              "failure_count": report["failure_count"],
+              "claim_boundary": report["claim_boundary"],
+              "github": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+              },
+          }
+          (root / "run-manifest.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload Phase B benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-rebaseline-phase-b-${{ steps.benchmark.outputs.source_sha }}
+          path: artifacts/benchmark-rebaseline/phase-b/
+          if-no-files-found: error
+          retention-days: 90
