@@ -247,21 +247,27 @@ def _plan_test_matrix() -> dict[str, Any]:
         {
             "behavior": "replay_decision_query_param_failure_defaults_mock_true",
             "tests": [
-                "test_replay_decision_endpoint_query_params_error_defaults_true",
-                "test_replay_decision_endpoint_defaults_mock_true_on_query_error",
                 "test_routes_replay_decision_query_param_error_defaults_to_mock_true",
             ],
-            "classification": "DUPLICATE_CANDIDATE",
+            "consolidated_from": [
+                "test_replay_decision_endpoint_query_params_error_defaults_true",
+                "test_replay_decision_endpoint_defaults_mock_true_on_query_error",
+            ],
+            "classification": "ACTIVE_NON_CORE",
             "confidence": "HIGH",
+            "resolution": "CONSOLIDATED",
         },
         {
             "behavior": "unknown_rollout_strategy_safe_full",
             "tests": [
-                "test_rollout_enforcement_unknown_strategy_defaults_to_safe_full",
                 "test_pipeline_rollout_unknown_strategy_falls_back_to_safe_full",
             ],
-            "classification": "DUPLICATE_CANDIDATE",
+            "consolidated_from": [
+                "test_rollout_enforcement_unknown_strategy_defaults_to_safe_full",
+            ],
+            "classification": "ACTIVE_NON_CORE",
             "confidence": "HIGH",
+            "resolution": "CONSOLIDATED",
         },
         {
             "behavior": "pipeline_unavailable_lazy_state_reset",
@@ -269,18 +275,30 @@ def _plan_test_matrix() -> dict[str, Any]:
                 "test_decide_pipeline_unavailable_resets_lazy_state",
                 "test_decide_pipeline_unavailable_resets_lazy_state_when_mutated",
             ],
-            "classification": "DUPLICATE_CANDIDATE",
-            "confidence": "MEDIUM",
+            "classification": "ACTIVE_NON_CORE",
+            "confidence": "HIGH",
+            "resolution": "PRESERVE_DISTINCT_VARIANTS",
+            "note": (
+                "The variants exercise different response/event-publication conditions; "
+                "they are not safe duplicates."
+            ),
         },
         {
             "behavior": "nonce_cleanup_scheduler_failure_handling",
             "tests": [
-                "test_schedule_nonce_cleanup_reschedules_even_after_cleanup_error",
                 "test_schedule_nonce_cleanup_logs_and_stops_when_timer_cleared",
                 "test_rate_nonce_scheduler_logs_when_cleanup_raises",
             ],
-            "classification": "DUPLICATE_CANDIDATE",
-            "confidence": "MEDIUM",
+            "consolidated_from": [
+                "test_schedule_nonce_cleanup_reschedules_even_after_cleanup_error",
+            ],
+            "classification": "ACTIVE_NON_CORE",
+            "confidence": "HIGH",
+            "resolution": "PARTIALLY_CONSOLIDATED_PRESERVE_DISTINCT_STATES",
+            "note": (
+                "One retained test covers the stopped scheduler; the other covers the "
+                "active scheduler and now preserves interval/start assertions."
+            ),
         },
         {
             "behavior": "effective_nonce_max_override_fallbacks",
@@ -291,6 +309,7 @@ def _plan_test_matrix() -> dict[str, Any]:
             ],
             "classification": "ACTIVE_NON_CORE",
             "confidence": "HIGH",
+            "resolution": "PRESERVE_DISTINCT_BRANCHES",
         },
     ]
     return {
