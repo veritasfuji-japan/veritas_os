@@ -1,0 +1,219 @@
+name: Benchmark Rebaseline Phase C
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-rebaseline-phase-c-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  evidence-current-head:
+    name: benchmark-rebaseline-phase-c
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout measured source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install schema validation dependency
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema==4.23.0
+
+      - name: Run canonical Phase C evidence benchmark
+        id: benchmark
+        run: |
+          set -euxo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          python -m veritas_os.scripts.evidence_benchmark --fixtures veritas_os/benchmarks/evidence/fixtures/sample_cases.jsonl --output /tmp/veritas-evidence-benchmark.json
+
+      - name: Validate frozen evidence contract
+        env:
+          SOURCE_SHA: ${{ steps.benchmark.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from jsonschema import validate
+
+          report_path = Path("/tmp/veritas-evidence-benchmark.json")
+          phase_c_path = Path("docs/benchmarks/benchmark-rebaseline-phase-c-v1.json")
+          schema_path = Path("veritas_os/benchmarks/evidence/output_schema.json")
+
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          phase_c = json.loads(phase_c_path.read_text(encoding="utf-8"))
+          schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+          validate(instance=report, schema=schema)
+
+          canonical = phase_c["canonical_measurement"]
+          expected_axes = set(canonical["axes"])
+          expected_systems = set(canonical["systems"])
+          expected_case_count = canonical["fixture_case_count"]
+
+          if len(report["cases"]) != expected_case_count:
+              raise SystemExit(
+                  f"fixture case count mismatch: {len(report['cases'])} != {expected_case_count}"
+              )
+          if set(report["aggregate"]) != expected_systems:
+              raise SystemExit("benchmark system set mismatch")
+
+          for system in expected_systems:
+              metrics = report["aggregate"][system]
+              if set(metrics) != expected_axes:
+                  raise SystemExit(f"axis set mismatch for {system}")
+              for axis in expected_axes:
+                  row = metrics[axis]
+                  if row["total"] != expected_case_count:
+                      raise SystemExit(f"case total mismatch for {system}/{axis}")
+                  if row["pass"] < 0 or row["pass"] > row["total"]:
+                      raise SystemExit(f"invalid pass count for {system}/{axis}")
+                  if row["rate"] < 0 or row["rate"] > 1:
+                      raise SystemExit(f"invalid rate for {system}/{axis}")
+
+          if canonical["synthetic_comparison"] is not True:
+              raise SystemExit("Phase C fixture must remain explicitly synthetic")
+          if canonical["external_llm_or_api_allowed"] is not False:
+              raise SystemExit("Phase C must not allow external LLM/API calls")
+          if phase_c["claim_boundary"]["independent_competitive_validation"] is not False:
+              raise SystemExit("synthetic benchmark cannot claim independent validation")
+          if phase_c["runtime_integrity"]["runtime_semantics_changed"] is not False:
+              raise SystemExit("Phase C must not change runtime semantics")
+
+          print(
+              json.dumps(
+                  {
+                      "source_commit_sha": os.environ["SOURCE_SHA"],
+                      "case_count": len(report["cases"]),
+                      "systems": sorted(report["aggregate"]),
+                      "axes": sorted(expected_axes),
+                      "validation_failures": 0,
+                  },
+                  sort_keys=True,
+              )
+          )
+          PY
+
+      - name: Package source-bound Phase C evidence
+        env:
+          SOURCE_SHA: ${{ steps.benchmark.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/benchmark-rebaseline/phase-c
+          cp /tmp/veritas-evidence-benchmark.json \
+            "artifacts/benchmark-rebaseline/phase-c/evidence-benchmark.${SOURCE_SHA}.json"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          import sys
+          from pathlib import Path
+
+          source_sha = os.environ["SOURCE_SHA"]
+          root = Path("artifacts/benchmark-rebaseline/phase-c")
+          raw_path = root / f"evidence-benchmark.{source_sha}.json"
+          phase_c = json.loads(
+              Path("docs/benchmarks/benchmark-rebaseline-phase-c-v1.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          report = json.loads(raw_path.read_text(encoding="utf-8"))
+
+          inputs = {
+              "harness": Path(phase_c["canonical_measurement"]["harness"]),
+              "metrics_definition": Path(
+                  phase_c["canonical_measurement"]["metrics_definition"]
+              ),
+              "output_schema": Path(
+                  phase_c["canonical_measurement"]["output_schema"]
+              ),
+              "fixture": Path(phase_c["canonical_measurement"]["fixture"]),
+          }
+          input_identity = {
+              key: {
+                  "path": str(path),
+                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+              }
+              for key, path in inputs.items()
+          }
+
+          manifest = {
+              "format_version": "benchmark-rebaseline-phase-c-run/v1",
+              "source_commit_sha": source_sha,
+              "schema_version": phase_c["artifact_policy"]["schema_version"],
+              "run_timestamp": report["meta"]["generated_at"],
+              "environment": {
+                  "implementation": platform.python_implementation().lower(),
+                  "python_version": platform.python_version(),
+                  "platform": platform.platform(),
+              },
+              "exact_command": phase_c["canonical_measurement"]["exact_command"],
+              "iterations_or_run_count": len(report["cases"]),
+              "warmup_when_relevant": None,
+              "raw_machine_readable_result": raw_path.name,
+              "summary": report["aggregate"],
+              "failure_count": 0,
+              "claim_boundary": phase_c["claim_boundary"],
+              "reproducibility_instructions": {
+                  "checkout": f"git checkout {source_sha}",
+                  "command": phase_c["canonical_measurement"]["exact_command"],
+                  "python": "CPython 3.12",
+              },
+              "input_identity": input_identity,
+              "raw_result_sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(),
+              "github": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+              },
+          }
+
+          if manifest["source_commit_sha"] != source_sha:
+              raise SystemExit("Phase C source SHA mismatch")
+          if manifest["environment"]["implementation"] != "cpython":
+              raise SystemExit("Phase C canonical implementation must be CPython")
+          if not manifest["environment"]["python_version"].startswith("3.12."):
+              raise SystemExit("Phase C canonical Python minor must be 3.12")
+
+          (root / "run-manifest.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload Phase C benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-rebaseline-phase-c-${{ steps.benchmark.outputs.source_sha }}
+          path: artifacts/benchmark-rebaseline/phase-c/
+          if-no-files-found: error
+          retention-days: 90
