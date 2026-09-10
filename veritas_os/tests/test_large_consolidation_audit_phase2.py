@@ -146,6 +146,37 @@ def test_phase2_plan_overlap_matrix_records_resolved_duplicates_and_preserved_va
     assert nonce["resolution"] == "PRESERVE_DISTINCT_BRANCHES"
     assert len(nonce["tests"]) == 3
 
+def test_consolidation_002_removed_only_resolved_duplicate_test_names() -> None:
+    module = _load_module()
+    data = module.build_phase2()
+    present = {
+        test_name
+        for row in data["plan8_plan17_matrix"]["files"]
+        for test_name in row["tests"]
+    }
+
+    for removed in (
+        "test_replay_decision_endpoint_query_params_error_defaults_true",
+        "test_replay_decision_endpoint_defaults_mock_true_on_query_error",
+        "test_rollout_enforcement_unknown_strategy_defaults_to_safe_full",
+        "test_schedule_nonce_cleanup_reschedules_even_after_cleanup_error",
+    ):
+        assert removed not in present
+
+    for retained in (
+        "test_routes_replay_decision_query_param_error_defaults_to_mock_true",
+        "test_pipeline_rollout_unknown_strategy_falls_back_to_safe_full",
+        "test_decide_pipeline_unavailable_resets_lazy_state",
+        "test_decide_pipeline_unavailable_resets_lazy_state_when_mutated",
+        "test_schedule_nonce_cleanup_logs_and_stops_when_timer_cleared",
+        "test_rate_nonce_scheduler_logs_when_cleanup_raises",
+        "test_effective_nonce_max_import_error_uses_default",
+        "test_effective_nonce_max_uses_default_when_server_override_is_non_int",
+        "test_effective_nonce_max_prefers_server_integer_override",
+    ):
+        assert retained in present
+
+
 def test_phase2_dry_run_matrix_records_parallelism_without_authorizing_collapse() -> None:
     module = _load_module()
     data = module.build_phase2()
