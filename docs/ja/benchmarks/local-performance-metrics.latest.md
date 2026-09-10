@@ -9,6 +9,19 @@
 - 第三者認証ではない。
 - 顧客環境での測定ではない。
 
+## Rebaseline status
+
+現在GitHubにcommitされている `docs/en/benchmarks/local-performance-metrics.latest.json` は、
+2026-05-09に生成されたもので、測定対象のGit source commit SHAを記録していません。
+そのためTASK-011 Phase Aでは、このcommit済みartifactを
+`STALE_PRE_REBASELINE_REFERENCE` と分類しています。現在のhead性能として扱ってはいけません。
+
+TASK-011 Phase Bでは `.github/workflows/benchmark-rebaseline-phase-b.yml` により、
+source SHAに結び付いたdeterministic local measurementを生成します。Pull Requestではcheckoutした
+PR headを検証し、merge後のpush-to-mainでは、その時点の正確な `main` commitを測定して、JSONと
+run manifestをGitHub Actions artifactとして保存します。Phase Bにおけるcurrent-headの正本証拠は、
+下記の2026年5月のcommit済みJSONではなく、そのsource-SHA-bound Actions artifactです。
+
 ## 英語正本
 
 - [Local Performance Metrics Artifact](../../en/benchmarks/local-performance-metrics.latest.md)
@@ -31,7 +44,7 @@ python scripts/benchmarks/run_performance_metrics.py --iterations 100 --warmup 1
 
 ## Metrics summary
 
-local deterministic artifactのみ（本番レイテンシではない）:
+以下はpre-rebaselineのhistorical local deterministic artifactのみであり、current-headでも本番レイテンシでもありません。
 
 | Field | Value |
 | --- | --- |
@@ -55,6 +68,7 @@ local deterministic artifactのみ（本番レイテンシではない）:
 - 本番SLAではない。
 - 第三者認証ではない。
 - 顧客環境測定ではない。
+- commit済みの2026年5月の値はcurrent-head benchmarkではない。
 
 ## Next measurement targets
 

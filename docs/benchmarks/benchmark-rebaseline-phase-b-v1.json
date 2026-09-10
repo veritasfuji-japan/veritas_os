@@ -1,0 +1,77 @@
+{
+  "format_version": "benchmark-rebaseline-phase-b/v1",
+  "status": "MEASUREMENT_PROTOCOL_DEFINED",
+  "task": "TASK-011",
+  "phase": "B",
+  "baseline_source_commit": "ad92ec663b962183327b1b96192378fd562da794",
+  "frozen_controlled_e2e_anchor": "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc",
+  "phase_a_contract": "docs/benchmarks/benchmark-rebaseline-contract-v1.json",
+  "scope": "source-SHA-bound deterministic local performance measurement only",
+  "canonical_measurement": {
+    "harness": "scripts/benchmarks/run_performance_metrics.py",
+    "exact_command": "python scripts/benchmarks/run_performance_metrics.py --iterations 100 --warmup 10 --output docs/en/benchmarks/local-performance-metrics.latest.json",
+    "iterations": 100,
+    "warmup": 10,
+    "scenario": "local_deterministic_smoke",
+    "python_family": "CPython",
+    "canonical_python_minor": "3.12",
+    "platform_class": "Linux x86_64",
+    "external_network_required": false,
+    "external_llm_or_api_allowed": false
+  },
+  "workflow": {
+    "path": ".github/workflows/benchmark-rebaseline-phase-b.yml",
+    "pull_request_behavior": "measure the checked-out PR head and validate provenance",
+    "main_behavior": "measure the exact pushed main commit and upload the source-bound artifact",
+    "artifact_name_prefix": "benchmark-rebaseline-phase-b-",
+    "retention_days": 90
+  },
+  "artifact_policy": {
+    "committed_pre_rebaseline_latest_classification": "STALE_PRE_REBASELINE_REFERENCE",
+    "authoritative_phase_b_current_head_location": "GitHub Actions artifact produced by the Phase B workflow on push to main",
+    "source_commit_must_equal_checked_out_commit": true,
+    "required_fields_source": "docs/benchmarks/benchmark-rebaseline-contract-v1.json::required_artifact_fields",
+    "publication_requires_zero_failures": true
+  },
+  "provenance_fields_added_to_performance_metrics_v1": [
+    "source_commit_sha",
+    "run_timestamp",
+    "exact_command",
+    "iterations_or_run_count",
+    "warmup_when_relevant",
+    "failure_count",
+    "harness_identity",
+    "input_identity",
+    "raw_machine_readable_result",
+    "summary",
+    "claim_boundary",
+    "reproducibility_instructions"
+  ],
+  "runtime_integrity": {
+    "runtime_semantics_changed": false,
+    "benchmark_path_optimized_for_score": false,
+    "authorization_bind_effect_reconciliation_semantics_changed": false
+  },
+  "non_claims": [
+    "production latency",
+    "production SLA",
+    "customer-environment performance",
+    "real customer endpoint performance",
+    "external provider latency",
+    "third-party certification",
+    "regulatory approval",
+    "superiority over named vendors"
+  ],
+  "phase_b_exit": {
+    "completion_conditions": [
+      "the Phase B workflow is merged",
+      "a push-to-main run completes successfully",
+      "the uploaded artifact source_commit_sha equals the measured main commit",
+      "failure_count is zero",
+      "exact command and environment are present",
+      "the non-production claim boundary remains present",
+      "the frozen Decision-to-Effect proof and required repository CI remain green"
+    ],
+    "next_phase_after_success": "PHASE_C_EVIDENCE_BENCHMARK_REBASELINE"
+  }
+}
