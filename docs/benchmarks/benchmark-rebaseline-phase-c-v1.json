@@ -1,0 +1,96 @@
+{
+  "format_version": "benchmark-rebaseline-phase-c/v1",
+  "status": "EVIDENCE_MEASUREMENT_PROTOCOL_DEFINED",
+  "task": "TASK-011",
+  "phase": "C",
+  "baseline_source_commit": "cb8bde7dc9d191e872d5bfcefe17e1597e70ddcd",
+  "phase_b_measured_main_commit": "bbf6fdd69f4c2cc5d77903f60f42163528818a03",
+  "frozen_controlled_e2e_anchor": "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc",
+  "phase_a_contract": "docs/benchmarks/benchmark-rebaseline-contract-v1.json",
+  "phase_b_record": "docs/benchmarks/benchmark-rebaseline-phase-b-v1.json",
+  "scope": "source-SHA-bound deterministic evidence-axis scoring over repository-controlled synthetic fixtures",
+  "canonical_measurement": {
+    "harness": "veritas_os/scripts/evidence_benchmark.py",
+    "metrics_definition": "veritas_os/benchmarks/evidence/metrics_definition.yaml",
+    "output_schema": "veritas_os/benchmarks/evidence/output_schema.json",
+    "fixture": "veritas_os/benchmarks/evidence/fixtures/sample_cases.jsonl",
+    "exact_command": "python -m veritas_os.scripts.evidence_benchmark --fixtures veritas_os/benchmarks/evidence/fixtures/sample_cases.jsonl --output /tmp/veritas-evidence-benchmark.json",
+    "fixture_case_count": 2,
+    "systems": [
+      "veritas",
+      "generic"
+    ],
+    "axes": [
+      "auditability",
+      "fail_closed_safety",
+      "governance_change_control",
+      "replay_divergence_visibility",
+      "trust_log_integrity"
+    ],
+    "python_family": "CPython",
+    "canonical_python_minor": "3.12",
+    "benchmark_workload_external_network_required": false,
+    "external_llm_or_api_allowed": false,
+    "synthetic_comparison": true
+  },
+  "workflow": {
+    "path": ".github/workflows/benchmark-rebaseline-phase-c.yml",
+    "pull_request_behavior": "score the checked-out PR head, validate the frozen schema and inputs, and package source-bound evidence",
+    "main_behavior": "score the exact pushed main commit and upload the authoritative source-bound Phase C artifact",
+    "artifact_name_prefix": "benchmark-rebaseline-phase-c-",
+    "retention_days": 90
+  },
+  "artifact_policy": {
+    "authoritative_phase_c_current_head_location": "GitHub Actions artifact produced by the Phase C workflow on push to main",
+    "source_commit_must_equal_checked_out_commit": true,
+    "raw_report_must_validate_against_output_schema": true,
+    "input_sha256_required": [
+      "harness",
+      "metrics_definition",
+      "output_schema",
+      "fixture"
+    ],
+    "publication_requires_zero_execution_or_validation_failures": true,
+    "schema_version": "benchmark-rebaseline-phase-c-run/v1"
+  },
+  "claim_boundary": {
+    "comparison_classification": "REPOSITORY_CONTROLLED_SYNTHETIC_FIXTURE_SCORING",
+    "independent_competitive_validation": false,
+    "named_vendor_superiority_claim_permitted": false,
+    "production_performance_claim_permitted": false,
+    "production_readiness_claim_permitted": false,
+    "third_party_certification_claim_permitted": false,
+    "external_llm_or_api_allowed": false
+  },
+  "runtime_integrity": {
+    "runtime_semantics_changed": false,
+    "benchmark_fixture_changed_for_score": false,
+    "metric_definition_changed_for_score": false,
+    "authorization_bind_effect_reconciliation_semantics_changed": false
+  },
+  "non_claims": [
+    "production latency",
+    "production SLA",
+    "customer-environment performance",
+    "production readiness",
+    "real customer credentials or endpoints",
+    "independent infrastructure validation",
+    "third-party certification",
+    "regulatory approval",
+    "superiority over named vendors",
+    "third-party competitive validation from synthetic generic fixtures"
+  ],
+  "phase_c_exit": {
+    "completion_conditions": [
+      "the Phase C workflow is merged",
+      "a push-to-main Phase C run completes successfully",
+      "the uploaded artifact source_commit_sha equals the measured main commit",
+      "the raw report validates against the frozen output schema",
+      "the harness, metrics definition, output schema, and fixture SHA-256 identities are recorded",
+      "the exact command and runtime environment are recorded",
+      "the synthetic comparison claim boundary remains explicit",
+      "the frozen Decision-to-Effect proof and required repository CI remain green"
+    ],
+    "next_phase_after_success": "TASK_011_DONE_EXTERNAL_POC_PACKAGING"
+  }
+}
