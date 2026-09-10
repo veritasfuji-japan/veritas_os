@@ -1,0 +1,159 @@
+{
+  "format_version": "large-consolidation-audit-phase2-baseline/v1",
+  "status": "PHASE2_EVIDENCE_MATRICES",
+  "mode": "NON_DESTRUCTIVE",
+  "source_main": "52752dbf766d9994f2f3267af47e904748d347a6",
+  "frozen_proof_anchor": "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc",
+  "phase1_pr": 2217,
+  "evidence_generator": "scripts/audit_large_consolidation_phase2.py",
+  "generated_artifact": "artifacts/consolidation-audit/phase2-generated.json",
+  "findings": [
+    {
+      "id": "P2-001",
+      "target": "frozen-core transitive dependency closure",
+      "classification": "FROZEN_CORE",
+      "confidence": "HIGH",
+      "evidence": [
+        "Architecture Freeze manifest supplies explicit required Python seeds.",
+        "Phase 2 generator resolves static in-repository Python imports transitively.",
+        "Both runtime-only and proof-inclusive closures are generated."
+      ],
+      "conclusion": "All modules in the generated frozen runtime closure are protected from broad consolidation until a narrower proof demonstrates semantic equivalence.",
+      "deletion_permitted": false,
+      "limitation": "Static import analysis does not prove dynamic/plugin/configuration-driven reachability."
+    },
+    {
+      "id": "P2-002",
+      "target": "veritas_os/policy/signing.py::verify_manifest_sha256",
+      "classification": "DEAD_CANDIDATE",
+      "confidence": "HIGH",
+      "evidence": [
+        "The function docstring explicitly identifies the helper as legacy SHA-256 verification.",
+        "Exact repository search found the definition, direct tests, and historical/review documentation.",
+        "The initial exact search found no supported runtime, CLI, script, or workflow consumer outside the defining module."
+      ],
+      "conclusion": "This is the first low-blast-radius removal candidate, but Phase 2 does not authorize deletion. The generator re-checks consumers on the exact PR source.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "P2-003",
+      "target": "TrustLog verifier roles",
+      "classification": "ACTIVE_NON_CORE",
+      "confidence": "HIGH",
+      "evidence": [
+        "veritas_os/logging/trust_log.py::verify_trust_log wraps full encrypted ledger verification and preserves legacy compatibility fields.",
+        "veritas_os/audit/trustlog_verify.py::verify_trustlogs is the stable combined full+witness verifier used by CLI/script/tests.",
+        "veritas_os/scripts/verify_trust_log.py::verify_entries and compute_hash are explicitly backward-compatible helper surfaces; CLI main delegates to verify_trustlogs."
+      ],
+      "conclusion": "The main TrustLog verifier surfaces are not safe duplicate-removal targets. Compatibility helpers may be separately audited.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "P2-004",
+      "target": "plan8-plan17 coverage tests",
+      "classification": "DUPLICATE_CANDIDATE",
+      "confidence": "HIGH_FOR_LISTED_OVERLAPS",
+      "evidence": [
+        "Three tests cover replay-decision query-parameter failure defaulting to mock_external_apis=True.",
+        "Two tests cover unknown rollout strategy falling back to safe full enforcement.",
+        "Multiple tests cover nonce cleanup scheduler exception handling.",
+        "Two tests cover decision-pipeline unavailable/lazy-state reset.",
+        "Related effective_nonce_max tests cover distinct positive/negative branches and should remain separate."
+      ],
+      "conclusion": "Consolidate only exact behavior/fixture overlap; preserve distinct branch coverage.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "P2-005",
+      "target": "parallel live-adapter dry-run families",
+      "classification": "UNCERTAIN",
+      "confidence": "HIGH",
+      "evidence": [
+        "11 suffixes exist in both canonical_promotion_live_adapter_dry_run_* and live_adapter_dry_run_* families.",
+        "5 suffixes are canonical-promotion-only: bind_context_hash_derivation, final_credential_scope_recheck, final_endpoint_identity_recheck, fresh_verified_source_gate, runtime_risk_review.",
+        "1 suffix is live-only: human_approval_requirement_satisfaction.",
+        "Frozen native-v2 authorization/recheck code imports portions of this lineage."
+      ],
+      "conclusion": "Structural pairing is substantial but is not behavioral equivalence. High blast radius; preserve pending dependency and responsibility evidence.",
+      "deletion_permitted": false
+    },
+    {
+      "id": "P2-006",
+      "target": "veritas_os/scripts/verify_trust_log.py compatibility helpers",
+      "classification": "COMPATIBILITY_CANDIDATE",
+      "confidence": "MEDIUM",
+      "evidence": [
+        "compute_hash docstring says it is retained for existing tests/tools.",
+        "verify_entries docstring says it is retained for existing tests/tools relying on tuple output.",
+        "CLI main directly calls verify_trustlogs rather than verify_entries."
+      ],
+      "conclusion": "Potential compatibility cleanup exists, but external/tool imports must be proven absent before deprecation.",
+      "deletion_permitted": false
+    }
+  ],
+  "dry_run_suffix_matrix": {
+    "paired": [
+      "authority_evidence_linkage",
+      "bind_authorization_gate_review",
+      "bind_pre_dispatch_review",
+      "credential_authorization",
+      "dispatch_readiness",
+      "endpoint_allowlist",
+      "final_bind_authorization_readiness",
+      "human_approval_linkage",
+      "operator_dispatch_review",
+      "readiness",
+      "request"
+    ],
+    "canonical_only": [
+      "bind_context_hash_derivation",
+      "final_credential_scope_recheck",
+      "final_endpoint_identity_recheck",
+      "fresh_verified_source_gate",
+      "runtime_risk_review"
+    ],
+    "live_only": [
+      "human_approval_requirement_satisfaction"
+    ]
+  },
+  "ranked_next_candidates": [
+    {
+      "rank": 1,
+      "target": "verify_manifest_sha256",
+      "action": "Human-reviewed narrow removal/deprecation PR if generated consumer matrix remains empty for supported runtime/script/workflow consumers.",
+      "blast_radius": "LOW"
+    },
+    {
+      "rank": 2,
+      "target": "exact plan8-plan17 duplicate behavior tests",
+      "action": "Consolidate duplicated fixtures/assertions into behavior-oriented tests without reducing branch/safety coverage.",
+      "blast_radius": "LOW"
+    },
+    {
+      "rank": 3,
+      "target": "verify_entries / compute_hash compatibility helpers",
+      "action": "Confirm external/tool import contract before deprecation.",
+      "blast_radius": "LOW_TO_MEDIUM"
+    },
+    {
+      "rank": 4,
+      "target": "dry-run packet families",
+      "action": "Preserve until behavioral responsibility matrix supports specific pair consolidation.",
+      "blast_radius": "HIGH"
+    },
+    {
+      "rank": 5,
+      "target": "TrustLog verifier architecture",
+      "action": "Preserve role separation; do not unify by naming alone.",
+      "blast_radius": "HIGH"
+    }
+  ],
+  "phase2_non_goals": [
+    "runtime deletion",
+    "migration rewrite",
+    "frozen proof semantic change",
+    "TrustLog unification",
+    "dry-run family collapse",
+    "API schema split"
+  ]
+}
