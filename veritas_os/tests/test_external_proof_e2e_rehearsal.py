@@ -248,7 +248,7 @@ def _run(
     jwks: dict[str, Any],
     replay_dir: Path,
     *,
-    authority: Any | None = None,
+    include_authority: bool = True,
     approval_state: dict[str, Any] | None = None,
     admissible: bool = True,
     max_age_seconds: int = 3600,
@@ -264,7 +264,7 @@ def _run(
         max_future_skew_seconds=60,
         allow_no_expiry=True,
         action_contract=_contract(),
-        authority_evidence=_authority() if authority is None else authority,
+        authority_evidence=_authority() if include_authority else None,
         human_approval_state=(
             _approval_state() if approval_state is None else approval_state
         ),
@@ -319,7 +319,12 @@ def test_e2e_rehearsal_measurement_does_not_replace_missing_authority(
     private_key, jwks = _material()
     artifact = _sign(_artifact(), private_key)
 
-    result = _run(artifact, jwks, tmp_path / "replay", authority=False)
+    result = _run(
+        artifact,
+        jwks,
+        tmp_path / "replay",
+        include_authority=False,
+    )
 
     closure = result["governance_closure"]
     assert closure["governance_outcome"] == "block"
