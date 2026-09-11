@@ -57,9 +57,9 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip --retries 5 --timeout 60
           # This job proves PostgreSQL effect-state contention semantics only.
-          # Install the repository's core + PostgreSQL + test profiles rather
-          # than the full profile, which pulls unrelated ML/CUDA dependencies.
-          python -m pip install --retries 5 --timeout 60 ".[postgresql,dev]"
+          # Install core + PostgreSQL + signing + test profiles rather than the
+          # full profile, which pulls unrelated ML/CUDA dependencies.
+          python -m pip install --retries 5 --timeout 60 ".[postgresql,signing,dev]"
 
       - name: Run Alembic migrations
         run: |
