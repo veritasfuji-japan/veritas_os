@@ -1,9 +1,12 @@
 # CI dependency profile: the exact full profile minus optional ML packages.
 #
 # Regular unit, smoke, and PostgreSQL lanes use this profile so CPU-only
-# GitHub runners do not download PyTorch/CUDA wheels. The slow and future
-# compatibility lanes still install requirements.txt in full. A regression
-# test keeps this file equal to requirements.txt minus the three ML entries.
+# GitHub runners do not download PyTorch/CUDA wheels. The slow lane still
+# installs requirements.txt in full. The future compatibility lane uses the
+# core profile plus only its targeted test/signing dependencies so it can
+# exercise FastAPI/Pydantic upgrade risk without pulling optional ML/CUDA.
+# A regression test keeps this file equal to requirements.txt minus the three
+# ML entries.
 
 -r requirements-core.txt
 
