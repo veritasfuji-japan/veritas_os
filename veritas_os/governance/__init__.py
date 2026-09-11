@@ -27,6 +27,17 @@ from veritas_os.governance.authority_evidence import (
     verify_authority_evidence_artifact_to_proof,
     authority_signature_payload,
 )
+from veritas_os.governance.external_measurement_evidence import (
+    ApprovedExternalMeasurementProvider,
+    ExternalMeasurementEvidence,
+    ExternalMeasurementProviderVerificationResult,
+    ExternalMeasurementProviderVerifier,
+    ExternalMeasurementReplayGuard,
+    ExternalMeasurementTrustPolicy,
+    VerifiedExternalMeasurementEvidence,
+    validate_verified_external_measurement_evidence,
+    verify_external_measurement_artifact_to_evidence,
+)
 from veritas_os.governance.action_contracts import (
     ActionClassContract,
     ActionClassContractValidationError,
@@ -107,6 +118,15 @@ __all__ = [
     "AuthorityRevocationVerificationResult",
     "VerifiedAuthorityEvidence",
     "VerificationResult",
+    "ApprovedExternalMeasurementProvider",
+    "ExternalMeasurementEvidence",
+    "ExternalMeasurementProviderVerificationResult",
+    "ExternalMeasurementProviderVerifier",
+    "ExternalMeasurementReplayGuard",
+    "ExternalMeasurementTrustPolicy",
+    "VerifiedExternalMeasurementEvidence",
+    "validate_verified_external_measurement_evidence",
+    "verify_external_measurement_artifact_to_evidence",
     "ActionClassContract",
     "ActionClassContractValidationError",
     "validate_human_approval_context_binding",
