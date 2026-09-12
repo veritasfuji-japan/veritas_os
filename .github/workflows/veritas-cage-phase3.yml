@@ -1,0 +1,153 @@
+name: VERITAS CAGE Phase 3 Fixture Proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: veritas-cage-phase3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deterministic-fixture-proof:
+    name: veritas-cage-phase3
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout proof source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused proof dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pytest==9.0.3 PyYAML==6.0.3
+
+      - name: Run focused Phase 3 tests
+        run: |
+          set -euxo pipefail
+          python -m pytest tests/governance/test_cage_provider03_phase3.py -q
+
+      - name: Generate deterministic reviewer artifacts
+        id: proof
+        run: |
+          set -euxo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          python scripts/run_veritas_cage_phase3_fixture.py \
+            --output-dir artifacts/veritas-cage-phase3
+
+      - name: Bind proof artifacts to checked-out source
+        env:
+          SOURCE_SHA: ${{ steps.proof.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          root = Path("artifacts/veritas-cage-phase3")
+          source_sha = os.environ["SOURCE_SHA"]
+          manifest_path = root / "manifest.json"
+          replay_path = root / "replay_report.json"
+          negative_path = root / "negative_test_report.json"
+          summary_path = root / "summary.json"
+
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          replay = json.loads(replay_path.read_text(encoding="utf-8"))
+          negative = json.loads(negative_path.read_text(encoding="utf-8"))
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+          if manifest["scenario_count"] != 7:
+              raise SystemExit("Phase 3 scenario count must remain 7")
+          if manifest["observed_primary_results"] != {
+              "APPROVED": 1,
+              "ESCALATE": 1,
+              "REJECTED": 5,
+          }:
+              raise SystemExit("unexpected Provider03 verdict distribution")
+          if replay["overall_replay_match"] is not True:
+              raise SystemExit("deterministic replay did not match")
+          if negative["passed"] is not True:
+              raise SystemExit("negative proof checks did not pass")
+          if summary["live_external_effects"] is not False:
+              raise SystemExit("Phase 3 must remain side-effect-free")
+          if summary["production_claim"] is not False:
+              raise SystemExit("Phase 3 must not claim production readiness")
+          if summary["live_cage_runtime_claim"] is not False:
+              raise SystemExit("Phase 3 must not claim live CAGE runtime integration")
+
+          files = sorted(path for path in root.rglob("*.json"))
+          file_hashes = {
+              str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in files
+          }
+
+          run_manifest = {
+              "format_version": "veritas-cage-phase3-run/v1",
+              "source_commit_sha": source_sha,
+              "environment": {
+                  "implementation": platform.python_implementation().lower(),
+                  "python_version": platform.python_version(),
+              },
+              "proof_id": manifest["proof_id"],
+              "fixture_id": manifest["fixture_id"],
+              "cage_contract_surface": manifest["cage_contract_surface"],
+              "scenario_count": manifest["scenario_count"],
+              "observed_primary_results": manifest["observed_primary_results"],
+              "overall_replay_match": replay["overall_replay_match"],
+              "negative_tests_passed": negative["passed"],
+              "artifact_sha256": file_hashes,
+              "claim_boundary": {
+                  "synthetic": True,
+                  "deterministic": True,
+                  "side_effect_free": True,
+                  "live_cage_runtime_integration": False,
+                  "production_deployment": False,
+                  "google_endorsement": False,
+                  "commercial_integration": False,
+              },
+              "github": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+              },
+          }
+
+          (root / "run-manifest.json").write_text(
+              json.dumps(run_manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload Phase 3 proof artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-cage-phase3-${{ steps.proof.outputs.source_sha }}
+          path: artifacts/veritas-cage-phase3/
+          if-no-files-found: error
+          retention-days: 90
