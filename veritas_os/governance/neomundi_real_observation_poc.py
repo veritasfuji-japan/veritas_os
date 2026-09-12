@@ -4,6 +4,10 @@ The runner composes the provider-specific NeoMundi verifier with the generic
 ExternalMeasurementEvidence trust boundary. It is intentionally evidence-only:
 it never creates AuthorityEvidence, HumanApproval, BindAuthorization, a
 GovernanceDecision, credentials, or an external effect.
+
+The runtime verification seam intentionally exposes the in-memory sealed proof
+for same-process composition. JSON serialization remains an audit/output format
+and is not reinterpreted as portable runtime trust.
 """
 
 from __future__ import annotations
@@ -41,6 +45,32 @@ class NeoMundiRealObservationPocError(ValueError):
         super().__init__(reason)
         self.reason = reason
         self.report = report
+
+
+@dataclass(frozen=True)
+class NeoMundiRealObservationRuntimeResult:
+    """Same-process runtime result preserving the sealed proof object.
+
+    ``verified_measurement`` and ``trust_policy`` are the trusted runtime values
+    for immediate same-process composition. ``serialized_verified_measurement``
+    is audit output only and must not be deserialized into trusted runtime state.
+    """
+
+    verified_measurement: VerifiedExternalMeasurementEvidence
+    trust_policy: ExternalMeasurementTrustPolicy
+    verification_report: dict[str, Any]
+    serialized_verified_measurement: dict[str, Any]
+    evidence_manifest: dict[str, Any]
+
+    def to_outputs(self) -> dict[str, dict[str, Any]]:
+        """Return the backward-compatible JSON-compatible PoC outputs."""
+        return {
+            "verification_report": dict(self.verification_report),
+            "verified_external_measurement_evidence": dict(
+                self.serialized_verified_measurement
+            ),
+            "evidence_manifest": dict(self.evidence_manifest),
+        }
 
 
 class FileExternalMeasurementReplayGuard:
@@ -160,7 +190,7 @@ def _failure_report(
     }
 
 
-def run_neomundi_real_observation_poc(
+def verify_neomundi_real_observation_runtime(
     artifact: dict[str, Any],
     *,
     trusted_jwks: dict[str, Any],
@@ -174,8 +204,8 @@ def run_neomundi_real_observation_poc(
     now: datetime | None = None,
     source_artifact_file_sha256: str | None = None,
     trusted_jwks_file_sha256: str | None = None,
-) -> dict[str, dict[str, Any]]:
-    """Verify one RGC v0.2 observation and build reproducible PoC outputs."""
+) -> NeoMundiRealObservationRuntimeResult:
+    """Verify one RGC v0.2 observation and retain its runtime-sealed proof."""
     current = now or datetime.now(UTC)
     if current.tzinfo is None or current.utcoffset() is None:
         report = _failure_report(
@@ -331,8 +361,43 @@ def run_neomundi_real_observation_poc(
         ],
     }
 
-    return {
-        "verification_report": verification_report,
-        "verified_external_measurement_evidence": proof_dict,
-        "evidence_manifest": manifest,
-    }
+    return NeoMundiRealObservationRuntimeResult(
+        verified_measurement=proof,
+        trust_policy=trust_policy,
+        verification_report=verification_report,
+        serialized_verified_measurement=proof_dict,
+        evidence_manifest=manifest,
+    )
+
+
+def run_neomundi_real_observation_poc(
+    artifact: dict[str, Any],
+    *,
+    trusted_jwks: dict[str, Any],
+    replay_state_dir: str | Path,
+    verifier_policy_id: str,
+    verifier_trust_level: str,
+    trust_policy_id: str,
+    max_age_seconds: int,
+    max_future_skew_seconds: int = 60,
+    allow_no_expiry: bool = False,
+    now: datetime | None = None,
+    source_artifact_file_sha256: str | None = None,
+    trusted_jwks_file_sha256: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Verify one RGC v0.2 observation and build reproducible PoC outputs."""
+    runtime_result = verify_neomundi_real_observation_runtime(
+        artifact,
+        trusted_jwks=trusted_jwks,
+        replay_state_dir=replay_state_dir,
+        verifier_policy_id=verifier_policy_id,
+        verifier_trust_level=verifier_trust_level,
+        trust_policy_id=trust_policy_id,
+        max_age_seconds=max_age_seconds,
+        max_future_skew_seconds=max_future_skew_seconds,
+        allow_no_expiry=allow_no_expiry,
+        now=now,
+        source_artifact_file_sha256=source_artifact_file_sha256,
+        trusted_jwks_file_sha256=trusted_jwks_file_sha256,
+    )
+    return runtime_result.to_outputs()
