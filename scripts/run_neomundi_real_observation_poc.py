@@ -12,10 +12,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from veritas_os.governance.neomundi_jwks_provenance import (
+    NeoMundiTrustedJwksProvenanceBinding,
+    bind_neomundi_trusted_jwks_provenance,
+)
 from veritas_os.governance.neomundi_real_observation_poc import (
     NeoMundiRealObservationPocError,
     run_neomundi_real_observation_poc,
 )
+from veritas_os.security.hash import sha256_of_canonical_json
 
 
 def _strict_json_object(raw: bytes, *, source: str) -> dict[str, Any]:
@@ -64,10 +69,68 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
+def _claim_boundary() -> dict[str, bool]:
+    return {
+        "measurement_only": True,
+        "authority_created": False,
+        "human_approval_created": False,
+        "bind_authorization_created": False,
+        "governance_decision_created": False,
+        "external_effect_performed": False,
+    }
+
+
+def _binding_metadata(
+    binding: NeoMundiTrustedJwksProvenanceBinding,
+    *,
+    receipt_file_sha256: str,
+) -> dict[str, Any]:
+    return {
+        "accepted": True,
+        **binding.to_dict(),
+        "receipt_file_sha256": receipt_file_sha256,
+    }
+
+
+def _attach_binding_to_outputs(
+    outputs: dict[str, dict[str, Any]],
+    *,
+    binding: NeoMundiTrustedJwksProvenanceBinding,
+    receipt_file_sha256: str,
+) -> None:
+    metadata = _binding_metadata(
+        binding,
+        receipt_file_sha256=receipt_file_sha256,
+    )
+    report = outputs["verification_report"]
+    manifest = outputs["evidence_manifest"]
+
+    report["trusted_key_provenance"] = dict(metadata)
+    manifest["inputs"]["trusted_key_provenance_receipt_canonical_sha256"] = (
+        binding.receipt_canonical_sha256
+    )
+    manifest["inputs"]["trusted_key_provenance_receipt_file_sha256"] = (
+        receipt_file_sha256
+    )
+    manifest["verification"]["trusted_key_provenance"] = dict(metadata)
+    manifest["outputs"]["verification_report_canonical_sha256"] = (
+        sha256_of_canonical_json(report)
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True, help="RGC v0.2 JSON")
     parser.add_argument("--jwks", type=Path, required=True, help="Trusted public JWKS JSON")
+    parser.add_argument(
+        "--trusted-key-provenance",
+        type=Path,
+        required=True,
+        help=(
+            "Trusted Public Key Provenance Receipt JSON for the Ed25519 key "
+            "selected by artifact integrity.key_id"
+        ),
+    )
     parser.add_argument(
         "--replay-state-dir",
         type=Path,
@@ -127,6 +190,46 @@ def main(argv: list[str] | None = None) -> int:
     try:
         artifact, artifact_file_sha256 = _load_json(args.artifact)
         trusted_jwks, jwks_file_sha256 = _load_json(args.jwks)
+        provenance_receipt, provenance_receipt_file_sha256 = _load_json(
+            args.trusted_key_provenance
+        )
+    except (OSError, ValueError) as exc:
+        report = {
+            "status": "failed",
+            "stage": "input",
+            "reason": str(exc),
+            "claim_boundary": _claim_boundary(),
+        }
+        _write_json_atomic(args.output_dir / "verification_report.json", report)
+        print(f"VERITAS NeoMundi PoC input failure: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        binding = bind_neomundi_trusted_jwks_provenance(
+            artifact,
+            trusted_jwks=trusted_jwks,
+            provenance_receipt=provenance_receipt,
+        )
+    except ValueError as exc:
+        report = {
+            "status": "failed",
+            "stage": "trusted_key_provenance",
+            "reason": str(exc),
+            "trusted_key_provenance": {
+                "accepted": False,
+                "receipt_file_sha256": provenance_receipt_file_sha256,
+                "out_of_band_trust_established_by_veritas": False,
+            },
+            "claim_boundary": _claim_boundary(),
+        }
+        _write_json_atomic(args.output_dir / "verification_report.json", report)
+        print(
+            f"VERITAS NeoMundi PoC key provenance failure: {exc}",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
         outputs = run_neomundi_real_observation_poc(
             artifact,
             trusted_jwks=trusted_jwks,
@@ -142,7 +245,12 @@ def main(argv: list[str] | None = None) -> int:
             trusted_jwks_file_sha256=jwks_file_sha256,
         )
     except NeoMundiRealObservationPocError as exc:
-        _write_json_atomic(args.output_dir / "verification_report.json", exc.report)
+        report = dict(exc.report)
+        report["trusted_key_provenance"] = _binding_metadata(
+            binding,
+            receipt_file_sha256=provenance_receipt_file_sha256,
+        )
+        _write_json_atomic(args.output_dir / "verification_report.json", report)
         print(f"VERITAS NeoMundi PoC verification failed: {exc.reason}", file=sys.stderr)
         return 2
     except (OSError, ValueError) as exc:
@@ -150,19 +258,21 @@ def main(argv: list[str] | None = None) -> int:
             "status": "failed",
             "stage": "input",
             "reason": str(exc),
-            "claim_boundary": {
-                "measurement_only": True,
-                "authority_created": False,
-                "human_approval_created": False,
-                "bind_authorization_created": False,
-                "governance_decision_created": False,
-                "external_effect_performed": False,
-            },
+            "trusted_key_provenance": _binding_metadata(
+                binding,
+                receipt_file_sha256=provenance_receipt_file_sha256,
+            ),
+            "claim_boundary": _claim_boundary(),
         }
         _write_json_atomic(args.output_dir / "verification_report.json", report)
         print(f"VERITAS NeoMundi PoC input failure: {exc}", file=sys.stderr)
         return 2
 
+    _attach_binding_to_outputs(
+        outputs,
+        binding=binding,
+        receipt_file_sha256=provenance_receipt_file_sha256,
+    )
     _write_json_atomic(
         args.output_dir / "verification_report.json",
         outputs["verification_report"],
