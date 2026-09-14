@@ -33,6 +33,23 @@ approval.
   stage counts, test counts, or dependency versions in agent instructions.
   Read them from the code, manifests, generated specifications, or CI source.
 
+## Stable Implementation Rules
+
+- Python changes must follow PEP 8 and the repository's current Ruff/config
+  rules.
+- Use type hints on public Python APIs and specific exception handling; never
+  use bare `except:`.
+- Material behavior changes require appropriate docstrings/documentation and
+  focused tests.
+- Keep generated changes limited to the requested diff; do not mix unrelated
+  cleanup into the same PR.
+- Preserve repository responsibility boundaries and surface security risks
+  explicitly when a proposed change introduces or changes them.
+- Use repository-standard logging rather than production `print()` calls.
+- Respect strict TypeScript and existing frontend credential/XSS boundaries for
+  frontend changes.
+- DCO sign-off remains required for commits where repository policy requires it.
+
 ## Progressive Disclosure
 
 Read the smallest authoritative source set needed for the task.
