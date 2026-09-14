@@ -1,0 +1,159 @@
+name: External UTC Clock Fixture Proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: external-clock-fixture-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deterministic-source-bound-proof:
+    name: external-clock-fixture-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout proof source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused proof dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pytest==9.0.3
+
+      - name: Run focused external-clock tests
+        run: |
+          set -euxo pipefail
+          python -m pytest \
+            veritas_os/tests/test_external_clock_evidence.py \
+            veritas_os/tests/test_external_clock_fixture_proof.py \
+            -q
+
+      - name: Generate two independent deterministic fixture runs
+        id: proof
+        run: |
+          set -euxo pipefail
+          FIRST="$(mktemp -d)"
+          SECOND="$(mktemp -d)"
+          TARGET="artifacts/external-clock-fixture-proof"
+          trap 'rm -rf "$FIRST" "$SECOND"' EXIT
+
+          python scripts/run_external_clock_fixture_proof.py --output-dir "$FIRST"
+          python scripts/run_external_clock_fixture_proof.py --output-dir "$SECOND"
+
+          diff -ru "$FIRST" "$SECOND"
+          rm -rf "$TARGET"
+          mkdir -p "$TARGET"
+          cp "$FIRST"/*.json "$TARGET"/
+
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Bind reviewer artifacts to checked-out source SHA
+        env:
+          SOURCE_SHA: ${{ steps.proof.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          root = Path("artifacts/external-clock-fixture-proof")
+          source_sha = os.environ["SOURCE_SHA"]
+
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          negative = json.loads(
+              (root / "negative_test_report.json").read_text(encoding="utf-8")
+          )
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+
+          if manifest["proof_mode"] != "synthetic_deterministic_side_effect_free":
+              raise SystemExit("external-clock proof mode changed")
+          if manifest["monotonic_rtt_ms"] != 125.0:
+              raise SystemExit("unexpected deterministic monotonic RTT")
+          if negative["passed"] is not True:
+              raise SystemExit("external-clock tamper check did not pass")
+          if summary["valid_proof"] is not True:
+              raise SystemExit("external-clock fixture proof is not valid")
+          if summary["validation_failures"] != []:
+              raise SystemExit("external-clock fixture proof has validation failures")
+          if summary["live_external_effects"] is not False:
+              raise SystemExit("external-clock fixture must remain side-effect-free")
+          if summary["live_clock_provider"] is not False:
+              raise SystemExit("external-clock fixture must not claim a live provider")
+          if summary["runtime_clock_replacement"] is not False:
+              raise SystemExit("external-clock fixture must not replace runtime clock")
+          if summary["execution_authority"] is not False:
+              raise SystemExit("external-clock evidence must not become authority")
+          if summary["production_claim"] is not False:
+              raise SystemExit("external-clock fixture must not claim production trust")
+
+          files = sorted(root.glob("*.json"))
+          artifact_hashes = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in files
+          }
+
+          run_manifest = {
+              "format_version": "veritas-external-clock-fixture-run/v1",
+              "source_commit_sha": source_sha,
+              "environment": {
+                  "implementation": platform.python_implementation().lower(),
+                  "python_version": platform.python_version(),
+              },
+              "proof_id": manifest["proof_id"],
+              "fixture_id": manifest["fixture_id"],
+              "proof_mode": manifest["proof_mode"],
+              "evidence_hash": manifest["evidence_hash"],
+              "verification_proof_hash": manifest["verification_proof_hash"],
+              "trust_policy_hash": manifest["trust_policy_hash"],
+              "deterministic_replay_match": True,
+              "negative_tests_passed": negative["passed"],
+              "artifact_sha256": artifact_hashes,
+              "claim_boundary": manifest["claim_boundary"],
+              "github": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+              },
+          }
+
+          (root / "run-manifest.json").write_text(
+              json.dumps(run_manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload source-bound clock proof artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-clock-fixture-proof-${{ steps.proof.outputs.source_sha }}
+          path: artifacts/external-clock-fixture-proof/
+          if-no-files-found: error
+          retention-days: 90
