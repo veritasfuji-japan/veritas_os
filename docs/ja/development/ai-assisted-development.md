@@ -26,6 +26,33 @@ AIツールは、変更の提案、実装、レビュー、要約を行うこと
 - GitHub Actions / CI は客観的チェックです。
 - 人間メンテナの承認が最終的な Commit Boundary です。
 
+## Agent Instruction の階層
+
+`AGENTS.md` を、すべてのcoding agentが最初に読む共通入口とします。
+
+ツール固有のinstructionファイルには、そのツールだけに必要な差分だけを置きます。
+
+- `CLAUDE.md` — Claude Code固有のレビュー・実装方針
+- `.github/copilot-instructions.md` — GitHub Copilot固有の方針
+
+agent instructionの中に、変化しやすいrepository情報を重複して保持しません。特にendpoint数、pipeline stage数、test数、dependency versionなどは複製せず、必要なときにcode、manifest、generated specification、test、CIから現在値を確認します。
+
+複数の情報源が矛盾する場合、AIは都合のよい方を黙って採用せず、その不一致を明示します。
+
+## Progressive Disclosure
+
+AI agentは、その作業に必要な最小限のauthoritative sourceだけを段階的に読み込みます。
+
+推奨順序:
+
+1. `AGENTS.md` を読む。
+2. 変更対象のfileを直接確認する。
+3. `AGENTS.md` がその変更領域に対して指定するarchitecture / contract / validation文書だけを読む。
+4. 関連testと実行可能なCI / quality checkを確認する。
+5. 実際にcross-boundary impactが確認された場合だけ、隣接subsystemへ調査範囲を広げる。
+
+これにより、AIの推論や探索の自由度は高めつつ、execution、governance、security、人間承認の境界は弱めません。
+
 ## ツールごとの役割
 
 | ツール | 主な役割 |
@@ -59,6 +86,7 @@ AIは以下を自動マージまたは単独承認してはいけません。
 - secret handling の変更
 - TrustLog の永続化または暗号化挙動の変更
 - FUJI Gate の fail-closed 挙動の変更
+- production / external-effect execution behavior の変更
 - 公開主張の変更
 - website positioning の変更
 - 非公開のユーザー情報または顧客情報に関わる変更
@@ -91,10 +119,22 @@ AIは以下を自動マージまたは単独承認してはいけません。
 
 1. CI/test failures
 2. Security or data exposure
-3. Runtime behavior mismatch
-4. Public documentation mismatch
-5. Missing tests for code changes
-6. Refactor or style suggestions
+3. Governance or execution-boundary violations
+4. Runtime behavior mismatch
+5. Evidence-integrity / replay / tamper-resistance weaknesses
+6. Public documentation mismatch
+7. Missing tests for code changes
+8. Refactor or style suggestions
+
+## Governance Schema Drift Guardrail
+
+- 通常の governance log retention は **180日** を維持します。
+- high-risk governance log retention は **365日** を維持します。
+- governance schemaを変更する場合、同じPRで以下を更新します。
+  - `veritas_os/api/governance.py` のPydantic schema
+  - `veritas_os/api/governance.json` のcommitted policy sample
+  - governance roundtrip / drift regression tests
+  - `scripts/quality/check_governance_policy_schema_sync.py` validation guard
 
 ## 非目的
 
@@ -106,13 +146,14 @@ AIは以下を自動マージまたは単独承認してはいけません。
 - 人間メンテナの置き換え
 - runtime governance behavior の変更
 - CI/release gates の変更
+- model confidenceをexecution authorityの代替として扱うこと
 
 ## VERITAS開発ステートメント
 
 VERITAS OS は、監査可能なAI支援ワークフローによって開発されます。
 
-- Codex は実装を支援できる。
-- Claude Code はレビューを支援できる。
-- GitHub Actions は検証する。
+- Coding agentは、依頼されたscope内で推論、探索、実装、testを行える。
+- ツール固有instructionは短く保ち、必要なsourceをtaskごとに段階的に読む。
+- GitHub Actionsは実行可能なcheckを検証する。
 - 外部モデルは参考レビューを提供できる。
 - 人間メンテナの承認が最終的な Commit Boundary である。

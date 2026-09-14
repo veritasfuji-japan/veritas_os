@@ -1,63 +1,99 @@
-# VERITAS OS — Codex Agent Instructions
+# VERITAS OS — Agent Instructions
 
 ## Purpose
 
-Codex is the primary implementation assistant for focused PRs in VERITAS OS.
+`AGENTS.md` is the shared entrypoint for coding agents working in VERITAS OS.
+Keep this file short and stable. Read task-specific sources only when they are
+relevant instead of loading the entire repository guidance for every task.
 
-This file defines how Codex should operate inside an auditable AI-assisted development workflow. It does not replace `CLAUDE.md`, `.github/copilot-instructions.md`, CI, or human maintainer approval.
+This file does not replace CI, repository-enforced checks, or human maintainer
+approval.
 
 ## Authority Model
 
-- AI reviews are advisory signals.
+- AI reviews and implementation suggestions are advisory signals.
 - GitHub Actions / CI are objective checks.
 - Human maintainer approval is the final commit boundary.
-- Codex must not push directly to `main`.
-- Codex must not merge PRs.
-- Codex must not approve security-sensitive, governance-sensitive, release-sensitive, or public-claim changes on its own.
+- Do not push directly to `main`.
+- Do not merge PRs.
+- Do not independently approve security-sensitive, governance-sensitive,
+  release-sensitive, or public-claim changes.
 
-## Scope Rules
+## Default Working Style
 
 - Prefer 1 PR = 1 purpose.
 - Prefer small, reviewable diffs.
-- Do not mix runtime changes, docs changes, and public positioning changes unless explicitly requested.
+- Inspect the relevant implementation and tests before editing.
+- Run the narrowest useful validation first; expand validation when the change
+  surface requires it.
+- Do not perform broad refactors or introduce new abstraction layers unless
+  explicitly requested.
 - If scope is unclear, reduce the change size instead of expanding it.
-- Do not perform broad refactors unless explicitly requested.
+- Do not duplicate volatile repository facts such as endpoint counts, pipeline
+  stage counts, test counts, or dependency versions in agent instructions.
+  Read them from the code, manifests, generated specifications, or CI source.
+
+## Stable Implementation Rules
+
+- Python changes must follow PEP 8 and the repository's current Ruff/config
+  rules.
+- Use type hints on public Python APIs and specific exception handling; never
+  use bare `except:`.
+- Material behavior changes require appropriate docstrings/documentation and
+  focused tests.
+- Keep generated changes limited to the requested diff; do not mix unrelated
+  cleanup into the same PR.
+- Preserve repository responsibility boundaries and surface security risks
+  explicitly when a proposed change introduces or changes them.
+- Use repository-standard logging rather than production `print()` calls.
+- Respect strict TypeScript and existing frontend credential/XSS boundaries for
+  frontend changes.
+- DCO sign-off remains required for commits where repository policy requires it.
+
+## Progressive Disclosure
+
+Read the smallest authoritative source set needed for the task.
+
+| Change surface | Read before editing |
+|---|---|
+| AI-assisted workflow / authority | `docs/en/development/ai-assisted-development.md` |
+| Bind, authorization, external effect, receipt, outcome, reconciliation | `docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md` and the affected runtime modules/tests |
+| External measurement / NeoMundi | `docs/en/architecture/external-measurement-evidence-boundary-v1.md` and affected governance modules/tests |
+| CAGE interoperability | `docs/en/validation/veritas-cage-phase3-deterministic-fixture-proof.md` and affected adapter/tests |
+| Governance schema/config | `veritas_os/api/governance.py`, `veritas_os/api/governance.json`, related roundtrip tests, and `scripts/quality/check_governance_policy_schema_sync.py` |
+| Pipeline architecture | Current pipeline implementation, architecture checks, and replay tests; do not rely on a copied stage count |
+| API surface | Current routes and generated/open API specification; do not rely on a copied endpoint count |
+
+If a referenced document conflicts with executable code or an enforced CI check,
+stop and surface the mismatch rather than silently choosing one.
 
 ## High-Risk Areas Requiring Human Approval
 
 Human approval is required for changes touching:
 
-- bind/admissibility logic
+- Bind/admissibility semantics
 - governance policy behavior
 - release gates
 - secrets or credential handling
 - TrustLog persistence or encryption behavior
 - FUJI Gate fail-closed behavior
+- production or external-effect execution semantics
 - public claims in README, docs, website, or social posts
 - private user/customer data handling
 
-## Priority Order
+## Core Safety Invariants
 
-1. CI/test failures
-2. Security or data exposure
-3. Runtime behavior mismatch
-4. Public documentation mismatch
-5. Missing tests for code changes
-6. Refactor or style suggestions
-
-## External AI Review Safety
-
-External/free-tier AI tools may be used only with non-sensitive excerpts.
-
-Do not paste:
-
-- secrets
-- credentials
-- API keys
-- `.env` content
-- private customer data
-- unpublished internal strategy
-- non-public security details
+- FUJI Gate remains fail-closed.
+- Do not bypass Authority, Policy, Human Approval, Bind, or current-recheck
+  boundaries.
+- Never treat evidence as execution authority unless the explicit contract says
+  so.
+- Do not introduce direct LLM calls outside `veritas_os/core/llm_client.py`.
+- Do not introduce `pickle`, `joblib`, or unsafe deserialization.
+- Do not store secrets, credentials, private customer data, or plaintext
+  TrustLog material in code, logs, fixtures, or review prompts.
+- Schema/config changes must update their committed samples, roundtrip/drift
+  tests, operational documentation, and sync guards in the same PR.
 
 ## Independent Sandbox Authentication Exception
 
@@ -65,11 +101,22 @@ The user-approved independent sandbox event service uses Bearer authentication
 with distinct expiring registration and read-only tokens. This exception applies
 only to `create_sandbox_event_service`; never mount it into the existing VERITAS
 API or change that API's X-API-Key authentication. Missing configuration rejects
-requests. Runtime implementation does not authorize deployment or live credentials.
+requests. Runtime implementation does not authorize deployment or live
+credentials.
 
-## References
+## Tool-Specific Files
 
-- `CLAUDE.md` — project architecture, safety rules, testing, and quality gates
-- `.github/copilot-instructions.md` — GitHub Copilot coding instructions
-- `docs/en/development/ai-assisted-development.md` — canonical AI-assisted development guide
+- `CLAUDE.md` contains Claude Code-specific review behavior only.
+- `.github/copilot-instructions.md` contains GitHub Copilot-specific behavior
+  only.
+- Neither file should duplicate volatile architecture inventories or dependency
+  versions from the repository.
+
+## Canonical References
+
+- `docs/en/development/ai-assisted-development.md` — AI-assisted development
+  workflow, authority, and review policy
 - `docs/ja/development/ai-assisted-development.md` — Japanese explanatory guide
+- CI workflows and repository scripts — executable quality/security gates
+- current code, tests, manifests, and generated specifications — current
+  implementation facts
