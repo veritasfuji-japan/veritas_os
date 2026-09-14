@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip
-          python -m pip install pytest==9.0.3
+          python -m pip install '.[signing,dev]'
 
       - name: Run focused external-clock tests
         run: |
