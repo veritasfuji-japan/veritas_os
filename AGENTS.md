@@ -58,6 +58,7 @@ Read the smallest authoritative source set needed for the task.
 |---|---|
 | AI-assisted workflow / authority | `docs/en/development/ai-assisted-development.md` |
 | Bind, authorization, external effect, receipt, outcome, reconciliation | `docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md` and the affected runtime modules/tests |
+| External UTC clock trust | `docs/en/architecture/external-utc-clock-evidence-boundary-v1.md` and `docs/architecture/external-utc-clock-evidence-boundary-v1.json`; keep it separate from the frozen execution path unless a later architecture decision explicitly composes them |
 | External measurement / NeoMundi | `docs/en/architecture/external-measurement-evidence-boundary-v1.md` and affected governance modules/tests |
 | CAGE interoperability | `docs/en/validation/veritas-cage-phase3-deterministic-fixture-proof.md` and affected adapter/tests |
 | Governance schema/config | `veritas_os/api/governance.py`, `veritas_os/api/governance.json`, related roundtrip tests, and `scripts/quality/check_governance_policy_schema_sync.py` |

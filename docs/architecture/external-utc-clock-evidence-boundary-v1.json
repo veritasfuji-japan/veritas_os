@@ -1,0 +1,86 @@
+{
+  "contract_id": "external-utc-clock-evidence-boundary-v1",
+  "status": "design_fixed_non_executing",
+  "purpose": "Define the provider-neutral evidence boundary required before any external UTC clock trust can be composed with the frozen Decision-to-Effect path.",
+  "implementation_target": {
+    "module": "veritas_os/governance/external_clock_evidence.py",
+    "test_module": "veritas_os/tests/test_external_clock_evidence.py",
+    "required_public_types": [
+      "ExternalClockChallenge",
+      "ExternalClockEvidence",
+      "ExternalClockProviderVerificationResult",
+      "ExternalClockProviderVerifier",
+      "ApprovedExternalClockProvider",
+      "ExternalClockTrustPolicy",
+      "VerifiedExternalClockEvidence"
+    ],
+    "required_public_functions": [
+      "register_external_clock_challenge",
+      "verify_external_clock_artifact_to_evidence",
+      "validate_verified_external_clock_evidence"
+    ]
+  },
+  "required_properties": {
+    "provider_neutral": true,
+    "challenge_bound_freshness": true,
+    "monotonic_rtt_bound": true,
+    "independent_provider_verifier_allowlist": true,
+    "independent_uncertainty_limit": true,
+    "runtime_sealed_proof": true,
+    "serialized_output_is_not_runtime_trust": true,
+    "evidence_is_not_execution_authority": true
+  },
+  "required_normalized_fields": [
+    "evidence_id",
+    "provider_id",
+    "artifact_id",
+    "artifact_type",
+    "artifact_version",
+    "payload_hash",
+    "challenge_id",
+    "challenge_nonce_hash",
+    "utc_time",
+    "uncertainty_ms",
+    "source_clock_id",
+    "provenance",
+    "metadata"
+  ],
+  "required_fail_closed_tests": [
+    "provider_verification_failure",
+    "semantic_inconsistency",
+    "unapproved_provider_or_verifier",
+    "verifier_policy_binding_mismatch",
+    "missing_signature_identity_metadata_where_required",
+    "malformed_payload_hash",
+    "missing_or_invalid_challenge",
+    "challenge_identifier_mismatch",
+    "challenge_nonce_mismatch",
+    "challenge_replay",
+    "non_utc_or_timezone_naive_time",
+    "invalid_or_excessive_uncertainty",
+    "negative_or_excessive_monotonic_rtt",
+    "trust_policy_change_after_proof_creation",
+    "caller_mutated_or_forged_verified_proof"
+  ],
+  "must_not_change": [
+    "authorization_issuance_semantics",
+    "authorization_consumption_semantics",
+    "current_governance_rechecks",
+    "credential_resolution",
+    "bind_dispatch",
+    "effect_unknown_semantics",
+    "reconciliation_semantics",
+    "bind_receipt_semantics",
+    "outcome_semantics",
+    "existing_trusted_clock_callbacks",
+    "external_effect_paths"
+  ],
+  "non_claims": [
+    "production_external_utc_clock_trust",
+    "live_clock_provider_interoperability",
+    "independent_production_infrastructure",
+    "customer_deployment",
+    "regulatory_or_certification_status",
+    "trustlog_exactly_once_publication"
+  ]
+}
