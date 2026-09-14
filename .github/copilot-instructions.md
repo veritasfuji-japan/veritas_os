@@ -1,305 +1,100 @@
-# VERITAS OS — AI Coding Agent Instructions
+# VERITAS OS — GitHub Copilot Instructions
 
-## 1. Project Identity
+Read `AGENTS.md` first. It is the shared authority, safety, scope, and
+progressive-disclosure entrypoint for coding agents in this repository.
 
-- **Name**: VERITAS OS v2.0.0
-- **Purpose**: Auditable Decision OS for LLM Agents (Proto-AGI Skeleton)
-- **Repository**: https://github.com/veritasfuji-japan/veritas_os
-- **Author**: Takeshi Fujishita
-- **License**: Multi-license (Core = Proprietary EULA, Interface = MIT)
-- **Status**: Beta (Pre-release) — Technical DD Score: 84/100 (A-)
+This file contains only GitHub Copilot-specific behavior. Do not duplicate
+volatile repository inventories here. Resolve current dependency versions,
+endpoint counts, pipeline stages, test counts, and architecture details from
+current code, manifests, generated specifications, tests, and CI.
 
-## 2. Tech Stack
+## Copilot Role
 
-### Backend (Python)
-- **Language**: Python 3.11+ (target: 3.12.12)
-- **Framework**: FastAPI 0.121.0 + Uvicorn
-- **Data Validation**: Pydantic v2 (2.8.2)
-- **LLM Client**: OpenAI SDK (1.51.0), httpx (0.27.2)
-- **Serialization**: orjson
-- **Build**: setuptools + pyproject.toml
-- **Linter**: Ruff (target py311, select: E/F/W/B)
-- **Tests**: pytest 8.3.5 + pytest-asyncio + pytest-cov
-- **CI Coverage Gate**: ≥ 85% (`--cov-fail-under=85`)
-- **Task Runner**: Makefile with `uv` (astral)
+GitHub Copilot is primarily used for:
 
-### Frontend (TypeScript)
-- **Framework**: Next.js 16 (App Router, React 18)
-- **Language**: TypeScript 5.7
-- **Styling**: Tailwind CSS 3.4 + CVA (class-variance-authority)
-- **Package Manager**: pnpm (workspace)
-- **Testing**: Vitest + Testing Library (unit), Playwright + axe-core (E2E)
-- **i18n**: Custom React Context (ja default, en)
-- **Design System**: `@veritas/design-system` (packages/design-system/)
-- **Shared Types**: `@veritas/types` (packages/types/) with runtime type guards
+- GitHub-native PR review
+- local coding assistance
+- focused implementation suggestions
+- small bug and test-gap detection
+- concise explanations of changed code
 
-### Infrastructure
-- Docker + Docker Compose (backend:8000 + frontend:3000)
-- GHCR: `ghcr.io/veritasfuji-japan/veritas_os:latest`
-- GitHub Actions CI (Python 3.11/3.12 matrix, CodeQL, SBOM)
+Keep suggestions narrow and compatible with the existing architecture. Do not
+turn a local fix into a broad refactor unless explicitly requested.
 
-## 3. Repository Structure (Critical Paths)
+## Authority Rules
 
-```
-veritas_os/                     ← Monorepo root
-├── veritas_os/                 ← Python backend
-│   ├── api/                    ← FastAPI server, routes, schemas, governance
-│   │   ├── server.py           ← FastAPI app (40+ endpoints)
-│   │   ├── routes_decide.py    ← /v1/decide & replay
-│   │   ├── routes_trust.py     ← TrustLog & audit
-│   │   ├── routes_memory.py    ← Memory CRUD
-│   │   ├── routes_governance.py← Governance & policy
-│   │   ├── routes_system.py    ← Health, metrics, SSE, halt
-│   │   ├── schemas.py          ← Pydantic v2 request/response
-│   │   └── governance.py       ← Policy mgmt, 4-eyes approval, RBAC/ABAC
-│   ├── core/                   ← Decision engine
-│   │   ├── kernel.py           ← Decision computation
-│   │   ├── pipeline/           ← 20+ stage orchestrator (package)
-│   │   ├── fuji/               ← FUJI safety gate (package)
-│   │   ├── memory/             ← MemoryOS (package)
-│   │   ├── continuation_runtime/ ← Phase-1 observe/shadow
-│   │   ├── value_core.py       ← Value alignment + EMA
-│   │   ├── world.py            ← WorldModel
-│   │   ├── llm_client.py       ← Multi-provider LLM gateway
-│   │   ├── debate.py           ← Multi-viewpoint debate
-│   │   ├── critique.py         ← Self-critique
-│   │   ├── planner.py          ← Action planning
-│   │   └── sanitize.py         ← PII masking
-│   ├── policy/                 ← Policy compiler, signing, runtime adapter
-│   ├── logging/                ← TrustLog, encryption, rotation
-│   ├── audit/                  ← Ed25519 signed audit
-│   ├── compliance/             ← EU AI Act reports
-│   ├── security/               ← SHA-256, Ed25519
-│   ├── replay/                 ← Deterministic replay engine
-│   ├── observability/          ← OpenTelemetry
-│   ├── storage/                ← Pluggable backends (JSONL, PostgreSQL)
-│   ├── tools/                  ← Web search, GitHub search
-│   ├── prompts/                ← LLM prompt templates
-│   └── tests/                  ← 5600+ Python tests
-├── frontend/                   ← Next.js 16 Mission Control
-│   ├── app/                    ← Pages (/, /console, /audit, /governance, /risk)
-│   ├── components/             ← Shared React components
-│   ├── features/console/       ← Decision Console feature
-│   ├── lib/                    ← API client, validators, utilities
-│   ├── locales/                ← i18n files
-│   └── e2e/                    ← Playwright E2E tests
-├── packages/
-│   ├── types/                  ← Shared TS types + runtime validators
-│   └── design-system/          ← Card, Button, AppShell
-├── spec/                       ← OpenAPI spec (MIT)
-├── sdk/                        ← SDK interface (MIT)
-├── cli/                        ← CLI interface (MIT)
-├── policies/                   ← Policy templates
-├── scripts/                    ← Architecture/quality/security checks
-├── openapi.yaml                ← OpenAPI 3.x
-├── pyproject.toml              ← Python config
-├── Makefile                    ← Dev/test commands
-└── docker-compose.yml          ← Full-stack orchestration
-```
+- Copilot suggestions and reviews are advisory.
+- GitHub Actions / CI are objective checks.
+- Human maintainer approval is the final commit boundary.
+- Do not independently approve or merge security-sensitive,
+  governance-sensitive, release-sensitive, credential, external-effect, or
+  public-claim changes.
+- Do not infer execution authority from model confidence or a passing local
+  test.
 
-## 4. Architecture Principles (MUST Follow)
+## Progressive Disclosure
 
-### 4.1 Responsibility Boundaries (Enforced in CI)
+1. Read `AGENTS.md`.
+2. Inspect the changed files and directly related tests.
+3. Read only the task-specific contract/architecture sources routed by
+   `AGENTS.md`.
+4. Use executable CI and repository checks for current quality/security gates.
+5. Expand scope only when the diff has a demonstrated cross-boundary impact.
 
-These boundaries are verified by `scripts/architecture/check_responsibility_boundaries.py`:
+If code, documentation, tests, or CI conflict, flag the mismatch. Do not resolve
+it by silently choosing one source.
 
-| Component    | Owns                                          | Must NOT absorb                                |
-|-------------|-----------------------------------------------|-----------------------------------------------|
-| **Planner** | Planning structure, action-plan generation    | Kernel orchestration, FUJI policy, Memory I/O |
-| **Kernel**  | Decision computation, scoring, debate wiring  | API orchestration, persistence, governance    |
-| **FUJI**    | Safety gating, rejection semantics, audit     | Memory mgmt, planner branching, persistence   |
-| **MemoryOS**| Storage, retrieval, summarization, security   | Planner policy, kernel decisions, FUJI logic  |
-| **Pipeline**| Stage orchestration for /v1/decide            | Decision logic (kernel), safety logic (FUJI)  |
+## Implementation Guardrails
 
-### 4.2 Safety Design
+- Preserve Planner / Kernel / FUJI / MemoryOS / Pipeline responsibility
+  boundaries enforced by repository checks.
+- Keep LLM calls behind `veritas_os/core/llm_client.py`.
+- Preserve fail-closed behavior.
+- Never bypass Authority, Policy, Human Approval, Bind, or current-recheck
+  boundaries.
+- Never treat external measurement or other evidence as Authority Evidence,
+  Human Approval, BindAuthorization, or execution permission unless the
+  explicit contract says so.
+- Do not introduce `pickle`, `joblib`, unsafe deserialization, plaintext
+  secrets, or plaintext TrustLog persistence.
+- Use specific exception handling and repository-standard logging.
+- Add or update focused tests for behavior changes.
 
-- **FUJI Gate is fail-closed**: ALL exceptions → `status=rejected`, `risk=1.0`. Never silently pass.
-- **TrustLog encryption is mandatory**: Missing `VERITAS_ENCRYPTION_KEY` → writes FAIL (by design).
-- **PII/secret redaction is automatic**: Before any persistence. No manual `redact()` needed.
-- **4-eyes approval**: Governance policy updates require 2 distinct approvers.
-- **Legacy pickle is blocked**: RCE risk. Never introduce pickle/joblib deserialization.
+## Schema and Config Contracts
 
-### 4.3 Pipeline Architecture
+A schema/config change must update all affected artifacts in the same PR,
+including:
 
-The `/v1/decide` pipeline has 20+ stages. Respect stage ordering:
+- schema/model code
+- committed JSON/YAML sample or default
+- roundtrip/drift tests
+- relevant sync/check scripts
+- operational documentation
 
-```
-Input Normalize → Memory Retrieval → Web Search → Options Normalize
-  → Core Execute → Absorb Results → Fallback Alternatives → Model Boost
-  → Debate → Critique → FUJI Precheck → ValueCore → Gate Decision
-  → Value Learning (EMA) → Compute Metrics → Evidence Hardening
-  → Response Assembly → Persist (Audit + Memory + World) → Finalize Evidence
-  → Build Replay Snapshot
-```
+For governance policy changes, follow the canonical files and guard named in
+`AGENTS.md`.
 
-### 4.4 LLM Client
+## Review Priority
 
-ALL LLM calls MUST go through `veritas_os/core/llm_client.py`. Never call OpenAI SDK directly from other modules.
+1. CI/test failures
+2. security or data exposure
+3. governance/execution-boundary violations
+4. runtime behavior mismatch
+5. evidence-integrity or replay/tamper weaknesses
+6. public documentation mismatch
+7. missing tests
+8. refactor or style suggestions
 
-## 5. Coding Conventions
+## External Sandbox Exception
 
-### Python
-- Python 3.11+ syntax. Use `from __future__ import annotations` where needed.
-- Type hints on ALL public functions. Use Pydantic v2 models for data classes.
-- Ruff lint rules: E, F, W, B (ignore: E501, E402, F401, W291, W293, B007, B009).
-- Docstrings: Google style.
-- Imports: stdlib → third-party → local. Use absolute imports (`from veritas_os.core.xxx`).
-- Error handling: specific exceptions. Never bare `except:`.
-- Logging: use Python `logging` module, never `print()` in production code.
-- Constants: UPPER_SNAKE_CASE.
-- Environment variables: always accessed through config/settings, never scattered.
+The independent sandbox event service may use its documented distinct,
+expiring Bearer writer/reader tokens. This exception is limited to
+`create_sandbox_event_service`. Do not mount it into the main VERITAS API or
+change that API's X-API-Key authentication. Missing authentication
+configuration must fail closed.
 
-### TypeScript (Frontend)
-- Strict TypeScript. No `any` without explicit justification.
-- Runtime type guards (`isDecideResponse`, etc.) for ALL API responses.
-- BFF pattern: browser NEVER sees API credentials.
-- `sanitizeText()` on ALL API response rendering (XSS defense).
-- Components: functional + hooks. No class components.
-- Styling: Tailwind CSS + CVA. No inline styles.
+## Current Facts
 
-### General
-- File names: snake_case (Python), kebab-case (TypeScript).
-- Commit messages: conventional commits format.
-- DCO sign-off required: `Signed-off-by: Name <email>`.
-- Any governance schema change must update the committed governance policy sample and schema drift tests in the same PR.
-
-### Schema-contract changes must update all artifacts
-
-Any change to a Pydantic schema, governance policy schema, API response schema, config schema, or policy model **must** update all related artifacts in the same PR.
-
-Required checklist for schema/config contract changes:
-- [ ] Update the Pydantic/schema model.
-- [ ] Update committed JSON/YAML sample or default files.
-- [ ] Update roundtrip serialization tests.
-- [ ] Update schema/config drift guard checks where applicable.
-- [ ] Update operational documentation.
-- [ ] Verify tests do not mutate committed production config artifacts.
-- [ ] Run the relevant sync/check script(s).
-
-Governance-specific requirement:
-- For `veritas_os/api/governance.py` and `veritas_os/api/governance.json`, every schema change must preserve committed JSON fields through `GovernancePolicy.model_validate(data).model_dump()`.
-- Every such change must pass `python scripts/quality/check_governance_policy_schema_sync.py`.
-
-AI-agent warning:
-- Rapid parallel agent development frequently introduces schema drift.
-- Do not merge schema changes that only update code or only update sample JSON.
-- Schema, sample policy, tests, docs, and CI guard must move together.
-
-## 6. Testing Rules
-
-### Python Tests
-- Location: `veritas_os/tests/` (5600+ tests exist)
-- Framework: pytest + pytest-asyncio
-- Coverage gate: ≥ 85% (CI-enforced)
-- Markers: `@pytest.mark.slow`, `@pytest.mark.production`, `@pytest.mark.smoke`, `@pytest.mark.external`, `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.scenario`, `@pytest.mark.eu_ai_act`
-- NEW CODE MUST include tests. Aim for ≥ 90% coverage on new modules.
-- Use mocks for LLM calls (never hit real APIs in unit tests).
-- Test file naming: `test_<module_name>.py`
-
-### Run commands
-```bash
-make test                    # All tests (uv + pytest)
-make test-cov                # With coverage (≥85% gate)
-make test-production         # Production-like validation
-make test-smoke              # Smoke tests only
-make quality-checks          # Architecture + security checks
-```
-
-### Frontend Tests
-```bash
-pnpm ui:test                 # Vitest unit tests
-pnpm ui:typecheck            # Type checking
-pnpm --filter frontend e2e   # Playwright E2E
-```
-
-## 7. Security Checklist (For Every PR)
-
-- [ ] No secrets/API keys in code or logs
-- [ ] PII is redacted before persistence
-- [ ] FUJI Gate remains fail-closed (exceptions → rejected)
-- [ ] No pickle/joblib deserialization
-- [ ] No `NEXT_PUBLIC_*` API base URL variables (leaks internal topology)
-- [ ] No wildcard CORS origins with credentials
-- [ ] TrustLog entries go through encrypt pipeline
-- [ ] New endpoints have `X-API-Key` authentication
-- Exception approved for the independent sandbox event service only:
-  `create_sandbox_event_service` uses distinct, expiring Bearer writer/reader
-  tokens. It must not be mounted into the main VERITAS API. Missing authentication
-  configuration fails closed; no external deployment is implied.
-- [ ] Governance endpoints have RBAC guard
-- [ ] Web search results pass toxicity filter
-- [ ] Schema/config changes include sample artifact updates and roundtrip drift tests.
-
-## 8. Key Environment Variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `VERITAS_API_KEY` | Yes | Backend auth key |
-| `VERITAS_API_SECRET` | Yes | HMAC secret (32+ chars) |
-| `VERITAS_ENCRYPTION_KEY` | Yes | TrustLog encryption (base64 32-byte) |
-| `LLM_PROVIDER` | No | Default: `openai` |
-| `LLM_MODEL` | No | Default: `gpt-4.1-mini` |
-
-## 9. Quality Gates (CI-Enforced)
-
-These checks run in CI and must pass:
-
-1. Full `pytest` non-slow suite in duration-balanced Python 3.11/3.12 shards,
-   with combined Python 3.12 coverage enforced at `--fail-under=85`
-2. CodeQL security scan
-3. `scripts/architecture/check_responsibility_boundaries.py`
-4. `scripts/architecture/check_core_complexity_budget.py`
-5. `scripts/security/check_memory_dir_allowlist.py`
-6. `scripts/security/check_httpx_raw_upload_usage.py`
-7. `scripts/security/check_subprocess_shell_usage.py`
-8. `scripts/security/check_runtime_pickle_artifacts.py`
-9. `scripts/quality/check_replay_pipeline_version_unknown_rate.py --max-unknown-rate 0.0`
-10. `scripts/quality/check_deployment_env_defaults.py`
-
-## 10. What NOT To Do
-
-- **DO NOT** bypass FUJI Gate or add silent pass-through on safety errors.
-- **DO NOT** add direct LLM calls outside `llm_client.py`.
-- **DO NOT** store plaintext TrustLog entries.
-- **DO NOT** merge Planner logic into Kernel or vice versa (boundary violation).
-- **DO NOT** use `pickle`, `joblib`, or `eval()` for deserialization.
-- **DO NOT** add `print()` statements. Use `logging` module.
-- **DO NOT** skip tests for new code.
-- **DO NOT** add `NEXT_PUBLIC_*` API variables in the frontend.
-- **DO NOT** modify pipeline stage ordering without updating replay engine.
-- **DO NOT** use bare `except:` clauses.
-
-## 11. Bilingual Notes
-
-- README and docs are maintained in **English + Japanese (日本語)**.
-- Code comments and docstrings are in **English**.
-- Test markers include Japanese descriptions: `unit: 単体テスト`, `integration: 統合テスト`.
-- When adding docs, provide both EN and JP versions when possible.
-
-## 12. Useful Commands Cheatsheet
-
-```bash
-# Development
-make setup                   # Initial environment setup
-make dev                     # Backend (port 8000)
-make dev-frontend            # Frontend (port 3000)
-make dev-all                 # Both
-make up                      # Docker Compose full stack
-
-# Testing
-make test                    # Unit tests
-make test-cov                # Coverage (≥85%)
-make quality-checks          # Architecture + security
-
-# Cleanup
-make clean-venv              # Remove virtualenv
-python scripts/reset_repo_runtime.py --dry-run  # Preview cleanup
-```
-# User-provided custom instructions
-
-• すべてのコード変更は PEP8 に準拠させる
-• 変更部分のみ差分(diffs)で生成する
-• 重大な変更は必ず docstring とテストを作る
-• Planner / Kernel / Fuji / MemoryOS の責務を越える変更は禁止
-• セキュリティリスクは必ず警告する
+Do not encode changing facts such as "N endpoints", "N pipeline stages", "N
+tests", or pinned library versions in this instruction file. Read those facts
+from their authoritative repository sources when a task actually needs them.
