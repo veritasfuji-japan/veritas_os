@@ -24,6 +24,33 @@ Only a human maintainer may approve:
 - GitHub Actions / CI are objective checks.
 - Human maintainer approval is the final commit boundary.
 
+## Agent Instruction Hierarchy
+
+`AGENTS.md` is the shared entrypoint for coding agents.
+
+Tool-specific instruction files must contain only role-specific deltas:
+
+- `CLAUDE.md` — Claude Code review and implementation behavior
+- `.github/copilot-instructions.md` — GitHub Copilot-specific behavior
+
+Do not maintain parallel copies of volatile repository facts in agent instruction files. In particular, do not duplicate changing endpoint counts, pipeline stage counts, test counts, or dependency versions. Read current facts from code, manifests, generated specifications, tests, and CI only when the task needs them.
+
+When sources disagree, agents must surface the mismatch instead of silently selecting the most convenient source.
+
+## Progressive Disclosure
+
+Agents should load the smallest authoritative source set that is sufficient for the task.
+
+Recommended sequence:
+
+1. Read `AGENTS.md`.
+2. Inspect the files directly affected by the task.
+3. Read only the architecture, contract, or validation documents routed by `AGENTS.md` for that change surface.
+4. Inspect relevant tests and executable CI/quality checks.
+5. Expand to adjacent subsystems only when there is evidence of cross-boundary impact.
+
+This keeps model reasoning autonomous where appropriate without weakening execution, governance, security, or human-approval boundaries.
+
 ## Tool Roles
 
 | Tool | Primary role |
@@ -57,6 +84,7 @@ AI must not automatically merge or independently approve:
 - secret handling changes
 - TrustLog persistence or encryption behavior changes
 - FUJI Gate fail-closed behavior changes
+- production or external-effect execution behavior changes
 - public claim changes
 - website positioning changes
 - changes involving private user or customer data
@@ -89,10 +117,12 @@ External AI feedback must not become a merge blocker by itself.
 
 1. CI/test failures
 2. Security or data exposure
-3. Runtime behavior mismatch
-4. Public documentation mismatch
-5. Missing tests for code changes
-6. Refactor or style suggestions
+3. Governance or execution-boundary violations
+4. Runtime behavior mismatch
+5. Evidence-integrity, replay, or tamper-resistance weaknesses
+6. Public documentation mismatch
+7. Missing tests for code changes
+8. Refactor or style suggestions
 
 ## Governance Schema Drift Guardrail
 
@@ -114,13 +144,14 @@ This guide does not introduce:
 - replacement of human maintainers
 - changes to runtime governance behavior
 - changes to CI/release gates
+- model confidence as a substitute for execution authority
 
 ## VERITAS Development Statement
 
 VERITAS OS is developed through an auditable AI-assisted workflow:
 
-- Codex may implement.
-- Claude Code may review.
-- GitHub Actions verifies.
+- Coding agents may reason, explore, implement, and test within the requested scope.
+- Tool-specific instructions remain minimal and task-routed.
+- GitHub Actions verifies executable checks.
 - External models may provide advisory review.
 - Human maintainer approval remains the final commit boundary.
