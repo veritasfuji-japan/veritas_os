@@ -249,11 +249,12 @@ class HumanApprovalReceipt:
     request_ref: str | None = None
     ai_output_ref: str | None = None
     bind_context_hash: str | None = None
+    approval_basis_opened_at: dict[str, str] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a plain deterministic dictionary representation."""
-        return {
+        payload: dict[str, Any] = {
             "approval_receipt_id": self.approval_receipt_id,
             "decision_id": self.decision_id,
             "execution_intent_id": self.execution_intent_id,
@@ -274,6 +275,15 @@ class HumanApprovalReceipt:
             "receipt_hash": self.receipt_hash,
             "metadata": self.metadata,
         }
+        if self.approval_basis_opened_at is not None:
+            payload["approval_basis_opened_at"] = {
+                str(ref): str(timestamp)
+                for ref, timestamp in sorted(
+                    self.approval_basis_opened_at.items(),
+                    key=lambda item: str(item[0]),
+                )
+            }
+        return payload
 
     def to_dict_for_hash(self) -> dict[str, Any]:
         """Return canonical hash payload excluding ``receipt_hash`` recursion."""
@@ -809,6 +819,99 @@ class HumanApprovalValidationResult:
     failure_reasons: list[str]
 
 
+def validate_human_approval_engagement_timing(
+    receipt: HumanApprovalReceipt | None,
+) -> HumanApprovalValidationResult:
+    """Validate optional reviewer-engagement timing evidence without enforcing it.
+
+    The signal records when approval-basis references were opened or presented.
+    It does not prove that the reviewer read, understood, independently assessed,
+    or agreed with the referenced material. Partial mappings are valid evidence:
+    missing entries mean timing evidence is incomplete, not that engagement did
+    not occur.
+    """
+    if receipt is None:
+        return HumanApprovalValidationResult(False, ["human_approval_missing"])
+
+    timing = receipt.approval_basis_opened_at
+    if timing is None:
+        return HumanApprovalValidationResult(True, [])
+    if not isinstance(timing, dict):
+        return HumanApprovalValidationResult(
+            False, ["human_approval_engagement_timing_invalid"]
+        )
+
+    failure_reasons: list[str] = []
+    basis_refs = {str(ref) for ref in receipt.approval_basis_refs}
+    approved_at = _parse_timezone_aware_iso_datetime(receipt.approved_at)
+    if approved_at is None:
+        failure_reasons.append("human_approval_approved_at_timezone_invalid")
+
+    for raw_ref, raw_timestamp in timing.items():
+        ref = str(raw_ref)
+        if ref not in basis_refs:
+            failure_reasons.append("human_approval_engagement_unknown_basis_ref")
+            continue
+        opened_at = _parse_timezone_aware_iso_datetime(str(raw_timestamp))
+        if opened_at is None:
+            failure_reasons.append("human_approval_engagement_timestamp_invalid")
+            continue
+        if approved_at is not None and opened_at > approved_at:
+            failure_reasons.append("human_approval_engagement_after_approval")
+
+    return HumanApprovalValidationResult(
+        not failure_reasons, sorted(set(failure_reasons))
+    )
+
+
+def summarize_human_approval_engagement_timing(
+    receipt: HumanApprovalReceipt | None,
+) -> dict[str, Any]:
+    """Return deterministic reviewer-facing engagement-timing evidence."""
+    validation = validate_human_approval_engagement_timing(receipt)
+    if receipt is None:
+        return {
+            "approval_basis_opened_at": None,
+            "all_approval_basis_refs_have_open_signal": False,
+            "seconds_from_latest_basis_open_to_approval": None,
+            "timing_validation_valid": False,
+            "timing_validation_failure_reasons": validation.failure_reasons,
+        }
+
+    timing = receipt.approval_basis_opened_at
+    basis_refs = sorted(str(ref) for ref in receipt.approval_basis_refs)
+    canonical_timing = None
+    if timing is not None:
+        canonical_timing = {
+            str(ref): str(timestamp)
+            for ref, timestamp in sorted(timing.items(), key=lambda item: str(item[0]))
+        }
+
+    all_refs_have_signal = bool(basis_refs) and canonical_timing is not None and all(
+        ref in canonical_timing for ref in basis_refs
+    )
+    seconds_from_latest: int | None = None
+    if validation.is_valid and canonical_timing:
+        approved_at = _parse_timezone_aware_iso_datetime(receipt.approved_at)
+        opened_values = [
+            _parse_timezone_aware_iso_datetime(value)
+            for value in canonical_timing.values()
+        ]
+        parsed_values = [value for value in opened_values if value is not None]
+        if approved_at is not None and parsed_values:
+            seconds_from_latest = int(
+                (approved_at - max(parsed_values)).total_seconds()
+            )
+
+    return {
+        "approval_basis_opened_at": canonical_timing,
+        "all_approval_basis_refs_have_open_signal": all_refs_have_signal,
+        "seconds_from_latest_basis_open_to_approval": seconds_from_latest,
+        "timing_validation_valid": validation.is_valid,
+        "timing_validation_failure_reasons": validation.failure_reasons,
+    }
+
+
 def validate_human_approval_context_binding(
     receipt: HumanApprovalReceipt | None,
     *,
@@ -869,6 +972,7 @@ def validate_human_approval_context_binding(
     return HumanApprovalValidationResult(
         not failure_reasons, sorted(set(failure_reasons))
     )
+
 
 def validate_human_approval_receipt(
     receipt: HumanApprovalReceipt | None,
@@ -977,4 +1081,15 @@ def _parse_iso_datetime(value: str) -> datetime | None:
         return None
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _parse_timezone_aware_iso_datetime(value: str) -> datetime | None:
+    """Parse only timezone-aware ISO/RFC3339 timestamps and normalize to UTC."""
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
     return parsed.astimezone(UTC)
