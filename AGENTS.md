@@ -58,6 +58,7 @@ Read the smallest authoritative source set needed for the task.
 |---|---|
 | AI-assisted workflow / authority | `docs/en/development/ai-assisted-development.md` |
 | Bind, authorization, external effect, receipt, outcome, reconciliation | `docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md` and the affected runtime modules/tests |
+| TrustLog publication / exactly-once claims | `docs/en/architecture/trustlog-publication-boundary-v1.md` and `docs/architecture/trustlog-publication-boundary-v1.json`; keep primary logical uniqueness separate from mirror/anchor delivery guarantees and from the frozen execution claim |
 | External UTC clock trust | `docs/en/architecture/external-utc-clock-evidence-boundary-v1.md` and `docs/architecture/external-utc-clock-evidence-boundary-v1.json`; keep it separate from the frozen execution path unless a later architecture decision explicitly composes them |
 | External measurement / NeoMundi | `docs/en/architecture/external-measurement-evidence-boundary-v1.md` and affected governance modules/tests |
 | CAGE interoperability | `docs/en/validation/veritas-cage-phase3-deterministic-fixture-proof.md` and affected adapter/tests |
