@@ -1,0 +1,72 @@
+{
+  "format_version": "trustlog-publication-boundary/v1",
+  "status": "DESIGN_FIXED_NON_EXECUTING",
+  "separate_proof_track": true,
+  "frozen_controlled_execution_claim_changed": false,
+  "primary_scope": "logical_publication_uniqueness_in_postgresql",
+  "secondary_scope": "retry_safe_destination_publication_state",
+  "publication_identity_inputs": [
+    "entry_type",
+    "entry_id",
+    "canonical_payload_hash",
+    "publication_schema_version"
+  ],
+  "primary_required_semantics": [
+    "same_key_same_payload_single_logical_row",
+    "same_key_same_payload_retry_returns_existing_publication",
+    "same_key_different_payload_fail_closed",
+    "ambiguous_client_response_after_commit_resolves_by_durable_lookup",
+    "process_restart_cannot_create_duplicate_logical_row",
+    "receipt_distinguishes_created_from_existing_equivalent"
+  ],
+  "secondary_states": [
+    "PENDING",
+    "ATTEMPTED_UNKNOWN",
+    "ACKNOWLEDGED",
+    "FAILED_TERMINAL"
+  ],
+  "secondary_retry_rules": [
+    "retry_same_publication_key_only",
+    "retry_same_canonical_payload_only",
+    "unknown_is_not_failure",
+    "unknown_is_not_proof_of_absence",
+    "do_not_mint_new_primary_entry_for_secondary_retry"
+  ],
+  "future_machine_contract": [
+    "TrustLogPublicationIdentity",
+    "TrustLogPrimaryPublicationResult",
+    "TrustLogSecondaryPublicationState",
+    "TrustLogPublicationReceipt"
+  ],
+  "future_primary_proof_exit_criteria": [
+    "concurrent_same_key_same_payload_one_logical_row",
+    "same_key_different_payload_collision_fails_closed",
+    "response_loss_after_commit_retry_resolves_original_row",
+    "process_restart_preserves_logical_uniqueness",
+    "publication_receipt_is_deterministic_and_replay_reviewable",
+    "secondary_uncertainty_not_misreported_as_failure_or_absence",
+    "no_execution_authority_semantics_introduced"
+  ],
+  "must_not_change": [
+    "authorization_issuance",
+    "authorization_consumption",
+    "pre_effect_current_rechecks",
+    "credential_resolution",
+    "external_effect_dispatch",
+    "effect_unknown_semantics",
+    "reconciliation",
+    "bindreceipt_outcome_semantics",
+    "confirmed_effect_definition",
+    "frozen_decision_to_effect_architecture"
+  ],
+  "explicit_non_claims": [
+    "production_readiness",
+    "cross_system_distributed_transactions",
+    "exactly_once_mirror_delivery",
+    "exactly_once_transparency_anchor_delivery",
+    "independently_operated_external_trustlog_infrastructure",
+    "external_destination_authenticity",
+    "regulatory_approval_or_certification",
+    "trustlog_receipt_proves_real_world_effect"
+  ]
+}
