@@ -61,15 +61,15 @@ def test_payload_is_redacted_before_hashing() -> None:
     first = build_trustlog_publication_identity(
         entry_type="review_packet",
         entry_id="packet-1",
-        payload={"password": "secret-one", "result": "ok"},
+        payload={"note": "password=secret-one", "result": "ok"},
     )
     second = build_trustlog_publication_identity(
         entry_type="review_packet",
         entry_id="packet-1",
-        payload={"password": "secret-two", "result": "ok"},
+        payload={"note": "password=secret-two", "result": "ok"},
     )
 
-    assert first.redacted_payload["password"] != "secret-one"
-    assert second.redacted_payload["password"] != "secret-two"
+    assert first.redacted_payload["note"] != "password=secret-one"
+    assert second.redacted_payload["note"] != "password=secret-two"
     assert first.canonical_payload_hash == second.canonical_payload_hash
     assert first.publication_key == second.publication_key
