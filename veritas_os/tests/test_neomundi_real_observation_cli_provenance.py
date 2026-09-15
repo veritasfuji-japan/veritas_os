@@ -1,4 +1,4 @@
-"""Integration tests for the real-observation CLI provenance ingress gate."""
+"""Integration tests for the real-observation CLI provenance/intake ingress gates."""
 
 from __future__ import annotations
 
@@ -176,15 +176,51 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _intake_manifest(
+    *,
+    artifact_path: Path,
+    jwks_path: Path,
+    receipt_path: Path,
+) -> dict[str, Any]:
+    return {
+        "manifest_version": "1.0",
+        "manifest_id": "neomundi-cli-intake-001",
+        "provider_id": "neomundi",
+        "artifact_type": "neomundi_rgc",
+        "artifact_version": "0.2.0",
+        "artifact_id": "req-neomundi-cli-provenance-001",
+        "expected_key_id": "neomundi-cli-key",
+        "expected_signer_identity": "neomundi-poc-signer",
+        "artifact_file_sha256": _file_sha256(artifact_path),
+        "trusted_jwks_file_sha256": _file_sha256(jwks_path),
+        "trusted_key_provenance_receipt_file_sha256": _file_sha256(receipt_path),
+        "handoff_reference": "NEOMUNDI-HANDOFF-CLI-001",
+        "received_at": "2026-09-15T00:00:00+00:00",
+    }
+
+
 def _argv(tmp_path: Path) -> tuple[list[str], bytes]:
     private_key, raw_public, jwks = _material()
     artifact = _sign(_artifact(), private_key)
     artifact_path = tmp_path / "artifact.json"
     jwks_path = tmp_path / "jwks.json"
     receipt_path = tmp_path / "provenance.json"
+    intake_path = tmp_path / "intake.json"
     _write_json(artifact_path, artifact)
     _write_json(jwks_path, jwks)
     _write_json(receipt_path, _receipt(raw_public))
+    _write_json(
+        intake_path,
+        _intake_manifest(
+            artifact_path=artifact_path,
+            jwks_path=jwks_path,
+            receipt_path=receipt_path,
+        ),
+    )
     return [
         "--artifact",
         str(artifact_path),
@@ -192,6 +228,8 @@ def _argv(tmp_path: Path) -> tuple[list[str], bytes]:
         str(jwks_path),
         "--trusted-key-provenance",
         str(receipt_path),
+        "--intake-manifest",
+        str(intake_path),
         "--replay-state-dir",
         str(tmp_path / "replay"),
         "--output-dir",
@@ -204,7 +242,7 @@ def _argv(tmp_path: Path) -> tuple[list[str], bytes]:
     ], raw_public
 
 
-def test_cli_records_source_bound_key_provenance(tmp_path: Path) -> None:
+def test_cli_records_source_bound_key_provenance_and_intake(tmp_path: Path) -> None:
     cli = _load_cli_module()
     argv, raw_public = _argv(tmp_path)
 
@@ -214,6 +252,17 @@ def test_cli_records_source_bound_key_provenance(tmp_path: Path) -> None:
     report = json.loads((output_dir / "verification_report.json").read_text())
     manifest = json.loads((output_dir / "evidence_manifest.json").read_text())
     expected_fingerprint = hashlib.sha256(raw_public).hexdigest()
+
+    intake = report["intake_manifest"]
+    assert intake["accepted"] is True
+    assert intake["manifest_id"] == "neomundi-cli-intake-001"
+    assert intake["artifact_id"] == "req-neomundi-cli-provenance-001"
+    assert intake["expected_key_id"] == "neomundi-cli-key"
+    assert intake["expected_signer_identity"] == "neomundi-poc-signer"
+    assert intake["packet_correlation_only"] is True
+    assert intake["trust_established_by_intake_manifest"] is False
+    assert intake["freshness_established_by_received_at"] is False
+    assert intake["manifest_file_sha256"]
 
     binding = report["trusted_key_provenance"]
     assert binding["accepted"] is True
@@ -228,7 +277,33 @@ def test_cli_records_source_bound_key_provenance(tmp_path: Path) -> None:
     assert manifest_binding["public_key_fingerprint_sha256"] == expected_fingerprint
     assert manifest["inputs"]["trusted_key_provenance_receipt_file_sha256"]
     assert manifest["inputs"]["trusted_key_provenance_receipt_canonical_sha256"]
+    assert manifest["inputs"]["intake_manifest_file_sha256"]
+    assert manifest["inputs"]["intake_manifest_canonical_sha256"]
+    assert manifest["verification"]["intake_manifest"]["accepted"] is True
     assert manifest["outputs"]["verification_report_canonical_sha256"]
+
+
+def test_cli_rejects_intake_hash_mismatch_before_replay_consumption(
+    tmp_path: Path,
+) -> None:
+    cli = _load_cli_module()
+    argv, _ = _argv(tmp_path)
+    artifact_path = tmp_path / "artifact.json"
+    artifact = json.loads(artifact_path.read_text())
+    artifact["identity"]["system_id"] = "tampered-after-handoff"
+    _write_json(artifact_path, artifact)
+
+    assert cli.main(argv) == 2
+
+    report = json.loads(
+        (tmp_path / "output" / "verification_report.json").read_text()
+    )
+    assert report["status"] == "failed"
+    assert report["stage"] == "intake_manifest"
+    assert report["reason"] == "neomundi_poc_intake_artifact_hash_mismatch"
+    assert report["intake_manifest"]["accepted"] is False
+    replay_dir = tmp_path / "replay"
+    assert not replay_dir.exists() or list(replay_dir.iterdir()) == []
 
 
 def test_cli_rejects_mismatched_provenance_before_replay_consumption(
@@ -237,9 +312,14 @@ def test_cli_rejects_mismatched_provenance_before_replay_consumption(
     cli = _load_cli_module()
     argv, _ = _argv(tmp_path)
     receipt_path = tmp_path / "provenance.json"
+    intake_path = tmp_path / "intake.json"
     receipt = json.loads(receipt_path.read_text())
     receipt["public_key_fingerprint_sha256"] = "0" * 64
     _write_json(receipt_path, receipt)
+
+    intake = json.loads(intake_path.read_text())
+    intake["trusted_key_provenance_receipt_file_sha256"] = _file_sha256(receipt_path)
+    _write_json(intake_path, intake)
 
     assert cli.main(argv) == 2
 
@@ -249,6 +329,7 @@ def test_cli_rejects_mismatched_provenance_before_replay_consumption(
     assert report["status"] == "failed"
     assert report["stage"] == "trusted_key_provenance"
     assert report["reason"] == "neomundi_poc_provenance_fingerprint_mismatch"
+    assert report["intake_manifest"]["accepted"] is True
     assert report["trusted_key_provenance"]["accepted"] is False
     replay_dir = tmp_path / "replay"
     assert not replay_dir.exists() or list(replay_dir.iterdir()) == []

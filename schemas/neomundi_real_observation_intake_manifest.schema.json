@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.example/schemas/neomundi_real_observation_intake_manifest.schema.json",
+  "title": "NeoMundi Real Observation Intake Manifest",
+  "description": "Binds one NeoMundi RGC v0.2 partner handoff packet to exact input-file hashes and declared signer/key identity before VERITAS verification. This manifest is correlation metadata only and does not establish trust, freshness, authority, approval, or execution permission.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "manifest_id",
+    "provider_id",
+    "artifact_type",
+    "artifact_version",
+    "artifact_id",
+    "expected_key_id",
+    "expected_signer_identity",
+    "artifact_file_sha256",
+    "trusted_jwks_file_sha256",
+    "trusted_key_provenance_receipt_file_sha256",
+    "handoff_reference",
+    "received_at"
+  ],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "manifest_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider_id": {
+      "type": "string",
+      "const": "neomundi"
+    },
+    "artifact_type": {
+      "type": "string",
+      "const": "neomundi_rgc"
+    },
+    "artifact_version": {
+      "type": "string",
+      "const": "0.2.0"
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Expected RGC identity.request_id."
+    },
+    "expected_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Expected RGC integrity.key_id."
+    },
+    "expected_signer_identity": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Expected RGC integrity.signer_identity."
+    },
+    "artifact_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "trusted_jwks_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "trusted_key_provenance_receipt_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "handoff_reference": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reviewer/operator reference for the partner handoff. It is not proof that the handoff channel is authentic."
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Audit metadata for when the packet was received. VERITAS does not use this field as evidence freshness or trusted UTC."
+    }
+  }
+}

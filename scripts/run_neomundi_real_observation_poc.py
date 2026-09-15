@@ -16,6 +16,10 @@ from veritas_os.governance.neomundi_jwks_provenance import (
     NeoMundiTrustedJwksProvenanceBinding,
     bind_neomundi_trusted_jwks_provenance,
 )
+from veritas_os.governance.neomundi_real_observation_intake import (
+    NeoMundiRealObservationIntakeBinding,
+    bind_neomundi_real_observation_intake,
+)
 from veritas_os.governance.neomundi_real_observation_poc import (
     NeoMundiRealObservationPocError,
     run_neomundi_real_observation_poc,
@@ -92,6 +96,18 @@ def _binding_metadata(
     }
 
 
+def _intake_metadata(
+    binding: NeoMundiRealObservationIntakeBinding,
+    *,
+    manifest_file_sha256: str,
+) -> dict[str, Any]:
+    return {
+        "accepted": True,
+        **binding.to_dict(),
+        "manifest_file_sha256": manifest_file_sha256,
+    }
+
+
 def _attach_binding_to_outputs(
     outputs: dict[str, dict[str, Any]],
     *,
@@ -118,6 +134,27 @@ def _attach_binding_to_outputs(
     )
 
 
+def _attach_intake_to_outputs(
+    outputs: dict[str, dict[str, Any]],
+    *,
+    binding: NeoMundiRealObservationIntakeBinding,
+    manifest_file_sha256: str,
+) -> None:
+    metadata = _intake_metadata(binding, manifest_file_sha256=manifest_file_sha256)
+    report = outputs["verification_report"]
+    manifest = outputs["evidence_manifest"]
+
+    report["intake_manifest"] = dict(metadata)
+    manifest["inputs"]["intake_manifest_canonical_sha256"] = (
+        binding.manifest_canonical_sha256
+    )
+    manifest["inputs"]["intake_manifest_file_sha256"] = manifest_file_sha256
+    manifest["verification"]["intake_manifest"] = dict(metadata)
+    manifest["outputs"]["verification_report_canonical_sha256"] = (
+        sha256_of_canonical_json(report)
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True, help="RGC v0.2 JSON")
@@ -129,6 +166,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Trusted Public Key Provenance Receipt JSON for the Ed25519 key "
             "selected by artifact integrity.key_id"
+        ),
+    )
+    parser.add_argument(
+        "--intake-manifest",
+        type=Path,
+        required=True,
+        help=(
+            "NeoMundi real-observation intake manifest binding the exact artifact, "
+            "JWKS, provenance receipt, key ID, and signer identity"
         ),
     )
     parser.add_argument(
@@ -193,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         provenance_receipt, provenance_receipt_file_sha256 = _load_json(
             args.trusted_key_provenance
         )
+        intake_manifest, intake_manifest_file_sha256 = _load_json(args.intake_manifest)
     except (OSError, ValueError) as exc:
         report = {
             "status": "failed",
@@ -202,6 +249,34 @@ def main(argv: list[str] | None = None) -> int:
         }
         _write_json_atomic(args.output_dir / "verification_report.json", report)
         print(f"VERITAS NeoMundi PoC input failure: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        intake_binding = bind_neomundi_real_observation_intake(
+            intake_manifest,
+            artifact=artifact,
+            artifact_file_sha256=artifact_file_sha256,
+            trusted_jwks_file_sha256=jwks_file_sha256,
+            trusted_key_provenance_receipt_file_sha256=(
+                provenance_receipt_file_sha256
+            ),
+        )
+    except ValueError as exc:
+        report = {
+            "status": "failed",
+            "stage": "intake_manifest",
+            "reason": str(exc),
+            "intake_manifest": {
+                "accepted": False,
+                "manifest_file_sha256": intake_manifest_file_sha256,
+                "packet_correlation_only": True,
+                "trust_established_by_intake_manifest": False,
+                "freshness_established_by_received_at": False,
+            },
+            "claim_boundary": _claim_boundary(),
+        }
+        _write_json_atomic(args.output_dir / "verification_report.json", report)
+        print(f"VERITAS NeoMundi PoC intake failure: {exc}", file=sys.stderr)
         return 2
 
     try:
@@ -215,6 +290,10 @@ def main(argv: list[str] | None = None) -> int:
             "status": "failed",
             "stage": "trusted_key_provenance",
             "reason": str(exc),
+            "intake_manifest": _intake_metadata(
+                intake_binding,
+                manifest_file_sha256=intake_manifest_file_sha256,
+            ),
             "trusted_key_provenance": {
                 "accepted": False,
                 "receipt_file_sha256": provenance_receipt_file_sha256,
@@ -246,6 +325,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     except NeoMundiRealObservationPocError as exc:
         report = dict(exc.report)
+        report["intake_manifest"] = _intake_metadata(
+            intake_binding,
+            manifest_file_sha256=intake_manifest_file_sha256,
+        )
         report["trusted_key_provenance"] = _binding_metadata(
             binding,
             receipt_file_sha256=provenance_receipt_file_sha256,
@@ -258,6 +341,10 @@ def main(argv: list[str] | None = None) -> int:
             "status": "failed",
             "stage": "input",
             "reason": str(exc),
+            "intake_manifest": _intake_metadata(
+                intake_binding,
+                manifest_file_sha256=intake_manifest_file_sha256,
+            ),
             "trusted_key_provenance": _binding_metadata(
                 binding,
                 receipt_file_sha256=provenance_receipt_file_sha256,
@@ -272,6 +359,11 @@ def main(argv: list[str] | None = None) -> int:
         outputs,
         binding=binding,
         receipt_file_sha256=provenance_receipt_file_sha256,
+    )
+    _attach_intake_to_outputs(
+        outputs,
+        binding=intake_binding,
+        manifest_file_sha256=intake_manifest_file_sha256,
     )
     _write_json_atomic(
         args.output_dir / "verification_report.json",

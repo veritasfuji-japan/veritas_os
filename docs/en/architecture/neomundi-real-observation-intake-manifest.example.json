@@ -1,0 +1,15 @@
+{
+  "manifest_version": "1.0",
+  "manifest_id": "neomundi-real-observation-001",
+  "provider_id": "neomundi",
+  "artifact_type": "neomundi_rgc",
+  "artifact_version": "0.2.0",
+  "artifact_id": "replace-with-rgc-request-id",
+  "expected_key_id": "replace-with-rgc-key-id",
+  "expected_signer_identity": "replace-with-rgc-signer-identity",
+  "artifact_file_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "trusted_jwks_file_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "trusted_key_provenance_receipt_file_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "handoff_reference": "replace-with-operator-handoff-reference",
+  "received_at": "2026-09-15T00:00:00+00:00"
+}
