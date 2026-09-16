@@ -26,10 +26,14 @@ jobs:
       - name: Install SBOM tooling (Python)
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cyclonedx-bom
+          python -m pip install cyclonedx-bom==7.3.1
 
       - name: Generate Python SBOM (CycloneDX)
-        run: cyclonedx-py requirements veritas_os/requirements.txt --output-file security/sbom/python.cdx.json
+        run: >-
+          cyclonedx-py requirements
+          --output-reproducible
+          veritas_os/requirements.txt
+          --output-file security/sbom/python.cdx.json
 
       - name: Setup pnpm (Corepack)
         run: |
@@ -46,7 +50,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Node SBOM (CycloneDX)
-        run: pnpm dlx @cyclonedx/cyclonedx-npm --output-file security/sbom/node.cdx.json --spec-version 1.5
+        run: >-
+          pnpm dlx @cyclonedx/cyclonedx-npm@6.0.1
+          --output-reproducible
+          --output-file security/sbom/node.cdx.json
+          --spec-version 1.5
 
       - name: Generate SBOM hashes
         run: |
