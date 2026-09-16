@@ -79,7 +79,7 @@ observability = [
   "prometheus-client>=0.20",
 ]
 signing = [
-  "cryptography==46.0.7",
+  "cryptography==50.0.0",
 ]
 postgresql = [
   "psycopg[binary]==3.2.9",
@@ -149,8 +149,8 @@ filterwarnings = [
   "ignore:invalid escape sequence.*:SyntaxWarning:sentence_transformers\\..*",
 ]
 markers = [
-  "asyncio: mark test as asynchronous and execute via asyncio.run",
-  "slow: mark test as slow or external-I/O dependent",
+  "asyncio: mark a test as asynchronous and execute via asyncio.run",
+  "slow: mark a test as slow or external-I/O dependent",
   "production: production-like validation requiring real services",
   "smoke: lightweight smoke tests for deployment verification",
   "external: tests that depend on external network services",
