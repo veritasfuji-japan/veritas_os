@@ -63,7 +63,7 @@ opentelemetry-exporter-otlp==1.28.2
 prometheus-client==0.20.0
 
 # --- Optional [signing]: Policy Bundle Signing ---
-cryptography==46.0.7
+cryptography==50.0.0
 
 # --- Optional [postgresql]: PostgreSQL Backend ---
 psycopg[binary]==3.2.9
