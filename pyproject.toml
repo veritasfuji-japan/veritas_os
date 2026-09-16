@@ -79,7 +79,7 @@ observability = [
   "prometheus-client>=0.20",
 ]
 signing = [
-  "cryptography==46.0.7",
+  "cryptography==50.0.0",
 ]
 postgresql = [
   "psycopg[binary]==3.2.9",

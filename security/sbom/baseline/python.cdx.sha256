@@ -7,6 +7,6 @@
 #   cyclonedx-bom==7.3.1
 #   cyclonedx-py requirements --output-reproducible veritas_os/requirements.txt --output-file security/sbom/python.cdx.json
 #
-# The baseline was bootstrapped after duplicate generation produced byte-identical
-# output in the PR #2244 bootstrap workflow.
-d99ffdfcd05810c5f3c76503ee67979925803728f34110e10d88b910c1e5ff58  security/sbom/python.cdx.json
+# Baseline refreshed in PR #2245 after the intentional cryptography 46.0.7 -> 50.0.0
+# dependency update. Duplicate generation produced byte-identical output.
+abb76fad9c4cfa3bca5fd92a9627a0bf67b6716cdde4ef07bf915582648cceb6  security/sbom/python.cdx.json
