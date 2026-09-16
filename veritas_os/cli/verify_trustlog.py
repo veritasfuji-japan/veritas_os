@@ -43,8 +43,8 @@ def _load_witness_entries(path: Path) -> List[Dict[str, Any]]:
 def _build_verify_signature_fn(public_key_path: Optional[Path] = None):
     """Build a signature verification callable.
 
-    Attempts to use cryptography library for Ed25519 verification.
-    Falls back to a permissive stub if keys are unavailable.
+    Uses the configured TrustLog signer backend to verify signatures.
+    Missing or unusable key material and verification errors fail closed.
     """
     def _verify(entry: Dict[str, Any]) -> bool:
         payload_hash = entry.get("payload_hash")
