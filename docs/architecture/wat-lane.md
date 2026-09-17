@@ -26,6 +26,7 @@ See also:
 - [Core Responsibility Boundaries](./core_responsibility_boundaries.md)
 - [DecideResponse v2 Plan](./decide-response-v2-plan.md)
 - [TrustLog Storage Consolidation](./trustlog_storage_consolidation.md)
+- [WAT Operations Contract](./wat-operations-contract.md)
 
 ## WAT token structure
 
@@ -144,17 +145,40 @@ Current degraded/failure characteristics:
   `error=wat_not_found`.
 - Warning-class outcomes are represented by warning event status/context in
   event details.
+- A TrustLog append exception is retained in the WAT event as
+  `trustlog_anchor_ref.error == "anchor_append_failed"`; it does not grant or
+  widen execution authority.
 
-**TBD / requires implementation confirmation**:
+### Operational SLO / error budget
 
-- Formal SLO/error-budget targets for WAT event write/read availability.
-- Required operator runbook behavior if TrustLog anchor append repeatedly fails
-  (currently warning log path exists in helper code).
+The v1 operator targets and measurement rules are defined in
+[WAT Operations Contract](./wat-operations-contract.md).
 
-📌 **Tracking**: These items are unresolved operational gaps. Create a
-GitHub issue for each and link here (replace `#TBD` below):
-- SLO/error-budget for WAT event write/read: issue #TBD
-- Operator runbook for repeated TrustLog anchor-append failure: issue #TBD
+The contract defines provisional, not-yet-production-validated targets of:
+
+- local WAT write success >= 99.9% over a rolling 30-day window;
+- valid existing-target WAT read success >= 99.9% over a rolling 30-day window;
+- write latency p95 <= 1,000 ms when route-level telemetry is available;
+- read latency p95 <= 500 ms when route-level telemetry is available;
+- request-count error budget of 0.1% for eligible writes and reads.
+
+These are operational objectives, not claims that current deployments have
+already achieved a production SLA.
+
+### Repeated TrustLog anchor-append failure
+
+The required operator procedure is also defined in
+[WAT Operations Contract](./wat-operations-contract.md).
+
+Key invariant: an append exception does not prove that the TrustLog effect did
+not commit. Operators must preserve evidence, perform read-only verification,
+and must **not blindly redispatch** the same historical WAT event. Recovery
+evidence is additive; prior failed WAT records are not rewritten.
+
+📌 **Tracking**:
+
+- SLO/error-budget for WAT event write/read: issue #2246
+- Operator runbook for repeated TrustLog anchor-append failure: issue #2247
 
 ## Testing expectations
 
