@@ -313,18 +313,26 @@ def _sha256_bytes(data: bytes) -> str:
 
 
 def _load_witness_entries(path: Path) -> List[Dict[str, Any]]:
-    """Load JSONL witness entries from file."""
+    """Load witness JSONL and fail closed on malformed physical records."""
     entries: List[Dict[str, Any]] = []
     if not path.exists():
         return entries
     with path.open("r", encoding="utf-8") as f:
-        for line in f:
+        for line_no, line in enumerate(f, 1):
             line = line.strip()
-            if line:
-                try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Malformed witness JSONL at line {line_no}: invalid JSON"
+                ) from exc
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"Malformed witness JSONL at line {line_no}: expected JSON object"
+                )
+            entries.append(entry)
     return entries
 
 

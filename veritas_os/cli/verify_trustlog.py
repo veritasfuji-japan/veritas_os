@@ -26,7 +26,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _load_witness_entries(path: Path) -> List[Dict[str, Any]]:
-    """Load JSONL witness ledger entries."""
+    """Load JSONL witness ledger entries and fail closed on malformed input."""
     entries: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as f:
         for line_no, line in enumerate(f, 1):
@@ -34,9 +34,16 @@ def _load_witness_entries(path: Path) -> List[Dict[str, Any]]:
             if not line:
                 continue
             try:
-                entries.append(json.loads(line))
+                entry = json.loads(line)
             except json.JSONDecodeError as exc:
-                _logger.warning("Skipping corrupt entry at line %d: %s", line_no, exc)
+                raise ValueError(
+                    f"Malformed witness JSONL at line {line_no}: invalid JSON"
+                ) from exc
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"Malformed witness JSONL at line {line_no}: expected JSON object"
+                )
+            entries.append(entry)
     return entries
 
 
