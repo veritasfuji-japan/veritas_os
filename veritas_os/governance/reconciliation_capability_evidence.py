@@ -167,3 +167,90 @@ class ReconciliationCapabilityEvidence(BaseModel):
     def deterministic_digest(self) -> str:
         """Return stable content identity for this non-authorizing artifact."""
         return sha256_of_canonical_json(self.model_dump(mode="json"))
+
+def validate_reconciliation_capability_for_current_target(
+    evidence: ReconciliationCapabilityEvidence,
+    *,
+    current_endpoint_identity_binding_digest: str,
+    current_target_configuration_digest: str,
+    verification_time: datetime,
+    require_authoritative: bool = False,
+    expected_verifier_id: str | None = None,
+    expected_verifier_policy_id: str | None = None,
+    expected_verifier_policy_hash: str | None = None,
+    expected_evidence_digest: str | None = None,
+) -> list[str]:
+    """Recheck one capability artifact against current target context.
+
+    This validator is deliberately non-authorizing.  It returns deterministic
+    failure reasons only; it does not create execution eligibility, execution
+    permission, retry permission, or an external-effect claim.
+
+    Expected verifier values and the expected evidence digest are trust anchors
+    supplied by the caller from an independently controlled source.  The artifact
+    must not be treated as self-authenticating merely because those fields exist.
+    """
+    if verification_time.tzinfo is None or verification_time.utcoffset() is None:
+        raise ValueError("reconciliation_capability_verification_time_invalid")
+
+    expected_verifier_values = (
+        expected_verifier_id,
+        expected_verifier_policy_id,
+        expected_verifier_policy_hash,
+    )
+    if any(value is not None for value in expected_verifier_values) and not all(
+        isinstance(value, str) and value.strip() for value in expected_verifier_values
+    ):
+        raise ValueError("reconciliation_capability_expected_verifier_binding_incomplete")
+
+    failures: list[str] = []
+
+    if (
+        evidence.endpoint_identity_binding_digest
+        != current_endpoint_identity_binding_digest
+    ):
+        failures.append("reconciliation_capability_endpoint_identity_changed")
+
+    if evidence.target_configuration_digest != current_target_configuration_digest:
+        failures.append("reconciliation_capability_target_configuration_changed")
+
+    assessed_at = _parse_aware_timestamp(
+        evidence.assessed_at,
+        "reconciliation_capability_assessed_at_invalid",
+    )
+    if assessed_at > verification_time:
+        failures.append("reconciliation_capability_assessment_from_future")
+
+    if evidence.valid_until is not None:
+        valid_until = _parse_aware_timestamp(
+            evidence.valid_until,
+            "reconciliation_capability_valid_until_invalid",
+        )
+        if verification_time >= valid_until:
+            failures.append("reconciliation_capability_evidence_expired")
+
+    if require_authoritative and evidence.capability_class not in {
+        ReconciliationCapabilityClass.AUTHORITATIVE_QUERY,
+        ReconciliationCapabilityClass.AUTHORITATIVE_EVIDENCE,
+    }:
+        failures.append("reconciliation_capability_not_authoritative")
+
+    if all(
+        isinstance(value, str) and value.strip() for value in expected_verifier_values
+    ):
+        actual_verifier_values = (
+            evidence.verifier_id,
+            evidence.verifier_policy_id,
+            evidence.verifier_policy_hash,
+        )
+        if actual_verifier_values != expected_verifier_values:
+            failures.append("reconciliation_capability_verifier_binding_mismatch")
+
+    if (
+        expected_evidence_digest is not None
+        and evidence.deterministic_digest() != expected_evidence_digest
+    ):
+        failures.append("reconciliation_capability_evidence_digest_mismatch")
+
+    return failures
+
