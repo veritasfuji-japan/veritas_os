@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ReconciliationCapabilityClass": {
+      "description": "Descriptive target capability classes from the architecture boundary.",
+      "enum": [
+        "AUTHORITATIVE_QUERY",
+        "AUTHORITATIVE_EVIDENCE",
+        "HEURISTIC_ONLY",
+        "UNAVAILABLE_OR_UNVERIFIED"
+      ],
+      "title": "ReconciliationCapabilityClass",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Immutable capability assessment; never execution authority.",
+  "properties": {
+    "format_version": {
+      "const": "reconciliation-capability-evidence/v1",
+      "default": "reconciliation-capability-evidence/v1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "reconciliation_capability_evidence",
+      "default": "reconciliation_capability_evidence",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "artifact_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Artifact Version",
+      "type": "string"
+    },
+    "evidence_id": {
+      "minLength": 1,
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "target_id": {
+      "minLength": 1,
+      "title": "Target Id",
+      "type": "string"
+    },
+    "endpoint_identity_binding_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Endpoint Identity Binding Digest",
+      "type": "string"
+    },
+    "target_configuration_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Target Configuration Digest",
+      "type": "string"
+    },
+    "capability_class": {
+      "$ref": "#/$defs/ReconciliationCapabilityClass"
+    },
+    "correlation_identity_type": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Correlation Identity Type"
+    },
+    "correlation_identity_pre_dispatch": {
+      "title": "Correlation Identity Pre Dispatch",
+      "type": "boolean"
+    },
+    "correlation_identity_caller_controlled": {
+      "title": "Correlation Identity Caller Controlled",
+      "type": "boolean"
+    },
+    "exact_attempt_lookup_available": {
+      "title": "Exact Attempt Lookup Available",
+      "type": "boolean"
+    },
+    "exact_lineage_binding_supported": {
+      "title": "Exact Lineage Binding Supported",
+      "type": "boolean"
+    },
+    "downstream_durability_supported": {
+      "title": "Downstream Durability Supported",
+      "type": "boolean"
+    },
+    "non_mutating_observation_supported": {
+      "title": "Non Mutating Observation Supported",
+      "type": "boolean"
+    },
+    "authoritative_evidence_available": {
+      "title": "Authoritative Evidence Available",
+      "type": "boolean"
+    },
+    "source_type": {
+      "minLength": 1,
+      "title": "Source Type",
+      "type": "string"
+    },
+    "source_identity": {
+      "minLength": 1,
+      "title": "Source Identity",
+      "type": "string"
+    },
+    "source_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Digest",
+      "type": "string"
+    },
+    "verifier_id": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Verifier Id"
+    },
+    "verifier_policy_id": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Verifier Policy Id"
+    },
+    "verifier_policy_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Verifier Policy Hash"
+    },
+    "assessed_at": {
+      "minLength": 1,
+      "title": "Assessed At",
+      "type": "string"
+    },
+    "valid_until": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Valid Until"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "execution_eligibility_decision_created": {
+      "const": false,
+      "default": false,
+      "title": "Execution Eligibility Decision Created",
+      "type": "boolean"
+    },
+    "execution_permission_created": {
+      "const": false,
+      "default": false,
+      "title": "Execution Permission Created",
+      "type": "boolean"
+    },
+    "retry_permission_created": {
+      "const": false,
+      "default": false,
+      "title": "Retry Permission Created",
+      "type": "boolean"
+    },
+    "terminal_effect_claim_created": {
+      "const": false,
+      "default": false,
+      "title": "Terminal Effect Claim Created",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "target_id",
+    "endpoint_identity_binding_digest",
+    "target_configuration_digest",
+    "capability_class",
+    "correlation_identity_pre_dispatch",
+    "correlation_identity_caller_controlled",
+    "exact_attempt_lookup_available",
+    "exact_lineage_binding_supported",
+    "downstream_durability_supported",
+    "non_mutating_observation_supported",
+    "authoritative_evidence_available",
+    "source_type",
+    "source_identity",
+    "source_digest",
+    "assessed_at"
+  ],
+  "title": "ReconciliationCapabilityEvidence",
+  "type": "object"
+}
