@@ -1,0 +1,202 @@
+name: VERITAS CAGE Phase 5A Runtime Wire
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: veritas-cage-phase5a-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  CAGE_PHASE4_SHA: "5f54d5e3403d67101e028ed14fa8dade853fb221"
+  VERITAS_CAGE_PHASE5_BEARER_TOKEN: "phase5a-ci-local-only-token"
+
+jobs:
+  runtime-wire-proof:
+    name: veritas-cage-phase5a
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout VERITAS proof source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused runtime dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            pytest==9.0.3 \
+            PyYAML==6.0.3 \
+            fastapi==0.121.0 \
+            uvicorn==0.30.3 \
+            httpx==0.28.1
+
+      - name: Run focused VERITAS Phase 5A tests
+        run: |
+          set -euxo pipefail
+          python -m pytest tests/governance/test_cage_provider03_phase5a_runtime.py -q
+
+      - name: Checkout pinned CAGE Phase 4 baseline
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/cage-phase5a
+          git init /tmp/cage-phase5a
+          git -C /tmp/cage-phase5a remote add origin https://github.com/google/cybernetic-agent-governance-engine.git
+          git -C /tmp/cage-phase5a fetch --depth 1 origin "${CAGE_PHASE4_SHA}"
+          git -C /tmp/cage-phase5a checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/cage-phase5a rev-parse HEAD)" = "${CAGE_PHASE4_SHA}"
+
+      - name: Start VERITAS Phase 5A loopback runtime
+        run: |
+          set -euxo pipefail
+          python -m uvicorn \
+            veritas_os.governance.cage_provider03_phase5a_runtime:create_phase5a_app \
+            --factory \
+            --host 127.0.0.1 \
+            --port 8765 \
+            --log-level warning \
+            > /tmp/veritas-phase5a.log 2>&1 &
+          echo $! > /tmp/veritas-phase5a.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${VERITAS_CAGE_PHASE5_BEARER_TOKEN}" \
+              http://127.0.0.1:8765/baseline/US_FED \
+              > /tmp/phase5a-baseline.json; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+
+          cat /tmp/veritas-phase5a.log
+          exit 1
+
+      - name: Run real CAGE Provider03 loopback proof
+        id: proof
+        run: |
+          set -euxo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+
+          python scripts/run_veritas_cage_phase5a_runtime.py \
+            --cage-repo /tmp/cage-phase5a \
+            --endpoint http://127.0.0.1:8765 \
+            --token "${VERITAS_CAGE_PHASE5_BEARER_TOKEN}" \
+            --veritas-source-sha "${SOURCE_SHA}" \
+            --cage-source-sha "${CAGE_PHASE4_SHA}" \
+            --output-dir artifacts/veritas-cage-phase5a
+
+      - name: Stop loopback runtime
+        if: always()
+        run: |
+          if test -f /tmp/veritas-phase5a.pid; then
+            kill "$(cat /tmp/veritas-phase5a.pid)" 2>/dev/null || true
+          fi
+          cat /tmp/veritas-phase5a.log 2>/dev/null || true
+
+      - name: Bind Phase 5A artifacts to source
+        env:
+          SOURCE_SHA: ${{ steps.proof.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          root = Path("artifacts/veritas-cage-phase5a")
+          report_path = root / "phase5a-runtime-report.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+
+          if report["real_cage_provider03_client"] is not True:
+              raise SystemExit("Phase 5A primary proof must use the real CAGE Provider03 client")
+          if report["loopback_http"] is not True:
+              raise SystemExit("Phase 5A primary proof must use real loopback HTTP")
+          if report["mocked_cage_http_client"] is not False:
+              raise SystemExit("Phase 5A primary proof must not mock the CAGE HTTP client")
+          if report["external_effects_executed"] is not False:
+              raise SystemExit("Phase 5A must not execute external business effects")
+          if report["production_claim"] is not False:
+              raise SystemExit("Phase 5A must not claim production deployment")
+          if report["cage_source_sha"] != os.environ["CAGE_PHASE4_SHA"]:
+              raise SystemExit("runtime proof did not use the pinned CAGE Phase 4 SHA")
+          if report["veritas_source_sha"] != os.environ["SOURCE_SHA"]:
+              raise SystemExit("runtime proof source SHA mismatch")
+
+          checks = report["negative_runtime_checks"]
+          for key in (
+              "invalid_bearer_fail_closed",
+              "endpoint_unavailable_fail_closed",
+              "timeout_fail_closed",
+          ):
+              if checks.get(key) is not True:
+                  raise SystemExit(f"negative runtime check failed: {key}")
+
+          artifacts = sorted(root.rglob("*.json"))
+          artifact_hashes = {
+              str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in artifacts
+          }
+          run_manifest = {
+              "format_version": "veritas-cage-phase5a-run/v1",
+              "proof_id": report["proof_id"],
+              "veritas_source_sha": os.environ["SOURCE_SHA"],
+              "cage_source_sha": os.environ["CAGE_PHASE4_SHA"],
+              "environment": {
+                  "implementation": platform.python_implementation().lower(),
+                  "python_version": platform.python_version(),
+              },
+              "artifact_sha256": artifact_hashes,
+              "claim_boundary": {
+                  "real_loopback_runtime": True,
+                  "real_cage_provider03_client": True,
+                  "external_business_effect": False,
+                  "production_deployment": False,
+                  "google_endorsement": False,
+                  "commercial_integration": False,
+              },
+              "known_external_gap": {
+                  "cage_validate_malformed_json_fail_closed_proven": False,
+                  "note": "Current pinned Provider03 validate_fria does not catch JSONDecodeError; resolve in Phase 5B before claiming the full malformed-response matrix.",
+              },
+              "github": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+              },
+          }
+          (root / "run-manifest.json").write_text(
+              json.dumps(run_manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload Phase 5A runtime proof artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-cage-phase5a-${{ steps.proof.outputs.source_sha }}
+          path: artifacts/veritas-cage-phase5a/
+          if-no-files-found: error
+          retention-days: 90
