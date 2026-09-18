@@ -248,7 +248,16 @@ def memory_put(body: MemoryPutRequest, response: Response = None, x_api_key: Opt
         try:
             text_clean = srv.redact(text)
             meta_for_store = dict(meta)
-            meta_for_store.setdefault("user_id", user_id)
+            requested_meta_user_id = str(
+                meta_for_store.get("user_id") or ""
+            ).strip()
+            if requested_meta_user_id and requested_meta_user_id != user_id:
+                logger.warning(
+                    "Memory meta.user_id override blocked by authenticated principal"
+                )
+            # Ownership metadata is authoritative server state. Never preserve a
+            # caller-provided conflicting owner via setdefault().
+            meta_for_store["user_id"] = user_id
             meta_for_store.setdefault("kind", kind)
             meta_for_store["retention_class"] = retention_class
             meta_for_store["expires_at"] = expires_at
