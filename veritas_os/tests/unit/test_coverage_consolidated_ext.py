@@ -782,7 +782,8 @@ class TestServerTrustFeedback:
         })
         body = resp.json()
         assert body["ok"] is True
-        assert body["user_id"] == "u1"
+        assert body["user_id"] == server._derive_api_user_id(_TEST_KEY)
+        assert calls[0]["user_id"] == server._derive_api_user_id(_TEST_KEY)
         assert len(calls) == 1
 
     def test_trust_feedback_bad_score(self, monkeypatch):
