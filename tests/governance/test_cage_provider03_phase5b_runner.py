@@ -55,6 +55,7 @@ def test_source_audit_detects_current_gap_shape(tmp_path: Path) -> None:
     audit = audit_cage_source(tmp_path)
 
     assert audit["provider03_validate_catches_json_decode_error"] is False
+    assert audit["provider03_validate_catches_generic_exception"] is False
     assert audit["provider03_validate_exception_handlers"] == [
         "httpx.HTTPStatusError",
         "httpx.RequestError",
@@ -67,9 +68,11 @@ def test_source_audit_detects_closed_response_exception_boundary(tmp_path: Path)
     _write_sources(
         tmp_path,
         provider_handlers=(
-            "        except json.JSONDecodeError:\n"
+            "        except (json.JSONDecodeError, ValueError):\n"
             "            return None\n"
             "        except httpx.RequestError:\n"
+            "            return None\n"
+            "        except Exception:\n"
             "            return None\n"
         ),
         kernel_handlers=(
@@ -83,4 +86,5 @@ def test_source_audit_detects_closed_response_exception_boundary(tmp_path: Path)
     audit = audit_cage_source(tmp_path)
 
     assert audit["provider03_validate_catches_json_decode_error"] is True
+    assert audit["provider03_validate_catches_generic_exception"] is True
     assert audit["sync_gate_catches_generic_exception"] is True
