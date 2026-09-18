@@ -91,6 +91,25 @@ def _run_scenario(scenario_name: str) -> RegulatedActionPathResult | None:
             return result
     return None
 
+def _bind_receipt_for_result(result: RegulatedActionPathResult) -> dict[str, str]:
+    """Reconstruct the deterministic VERITAS bind receipt for runtime handoff.
+
+    The VERITAS receipt hash covers the receipt body before the
+    ``bind_receipt_hash`` field itself is inserted. CAGE later computes a
+    separate JCS/SHA-256 digest over the complete receipt.
+    """
+
+    body = {
+        "bind_receipt_id": result.bind_receipt_id,
+        "action_contract_id": result.action_contract_id,
+        "authority_evidence_id": result.authority_evidence_id,
+        "authority_evidence_hash": str(result.metadata.get("authority_evidence_hash", "")),
+        "commit_boundary_result": result.commit_boundary_result,
+    }
+    receipt = dict(body)
+    receipt["bind_receipt_hash"] = sha256_of_canonical_json(body)
+    return receipt
+
 
 def _finding_for_result(result: RegulatedActionPathResult) -> dict[str, Any]:
     if result.actual_outcome == "commit":
@@ -103,7 +122,7 @@ def _finding_for_result(result: RegulatedActionPathResult) -> dict[str, Any]:
         code = "veritas.bind_blocked"
         severity = "blocked"
 
-    return {
+    finding = {
         "code": code,
         "severity": severity,
         "scenario_name": result.scenario_name,
@@ -118,6 +137,12 @@ def _finding_for_result(result: RegulatedActionPathResult) -> dict[str, Any]:
         "phase5a_runtime_prototype": True,
         "external_effect_executed": False,
     }
+    if result.actual_outcome == "commit":
+        finding["bind_receipt"] = _bind_receipt_for_result(result)
+        finding["bind_receipt_hash_semantics"] = (
+            "VERITAS canonical body hash before bind_receipt_hash insertion"
+        )
+    return finding
 
 
 def _runtime_manifest() -> dict[str, Any]:
