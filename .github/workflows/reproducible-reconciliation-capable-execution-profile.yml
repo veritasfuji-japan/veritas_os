@@ -1,0 +1,202 @@
+name: Reproducible Reconciliation-Capable Execution Profile
+
+on:
+  pull_request:
+    paths:
+      - "veritas_os/tests/test_reconciliation_capable_execution_profile_e2e.py"
+      - "veritas_os/tests/test_reconciliation_capability_consumption_gate.py"
+      - "veritas_os/tests/test_decision_to_effect_controlled_e2e.py"
+      - "veritas_os/tests/helpers/live_decision_capture.py"
+      - "scripts/run_native_v2_sandbox_service.py"
+      - "veritas_os/governance/reconciliation_capability_evidence.py"
+      - "veritas_os/policy/native_bind_authorization.py"
+      - "veritas_os/policy/native_bind_authorization_consumption.py"
+      - "veritas_os/policy/sandbox_*.py"
+      - "veritas_os/policy/bind_effect_reconciliation.py"
+      - "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+      - "alembic/**"
+      - ".github/workflows/reproducible-reconciliation-capable-execution-profile.yml"
+      - "artifacts/reconciliation-capable-execution-profile/**"
+      - "docs/en/architecture/reconciliation-capable-execution-profile-v1.md"
+      - "docs/en/validation/reconciliation-capable-execution-profile-proof-v1.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproducible-reconciliation-capable-execution-profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas
+          POSTGRES_DB: veritas_reconciliation_profile
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veritas -d veritas_reconciliation_profile"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:veritas@127.0.0.1:5432/veritas_reconciliation_profile
+      VERITAS_SANDBOX_DATABASE_URL: postgresql://veritas:veritas@127.0.0.1:5432/veritas_reconciliation_profile_sandbox
+      VERITAS_SANDBOX_WRITER_TOKEN: reconciliation-profile-writer-token-0123456789abcdef
+      VERITAS_SANDBOX_READER_TOKEN: reconciliation-profile-reader-token-fedcba9876543210
+      VERITAS_SANDBOX_CA_FILE: /tmp/veritas-reconciliation-profile/ca.crt
+      VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG: /tmp/veritas-reconciliation-profile/lookup-outage
+      VERITAS_RECONCILIATION_PROFILE_REPORT: artifacts/reconciliation-capable-execution-profile/report.json
+      VERITAS_RECONCILIATION_PROFILE_EVIDENCE: artifacts/reconciliation-capable-execution-profile/evidence.json
+      VERITAS_RECONCILIATION_CAPABLE_PROFILE_E2E: "1"
+      VERITAS_PROFILE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      VERITAS_PROFILE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install proof dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip --retries 5 --timeout 60
+          python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
+          python -m pip install --retries 5 --timeout 60             "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
+
+      - name: Create dedicated sandbox database
+        run: |
+          python - <<'PY'
+          import psycopg
+
+          conn = psycopg.connect(
+              "postgresql://veritas:veritas@127.0.0.1:5432/postgres",
+              autocommit=True,
+          )
+          try:
+              conn.execute("CREATE DATABASE veritas_reconciliation_profile_sandbox")
+          finally:
+              conn.close()
+          PY
+
+      - name: Apply current VERITAS PostgreSQL migrations
+        run: alembic upgrade head
+
+      - name: Create controlled CA and authorization-pinned certificate
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/veritas-reconciliation-profile
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1             -keyout /tmp/veritas-reconciliation-profile/ca.key             -out /tmp/veritas-reconciliation-profile/ca.crt             -subj "/CN=VERITAS Reconciliation-Capable Profile CA"
+          openssl req -newkey rsa:2048 -nodes             -keyout /tmp/veritas-reconciliation-profile/server.key             -out /tmp/veritas-reconciliation-profile/server.csr             -subj "/CN=sandbox.example.invalid"
+          cat >/tmp/veritas-reconciliation-profile/ext.cnf <<'EOF'
+          subjectAltName=DNS:sandbox.example.invalid
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -days 1             -in /tmp/veritas-reconciliation-profile/server.csr             -CA /tmp/veritas-reconciliation-profile/ca.crt             -CAkey /tmp/veritas-reconciliation-profile/ca.key             -CAcreateserial             -out /tmp/veritas-reconciliation-profile/server.crt             -extfile /tmp/veritas-reconciliation-profile/ext.cnf
+          chmod 600             /tmp/veritas-reconciliation-profile/ca.key             /tmp/veritas-reconciliation-profile/server.key
+
+      - name: Bind authorization-pinned sandbox hostname to loopback
+        run: echo "127.0.0.1 sandbox.example.invalid" | sudo tee -a /etc/hosts
+
+      - name: Start independent sandbox HTTPS service
+        run: |
+          set -euo pipefail
+          sudo -E env PYTHONPATH="$GITHUB_WORKSPACE" "$(which python)"             scripts/run_native_v2_sandbox_service.py             --host 0.0.0.0             --port 443             --cert /tmp/veritas-reconciliation-profile/server.crt             --key /tmp/veritas-reconciliation-profile/server.key             >/tmp/veritas-reconciliation-profile/service.log 2>&1 &
+          echo $! >/tmp/veritas-reconciliation-profile/service.pid
+
+          status=""
+          for i in $(seq 1 30); do
+            status="$(curl --silent --show-error               --cacert "$VERITAS_SANDBOX_CA_FILE"               -H "Authorization: Bearer $VERITAS_SANDBOX_READER_TOKEN"               -o /tmp/veritas-reconciliation-profile/health.json               -w '%{http_code}'               'https://sandbox.example.invalid/v1/operations?idempotency_key=not-created'               || true)"
+            if [ "$status" = "404" ]; then
+              break
+            fi
+            sleep 0.5
+          done
+
+          test "$status" = "404"
+          grep -q "SSE_NOT_FOUND_NOT_PROOF_OF_NO_EFFECT"             /tmp/veritas-reconciliation-profile/health.json
+
+      - name: Run focused reconciliation capability gate matrix
+        run: |
+          set -euxo pipefail
+          PYTHONPATH=. pytest             veritas_os/tests/test_reconciliation_capability_consumption_gate.py             -v --tb=short
+
+      - name: Run reproducible reconciliation-capable profile proof
+        run: |
+          set -euxo pipefail
+          PYTHONPATH=. pytest             veritas_os/tests/test_reconciliation_capable_execution_profile_e2e.py             -v -s --tb=short
+
+      - name: Assert profile proof conjunction
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path(
+                  "artifacts/reconciliation-capable-execution-profile/report.json"
+              ).read_text()
+          )
+          evidence = json.loads(
+              Path(
+                  "artifacts/reconciliation-capable-execution-profile/evidence.json"
+              ).read_text()
+          )
+
+          assert report["result"] == "PASS"
+          assert (
+              report["proof"]
+              == "CONTROLLED_RECONCILIATION_CAPABLE_EXECUTION_PROFILE_V1"
+          )
+          assert report["production_claim"] is False
+          assert report["alembic_head"] == "0009"
+          assert (
+              report["controlled_policy_gated_reconciliation_profile_proven"]
+              is True
+          )
+          assert report["production_reconciliation_capability_proven"] is False
+          assert report["universal_downstream_reconcilability_proven"] is False
+          assert report["exactly_once_external_delivery_proven"] is False
+          assert report["blocked"]["missing_authorization_consumed"] is False
+          assert report["blocked"]["heuristic_authorization_consumed"] is False
+          assert report["blocked"]["sandbox_rows_added"] == 0
+          assert report["normal"]["capability_class"] == "AUTHORITATIVE_QUERY"
+          assert report["normal"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
+          assert report["fault"]["capability_class"] == "AUTHORITATIVE_QUERY"
+          assert report["fault"]["lookup_outage_state"] == "EFFECT_UNKNOWN"
+          assert report["fault"]["lookup_outage_retry_permitted"] is False
+          assert report["fault"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
+          assert report["fault"]["transport_calls"] == 1
+          assert report["sandbox_rows_added_by_valid_paths"] == 2
+          assert all(report["proof_conjunction"].values())
+          assert evidence["source_sha"] == report["source_sha"]
+          assert evidence["base_sha"] == report["base_sha"]
+          PY
+
+      - name: Upload reconciliation-capable profile proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproducible-reconciliation-capable-execution-profile
+          path: |
+            artifacts/reconciliation-capable-execution-profile/report.json
+            artifacts/reconciliation-capable-execution-profile/evidence.json
+            /tmp/veritas-reconciliation-profile/service.log
+          if-no-files-found: warn
+
+      - name: Stop controlled sandbox service
+        if: always()
+        run: |
+          if [ -f /tmp/veritas-reconciliation-profile/service.pid ]; then
+            sudo kill "$(cat /tmp/veritas-reconciliation-profile/service.pid)" || true
+          fi
+          rm -f "$VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG"
