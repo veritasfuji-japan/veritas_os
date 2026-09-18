@@ -211,8 +211,6 @@ def _decision_request_fixture(policy_bundle_dir: Path) -> dict[str, Any]:
     context = dict(payload.get("context") or {})
     context.update(
         {
-            "compiled_policy_bundle_dir": policy_bundle_dir.as_posix(),
-            "policy_runtime_enforce": True,
             "domain": "governance",
             "route": "/api/decide",
             "actor": "kernel",
@@ -296,6 +294,8 @@ def _configure_verified_policy_bundle(runtime_root: Path) -> Path:
         {
             "VERITAS_POLICY_VERIFY_KEY": str(verify_key_path),
             "VERITAS_POLICY_REQUIRE_ED25519": "1",
+            "VERITAS_POLICY_RUNTIME_ENFORCE": "1",
+            "VERITAS_POLICY_RUNTIME_BUNDLE_DIR": str(compiled.bundle_dir),
         }
     )
     return compiled.bundle_dir
