@@ -714,11 +714,7 @@ def search(
             raw = _vec.search(query=query, k=k, kinds=kinds, min_sim=min_sim)
             candidates = collect_candidate_hits(raw)
             if candidates:
-                candidates = filter_hits_for_user(
-                    candidates,
-                    user_id,
-                    include_unowned=user_id is None,
-                )
+                candidates = filter_hits_for_user(candidates, user_id)
                 if candidates:
                     unique = _dedup_hits(candidates, k)
                     logger.info(
@@ -737,11 +733,7 @@ def search(
                 raw = _vec.search(query, k=k)  # type: ignore[call-arg]
                 if isinstance(raw, list) and raw:
                     hits = [h for h in raw if isinstance(h, dict)]
-                    hits = filter_hits_for_user(
-                        hits,
-                        user_id,
-                        include_unowned=user_id is None,
-                    )
+                    hits = filter_hits_for_user(hits, user_id)
                     if hits:
                         unique = _dedup_hits(hits, k)
                         logger.info(
