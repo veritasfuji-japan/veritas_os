@@ -174,11 +174,10 @@ def test_verify_manifest_signature_via_env_var(
     assert verify_manifest_signature(result.bundle_dir) is True
 
 
-def test_ed25519_bundle_without_key_logs_downgrade_warning(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+def test_ed25519_bundle_without_key_rejects_algorithm_downgrade(
+    tmp_path: Path,
 ) -> None:
-    """When a bundle declares ed25519 but no public key is supplied, a warning
-    about the security downgrade to SHA-256 must be emitted."""
+    """Ed25519-declared artifacts never downgrade to SHA-256 without a key."""
     private_pem, _ = generate_keypair()
     result = compile_policy_to_bundle(
         EXAMPLES_DIR / "external_tool_usage_denied.yaml",
@@ -186,15 +185,9 @@ def test_ed25519_bundle_without_key_logs_downgrade_warning(
         compiled_at="2026-04-03T07:00:00Z",
         signing_key=private_pem,
     )
-    import logging
 
-    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"):
-        # No public_key_pem → SHA-256 fallback even though manifest says ed25519
-        # SHA-256 will fail because the sig file contains a base64 ed25519 sig,
-        # not a sha256 hex digest.
-        ok = verify_manifest_signature(result.bundle_dir)
-    assert not ok  # SHA-256 check fails for ed25519-signed bundles
-    assert "falling back to SHA-256" in caplog.text
+    with pytest.raises(ValueError, match="trusted public key"):
+        verify_manifest_signature(result.bundle_dir)
 
 
 def test_legacy_bundle_still_loads_without_key(tmp_path: Path) -> None:
@@ -310,12 +303,11 @@ def test_verify_key_env_var_unreadable_file_does_not_crash(
     with (
         patch.object(Path, "read_bytes", _fail_on_key_file),
         caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"),
+        pytest.raises(ValueError, match="trusted public key"),
     ):
-        # Must not raise — should fall through to SHA-256 fallback
-        ok = verify_manifest_signature(result.bundle_dir)
+        verify_manifest_signature(result.bundle_dir)
 
-    assert not ok  # SHA-256 check fails for ed25519-signed bundles
-    assert "failed to read public key" in caplog.text
+    assert "failed to read configured policy verification key" in caplog.text
 
 
 def test_runtime_adapter_logs_do_not_expose_bundle_or_key_paths(
