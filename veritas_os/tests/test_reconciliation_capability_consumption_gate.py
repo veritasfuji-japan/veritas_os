@@ -10,12 +10,18 @@ from veritas_os.governance.reconciliation_capability_evidence import (
     ReconciliationCapabilityEvidence,
 )
 from veritas_os.policy import native_bind_authorization_consumption as module
+from veritas_os.tests.test_native_bind_authorization import (
+    api_risk_source as api_risk_source_fixture,
+    issued as issued_fixture,
+)
 from veritas_os.tests.test_native_bind_authorization_consumption import (
     _store_inputs,
     consumable as consumable_fixture,
 )
 
 pytestmark = pytest.mark.slow
+api_risk_source = api_risk_source_fixture
+issued = issued_fixture
 consumable = consumable_fixture
 
 _TARGET_CONFIGURATION_DIGEST = "b" * 64
