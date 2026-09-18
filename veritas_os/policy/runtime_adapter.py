@@ -90,9 +90,8 @@ def verify_manifest_signature(
             if not p.exists()
         ]
         logger.warning(
-            "signature verification skipped: missing %s in %s",
+            "signature verification skipped: missing required artifacts: %s",
             missing,
-            bundle_dir,
         )
         return False
 
@@ -107,9 +106,9 @@ def verify_manifest_signature(
                     pub_key = key_path.read_bytes()
             except OSError as exc:
                 logger.warning(
-                    "failed to read public key from VERITAS_POLICY_VERIFY_KEY=%s: %s",
-                    key_path_str,
-                    exc,
+                    "failed to read public key from configured verification key "
+                    "(error_type=%s)",
+                    type(exc).__name__,
                 )
 
     # Read raw bytes once (used for both algorithm detection and verification)
@@ -117,7 +116,9 @@ def verify_manifest_signature(
         manifest_bytes = manifest_path.read_bytes()
     except OSError as exc:
         logger.warning(
-            "failed to read manifest for signature verification: %s", exc
+            "failed to read manifest for signature verification "
+            "(error_type=%s)",
+            type(exc).__name__,
         )
         return False
 
@@ -125,7 +126,9 @@ def verify_manifest_signature(
         sig_text = signature_path.read_text(encoding="utf-8").strip()
     except OSError as exc:
         logger.warning(
-            "failed to read signature file for verification: %s", exc
+            "failed to read signature file for verification "
+            "(error_type=%s)",
+            type(exc).__name__,
         )
         return False
 
@@ -139,9 +142,9 @@ def verify_manifest_signature(
         )
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         logger.warning(
-            "failed to parse manifest.json for algorithm detection: %s; "
-            "defaulting to sha256 integrity check",
-            exc,
+            "failed to parse manifest.json for algorithm detection "
+            "(error_type=%s); defaulting to sha256 integrity check",
+            type(exc).__name__,
         )
         algorithm = "sha256"
 
@@ -237,9 +240,8 @@ def load_runtime_bundle(
                 "artifacts are rejected in secure/prod posture."
             )
         logger.warning(
-            "bundle %s is missing manifest.sig; accepting unsigned artifact in "
-            "non-strict posture for developer workflow compatibility.",
-            bundle_dir,
+            "policy bundle is missing manifest.sig; accepting unsigned artifact "
+            "in non-strict posture for developer workflow compatibility."
         )
     else:
         if not verify_manifest_signature(root, public_key_pem=public_key_pem):
@@ -254,10 +256,9 @@ def load_runtime_bundle(
                 "secure/prod posture. Sign bundles with Ed25519 for production."
             )
         logger.warning(
-            "bundle %s loaded with SHA-256 integrity check only; "
+            "policy bundle loaded with SHA-256 integrity check only; "
             "authenticity is NOT verified. Set VERITAS_POLICY_REQUIRE_ED25519=true "
-            "and provide an Ed25519 public key for production use.",
-            bundle_dir,
+            "and provide an Ed25519 public key for production use."
         )
 
     canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
