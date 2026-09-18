@@ -328,14 +328,26 @@ def test_runtime_adapter_logs_do_not_expose_bundle_or_key_paths(
 
     secret_bundle = tmp_path / "customer-secret-policy-location"
     secret_bundle.mkdir()
+    (secret_bundle / "manifest.json").write_text(
+        '{"signing":{"algorithm":"ed25519"}}',
+        encoding="utf-8",
+    )
+    (secret_bundle / "manifest.sig").write_text("invalid-signature", encoding="utf-8")
     secret_key = tmp_path / "customer-secret-key-location.pem"
     secret_key.write_text("not-a-key", encoding="utf-8")
     monkeypatch.setenv("VERITAS_POLICY_VERIFY_KEY", str(secret_key))
 
     from unittest.mock import patch
 
+    original_read_bytes = Path.read_bytes
+
+    def _fail_only_for_key(path: Path) -> bytes:
+        if path == secret_key:
+            raise OSError("synthetic read failure")
+        return original_read_bytes(path)
+
     with (
-        patch.object(Path, "read_bytes", side_effect=OSError("synthetic read failure")),
+        patch.object(Path, "read_bytes", _fail_only_for_key),
         caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"),
     ):
         verify_manifest_signature(secret_bundle)
