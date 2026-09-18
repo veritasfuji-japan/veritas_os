@@ -2,14 +2,17 @@
 
 ## Status
 
-Phase 5B is a source-pinned runtime verification step after the merged Phase 5A
-wire proof.  It does **not** claim full Phase 5 completion.
+Phase 5B is the source-pinned runtime verification step after the merged Phase 5A
+wire proof.  The original Phase 5B run localized two CAGE Provider03 response
+handling gaps.  CAGE subsequently closed those gaps in PR #217 and merged the
+fix to `main`.
 
-The proof has two purposes:
+This closure rerun verifies the repaired upstream CAGE contract directly.  It
+does **not** add a VERITAS compatibility wrapper.
 
-1. confirm Provider03 verdict semantics over the real loopback HTTP boundary;
-2. verify negative/error behavior without masking upstream CAGE exceptions with
-   a VERITAS-side compatibility wrapper.
+Expected result:
+
+`READY_FOR_PHASE5C`
 
 ## Pinned sources
 
@@ -17,10 +20,14 @@ The proof has two purposes:
   `6cb71643a4cd3aad52b6fc9a872671c070a01057`
 - CAGE Phase 4 reviewed baseline:
   `5f54d5e3403d67101e028ed14fa8dade853fb221`
-- CAGE source evaluated for Phase 5B:
-  `8162958ac23d958871fd4016f349a7062627fd4d`
+- CAGE fail-closed repair PR:
+  `google/cybernetic-agent-governance-engine#217`
+- CAGE PR #217 merge commit:
+  `2baa79687e40cf83046ef7a65e537060eb688e2d`
+- CAGE source pinned for the closure rerun:
+  `fcb98bef0b5faea1afcc5a430148fe065b985ef4`
 
-The CAGE Phase 5B source commit is pinned rather than following a moving branch.
+The Phase 5B proof remains commit-pinned rather than following a moving branch.
 
 ## Runtime matrix
 
@@ -31,47 +38,41 @@ loopback HTTP to the merged VERITAS Phase 5A FastAPI surface:
 - `ESCALATE` -> `admitted=False` plus `needs_human_review=True`
 - `REJECTED` -> `admitted=False`
 
-A local-only deterministic fault endpoint then exercises:
+A local-only deterministic fault endpoint verifies:
 
 - unknown verdict -> hard deny
 - missing verdict -> hard deny
 - HTTP 500 -> `ENDPOINT_ERROR` / hard deny
 - timeout -> `ENDPOINT_ERROR` / hard deny
-- `action_context` legacy/canonical collision -> `MAPPING_COLLISION`, with no
+- legacy/canonical action-context collision -> `MAPPING_COLLISION`, with no
   wire dispatch
-- malformed JSON response
-- non-string (`null`) verdict
+- malformed / non-JSON HTTP 200 -> `admitted=False` + `PARSE_ERROR`
+- non-object JSON -> `admitted=False` + `PARSE_ERROR`
+- null verdict -> `admitted=False`, no exception leakage
+- numeric verdict -> `admitted=False`, no exception leakage
 
-No fault endpoint is external and no business effect is executed.
+The source audit additionally requires Provider03 to retain an explicit JSON
+decode guard and a generic adapter exception guard.
 
-## Response-contract blocker
+## Historical blocker and closure
 
-At the pinned CAGE source, `Provider03NormativeProvider.validate_fria()` catches
-`httpx.HTTPStatusError` and `httpx.RequestError`, but does not convert JSON decode
-failures into a fail-closed `ValidationResult`.
-
-The CAGE synchronous FRIA gate wraps `provider.validate_fria(...)` with
-`asyncio.wait_for(...)` and catches `asyncio.TimeoutError`; it does not provide a
-generic provider-exception conversion at that boundary.
-
-Phase 5B therefore records malformed-response exceptions as evidence.  It does
-**not** add a VERITAS wrapper and then claim the CAGE boundary itself is
-fail-closed.
-
-The runtime proof also checks a `null` verdict because current Provider03 code
-calls `.upper()` on the returned verdict.  A non-string verdict is therefore a
-separate response-schema failure path unless the upstream adapter validates or
-normalizes the response first.
-
-Until these response-contract paths return an explicit non-admitted result (or
-CAGE defines another equivalent fail-closed kernel boundary), the report status
-is:
+The original Phase 5B evidence at CAGE source
+`8162958ac23d958871fd4016f349a7062627fd4d` recorded:
 
 `BLOCKED_ON_CAGE_RESPONSE_FAIL_CLOSED_CONTRACT`
 
-This status means the Phase 5B evidence run succeeded in reproducing and
-localizing the blocker.  It does not mean the complete Phase 5B safety claim is
-satisfied.
+because malformed JSON and non-string verdicts could raise before a
+`ValidationResult` was returned.
+
+CAGE PR #217 closed that boundary in the Provider03 adapter.  The closure rerun
+therefore requires all anomalous response cases to return an explicit
+non-admitted result without exception leakage.  The proof is considered closed
+only when:
+
+- all runtime fail-closed checks pass;
+- all response-contract assertions pass;
+- `phase5b_blockers` is empty; and
+- `phase5b_status == "READY_FOR_PHASE5C"`.
 
 ## Claim boundary
 
@@ -95,5 +96,6 @@ The CI workflow writes:
 - `phase5b-runtime-report.json`
 - `run-manifest.json`
 
-The run manifest binds the evidence to the exact VERITAS and CAGE source SHAs
-and records the artifact SHA-256 digest.
+The run manifest binds the evidence to the exact VERITAS and CAGE source SHAs,
+records the artifact SHA-256 digest, and marks Phase 5C readiness only after the
+full closure matrix passes.

@@ -17,7 +17,7 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   CAGE_PHASE4_SHA: "5f54d5e3403d67101e028ed14fa8dade853fb221"
-  CAGE_PHASE5B_SHA: "8162958ac23d958871fd4016f349a7062627fd4d"
+  CAGE_PHASE5B_SHA: "fcb98bef0b5faea1afcc5a430148fe065b985ef4"
   VERITAS_CAGE_PHASE5_BEARER_TOKEN: "phase5b-ci-local-only-token"
 
 jobs:
@@ -154,22 +154,35 @@ jobs:
               if passed is not True:
                   raise SystemExit(f"Phase 5B fail-closed check failed: {key}")
 
-          gaps = report["known_response_contract_gaps"]
-          for gap_name in ("malformed_json", "null_verdict"):
-              gap = gaps[gap_name]
-              if gap["unsafe_admit"] is not False:
-                  raise SystemExit(f"unsafe admit observed for {gap_name}")
-              if gap["gap_reproduced"] is not True:
-                  raise SystemExit(f"expected pinned-source gap not reproduced: {gap_name}")
+          response_checks = report["response_contract_checks"]
+          for check_name, passed in response_checks["assertions"].items():
+              if passed is not True:
+                  raise SystemExit(f"Phase 5B response-contract check failed: {check_name}")
+
+          for case_name in (
+              "malformed_json",
+              "non_object_json",
+              "null_verdict",
+              "numeric_verdict",
+          ):
+              case = response_checks[case_name]
+              if case["unsafe_admit"] is not False:
+                  raise SystemExit(f"unsafe admit observed for {case_name}")
+              if case["fail_closed_result_returned"] is not True:
+                  raise SystemExit(f"no fail-closed ValidationResult returned for {case_name}")
+              if case["exception_type"] is not None:
+                  raise SystemExit(f"exception leaked for {case_name}: {case['exception_type']}")
 
           audit = report["cage_source_audit"]
-          if audit["provider03_validate_catches_json_decode_error"] is not False:
-              raise SystemExit("pinned CAGE source unexpectedly catches JSONDecodeError")
-          if audit["sync_gate_catches_generic_exception"] is not False:
-              raise SystemExit("pinned CAGE sync gate unexpectedly catches generic provider errors")
+          if audit["provider03_validate_catches_json_decode_error"] is not True:
+              raise SystemExit("pinned CAGE source must catch JSONDecodeError")
+          if audit["provider03_validate_catches_generic_exception"] is not True:
+              raise SystemExit("pinned CAGE source must catch unexpected adapter exceptions")
 
-          if report["phase5b_status"] != "BLOCKED_ON_CAGE_RESPONSE_FAIL_CLOSED_CONTRACT":
-              raise SystemExit("pinned Phase 5B source should remain explicitly blocked")
+          if report["phase5b_status"] != "READY_FOR_PHASE5C":
+              raise SystemExit("Phase 5B must close cleanly before Phase 5C")
+          if report["phase5b_blockers"] != []:
+              raise SystemExit(f"Phase 5B blockers remain: {report['phase5b_blockers']}")
 
           artifacts = sorted(root.rglob("*.json"))
           artifact_hashes = {
@@ -177,7 +190,7 @@ jobs:
               for path in artifacts
           }
           run_manifest = {
-              "format_version": "veritas-cage-phase5b-run/v1",
+              "format_version": "veritas-cage-phase5b-run/v2",
               "proof_id": report["proof_id"],
               "veritas_source_sha": os.environ["SOURCE_SHA"],
               "cage_source_sha": os.environ["CAGE_PHASE5B_SHA"],
@@ -196,7 +209,8 @@ jobs:
                   "production_deployment": False,
                   "google_endorsement": False,
                   "commercial_integration": False,
-                  "phase5b_complete": False,
+                  "phase5b_complete": True,
+                  "phase5c_ready": True,
               },
               "github": {
                   "repository": os.environ["GITHUB_REPOSITORY"],
