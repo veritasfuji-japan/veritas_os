@@ -1947,7 +1947,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` (posture: `1` in secure/prod) | Enable runtime enforcement of compiled policy decisions; request input cannot disable server-mandated enforcement |
 | `VERITAS_POLICY_RUNTIME_BUNDLE_ID` | — | Deployment-controlled path-safe bundle ID under `<VERITAS_RUNTIME_ROOT>/policy_bundles`; request paths are never used |
 | `VERITAS_POLICY_ROLLOUT_KEY` | — | Deployment-controlled canary/staged rollout bucket key; missing key fails safe to full enforcement when enforcement is mandatory |
-| `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Require Ed25519 signature verification; reject manifests when no key is available |
+| `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Require Ed25519 verification and reject legacy SHA-256 bundles; Ed25519-declared bundles never downgrade when the trusted key is missing |
 
 > **Posture-aware enforcement**: In `secure`/`prod` posture, SHA-256-only (unsigned) policy bundles
 > are rejected by the runtime adapter.  Only Ed25519-signed bundles pass verification.
