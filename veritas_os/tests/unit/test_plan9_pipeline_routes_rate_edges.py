@@ -72,6 +72,7 @@ def test_apply_compiled_policy_runtime_bridge_handles_non_dict_governance(
         def to_dict() -> dict[str, Any]:
             return {"final_outcome": "allow", "policy_results": []}
 
+    monkeypatch.setattr(pp, "_resolve_trusted_runtime_bundle_dir", lambda: "/tmp/bundle")
     monkeypatch.setattr(pp, "load_runtime_bundle", lambda _path: object())
     monkeypatch.setattr(pp, "evaluate_runtime_policies", lambda _bundle, _ctx: _Decision())
 
