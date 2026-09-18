@@ -35,7 +35,9 @@ authorization consumption and then exercises:
 -> deterministic promotion / ExecutionIntent
 -> native v2 authorization
 -> policy-required AUTHORITATIVE_QUERY capability
--> current target / verifier / evidence-digest recheck
+-> deployment-controlled capability verifier
+-> runtime-sealed verified capability proof
+-> current target / verifier trust-policy / evidence-digest recheck
 -> PostgreSQL single-use authorization consumption
 -> controlled pre-effect checks
 -> certificate-validated TLS POST
@@ -49,17 +51,32 @@ The fault path loses the observed response after the sandbox event persists,
 preserves `EFFECT_UNKNOWN` through a controlled lookup outage, prohibits blind
 redispatch, and confirms the exact persisted operation after lookup recovery.
 
+## Verified proof boundary
+
+Raw `ReconciliationCapabilityEvidence` is not treated as self-authenticating.
+The controlled profile first sends it through a deployment-controlled verifier
+and independently configured verifier trust policy.
+
+The resulting `VerifiedReconciliationCapabilityEvidence` carries the raw
+evidence digest, verifier binding, trust-policy binding, verification material
+digest, verified timestamp and runtime seal hash.
+
+The runtime seal is process-local. Serializing and reconstructing the same fields
+does not create another trusted proof.
+
 ## Fail-closed cases
 
 The dedicated proof also demonstrates with real PostgreSQL that:
 
-- required capability missing -> authorization remains unconsumed;
-- `HEURISTIC_ONLY` capability -> authorization remains unconsumed; and
+- required verified capability proof missing -> authorization remains unconsumed;
+- raw capability evidence alone -> authorization remains unconsumed;
+- verifier-sealed `HEURISTIC_ONLY` capability -> authorization remains unconsumed; and
 - neither blocked path creates a sandbox event.
 
-The broader focused gate matrix is run in the same workflow and covers expiry,
-endpoint/configuration drift, verifier mismatch, digest mismatch, incomplete
-policy, and request-like policy downgrade attempts.
+The verifier trust-boundary tests and broader focused gate matrix are run in the
+same workflow. They cover caller-constructed proof lookalikes, trust-policy
+mismatch, expiry, endpoint/configuration drift, verifier mismatch, digest
+mismatch, incomplete policy, and request-like policy downgrade attempts.
 
 ## Claim boundary
 
