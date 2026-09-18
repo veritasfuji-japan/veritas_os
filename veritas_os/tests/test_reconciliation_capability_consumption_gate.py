@@ -1,4 +1,4 @@
-"""Policy-gated reconciliation capability proofs at authorization consumption."""
+"""Policy-gated verified reconciliation capability proofs at consumption."""
 
 from dataclasses import replace
 from datetime import timedelta
@@ -6,10 +6,16 @@ from datetime import timedelta
 import pytest
 
 from veritas_os.governance.reconciliation_capability_evidence import (
+    ApprovedReconciliationCapabilityVerifier,
     ReconciliationCapabilityClass,
     ReconciliationCapabilityEvidence,
+    ReconciliationCapabilityVerificationResult,
+    ReconciliationCapabilityVerifierTrustPolicy,
+    VerifiedReconciliationCapabilityEvidence,
+    verify_reconciliation_capability_evidence_to_proof,
 )
 from veritas_os.policy import native_bind_authorization_consumption as module
+from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.tests.test_native_bind_authorization import (
     api_risk_source as api_risk_source_fixture,
     issued as issued_fixture,
@@ -25,7 +31,63 @@ issued = issued_fixture
 consumable = consumable_fixture
 
 _TARGET_CONFIGURATION_DIGEST = "b" * 64
+_VERIFIER_ID = "reconciliation-capability-verifier/v1"
+_VERIFIER_POLICY_ID = "reconciliation-capability-policy/v1"
 _VERIFIER_POLICY_HASH = "d" * 64
+_TRUST_POLICY_ID = "reconciliation-capability-trust/v1"
+
+
+class _ControlledVerifier:
+    def __init__(
+        self,
+        *,
+        verifier_id=_VERIFIER_ID,
+        verifier_policy_id=_VERIFIER_POLICY_ID,
+        verifier_policy_hash=_VERIFIER_POLICY_HASH,
+    ):
+        self.verifier_id = verifier_id
+        self.verifier_policy_id = verifier_policy_id
+        self.verifier_policy_hash = verifier_policy_hash
+
+    def verify(self, evidence):
+        material = sha256_of_canonical_json(
+            {
+                "domain": "test.reconciliation-capability-verifier/v1",
+                "evidence_digest": evidence.deterministic_digest(),
+                "verifier_id": self.verifier_id,
+                "verifier_policy_id": self.verifier_policy_id,
+                "verifier_policy_hash": self.verifier_policy_hash,
+            }
+        )
+        return ReconciliationCapabilityVerificationResult(
+            verified=True,
+            evidence_digest=evidence.deterministic_digest(),
+            verifier_id=self.verifier_id,
+            verifier_policy_id=self.verifier_policy_id,
+            verifier_policy_hash=self.verifier_policy_hash,
+            verification_material_digest=material,
+            semantic_consistent=True,
+            reason="controlled-test-verification",
+        )
+
+
+def _trust_policy(
+    *,
+    verifier_id=_VERIFIER_ID,
+    verifier_policy_id=_VERIFIER_POLICY_ID,
+    verifier_policy_hash=_VERIFIER_POLICY_HASH,
+    policy_id=_TRUST_POLICY_ID,
+):
+    return ReconciliationCapabilityVerifierTrustPolicy(
+        policy_id=policy_id,
+        approved_verifiers=(
+            ApprovedReconciliationCapabilityVerifier(
+                verifier_id=verifier_id,
+                verifier_policy_id=verifier_policy_id,
+                verifier_policy_hash=verifier_policy_hash,
+            ),
+        ),
+    )
 
 
 def _current_context(original):
@@ -47,8 +109,8 @@ def _evidence(
     capability_class=ReconciliationCapabilityClass.AUTHORITATIVE_QUERY,
     endpoint_digest=None,
     target_configuration_digest=_TARGET_CONFIGURATION_DIGEST,
-    verifier_id="reconciliation-capability-verifier/v1",
-    verifier_policy_id="reconciliation-capability-policy/v1",
+    verifier_id=_VERIFIER_ID,
+    verifier_policy_id=_VERIFIER_POLICY_ID,
     verifier_policy_hash=_VERIFIER_POLICY_HASH,
     assessed_at=None,
     valid_until=None,
@@ -95,14 +157,34 @@ def _evidence(
     )
 
 
-def _required_policy(
+def _proof(
     evidence,
     *,
+    verified_at,
+    verifier=None,
+    trust_policy=None,
+):
+    trust = trust_policy or _trust_policy()
+    actual_verifier = verifier or _ControlledVerifier()
+    return verify_reconciliation_capability_evidence_to_proof(
+        evidence,
+        verifier=actual_verifier,
+        trust_policy=trust,
+        verified_at=verified_at,
+    )
+
+
+def _required_policy(
+    evidence,
+    trust_policy,
+    *,
     current_target_configuration_digest=_TARGET_CONFIGURATION_DIGEST,
-    expected_verifier_id="reconciliation-capability-verifier/v1",
-    expected_verifier_policy_id="reconciliation-capability-policy/v1",
+    expected_verifier_id=_VERIFIER_ID,
+    expected_verifier_policy_id=_VERIFIER_POLICY_ID,
     expected_verifier_policy_hash=_VERIFIER_POLICY_HASH,
     expected_evidence_digest=None,
+    expected_trust_policy_id=None,
+    expected_trust_policy_hash=None,
 ):
     return module.ReconciliationCapabilityExecutionPolicy(
         policy_id="reconciliation-required/v1",
@@ -114,6 +196,12 @@ def _required_policy(
         expected_evidence_digest=(
             expected_evidence_digest or evidence.deterministic_digest()
         ),
+        expected_trust_policy_id=(
+            expected_trust_policy_id or trust_policy.policy_id
+        ),
+        expected_trust_policy_hash=(
+            expected_trust_policy_hash or trust_policy.deterministic_hash()
+        ),
     )
 
 
@@ -122,7 +210,9 @@ async def _assert_rejected_before_consumption(
     original,
     *,
     policy,
-    evidence,
+    proof=None,
+    trust_policy=None,
+    raw_evidence=None,
     expected_reason="NABC_RECONCILIATION_CAPABILITY_REJECTED",
     monkeypatch,
 ):
@@ -137,12 +227,17 @@ async def _assert_rejected_before_consumption(
 
     monkeypatch.setattr(store, "consume_once", spy_consume_once)
 
-    with pytest.raises(module.NativeAuthorizationConsumptionError, match=expected_reason):
+    with pytest.raises(
+        module.NativeAuthorizationConsumptionError,
+        match=expected_reason,
+    ):
         await module.consume_native_bind_authorization(
             artifact,
             **inputs,
             reconciliation_capability_policy=policy,
-            reconciliation_capability_evidence=evidence,
+            reconciliation_capability_proof=proof,
+            reconciliation_capability_trust_policy=trust_policy,
+            reconciliation_capability_evidence=raw_evidence,
         )
 
     assert calls == 0
@@ -157,20 +252,27 @@ async def _assert_rejected_before_consumption(
         ReconciliationCapabilityClass.AUTHORITATIVE_EVIDENCE,
     ],
 )
-async def test_required_authoritative_capability_passes_before_consumption(
+async def test_required_verified_authoritative_capability_passes_before_consumption(
     consumable,
     capability_class,
 ):
     artifact, original, _ = consumable
     evidence = _evidence(original, capability_class=capability_class)
-    policy = _required_policy(evidence)
+    trust_policy = _trust_policy()
+    proof = _proof(
+        evidence,
+        verified_at=original["now"],
+        trust_policy=trust_policy,
+    )
+    policy = _required_policy(evidence, trust_policy)
     store, inputs = _store_inputs(original)
 
     result = await module.consume_native_bind_authorization(
         artifact,
         **inputs,
         reconciliation_capability_policy=policy,
-        reconciliation_capability_evidence=evidence,
+        reconciliation_capability_proof=proof,
+        reconciliation_capability_trust_policy=trust_policy,
     )
 
     assert result.authorization_consumed is True
@@ -180,6 +282,10 @@ async def test_required_authoritative_capability_passes_before_consumption(
     assert (
         result.reconciliation_capability_evidence_digest
         == evidence.deterministic_digest()
+    )
+    assert (
+        result.reconciliation_capability_verification_proof_hash
+        == proof.verification_proof_hash
     )
     assert await store.get(artifact.authorization_id) == result.consumption_record
     assert result.execution_authority_created is False
@@ -206,22 +312,44 @@ async def test_policy_not_requiring_capability_preserves_existing_contract(consu
     assert result.reconciliation_capability_satisfied is False
     assert result.reconciliation_capability_policy_id == policy.policy_id
     assert result.reconciliation_capability_evidence_digest is None
+    assert result.reconciliation_capability_verification_proof_hash is None
     assert await store.get(artifact.authorization_id) == result.consumption_record
 
 
 @pytest.mark.asyncio
-async def test_required_capability_missing_fails_before_consumption(
+async def test_required_raw_evidence_alone_cannot_satisfy_gate(
     consumable,
     monkeypatch,
 ):
     artifact, original, _ = consumable
     evidence = _evidence(original)
+    trust_policy = _trust_policy()
     await _assert_rejected_before_consumption(
         artifact,
         original,
-        policy=_required_policy(evidence),
-        evidence=None,
-        expected_reason="NABC_RECONCILIATION_CAPABILITY_REQUIRED",
+        policy=_required_policy(evidence, trust_policy),
+        trust_policy=trust_policy,
+        raw_evidence=evidence,
+        expected_reason="NABC_RECONCILIATION_CAPABILITY_VERIFIED_PROOF_REQUIRED",
+        monkeypatch=monkeypatch,
+    )
+
+
+@pytest.mark.asyncio
+async def test_required_missing_trust_policy_fails_before_consumption(
+    consumable,
+    monkeypatch,
+):
+    artifact, original, _ = consumable
+    evidence = _evidence(original)
+    trust_policy = _trust_policy()
+    proof = _proof(evidence, verified_at=original["now"], trust_policy=trust_policy)
+    await _assert_rejected_before_consumption(
+        artifact,
+        original,
+        policy=_required_policy(evidence, trust_policy),
+        proof=proof,
+        expected_reason="NABC_RECONCILIATION_CAPABILITY_TRUST_POLICY_REQUIRED",
         monkeypatch=monkeypatch,
     )
 
@@ -234,67 +362,82 @@ async def test_required_capability_missing_fails_before_consumption(
         ReconciliationCapabilityClass.UNAVAILABLE_OR_UNVERIFIED,
     ],
 )
-async def test_non_authoritative_capability_fails_before_consumption(
+async def test_verified_non_authoritative_capability_fails_before_consumption(
     consumable,
     capability_class,
     monkeypatch,
 ):
     artifact, original, _ = consumable
     evidence = _evidence(original, capability_class=capability_class)
+    trust_policy = _trust_policy()
+    proof = _proof(evidence, verified_at=original["now"], trust_policy=trust_policy)
     await _assert_rejected_before_consumption(
         artifact,
         original,
-        policy=_required_policy(evidence),
-        evidence=evidence,
+        policy=_required_policy(evidence, trust_policy),
+        proof=proof,
+        trust_policy=trust_policy,
         monkeypatch=monkeypatch,
     )
 
 
 @pytest.mark.asyncio
-async def test_expired_capability_fails_before_consumption(consumable, monkeypatch):
+async def test_expired_verified_capability_fails_before_consumption(
+    consumable,
+    monkeypatch,
+):
     artifact, original, _ = consumable
     evidence = _evidence(
         original,
         assessed_at=original["now"] - timedelta(minutes=2),
         valid_until=original["now"] - timedelta(seconds=1),
     )
+    trust_policy = _trust_policy()
+    proof = _proof(
+        evidence,
+        verified_at=original["now"] - timedelta(seconds=2),
+        trust_policy=trust_policy,
+    )
     await _assert_rejected_before_consumption(
         artifact,
         original,
-        policy=_required_policy(evidence),
-        evidence=evidence,
+        policy=_required_policy(evidence, trust_policy),
+        proof=proof,
+        trust_policy=trust_policy,
         monkeypatch=monkeypatch,
     )
 
 
 @pytest.mark.asyncio
-async def test_endpoint_identity_drift_fails_before_consumption(
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("endpoint", "e" * 64),
+        ("target", "e" * 64),
+    ],
+)
+async def test_verified_target_drift_fails_before_consumption(
     consumable,
+    field,
+    value,
     monkeypatch,
 ):
     artifact, original, _ = consumable
-    evidence = _evidence(original, endpoint_digest="e" * 64)
-    await _assert_rejected_before_consumption(
-        artifact,
+    evidence = _evidence(
         original,
-        policy=_required_policy(evidence),
-        evidence=evidence,
-        monkeypatch=monkeypatch,
+        endpoint_digest=value if field == "endpoint" else None,
+        target_configuration_digest=(
+            value if field == "target" else _TARGET_CONFIGURATION_DIGEST
+        ),
     )
-
-
-@pytest.mark.asyncio
-async def test_target_configuration_drift_fails_before_consumption(
-    consumable,
-    monkeypatch,
-):
-    artifact, original, _ = consumable
-    evidence = _evidence(original, target_configuration_digest="e" * 64)
+    trust_policy = _trust_policy()
+    proof = _proof(evidence, verified_at=original["now"], trust_policy=trust_policy)
     await _assert_rejected_before_consumption(
         artifact,
         original,
-        policy=_required_policy(evidence),
-        evidence=evidence,
+        policy=_required_policy(evidence, trust_policy),
+        proof=proof,
+        trust_policy=trust_policy,
         monkeypatch=monkeypatch,
     )
 
@@ -307,15 +450,38 @@ async def test_verifier_anchor_mismatch_fails_before_consumption(
     artifact, original, _ = consumable
     evidence = _evidence(
         original,
-        verifier_id="caller-declared-verifier",
-        verifier_policy_id="caller-declared-policy",
+        verifier_id="other-verifier",
+        verifier_policy_id="other-policy",
         verifier_policy_hash="e" * 64,
+    )
+    trust_policy = _trust_policy(
+        verifier_id="other-verifier",
+        verifier_policy_id="other-policy",
+        verifier_policy_hash="e" * 64,
+    )
+    proof = _proof(
+        evidence,
+        verified_at=original["now"],
+        verifier=_ControlledVerifier(
+            verifier_id="other-verifier",
+            verifier_policy_id="other-policy",
+            verifier_policy_hash="e" * 64,
+        ),
+        trust_policy=trust_policy,
+    )
+    policy = _required_policy(
+        evidence,
+        trust_policy,
+        expected_verifier_id=_VERIFIER_ID,
+        expected_verifier_policy_id=_VERIFIER_POLICY_ID,
+        expected_verifier_policy_hash=_VERIFIER_POLICY_HASH,
     )
     await _assert_rejected_before_consumption(
         artifact,
         original,
-        policy=_required_policy(evidence),
-        evidence=evidence,
+        policy=policy,
+        proof=proof,
+        trust_policy=trust_policy,
         monkeypatch=monkeypatch,
     )
 
@@ -327,14 +493,91 @@ async def test_evidence_digest_mismatch_fails_before_consumption(
 ):
     artifact, original, _ = consumable
     evidence = _evidence(original)
+    trust_policy = _trust_policy()
+    proof = _proof(evidence, verified_at=original["now"], trust_policy=trust_policy)
+    policy = _required_policy(
+        evidence,
+        trust_policy,
+        expected_evidence_digest="0" * 64,
+    )
     await _assert_rejected_before_consumption(
         artifact,
         original,
-        policy=_required_policy(
-            evidence,
-            expected_evidence_digest="0" * 64,
-        ),
-        evidence=evidence,
+        policy=policy,
+        proof=proof,
+        trust_policy=trust_policy,
+        monkeypatch=monkeypatch,
+    )
+
+
+@pytest.mark.asyncio
+async def test_trust_policy_anchor_mismatch_fails_before_consumption(
+    consumable,
+    monkeypatch,
+):
+    artifact, original, _ = consumable
+    evidence = _evidence(original)
+    trust_policy = _trust_policy()
+    proof = _proof(evidence, verified_at=original["now"], trust_policy=trust_policy)
+    policy = _required_policy(
+        evidence,
+        trust_policy,
+        expected_trust_policy_hash="0" * 64,
+    )
+    await _assert_rejected_before_consumption(
+        artifact,
+        original,
+        policy=policy,
+        proof=proof,
+        trust_policy=trust_policy,
+        expected_reason="NABC_RECONCILIATION_CAPABILITY_TRUST_POLICY_MISMATCH",
+        monkeypatch=monkeypatch,
+    )
+
+
+@pytest.mark.asyncio
+async def test_caller_constructed_verified_lookalike_fails_before_consumption(
+    consumable,
+    monkeypatch,
+):
+    artifact, original, _ = consumable
+    evidence = _evidence(original)
+    trust_policy = _trust_policy()
+    sealed = _proof(
+        evidence,
+        verified_at=original["now"],
+        trust_policy=trust_policy,
+    )
+    forged = VerifiedReconciliationCapabilityEvidence(
+        **sealed.model_dump(mode="json")
+    )
+    await _assert_rejected_before_consumption(
+        artifact,
+        original,
+        policy=_required_policy(evidence, trust_policy),
+        proof=forged,
+        trust_policy=trust_policy,
+        monkeypatch=monkeypatch,
+    )
+
+
+@pytest.mark.asyncio
+async def test_raw_evidence_is_rejected_even_beside_valid_sealed_proof(
+    consumable,
+    monkeypatch,
+):
+    artifact, original, _ = consumable
+    evidence = _evidence(original)
+    trust_policy = _trust_policy()
+    proof = _proof(evidence, verified_at=original["now"], trust_policy=trust_policy)
+    await _assert_rejected_before_consumption(
+        artifact,
+        original,
+        policy=_required_policy(evidence, trust_policy),
+        proof=proof,
+        trust_policy=trust_policy,
+        raw_evidence=evidence,
+        expected_reason="NABC_RECONCILIATION_CAPABILITY_RAW_EVIDENCE_NOT_ACCEPTED",
         monkeypatch=monkeypatch,
     )
 
@@ -346,6 +589,8 @@ async def test_incomplete_required_policy_fails_before_consumption(
 ):
     artifact, original, _ = consumable
     evidence = _evidence(original)
+    trust_policy = _trust_policy()
+    proof = _proof(evidence, verified_at=original["now"], trust_policy=trust_policy)
     policy = module.ReconciliationCapabilityExecutionPolicy(
         policy_id="reconciliation-required/v1",
         require_authoritative_reconciliation=True,
@@ -355,7 +600,8 @@ async def test_incomplete_required_policy_fails_before_consumption(
         artifact,
         original,
         policy=policy,
-        evidence=evidence,
+        proof=proof,
+        trust_policy=trust_policy,
         expected_reason="NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID",
         monkeypatch=monkeypatch,
     )
