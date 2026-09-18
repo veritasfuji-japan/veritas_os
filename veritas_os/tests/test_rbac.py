@@ -37,7 +37,8 @@ class TestPermissionEnum:
     def test_all_permissions_defined(self):
         expected = {
             "decide", "memory_read", "memory_write",
-            "trust_log_read", "governance_read", "governance_write",
+            "trust_log_read", "trust_feedback_write",
+            "governance_read", "governance_write",
             "config_write", "compliance_read",
         }
         assert {p.value for p in Permission} == expected
@@ -53,6 +54,7 @@ class TestRolePermissions:
             Permission.memory_read,
             Permission.memory_write,
             Permission.trust_log_read,
+            Permission.trust_feedback_write,
         }
         assert ROLE_PERMISSIONS[Role.operator] == frozenset(expected)
 
@@ -73,6 +75,7 @@ class TestRolePermissions:
 
     def test_auditor_cannot_write(self):
         assert Permission.memory_write not in ROLE_PERMISSIONS[Role.auditor]
+        assert Permission.trust_feedback_write not in ROLE_PERMISSIONS[Role.auditor]
         assert Permission.governance_write not in ROLE_PERMISSIONS[Role.auditor]
         assert Permission.config_write not in ROLE_PERMISSIONS[Role.auditor]
 
