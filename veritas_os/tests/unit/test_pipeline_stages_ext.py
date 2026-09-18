@@ -7392,6 +7392,7 @@ class TestPipelineUnusedImportsRemoved:
 
 from pathlib import Path
 
+from veritas_os.core.pipeline import pipeline_policy as pp
 from veritas_os.core.pipeline_policy import stage_fuji_precheck
 from veritas_os.core.pipeline_types import PipelineContext
 from veritas_os.policy.compiler import compile_policy_to_bundle
@@ -7399,12 +7400,27 @@ from veritas_os.policy.compiler import compile_policy_to_bundle
 EXAMPLES_DIR = Path("policies/examples")
 
 
-def test_pipeline_bridge_surfaces_compiled_policy_decision(tmp_path: Path) -> None:
+def _trust_compiled_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    bundle_dir: Path,
+) -> None:
+    monkeypatch.setattr(
+        pp,
+        "_resolve_trusted_runtime_bundle_dir",
+        lambda: bundle_dir.as_posix(),
+    )
+
+
+def test_pipeline_bridge_surfaces_compiled_policy_decision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     compiled = compile_policy_to_bundle(
         EXAMPLES_DIR / "external_tool_usage_denied.yaml",
         tmp_path,
         compiled_at="2026-03-28T00:00:00Z",
     )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="use external tool",
@@ -7426,12 +7442,16 @@ def test_pipeline_bridge_surfaces_compiled_policy_decision(tmp_path: Path) -> No
     assert governance["final_outcome"] == "deny"
 
 
-def test_pipeline_bridge_enforcement_updates_fuji_status(tmp_path: Path) -> None:
+def test_pipeline_bridge_enforcement_updates_fuji_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     compiled = compile_policy_to_bundle(
         EXAMPLES_DIR / "missing_mandatory_evidence_halt.yaml",
         tmp_path,
         compiled_at="2026-03-28T00:00:00Z",
     )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="critical decision",
@@ -7464,6 +7484,7 @@ def test_pipeline_bridge_warns_when_not_enforced(
         tmp_path,
         compiled_at="2026-03-28T00:00:00Z",
     )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="use external tool",
@@ -7488,13 +7509,17 @@ def test_pipeline_bridge_warns_when_not_enforced(
     assert "rollout_state=enforcement_disabled" in caplog.text
 
 
-def test_pipeline_bridge_enforcement_deny_sets_rejected(tmp_path: Path) -> None:
+def test_pipeline_bridge_enforcement_deny_sets_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Enforcement: deny outcome sets fuji_dict status to rejected."""
     compiled = compile_policy_to_bundle(
         EXAMPLES_DIR / "external_tool_usage_denied.yaml",
         tmp_path,
         compiled_at="2026-03-28T00:00:00Z",
     )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="use external tool",
@@ -7517,7 +7542,10 @@ def test_pipeline_bridge_enforcement_deny_sets_rejected(tmp_path: Path) -> None:
     assert "compiled_policy:deny" in ctx.fuji_dict["reasons"]
 
 
-def test_pipeline_bridge_enforcement_escalate_sets_modify(tmp_path: Path) -> None:
+def test_pipeline_bridge_enforcement_escalate_sets_modify(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Enforcement: escalate outcome sets fuji_dict status to modify."""
     from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
 
@@ -7550,6 +7578,11 @@ def test_pipeline_bridge_enforcement_escalate_sets_modify(tmp_path: Path) -> Non
 
     from unittest.mock import patch
 
+    monkeypatch.setattr(
+        pp,
+        "_resolve_trusted_runtime_bundle_dir",
+        lambda: "/mock/bundle",
+    )
     with patch(
         "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
         return_value=bundle,
@@ -7574,6 +7607,7 @@ def test_pipeline_bridge_enforcement_escalate_sets_modify(tmp_path: Path) -> Non
 
 def test_pipeline_bridge_enforcement_require_human_review_sets_modify(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Enforcement: require_human_review outcome sets fuji_dict status to modify."""
     compiled = compile_policy_to_bundle(
@@ -7581,6 +7615,7 @@ def test_pipeline_bridge_enforcement_require_human_review_sets_modify(
         tmp_path,
         compiled_at="2026-03-28T00:00:00Z",
     )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="high risk decision",
@@ -7614,10 +7649,7 @@ def test_pipeline_bridge_env_var_enforcement_fallback(
     )
 
     monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
-    monkeypatch.setenv(
-        "VERITAS_POLICY_RUNTIME_BUNDLE_DIR",
-        compiled.bundle_dir.as_posix(),
-    )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="use external tool",
@@ -7651,6 +7683,7 @@ def test_pipeline_bridge_string_false_enforcement_not_enforced(
         tmp_path,
         compiled_at="2026-03-28T00:00:00Z",
     )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="use external tool",
@@ -7674,7 +7707,9 @@ def test_pipeline_bridge_string_false_enforcement_not_enforced(
 
 
 def test_pipeline_bridge_enforcement_logs_audit_info(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Enforcement decisions emit INFO-level audit logs with policy details."""
     compiled = compile_policy_to_bundle(
@@ -7682,6 +7717,7 @@ def test_pipeline_bridge_enforcement_logs_audit_info(
         tmp_path,
         compiled_at="2026-03-28T00:00:00Z",
     )
+    _trust_compiled_bundle(monkeypatch, compiled.bundle_dir)
 
     ctx = PipelineContext(
         query="use external tool",
@@ -7755,6 +7791,11 @@ def test_pipeline_bridge_canary_rollout_skips_enforcement_outside_bucket(
         runtime_policies=[deny_policy],
     )
 
+    monkeypatch.setattr(
+        pp,
+        "_resolve_trusted_runtime_bundle_dir",
+        lambda: "/mock/bundle",
+    )
     with patch(
         "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
         return_value=bundle,
@@ -7780,7 +7821,9 @@ def test_pipeline_bridge_canary_rollout_skips_enforcement_outside_bucket(
     assert rollout["rollback"]["target_policy_version"] == "2026.03.20"
 
 
-def test_pipeline_bridge_canary_rollout_auto_promotes_to_full() -> None:
+def test_pipeline_bridge_canary_rollout_auto_promotes_to_full(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Canary strategy should auto-promote to full after full_enforce_after."""
     from unittest.mock import patch
 
@@ -7819,6 +7862,11 @@ def test_pipeline_bridge_canary_rollout_auto_promotes_to_full() -> None:
         runtime_policies=[deny_policy],
     )
 
+    monkeypatch.setattr(
+        pp,
+        "_resolve_trusted_runtime_bundle_dir",
+        lambda: "/mock/bundle",
+    )
     with patch(
         "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
         return_value=bundle,
