@@ -2333,6 +2333,11 @@ paths:
       responses:
         '200':
           description: Replay execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
         '403':
           description: External API execution requested at a replay-only boundary
           content:
