@@ -418,11 +418,6 @@ def load_runtime_bundle(
     if signing_algorithm not in {"ed25519", "sha256"}:
         raise ValueError("unsupported manifest signing algorithm")
 
-    if require_ed25519 and signing_algorithm != "ed25519":
-        raise ValueError(
-            "bundle does not use Ed25519 signing required by secure/prod posture"
-        )
-
     signature_path = root / "manifest.sig"
     verification = ManifestVerificationResult(
         integrity_verified=False,
@@ -441,6 +436,10 @@ def load_runtime_bundle(
             "only in non-strict legacy compatibility mode"
         )
     else:
+        if require_ed25519 and signing_algorithm != "ed25519":
+            raise ValueError(
+                "bundle does not use Ed25519 signing required by secure/prod posture"
+            )
         try:
             signature_text = signature_path.read_text(
                 encoding="utf-8"
@@ -456,6 +455,11 @@ def load_runtime_bundle(
         )
         if not verification.integrity_verified:
             raise ValueError("manifest signature verification failed")
+        if verification.algorithm == "sha256":
+            logger.warning(
+                "policy bundle loaded with legacy SHA-256 integrity only; "
+                "authenticity is not verified"
+            )
 
     payloads, contents_verified = _verify_declared_bundle_contents(
         root,
