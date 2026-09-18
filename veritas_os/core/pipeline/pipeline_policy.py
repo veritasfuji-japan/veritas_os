@@ -11,12 +11,15 @@ Handles:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import math
 import os
+import re
 import time
 from datetime import datetime, timezone
-import hashlib
+from pathlib import Path
 from typing import Any
 
 from veritas_os.policy.evaluator import evaluate_runtime_policies
@@ -115,24 +118,140 @@ def _is_rollout_auto_promoted(rollout_controls: dict[str, Any]) -> bool:
     return datetime.now(timezone.utc) >= full_after_dt
 
 
+def _server_policy_enforcement_required() -> bool:
+    """Resolve mandatory compiled-policy enforcement from trusted server state."""
+    raw = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE")
+    if raw is not None:
+        return _coerce_policy_enforce_flag(raw)
+    try:
+        from veritas_os.core.posture import get_active_posture
+
+        return bool(get_active_posture().policy_runtime_enforce)
+    except Exception as exc:
+        logger.error(
+            "unable to resolve trusted policy enforcement posture; failing closed: %s",
+            exc,
+            exc_info=True,
+        )
+        return True
+
+
+def _request_policy_enforcement_opt_in(ctx_dict: dict[str, Any]) -> bool:
+    """Allow a caller to request stricter enforcement, never to disable server policy."""
+    raw = ctx_dict.get("policy_runtime_enforce")
+    if raw is None:
+        return False
+    return _coerce_policy_enforce_flag(raw)
+
+
+def _trusted_policy_runtime_paths() -> tuple[Path, Path]:
+    """Return deployment runtime policy storage paths from central server config."""
+    from veritas_os.core.config import VeritasConfig
+
+    cfg = VeritasConfig()
+    runtime_root = cfg.runtime_root
+    if runtime_root is None:
+        raise ValueError("trusted runtime root is unavailable")
+    root = Path(runtime_root).expanduser().resolve()
+    return (root / "policy_bundles").resolve(), (root / "active_bundle.json").resolve()
+
+
+def _sanitize_policy_bundle_id(raw: Any) -> str:
+    """Return a path-safe bundle identifier or fail closed."""
+    value = str(raw or "").strip()
+    if not value:
+        raise ValueError("trusted policy bundle id is empty")
+    basename = os.path.basename(os.path.normpath(value))
+    if basename != value:
+        raise ValueError("trusted policy bundle id contains path components")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", basename):
+        raise ValueError("trusted policy bundle id has invalid characters")
+    return basename
+
+
+def _bundle_id_from_pointer(pointer: dict[str, Any]) -> str:
+    """Resolve the active bundle id without trusting a pointer-supplied path."""
+    explicit_id = pointer.get("active_bundle_id")
+    if explicit_id:
+        return _sanitize_policy_bundle_id(explicit_id)
+
+    legacy_dir = str(pointer.get("active_bundle_dir") or "").strip()
+    if not legacy_dir:
+        raise ValueError("trusted policy active pointer has no active bundle")
+    # Legacy pointers store an absolute directory. Only its final component is
+    # accepted as an identifier; the directory path itself is never opened.
+    return _sanitize_policy_bundle_id(os.path.basename(os.path.normpath(legacy_dir)))
+
+
+def _resolve_trusted_runtime_bundle_dir() -> str | None:
+    """Resolve a policy bundle from trusted runtime storage by bundle id only.
+
+    Request context is excluded entirely. Deployment may select a bundle by
+    VERITAS_POLICY_RUNTIME_BUNDLE_ID or by the bind-controlled active pointer
+    under the central runtime root. Pointer paths are never used as filesystem
+    capabilities.
+    """
+    bundles_root, pointer_path = _trusted_policy_runtime_paths()
+
+    configured_id = (os.getenv("VERITAS_POLICY_RUNTIME_BUNDLE_ID") or "").strip()
+    if configured_id:
+        bundle_id = _sanitize_policy_bundle_id(configured_id)
+    else:
+        if not pointer_path.exists():
+            return None
+        try:
+            pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+            raise ValueError("trusted policy active pointer is unreadable") from exc
+        if not isinstance(pointer, dict):
+            raise ValueError("trusted policy active pointer must be an object")
+        bundle_id = _bundle_id_from_pointer(pointer)
+
+    candidate = (bundles_root / bundle_id).resolve()
+    try:
+        candidate.relative_to(bundles_root)
+    except ValueError as exc:
+        raise ValueError("trusted policy bundle escapes policy storage root") from exc
+    return str(candidate)
+
+
+def _mark_compiled_policy_fail_closed(
+    ctx: PipelineContext,
+    *,
+    reason: str,
+) -> None:
+    """Reject when mandatory compiled-policy evaluation cannot be established."""
+    if not isinstance(ctx.fuji_dict, dict):
+        ctx.fuji_dict = {}
+    ctx.fuji_dict["status"] = "rejected"
+    reasons = ctx.fuji_dict.setdefault("reasons", [])
+    if not isinstance(reasons, list):
+        reasons = []
+        ctx.fuji_dict["reasons"] = reasons
+    code = f"compiled_policy:{reason}"
+    if code not in reasons:
+        reasons.append(code)
+
+    governance = ctx.response_extras.setdefault("governance", {})
+    if not isinstance(governance, dict):
+        governance = {}
+        ctx.response_extras["governance"] = governance
+    governance["compiled_policy_rollout"] = {
+        "enforced": True,
+        "state": "fail_closed",
+        "rollback": {},
+    }
+    governance["compiled_policy_error"] = {"reason": reason}
+
+
 def _is_enforcement_enabled_for_rollout(
     ctx_dict: dict[str, Any],
     decision: dict[str, Any],
 ) -> tuple[bool, str]:
-    """Resolve runtime enforcement state with canary/full rollout control."""
-    enforce = ctx_dict.get("policy_runtime_enforce")
-    if enforce is None:
-        raw = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE")
-        if raw is not None:
-            enforce = raw
-        else:
-            # Fall back to posture-derived default.
-            try:
-                from veritas_os.core.posture import get_active_posture
-                enforce = get_active_posture().policy_runtime_enforce
-            except Exception:
-                enforce = ""
-    if not _coerce_policy_enforce_flag(enforce):
+    """Resolve enforcement without allowing request input to weaken server policy."""
+    server_required = _server_policy_enforcement_required()
+    request_opt_in = _request_policy_enforcement_opt_in(ctx_dict)
+    if not server_required and not request_opt_in:
         return False, "enforcement_disabled"
 
     rollout_controls = _resolve_rollout_controls(decision)
@@ -154,13 +273,27 @@ def _is_enforcement_enabled_for_rollout(
             )
             canary_percent = 0
         canary_percent = max(0, min(100, canary_percent))
-        bucket_key = str(
-            ctx_dict.get("policy_rollout_key")
-            or ctx_dict.get("request_id")
-            or ctx_dict.get("trace_id")
-            or ctx_dict.get("actor")
-            or ""
-        )
+
+        if server_required:
+            bucket_key = (os.getenv("VERITAS_POLICY_ROLLOUT_KEY") or "").strip()
+            if not bucket_key:
+                logger.warning(
+                    "mandatory policy canary has no trusted rollout key; "
+                    "defaulting to full enforcement"
+                )
+                return True, "full_no_trusted_rollout_key"
+        else:
+            # Request-derived identifiers are only allowed for an additive,
+            # caller-requested enforcement experiment. They can never weaken
+            # deployment-mandated enforcement.
+            bucket_key = str(
+                ctx_dict.get("policy_rollout_key")
+                or ctx_dict.get("request_id")
+                or ctx_dict.get("trace_id")
+                or ctx_dict.get("actor")
+                or ""
+            )
+
         ratio = _deterministic_bucket_ratio(bucket_key)
         in_canary = ratio < (canary_percent / 100.0)
         if not in_canary:
@@ -175,24 +308,51 @@ def _is_enforcement_enabled_for_rollout(
 
 
 def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
-    """Evaluate optional compiled policy bundle and expose structured output.
+    """Evaluate compiled policy without trusting request-controlled enforcement state.
 
-    Integration point:
-    - `ctx.context["compiled_policy_bundle_dir"]` may point to a compiled bundle.
-    - Result is written to `ctx.response_extras["governance"]["compiled_policy"]`.
-    - Enforcement is opt-in via `ctx.context["policy_runtime_enforce"]`.
+    Deployment-controlled configuration selects the mandatory bundle and decides
+    whether enforcement is required. Request context may opt into stricter
+    enforcement in non-mandatory environments, but it cannot opt out of
+    deployment-mandated policy or replace its trusted bundle.
     """
-    bundle_dir = (ctx.context or {}).get("compiled_policy_bundle_dir")
-    if not bundle_dir:
-        return
-
     ctx_dict = ctx.context or {}
+    server_required = _server_policy_enforcement_required()
+    request_opt_in = _request_policy_enforcement_opt_in(ctx_dict)
+    enforcement_requested = server_required or request_opt_in
+
+    try:
+        trusted_bundle_dir = _resolve_trusted_runtime_bundle_dir()
+    except ValueError as exc:
+        logger.error("trusted compiled policy bundle resolution failed: %s", exc)
+        if server_required:
+            _mark_compiled_policy_fail_closed(
+                ctx,
+                reason="required_bundle_unavailable",
+            )
+            return
+        trusted_bundle_dir = None
+
+    # Bundle selection is never request-controlled. A caller may request
+    # stricter enforcement, but the evaluated policy is always selected from
+    # deployment-controlled runtime storage.
+    bundle_dir = trusted_bundle_dir
+
+    if not bundle_dir:
+        if enforcement_requested:
+            logger.error("mandatory compiled policy bundle is unavailable")
+            _mark_compiled_policy_fail_closed(
+                ctx,
+                reason="required_bundle_unavailable",
+            )
+        return
 
     try:
         runtime_bundle = load_runtime_bundle(bundle_dir)
         decision = evaluate_runtime_policies(runtime_bundle, ctx_dict).to_dict()
     except (OSError, ValueError) as exc:
         logger.warning("compiled policy runtime bridge failed: %s", exc)
+        if enforcement_requested:
+            _mark_compiled_policy_fail_closed(ctx, reason="runtime_unavailable")
         return
     except (TypeError, KeyError) as exc:
         logger.error(
@@ -200,6 +360,8 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
             exc,
             exc_info=True,
         )
+        if enforcement_requested:
+            _mark_compiled_policy_fail_closed(ctx, reason="runtime_unavailable")
         return
 
     governance = ctx.response_extras.setdefault("governance", {})
@@ -239,7 +401,7 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
         if outcome in {"deny", "halt", "escalate", "require_human_review"}:
             logger.warning(
                 "compiled policy outcome=%s observed but not enforced "
-                "(policy_runtime_enforce=false, rollout_state=%s)",
+                "(rollout_state=%s)",
                 outcome,
                 rollout_state,
             )
@@ -265,7 +427,6 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
             outcome,
             decision.get("triggered_policies", []),
         )
-
 
 def stage_fuji_precheck(ctx: PipelineContext) -> None:
     """Run FUJI policy pre‑check and merge with existing fuji_dict."""

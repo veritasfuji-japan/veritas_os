@@ -38,7 +38,8 @@ def test_rollout_enforcement_canary_skip_when_bucket_outside_percent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Canary rollout should be skipped when deterministic bucket is outside target."""
-    monkeypatch.setattr(pp, "_coerce_policy_enforce_flag", lambda _raw: True)
+    monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
+    monkeypatch.setenv("VERITAS_POLICY_ROLLOUT_KEY", "server-controlled-plan9")
     monkeypatch.setattr(pp, "_deterministic_bucket_ratio", lambda _key: 0.9)
 
     decision = {
@@ -71,6 +72,7 @@ def test_apply_compiled_policy_runtime_bridge_handles_non_dict_governance(
         def to_dict() -> dict[str, Any]:
             return {"final_outcome": "allow", "policy_results": []}
 
+    monkeypatch.setattr(pp, "_resolve_trusted_runtime_bundle_dir", lambda: "/tmp/bundle")
     monkeypatch.setattr(pp, "load_runtime_bundle", lambda _path: object())
     monkeypatch.setattr(pp, "evaluate_runtime_policies", lambda _bundle, _ctx: _Decision())
 
