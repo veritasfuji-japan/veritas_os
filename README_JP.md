@@ -1797,7 +1797,7 @@ make validate
 |---|---|---|
 | `VERITAS_POLICY_VERIFY_KEY` | — | ポリシーバンドル署名検証用Ed25519公開鍵PEMファイルのパス |
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` | コンパイル済みポリシー判定のランタイム適用を有効化。リクエスト入力でサーバー必須適用を解除不可 |
-| `VERITAS_POLICY_RUNTIME_BUNDLE_DIR` | — | 必須ランタイム適用時に使用するdeployment-controlledなポリシーバンドルパス |
+| `VERITAS_POLICY_RUNTIME_BUNDLE_ID` | — | `<VERITAS_RUNTIME_ROOT>/policy_bundles` 配下から選ぶdeployment-controlledなbundle ID。リクエスト由来pathは使用しない |
 | `VERITAS_POLICY_ROLLOUT_KEY` | — | canary/staged用のサーバー管理bucket key。必須適用時に未設定ならfull enforcementへfail-safe |
 | `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Ed25519署名検証を必須化。鍵未設定時にマニフェストを拒否 |
 
