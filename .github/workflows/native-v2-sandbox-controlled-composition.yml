@@ -137,7 +137,7 @@ jobs:
           assert report["decision_lineage_source"] == "SIGNED_SYNTHETIC_NATIVE_FIXTURE"
           assert report["main_postgresql"] is True
           assert report["sandbox_postgresql"] is True
-          assert report["alembic_head"] == "0008"
+          assert report["alembic_head"] == "0009"
           assert report["real_tls_transport"] is True
           assert report["writer_reader_credentials_distinct"] is True
           assert report["dispatch_intent_state"] == "EFFECT_UNKNOWN"
