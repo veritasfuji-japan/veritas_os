@@ -275,12 +275,14 @@ class TestTrustFeedback:
         assert response.status_code == 200
         data = response.json()
         
-        # レスポンス確認
+        # レスポンス確認: caller-supplied user_id cannot replace
+        # the authenticated principal at the trust-write boundary.
+        scoped_user = server._derive_api_user_id("test-key")
         assert data["ok"] is True
-        assert data["user_id"] == "feedback_user"
+        assert data["user_id"] == scoped_user
 
-        # コア関数が正しく呼ばれているか確認
-        assert called["user_id"] == "feedback_user"
+        # コア関数が認証principalで呼ばれているか確認
+        assert called["user_id"] == scoped_user
         assert called["score"] == 0.9
         assert called["note"] == "テスト用フィードバック"
         assert called["source"] == "unit-test"
