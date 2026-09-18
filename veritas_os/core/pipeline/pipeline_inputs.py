@@ -287,6 +287,7 @@ def normalize_pipeline_inputs(
         body=body,
         query=query,
         user_id=user_id,
+        authenticated_principal_id=principal_id or None,
         request_id=request_id,
         fast_mode=fast_mode,
         replay_mode=replay_mode,
