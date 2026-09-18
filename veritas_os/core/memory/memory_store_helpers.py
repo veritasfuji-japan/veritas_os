@@ -298,18 +298,23 @@ def put_episode_record(
     **kwargs: Any,
 ) -> str:
     """Persist an episodic record while keeping optional vector fallback safe."""
+    trusted_user_id = kwargs.pop("user_id", None)
+    record_meta: Dict[str, Any] = dict(meta or {})
+    if trusted_user_id not in (None, ""):
+        record_meta["user_id"] = str(trusted_user_id)
+
     record: Dict[str, Any] = {
         "text": text,
         "tags": tags or [],
-        "meta": meta or {},
+        "meta": record_meta,
     }
     for key, value in kwargs.items():
         if key not in record:
             record[key] = value
 
-    user_id = (record.get("meta") or {}).get("user_id", "episodic")
+    owner_user_id = (record.get("meta") or {}).get("user_id", "episodic")
     key = f"episode_{int(time_module.time())}"
-    store.put(user_id, key, record)
+    store.put(owner_user_id, key, record)
 
     if mem_vec is not None:
         try:
