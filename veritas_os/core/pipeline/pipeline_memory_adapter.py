@@ -63,7 +63,14 @@ def _call_with_accepted_kwargs(fn: Any, kwargs: Dict[str, Any]) -> Any:
     """
     try:
         sig = inspect.signature(fn)
-        accepted = set(sig.parameters.keys())
+        parameters = sig.parameters
+        accepts_var_kwargs = any(
+            param.kind is inspect.Parameter.VAR_KEYWORD
+            for param in parameters.values()
+        )
+        if accepts_var_kwargs:
+            return fn(**kwargs)
+        accepted = set(parameters.keys())
         filtered = {k: v for k, v in kwargs.items() if k in accepted}
         return fn(**filtered)
     except Exception:
