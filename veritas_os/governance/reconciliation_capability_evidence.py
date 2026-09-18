@@ -1,20 +1,21 @@
-"""Non-enforcing downstream reconciliation capability evidence.
+"""Downstream reconciliation capability evidence and verifier trust boundary.
 
-This module records whether a downstream execution target exposes a trustworthy
-path for resolving ``EFFECT_UNKNOWN``.  The artifact is descriptive evidence
-only: it does not create execution eligibility, execution permission, retry
-permission, or a terminal external-effect claim.
+Raw reconciliation capability artifacts remain descriptive evidence only. They
+do not authenticate themselves and do not create execution eligibility,
+execution permission, retry permission, or a terminal external-effect claim.
 
-The runtime execution path does not consume this artifact in v1.  Any future use
-as an execution-eligibility precondition requires a separate architecture
-decision and proof update.
+A deployment-controlled verifier may seal one raw artifact into
+``VerifiedReconciliationCapabilityEvidence``. Runtime enforcement must validate
+that sealed proof against independently configured verifier trust before relying
+on the underlying capability classification.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -167,6 +168,344 @@ class ReconciliationCapabilityEvidence(BaseModel):
     def deterministic_digest(self) -> str:
         """Return stable content identity for this non-authorizing artifact."""
         return sha256_of_canonical_json(self.model_dump(mode="json"))
+
+
+RECONCILIATION_CAPABILITY_VERIFICATION_SOURCE = (
+    "reconciliation_capability_evidence_verifier"
+)
+_VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY: dict[int, str] = {}
+
+
+@dataclass(frozen=True)
+class ReconciliationCapabilityVerificationResult:
+    """Result emitted by a deployment-controlled capability verifier."""
+
+    verified: bool
+    evidence_digest: str | None = None
+    verifier_id: str | None = None
+    verifier_policy_id: str | None = None
+    verifier_policy_hash: str | None = None
+    verification_material_digest: str | None = None
+    semantic_consistent: bool = False
+    reason: str | None = None
+
+
+class ReconciliationCapabilityEvidenceVerifier(Protocol):
+    """Verifier seam owned by deployment policy, never by request data."""
+
+    def verify(
+        self,
+        evidence: ReconciliationCapabilityEvidence,
+    ) -> ReconciliationCapabilityVerificationResult:
+        """Authenticate and assess one normalized capability artifact."""
+        ...
+
+
+@dataclass(frozen=True)
+class ApprovedReconciliationCapabilityVerifier:
+    """Deployment-owned verifier/policy binding."""
+
+    verifier_id: str
+    verifier_policy_id: str
+    verifier_policy_hash: str
+
+
+@dataclass(frozen=True)
+class ReconciliationCapabilityVerifierTrustPolicy:
+    """Independent trust policy for capability verification."""
+
+    policy_id: str
+    approved_verifiers: tuple[ApprovedReconciliationCapabilityVerifier, ...]
+
+    def approved(
+        self,
+        verifier_id: str,
+    ) -> ApprovedReconciliationCapabilityVerifier | None:
+        """Return the exact configured verifier binding, if approved."""
+        return next(
+            (
+                item
+                for item in self.approved_verifiers
+                if item.verifier_id == verifier_id
+            ),
+            None,
+        )
+
+    def deterministic_hash(self) -> str:
+        """Return stable identity for the configured verifier trust."""
+        return sha256_of_canonical_json(
+            {
+                "policy_id": self.policy_id,
+                "approved_verifiers": sorted(
+                    (
+                        {
+                            "verifier_id": item.verifier_id,
+                            "verifier_policy_id": item.verifier_policy_id,
+                            "verifier_policy_hash": item.verifier_policy_hash,
+                        }
+                        for item in self.approved_verifiers
+                    ),
+                    key=lambda item: item["verifier_id"],
+                ),
+            }
+        )
+
+
+class VerifiedReconciliationCapabilityEvidence(BaseModel):
+    """Runtime-sealed capability proof; still never execution authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    format_version: Literal["verified-reconciliation-capability-evidence/v1"] = (
+        "verified-reconciliation-capability-evidence/v1"
+    )
+    artifact_type: Literal["verified_reconciliation_capability_evidence"] = (
+        "verified_reconciliation_capability_evidence"
+    )
+    artifact_version: Literal["v1"] = "v1"
+
+    evidence: ReconciliationCapabilityEvidence
+    evidence_digest: str = Field(pattern=_HASH)
+    verifier_id: str = Field(min_length=1)
+    verifier_policy_id: str = Field(min_length=1)
+    verifier_policy_hash: str = Field(pattern=_HASH)
+    trust_policy_id: str = Field(min_length=1)
+    trust_policy_hash: str = Field(pattern=_HASH)
+    verification_material_digest: str = Field(pattern=_HASH)
+    verified_at: str = Field(min_length=1)
+    verification_reason: str = Field(min_length=1)
+    verification_source: Literal[
+        "reconciliation_capability_evidence_verifier"
+    ] = RECONCILIATION_CAPABILITY_VERIFICATION_SOURCE
+    verification_proof_hash: str = Field(pattern=_HASH)
+
+    execution_eligibility_decision_created: Literal[False] = False
+    execution_permission_created: Literal[False] = False
+    retry_permission_created: Literal[False] = False
+    terminal_effect_claim_created: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_proof_shape(self) -> "VerifiedReconciliationCapabilityEvidence":
+        """Validate deterministic internal bindings without trusting the proof."""
+        _parse_aware_timestamp(
+            self.verified_at,
+            "reconciliation_capability_verified_at_invalid",
+        )
+        if self.evidence_digest != self.evidence.deterministic_digest():
+            raise ValueError("reconciliation_capability_verified_evidence_mismatch")
+        return self
+
+    def proof_hash_payload(self) -> dict[str, Any]:
+        """Return the exact payload sealed by the runtime helper."""
+        payload = self.model_dump(mode="json")
+        payload.pop("verification_proof_hash", None)
+        return payload
+
+    def deterministic_digest(self) -> str:
+        """Return stable identity for the sealed proof artifact."""
+        return sha256_of_canonical_json(self.model_dump(mode="json"))
+
+
+def _validate_hash_value(value: str | None, reason: str) -> None:
+    if not isinstance(value, str) or len(value) != 64:
+        raise ValueError(reason)
+    try:
+        int(value, 16)
+    except ValueError as exc:
+        raise ValueError(reason) from exc
+    if value != value.lower():
+        raise ValueError(reason)
+
+
+def _validate_verifier_trust_policy(
+    policy: ReconciliationCapabilityVerifierTrustPolicy,
+) -> None:
+    if type(policy) is not ReconciliationCapabilityVerifierTrustPolicy:
+        raise ValueError("reconciliation_capability_verifier_trust_policy_invalid")
+    if not policy.policy_id.strip() or not policy.approved_verifiers:
+        raise ValueError("reconciliation_capability_verifier_trust_policy_invalid")
+
+    verifier_ids: set[str] = set()
+    for item in policy.approved_verifiers:
+        if (
+            type(item) is not ApprovedReconciliationCapabilityVerifier
+            or not item.verifier_id.strip()
+            or not item.verifier_policy_id.strip()
+        ):
+            raise ValueError(
+                "reconciliation_capability_verifier_trust_policy_invalid"
+            )
+        _validate_hash_value(
+            item.verifier_policy_hash,
+            "reconciliation_capability_verifier_trust_policy_invalid",
+        )
+        if item.verifier_id in verifier_ids:
+            raise ValueError(
+                "reconciliation_capability_verifier_trust_policy_invalid"
+            )
+        verifier_ids.add(item.verifier_id)
+
+
+def verify_reconciliation_capability_evidence_to_proof(
+    evidence: ReconciliationCapabilityEvidence,
+    *,
+    verifier: ReconciliationCapabilityEvidenceVerifier,
+    trust_policy: ReconciliationCapabilityVerifierTrustPolicy,
+    verified_at: datetime,
+) -> VerifiedReconciliationCapabilityEvidence:
+    """Verify and runtime-seal one non-authorizing capability artifact."""
+    if type(evidence) is not ReconciliationCapabilityEvidence:
+        raise ValueError("reconciliation_capability_evidence_required")
+    if verified_at.tzinfo is None or verified_at.utcoffset() is None:
+        raise ValueError("reconciliation_capability_verified_at_invalid")
+    _validate_verifier_trust_policy(trust_policy)
+
+    result = verifier.verify(evidence)
+    if type(result) is not ReconciliationCapabilityVerificationResult:
+        raise ValueError("reconciliation_capability_verification_result_invalid")
+    if not result.verified:
+        raise ValueError("reconciliation_capability_verification_failed")
+    if not result.semantic_consistent:
+        raise ValueError("reconciliation_capability_verification_inconsistent")
+
+    evidence_digest = evidence.deterministic_digest()
+    if result.evidence_digest != evidence_digest:
+        raise ValueError("reconciliation_capability_verified_evidence_mismatch")
+
+    verifier_values = (
+        result.verifier_id,
+        result.verifier_policy_id,
+        result.verifier_policy_hash,
+    )
+    if not all(isinstance(value, str) and value.strip() for value in verifier_values):
+        raise ValueError("reconciliation_capability_verified_verifier_missing")
+    _validate_hash_value(
+        result.verifier_policy_hash,
+        "reconciliation_capability_verified_verifier_invalid",
+    )
+    _validate_hash_value(
+        result.verification_material_digest,
+        "reconciliation_capability_verification_material_invalid",
+    )
+
+    approved = trust_policy.approved(str(result.verifier_id))
+    if approved is None:
+        raise ValueError("reconciliation_capability_verifier_unapproved")
+    if (
+        approved.verifier_policy_id,
+        approved.verifier_policy_hash,
+    ) != (
+        result.verifier_policy_id,
+        result.verifier_policy_hash,
+    ):
+        raise ValueError("reconciliation_capability_verifier_binding_mismatch")
+
+    declared = (
+        evidence.verifier_id,
+        evidence.verifier_policy_id,
+        evidence.verifier_policy_hash,
+    )
+    if any(value is not None for value in declared) and declared != verifier_values:
+        raise ValueError("reconciliation_capability_verifier_declaration_mismatch")
+
+    proof_data = {
+        "evidence": evidence,
+        "evidence_digest": evidence_digest,
+        "verifier_id": str(result.verifier_id),
+        "verifier_policy_id": str(result.verifier_policy_id),
+        "verifier_policy_hash": str(result.verifier_policy_hash),
+        "trust_policy_id": trust_policy.policy_id,
+        "trust_policy_hash": trust_policy.deterministic_hash(),
+        "verification_material_digest": str(result.verification_material_digest),
+        "verified_at": verified_at.isoformat(),
+        "verification_reason": str(result.reason or "verified"),
+        "verification_source": RECONCILIATION_CAPABILITY_VERIFICATION_SOURCE,
+    }
+    temporary = VerifiedReconciliationCapabilityEvidence(
+        **proof_data,
+        verification_proof_hash="0" * 64,
+    )
+    proof_hash = sha256_of_canonical_json(temporary.proof_hash_payload())
+    proof = VerifiedReconciliationCapabilityEvidence(
+        **proof_data,
+        verification_proof_hash=proof_hash,
+    )
+    _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY[id(proof)] = proof_hash
+    return proof
+
+
+def validate_verified_reconciliation_capability_evidence(
+    proof: VerifiedReconciliationCapabilityEvidence,
+    *,
+    trust_policy: ReconciliationCapabilityVerifierTrustPolicy,
+    current_endpoint_identity_binding_digest: str,
+    current_target_configuration_digest: str,
+    verification_time: datetime,
+    require_authoritative: bool = False,
+    expected_evidence_digest: str | None = None,
+) -> list[str]:
+    """Revalidate runtime seal, verifier trust, and current target bindings."""
+    if type(proof) is not VerifiedReconciliationCapabilityEvidence:
+        return ["reconciliation_capability_verified_proof_required"]
+    if verification_time.tzinfo is None or verification_time.utcoffset() is None:
+        raise ValueError("reconciliation_capability_verification_time_invalid")
+
+    try:
+        _validate_verifier_trust_policy(trust_policy)
+    except ValueError as exc:
+        return [str(exc)]
+
+    failures: list[str] = []
+    expected_proof_hash = sha256_of_canonical_json(proof.proof_hash_payload())
+    if (
+        proof.verification_proof_hash != expected_proof_hash
+        or _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY.get(id(proof))
+        != expected_proof_hash
+    ):
+        failures.append("reconciliation_capability_verification_proof_invalid")
+
+    if proof.evidence_digest != proof.evidence.deterministic_digest():
+        failures.append("reconciliation_capability_verified_evidence_mismatch")
+    if proof.trust_policy_id != trust_policy.policy_id:
+        failures.append("reconciliation_capability_trust_policy_id_mismatch")
+    if proof.trust_policy_hash != trust_policy.deterministic_hash():
+        failures.append("reconciliation_capability_trust_policy_hash_mismatch")
+
+    approved = trust_policy.approved(proof.verifier_id)
+    if approved is None:
+        failures.append("reconciliation_capability_verifier_unapproved")
+    elif (
+        approved.verifier_policy_id,
+        approved.verifier_policy_hash,
+    ) != (
+        proof.verifier_policy_id,
+        proof.verifier_policy_hash,
+    ):
+        failures.append("reconciliation_capability_verifier_binding_mismatch")
+
+    verified_at = _parse_aware_timestamp(
+        proof.verified_at,
+        "reconciliation_capability_verified_at_invalid",
+    )
+    if verified_at > verification_time:
+        failures.append("reconciliation_capability_verification_from_future")
+
+    failures.extend(
+        validate_reconciliation_capability_for_current_target(
+            proof.evidence,
+            current_endpoint_identity_binding_digest=(
+                current_endpoint_identity_binding_digest
+            ),
+            current_target_configuration_digest=current_target_configuration_digest,
+            verification_time=verification_time,
+            require_authoritative=require_authoritative,
+            expected_verifier_id=proof.verifier_id,
+            expected_verifier_policy_id=proof.verifier_policy_id,
+            expected_verifier_policy_hash=proof.verifier_policy_hash,
+            expected_evidence_digest=expected_evidence_digest,
+        )
+    )
+    return failures
 
 def validate_reconciliation_capability_for_current_target(
     evidence: ReconciliationCapabilityEvidence,
