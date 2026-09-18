@@ -22,8 +22,12 @@ from typing import Any
 import pytest
 
 from veritas_os.governance.reconciliation_capability_evidence import (
+    ApprovedReconciliationCapabilityVerifier,
     ReconciliationCapabilityClass,
     ReconciliationCapabilityEvidence,
+    ReconciliationCapabilityVerificationResult,
+    ReconciliationCapabilityVerifierTrustPolicy,
+    verify_reconciliation_capability_evidence_to_proof,
 )
 from veritas_os.policy import native_bind_authorization_consumption as consumption
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
@@ -60,6 +64,7 @@ BLOCKED_PAYLOAD = {
 POLICY_ID = "reconciliation-capable-execution-profile/v1"
 VERIFIER_ID = "reconciliation-capability-verifier/profile-proof-v1"
 VERIFIER_POLICY_ID = "reconciliation-capability-policy/profile-proof-v1"
+TRUST_POLICY_ID = "reconciliation-capability-trust/profile-proof-v1"
 VERIFIER_POLICY_HASH = sha256_of_canonical_json(
     {
         "domain": "veritas.reconciliation-capability-verifier-policy/v1",
@@ -71,6 +76,62 @@ VERIFIER_POLICY_HASH = sha256_of_canonical_json(
         ],
     }
 )
+
+
+class ControlledCapabilityVerifier:
+    """CI-only verifier representing the deployment-owned capability seam."""
+
+    def verify(
+        self,
+        evidence: ReconciliationCapabilityEvidence,
+    ) -> ReconciliationCapabilityVerificationResult:
+        evidence_digest = evidence.deterministic_digest()
+        material = sha256_of_canonical_json(
+            {
+                "domain": "veritas.controlled-capability-verification/v1",
+                "evidence_digest": evidence_digest,
+                "verifier_id": VERIFIER_ID,
+                "verifier_policy_id": VERIFIER_POLICY_ID,
+                "verifier_policy_hash": VERIFIER_POLICY_HASH,
+            }
+        )
+        return ReconciliationCapabilityVerificationResult(
+            verified=True,
+            evidence_digest=evidence_digest,
+            verifier_id=VERIFIER_ID,
+            verifier_policy_id=VERIFIER_POLICY_ID,
+            verifier_policy_hash=VERIFIER_POLICY_HASH,
+            verification_material_digest=material,
+            semantic_consistent=True,
+            reason="controlled-profile-verification",
+        )
+
+
+def _verifier_trust_policy() -> ReconciliationCapabilityVerifierTrustPolicy:
+    return ReconciliationCapabilityVerifierTrustPolicy(
+        policy_id=TRUST_POLICY_ID,
+        approved_verifiers=(
+            ApprovedReconciliationCapabilityVerifier(
+                verifier_id=VERIFIER_ID,
+                verifier_policy_id=VERIFIER_POLICY_ID,
+                verifier_policy_hash=VERIFIER_POLICY_HASH,
+            ),
+        ),
+    )
+
+
+def _verified_capability_proof(
+    evidence: ReconciliationCapabilityEvidence,
+    *,
+    verified_at: datetime,
+    trust_policy: ReconciliationCapabilityVerifierTrustPolicy,
+):
+    return verify_reconciliation_capability_evidence_to_proof(
+        evidence,
+        verifier=ControlledCapabilityVerifier(),
+        trust_policy=trust_policy,
+        verified_at=verified_at,
+    )
 
 
 def _target_configuration_digest(case: dict[str, Any]) -> str:
@@ -168,6 +229,7 @@ def _capability_evidence(
 def _required_policy(
     case: dict[str, Any],
     evidence: ReconciliationCapabilityEvidence,
+    trust_policy: ReconciliationCapabilityVerifierTrustPolicy,
 ) -> consumption.ReconciliationCapabilityExecutionPolicy:
     return consumption.ReconciliationCapabilityExecutionPolicy(
         policy_id=POLICY_ID,
@@ -177,6 +239,8 @@ def _required_policy(
         expected_verifier_policy_id=VERIFIER_POLICY_ID,
         expected_verifier_policy_hash=VERIFIER_POLICY_HASH,
         expected_evidence_digest=evidence.deterministic_digest(),
+        expected_trust_policy_id=trust_policy.policy_id,
+        expected_trust_policy_hash=trust_policy.deterministic_hash(),
     )
 
 
@@ -194,7 +258,13 @@ async def _consume_with_required_capability(
         now=consume_at,
         capability_class=ReconciliationCapabilityClass.AUTHORITATIVE_QUERY,
     )
-    policy = _required_policy(case, evidence)
+    trust_policy = _verifier_trust_policy()
+    proof = _verified_capability_proof(
+        evidence,
+        verified_at=consume_at,
+        trust_policy=trust_policy,
+    )
+    policy = _required_policy(case, evidence, trust_policy)
 
     result = await consumption.consume_native_bind_authorization(
         artifact,
@@ -206,7 +276,8 @@ async def _consume_with_required_capability(
         now=consume_at,
         consumption_store=store,
         reconciliation_capability_policy=policy,
-        reconciliation_capability_evidence=evidence,
+        reconciliation_capability_proof=proof,
+        reconciliation_capability_trust_policy=trust_policy,
     )
     assert result.reconciliation_capability_required is True
     assert result.reconciliation_capability_satisfied is True
@@ -219,6 +290,7 @@ async def _consume_with_required_capability(
     gate_capture[artifact.authorization_id] = {
         "policy": asdict(policy),
         "capability_evidence": evidence.model_dump(mode="json"),
+        "verified_capability_proof": proof.model_dump(mode="json"),
         "result": {
             "authorization_consumed": result.authorization_consumed,
             "reconciliation_capability_required": (
@@ -232,6 +304,9 @@ async def _consume_with_required_capability(
             ),
             "reconciliation_capability_evidence_digest": (
                 result.reconciliation_capability_evidence_digest
+            ),
+            "reconciliation_capability_verification_proof_hash": (
+                result.reconciliation_capability_verification_proof_hash
             ),
             "execution_authority_created": result.execution_authority_created,
             "external_action_executed": result.external_action_executed,
@@ -250,6 +325,7 @@ async def _assert_blocked_before_consumption(
     store = PostgresAtomicAuthorizationConsumptionStore()
     now = datetime.now(UTC)
     current_risk, current_source, _ = _current_inputs(case, now)
+    trust_policy = _verifier_trust_policy()
 
     authoritative = _capability_evidence(
         case,
@@ -257,17 +333,31 @@ async def _assert_blocked_before_consumption(
         capability_class=ReconciliationCapabilityClass.AUTHORITATIVE_QUERY,
     )
     if mode == "missing":
-        evidence = None
-        policy = _required_policy(case, authoritative)
-        expected_reason = "NABC_RECONCILIATION_CAPABILITY_REQUIRED"
+        evidence = authoritative
+        proof = None
+        policy = _required_policy(case, authoritative, trust_policy)
+        expected_reason = (
+            "NABC_RECONCILIATION_CAPABILITY_VERIFIED_PROOF_REQUIRED"
+        )
+        capability_class = None
+        evidence_digest = None
+        proof_hash = None
     elif mode == "heuristic":
         evidence = _capability_evidence(
             case,
             now=now,
             capability_class=ReconciliationCapabilityClass.HEURISTIC_ONLY,
         )
-        policy = _required_policy(case, evidence)
+        proof = _verified_capability_proof(
+            evidence,
+            verified_at=now,
+            trust_policy=trust_policy,
+        )
+        policy = _required_policy(case, evidence, trust_policy)
         expected_reason = "NABC_RECONCILIATION_CAPABILITY_REJECTED"
+        capability_class = evidence.capability_class.value
+        evidence_digest = evidence.deterministic_digest()
+        proof_hash = proof.verification_proof_hash
     else:
         raise AssertionError(f"unsupported blocked mode: {mode}")
 
@@ -285,7 +375,8 @@ async def _assert_blocked_before_consumption(
             now=now,
             consumption_store=store,
             reconciliation_capability_policy=policy,
-            reconciliation_capability_evidence=evidence,
+            reconciliation_capability_proof=proof,
+            reconciliation_capability_trust_policy=trust_policy,
         )
 
     stored = await store.get(artifact.authorization_id)
@@ -299,13 +390,12 @@ async def _assert_blocked_before_consumption(
         "authorization_consumed": False,
         "consumption_record_present": False,
         "network_dispatch_entered": False,
-        "capability_class": (
-            evidence.capability_class.value if evidence is not None else None
-        ),
-        "capability_evidence_digest": (
-            evidence.deterministic_digest() if evidence is not None else None
-        ),
+        "capability_class": capability_class,
+        "capability_evidence_digest": evidence_digest,
+        "verification_proof_hash": proof_hash,
         "policy": asdict(policy),
+        "trust_policy_id": trust_policy.policy_id,
+        "trust_policy_hash": trust_policy.deterministic_hash(),
     }
 
 
@@ -421,6 +511,20 @@ async def test_reproducible_reconciliation_capable_execution_profile(
             and fault_gate["capability_evidence"]["capability_class"]
             == ReconciliationCapabilityClass.AUTHORITATIVE_QUERY.value
         ),
+        "runtime_sealed_capability_proof_required": (
+            normal_gate["result"][
+                "reconciliation_capability_verification_proof_hash"
+            ]
+            == normal_gate["verified_capability_proof"][
+                "verification_proof_hash"
+            ]
+            and fault_gate["result"][
+                "reconciliation_capability_verification_proof_hash"
+            ]
+            == fault_gate["verified_capability_proof"][
+                "verification_proof_hash"
+            ]
+        ),
         "missing_capability_rejected_before_consumption": (
             blocked_missing["authorization_consumed"] is False
             and blocked_missing["consumption_record_present"] is False
@@ -490,6 +594,9 @@ async def test_reproducible_reconciliation_capable_execution_profile(
             "capability_evidence_digest": (
                 normal_gate["result"]["reconciliation_capability_evidence_digest"]
             ),
+            "verification_proof_hash": normal_gate["result"][
+                "reconciliation_capability_verification_proof_hash"
+            ],
             "consumption_id": normal["consumption"].consumption_id,
             "dispatch_reason": normal["dispatch"].reason_code,
             "terminal_effect_state": normal["recovered"].state.value,
@@ -502,6 +609,9 @@ async def test_reproducible_reconciliation_capable_execution_profile(
             "capability_evidence_digest": (
                 fault_gate["result"]["reconciliation_capability_evidence_digest"]
             ),
+            "verification_proof_hash": fault_gate["result"][
+                "reconciliation_capability_verification_proof_hash"
+            ],
             "consumption_id": fault["consumption"].consumption_id,
             "dispatch_reason": fault["dispatch"].reason_code,
             "lookup_outage_state": fault["unavailable"].state.value,

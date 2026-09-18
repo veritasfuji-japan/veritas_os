@@ -13,7 +13,9 @@ from typing import Any, Literal
 
 from veritas_os.governance.reconciliation_capability_evidence import (
     ReconciliationCapabilityEvidence,
-    validate_reconciliation_capability_for_current_target,
+    ReconciliationCapabilityVerifierTrustPolicy,
+    VerifiedReconciliationCapabilityEvidence,
+    validate_verified_reconciliation_capability_evidence,
 )
 
 from veritas_os.policy.native_bind_authorization import (
@@ -55,6 +57,8 @@ class ReconciliationCapabilityExecutionPolicy:
     expected_verifier_policy_id: str | None = None
     expected_verifier_policy_hash: str | None = None
     expected_evidence_digest: str | None = None
+    expected_trust_policy_id: str | None = None
+    expected_trust_policy_hash: str | None = None
 
 
 def _is_sha256(value: str | None) -> bool:
@@ -88,6 +92,8 @@ def _validate_reconciliation_capability_execution_policy(
         policy.expected_verifier_policy_id,
         policy.expected_verifier_policy_hash,
         policy.expected_evidence_digest,
+        policy.expected_trust_policy_id,
+        policy.expected_trust_policy_hash,
     )
 
     if not policy.require_authoritative_reconciliation:
@@ -105,6 +111,7 @@ def _validate_reconciliation_capability_execution_policy(
         _is_sha256(policy.current_target_configuration_digest)
         and _is_sha256(policy.expected_verifier_policy_hash)
         and _is_sha256(policy.expected_evidence_digest)
+        and _is_sha256(policy.expected_trust_policy_hash)
     ):
         raise NativeAuthorizationConsumptionError(
             "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
@@ -114,26 +121,66 @@ def _validate_reconciliation_capability_execution_policy(
 def _enforce_reconciliation_capability_before_consumption(
     *,
     policy: ReconciliationCapabilityExecutionPolicy | None,
-    evidence: ReconciliationCapabilityEvidence | None,
+    proof: VerifiedReconciliationCapabilityEvidence | None,
+    trust_policy: ReconciliationCapabilityVerifierTrustPolicy | None,
+    raw_evidence: ReconciliationCapabilityEvidence | None,
     current_endpoint_identity_binding_digest: str,
     verification_time: datetime,
-) -> tuple[str | None, str | None, bool]:
-    """Apply the policy-selected capability gate without consuming anything."""
+) -> tuple[str | None, str | None, str | None, bool]:
+    """Apply the policy-selected verified capability gate before consumption."""
     if policy is None:
-        return None, None, False
+        if proof is not None or trust_policy is not None or raw_evidence is not None:
+            raise NativeAuthorizationConsumptionError(
+                "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
+            )
+        return None, None, None, False
 
     _validate_reconciliation_capability_execution_policy(policy)
     if not policy.require_authoritative_reconciliation:
-        return policy.policy_id, None, False
+        if proof is not None or trust_policy is not None or raw_evidence is not None:
+            raise NativeAuthorizationConsumptionError(
+                "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
+            )
+        return policy.policy_id, None, None, False
 
-    if type(evidence) is not ReconciliationCapabilityEvidence:
+    if type(proof) is not VerifiedReconciliationCapabilityEvidence:
         raise NativeAuthorizationConsumptionError(
-            "NABC_RECONCILIATION_CAPABILITY_REQUIRED"
+            "NABC_RECONCILIATION_CAPABILITY_VERIFIED_PROOF_REQUIRED"
+        )
+    if type(trust_policy) is not ReconciliationCapabilityVerifierTrustPolicy:
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_TRUST_POLICY_REQUIRED"
+        )
+    if raw_evidence is not None:
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_RAW_EVIDENCE_NOT_ACCEPTED"
+        )
+
+    if (
+        trust_policy.policy_id != policy.expected_trust_policy_id
+        or trust_policy.deterministic_hash() != policy.expected_trust_policy_hash
+    ):
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_TRUST_POLICY_MISMATCH"
+        )
+
+    if (
+        proof.verifier_id,
+        proof.verifier_policy_id,
+        proof.verifier_policy_hash,
+    ) != (
+        policy.expected_verifier_id,
+        policy.expected_verifier_policy_id,
+        policy.expected_verifier_policy_hash,
+    ):
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_REJECTED"
         )
 
     try:
-        failures = validate_reconciliation_capability_for_current_target(
-            evidence,
+        failures = validate_verified_reconciliation_capability_evidence(
+            proof,
+            trust_policy=trust_policy,
             current_endpoint_identity_binding_digest=(
                 current_endpoint_identity_binding_digest
             ),
@@ -142,9 +189,6 @@ def _enforce_reconciliation_capability_before_consumption(
             ),
             verification_time=verification_time,
             require_authoritative=True,
-            expected_verifier_id=policy.expected_verifier_id,
-            expected_verifier_policy_id=policy.expected_verifier_policy_id,
-            expected_verifier_policy_hash=policy.expected_verifier_policy_hash,
             expected_evidence_digest=policy.expected_evidence_digest,
         )
     except ValueError:
@@ -157,7 +201,12 @@ def _enforce_reconciliation_capability_before_consumption(
             "NABC_RECONCILIATION_CAPABILITY_REJECTED"
         )
 
-    return policy.policy_id, evidence.deterministic_digest(), True
+    return (
+        policy.policy_id,
+        proof.evidence_digest,
+        proof.verification_proof_hash,
+        True,
+    )
 
 
 class NativeAuthorizationConsumptionError(ValueError):
@@ -177,6 +226,7 @@ class NativeAuthorizationConsumptionResult:
     durable_store_used: bool
     reconciliation_capability_policy_id: str | None = None
     reconciliation_capability_evidence_digest: str | None = None
+    reconciliation_capability_verification_proof_hash: str | None = None
     reconciliation_capability_required: bool = False
     reconciliation_capability_satisfied: bool = False
     authorization_consumed: Literal[True] = True
@@ -200,6 +250,10 @@ async def consume_native_bind_authorization(
     | InMemoryAtomicAuthorizationConsumptionStore,
     reconciliation_capability_policy: ReconciliationCapabilityExecutionPolicy
     | None = None,
+    reconciliation_capability_proof: VerifiedReconciliationCapabilityEvidence
+    | None = None,
+    reconciliation_capability_trust_policy:
+        ReconciliationCapabilityVerifierTrustPolicy | None = None,
     reconciliation_capability_evidence: ReconciliationCapabilityEvidence
     | None = None,
     allow_in_memory_for_testing: bool = False,
@@ -220,12 +274,13 @@ async def consume_native_bind_authorization(
     or unknown, not automatically retried as an executable action.
 
     When a deployment-controlled reconciliation capability policy requires an
-    authoritative downstream resolution path, that capability is rechecked
-    against the current endpoint/configuration and independently supplied trust
-    anchors before the consumption write. Missing, stale, drifted, heuristic, or
-    untrusted capability evidence fails closed while leaving the authorization
-    unconsumed. If the policy does not require the gate, the existing consumption
-    contract remains unchanged.
+    authoritative downstream resolution path, a deployment-controlled verifier
+    must first seal the raw capability artifact into a verified proof. The proof
+    seal, verifier trust policy, current endpoint/configuration, and independently
+    supplied policy anchors are all rechecked before the consumption write.
+    Missing, raw-only, stale, drifted, heuristic, unsealed, or untrusted evidence
+    fails closed while leaving the authorization unconsumed. If the policy does
+    not require the gate, the existing consumption contract remains unchanged.
     """
     durable = type(consumption_store) is PostgresAtomicAuthorizationConsumptionStore
     if not durable and not (
@@ -290,10 +345,13 @@ async def consume_native_bind_authorization(
     (
         reconciliation_policy_id,
         reconciliation_evidence_digest,
+        reconciliation_verification_proof_hash,
         reconciliation_capability_satisfied,
     ) = _enforce_reconciliation_capability_before_consumption(
         policy=reconciliation_capability_policy,
-        evidence=reconciliation_capability_evidence,
+        proof=reconciliation_capability_proof,
+        trust_policy=reconciliation_capability_trust_policy,
+        raw_evidence=reconciliation_capability_evidence,
         current_endpoint_identity_binding_digest=(
             context.endpoint_identity_binding_digest
         ),
@@ -335,6 +393,9 @@ async def consume_native_bind_authorization(
         durable_store_used=durable,
         reconciliation_capability_policy_id=reconciliation_policy_id,
         reconciliation_capability_evidence_digest=reconciliation_evidence_digest,
+        reconciliation_capability_verification_proof_hash=(
+            reconciliation_verification_proof_hash
+        ),
         reconciliation_capability_required=(
             reconciliation_capability_policy is not None
             and reconciliation_capability_policy.require_authoritative_reconciliation

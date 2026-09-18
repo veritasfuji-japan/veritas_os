@@ -5,6 +5,7 @@ on:
     paths:
       - "veritas_os/tests/test_reconciliation_capable_execution_profile_e2e.py"
       - "veritas_os/tests/test_reconciliation_capability_consumption_gate.py"
+      - "veritas_os/tests/test_verified_reconciliation_capability_evidence.py"
       - "veritas_os/tests/test_decision_to_effect_controlled_e2e.py"
       - "veritas_os/tests/helpers/live_decision_capture.py"
       - "scripts/run_native_v2_sandbox_service.py"
@@ -125,10 +126,10 @@ jobs:
           test "$status" = "404"
           grep -q "SSE_NOT_FOUND_NOT_PROOF_OF_NO_EFFECT"             /tmp/veritas-reconciliation-profile/health.json
 
-      - name: Run focused reconciliation capability gate matrix
+      - name: Run verifier trust-boundary and focused gate matrix
         run: |
           set -euxo pipefail
-          PYTHONPATH=. pytest             veritas_os/tests/test_reconciliation_capability_consumption_gate.py             -v --tb=short
+          PYTHONPATH=. pytest             veritas_os/tests/test_verified_reconciliation_capability_evidence.py             veritas_os/tests/test_reconciliation_capability_consumption_gate.py             -v --tb=short
 
       - name: Run reproducible reconciliation-capable profile proof
         run: |
@@ -170,8 +171,10 @@ jobs:
           assert report["blocked"]["heuristic_authorization_consumed"] is False
           assert report["blocked"]["sandbox_rows_added"] == 0
           assert report["normal"]["capability_class"] == "AUTHORITATIVE_QUERY"
+          assert len(report["normal"]["verification_proof_hash"]) == 64
           assert report["normal"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
           assert report["fault"]["capability_class"] == "AUTHORITATIVE_QUERY"
+          assert len(report["fault"]["verification_proof_hash"]) == 64
           assert report["fault"]["lookup_outage_state"] == "EFFECT_UNKNOWN"
           assert report["fault"]["lookup_outage_retry_permitted"] is False
           assert report["fault"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
