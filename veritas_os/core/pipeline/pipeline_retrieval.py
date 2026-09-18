@@ -83,17 +83,18 @@ def stage_memory_retrieval(
             flat_hits.extend(_flatten_memory_hits(doc_hits_raw, default_kind="doc"))
 
             # Defense in depth: even if a backend ignores the user_id search
-            # argument, authenticated pipeline evidence must not consume a
-            # record owned by another principal (or an unowned record).
-            owner_scoped_hits: List[Dict[str, Any]] = []
-            for hit in flat_hits:
-                meta = hit.get("meta") or {}
-                if not isinstance(meta, dict):
-                    continue
-                if meta.get("user_id") != ctx.user_id:
-                    continue
-                owner_scoped_hits.append(hit)
-            flat_hits = owner_scoped_hits
+            # argument, an authenticated pipeline must not consume a record
+            # owned by another principal (or an unowned legacy record).
+            if ctx.authenticated_principal_id:
+                owner_scoped_hits: List[Dict[str, Any]] = []
+                for hit in flat_hits:
+                    meta = hit.get("meta") or {}
+                    if not isinstance(meta, dict):
+                        continue
+                    if meta.get("user_id") != ctx.authenticated_principal_id:
+                        continue
+                    owner_scoped_hits.append(hit)
+                flat_hits = owner_scoped_hits
 
             seen_ids: set[str] = set()
             deduped: List[Dict[str, Any]] = []
