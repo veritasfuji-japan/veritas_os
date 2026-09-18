@@ -7614,6 +7614,10 @@ def test_pipeline_bridge_env_var_enforcement_fallback(
     )
 
     monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
+    monkeypatch.setenv(
+        "VERITAS_POLICY_RUNTIME_BUNDLE_DIR",
+        compiled.bundle_dir.as_posix(),
+    )
 
     ctx = PipelineContext(
         query="use external tool",
