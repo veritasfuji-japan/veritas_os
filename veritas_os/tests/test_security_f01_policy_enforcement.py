@@ -42,7 +42,7 @@ def test_request_false_cannot_disable_server_mandated_enforcement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
-    monkeypatch.setenv("VERITAS_POLICY_RUNTIME_BUNDLE_DIR", "/trusted/bundle")
+    monkeypatch.setattr(pp, "_resolve_trusted_runtime_bundle_dir", lambda: "/trusted/bundle")
     monkeypatch.setattr(pp, "load_runtime_bundle", lambda path: SimpleNamespace(
         manifest={}, version="1", semantic_hash="sha256:test"
     ))
@@ -68,7 +68,7 @@ def test_server_mandated_enforcement_ignores_request_bundle_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
-    monkeypatch.setenv("VERITAS_POLICY_RUNTIME_BUNDLE_DIR", "/trusted/bundle")
+    monkeypatch.setattr(pp, "_resolve_trusted_runtime_bundle_dir", lambda: "/trusted/bundle")
     loaded: list[str] = []
 
     def _load(path: str) -> Any:
@@ -94,11 +94,7 @@ def test_missing_trusted_bundle_fails_closed_when_enforcement_is_mandatory(
     tmp_path,
 ) -> None:
     monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
-    monkeypatch.delenv("VERITAS_POLICY_RUNTIME_BUNDLE_DIR", raising=False)
-    monkeypatch.setenv(
-        "VERITAS_POLICY_ACTIVE_POINTER_PATH",
-        str(tmp_path / "missing-active-bundle.json"),
-    )
+    monkeypatch.setattr(pp, "_resolve_trusted_runtime_bundle_dir", lambda: None)
 
     ctx = _ctx({"compiled_policy_bundle_dir": "/attacker/bundle"})
     pp._apply_compiled_policy_runtime_bridge(ctx)
@@ -114,7 +110,7 @@ def test_policy_load_failure_fails_closed_when_enforcement_is_mandatory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
-    monkeypatch.setenv("VERITAS_POLICY_RUNTIME_BUNDLE_DIR", "/trusted/bundle")
+    monkeypatch.setattr(pp, "_resolve_trusted_runtime_bundle_dir", lambda: "/trusted/bundle")
     monkeypatch.setattr(
         pp,
         "load_runtime_bundle",
@@ -157,23 +153,53 @@ def test_mandatory_canary_without_trusted_rollout_key_enforces_full(
     assert state == "full_no_trusted_rollout_key"
 
 
-def test_trusted_active_pointer_is_constrained_to_bundles_root(
+def test_pointer_path_is_reduced_to_validated_bundle_id(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    bundles_root = tmp_path / "bundles"
-    bundles_root.mkdir()
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    pointer = tmp_path / "active.json"
+    bundles_root = tmp_path / "policy_bundles"
+    trusted_bundle = bundles_root / "bundle-v1"
+    trusted_bundle.mkdir(parents=True)
+    pointer = tmp_path / "active_bundle.json"
     pointer.write_text(
-        '{"active_bundle_dir": "' + str(outside.resolve()).replace("\\", "\\\\") + '"}',
+        '{"active_bundle_dir": "/attacker/controlled/path/bundle-v1"}',
         encoding="utf-8",
     )
+    monkeypatch.setattr(
+        pp,
+        "_trusted_policy_runtime_paths",
+        lambda: (bundles_root.resolve(), pointer.resolve()),
+    )
+    monkeypatch.delenv("VERITAS_POLICY_RUNTIME_BUNDLE_ID", raising=False)
 
-    monkeypatch.delenv("VERITAS_POLICY_RUNTIME_BUNDLE_DIR", raising=False)
-    monkeypatch.setenv("VERITAS_POLICY_BUNDLES_ROOT", str(bundles_root))
-    monkeypatch.setenv("VERITAS_POLICY_ACTIVE_POINTER_PATH", str(pointer))
+    resolved = pp._resolve_trusted_runtime_bundle_dir()
 
-    with pytest.raises(ValueError, match="escapes"):
-        pp._resolve_trusted_runtime_bundle_dir()
+    assert resolved == str(trusted_bundle.resolve())
+
+
+def test_request_bundle_path_is_never_used_without_trusted_selection(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    bundles_root = tmp_path / "policy_bundles"
+    bundles_root.mkdir()
+    pointer = tmp_path / "missing-pointer.json"
+    loaded: list[str] = []
+    monkeypatch.setattr(
+        pp,
+        "_trusted_policy_runtime_paths",
+        lambda: (bundles_root.resolve(), pointer.resolve()),
+    )
+    monkeypatch.setattr(pp, "load_runtime_bundle", lambda path: loaded.append(str(path)))
+    monkeypatch.delenv("VERITAS_POLICY_RUNTIME_BUNDLE_ID", raising=False)
+    monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "false")
+
+    ctx = _ctx(
+        {
+            "compiled_policy_bundle_dir": "/attacker/allow-bundle",
+            "policy_runtime_enforce": False,
+        }
+    )
+    pp._apply_compiled_policy_runtime_bridge(ctx)
+
+    assert loaded == []
