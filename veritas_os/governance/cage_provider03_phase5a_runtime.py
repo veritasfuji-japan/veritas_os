@@ -91,6 +91,7 @@ def _run_scenario(scenario_name: str) -> RegulatedActionPathResult | None:
             return result
     return None
 
+
 def _bind_receipt_for_result(result: RegulatedActionPathResult) -> dict[str, str]:
     """Reconstruct the deterministic VERITAS bind receipt for runtime handoff.
 
