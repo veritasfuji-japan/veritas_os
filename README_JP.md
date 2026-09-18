@@ -1799,7 +1799,7 @@ make validate
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` | コンパイル済みポリシー判定のランタイム適用を有効化。リクエスト入力でサーバー必須適用を解除不可 |
 | `VERITAS_POLICY_RUNTIME_BUNDLE_ID` | — | `<VERITAS_RUNTIME_ROOT>/policy_bundles` 配下から選ぶdeployment-controlledなbundle ID。リクエスト由来pathは使用しない |
 | `VERITAS_POLICY_ROLLOUT_KEY` | — | canary/staged用のサーバー管理bucket key。必須適用時に未設定ならfull enforcementへfail-safe |
-| `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Ed25519署名検証を必須化。鍵未設定時にマニフェストを拒否 |
+| `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Ed25519検証を必須化しレガシーSHA-256 bundleを拒否。Ed25519宣言bundleは信頼済み鍵欠損時にダウングレードしない |
 
 > **ポスチャ対応適用**: `secure`/`prod` ポスチャでは、SHA-256のみ（未署名）のポリシーバンドルは
 > ランタイムアダプターにより拒否されます。Ed25519署名済みバンドルのみが検証を通過します。
