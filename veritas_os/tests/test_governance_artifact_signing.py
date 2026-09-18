@@ -828,6 +828,10 @@ def test_compiled_policy_bridge_sets_governance_identity(monkeypatch):
         },
     )
     monkeypatch.setattr(
+        "veritas_os.core.pipeline.pipeline_policy._resolve_trusted_runtime_bundle_dir",
+        lambda: "/mock/bundle",
+    )
+    monkeypatch.setattr(
         "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
         lambda *_args, **_kwargs: runtime_bundle,
     )
