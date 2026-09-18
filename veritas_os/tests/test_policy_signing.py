@@ -341,6 +341,7 @@ def test_runtime_adapter_logs_do_not_expose_bundle_or_key_paths(
     with (
         patch.object(Path, "read_bytes", _fail_only_for_key),
         caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"),
+        pytest.raises(ValueError, match="trusted public key"),
     ):
         verify_manifest_signature(secret_bundle)
 
