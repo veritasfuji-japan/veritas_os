@@ -126,9 +126,37 @@ def normalize_pipeline_inputs(
         raw_query = str(raw_query)
     query = raw_query.strip()
 
-    # --- user_id (always str) ---
-    user_id_raw = context.get("user_id") or body.get("user_id") or "anon"
-    user_id = str(user_id_raw) if user_id_raw is not None else "anon"
+    # --- identity / memory owner ---
+    # API-authenticated requests are scoped to the trusted principal attached by
+    # the auth dependency. Client-supplied user_id remains business input only
+    # and cannot select another memory / WorldOS ownership namespace.
+    requested_user_id_raw = context.get("user_id") or body.get("user_id")
+    requested_user_id = (
+        str(requested_user_id_raw).strip()
+        if requested_user_id_raw is not None
+        else ""
+    )
+    request_state = getattr(request, "state", None)
+    principal_raw = getattr(
+        request_state,
+        "authenticated_principal_id",
+        None,
+    )
+    principal_id = (
+        str(principal_raw).strip()
+        if principal_raw is not None
+        else ""
+    )
+    if principal_id:
+        user_id = principal_id
+        if requested_user_id and requested_user_id != principal_id:
+            logger.warning(
+                "Pipeline user_id override blocked by authenticated principal"
+            )
+        context["user_id"] = principal_id
+        body["context"] = context
+    else:
+        user_id = requested_user_id or "anon"
 
     # --- fast mode ---
     if _get_request_params is None:
@@ -259,6 +287,7 @@ def normalize_pipeline_inputs(
         body=body,
         query=query,
         user_id=user_id,
+        authenticated_principal_id=principal_id or None,
         request_id=request_id,
         fast_mode=fast_mode,
         replay_mode=replay_mode,

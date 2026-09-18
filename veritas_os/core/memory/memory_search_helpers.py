@@ -54,8 +54,16 @@ def collect_candidate_hits(raw: Any) -> List[Dict[str, Any]]:
 def filter_hits_for_user(
     hits: List[Dict[str, Any]],
     user_id: Optional[str],
+    *,
+    include_unowned: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Keep hits whose ``meta.user_id`` matches the requested user or is unset."""
+    """Filter hits by owner.
+
+    include_unowned preserves legacy shared-memory behavior for direct
+    non-authenticated callers. Authenticated API/pipeline paths set it to
+    False so records without an explicit matching owner cannot cross the
+    tenant boundary.
+    """
     if user_id is None:
         return hits
 
@@ -63,7 +71,9 @@ def filter_hits_for_user(
     for hit in hits:
         meta = hit.get("meta") or {}
         hit_user_id = meta.get("user_id")
-        if hit_user_id is None or hit_user_id == user_id:
+        if hit_user_id == user_id:
+            filtered.append(hit)
+        elif hit_user_id is None and include_unowned:
             filtered.append(hit)
 
     return filtered

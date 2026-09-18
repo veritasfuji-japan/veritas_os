@@ -39,6 +39,9 @@ class PipelineContext:
     body: Dict[str, Any] = field(default_factory=dict)
     query: str = ""
     user_id: str = "anon"
+    # Trusted API principal when the pipeline was entered through an
+    # authenticated HTTP boundary. None for direct/internal callers.
+    authenticated_principal_id: Optional[str] = None
     request_id: str = ""
     fast_mode: bool = False
     replay_mode: bool = False
