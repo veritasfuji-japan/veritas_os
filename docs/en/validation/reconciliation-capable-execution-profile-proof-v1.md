@@ -10,7 +10,8 @@ downstream reconciliation capability architecture decision.
 It is intentionally separate from the frozen Controlled Execution Proof v1.
 The frozen proof remains the baseline claim. This proof demonstrates an
 additional profile in which deployment-controlled policy requires authoritative
-downstream reconciliation capability before native v2 authorization consumption.
+downstream reconciliation capability, and that capability must be represented by
+a runtime-sealed verified proof before native v2 authorization consumption.
 
 ## Dedicated workflow
 
@@ -39,6 +40,8 @@ For each positive path, the proof binds:
 - native v2 authorization;
 - reconciliation capability policy identifier;
 - reconciliation capability evidence digest;
+- verifier-sealed capability proof hash;
+- verifier trust-policy identity/hash;
 - current endpoint identity;
 - current target configuration;
 - verifier identity and verifier-policy hash;
@@ -55,8 +58,9 @@ authority.
 The same workflow demonstrates with real PostgreSQL that a policy requiring
 authoritative reconciliation rejects:
 
-- missing capability evidence; and
-- `HEURISTIC_ONLY` capability evidence.
+- missing verified capability proof;
+- raw capability evidence without a sealed proof; and
+- verifier-sealed `HEURISTIC_ONLY` capability evidence.
 
 For both cases:
 
@@ -65,9 +69,30 @@ For both cases:
 - the transport path is not entered; and
 - no sandbox event is added.
 
-The workflow also runs the focused reconciliation-capability gate matrix covering
-expiry, endpoint/configuration drift, verifier mismatch, evidence-digest mismatch,
-incomplete required policy, and untyped request-like policy downgrade attempts.
+The workflow also runs the verifier trust-boundary tests plus the focused
+reconciliation-capability gate matrix covering caller-constructed proof
+lookalikes, trust-policy mismatch, expiry, endpoint/configuration drift, verifier
+mismatch, evidence-digest mismatch, incomplete required policy, and untyped
+request-like policy downgrade attempts.
+
+## Verifier trust-boundary proof
+
+The proof now distinguishes three objects:
+
+1. raw `ReconciliationCapabilityEvidence`, which is descriptive and
+   self-non-authenticating;
+2. `ReconciliationCapabilityVerifierTrustPolicy`, supplied from the deployment
+   trust boundary; and
+3. `VerifiedReconciliationCapabilityEvidence`, produced only through
+   `verify_reconciliation_capability_evidence_to_proof(...)`.
+
+The focused proof demonstrates that copying the serialized fields of a valid
+verified proof does not recreate its process-local runtime seal. The copied
+lookalike is rejected before authorization consumption.
+
+This seal is not claimed to be a durable cross-process credential. Another
+process must re-establish verification through the deployment-controlled
+verifier boundary before relying on the capability.
 
 ## Post-dispatch semantics
 
@@ -77,6 +102,8 @@ The fault path proves:
 
 ```text
 required authoritative reconciliation capability
+-> deployment-controlled verifier
+-> runtime-sealed verified capability proof
 -> authorization consumption
 -> one TLS POST
 -> response loss
@@ -124,8 +151,9 @@ This proof does not establish:
 A passing workflow supports the following narrow claim:
 
 > In the controlled VERITAS profile, when deployment policy requires
-> authoritative reconciliation capability, missing or heuristic-only capability
-> is rejected before authorization consumption, while a current authoritative
-> query capability permits the existing fail-closed Decision-to-Effect path to
-> proceed without weakening `EFFECT_UNKNOWN`, reconciliation, retry, receipt, or
-> recovery semantics.
+> authoritative reconciliation capability, raw or unsealed evidence cannot
+> satisfy the gate. A current authoritative query capability must first be
+> verified through the deployment-controlled verifier boundary and represented
+> by a runtime-sealed proof before the existing fail-closed Decision-to-Effect
+> path may proceed, without weakening `EFFECT_UNKNOWN`, reconciliation, retry,
+> receipt, or recovery semantics.
