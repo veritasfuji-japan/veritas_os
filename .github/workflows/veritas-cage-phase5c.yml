@@ -1,0 +1,225 @@
+name: VERITAS CAGE Phase 5C BindReceipt Evidence Flow
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: veritas-cage-phase5c-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  CAGE_PHASE5C_SHA: "fcb98bef0b5faea1afcc5a430148fe065b985ef4"
+  PHASE5B_VERITAS_BASELINE: "0fc73e27b5d423102b9e4bb474169a815f1ab659"
+  VERITAS_CAGE_PHASE5_BEARER_TOKEN: "phase5c-ci-local-only-token"
+
+jobs:
+  bind-evidence-flow:
+    name: veritas-cage-phase5c
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout VERITAS proof source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused runtime dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            pytest==9.0.3 \
+            PyYAML==6.0.3 \
+            fastapi==0.121.0 \
+            uvicorn==0.30.3 \
+            httpx==0.28.1
+
+      - name: Run focused Phase 5C tests
+        run: |
+          set -euxo pipefail
+          python -m pytest \
+            tests/governance/test_cage_provider03_phase5a_runtime.py \
+            tests/governance/test_cage_provider03_phase5c_runner.py \
+            -q
+
+      - name: Checkout pinned CAGE Phase 5C source
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/cage-phase5c
+          git init /tmp/cage-phase5c
+          git -C /tmp/cage-phase5c remote add origin https://github.com/google/cybernetic-agent-governance-engine.git
+          git -C /tmp/cage-phase5c fetch --depth 1 origin "${CAGE_PHASE5C_SHA}"
+          git -C /tmp/cage-phase5c checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/cage-phase5c rev-parse HEAD)" = "${CAGE_PHASE5C_SHA}"
+
+      - name: Start VERITAS loopback runtime
+        run: |
+          set -euxo pipefail
+          python -m uvicorn \
+            veritas_os.governance.cage_provider03_phase5a_runtime:create_phase5a_app \
+            --factory \
+            --host 127.0.0.1 \
+            --port 8765 \
+            --log-level warning \
+            > /tmp/veritas-phase5c.log 2>&1 &
+          echo $! > /tmp/veritas-phase5c.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${VERITAS_CAGE_PHASE5_BEARER_TOKEN}" \
+              http://127.0.0.1:8765/baseline/US_FED \
+              > /tmp/phase5c-baseline.json; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+
+          cat /tmp/veritas-phase5c.log
+          exit 1
+
+      - name: Run real CAGE Provider03 Phase 5C flow
+        id: proof
+        run: |
+          set -euxo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+
+          python scripts/run_veritas_cage_phase5c_runtime.py \
+            --cage-repo /tmp/cage-phase5c \
+            --endpoint http://127.0.0.1:8765 \
+            --token "${VERITAS_CAGE_PHASE5_BEARER_TOKEN}" \
+            --veritas-source-sha "${SOURCE_SHA}" \
+            --cage-source-sha "${CAGE_PHASE5C_SHA}" \
+            --phase5b-veritas-baseline "${PHASE5B_VERITAS_BASELINE}" \
+            --output-dir artifacts/veritas-cage-phase5c
+
+      - name: Stop loopback runtime
+        if: always()
+        run: |
+          if test -f /tmp/veritas-phase5c.pid; then
+            kill "$(cat /tmp/veritas-phase5c.pid)" 2>/dev/null || true
+          fi
+          cat /tmp/veritas-phase5c.log 2>/dev/null || true
+
+      - name: Bind Phase 5C artifacts to source
+        env:
+          SOURCE_SHA: ${{ steps.proof.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          root = Path("artifacts/veritas-cage-phase5c")
+          report_path = root / "phase5c-runtime-report.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+
+          if report["veritas_source_sha"] != os.environ["SOURCE_SHA"]:
+              raise SystemExit("Phase 5C VERITAS source SHA mismatch")
+          if report["cage_source_sha"] != os.environ["CAGE_PHASE5C_SHA"]:
+              raise SystemExit("Phase 5C CAGE source SHA mismatch")
+          if report["phase5b_veritas_baseline"] != os.environ["PHASE5B_VERITAS_BASELINE"]:
+              raise SystemExit("Phase 5B VERITAS baseline mismatch")
+          if report["real_cage_provider03_client"] is not True:
+              raise SystemExit("Phase 5C must use the real CAGE Provider03 client")
+          if report["real_cage_ingest_bind_receipt"] is not True:
+              raise SystemExit("Phase 5C must use real CAGE ingest_bind_receipt")
+          if report["real_cage_submit_evidence"] is not True:
+              raise SystemExit("Phase 5C must use real CAGE submit_evidence")
+          if report["loopback_http"] is not True:
+              raise SystemExit("Phase 5C must exercise loopback HTTP")
+          if report["mocked_cage_http_client"] is not False:
+              raise SystemExit("Phase 5C must not mock the CAGE HTTP client")
+          if report["external_effects_executed"] is not False:
+              raise SystemExit("Phase 5C must not execute external business effects")
+          if report["production_claim"] is not False:
+              raise SystemExit("Phase 5C must not claim production deployment")
+          if report["google_endorsement_claim"] is not False:
+              raise SystemExit("Phase 5C must not claim Google endorsement")
+
+          if report["phase5c_status"] != "READY_FOR_PHASE5D":
+              raise SystemExit(f"Phase 5C is not closed: {report['phase5c_status']}")
+          if report["phase5c_blockers"] != []:
+              raise SystemExit(f"Phase 5C blockers remain: {report['phase5c_blockers']}")
+          for key, passed in report["checks"].items():
+              if passed is not True:
+                  raise SystemExit(f"Phase 5C check failed: {key}")
+
+          domains = report["hash_domains"]
+          veritas_hash = domains["veritas_bind_receipt_hash"]["value"]
+          cage_digest = domains["cage_ingested_bind_receipt_digest"]["value"]
+          if veritas_hash == cage_digest:
+              raise SystemExit("Phase 5C hash domains collapsed")
+          if domains["cage_ingested_bind_receipt_digest"]["signature_claim"] is not False:
+              raise SystemExit("CAGE digest must not be represented as a signature")
+          if report["evidence_flow"]["trustlog_witness_claim"] is not False:
+              raise SystemExit("Phase 5C must remain lineage-only")
+
+          artifacts = sorted(root.rglob("*.json"))
+          artifact_hashes = {
+              str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in artifacts
+          }
+          run_manifest = {
+              "format_version": "veritas-cage-phase5c-run/v1",
+              "proof_id": report["proof_id"],
+              "veritas_source_sha": os.environ["SOURCE_SHA"],
+              "cage_source_sha": os.environ["CAGE_PHASE5C_SHA"],
+              "phase5b_veritas_baseline": os.environ["PHASE5B_VERITAS_BASELINE"],
+              "phase5c_status": report["phase5c_status"],
+              "phase5c_blockers": report["phase5c_blockers"],
+              "environment": {
+                  "implementation": platform.python_implementation().lower(),
+                  "python_version": platform.python_version(),
+              },
+              "artifact_sha256": artifact_hashes,
+              "claim_boundary": {
+                  "external_business_effect": False,
+                  "production_deployment": False,
+                  "google_endorsement": False,
+                  "commercial_integration": False,
+                  "trustlog_witness": False,
+                  "cage_digest_is_signature": False,
+                  "phase5c_complete": True,
+                  "phase5d_ready": True,
+              },
+              "github": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+              },
+          }
+          (root / "run-manifest.json").write_text(
+              json.dumps(run_manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload Phase 5C evidence artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-cage-phase5c-${{ steps.proof.outputs.source_sha }}
+          path: artifacts/veritas-cage-phase5c/
+          if-no-files-found: error
+          retention-days: 90
