@@ -826,6 +826,11 @@ def test_compiled_policy_bridge_sets_governance_identity(monkeypatch):
         manifest={
             "signing": {"algorithm": "ed25519", "status": "signed-ed25519", "key_id": "ops-key-1"}
         },
+        manifest_integrity_verified=True,
+        signature_verified=True,
+        signature_algorithm="ed25519",
+        signer_id="ops-key-1",
+        bundle_contents_verified=True,
     )
     monkeypatch.setattr(
         "veritas_os.core.pipeline.pipeline_policy._resolve_trusted_runtime_bundle_dir",
