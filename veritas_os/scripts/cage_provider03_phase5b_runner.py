@@ -5,8 +5,9 @@ sent over loopback HTTP to the merged VERITAS Phase 5A runtime surface.  A
 second local-only fault server exercises CAGE response and transport failure
 semantics without performing any external business effect.
 
-Phase 5B deliberately records upstream CAGE exceptions as evidence rather than
-wrapping them in a VERITAS shim and calling that equivalent fail-closed behavior.
+Phase 5B records the upstream CAGE response contract directly and does not add
+a VERITAS compatibility shim.  The closure rerun verifies that malformed and
+schema-invalid responses now return explicit non-admitted ValidationResults.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
-PHASE5B_PROOF_ID: Final[str] = "veritas-cage-provider03-phase5b-fail-closed-v1"
+PHASE5B_PROOF_ID: Final[str] = "veritas-cage-provider03-phase5b-fail-closed-v2"
 FIELD_MAP: Final[dict[str, str]] = {"amount": "magnitude", "symbol": "context"}
 
 
@@ -147,7 +148,10 @@ def audit_cage_source(cage_repo: Path) -> dict[str, Any]:
     return {
         "provider03_validate_exception_handlers": adapter_handlers,
         "provider03_validate_catches_json_decode_error": any(
-            handler.endswith("JSONDecodeError") for handler in adapter_handlers
+            "JSONDecodeError" in handler for handler in adapter_handlers
+        ),
+        "provider03_validate_catches_generic_exception": any(
+            handler in {"Exception", "BaseException"} for handler in adapter_handlers
         ),
         "sync_gate_validate_exception_handlers": sync_handlers,
         "sync_gate_catches_generic_exception": any(
@@ -197,7 +201,7 @@ class _FaultMatrixHandler(BaseHTTPRequestHandler):
         except BrokenPipeError:
             pass
 
-    def _send_json(self, status: int, payload: dict[str, Any]) -> None:
+    def _send_json(self, status: int, payload: Any) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         self._send_bytes(status, body)
 
@@ -236,8 +240,14 @@ class _FaultMatrixHandler(BaseHTTPRequestHandler):
         if probe == "malformed_json":
             self._send_bytes(200, b'{"verdict":')
             return
+        if probe == "non_object_json":
+            self._send_json(200, ["not", "a", "json", "object"])
+            return
         if probe == "null_verdict":
             self._send_json(200, {"verdict": None, "findings": []})
+            return
+        if probe == "numeric_verdict":
+            self._send_json(200, {"verdict": 12345, "findings": []})
             return
 
         self._send_json(200, {"verdict": "APPROVED", "findings": []})
@@ -378,9 +388,19 @@ async def _run(
                 {"action": "phase5b_probe", "phase5b_probe": "malformed_json"}
             )
         )
+        non_object_json = await _capture_exception_or_result(
+            fault_provider.validate_fria(
+                {"action": "phase5b_probe", "phase5b_probe": "non_object_json"}
+            )
+        )
         null_verdict = await _capture_exception_or_result(
             fault_provider.validate_fria(
                 {"action": "phase5b_probe", "phase5b_probe": "null_verdict"}
+            )
+        )
+        numeric_verdict = await _capture_exception_or_result(
+            fault_provider.validate_fria(
+                {"action": "phase5b_probe", "phase5b_probe": "numeric_verdict"}
             )
         )
     finally:
@@ -409,29 +429,64 @@ async def _run(
         raise RuntimeError(f"Phase 5B fail-closed matrix failure: {failed}")
 
     source_audit = audit_cage_source(cage_repo)
-    malformed["gap_reproduced"] = (
-        malformed["fail_closed_result_returned"] is False
-        and malformed["unsafe_admit"] is False
-        and bool(malformed["exception_type"])
-    )
-    null_verdict["gap_reproduced"] = (
-        null_verdict["fail_closed_result_returned"] is False
-        and null_verdict["unsafe_admit"] is False
-        and bool(null_verdict["exception_type"])
-    )
 
-    blockers: list[str] = []
-    if not malformed["fail_closed_result_returned"]:
-        blockers.append("malformed_json_response_not_converted_to_ValidationResult")
-    if not null_verdict["fail_closed_result_returned"]:
-        blockers.append("non_string_verdict_not_converted_to_ValidationResult")
+    def captured_finding_codes(capture: dict[str, Any]) -> list[str]:
+        result = capture.get("result")
+        if not isinstance(result, dict):
+            return []
+        findings = result.get("findings")
+        if not isinstance(findings, list):
+            return []
+        return [
+            str(finding["code"])
+            for finding in findings
+            if isinstance(finding, dict) and finding.get("code")
+        ]
+
+    response_contract_assertions = {
+        "malformed_json_returns_fail_closed_result": (
+            malformed["fail_closed_result_returned"] is True
+            and malformed["unsafe_admit"] is False
+        ),
+        "malformed_json_returns_parse_error": (
+            "PARSE_ERROR" in captured_finding_codes(malformed)
+        ),
+        "non_object_json_returns_fail_closed_result": (
+            non_object_json["fail_closed_result_returned"] is True
+            and non_object_json["unsafe_admit"] is False
+        ),
+        "non_object_json_returns_parse_error": (
+            "PARSE_ERROR" in captured_finding_codes(non_object_json)
+        ),
+        "null_verdict_returns_fail_closed_result": (
+            null_verdict["fail_closed_result_returned"] is True
+            and null_verdict["unsafe_admit"] is False
+        ),
+        "numeric_verdict_returns_fail_closed_result": (
+            numeric_verdict["fail_closed_result_returned"] is True
+            and numeric_verdict["unsafe_admit"] is False
+        ),
+        "adapter_has_json_decode_guard": (
+            source_audit["provider03_validate_catches_json_decode_error"] is True
+        ),
+        "adapter_has_generic_exception_guard": (
+            source_audit["provider03_validate_catches_generic_exception"] is True
+        ),
+    }
+
+    blockers = sorted(
+        key for key, passed in response_contract_assertions.items() if passed is not True
+    )
 
     return {
         "normal_verdict_matrix": normal_results,
         "fail_closed_matrix": fail_closed_matrix,
-        "known_response_contract_gaps": {
+        "response_contract_checks": {
             "malformed_json": malformed,
+            "non_object_json": non_object_json,
             "null_verdict": null_verdict,
+            "numeric_verdict": numeric_verdict,
+            "assertions": response_contract_assertions,
         },
         "cage_source_audit": source_audit,
         "phase5b_status": (
@@ -467,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     report = {
-        "format_version": "veritas-cage-phase5b-runtime/v1",
+        "format_version": "veritas-cage-phase5b-runtime/v2",
         "proof_id": PHASE5B_PROOF_ID,
         "veritas_source_sha": args.veritas_source_sha,
         "cage_source_sha": args.cage_source_sha,
