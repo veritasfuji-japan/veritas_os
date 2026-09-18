@@ -10,6 +10,7 @@ from veritas_os.governance.cage_provider03_phase5a_runtime import (
     TOKEN_ENV,
     create_phase5a_app,
 )
+from veritas_os.security.hash import sha256_of_canonical_json
 
 
 TOKEN = "phase5a-test-token"
@@ -71,7 +72,19 @@ def test_validate_runtime_covers_approved_escalate_and_rejected() -> None:
             payload = response.json()
             assert payload["verdict"] == expected_verdict
             assert payload["findings"][0]["scenario_name"] == scenario_name
-            assert payload["findings"][0]["external_effect_executed"] is False
+            finding = payload["findings"][0]
+            assert finding["external_effect_executed"] is False
+            if expected_verdict == "APPROVED":
+                receipt = finding["bind_receipt"]
+                embedded_hash = receipt["bind_receipt_hash"]
+                body = {
+                    key: value
+                    for key, value in receipt.items()
+                    if key != "bind_receipt_hash"
+                }
+                assert sha256_of_canonical_json(body) == embedded_hash
+            else:
+                assert "bind_receipt" not in finding
 
 
 def test_validate_missing_or_unknown_scenario_rejects() -> None:
