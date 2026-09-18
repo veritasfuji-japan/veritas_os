@@ -742,6 +742,20 @@ VERITAS OS uses a single **runtime posture** (`VERITAS_POSTURE`) to control gove
 | Strict replay | `VERITAS_REPLAY_STRICT` | Critical replay divergences abort |
 | Governance artifact signatures | `VERITAS_POLICY_VERIFY_KEY` (+ posture strictness) | In secure/prod, require trusted-key Ed25519 verification and exact signed-manifest binding to the evaluated bundle contents |
 
+### Authenticated principal and MemoryOS ownership
+
+For authenticated API requests, VERITAS derives an internal principal identifier
+from the authenticated API key and treats that principal as the authoritative
+MemoryOS / WorldOS ownership scope. Request-body or context `user_id` values
+remain application input; they cannot select another principal's storage
+namespace. Likewise, `/v1/memory/put` overwrites caller-supplied
+`meta.user_id` with the authenticated principal before persistence.
+
+The decision pipeline carries the authenticated principal separately from
+business input and applies a final owner check before memory evidence is used.
+Direct/internal calls that do not enter through the authenticated HTTP boundary
+retain their existing explicit-user behavior.
+
 ### Governance artifact identity in decision outputs
 
 When compiled policy governance is active, `/v1/decide` responses include
