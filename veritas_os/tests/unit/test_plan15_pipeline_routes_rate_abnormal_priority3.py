@@ -22,7 +22,8 @@ def test_pipeline_rollout_invalid_canary_percent_logs_and_skips(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Invalid canary_percent should fail safe to skip with a warning."""
-    monkeypatch.setattr(pp, "_coerce_policy_enforce_flag", lambda _raw: True)
+    monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
+    monkeypatch.setenv("VERITAS_POLICY_ROLLOUT_KEY", "server-controlled-plan15")
     monkeypatch.setattr(pp, "_deterministic_bucket_ratio", lambda _key: 0.5)
 
     decision = {
