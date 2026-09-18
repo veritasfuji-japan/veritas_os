@@ -162,7 +162,7 @@ bundle = load_runtime_bundle(
 |------|------|
 | `VERITAS_POLICY_VERIFY_KEY` | Ed25519 公開鍵 PEM ファイルのパスを指定。`public_key_pem` 引数が未指定の場合にフォールバックとして使用 |
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `true` でserver-mandated compiled policy enforcementを有効化。リクエスト側のfalseでは解除不可 |
-| `VERITAS_POLICY_RUNTIME_BUNDLE_DIR` | mandatory enforcementで使用するdeployment-controlled bundle path |
+| `VERITAS_POLICY_RUNTIME_BUNDLE_ID` | mandatory enforcementで使用するpath-safeなdeployment-controlled bundle ID（`<VERITAS_RUNTIME_ROOT>/policy_bundles` 配下） |
 | `VERITAS_POLICY_ROLLOUT_KEY` | mandatory canary/staged rollout用のserver-controlled bucket key。未設定時はfull enforcementへfail-safe |
 | `VERITAS_POLICY_REQUIRE_ED25519` | `true` を設定すると、マニフェストが Ed25519 署名を宣言しているバンドルに対して SHA-256 フォールバックを拒否。公開鍵が利用不可の場合は `ValueError` を送出し、サイレントダウングレードを防止 |
 
@@ -277,8 +277,8 @@ canary 対象外リクエストは observe-only に維持します。
 
 `veritas_os/core/pipeline_policy.py` に bridge を追加:
 
-- mandatory runtime enforcement時は `VERITAS_POLICY_RUNTIME_BUNDLE_DIR` または
-  bind-controlledなactive pointerからdeployment-controlled bundleを選択
+- mandatory runtime enforcement時は `VERITAS_POLICY_RUNTIME_BUNDLE_ID` または
+  bind-controlledなactive pointerからpath-safeなbundle IDを取り出し、deployment-controlled runtime storageからbundleを選択
 - リクエストの `compiled_policy_bundle_dir` / `policy_runtime_enforce=false` では
   server-mandated enforcementを解除・差し替えできない
 - 結果を `ctx.response_extras["governance"]["compiled_policy"]` に格納
