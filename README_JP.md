@@ -676,7 +676,7 @@ VERITAS OS は単一の**ランタイムポスチャ**（`VERITAS_POSTURE`）で
 | Transparency logアンカーリング | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | Transparencyアンカー未設定時にTrustLog書き込みを失敗させる |
 | WORM hard-fail | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | WORMミラー書き込み失敗時にTrustLog書き込みを失敗させる |
 | 厳密リプレイ | `VERITAS_REPLAY_STRICT` | 重大なリプレイ乖離を中止させる |
-| ガバナンス成果物署名検証 | `VERITAS_POLICY_VERIFY_KEY`（+ポスチャ強制） | secure/prod で未署名または非Ed25519のガバナンスポリシーバンドルを拒否 |
+| ガバナンス成果物署名検証 | `VERITAS_POLICY_VERIFY_KEY`（+ポスチャ強制） | secure/prod で信頼済み鍵によるEd25519検証と、署名manifestから実際に評価するbundle本文への完全な結合を要求 |
 
 ### 意思決定出力に含まれるガバナンス成果物ID
 
@@ -685,8 +685,8 @@ VERITAS OS は単一の**ランタイムポスチャ**（`VERITAS_POSTURE`）で
 
 - `policy_version`
 - `digest`（コンパイル済みバンドルのセマンティックハッシュ）
-- `signature_verified`
-- `signer_id`（バンドルメタデータに `signing.key_id` がある場合）
+- `signature_verified`（信頼済み鍵でEd25519検証が実際に成功した場合のみtrue）
+- `signer_id`（署名検証に成功したmanifestからのみ出力）
 - `verified_at`
 
 このIDは意思決定・Replay・監査成果物に連結され、どのガバナンス制御プレーン成果物が
