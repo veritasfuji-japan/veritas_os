@@ -749,7 +749,8 @@ def require_permission(permission: Permission):
                 status_code=403,
                 detail=f"Role '{role.value}' does not have '{permission.value}' permission",
             )
-        # Attach role to request state for downstream use (e.g. TrustLog extras)
+        # Attach trusted principal + role to request state for downstream use.
+        _bind_authenticated_principal(request, key)
         if request is not None:
             request.state.rbac_role = role.value  # type: ignore[attr-defined]
         return True
@@ -856,11 +857,12 @@ def require_api_key(
         _record_auth_reject_reason("api_key_invalid")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
+    _bind_authenticated_principal(request, x_api_key)
     return True
 
 
 def _derive_api_user_id(x_api_key: Optional[str]) -> str:
-    """Derive a stable internal user identifier from the authenticated API key."""
+    """Derive a stable internal principal identifier from the authenticated API key."""
     if isinstance(x_api_key, str) and x_api_key.strip():
         digest = hashlib.pbkdf2_hmac(
             "sha256",
@@ -870,6 +872,23 @@ def _derive_api_user_id(x_api_key: Optional[str]) -> str:
         ).hex()[:16]
         return f"key_{digest}"
     return "anon"
+
+
+def _bind_authenticated_principal(
+    request: Optional[Request],
+    x_api_key: Optional[str],
+) -> str:
+    """Attach a trusted principal id to request state after authentication.
+
+    Client-supplied business/user identifiers are not authorization identity.
+    Downstream access-control code must use this principal-derived value.
+    """
+    principal_id = _derive_api_user_id(x_api_key)
+    if request is not None:
+        request.state.authenticated_principal_id = principal_id  # type: ignore[attr-defined]
+        # Backward-compatible alias used by existing endpoint telemetry.
+        request.state.user_id = principal_id  # type: ignore[attr-defined]
+    return principal_id
 
 
 def _resolve_memory_user_id(body_user_id: Any, x_api_key: Optional[str]) -> str:
@@ -926,6 +945,7 @@ def require_api_key_header_or_query(
         _record_auth_reject_reason("api_key_invalid")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
+    _bind_authenticated_principal(request, candidate)
     return True
 
 
