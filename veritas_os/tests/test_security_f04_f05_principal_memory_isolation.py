@@ -77,6 +77,7 @@ def test_f04_pipeline_request_user_id_cannot_replace_authenticated_principal() -
     )
 
     assert ctx.user_id == principal_b
+    assert ctx.authenticated_principal_id == principal_b
     assert ctx.context["user_id"] == principal_b
     assert ctx.body["context"]["user_id"] == principal_b
 
@@ -89,6 +90,7 @@ def test_f04_pipeline_retrieval_rejects_cross_principal_and_unowned_hits() -> No
         context={},
         body={},
         user_id=principal_b,
+        authenticated_principal_id=principal_b,
         response_extras={
             "metrics": {
                 "mem_hits": 0,
