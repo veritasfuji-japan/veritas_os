@@ -712,21 +712,9 @@ async def replay_endpoint(decision_id: str, request: Request):
 )
 async def replay_decision_endpoint(decision_id: str, request: Request):
     """Replay a persisted decision deterministically and return diff report."""
-    srv = _get_server()
-    p = srv.get_decision_pipeline()
-    if p is None or not hasattr(p, "replay_decision"):
-        return JSONResponse(
-            status_code=503,
-            content={
-                "match": False,
-                "diff": {"error": DECIDE_GENERIC_ERROR},
-                "replay_time_ms": 0,
-            },
-        )
-
     # Public replay is an audit/reproducibility path, never an external
     # side-effect path. A caller cannot turn external APIs back on through
-    # query parameters, regardless of RBAC role.
+    # query parameters, regardless of RBAC role or backend availability.
     try:
         qv = request.query_params.get("mock_external_apis")
     except Exception:
@@ -742,6 +730,18 @@ async def replay_decision_endpoint(decision_id: str, request: Request):
             content={
                 "match": False,
                 "diff": {"error": "replay_external_apis_forbidden"},
+                "replay_time_ms": 0,
+            },
+        )
+
+    srv = _get_server()
+    p = srv.get_decision_pipeline()
+    if p is None or not hasattr(p, "replay_decision"):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "match": False,
+                "diff": {"error": DECIDE_GENERIC_ERROR},
                 "replay_time_ms": 0,
             },
         )
