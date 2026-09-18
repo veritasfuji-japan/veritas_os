@@ -124,7 +124,8 @@ async def _run(*, provider_cls: Any, endpoint: str, token: str) -> dict[str, Any
         raise RuntimeError("VERITAS and CAGE receipt hash domains unexpectedly collapsed")
 
     tampered = dict(receipt)
-    tampered["authority_evidence_id"] = f"{receipt.get('authority_evidence_id', '')}::tampered"
+    authority_evidence_id = str(receipt.get("authority_evidence_id", ""))
+    tampered["authority_evidence_id"] = f"{authority_evidence_id}::tampered"
     tampered_digest = provider.ingest_bind_receipt(tampered)
     if tampered_digest == cage_digest:
         raise RuntimeError("CAGE digest did not change after BindReceipt tampering")
@@ -169,11 +170,15 @@ async def _run(*, provider_cls: Any, endpoint: str, token: str) -> dict[str, Any
         "cage_ingest_digest_deterministic": cage_digest == replay_digest,
         "hash_domains_distinct": cage_digest != veritas_receipt_hash,
         "tamper_changes_cage_digest": tampered_digest != cage_digest,
-        "tamper_invalidates_veritas_self_hash": (\n            not veritas_bind_receipt_hash_valid(tampered)\n        ),
+        "tamper_invalidates_veritas_self_hash": (
+            not veritas_bind_receipt_hash_valid(tampered)
+        ),
         "evidence_submission_succeeded": getattr(evidence, "error", None) is None,
         "evidence_seal_binds_cage_digest": seal_hash == expected_seal_hash,
         "rejected_result_non_admitted": getattr(rejected, "admitted", True) is False,
-        "rejected_result_exposes_no_bind_receipt": (\n            not _findings_expose_bind_receipt(rejected)\n        ),
+        "rejected_result_exposes_no_bind_receipt": (
+            not _findings_expose_bind_receipt(rejected)
+        ),
     }
     blockers = sorted(key for key, passed in checks.items() if passed is not True)
 
@@ -201,7 +206,9 @@ async def _run(*, provider_cls: Any, endpoint: str, token: str) -> dict[str, Any
         "tamper_probe": {
             "tampered_cage_digest": tampered_digest,
             "cage_digest_changed": tampered_digest != cage_digest,
-            "veritas_self_hash_valid_after_tamper": (\n                veritas_bind_receipt_hash_valid(tampered)\n            ),
+            "veritas_self_hash_valid_after_tamper": (
+                veritas_bind_receipt_hash_valid(tampered)
+            ),
         },
         "evidence_flow": {
             "thread_id": thread_id,
@@ -265,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     output_path = args.output_dir / "phase5c-runtime-report.json"
     output_path.write_text(
-        json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\\n",
+        json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
     print(output_path)
