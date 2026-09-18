@@ -161,6 +161,25 @@ The implementation includes focused tests proving:
 12. incomplete required policy fails before consumption; and
 13. untyped request-like policy input cannot downgrade the typed deployment gate.
 
+## 9.1 Dedicated reproducible proof
+
+A dedicated workflow now exercises this profile separately from the frozen
+Controlled Execution Proof v1:
+
+`.github/workflows/reproducible-reconciliation-capable-execution-profile.yml`
+
+Validation contract:
+
+`docs/en/validation/reconciliation-capable-execution-profile-proof-v1.md`
+
+The proof requires `AUTHORITATIVE_QUERY` before consumption on the positive
+normal and lost-response paths, and demonstrates that missing or
+`HEURISTIC_ONLY` capability remains unconsumed with no sandbox event.
+
+The workflow also runs the broader focused negative matrix for expiry,
+endpoint/configuration drift, verifier mismatch, evidence-digest mismatch,
+incomplete policy, and request-like downgrade attempts.
+
 ## 10. Non-claims
 
 This profile does not claim:
