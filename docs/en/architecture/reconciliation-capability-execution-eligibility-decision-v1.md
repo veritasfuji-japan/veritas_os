@@ -1,6 +1,6 @@
 # Reconciliation Capability Execution Eligibility Decision v1
 
-Status: **DECIDED / IMPLEMENTATION DEFERRED**
+Status: **DECIDED / IMPLEMENTED BY POLICY-GATED PROFILE V1**
 
 ## 1. Decision
 
@@ -194,17 +194,17 @@ This decision does not claim:
 
 ## 13. Implementation boundary
 
-Implementation is deliberately deferred to a separate PR.
+Implementation is provided by the separate policy-gated profile documented in `reconciliation-capable-execution-profile-v1.md`.
 
-That PR must:
+That implementation:
 
-- introduce an explicit deployment-controlled policy input;
-- consume the existing reconciliation-capability evidence through a narrowly scoped gate;
-- perform the current-target/trust/freshness rechecks;
-- fail before authorization consumption and transport when the prerequisite is unsatisfied;
-- preserve existing `EFFECT_UNKNOWN`, retry, replacement, reconciliation, and recovery semantics;
-- add the proof cases above; and
-- document the resulting controlled-proof version/profile.
+- introduces an explicit deployment-controlled policy input;
+- consumes the existing reconciliation-capability evidence through a narrowly scoped gate;
+- performs the current-target/trust/freshness rechecks;
+- fails before authorization consumption and transport when the prerequisite is unsatisfied;
+- preserves existing `EFFECT_UNKNOWN`, retry, replacement, reconciliation, and recovery semantics;
+- adds the focused proof cases above; and
+- documents the resulting policy-gated execution profile while leaving the frozen proof v1 unchanged.
 
 ## 14. Resulting principle
 
