@@ -727,7 +727,6 @@ async def replay_decision_endpoint(decision_id: str, request: Request):
     # Public replay is an audit/reproducibility path, never an external
     # side-effect path. A caller cannot turn external APIs back on through
     # query parameters, regardless of RBAC role.
-    mock_external_apis = True
     try:
         qv = request.query_params.get("mock_external_apis")
     except Exception:
