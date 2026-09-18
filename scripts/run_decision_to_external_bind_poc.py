@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import sys
 import tempfile
 from typing import Any
@@ -286,19 +287,24 @@ def _configure_verified_policy_bundle(runtime_root: Path) -> Path:
     verify_key_path.write_bytes(public_pem)
     compiled = compile_policy_to_bundle(
         POLICY_SOURCE,
-        runtime_root / "policy-bundle",
+        runtime_root / "policy-bundle-build",
         compiled_at=NOW.isoformat().replace("+00:00", "Z"),
         signing_key=private_pem,
     )
+    bundle_id = "decision-bind-poc"
+    trusted_root = runtime_root / "runtime" / "policy_bundles"
+    trusted_bundle = trusted_root / bundle_id
+    trusted_root.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(compiled.bundle_dir, trusted_bundle)
     os.environ.update(
         {
             "VERITAS_POLICY_VERIFY_KEY": str(verify_key_path),
             "VERITAS_POLICY_REQUIRE_ED25519": "1",
             "VERITAS_POLICY_RUNTIME_ENFORCE": "1",
-            "VERITAS_POLICY_RUNTIME_BUNDLE_DIR": str(compiled.bundle_dir),
+            "VERITAS_POLICY_RUNTIME_BUNDLE_ID": bundle_id,
         }
     )
-    return compiled.bundle_dir
+    return trusted_bundle
 
 
 def _verified_authority(
