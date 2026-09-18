@@ -482,21 +482,26 @@ class MemoryStore:
         - KVS に保存
         - 可能なら VectorMemory にも同時に追加
         """
+        trusted_user_id = kwargs.pop("user_id", None)
+        record_meta: Dict[str, Any] = dict(meta or {})
+        if trusted_user_id not in (None, ""):
+            record_meta["user_id"] = str(trusted_user_id)
+
         record: Dict[str, Any] = {
             "text": text,
             "tags": tags or [],
-            "meta": meta or {},
+            "meta": record_meta,
         }
 
         for k, v in kwargs.items():
             if k not in record:
                 record[k] = v
 
-        user_id = (record.get("meta") or {}).get("user_id", "episodic")
+        owner_user_id = (record.get("meta") or {}).get("user_id", "episodic")
         key = f"episode_{int(time.time())}"
 
         # KVS
-        saved = self.put(user_id, key, record)
+        saved = self.put(owner_user_id, key, record)
         if not saved:
             logger.error("[MemoryOS] put_episode persist failed: key=%s", key)
             return key
