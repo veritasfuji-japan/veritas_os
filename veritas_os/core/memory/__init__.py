@@ -586,7 +586,8 @@ def add(
         raise ValueError("[MemoryOS.add] text is empty")
 
     entry_meta: Dict[str, Any] = dict(meta or {})
-    entry_meta.setdefault("user_id", user_id)
+    # Explicit owner argument is authoritative; metadata cannot redirect writes.
+    entry_meta["user_id"] = user_id
     if source_label is not None:
         entry_meta.setdefault("source_label", source_label)
 
@@ -713,16 +714,19 @@ def search(
             raw = _vec.search(query=query, k=k, kinds=kinds, min_sim=min_sim)
             candidates = collect_candidate_hits(raw)
             if candidates:
-                filtered = filter_hits_for_user(candidates, user_id)
-                if filtered:
-                    candidates = filtered
-                unique = _dedup_hits(candidates, k)
-                logger.info(
-                    "[MemoryOS] Vector search returned "
-                    "%d unique hits (raw=%d)",
-                    len(unique), len(candidates),
+                candidates = filter_hits_for_user(
+                    candidates,
+                    user_id,
+                    include_unowned=user_id is None,
                 )
-                return unique
+                if candidates:
+                    unique = _dedup_hits(candidates, k)
+                    logger.info(
+                        "[MemoryOS] Vector search returned "
+                        "%d unique hits (raw=%d)",
+                        len(unique), len(candidates),
+                    )
+                    return unique
 
             logger.info(
                 "[MemoryOS] MEM_VEC.search returned no hits; fallback to KVS"
@@ -733,13 +737,19 @@ def search(
                 raw = _vec.search(query, k=k)  # type: ignore[call-arg]
                 if isinstance(raw, list) and raw:
                     hits = [h for h in raw if isinstance(h, dict)]
-                    unique = _dedup_hits(hits, k)
-                    logger.info(
-                        "[MemoryOS] Vector search (old sig) returned "
-                        "%d unique hits (raw=%d)",
-                        len(unique), len(hits),
+                    hits = filter_hits_for_user(
+                        hits,
+                        user_id,
+                        include_unowned=user_id is None,
                     )
-                    return unique
+                    if hits:
+                        unique = _dedup_hits(hits, k)
+                        logger.info(
+                            "[MemoryOS] Vector search (old sig) returned "
+                            "%d unique hits (raw=%d)",
+                            len(unique), len(hits),
+                        )
+                        return unique
                 logger.info(
                     "[MemoryOS] MEM_VEC.search(old sig) no hits; fallback to KVS"
                 )
