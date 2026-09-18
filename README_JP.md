@@ -678,6 +678,18 @@ VERITAS OS は単一の**ランタイムポスチャ**（`VERITAS_POSTURE`）で
 | 厳密リプレイ | `VERITAS_REPLAY_STRICT` | 重大なリプレイ乖離を中止させる |
 | ガバナンス成果物署名検証 | `VERITAS_POLICY_VERIFY_KEY`（+ポスチャ強制） | secure/prod で信頼済み鍵によるEd25519検証と、署名manifestから実際に評価するbundle本文への完全な結合を要求 |
 
+### 認証主体とMemoryOS所有権
+
+認証済みAPIリクエストでは、VERITASは認証済みAPIキーから内部principal IDを
+導出し、そのprincipalをMemoryOS / WorldOSの所有権スコープとして扱います。
+request body / contextの `user_id` は業務入力であり、別principalのストレージ
+namespaceを選択する権限にはなりません。また `/v1/memory/put` では、
+callerが指定した `meta.user_id` を保存前に認証principalで上書きします。
+
+decision pipelineは認証principalを業務入力とは別に保持し、memory evidenceを
+採用する直前にもowner一致を確認します。認証HTTP境界を通らないdirect/internal
+呼び出しについては、既存の明示user指定の互換挙動を維持します。
+
 ### 意思決定出力に含まれるガバナンス成果物ID
 
 コンパイル済みポリシーガバナンスが有効な場合、`/v1/decide` レスポンスには
