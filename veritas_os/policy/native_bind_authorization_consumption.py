@@ -11,6 +11,11 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Literal
 
+from veritas_os.governance.reconciliation_capability_evidence import (
+    ReconciliationCapabilityEvidence,
+    validate_reconciliation_capability_for_current_target,
+)
+
 from veritas_os.policy.native_bind_authorization import (
     NativeAuthorizationSourceInputs,
     NativeBindAuthorizationArtifact,
@@ -34,6 +39,127 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
 )
 
 
+@dataclass(frozen=True)
+class ReconciliationCapabilityExecutionPolicy:
+    """Deployment-controlled policy for pre-consumption reconciliation gating.
+
+    This object is not request data and does not itself create execution
+    permission. When require_authoritative_reconciliation is false, the
+    existing consumption contract remains unchanged.
+    """
+
+    policy_id: str
+    require_authoritative_reconciliation: bool
+    current_target_configuration_digest: str | None = None
+    expected_verifier_id: str | None = None
+    expected_verifier_policy_id: str | None = None
+    expected_verifier_policy_hash: str | None = None
+    expected_evidence_digest: str | None = None
+
+
+def _is_sha256(value: str | None) -> bool:
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    try:
+        int(value, 16)
+    except ValueError:
+        return False
+    return value == value.lower()
+
+
+def _validate_reconciliation_capability_execution_policy(
+    policy: ReconciliationCapabilityExecutionPolicy,
+) -> None:
+    """Fail closed on ambiguous or incompletely anchored gate policy."""
+    if type(policy) is not ReconciliationCapabilityExecutionPolicy:
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
+        )
+    if not policy.policy_id.strip() or type(
+        policy.require_authoritative_reconciliation
+    ) is not bool:
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
+        )
+
+    anchor_values = (
+        policy.current_target_configuration_digest,
+        policy.expected_verifier_id,
+        policy.expected_verifier_policy_id,
+        policy.expected_verifier_policy_hash,
+        policy.expected_evidence_digest,
+    )
+
+    if not policy.require_authoritative_reconciliation:
+        if any(value is not None for value in anchor_values):
+            raise NativeAuthorizationConsumptionError(
+                "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
+            )
+        return
+
+    if not all(isinstance(value, str) and value.strip() for value in anchor_values):
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
+        )
+    if not (
+        _is_sha256(policy.current_target_configuration_digest)
+        and _is_sha256(policy.expected_verifier_policy_hash)
+        and _is_sha256(policy.expected_evidence_digest)
+    ):
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_POLICY_INVALID"
+        )
+
+
+def _enforce_reconciliation_capability_before_consumption(
+    *,
+    policy: ReconciliationCapabilityExecutionPolicy | None,
+    evidence: ReconciliationCapabilityEvidence | None,
+    current_endpoint_identity_binding_digest: str,
+    verification_time: datetime,
+) -> tuple[str | None, str | None, bool]:
+    """Apply the policy-selected capability gate without consuming anything."""
+    if policy is None:
+        return None, None, False
+
+    _validate_reconciliation_capability_execution_policy(policy)
+    if not policy.require_authoritative_reconciliation:
+        return policy.policy_id, None, False
+
+    if type(evidence) is not ReconciliationCapabilityEvidence:
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_REQUIRED"
+        )
+
+    try:
+        failures = validate_reconciliation_capability_for_current_target(
+            evidence,
+            current_endpoint_identity_binding_digest=(
+                current_endpoint_identity_binding_digest
+            ),
+            current_target_configuration_digest=str(
+                policy.current_target_configuration_digest
+            ),
+            verification_time=verification_time,
+            require_authoritative=True,
+            expected_verifier_id=policy.expected_verifier_id,
+            expected_verifier_policy_id=policy.expected_verifier_policy_id,
+            expected_verifier_policy_hash=policy.expected_verifier_policy_hash,
+            expected_evidence_digest=policy.expected_evidence_digest,
+        )
+    except ValueError:
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_REJECTED"
+        ) from None
+
+    if failures:
+        raise NativeAuthorizationConsumptionError(
+            "NABC_RECONCILIATION_CAPABILITY_REJECTED"
+        )
+
+    return policy.policy_id, evidence.deterministic_digest(), True
+
+
 class NativeAuthorizationConsumptionError(ValueError):
     """Fail-closed native consumption error; never includes backend secrets."""
 
@@ -49,6 +175,10 @@ class NativeAuthorizationConsumptionResult:
     current_human_approval_proof_digest: str | None
     current_runtime_authority_digest: str
     durable_store_used: bool
+    reconciliation_capability_policy_id: str | None = None
+    reconciliation_capability_evidence_digest: str | None = None
+    reconciliation_capability_required: bool = False
+    reconciliation_capability_satisfied: bool = False
     authorization_consumed: Literal[True] = True
     execution_authority_created: Literal[False] = False
     credential_material_accessed: Literal[False] = False
@@ -68,6 +198,10 @@ async def consume_native_bind_authorization(
     now: datetime,
     consumption_store: PostgresAtomicAuthorizationConsumptionStore
     | InMemoryAtomicAuthorizationConsumptionStore,
+    reconciliation_capability_policy: ReconciliationCapabilityExecutionPolicy
+    | None = None,
+    reconciliation_capability_evidence: ReconciliationCapabilityEvidence
+    | None = None,
     allow_in_memory_for_testing: bool = False,
 ) -> NativeAuthorizationConsumptionResult:
     """Reverify historical and current evidence, then atomically consume once.
@@ -83,8 +217,15 @@ async def consume_native_bind_authorization(
 
     Failure after an attempted write never releases or reuses an authorization.
     A database commit with a lost acknowledgement must be treated as consumed
-    or unknown, not automatically retried as an executable action. A future
-    execution boundary still needs fresh policy/risk checks and durable lineage.
+    or unknown, not automatically retried as an executable action.
+
+    When a deployment-controlled reconciliation capability policy requires an
+    authoritative downstream resolution path, that capability is rechecked
+    against the current endpoint/configuration and independently supplied trust
+    anchors before the consumption write. Missing, stale, drifted, heuristic, or
+    untrusted capability evidence fails closed while leaving the authorization
+    unconsumed. If the policy does not require the gate, the existing consumption
+    contract remains unchanged.
     """
     durable = type(consumption_store) is PostgresAtomicAuthorizationConsumptionStore
     if not durable and not (
@@ -145,6 +286,20 @@ async def consume_native_bind_authorization(
         != risk.required_human_approval
     ):
         raise NativeAuthorizationConsumptionError("NABC_CURRENT_APPROVAL_MISMATCH")
+
+    (
+        reconciliation_policy_id,
+        reconciliation_evidence_digest,
+        reconciliation_capability_satisfied,
+    ) = _enforce_reconciliation_capability_before_consumption(
+        policy=reconciliation_capability_policy,
+        evidence=reconciliation_capability_evidence,
+        current_endpoint_identity_binding_digest=(
+            context.endpoint_identity_binding_digest
+        ),
+        verification_time=current,
+    )
+
     record = build_authorization_consumption_record(
         live_adapter_bind_authorization_id=authorization.authorization_id,
         live_adapter_bind_authorization_hash=authorization.authorization_hash,
@@ -178,4 +333,11 @@ async def consume_native_bind_authorization(
         ),
         current_runtime_authority_digest=governance.runtime_result_digest,
         durable_store_used=durable,
+        reconciliation_capability_policy_id=reconciliation_policy_id,
+        reconciliation_capability_evidence_digest=reconciliation_evidence_digest,
+        reconciliation_capability_required=(
+            reconciliation_capability_policy is not None
+            and reconciliation_capability_policy.require_authoritative_reconciliation
+        ),
+        reconciliation_capability_satisfied=reconciliation_capability_satisfied,
     )

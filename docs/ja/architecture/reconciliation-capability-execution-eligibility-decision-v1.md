@@ -1,6 +1,6 @@
 # Reconciliation Capability Execution Eligibility Decision v1
 
-Status: **DECIDED / IMPLEMENTATION DEFERRED**
+Status: **DECIDED / IMPLEMENTED BY POLICY-GATED PROFILE V1**
 
 ## 1. 決定
 
@@ -194,17 +194,17 @@ Human involvement は evidence collection の調整には使える。Human asser
 
 ## 13. Implementation boundary
 
-Implementation は別PRへ意図的に defer する。
+Implementation は別の policy-gated profile として実装されており、`reconciliation-capable-execution-profile-v1.md` に記録する。
 
-そのPRでは次を満たす必要がある。
+その実装は次を満たす。
 
-- explicit deployment-controlled policy input を導入
-- existing reconciliation-capability evidence を narrowly scoped gate で利用
-- current-target / trust / freshness recheck を実施
-- prerequisite 不成立時、authorization consumption と transport の前に fail
-- existing `EFFECT_UNKNOWN`, retry, replacement, reconciliation, recovery semantics を保持
-- 上記 proof case を追加
-- resulting controlled-proof version/profile を文書化
+- explicit deployment-controlled policy input を導入する
+- existing reconciliation-capability evidence を narrowly scoped gate で利用する
+- current-target / trust / freshness recheck を実施する
+- prerequisite 不成立時、authorization consumption と transport の前に fail する
+- existing `EFFECT_UNKNOWN`, retry, replacement, reconciliation, recovery semantics を保持する
+- 上記 focused proof case を追加する
+- frozen proof v1 を変更せず、resulting policy-gated execution profile を文書化する
 
 ## 14. Resulting principle
 

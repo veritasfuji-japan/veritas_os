@@ -322,7 +322,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
     archive = await effect_store.get_reconciliation(consumption.consumption_id)
     assert archive is not None
     migration = await _migration_head()
-    assert migration == "0008"
+    assert migration == "0009"
 
     report = {
         "format_version": "native-v2-sandbox-controlled-composition/v1",
