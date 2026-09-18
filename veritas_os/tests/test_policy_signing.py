@@ -316,3 +316,29 @@ def test_verify_key_env_var_unreadable_file_does_not_crash(
 
     assert not ok  # SHA-256 check fails for ed25519-signed bundles
     assert "failed to read public key" in caplog.text
+
+
+def test_runtime_adapter_logs_do_not_expose_bundle_or_key_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Sensitive filesystem locations must not be emitted in policy logs."""
+    import logging
+
+    secret_bundle = tmp_path / "customer-secret-policy-location"
+    secret_bundle.mkdir()
+    secret_key = tmp_path / "customer-secret-key-location.pem"
+    secret_key.write_text("not-a-key", encoding="utf-8")
+    monkeypatch.setenv("VERITAS_POLICY_VERIFY_KEY", str(secret_key))
+
+    from unittest.mock import patch
+
+    with (
+        patch.object(Path, "read_bytes", side_effect=OSError("synthetic read failure")),
+        caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"),
+    ):
+        verify_manifest_signature(secret_bundle)
+
+    assert str(secret_bundle) not in caplog.text
+    assert str(secret_key) not in caplog.text
