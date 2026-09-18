@@ -740,7 +740,7 @@ VERITAS OS uses a single **runtime posture** (`VERITAS_POSTURE`) to control gove
 | Transparency log anchoring | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | TrustLog writes fail when transparency anchor is missing |
 | WORM hard-fail | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | TrustLog writes fail when WORM mirror write fails |
 | Strict replay | `VERITAS_REPLAY_STRICT` | Critical replay divergences abort |
-| Governance artifact signatures | `VERITAS_POLICY_VERIFY_KEY` (+ posture strictness) | In secure/prod, reject unsigned or non-Ed25519 governance policy bundles |
+| Governance artifact signatures | `VERITAS_POLICY_VERIFY_KEY` (+ posture strictness) | In secure/prod, require trusted-key Ed25519 verification and exact signed-manifest binding to the evaluated bundle contents |
 
 ### Governance artifact identity in decision outputs
 
@@ -749,8 +749,8 @@ When compiled policy governance is active, `/v1/decide` responses include
 
 - `policy_version`
 - `digest` (compiled bundle semantic hash)
-- `signature_verified`
-- `signer_id` (if bundle metadata provides `signing.key_id`)
+- `signature_verified` (true only after successful Ed25519 verification with trusted key material)
+- `signer_id` (emitted only from a successfully verified signed manifest)
 - `verified_at`
 
 This identity is threaded into decision, replay, and audit artifacts so that
