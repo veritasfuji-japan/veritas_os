@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
+from .hash import semantic_policy_hash
 from .ir import CanonicalPolicyIR
 from .signing import verify_manifest_ed25519
 
@@ -42,6 +43,20 @@ class RuntimePolicy:
 
 
 @dataclass(frozen=True)
+class ManifestVerificationResult:
+    """Verifier-derived manifest trust result.
+
+    signature_verified is true only after successful Ed25519 verification
+    with trusted public-key material. A SHA-256 integrity check never sets it.
+    """
+
+    integrity_verified: bool
+    signature_verified: bool
+    algorithm: str
+    signer_id: str = ""
+
+
+@dataclass(frozen=True)
 class RuntimePolicyBundle:
     """Runtime policy bundle adapted from compiled artifacts."""
 
@@ -53,6 +68,11 @@ class RuntimePolicyBundle:
     compiled_at: str
     runtime_policies: List[RuntimePolicy]
     manifest: Dict[str, Any]
+    manifest_integrity_verified: bool = False
+    signature_verified: bool = False
+    signature_algorithm: str = ""
+    signer_id: str = ""
+    bundle_contents_verified: bool = False
 
 
 def _read_json_file(path: Path) -> Dict[str, Any]:
@@ -69,16 +89,119 @@ def _read_json_file(path: Path) -> Dict[str, Any]:
     return data
 
 
+def _active_policy_posture_is_strict() -> bool:
+    try:
+        from veritas_os.core.posture import get_active_posture
+
+        return bool(get_active_posture().is_strict)
+    except (ImportError, AttributeError):
+        return False
+
+
+def _ed25519_required(*, is_strict: bool) -> bool:
+    explicit = os.getenv("VERITAS_POLICY_REQUIRE_ED25519", "").strip().lower()
+    return is_strict or explicit in {"1", "true", "yes"}
+
+
+def _parse_json_mapping_bytes(raw: bytes, *, label: str) -> Dict[str, Any]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f"invalid JSON in {label}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"expected mapping JSON in {label}")
+    return data
+
+
+def _resolve_verification_public_key(
+    public_key_pem: bytes | None,
+) -> bytes | None:
+    if public_key_pem is not None:
+        return public_key_pem
+
+    key_path_str = os.environ.get("VERITAS_POLICY_VERIFY_KEY")
+    if not key_path_str:
+        return None
+
+    key_path = Path(key_path_str)
+    try:
+        if key_path.is_file():
+            return key_path.read_bytes()
+    except OSError as exc:
+        logger.warning(
+            "failed to read configured policy verification key "
+            "(error_type=%s)",
+            type(exc).__name__,
+        )
+    return None
+
+
+def _verify_manifest_payload(
+    *,
+    manifest_bytes: bytes,
+    manifest: Mapping[str, Any],
+    signature_text: str,
+    public_key_pem: bytes | None,
+    require_ed25519: bool,
+) -> ManifestVerificationResult:
+    signing = manifest.get("signing", {})
+    if not isinstance(signing, Mapping):
+        raise ValueError("manifest signing metadata must be a mapping")
+
+    algorithm = str(signing.get("algorithm", "")).strip().lower()
+    if algorithm not in {"ed25519", "sha256"}:
+        raise ValueError("unsupported manifest signing algorithm")
+
+    if algorithm == "ed25519":
+        pub_key = _resolve_verification_public_key(public_key_pem)
+        if pub_key is None:
+            raise ValueError(
+                "Ed25519 verification requires a trusted public key; "
+                "SHA-256 downgrade is not permitted"
+            )
+        verified = verify_manifest_ed25519(
+            manifest_bytes,
+            signature_text,
+            pub_key,
+        )
+        return ManifestVerificationResult(
+            integrity_verified=verified,
+            signature_verified=verified,
+            algorithm="ed25519",
+            signer_id=(
+                str(signing.get("key_id", "")).strip()
+                if verified
+                else ""
+            ),
+        )
+
+    if require_ed25519:
+        raise ValueError(
+            "Ed25519 verification is required; legacy SHA-256 manifest "
+            "integrity is insufficient"
+        )
+
+    expected = hashlib.sha256(manifest_bytes).hexdigest()
+    verified = hmac.compare_digest(expected, signature_text)
+    return ManifestVerificationResult(
+        integrity_verified=verified,
+        signature_verified=False,
+        algorithm="sha256",
+        signer_id="",
+    )
+
+
 def verify_manifest_signature(
     bundle_dir: str | Path,
     *,
     public_key_pem: bytes | None = None,
 ) -> bool:
-    """Verify ``manifest.sig`` for a compiled bundle.
+    """Verify manifest.sig without allowing algorithm downgrade.
 
-    When *public_key_pem* is provided (or the ``VERITAS_POLICY_VERIFY_KEY``
-    environment variable points to a PEM file), Ed25519 verification is used.
-    Otherwise falls back to legacy SHA-256 integrity check.
+    An artifact that declares ed25519 is verified only with a trusted Ed25519
+    public key. It is never reinterpreted as a SHA-256 artifact when the key is
+    missing. Legacy bundles that explicitly declare sha256 are accepted only
+    outside strict posture unless Ed25519 is explicitly required.
     """
     root = Path(bundle_dir)
     manifest_path = root / "manifest.json"
@@ -86,7 +209,10 @@ def verify_manifest_signature(
     if not manifest_path.exists() or not signature_path.exists():
         missing = [
             name
-            for name, p in (("manifest.json", manifest_path), ("manifest.sig", signature_path))
+            for name, p in (
+                ("manifest.json", manifest_path),
+                ("manifest.sig", signature_path),
+            )
             if not p.exists()
         ]
         logger.warning(
@@ -95,23 +221,6 @@ def verify_manifest_signature(
         )
         return False
 
-    # Resolve public key from argument or env var
-    pub_key = public_key_pem
-    if pub_key is None:
-        key_path_str = os.environ.get("VERITAS_POLICY_VERIFY_KEY")
-        if key_path_str:
-            key_path = Path(key_path_str)
-            try:
-                if key_path.is_file():
-                    pub_key = key_path.read_bytes()
-            except OSError as exc:
-                logger.warning(
-                    "failed to read public key from configured verification key "
-                    "(error_type=%s)",
-                    type(exc).__name__,
-                )
-
-    # Read raw bytes once (used for both algorithm detection and verification)
     try:
         manifest_bytes = manifest_path.read_bytes()
     except OSError as exc:
@@ -121,10 +230,22 @@ def verify_manifest_signature(
             type(exc).__name__,
         )
         return False
+    try:
+        manifest = _parse_json_mapping_bytes(
+            manifest_bytes,
+            label="manifest.json",
+        )
+    except ValueError as exc:
+        logger.warning(
+            "failed to parse manifest.json for signature verification "
+            "(error_type=%s)",
+            type(exc).__name__,
+        )
+        return False
 
     try:
-        sig_text = signature_path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
+        signature_text = signature_path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError) as exc:
         logger.warning(
             "failed to read signature file for verification "
             "(error_type=%s)",
@@ -132,42 +253,102 @@ def verify_manifest_signature(
         )
         return False
 
-    # Detect signing algorithm from manifest metadata.
-    # OSError is not caught here because manifest_bytes was already read above;
-    # only JSON parse / encoding errors are possible at this point.
-    try:
-        manifest_data = json.loads(manifest_bytes.decode("utf-8"))
-        algorithm = (
-            manifest_data.get("signing", {}).get("algorithm", "sha256")
-        )
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        logger.warning(
-            "failed to parse manifest.json for algorithm detection "
-            "(error_type=%s); defaulting to sha256 integrity check",
-            type(exc).__name__,
-        )
-        algorithm = "sha256"
+    verification = _verify_manifest_payload(
+        manifest_bytes=manifest_bytes,
+        manifest=manifest,
+        signature_text=signature_text,
+        public_key_pem=public_key_pem,
+        require_ed25519=_ed25519_required(
+            is_strict=_active_policy_posture_is_strict()
+        ),
+    )
+    return verification.integrity_verified
 
-    if algorithm == "ed25519" and pub_key is not None:
-        return verify_manifest_ed25519(manifest_bytes, sig_text, pub_key)
 
-    if algorithm == "ed25519" and pub_key is None:
-        require_ed25519 = os.getenv(
-            "VERITAS_POLICY_REQUIRE_ED25519", ""
-        ).strip().lower() in ("1", "true", "yes")
-        if require_ed25519:
+def _validate_manifest_bundle_entry(entry: Any) -> tuple[str, str, int]:
+    if not isinstance(entry, Mapping):
+        raise ValueError("manifest bundle_contents entry must be a mapping")
+
+    rel = str(entry.get("path", "")).strip()
+    digest = str(entry.get("sha256", "")).strip().lower()
+    size = entry.get("size")
+
+    if (
+        not rel
+        or rel.startswith("/")
+        or "\\" in rel
+        or rel in {".", ".."}
+        or any(part in {"", ".", ".."} for part in rel.split("/"))
+    ):
+        raise ValueError("manifest bundle_contents contains an invalid path")
+    if (
+        len(digest) != 64
+        or any(ch not in "0123456789abcdef" for ch in digest)
+    ):
+        raise ValueError("manifest bundle_contents contains an invalid sha256")
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        raise ValueError("manifest bundle_contents contains an invalid size")
+    return rel, digest, size
+
+
+def _verify_declared_bundle_contents(
+    root: Path,
+    manifest: Mapping[str, Any],
+    *,
+    required: bool,
+) -> tuple[dict[str, bytes], bool]:
+    raw_entries = manifest.get("bundle_contents")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        if required:
             raise ValueError(
-                "manifest requires Ed25519 verification but no public key is "
-                "available; set VERITAS_POLICY_VERIFY_KEY or provide public_key_pem"
+                "manifest bundle_contents is required for verified runtime loading"
             )
         logger.warning(
-            "manifest declares ed25519 signing but no public key is available; "
-            "falling back to SHA-256 integrity check (authenticity NOT verified)"
+            "legacy policy bundle has no bundle_contents; exact body binding "
+            "is not established in non-strict compatibility mode"
         )
+        return {}, False
 
-    # Fallback: legacy SHA-256 integrity check (constant-time comparison)
-    expected = hashlib.sha256(manifest_bytes).hexdigest()
-    return hmac.compare_digest(expected, sig_text)
+    declared: dict[str, tuple[str, int]] = {}
+    for raw_entry in raw_entries:
+        rel, digest, size = _validate_manifest_bundle_entry(raw_entry)
+        if rel in declared:
+            raise ValueError("manifest bundle_contents contains duplicate paths")
+        declared[rel] = (digest, size)
+
+    actual: dict[str, bytes] = {}
+    for candidate in root.rglob("*"):
+        rel = candidate.relative_to(root).as_posix()
+        if rel in {"manifest.json", "manifest.sig"} or rel.endswith(".tar.gz"):
+            continue
+        if candidate.is_symlink():
+            raise ValueError("policy bundle contains a symlink")
+        if not candidate.is_file():
+            continue
+        try:
+            actual[rel] = candidate.read_bytes()
+        except OSError as exc:
+            raise ValueError("failed to read declared policy bundle content") from exc
+
+    if set(actual) != set(declared):
+        raise ValueError("policy bundle contents do not match signed manifest")
+
+    for rel, payload in actual.items():
+        expected_digest, expected_size = declared[rel]
+        actual_digest = hashlib.sha256(payload).hexdigest()
+        if not hmac.compare_digest(actual_digest, expected_digest):
+            raise ValueError(
+                f"policy bundle content digest mismatch: {rel}"
+            )
+        if len(payload) != expected_size:
+            raise ValueError(
+                f"policy bundle content size mismatch: {rel}"
+            )
+
+    required_ir = "compiled/canonical_ir.json"
+    if required_ir not in actual:
+        raise ValueError("policy bundle is missing compiled/canonical_ir.json")
+    return actual, True
 
 
 def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
@@ -208,79 +389,149 @@ def load_runtime_bundle(
     *,
     public_key_pem: bytes | None = None,
 ) -> RuntimePolicyBundle:
-    """Load a compiled bundle directory and adapt it for runtime evaluation.
+    """Load and verify the exact policy bytes that will be evaluated.
 
-    In **secure** / **prod** posture, Ed25519 signature verification is
-    mandatory.  Loading an unsigned bundle in strict posture raises a
-    ``ValueError``.  In **dev** / **staging** posture, SHA-256 fallback
-    is accepted with a warning.
-
-    Args:
-        public_key_pem: Optional Ed25519 public key in PEM format for
-            signature verification.  Falls back to SHA-256 integrity check.
+    Strict posture requires successful Ed25519 verification with trusted key
+    material. Signed manifest metadata is then checked against the exact bundle
+    files loaded into memory, including canonical-IR digest, semantic hash,
+    policy id and version. The same canonical-IR bytes that pass these checks
+    are adapted for runtime evaluation.
     """
-    is_strict = False
-    try:
-        from veritas_os.core.posture import get_active_posture
-        is_strict = get_active_posture().is_strict
-    except (ImportError, AttributeError):
-        pass
+    is_strict = _active_policy_posture_is_strict()
+    require_ed25519 = _ed25519_required(is_strict=is_strict)
 
     root = Path(bundle_dir)
-    manifest = _read_json_file(root / "manifest.json")
+    manifest_path = root / "manifest.json"
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+    except OSError as exc:
+        raise ValueError("failed to read policy manifest") from exc
+    manifest = _parse_json_mapping_bytes(
+        manifest_bytes,
+        label="manifest.json",
+    )
 
     signing = manifest.get("signing", {})
-    signing_algorithm = signing.get("algorithm", "sha256")
-    signature_path = root / "manifest.sig"
+    if not isinstance(signing, Mapping):
+        raise ValueError("manifest signing metadata must be a mapping")
+    signing_algorithm = str(signing.get("algorithm", "")).strip().lower()
+    if signing_algorithm not in {"ed25519", "sha256"}:
+        raise ValueError("unsupported manifest signing algorithm")
 
+    signature_path = root / "manifest.sig"
+    verification = ManifestVerificationResult(
+        integrity_verified=False,
+        signature_verified=False,
+        algorithm=signing_algorithm,
+        signer_id="",
+    )
     if not signature_path.exists():
-        if is_strict:
+        if signing_algorithm == "ed25519" or require_ed25519:
             raise ValueError(
-                f"bundle {bundle_dir} is missing manifest.sig; unsigned governance "
-                "artifacts are rejected in secure/prod posture."
+                "bundle is missing manifest.sig; verified Ed25519 policy "
+                "artifacts are required"
             )
         logger.warning(
             "policy bundle is missing manifest.sig; accepting unsigned artifact "
-            "in non-strict posture for developer workflow compatibility."
+            "only in non-strict legacy compatibility mode"
         )
     else:
-        if not verify_manifest_signature(root, public_key_pem=public_key_pem):
-            raise ValueError("manifest signature verification failed")
-
-    # Posture-aware enforcement: reject non-Ed25519 bundles in strict posture.
-    if signing_algorithm != "ed25519":
-        if is_strict:
+        if require_ed25519 and signing_algorithm != "ed25519":
             raise ValueError(
-                f"bundle {bundle_dir} uses {signing_algorithm} signing which "
-                "does not provide authenticity verification; rejected in "
-                "secure/prod posture. Sign bundles with Ed25519 for production."
+                "bundle does not use Ed25519 signing required by secure/prod posture"
             )
-        logger.warning(
-            "policy bundle loaded with SHA-256 integrity check only; "
-            "authenticity is NOT verified. Set VERITAS_POLICY_REQUIRE_ED25519=true "
-            "and provide an Ed25519 public key for production use."
+        try:
+            signature_text = signature_path.read_text(
+                encoding="utf-8"
+            ).strip()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise ValueError("failed to read policy manifest signature") from exc
+        verification = _verify_manifest_payload(
+            manifest_bytes=manifest_bytes,
+            manifest=manifest,
+            signature_text=signature_text,
+            public_key_pem=public_key_pem,
+            require_ed25519=require_ed25519,
         )
+        if not verification.integrity_verified:
+            raise ValueError("manifest signature verification failed")
+        if verification.algorithm == "sha256":
+            logger.warning(
+                "policy bundle loaded with legacy SHA-256 integrity only; "
+                "authenticity is not verified"
+            )
 
-    canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
+    payloads, contents_verified = _verify_declared_bundle_contents(
+        root,
+        manifest,
+        required=is_strict or verification.signature_verified,
+    )
+
+    if contents_verified:
+        canonical_bytes = payloads["compiled/canonical_ir.json"]
+    else:
+        try:
+            canonical_bytes = (
+                root / "compiled" / "canonical_ir.json"
+            ).read_bytes()
+        except OSError as exc:
+            raise ValueError("failed to read canonical policy IR") from exc
+
+    canonical_ir = _parse_json_mapping_bytes(
+        canonical_bytes,
+        label="compiled/canonical_ir.json",
+    )
+
+    if contents_verified:
+        computed_semantic_hash = semantic_policy_hash(canonical_ir)
+        manifest_semantic_hash = str(
+            manifest.get("semantic_hash", "")
+        ).strip().lower()
+        if not manifest_semantic_hash or not hmac.compare_digest(
+            computed_semantic_hash,
+            manifest_semantic_hash,
+        ):
+            raise ValueError("policy semantic_hash does not match canonical IR")
+
+        manifest_policy_id = str(manifest.get("policy_id", ""))
+        manifest_version = str(manifest.get("version", ""))
+        canonical_policy_id = str(canonical_ir.get("policy_id", ""))
+        canonical_version = str(canonical_ir.get("version", ""))
+        if manifest_policy_id != canonical_policy_id:
+            raise ValueError("manifest policy_id does not match canonical IR")
+        if manifest_version != canonical_version:
+            raise ValueError("manifest version does not match canonical IR")
+        effective_semantic_hash = computed_semantic_hash
+    else:
+        effective_semantic_hash = str(manifest.get("semantic_hash", ""))
+
     runtime_policy = adapt_canonical_ir(canonical_ir)
 
     logger.info(
-        "bundle loaded: policy_id=%s version=%s hash=%s signing=%s",
+        "bundle loaded: policy_id=%s version=%s hash=%s signing=%s "
+        "signature_verified=%s contents_verified=%s",
         runtime_policy.policy_id,
         runtime_policy.version,
-        manifest.get("semantic_hash", ""),
-        signing_algorithm,
+        effective_semantic_hash,
+        verification.algorithm,
+        verification.signature_verified,
+        contents_verified,
     )
 
     return RuntimePolicyBundle(
         schema_version=str(manifest.get("schema_version", "0.1")),
         policy_id=runtime_policy.policy_id,
         version=runtime_policy.version,
-        semantic_hash=str(manifest.get("semantic_hash", "")),
+        semantic_hash=effective_semantic_hash,
         compiler_version=str(manifest.get("compiler_version", "")),
         compiled_at=str(manifest.get("compiled_at", "")),
         runtime_policies=[runtime_policy],
         manifest=manifest,
+        manifest_integrity_verified=verification.integrity_verified,
+        signature_verified=verification.signature_verified,
+        signature_algorithm=verification.algorithm,
+        signer_id=verification.signer_id,
+        bundle_contents_verified=contents_verified,
     )
 
 
@@ -300,4 +551,9 @@ def adapt_compiled_payload(
         compiled_at=str(manifest.get("compiled_at", "")),
         runtime_policies=[runtime_policy],
         manifest=dict(manifest),
+        manifest_integrity_verified=False,
+        signature_verified=False,
+        signature_algorithm="",
+        signer_id="",
+        bundle_contents_verified=False,
     )

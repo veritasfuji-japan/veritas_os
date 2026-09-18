@@ -164,7 +164,7 @@ bundle = load_runtime_bundle(
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `true` でserver-mandated compiled policy enforcementを有効化。リクエスト側のfalseでは解除不可 |
 | `VERITAS_POLICY_RUNTIME_BUNDLE_ID` | mandatory enforcementで使用するpath-safeなdeployment-controlled bundle ID（`<VERITAS_RUNTIME_ROOT>/policy_bundles` 配下） |
 | `VERITAS_POLICY_ROLLOUT_KEY` | mandatory canary/staged rollout用のserver-controlled bucket key。未設定時はfull enforcementへfail-safe |
-| `VERITAS_POLICY_REQUIRE_ED25519` | `true` を設定すると、マニフェストが Ed25519 署名を宣言しているバンドルに対して SHA-256 フォールバックを拒否。公開鍵が利用不可の場合は `ValueError` を送出し、サイレントダウングレードを防止 |
+| `VERITAS_POLICY_REQUIRE_ED25519` | `true` でレガシーSHA-256 bundleも拒否。Ed25519を宣言したbundleはこの変数に関係なく、信頼済み公開鍵がなければ拒否しSHA-256へダウングレードしない |
 
 ### 鍵ペアの生成
 
@@ -201,8 +201,9 @@ v0.1 では SHA-256 ハッシュ整合のみでしたが、Ed25519 公開鍵暗�
   - `key_id`: 署名鍵識別子
   - `extensions`: 将来拡張用
 
-Ed25519 署名により、秘密鍵を保有しない攻撃者はバンドルの改ざん後に有効な署名を再生成できません。
-レガシー SHA-256 バンドルとの後方互換性を維持しています。
+Ed25519 署名により、秘密鍵を保有しない攻撃者はmanifest改ざん後に有効な署名を再生成できません。
+ランタイムはさらに、signed manifestの `bundle_contents[].sha256` / size と実際に読み込むbundle本文を照合し、同じ `canonical_ir.json` バイト列からsemantic hashを再計算して `policy_id` / `version` も一致確認します。検証済みバイト列のみをruntime評価へ渡します。
+Ed25519宣言bundleは鍵欠損時にSHA-256へダウングレードしません。レガシーSHA-256 bundleは非strict環境でのみ互換経路として利用できます。
 
 将来 Task で、以下を段階的に追加できます。
 

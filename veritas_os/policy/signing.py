@@ -1,8 +1,9 @@
 """Ed25519 cryptographic signing for policy bundles.
 
 This module provides key generation, signing, and verification using
-Ed25519 public-key cryptography.  When keys are unavailable the caller
-falls back to SHA-256 integrity checks automatically.
+Ed25519 public-key cryptography. Legacy SHA-256 manifest integrity remains
+available only for artifacts that explicitly declare SHA-256; Ed25519-declared
+artifacts are never downgraded when trusted verification keys are unavailable.
 """
 
 from __future__ import annotations

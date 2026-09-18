@@ -64,8 +64,11 @@ Operational notes:
 1. Set `VERITAS_POLICY_VERIFY_KEY` to the current Ed25519 public key PEM path.
 2. Compile policy bundles with signing metadata (`signing.algorithm=ed25519`).
 3. Confirm `/v1/decide` output includes `governance_identity.signature_verified=true`.
-4. Confirm `governance_identity.signer_id` is populated when `manifest.signing.key_id`
-   is present.
+   This value is verifier-derived and is never inferred from `manifest.signing.algorithm`.
+4. Confirm `governance_identity.signer_id` is populated only after successful
+   trusted-key Ed25519 verification.
+5. Confirm runtime loading rejects any canonical-IR digest / semantic-hash /
+   policy-id / version mismatch against the signed manifest.
 
 ## Key rotation procedure
 
@@ -97,9 +100,9 @@ Operational notes:
 ### Missing verification key
 
 - Runtime behavior:
-  - Ed25519 authenticity cannot be verified without `VERITAS_POLICY_VERIFY_KEY`.
-  - In strict posture this should be treated as a misconfiguration and fixed before
-    promotion.
+  - An artifact declaring Ed25519 is rejected when no trusted verification key is available.
+  - There is no SHA-256 downgrade path for an Ed25519-declared artifact.
+  - In secure/prod, legacy SHA-256-only policy bundles are also rejected.
 - Operator response:
   1. Restore public key path and file permissions.
   2. Re-run bundle verification checks.

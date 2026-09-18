@@ -611,21 +611,31 @@ class TestRuntimeAdapterPostureAwareness:
             "metadata": {},
             "source_refs": [],
         }
+        from veritas_os.policy.hash import semantic_policy_hash
+
+        ir_json = json.dumps(canonical_ir, sort_keys=True, separators=(",", ":"))
+        ir_bytes = ir_json.encode("utf-8")
+        (bundle_dir / "compiled" / "canonical_ir.json").write_bytes(ir_bytes)
         manifest = {
             "schema_version": "0.1",
             "policy_id": "test-policy-signed",
             "version": "2.0",
-            "semantic_hash": "def456",
+            "semantic_hash": semantic_policy_hash(canonical_ir),
             "compiler_version": "0.1.0",
             "compiled_at": "2026-01-01T00:00:00Z",
+            "bundle_contents": [
+                {
+                    "path": "compiled/canonical_ir.json",
+                    "sha256": hashlib.sha256(ir_bytes).hexdigest(),
+                    "size": len(ir_bytes),
+                }
+            ],
             "signing": {"algorithm": "ed25519", "status": "signed-ed25519"},
         }
         manifest_json = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
         (bundle_dir / "manifest.json").write_text(manifest_json, encoding="utf-8")
         sig = sign_manifest(manifest_json.encode("utf-8"), priv_pem)
         (bundle_dir / "manifest.sig").write_text(sig, encoding="utf-8")
-        ir_json = json.dumps(canonical_ir, sort_keys=True, separators=(",", ":"))
-        (bundle_dir / "compiled" / "canonical_ir.json").write_text(ir_json, encoding="utf-8")
 
         mock_posture = PostureDefaults(posture=PostureLevel.PROD)
         monkeypatch.setattr(
@@ -826,6 +836,11 @@ def test_compiled_policy_bridge_sets_governance_identity(monkeypatch):
         manifest={
             "signing": {"algorithm": "ed25519", "status": "signed-ed25519", "key_id": "ops-key-1"}
         },
+        manifest_integrity_verified=True,
+        signature_verified=True,
+        signature_algorithm="ed25519",
+        signer_id="ops-key-1",
+        bundle_contents_verified=True,
     )
     monkeypatch.setattr(
         "veritas_os.core.pipeline.pipeline_policy._resolve_trusted_runtime_bundle_dir",
