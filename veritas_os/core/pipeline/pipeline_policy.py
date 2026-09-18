@@ -16,6 +16,7 @@ import json
 import logging
 import math
 import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -143,47 +144,74 @@ def _request_policy_enforcement_opt_in(ctx_dict: dict[str, Any]) -> bool:
     return _coerce_policy_enforce_flag(raw)
 
 
+def _trusted_policy_runtime_paths() -> tuple[Path, Path]:
+    """Return deployment runtime policy storage paths from central server config."""
+    from veritas_os.core.config import VeritasConfig
+
+    cfg = VeritasConfig()
+    runtime_root = cfg.runtime_root
+    if runtime_root is None:
+        raise ValueError("trusted runtime root is unavailable")
+    root = Path(runtime_root).expanduser().resolve()
+    return (root / "policy_bundles").resolve(), (root / "active_bundle.json").resolve()
+
+
+def _sanitize_policy_bundle_id(raw: Any) -> str:
+    """Return a path-safe bundle identifier or fail closed."""
+    value = str(raw or "").strip()
+    if not value:
+        raise ValueError("trusted policy bundle id is empty")
+    basename = os.path.basename(os.path.normpath(value))
+    if basename != value:
+        raise ValueError("trusted policy bundle id contains path components")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", basename):
+        raise ValueError("trusted policy bundle id has invalid characters")
+    return basename
+
+
+def _bundle_id_from_pointer(pointer: dict[str, Any]) -> str:
+    """Resolve the active bundle id without trusting a pointer-supplied path."""
+    explicit_id = pointer.get("active_bundle_id")
+    if explicit_id:
+        return _sanitize_policy_bundle_id(explicit_id)
+
+    legacy_dir = str(pointer.get("active_bundle_dir") or "").strip()
+    if not legacy_dir:
+        raise ValueError("trusted policy active pointer has no active bundle")
+    # Legacy pointers store an absolute directory. Only its final component is
+    # accepted as an identifier; the directory path itself is never opened.
+    return _sanitize_policy_bundle_id(os.path.basename(os.path.normpath(legacy_dir)))
+
+
 def _resolve_trusted_runtime_bundle_dir() -> str | None:
-    """Resolve the runtime policy bundle only from deployment-controlled state.
+    """Resolve a policy bundle from trusted runtime storage by bundle id only.
 
-    An explicit runtime bundle path wins. Otherwise the bind-controlled active
-    bundle pointer is used and constrained to the configured bundles root.
-    Request context is intentionally excluded from this trust decision.
+    Request context is excluded entirely. Deployment may select a bundle by
+    VERITAS_POLICY_RUNTIME_BUNDLE_ID or by the bind-controlled active pointer
+    under the central runtime root. Pointer paths are never used as filesystem
+    capabilities.
     """
-    explicit = (os.getenv("VERITAS_POLICY_RUNTIME_BUNDLE_DIR") or "").strip()
-    if explicit:
-        return str(Path(explicit).expanduser().resolve())
+    bundles_root, pointer_path = _trusted_policy_runtime_paths()
 
-    pointer_path = Path(
-        (
-            os.getenv("VERITAS_POLICY_ACTIVE_POINTER_PATH")
-            or "runtime/active_bundle.json"
-        ).strip()
-    ).expanduser().resolve()
-    if not pointer_path.exists():
-        return None
+    configured_id = (os.getenv("VERITAS_POLICY_RUNTIME_BUNDLE_ID") or "").strip()
+    if configured_id:
+        bundle_id = _sanitize_policy_bundle_id(configured_id)
+    else:
+        if not pointer_path.exists():
+            return None
+        try:
+            pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+            raise ValueError("trusted policy active pointer is unreadable") from exc
+        if not isinstance(pointer, dict):
+            raise ValueError("trusted policy active pointer must be an object")
+        bundle_id = _bundle_id_from_pointer(pointer)
 
-    try:
-        pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
-        raise ValueError("trusted policy active pointer is unreadable") from exc
-    if not isinstance(pointer, dict):
-        raise ValueError("trusted policy active pointer must be an object")
-
-    active_bundle_dir = str(pointer.get("active_bundle_dir") or "").strip()
-    if not active_bundle_dir:
-        raise ValueError("trusted policy active pointer has no active_bundle_dir")
-
-    candidate = Path(active_bundle_dir).expanduser().resolve()
-    bundles_root = Path(
-        (os.getenv("VERITAS_POLICY_BUNDLES_ROOT") or "runtime/policy_bundles").strip()
-    ).expanduser().resolve()
+    candidate = (bundles_root / bundle_id).resolve()
     try:
         candidate.relative_to(bundles_root)
     except ValueError as exc:
-        raise ValueError(
-            "trusted policy active bundle escapes VERITAS_POLICY_BUNDLES_ROOT"
-        ) from exc
+        raise ValueError("trusted policy bundle escapes policy storage root") from exc
     return str(candidate)
 
 
@@ -304,14 +332,10 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
             return
         trusted_bundle_dir = None
 
-    request_bundle_dir = ctx_dict.get("compiled_policy_bundle_dir")
-    if server_required:
-        bundle_dir = trusted_bundle_dir
-    else:
-        # Backward-compatible observe-only / additive opt-in path. This path can
-        # never replace a deployment-mandated bundle because server_required
-        # always selects trusted_bundle_dir exclusively.
-        bundle_dir = trusted_bundle_dir or request_bundle_dir
+    # Bundle selection is never request-controlled. A caller may request
+    # stricter enforcement, but the evaluated policy is always selected from
+    # deployment-controlled runtime storage.
+    bundle_dir = trusted_bundle_dir
 
     if not bundle_dir:
         if enforcement_requested:
