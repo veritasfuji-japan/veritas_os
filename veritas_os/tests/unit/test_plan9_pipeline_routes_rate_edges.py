@@ -91,17 +91,22 @@ def test_apply_compiled_policy_runtime_bridge_handles_non_dict_governance(
 
 
 @pytest.mark.anyio
-async def test_replay_decision_endpoint_parses_mock_external_apis_off(
+async def test_replay_decision_endpoint_rejects_mock_external_apis_off(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """mock_external_apis=off should disable mocks for replay endpoint."""
+    """mock_external_apis=off must fail closed at the public replay boundary."""
+
+    calls: list[dict[str, Any]] = []
 
     class _DummyPipeline:
         async def replay_decision(self, *, decision_id: str, mock_external_apis: bool) -> dict[str, Any]:
-            return {
-                "decision_id": decision_id,
-                "mock_external_apis": mock_external_apis,
-            }
+            calls.append(
+                {
+                    "decision_id": decision_id,
+                    "mock_external_apis": mock_external_apis,
+                }
+            )
+            return {"match": True}
 
     class _DummyServer:
         @staticmethod
@@ -115,8 +120,9 @@ async def test_replay_decision_endpoint_parses_mock_external_apis_off(
 
     resp = await rd.replay_decision_endpoint("d-1", _DummyRequest())
 
-    assert resp["decision_id"] == "d-1"
-    assert resp["mock_external_apis"] is False
+    assert resp.status_code == 403
+    assert b"replay_external_apis_forbidden" in resp.body
+    assert calls == []
 
 
 def test_effective_nonce_max_uses_default_when_server_override_is_non_int(
