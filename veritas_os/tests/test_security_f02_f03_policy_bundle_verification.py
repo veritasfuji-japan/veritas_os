@@ -263,3 +263,18 @@ def test_f03_pipeline_does_not_trust_manifest_signature_self_claim(
     assert ctx.governance_identity is not None
     assert ctx.governance_identity["signature_verified"] is False
     assert ctx.governance_identity["signer_id"] == ""
+
+
+def test_f03_require_ed25519_flag_rejects_legacy_sha256_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy = compile_policy_to_bundle(
+        EXAMPLES_DIR / "low_risk_route_allow.yaml",
+        tmp_path,
+        compiled_at="2026-09-18T00:07:00Z",
+    )
+    monkeypatch.setenv("VERITAS_POLICY_REQUIRE_ED25519", "true")
+
+    with pytest.raises(ValueError, match="Ed25519"):
+        load_runtime_bundle(legacy.bundle_dir)
