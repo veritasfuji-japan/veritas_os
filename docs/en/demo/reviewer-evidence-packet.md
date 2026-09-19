@@ -129,3 +129,20 @@ Reviewer Evidence Packet v1 has a checked-in schema at:
 The schema documents the required packet fields, case summaries, nested evidence summaries, aggregate summary, reviewer notes, packet hash format, and optional `evaluation_governance_artifacts` reference shape. The golden fixture and generated packet are tested against this schema. Future intentional packet-shape changes should update the schema, exporter, tests, and golden fixture in the same PR.
 
 This schema is for a local/offline reviewer packet. It is not a production audit certification, regulatory approval, or proof of live deployment.
+
+
+## Human Approval alternatives evidence supplement
+
+A separate deterministic local/offline supplement is available for the next
+Human Approval reconstructability test:
+
+[Human Approval Alternatives Evidence v1](human-approval-alternatives-evidence.md)
+
+It records alternatives technically available to the review workflow separately
+from alternatives actually presented to the reviewer, plus the selected
+alternative and selection time. It also preserves the prior 180-second
+engagement-timing fixture rather than tuning that result away.
+
+The supplement is evidence-only and does not change Reviewer Evidence Packet v1
+runtime semantics or claim that a reviewer understood or mentally considered
+the recorded alternatives.

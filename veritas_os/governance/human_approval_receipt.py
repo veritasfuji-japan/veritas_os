@@ -16,6 +16,9 @@ from veritas_os.security.hash import sha256_of_canonical_json
 HUMAN_APPROVAL_STATE_SOURCE = "validated_human_approval_receipt"
 
 ApprovalResult = Literal["approved", "denied", "expired", "indeterminate"]
+HUMAN_REVIEW_ALTERNATIVE_TYPES = frozenset(
+    {"approve", "approve_narrower", "reject", "defer", "escalate"}
+)
 SIGNED_APPROVAL_ARTIFACT_TYPE = "human_approval_receipt"
 SIGNED_APPROVAL_ARTIFACT_VERSION = "v1"
 VERIFICATION_SOURCE_SIGNED_ARTIFACT = "signed_human_approval_artifact"
@@ -250,6 +253,9 @@ class HumanApprovalReceipt:
     ai_output_ref: str | None = None
     bind_context_hash: str | None = None
     approval_basis_opened_at: dict[str, str] | None = None
+    review_alternatives: list[dict[str, Any]] | None = None
+    selected_alternative_id: str | None = None
+    selected_at: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -283,6 +289,18 @@ class HumanApprovalReceipt:
                     key=lambda item: str(item[0]),
                 )
             }
+        if self.review_alternatives is not None:
+            payload["review_alternatives"] = sorted(
+                [
+                    {str(key): value for key, value in alternative.items()}
+                    for alternative in self.review_alternatives
+                ],
+                key=lambda alternative: str(alternative.get("alternative_id", "")),
+            )
+        if self.selected_alternative_id is not None:
+            payload["selected_alternative_id"] = str(self.selected_alternative_id)
+        if self.selected_at is not None:
+            payload["selected_at"] = str(self.selected_at)
         return payload
 
     def to_dict_for_hash(self) -> dict[str, Any]:
@@ -817,6 +835,249 @@ class HumanApprovalValidationResult:
 
     is_valid: bool
     failure_reasons: list[str]
+
+
+
+def validate_human_approval_alternatives_evidence(
+    receipt: HumanApprovalReceipt | None,
+) -> HumanApprovalValidationResult:
+    """Validate optional reviewer-facing alternative-set evidence.
+
+    This validator is deliberately separate from runtime Human Approval
+    admissibility. It checks whether the recorded alternative set is internally
+    reconstructable; it does not prove what a reviewer understood, believed, or
+    mentally considered.
+    """
+    if receipt is None:
+        return HumanApprovalValidationResult(False, ["human_approval_missing"])
+
+    alternatives = receipt.review_alternatives
+    selected_id = receipt.selected_alternative_id
+    selected_at_raw = receipt.selected_at
+
+    if alternatives is None:
+        if selected_id is not None or selected_at_raw is not None:
+            return HumanApprovalValidationResult(
+                False, ["human_approval_alternative_selection_without_set"]
+            )
+        return HumanApprovalValidationResult(True, [])
+
+    if not isinstance(alternatives, list) or not alternatives:
+        return HumanApprovalValidationResult(
+            False, ["human_approval_alternatives_invalid"]
+        )
+
+    required_fields = {
+        "alternative_id",
+        "alternative_type",
+        "available",
+        "presented",
+        "presented_at",
+        "unavailable_reason",
+    }
+    failure_reasons: list[str] = []
+    by_id: dict[str, dict[str, Any]] = {}
+    approved_at = _parse_timezone_aware_iso_datetime(receipt.approved_at)
+    if approved_at is None:
+        failure_reasons.append("human_approval_approved_at_timezone_invalid")
+
+    for alternative in alternatives:
+        if not isinstance(alternative, dict):
+            failure_reasons.append("human_approval_alternative_not_object")
+            continue
+        keys = {str(key) for key in alternative}
+        if keys != required_fields:
+            failure_reasons.append("human_approval_alternative_shape_invalid")
+            continue
+
+        alternative_id = str(alternative.get("alternative_id") or "").strip()
+        alternative_type = str(alternative.get("alternative_type") or "").strip()
+        available = alternative.get("available")
+        presented = alternative.get("presented")
+        presented_at_raw = alternative.get("presented_at")
+        unavailable_reason = alternative.get("unavailable_reason")
+
+        if not alternative_id:
+            failure_reasons.append("human_approval_alternative_id_missing")
+        elif alternative_id in by_id:
+            failure_reasons.append("human_approval_alternative_id_duplicate")
+        else:
+            by_id[alternative_id] = alternative
+
+        if alternative_type not in HUMAN_REVIEW_ALTERNATIVE_TYPES:
+            failure_reasons.append("human_approval_alternative_type_invalid")
+        if not isinstance(available, bool):
+            failure_reasons.append("human_approval_alternative_available_invalid")
+        if not isinstance(presented, bool):
+            failure_reasons.append("human_approval_alternative_presented_invalid")
+
+        presented_at = None
+        if presented_at_raw is not None:
+            presented_at = _parse_timezone_aware_iso_datetime(str(presented_at_raw))
+            if presented_at is None:
+                failure_reasons.append(
+                    "human_approval_alternative_presented_at_invalid"
+                )
+            elif approved_at is not None and presented_at > approved_at:
+                failure_reasons.append(
+                    "human_approval_alternative_presented_after_approval"
+                )
+        if presented is True and presented_at_raw is None:
+            failure_reasons.append(
+                "human_approval_alternative_presented_at_missing"
+            )
+        if presented is False and presented_at_raw is not None:
+            failure_reasons.append(
+                "human_approval_alternative_unpresented_has_timestamp"
+            )
+
+        if available is False:
+            if unavailable_reason is None or not str(unavailable_reason).strip():
+                failure_reasons.append(
+                    "human_approval_alternative_unavailable_reason_missing"
+                )
+        elif available is True and unavailable_reason is not None:
+            failure_reasons.append(
+                "human_approval_alternative_available_has_unavailable_reason"
+            )
+
+    if selected_id is None:
+        if selected_at_raw is not None:
+            failure_reasons.append(
+                "human_approval_alternative_selected_at_without_selection"
+            )
+    else:
+        selected_id = str(selected_id).strip()
+        if not selected_id:
+            failure_reasons.append("human_approval_selected_alternative_id_missing")
+        selected = by_id.get(selected_id)
+        if selected is None:
+            failure_reasons.append("human_approval_selected_alternative_unknown")
+        else:
+            if selected.get("available") is not True:
+                failure_reasons.append(
+                    "human_approval_selected_alternative_unavailable"
+                )
+            if selected.get("presented") is not True:
+                failure_reasons.append(
+                    "human_approval_selected_alternative_not_presented"
+                )
+
+        selected_at = None
+        if selected_at_raw is None:
+            failure_reasons.append("human_approval_selected_at_missing")
+        else:
+            selected_at = _parse_timezone_aware_iso_datetime(str(selected_at_raw))
+            if selected_at is None:
+                failure_reasons.append("human_approval_selected_at_invalid")
+            elif approved_at is not None and selected_at > approved_at:
+                failure_reasons.append("human_approval_selected_after_approval")
+
+        if selected is not None and selected_at is not None:
+            presented_at_raw = selected.get("presented_at")
+            presented_at = (
+                None
+                if presented_at_raw is None
+                else _parse_timezone_aware_iso_datetime(str(presented_at_raw))
+            )
+            if presented_at is not None and selected_at < presented_at:
+                failure_reasons.append(
+                    "human_approval_selected_before_presentation"
+                )
+
+    return HumanApprovalValidationResult(
+        not failure_reasons, sorted(set(failure_reasons))
+    )
+
+
+def summarize_human_approval_alternatives_evidence(
+    receipt: HumanApprovalReceipt | None,
+) -> dict[str, Any]:
+    """Return deterministic reviewer-facing alternative-set evidence."""
+    validation = validate_human_approval_alternatives_evidence(receipt)
+    if receipt is None:
+        return {
+            "review_alternatives": None,
+            "available_alternative_ids": [],
+            "presented_alternative_ids": [],
+            "available_but_not_presented_alternative_ids": [],
+            "presented_but_unavailable_alternative_ids": [],
+            "selected_alternative_id": None,
+            "selected_at": None,
+            "selected_alternative_was_available": None,
+            "selected_alternative_was_presented": None,
+            "reject_alternative_available": False,
+            "reject_alternative_presented": False,
+            "alternatives_validation_valid": False,
+            "alternatives_validation_failure_reasons": validation.failure_reasons,
+        }
+
+    canonical_alternatives = None
+    if receipt.review_alternatives is not None:
+        canonical_alternatives = sorted(
+            [
+                {str(key): value for key, value in alternative.items()}
+                for alternative in receipt.review_alternatives
+            ],
+            key=lambda alternative: str(alternative.get("alternative_id", "")),
+        )
+
+    alternatives = canonical_alternatives or []
+    available_ids = sorted(
+        str(item.get("alternative_id"))
+        for item in alternatives
+        if item.get("available") is True
+    )
+    presented_ids = sorted(
+        str(item.get("alternative_id"))
+        for item in alternatives
+        if item.get("presented") is True
+    )
+    available_but_not_presented = sorted(
+        str(item.get("alternative_id"))
+        for item in alternatives
+        if item.get("available") is True and item.get("presented") is not True
+    )
+    presented_but_unavailable = sorted(
+        str(item.get("alternative_id"))
+        for item in alternatives
+        if item.get("presented") is True and item.get("available") is not True
+    )
+    selected = next(
+        (
+            item
+            for item in alternatives
+            if str(item.get("alternative_id")) == str(receipt.selected_alternative_id)
+        ),
+        None,
+    )
+    reject_items = [
+        item for item in alternatives if item.get("alternative_type") == "reject"
+    ]
+
+    return {
+        "review_alternatives": canonical_alternatives,
+        "available_alternative_ids": available_ids,
+        "presented_alternative_ids": presented_ids,
+        "available_but_not_presented_alternative_ids": available_but_not_presented,
+        "presented_but_unavailable_alternative_ids": presented_but_unavailable,
+        "selected_alternative_id": receipt.selected_alternative_id,
+        "selected_at": receipt.selected_at,
+        "selected_alternative_was_available": (
+            None if selected is None else selected.get("available") is True
+        ),
+        "selected_alternative_was_presented": (
+            None if selected is None else selected.get("presented") is True
+        ),
+        "reject_alternative_available": any(
+            item.get("available") is True for item in reject_items
+        ),
+        "reject_alternative_presented": any(
+            item.get("presented") is True for item in reject_items
+        ),
+        "alternatives_validation_valid": validation.is_valid,
+        "alternatives_validation_failure_reasons": validation.failure_reasons,
+    }
 
 
 def validate_human_approval_engagement_timing(
