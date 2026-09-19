@@ -192,8 +192,7 @@ jobs:
           path: pip-audit-core.json
           if-no-files-found: ignore
 
-      - name: Python full/optional dependency audit (informational)
-        continue-on-error: true
+      - name: Python full/optional dependency audit (blocking)
         run: pip-audit -r veritas_os/requirements.txt --desc
 
       - name: Setup pnpm (Corepack)
