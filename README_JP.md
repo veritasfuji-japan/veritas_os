@@ -2,6 +2,7 @@
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.17838349-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI（日本語論文）](https://img.shields.io/badge/DOI%20(JP)-10.5281%2Fzenodo.17838456-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838456)
+[![DOI（Execution Governance論文）](https://img.shields.io/badge/DOI%20(Execution%20Governance)-10.5281%2Fzenodo.22844531-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.22844531)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
@@ -20,6 +21,16 @@
 
 VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agents**（AIエージェント向け意思決定ガバナンス / bind-boundary 制御プレーン）です。
 エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。これは、AIエージェントの意思決定と実行境界を統治するコントロールプレーンという現在のプロダクトポジショニングを示します。
+
+## 研究論文
+
+VERITAS OS では、システム全体のアーキテクチャと、Authorization から外部 effect の検証までを扱う実行ガバナンス境界を、それぞれ別論文として公開しています。
+
+- **システム / アーキテクチャ論文:** *VERITAS OS: Auditable Decision OS for LLM Agents* — [DOI: 10.5281/zenodo.17838349](https://doi.org/10.5281/zenodo.17838349)
+- **日本語システム論文:** [DOI: 10.5281/zenodo.17838456](https://doi.org/10.5281/zenodo.17838456)
+- **Execution Governance 論文:** *VERITAS OS: From Authorization to Verified External Effect in AI Agent Execution Governance* — [DOI: 10.5281/zenodo.22844531](https://doi.org/10.5281/zenodo.22844531)
+
+Execution Governance 論文では、execution-time revalidation、single-use authorization consumption、`EFFECT_UNKNOWN`、reconciliation-capability gating、独立した read-only reconciliation、controlled reproducible evidence を中心に扱います。
 
 ## アーキテクチャ概要
 
