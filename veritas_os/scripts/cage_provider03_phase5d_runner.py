@@ -310,6 +310,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--veritas-source-sha", required=True)
     parser.add_argument("--cage-source-sha", required=True)
     parser.add_argument("--phase5c-veritas-baseline", required=True)
+    parser.add_argument("--security-closure-baseline", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -332,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
         "veritas_source_sha": args.veritas_source_sha,
         "cage_source_sha": args.cage_source_sha,
         "phase5c_veritas_baseline": args.phase5c_veritas_baseline,
+        "security_closure_baseline": args.security_closure_baseline,
         "cage_provider03_module": str(Path(cage["provider_module"].__file__).resolve()),
         "runtime_topology": (
             "real CAGE enforce_fria_boundary -> real CAGE Provider03 -> loopback VERITAS "
