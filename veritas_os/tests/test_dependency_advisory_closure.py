@@ -82,3 +82,20 @@ def test_reported_vulnerable_runtime_surfaces_are_not_directly_used() -> None:
                 hits.append(f"{path.relative_to(ROOT)}: {label} ({token})")
 
     assert not hits, "Reviewed vulnerable surfaces became directly reachable:\n" + "\n".join(hits)
+
+
+def test_bind_coverage_exporter_handles_fastapi_route_tree() -> None:
+    from scripts.governance.export_bind_coverage_evidence import (
+        generate_bind_coverage_evidence,
+    )
+
+    evidence = generate_bind_coverage_evidence(
+        generated_at="1970-01-01T00:00:00+00:00"
+    )
+
+    assert evidence["total_runtime_routes"] >= 40
+    assert evidence["classified_routes"] == evidence["total_runtime_routes"]
+    assert evidence["status"] == "ok"
+    assert "POST /v1/decide" in {
+        f"{row['method']} {row['path']}" for row in evidence["routes"]
+    }
