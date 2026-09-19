@@ -12,7 +12,7 @@ from veritas_os.api.auth import require_permission
 from veritas_os.api.governance import get_policy
 from veritas_os.api.rbac import Permission
 from veritas_os.audit.wat_events import (
-    SUPPORTED_WAT_EVENT_TYPES,
+    WAT_VALIDATION_EVENT_TYPES,
     get_wat_event,
     list_wat_events,
     persist_wat_issuance_event,
@@ -149,7 +149,7 @@ def validate_shadow_wat(body: WatValidateShadowRequest, request: Request) -> Dic
         )
         return {"ok": True, "wat_id": body.wat_id, "event": event}
 
-    if body.outcome_event not in SUPPORTED_WAT_EVENT_TYPES:
+    if body.outcome_event not in WAT_VALIDATION_EVENT_TYPES:
         return JSONResponse(
             status_code=422,
             content={"ok": False, "error": "unsupported outcome_event"},

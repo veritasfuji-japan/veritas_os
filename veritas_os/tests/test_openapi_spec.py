@@ -309,6 +309,17 @@ def test_openapi_wat_shadow_requests_define_observable_digest_ref_contract() -> 
     assert "observable_digest_ref" in validate_props
     assert "locator/reference" in validate_props["observable_digest_ref"]["description"]
     assert "Legacy transitional field" in validate_props["observable_digest"]["description"]
+    assert set(validate_props["outcome_event"]["enum"]) == {
+        "wat_validated",
+        "wat_validation_failed",
+        "wat_psid_mismatch",
+        "wat_observable_missing",
+        "wat_observable_digest_mismatch",
+        "wat_signature_invalid",
+        "wat_replay_suspected",
+        "wat_partial_validation_warning",
+        "wat_partial_validation_blocked",
+    }
 
 
 def test_openapi_wat_operator_summary_and_governance_defaults_locked() -> None:

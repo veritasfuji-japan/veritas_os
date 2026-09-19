@@ -84,6 +84,43 @@ def test_validate_shadow_success(monkeypatch, tmp_path: Path) -> None:
     assert response.json()["event"]["event_type"] == "wat_validated"
 
 
+@pytest.mark.parametrize(
+    "transition_event",
+    [
+        "wat_issued",
+        "wat_revocation_pending",
+        "wat_revoked_confirmed",
+    ],
+)
+def test_validate_shadow_rejects_lifecycle_transition_events(
+    monkeypatch,
+    tmp_path: Path,
+    transition_event: str,
+) -> None:
+    """Validation must not create issuance or revocation state transitions."""
+    _configure_auth(monkeypatch)
+    _configure_wat_store(monkeypatch, tmp_path)
+    client = TestClient(app)
+    wat_id = "wat-transition-isolation"
+
+    response = client.post(
+        "/v1/wat/validate-shadow",
+        headers=_headers("k-operator"),
+        json={"wat_id": wat_id, "outcome_event": transition_event},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "ok": False,
+        "error": "unsupported outcome_event",
+    }
+    assert wat_events.list_wat_events(wat_id=wat_id) == []
+    assert wat_events.derive_latest_revocation_state(wat_id) == {
+        "status": "active",
+        "source": "wat_events",
+    }
+
+
 def test_get_wat_by_id(monkeypatch, tmp_path: Path) -> None:
     _configure_auth(monkeypatch)
     _configure_wat_store(monkeypatch, tmp_path)
