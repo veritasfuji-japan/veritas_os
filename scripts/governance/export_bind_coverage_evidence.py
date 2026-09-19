@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, iter_route_contexts
 
 from veritas_os.api.bind_target_catalog import CATALOG
 from veritas_os.api.server import app
@@ -48,14 +48,23 @@ def _resolve_generated_at(generated_at: str | None) -> str:
 
 
 def _runtime_api_routes() -> list[tuple[str, str]]:
+    """Return effective HTTP routes using the supported FastAPI route-tree API.
+
+    FastAPI 0.137 stopped flattening included routers into app.routes.
+    iter_route_contexts (added in 0.137.2) preserves effective prefixes and
+    is the supported replacement for direct flat-list introspection.
+    """
+
     routes: list[tuple[str, str]] = []
-    for route in app.routes:
+    for route_context in iter_route_contexts(app.routes):
+        route = route_context.route
         if not isinstance(route, APIRoute):
             continue
-        for method in sorted(route.methods):
+        methods = route_context.methods or route.methods
+        for method in sorted(methods):
             if method in {"HEAD", "OPTIONS"}:
                 continue
-            routes.append((route.path, method))
+            routes.append((route_context.path, method))
     return sorted(routes, key=lambda item: (item[0], item[1]))
 
 
