@@ -198,3 +198,46 @@ It is:
 - not regulatory approval,
 - not third-party certification,
 - not production approval validation.
+
+
+## Optional alternative-set reviewer evidence
+
+`HumanApprovalReceipt` may also carry optional reviewer-facing alternative-set
+evidence:
+
+```text
+review_alternatives
+selected_alternative_id
+selected_at
+```
+
+The bounded v1 alternative types are `approve`, `approve_narrower`,
+`reject`, `defer`, and `escalate`.
+
+Each alternative records `available` separately from `presented`. This is
+intentional: an option may exist technically without being shown to the
+reviewer, and an unavailable option may still be presented as a disabled path
+with an explicit reason.
+
+When all alternative-set fields are absent, they are omitted from the receipt
+serialization/hash payload so existing v1 receipt digest behavior remains
+unchanged. When present, the alternative list is canonicalized by
+`alternative_id` and becomes part of the receipt hash.
+
+`validate_human_approval_alternatives_evidence()` validates this evidence
+separately from runtime Human Approval admissibility. It does not add a new
+runtime permission predicate.
+
+The evidentiary boundary is explicit:
+
+```text
+available != presented
+presented != considered
+selected != understood
+```
+
+Recorded presentation and selection are observable process evidence. They are
+not proof of reviewer cognition, independence, comprehension, or decision
+quality.
+
+See [Human Approval Alternatives Evidence v1](../demo/human-approval-alternatives-evidence.md).
