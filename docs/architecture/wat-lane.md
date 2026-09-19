@@ -84,6 +84,11 @@ not a standalone signed bearer token object. The structure below is sourced from
 3. Route persists WAT event(s) via `veritas_os.audit.wat_events` helpers.
 4. Route returns event payload (or read timeline) to caller.
 
+`validate-shadow` accepts validation outcomes and replay suspicion only. It
+cannot emit `wat_issued`, `wat_revocation_pending`, or
+`wat_revoked_confirmed`; issuance and revocation transitions are isolated to
+their dedicated endpoints and persistence helpers.
+
 ### B) Decide observer hook (`/v1/decide`)
 
 1. `/v1/decide` runs normal pipeline/gating flow.
@@ -129,6 +134,8 @@ From current code and tests, WAT lane must not bypass:
 - **RBAC** controls (auditor can read but cannot mutate WAT lane state);
 - **explicit confirmation** for confirmed revocation transitions
   (`CONFIRM_REVOKED_CONFIRMED`);
+- **state-transition isolation** (`validate-shadow` cannot create issuance or
+  revocation events);
 - **governance/audit traceability** expectations (events persisted with lane,
   actor, timestamp, and anchor reference);
 - **core decision enforcement ownership** (WAT does not become execution

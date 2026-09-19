@@ -37,6 +37,17 @@ SUPPORTED_WAT_EVENT_TYPES: frozenset[str] = frozenset({
     "wat_partial_validation_blocked",
 })
 
+WAT_VALIDATION_EVENT_TYPES: frozenset[str] = frozenset({
+    "wat_validated",
+    "wat_validation_failed",
+    "wat_psid_mismatch",
+    "wat_observable_missing",
+    "wat_observable_digest_mismatch",
+    "wat_signature_invalid",
+    "wat_partial_validation_warning",
+    "wat_partial_validation_blocked",
+})
+
 _DEFAULT_WAT_METADATA_RETENTION_TTL_SECONDS = 7_776_000
 _DEFAULT_WAT_EVENT_POINTER_RETENTION_TTL_SECONDS = 7_776_000
 _DEFAULT_OBSERVABLE_DIGEST_RETENTION_TTL_SECONDS = 31_536_000
@@ -342,9 +353,14 @@ def persist_wat_validation_event(
     path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Persist WAT validation result events for shadow validation workflows."""
+    normalized_event_type = str(event_type or "").strip()
+    if normalized_event_type not in WAT_VALIDATION_EVENT_TYPES:
+        raise ValueError(
+            f"unsupported_wat_validation_event_type: {normalized_event_type}"
+        )
     return _persist_wat_event(
         wat_id=wat_id,
-        event_type=event_type,
+        event_type=normalized_event_type,
         actor=actor,
         details=details,
         status=status,

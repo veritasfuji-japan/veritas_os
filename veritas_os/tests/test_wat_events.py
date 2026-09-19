@@ -153,3 +153,30 @@ def test_warning_events_include_traceability_context_and_correlation(tmp_path: P
     metadata = event["details"]["metadata"]
     assert metadata["warning_context"] == "wat_shadow_warning"
     assert metadata["warning_correlation_id"]
+
+
+@pytest.mark.parametrize(
+    "transition_event",
+    [
+        "wat_issued",
+        "wat_replay_suspected",
+        "wat_revocation_pending",
+        "wat_revoked_confirmed",
+    ],
+)
+def test_validation_helper_rejects_non_validation_events(
+    tmp_path: Path,
+    transition_event: str,
+) -> None:
+    """Lifecycle transitions must use their dedicated persistence helpers."""
+    path = tmp_path / "wat_events.jsonl"
+
+    with pytest.raises(ValueError, match="unsupported_wat_validation_event_type"):
+        persist_wat_validation_event(
+            wat_id="wat-helper-isolation",
+            actor="test",
+            event_type=transition_event,
+            path=path,
+        )
+
+    assert not path.exists()
