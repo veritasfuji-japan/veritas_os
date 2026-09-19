@@ -9,8 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from fastapi.routing import APIRoute
-
 from veritas_os.api import server as srv
 
 
