@@ -4,6 +4,7 @@
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.17838349-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI (JP Paper)](https://img.shields.io/badge/DOI%20(JP)-10.5281%2Fzenodo.17838456-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838456)
+[![DOI (Execution Governance Paper)](https://img.shields.io/badge/DOI%20(Execution%20Governance)-10.5281%2Fzenodo.22844531-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.22844531)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple)
@@ -18,6 +19,16 @@
 
 VERITAS OS is a **Decision Governance and Bind-Boundary Control Plane** for AI agents.
 Instead of passing model output directly to execution, VERITAS routes each decision through a **reproducible, fail-closed, safety-gated, hash-chained governance pipeline** with an operator-facing governance surface in **Mission Control** and governance APIs.
+
+## Research Papers
+
+VERITAS OS has separate publications for the system-level architecture and the authorization-to-effect execution-governance boundary:
+
+- **System / architecture paper:** *VERITAS OS: Auditable Decision OS for LLM Agents* — [DOI: 10.5281/zenodo.17838349](https://doi.org/10.5281/zenodo.17838349)
+- **Japanese system paper:** [DOI: 10.5281/zenodo.17838456](https://doi.org/10.5281/zenodo.17838456)
+- **Execution-governance paper:** *VERITAS OS: From Authorization to Verified External Effect in AI Agent Execution Governance* — [DOI: 10.5281/zenodo.22844531](https://doi.org/10.5281/zenodo.22844531)
+
+The execution-governance paper focuses on execution-time revalidation, single-use authorization consumption, explicit `EFFECT_UNKNOWN` semantics, reconciliation-capability gating, independent read-only reconciliation, and controlled reproducible evidence.
 
 ## Architecture at a Glance
 
