@@ -9,7 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-
 from veritas_os.api import server as srv
 
 
@@ -95,7 +94,7 @@ def test_openapi_includes_runtime_audit_and_governance_routes() -> None:
     """OpenAPI should include critical runtime routes used for governance/audit."""
     spec = _load_openapi_spec()
     paths = spec.get("paths", {})
-    runtime_paths = {route.path for route in srv.app.routes}
+    runtime_paths = set(srv.app.openapi().get("paths", {}))
 
     critical = {
         "/v1/governance/policy",

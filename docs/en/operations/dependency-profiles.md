@@ -1,6 +1,6 @@
 # VERITAS OS — Dependency Profiles
 
-> Last updated: 2026-04-21
+> Last updated: 2026-09-19
 
 ## Overview
 
@@ -29,7 +29,7 @@ keeping full backward compatibility via the `[full]` extra.
 
 | Package | Version | Role |
 |---|---|---|
-| fastapi | 0.121.0 | API framework |
+| fastapi | 0.137.2 | API framework |
 | uvicorn | 0.30.3 | ASGI server |
 | pydantic | 2.8.2 | Data validation / schemas |
 | python-dotenv | 1.2.2 | `.env` file loading |
@@ -45,7 +45,8 @@ keeping full backward compatibility via the `[full]` extra.
 | Package | Version | Role | Graceful degradation |
 |---|---|---|---|
 | scikit-learn | 1.5.2 | Memory model training (scripts) | Lazy import in `memory_train.py` |
-| sentence-transformers | 3.0.1 | Sentence embeddings (memory vector) | Lazy import with env-var guard in `memory_vector.py` |
+| sentence-transformers | 5.3.0 | Sentence embeddings (memory vector) | Lazy import with env-var guard in `memory_vector.py` |
+| transformers | 5.10.0 | ML runtime used by sentence-transformers | Optional ML profile; direct `save_pretrained()` use is absent from VERITAS runtime |
 
 ### Optional `[reports]`
 
@@ -68,16 +69,13 @@ keeping full backward compatibility via the `[full]` extra.
 |---|---|---|---|
 | psutil | 6.0.0 | System monitoring utilities | Not imported in current codebase |
 | trio | 0.26.2 | Async framework (reserved) | Not imported in current codebase |
-| starlette | 0.49.1 | ASGI toolkit (FastAPI transitive; pinned for compatibility) | Installed transitively by FastAPI |
+| starlette | 1.3.1 | ASGI toolkit (FastAPI transitive; full-profile compatibility pin) | Installed transitively by FastAPI |
 
 ## CI / Docker Behavior
 
-- **CI blocking dependency audit** (`main.yml`, `security-gates.yml`): `pip-audit -r veritas_os/requirements-core.txt --desc`.
-  The Starlette `--ignore-vuln` entries added in PR #2048 are temporary,
-  narrowly scoped audit exceptions for the current FastAPI resolver constraint.
-  Remove those ignores as soon as FastAPI resolves with `starlette>=1.3.1`;
-  do not add adjacent Starlette ignores or weaken the blocking audit gate.
-- **CI informational full audit**: `pip-audit -r veritas_os/requirements.txt --desc` with non-blocking status, so optional ML/security posture remains visible.
+- **CI blocking core dependency audit** (`main.yml`, `security-gates.yml`): `pip-audit -r veritas_os/requirements-core.txt --desc` with no Starlette advisory exceptions.
+- **CI blocking full-profile audit**: `pip-audit -r veritas_os/requirements.txt --desc`. Optional ML dependencies are therefore security-gated even though they are not installed by the core-only profile.
+- TASK-017F moved FastAPI to a Starlette-1.x-compatible release, pinned the full profile to `starlette==1.3.1`, and moved `transformers` to `5.10.0`; the prior temporary Starlette ignores are removed rather than broadened.
 - **CI install paths**: Some jobs still install `requirements.txt` for full-coverage test environments.
 - **Docker** (`Dockerfile`): Installs via `requirements.txt` → full dependency set. No change needed.
 - **`setup.sh`**: Installs via `requirements.txt` → full dependency set. No change needed.
