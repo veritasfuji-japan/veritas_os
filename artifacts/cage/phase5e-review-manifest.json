@@ -1,0 +1,87 @@
+{
+  "format_version": "veritas-cage-phase5e-review-packet/v1",
+  "status": "REVIEW_CANDIDATE",
+  "generated_date": "2026-09-19",
+  "veritas_phase5e_baseline": "4822a5b8bfcd59af7f76e9d33da4fa8e8e74d29b",
+  "cage_latest_reviewed_main": "50b12e7d983db0e3d7faf206ac6aa600294f33ac",
+  "phases": {
+    "5A": {
+      "purpose": "runtime wire",
+      "pr": 2252,
+      "pr_head_sha": "d40cca76dc4b146dc3bc36d3a9ca89cc17c5d3df",
+      "merge_sha": "6cb71643a4cd3aad52b6fc9a872671c070a01057",
+      "cage_sha": "5f54d5e3403d67101e028ed14fa8dade853fb221",
+      "workflow_run_id": 35179717567,
+      "artifact_id": 10478654845,
+      "artifact_name": "veritas-cage-phase5a-d40cca76dc4b146dc3bc36d3a9ca89cc17c5d3df",
+      "artifact_digest": "sha256:637a282f2dbc3a0a86f5cff84c0c705df29487d76cc27548307a301b1f632335"
+    },
+    "5B": {
+      "purpose": "fail-closed response matrix",
+      "pr": 2262,
+      "pr_head_sha": "ebc9a14de2a81b8269e17457720ab67df093996c",
+      "merge_sha": "0fc73e27b5d423102b9e4bb474169a815f1ab659",
+      "cage_sha": "fcb98bef0b5faea1afcc5a430148fe065b985ef4",
+      "workflow_run_id": 35319465545,
+      "artifact_id": 10536845406,
+      "artifact_name": "veritas-cage-phase5b-ebc9a14de2a81b8269e17457720ab67df093996c",
+      "artifact_digest": "sha256:70e995a1412ec1be9dfb0f186a03f6c38a3ff2502e04e6bb9e8a848abd84d4d1"
+    },
+    "5C": {
+      "purpose": "BindReceipt evidence flow",
+      "pr": 2263,
+      "pr_head_sha": "a185ef1e32c8e0a16b9f5b2e21a63c20af279dbb",
+      "merge_sha": "c8109424f5fe6d97b39305edc76347da2e97025a",
+      "cage_sha": "fcb98bef0b5faea1afcc5a430148fe065b985ef4",
+      "workflow_run_id": 35330302873,
+      "artifact_id": 10540642551,
+      "artifact_name": "veritas-cage-phase5c-a185ef1e32c8e0a16b9f5b2e21a63c20af279dbb",
+      "artifact_digest": "sha256:e36dcc4a9d6d68a8e47c0c598dc54b96c85af37173ca893f6d71bf20e43ee792"
+    },
+    "5D": {
+      "purpose": "ESCALATE / human review non-amplification",
+      "pr": 2271,
+      "pr_head_sha": "e1f0e1ca5e5d203b6758e93bc8f26dac6f9d55ab",
+      "merge_sha": "4822a5b8bfcd59af7f76e9d33da4fa8e8e74d29b",
+      "cage_sha": "50b12e7d983db0e3d7faf206ac6aa600294f33ac",
+      "workflow_run_id": 35431274973,
+      "artifact_id": 10580168941,
+      "artifact_name": "veritas-cage-phase5d-e1f0e1ca5e5d203b6758e93bc8f26dac6f9d55ab",
+      "artifact_digest": "sha256:e9dc0ddd48bfd5c8c912fda75f7300b72b7ba2ac7d501ed0d01c71603b6a3a1d"
+    }
+  },
+  "invariants": {
+    "admission_is_not_execution_authority": true,
+    "escalate_is_not_approved": true,
+    "authority_policy_human_approval_remain_separate": true,
+    "cage_human_review_is_not_veritas_authority": true,
+    "cage_human_review_is_not_veritas_human_approval": true,
+    "bind_receipt_is_retrospective_not_authority": true,
+    "veritas_receipt_hash_and_cage_ingest_digest_are_distinct": true,
+    "fail_closed_on_provider_response_errors": true,
+    "no_external_business_effect_in_phase5_proof": true
+  },
+  "review_request": {
+    "reviewer": "CAGE-side technical reviewer",
+    "requested_scope": [
+      "Phase 5A-5D source-pin and artifact-chain consistency",
+      "Provider03 runtime semantics",
+      "fail-closed response handling",
+      "BindReceipt hash-domain separation",
+      "ESCALATE/Human Review non-amplification boundary"
+    ],
+    "requested_outcome": "technical review only; no endorsement, production, commercial, certification, or organizational approval claim"
+  },
+  "nonclaims": {
+    "production_readiness": false,
+    "customer_deployment": false,
+    "live_customer_credentials": false,
+    "external_business_effect": false,
+    "google_endorsement": false,
+    "commercial_integration": false,
+    "regulatory_approval": false,
+    "security_certification": false,
+    "live_human_identity_verification": false,
+    "trustlog_witness": false
+  }
+}
