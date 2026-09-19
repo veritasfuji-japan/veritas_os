@@ -147,7 +147,7 @@ def test_empty_predicates_mean_no_failure() -> None:
 
 def test_raw_strings_are_not_interpreted_as_contract_predicates() -> None:
     with pytest.raises(TypeError, match="ObservableDigestFailurePredicate"):
-        classify_observable_digest_failure([
+        classify_observable_digest_failure(
             ["DIGEST_MISMATCH"]  # type: ignore[list-item]
         )
 
