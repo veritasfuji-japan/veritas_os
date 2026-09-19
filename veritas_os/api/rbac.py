@@ -26,6 +26,7 @@ class Permission(str, enum.Enum):
     memory_read = "memory_read"
     memory_write = "memory_write"
     trust_log_read = "trust_log_read"
+    trust_feedback_write = "trust_feedback_write"
     governance_read = "governance_read"
     governance_write = "governance_write"
     config_write = "config_write"
@@ -39,6 +40,7 @@ ROLE_PERMISSIONS: Dict[Role, FrozenSet[Permission]] = {
         Permission.memory_read,
         Permission.memory_write,
         Permission.trust_log_read,
+        Permission.trust_feedback_write,
     }),
     Role.auditor: frozenset({
         Permission.trust_log_read,

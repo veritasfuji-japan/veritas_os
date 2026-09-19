@@ -317,7 +317,7 @@ class TestReplayDecisionEndpoint:
             assert resp["match"] is True
 
     @pytest.mark.asyncio
-    async def test_replay_decision_mock_external_false(self):
+    async def test_replay_decision_mock_external_false_is_rejected(self):
         from veritas_os.api.routes_decide import replay_decision_endpoint
 
         mock_request = MagicMock()
@@ -331,10 +331,10 @@ class TestReplayDecisionEndpoint:
             srv.get_decision_pipeline.return_value = pipeline
             mock_srv.return_value = srv
 
-            await replay_decision_endpoint("d1", mock_request)
-            pipeline.replay_decision.assert_called_once_with(
-                decision_id="d1", mock_external_apis=False,
-            )
+            resp = await replay_decision_endpoint("d1", mock_request)
+            assert resp.status_code == 403
+            assert resp.body
+            pipeline.replay_decision.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_replay_decision_error(self):

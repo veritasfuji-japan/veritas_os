@@ -1046,7 +1046,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 | POST | `/v1/decide` | フル意思決定パイプライン |
 | POST | `/v1/fuji/validate` | 単一アクションをFUJI Gateで評価 |
 | POST | `/v1/replay/{decision_id}` | 差分レポート付き決定論的リプレイ |
-| POST | `/v1/decision/replay/{decision_id}` | モックサポート付き代替リプレイ |
+| POST | `/v1/decision/replay/{decision_id}` | 監査用リプレイ。外部APIは常にモックされ、モック無効化要求は拒否 |
 
 ### メモリ
 
@@ -1063,7 +1063,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 |---|---|---|
 | GET | `/v1/trust/logs` | TrustLogエントリ一覧 |
 | GET | `/v1/trust/{request_id}` | 単一TrustLogエントリ取得 |
-| POST | `/v1/trust/feedback` | 意思決定に対するユーザー満足度フィードバック |
+| POST | `/v1/trust/feedback` | Trust feedback書き込み。`trust_feedback_write` 権限が必要で、認証principal所有として記録 |
 | GET | `/v1/trust/stats` | TrustLog統計 |
 | GET | `/v1/trustlog/verify` | ハッシュチェーン完全性検証 |
 | GET | `/v1/trustlog/export` | 署名付きTrustLogエクスポート |
@@ -1150,6 +1150,8 @@ curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
 Replayスナップショットには `retrieval_snapshot_checksum`（SHA-256決定論的ハッシュ）、`external_dependency_versions`、`model_version` が含まれ、再現性検証に使用されます。モデルバージョン不一致はデフォルトでチェックされ、`model_version` 未記録のスナップショットはデフォルトで拒否されます（`VERITAS_REPLAY_REQUIRE_MODEL_VERSION=1`）。
 
 > **注意**: LLM応答は `temperature=0` でも本質的に非決定的です。VERITAS Replayは厳密な決定論的リプレイではなく、**差分検知付き高再現性再実行**として設計されています。
+
+`POST /v1/decision/replay/{decision_id}` は監査・再現性確認用の公開境界です。Replay engineには常に `mock_external_apis=True` を渡し、`mock_external_apis=false` を要求するリクエストは外部副作用を有効化せずHTTP 403で拒否します。
 
 `VERITAS_REPLAY_STRICT=1` の場合、Replayは決定論設定（`temperature=0`、固定seed、外部取得の副作用モック）を強制します。
 

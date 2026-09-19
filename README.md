@@ -1145,7 +1145,7 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | POST | `/v1/decide` | Full decision pipeline |
 | POST | `/v1/fuji/validate` | Validate a single action via FUJI Gate |
 | POST | `/v1/replay/{decision_id}` | Deterministic replay with diff report |
-| POST | `/v1/decision/replay/{decision_id}` | Alternative replay with mock support |
+| POST | `/v1/decision/replay/{decision_id}` | Audit replay; external APIs are always mocked and attempts to disable mocking are rejected |
 
 ### Memory
 
@@ -1162,7 +1162,7 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 |---|---|---|
 | GET | `/v1/trust/logs` | List trust log entries |
 | GET | `/v1/trust/{request_id}` | Get single trust log entry |
-| POST | `/v1/trust/feedback` | User satisfaction feedback on decisions |
+| POST | `/v1/trust/feedback` | Trust feedback write; requires `trust_feedback_write` and records under the authenticated principal |
 | GET | `/v1/trust/stats` | Trust log statistics |
 | GET | `/v1/trustlog/verify` | Verify hash chain integrity |
 | GET | `/v1/trustlog/export` | Export signed trustlog |
@@ -1250,6 +1250,8 @@ For operator guidance and outcome interpretation, see
 Replay snapshots include `retrieval_snapshot_checksum` (SHA-256 deterministic hash), `external_dependency_versions`, and `model_version` for reproducibility verification. Model version mismatch is checked by default; snapshots without `model_version` are rejected by default (`VERITAS_REPLAY_REQUIRE_MODEL_VERSION=1`).
 
 > **Note**: LLM responses are inherently non-deterministic even at `temperature=0`. VERITAS Replay is designed as **high-fidelity reproducible re-execution with divergence detection**, not strict deterministic replay.
+
+`POST /v1/decision/replay/{decision_id}` is a public audit/reproducibility boundary. It always calls the replay engine with `mock_external_apis=True`; a request that asks for `mock_external_apis=false` is rejected with HTTP 403 rather than enabling external side effects.
 
 When `VERITAS_REPLAY_STRICT=1`, replay enforces deterministic settings (`temperature=0`, fixed seed, and mocked external retrieval side effects).
 

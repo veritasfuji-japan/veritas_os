@@ -2452,12 +2452,13 @@ def test_trust_feedback_ok(monkeypatch):
     )
     assert r.status_code == 200
     data = r.json()
+    scoped_user = server._derive_api_user_id(_TEST_API_KEY)
     assert data["ok"] is True
-    assert data["user_id"] == "user123"
+    assert data["user_id"] == scoped_user
 
     assert len(calls) == 1
     u, score, note, source, extra = calls[0]
-    assert u == "user123"
+    assert u == scoped_user
     assert score == 0.9
     assert note == "good plan"
     assert source == "test"

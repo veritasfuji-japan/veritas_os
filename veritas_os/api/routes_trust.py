@@ -6,7 +6,7 @@ import logging
 import math
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from veritas_os.api.auth import require_permission
@@ -138,10 +138,10 @@ def trust_log_by_request(request_id: str):
 @router.post(
     "/v1/trust/feedback",
     response_model=TrustFeedbackResponse,
-    dependencies=[Depends(require_permission(Permission.trust_log_read))],
+    dependencies=[Depends(require_permission(Permission.trust_feedback_write))],
 )
-def trust_feedback(body: TrustFeedbackRequest):
-    """人間からのフィードバックを trust_log に記録する簡易API。"""
+def trust_feedback(body: TrustFeedbackRequest, request: Request):
+    """Record human trust feedback under the authenticated principal."""
     srv = _get_server()
     vc = srv.get_value_core()
     if vc is None:
@@ -149,11 +149,32 @@ def trust_feedback(body: TrustFeedbackRequest):
         return {"ok": False, "error": "value_core unavailable"}
 
     try:
-        uid = str(body.user_id or "anon")[:500]
+        principal = getattr(
+            getattr(request, "state", None),
+            "authenticated_principal_id",
+            None,
+        )
+        uid = str(principal or "").strip()[:500]
+        if not uid:
+            logger.error("trust_feedback missing authenticated principal")
+            return JSONResponse(
+                status_code=403,
+                content={"ok": False, "error": "authenticated principal required"},
+            )
+
+        requested_uid = str(body.user_id or "").strip()
+        if requested_uid and requested_uid != uid:
+            logger.warning(
+                "Trust feedback user_id override blocked by authenticated principal"
+            )
+
         score = body.score
         note = body.note
         source = body.source
-        extra = {"api": "/v1/trust/feedback"}
+        extra = {
+            "api": "/v1/trust/feedback",
+            "authenticated_principal_id": uid,
+        }
 
         if hasattr(vc, "append_trust_log"):
             vc.append_trust_log(

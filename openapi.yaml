@@ -2315,16 +2315,31 @@ paths:
                     description: Human-readable audit summary of the replay result
   /v1/decision/replay/{decision_id}:
     post:
-      summary: Decision replay (v2)
+      summary: Decision replay (v2, external APIs always mocked)
+      description: Audit/reproducibility replay. External API execution cannot be enabled through this public endpoint. A false-like mock_external_apis query value is rejected with HTTP 403.
       parameters:
       - in: path
         name: decision_id
         required: true
         schema:
           type: string
+      - in: query
+        name: mock_external_apis
+        required: false
+        description: Compatibility parameter. Omit or set true. False-like values are rejected; the replay engine always receives true.
+        schema:
+          type: boolean
+          default: true
       responses:
         '200':
           description: Replay execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '403':
+          description: External API execution requested at a replay-only boundary
           content:
             application/json:
               schema:
@@ -2539,6 +2554,7 @@ paths:
   /v1/trust/feedback:
     post:
       summary: Human feedback recording
+      description: Requires trust_feedback_write permission. The authenticated API principal is the authoritative feedback owner; caller-supplied user_id cannot redirect the TrustLog write.
       requestBody:
         required: true
         content:

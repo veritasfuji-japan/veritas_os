@@ -706,9 +706,34 @@ async def replay_endpoint(decision_id: str, request: Request):
     }
 
 
-@router.post("/v1/decision/replay/{decision_id}")
+@router.post(
+    "/v1/decision/replay/{decision_id}",
+    dependencies=[Depends(require_permission(Permission.trust_log_read))],
+)
 async def replay_decision_endpoint(decision_id: str, request: Request):
     """Replay a persisted decision deterministically and return diff report."""
+    # Public replay is an audit/reproducibility path, never an external
+    # side-effect path. A caller cannot turn external APIs back on through
+    # query parameters, regardless of RBAC role or backend availability.
+    try:
+        qv = request.query_params.get("mock_external_apis")
+    except Exception:
+        qv = None
+
+    if qv is not None and str(qv).strip().lower() in {"0", "false", "no", "off"}:
+        logger.warning(
+            "Replay request rejected: external API execution is forbidden "
+            "at the public replay boundary"
+        )
+        return JSONResponse(
+            status_code=403,
+            content={
+                "match": False,
+                "diff": {"error": "replay_external_apis_forbidden"},
+                "replay_time_ms": 0,
+            },
+        )
+
     srv = _get_server()
     p = srv.get_decision_pipeline()
     if p is None or not hasattr(p, "replay_decision"):
@@ -721,18 +746,10 @@ async def replay_decision_endpoint(decision_id: str, request: Request):
             },
         )
 
-    mock_external_apis = True
-    try:
-        qv = request.query_params.get("mock_external_apis")
-        if qv is not None:
-            mock_external_apis = str(qv).strip().lower() not in {"0", "false", "no", "off"}
-    except Exception:
-        mock_external_apis = True
-
     try:
         result = await p.replay_decision(
             decision_id=decision_id,
-            mock_external_apis=mock_external_apis,
+            mock_external_apis=True,
         )
     except Exception as e:
         logger.error("decision replay failed: %s", _errstr(e))
