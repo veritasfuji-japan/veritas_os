@@ -1,0 +1,67 @@
+{
+  "format_version": "veritas-integrated-security-closure/v1",
+  "status": "REQUIRED_SECURITY_REGRESSION_GATE",
+  "findings": {
+    "F-01": [
+      "veritas_os/tests/test_security_f01_policy_enforcement.py"
+    ],
+    "F-02": [
+      "veritas_os/tests/test_security_f02_f03_policy_bundle_verification.py"
+    ],
+    "F-03": [
+      "veritas_os/tests/test_security_f02_f03_policy_bundle_verification.py"
+    ],
+    "F-04": [
+      "veritas_os/tests/test_security_f04_f05_principal_memory_isolation.py"
+    ],
+    "F-05": [
+      "veritas_os/tests/test_security_f04_f05_principal_memory_isolation.py"
+    ],
+    "F-06": [
+      "veritas_os/tests/test_security_f06_f07_replay_trust_rbac.py"
+    ],
+    "F-07": [
+      "veritas_os/tests/test_security_f06_f07_replay_trust_rbac.py"
+    ],
+    "F-08": [
+      "tests/test_wat_api.py::test_validate_shadow_rejects_lifecycle_transition_events",
+      "tests/test_wat_api.py::test_revoke_confirmed_requires_explicit_confirmation",
+      "veritas_os/tests/test_wat_events.py::test_validation_helper_rejects_non_validation_events"
+    ]
+  },
+  "security_regression_targets": [
+    "veritas_os/tests/test_security_f01_policy_enforcement.py",
+    "veritas_os/tests/test_security_f02_f03_policy_bundle_verification.py",
+    "veritas_os/tests/test_security_f04_f05_principal_memory_isolation.py",
+    "veritas_os/tests/test_security_f06_f07_replay_trust_rbac.py",
+    "tests/test_wat_api.py::test_validate_shadow_rejects_lifecycle_transition_events",
+    "tests/test_wat_api.py::test_revoke_confirmed_requires_explicit_confirmation",
+    "veritas_os/tests/test_wat_events.py::test_validation_helper_rejects_non_validation_events",
+    "veritas_os/tests/test_integrated_security_closure_manifest.py"
+  ],
+  "preserved_boundary_targets": [
+    "veritas_os/tests/test_native_bind_authorization_consumption.py",
+    "veritas_os/tests/test_sandbox_bind_execution.py",
+    "veritas_os/tests/test_controlled_execution_proof_architecture_freeze.py"
+  ],
+  "preserved_invariants": [
+    "server_controlled_policy_enforcement",
+    "verified_policy_bytes_match_signed_manifest",
+    "ed25519_does_not_downgrade_without_trusted_key",
+    "authenticated_principal_owns_memory_access",
+    "public_replay_never_enables_external_apis",
+    "trust_feedback_write_is_separate_from_read",
+    "wat_validation_cannot_create_lifecycle_transitions",
+    "native_v2_authorization_is_single_use",
+    "effect_unknown_prohibits_blind_redispatch",
+    "controlled_execution_proof_scope_remains_frozen"
+  ],
+  "explicit_non_claims": [
+    "production_readiness",
+    "production_security_certification",
+    "dependency_advisories_resolved",
+    "real_customer_credentials_or_endpoints",
+    "independent_production_infrastructure",
+    "production_decision_to_effect_e2e_proven"
+  ]
+}

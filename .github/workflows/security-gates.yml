@@ -11,6 +11,27 @@ permissions:
   contents: read
 
 jobs:
+  integrated-security-closure:
+    name: Integrated Security Closure (F-01-F-08)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install CI dependencies
+        run: python -m pip install -r veritas_os/requirements-ci.txt
+
+      - name: Run integrated F-01 through F-08 closure regression
+        run: python scripts/security/run_integrated_security_closure.py
+
   runtime-guards:
     name: Runtime guardrails (pickle + bare except)
     runs-on: ubuntu-latest
