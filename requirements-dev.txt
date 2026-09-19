@@ -3,5 +3,5 @@
 -r veritas_os/requirements.txt
 
 # Explicit test-time web stack pins used by tests/test_wat_api.py.
-fastapi==0.121.0
+fastapi==0.137.2
 httpx==0.27.2
