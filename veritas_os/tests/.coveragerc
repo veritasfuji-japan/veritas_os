@@ -5,7 +5,6 @@ source =
 omit =
     */veritas_os/tests/*
     */veritas_os/**/tests/*
-    */__init__.py
     */veritas_os/scripts/*
 
 [report]
@@ -13,7 +12,6 @@ show_missing = True
 omit =
     */veritas_os/tests/*
     */veritas_os/**/tests/*
-    */__init__.py
     */veritas_os/scripts/*
 exclude_lines =
     pragma: no cover
