@@ -102,7 +102,7 @@ def test_counterfactual_pair_uses_identical_candidate_and_prestate_when_blocked(
     assert result.arm_a_effect_observed is True
     assert result.arm_b_effect_observed is False
     assert result.arm_a_native_error is None
-    assert result.arm_b_bind_receipt["final_outcome"] == "blocked"
+    assert result.arm_b_bind_receipt["final_outcome"] == "BLOCKED"
 
 
 def test_counterfactual_pair_can_commit_conditionally_admissible_exact_call() -> None:
@@ -150,7 +150,7 @@ def test_counterfactual_pair_can_commit_conditionally_admissible_exact_call() ->
     assert result.same_pre_environment is True
     assert result.arm_a_effect_observed is True
     assert result.arm_b_effect_observed is True
-    assert result.arm_b_bind_receipt["final_outcome"] == "committed"
+    assert result.arm_b_bind_receipt["final_outcome"] == "COMMITTED"
 
 
 def test_counterfactual_rejects_non_identical_constructed_prestate() -> None:
@@ -213,4 +213,4 @@ def test_missing_constraint_mapping_still_fails_closed_in_pair() -> None:
 
     assert result.arm_a_effect_observed is True
     assert result.arm_b_effect_observed is False
-    assert result.arm_b_bind_receipt["final_outcome"] == "blocked"
+    assert result.arm_b_bind_receipt["final_outcome"] == "BLOCKED"
