@@ -10,7 +10,8 @@ architecture.
 ## Source pins
 
 - AgentDojo repository: `ethz-spylab/agentdojo`
-- AgentDojo commit: `089ed468cf3ed0322acc66b0211f26d9d90dbf60`
+- AgentDojo release: `v0.1.35`
+- AgentDojo release commit: `a75aba7631d3ca5fb7ab938965c97ead2f9ff84b`
 - benchmark version: `v1.2.2`
 - suite: `banking`
 - preregistration: TASK-022 v0.2 draft
