@@ -15,7 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from threading import RLock
 from typing import Any, Literal, Protocol
+import weakref
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -173,7 +175,12 @@ class ReconciliationCapabilityEvidence(BaseModel):
 RECONCILIATION_CAPABILITY_VERIFICATION_SOURCE = (
     "reconciliation_capability_evidence_verifier"
 )
-_VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY: dict[int, str] = {}
+# Keep a weak identity binding as well as the original hash. Integer IDs can
+# be reused after collection; a hash alone must never authenticate a new object.
+_VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY: dict[
+    int, tuple[weakref.ReferenceType[VerifiedReconciliationCapabilityEvidence], str]
+] = {}
+_VERIFIED_RECONCILIATION_CAPABILITY_LOCK = RLock()
 
 
 @dataclass(frozen=True)
@@ -430,7 +437,17 @@ def verify_reconciliation_capability_evidence_to_proof(
         **proof_data,
         verification_proof_hash=proof_hash,
     )
-    _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY[id(proof)] = proof_hash
+    key = id(proof)
+
+    def forget(reference: weakref.ReferenceType) -> None:
+        with _VERIFIED_RECONCILIATION_CAPABILITY_LOCK:
+            entry = _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY.get(key)
+            if entry is not None and entry[0] is reference:
+                del _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY[key]
+
+    reference = weakref.ref(proof, forget)
+    with _VERIFIED_RECONCILIATION_CAPABILITY_LOCK:
+        _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY[key] = (reference, proof_hash)
     return proof
 
 
@@ -457,11 +474,14 @@ def validate_verified_reconciliation_capability_evidence(
 
     failures: list[str] = []
     expected_proof_hash = sha256_of_canonical_json(proof.proof_hash_payload())
-    if (
-        proof.verification_proof_hash != expected_proof_hash
-        or _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY.get(id(proof))
-        != expected_proof_hash
-    ):
+    with _VERIFIED_RECONCILIATION_CAPABILITY_LOCK:
+        entry = _VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY.get(id(proof))
+        runtime_sealed = (
+            entry is not None
+            and entry[0]() is proof
+            and entry[1] == expected_proof_hash
+        )
+    if proof.verification_proof_hash != expected_proof_hash or not runtime_sealed:
         failures.append("reconciliation_capability_verification_proof_invalid")
 
     if proof.evidence_digest != proof.evidence.deterministic_digest():

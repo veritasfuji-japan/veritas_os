@@ -103,6 +103,13 @@ same workflow. They cover caller-constructed proof lookalikes, trust-policy
 mismatch, expiry, endpoint/configuration drift, verifier mismatch, digest
 mismatch, incomplete policy, and request-like policy downgrade attempts.
 
+## Controlled fixture timing
+
+The shared synthetic risk fixture records issuance three seconds after decision
+capture. Setup waits for actual UTC to reach that timestamp, with a five-second
+monotonic timeout. Consumption and dispatch keep their real clocks and existing
+fail-closed checks; an expired authorization or unhealthy clock still fails.
+
 ## Claim boundary
 
 A passing workflow proves a **controlled policy-gated execution profile** with

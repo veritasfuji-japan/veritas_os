@@ -62,7 +62,7 @@ jobs:
           python -m pip install --retries 5 --timeout 60             "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
 
       - name: Check proof provenance and workflow regressions
-        run: PYTHONPATH=. pytest veritas_os/tests/test_proof_provenance.py veritas_os/tests/test_sandbox_ci_runner.py -q --tb=short
+        run: PYTHONPATH=. pytest veritas_os/tests/test_proof_provenance.py veritas_os/tests/test_sandbox_ci_runner.py veritas_os/tests/test_fixture_clock.py -q --tb=short
 
       - name: Create dedicated sandbox database
         run: |

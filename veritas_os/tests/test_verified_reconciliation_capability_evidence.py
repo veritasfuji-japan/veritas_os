@@ -291,3 +291,65 @@ def test_verified_proof_fails_under_different_trust_policy() -> None:
 
     assert "reconciliation_capability_trust_policy_id_mismatch" in failures
     assert "reconciliation_capability_trust_policy_hash_mismatch" in failures
+
+
+def test_reused_registry_key_cannot_authenticate_a_distinct_object(monkeypatch):
+    # Deterministically model allocator ID reuse, without depending on GC timing.
+    monkeypatch.setattr(module, '_VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY', {})
+    monkeypatch.setattr(module, 'id', lambda _: 123, raising=False)
+    test_caller_constructed_lookalike_is_not_a_runtime_sealed_proof()
+
+
+def test_runtime_registry_releases_collected_proofs(monkeypatch):
+    import gc
+    import weakref
+
+    registry = {}
+    monkeypatch.setattr(module, '_VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY', registry)
+    proof = module.verify_reconciliation_capability_evidence_to_proof(
+        _evidence(), verifier=ControlledVerifier(), trust_policy=_trust_policy(),
+        verified_at=_verification_time(),
+    )
+    key, reference = id(proof), weakref.ref(proof)
+    assert key in registry
+    del proof
+    gc.collect()
+    assert reference() is None
+    assert key not in registry
+
+
+def test_old_collection_callback_does_not_remove_new_registration(monkeypatch):
+    import gc
+
+    registry = {}
+    monkeypatch.setattr(module, '_VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY', registry)
+    monkeypatch.setattr(module, 'id', lambda _: 123, raising=False)
+    def issue():
+        return module.verify_reconciliation_capability_evidence_to_proof(
+            _evidence(), verifier=ControlledVerifier(), trust_policy=_trust_policy(),
+            verified_at=_verification_time(),
+        )
+    older, newer = issue(), issue()
+    del older
+    gc.collect()
+    assert registry[123][0]() is newer
+
+
+def test_original_seal_hash_survives_rehashed_in_place_tampering(monkeypatch):
+    monkeypatch.setattr(module, '_VERIFIED_RECONCILIATION_CAPABILITY_REGISTRY', {})
+    evidence = _evidence()
+    policy = _trust_policy()
+    proof = module.verify_reconciliation_capability_evidence_to_proof(
+        evidence, verifier=ControlledVerifier(), trust_policy=policy,
+        verified_at=_verification_time(),
+    )
+    # Deliberately bypass frozen-model assignment to exercise the stored hash.
+    object.__setattr__(proof, 'verification_reason', 'changed after verification')
+    object.__setattr__(proof, 'verification_proof_hash', sha256_of_canonical_json(proof.proof_hash_payload()))
+    failures = module.validate_verified_reconciliation_capability_evidence(
+        proof, trust_policy=policy,
+        current_endpoint_identity_binding_digest=evidence.endpoint_identity_binding_digest,
+        current_target_configuration_digest=evidence.target_configuration_digest,
+        verification_time=_verification_time(),
+    )
+    assert 'reconciliation_capability_verification_proof_invalid' in failures
