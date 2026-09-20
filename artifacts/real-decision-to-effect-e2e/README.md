@@ -14,13 +14,38 @@ Required check:
 
 `reproducible-decision-to-effect-e2e`
 
+## Commit identity and execution conditions
+
+Both dedicated proof workflows run on every pull request, every push to
+`main`, and manual dispatch. There are no path filters: API, policy, storage,
+migration and dependency changes can affect the proof indirectly.
+
+Both `report.json` and `evidence.json` record:
+
+- `tested_sha`: actual `git rev-parse HEAD`, required to equal the workflow's
+  `github.sha`;
+- `source_sha`: PR head SHA (retained for compatibility); and
+- `base_sha`: PR base SHA.
+
+On a PR, `tested_sha` normally identifies GitHub's synthetic merge commit and
+can differ from both metadata SHAs. On a main push or manual dispatch, all three
+identify the event's commit. Missing, malformed or mismatched identities fail
+the proof; the final artifact check independently verifies both files against
+the checkout and event metadata, even if the files agree with each other.
+
+A passing PR run is evidence for its tested merge candidate. Evidence for a
+merged main commit requires a successful main run with that exact `tested_sha`.
+Failed-run artifacts may still be uploaded for diagnosis and are not PASS
+evidence. These fields are CI provenance, not signed attestations or additional
+execution authority.
+
 ## Generated artifacts
 
 ### report.json
 
 A compact proof report containing:
 
-- source and base commit SHAs;
+- tested checkout, source and base commit SHAs;
 - deployment and controlled CA digests;
 - Alembic revision;
 - normal-path decision / promotion / authorization / operation identities;

@@ -1,25 +1,11 @@
 name: Reproducible Reconciliation-Capable Execution Profile
 
+# Run every PR and every merged-main push: API, policy, storage and proof
+# dependencies extend beyond the former hand-maintained path filters.
 on:
   pull_request:
-    paths:
-      - "veritas_os/tests/test_reconciliation_capable_execution_profile_e2e.py"
-      - "veritas_os/tests/test_reconciliation_capability_consumption_gate.py"
-      - "veritas_os/tests/test_verified_reconciliation_capability_evidence.py"
-      - "veritas_os/tests/test_decision_to_effect_controlled_e2e.py"
-      - "veritas_os/tests/helpers/live_decision_capture.py"
-      - "scripts/run_native_v2_sandbox_service.py"
-      - "veritas_os/governance/reconciliation_capability_evidence.py"
-      - "veritas_os/policy/native_bind_authorization.py"
-      - "veritas_os/policy/native_bind_authorization_consumption.py"
-      - "veritas_os/policy/sandbox_*.py"
-      - "veritas_os/policy/bind_effect_reconciliation.py"
-      - "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
-      - "alembic/**"
-      - ".github/workflows/reproducible-reconciliation-capable-execution-profile.yml"
-      - "artifacts/reconciliation-capable-execution-profile/**"
-      - "docs/en/architecture/reconciliation-capable-execution-profile-v1.md"
-      - "docs/en/validation/reconciliation-capable-execution-profile-proof-v1.md"
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -55,6 +41,7 @@ jobs:
       VERITAS_RECONCILIATION_PROFILE_REPORT: artifacts/reconciliation-capable-execution-profile/report.json
       VERITAS_RECONCILIATION_PROFILE_EVIDENCE: artifacts/reconciliation-capable-execution-profile/evidence.json
       VERITAS_RECONCILIATION_CAPABLE_PROFILE_E2E: "1"
+      VERITAS_PROFILE_TESTED_SHA: ${{ github.sha }}
       VERITAS_PROFILE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       VERITAS_PROFILE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
       PYTHONUNBUFFERED: "1"
@@ -73,6 +60,9 @@ jobs:
           python -m pip install --upgrade pip --retries 5 --timeout 60
           python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
           python -m pip install --retries 5 --timeout 60             "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
+
+      - name: Check proof provenance and workflow regressions
+        run: PYTHONPATH=. pytest veritas_os/tests/test_proof_provenance.py veritas_os/tests/test_sandbox_ci_runner.py -q --tb=short
 
       - name: Create dedicated sandbox database
         run: |
@@ -140,7 +130,12 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
+
+          from veritas_os.tests.helpers.proof_provenance import (
+              verify_proof_provenance,
+          )
 
           report = json.loads(
               Path(
@@ -181,8 +176,13 @@ jobs:
           assert report["fault"]["transport_calls"] == 1
           assert report["sandbox_rows_added_by_valid_paths"] == 2
           assert all(report["proof_conjunction"].values())
-          assert evidence["source_sha"] == report["source_sha"]
-          assert evidence["base_sha"] == report["base_sha"]
+          verify_proof_provenance(
+              report,
+              evidence,
+              source_sha=os.environ["VERITAS_PROFILE_SOURCE_SHA"],
+              base_sha=os.environ["VERITAS_PROFILE_BASE_SHA"],
+              expected_tested_sha=os.environ["VERITAS_PROFILE_TESTED_SHA"],
+          )
           PY
 
       - name: Upload reconciliation-capable profile proof artifacts

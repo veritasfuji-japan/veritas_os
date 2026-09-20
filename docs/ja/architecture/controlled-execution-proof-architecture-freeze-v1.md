@@ -79,6 +79,22 @@ freezeは一度のephemeral CI reportをsource controlへコピーすること�
 workflow、proof contract、source anchor、required safety semanticsをversion管理し、
 後続proof runは毎回自身のexact source SHAへbindingする必要があります。
 
+### 現在のproof runにおけるSHA記録
+
+Decision-to-Effectとreconciliation-capable profileの専用workflowは、
+全PR、`main`へのpush、手動実行で動き、path filterは設けません。
+reportとevidenceの両方に、`git rev-parse HEAD`で取得した実checkoutの
+`tested_sha`を記録し、`github.sha`との一致を必須にします。
+既存の`source_sha` / `base_sha`はPR head/baseのmetadataとして維持します。
+PRのテスト対象はマージ候補のcommitなので、これらのSHAと異なる場合があります。
+pushと手動実行では3つとも当該eventのcommitを示します。
+artifactの最終検査でも、各SHAをcheckoutおよびCI metadataと再照合します。
+
+過去のPR PASSを後続main SHAの証拠には転用できません。
+対象main commit自身のrunが成功している必要があります。
+失敗runからuploadされたartifactは診断用です。この来歴記録の修正は、
+過去のfreeze anchor、安全性の意味、controlled proofの主張範囲を変更しません。
+
 ## 5. Freeze後に許可するchange
 
 既存contractとproof testを維持する限り、次はarchitecture reopenなしで許可します。

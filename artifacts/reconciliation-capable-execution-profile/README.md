@@ -5,7 +5,7 @@ proof of the policy-gated reconciliation-capable execution profile.
 
 The committed repository does not treat generated `report.json` or
 `evidence.json` as static truth. The GitHub Actions workflow regenerates them
-for the exact source SHA under test.
+for the exact checkout SHA under test.
 
 ## Workflow
 
@@ -15,12 +15,37 @@ Job:
 
 `reproducible-reconciliation-capable-execution-profile`
 
+## Commit identity and execution conditions
+
+Both dedicated proof workflows run on every pull request, every push to
+`main`, and manual dispatch. There are no path filters: API, policy, storage,
+migration and dependency changes can affect the proof indirectly.
+
+Both `report.json` and `evidence.json` record:
+
+- `tested_sha`: actual `git rev-parse HEAD`, required to equal the workflow's
+  `github.sha`;
+- `source_sha`: PR head SHA (retained for compatibility); and
+- `base_sha`: PR base SHA.
+
+On a PR, `tested_sha` normally identifies GitHub's synthetic merge commit and
+can differ from both metadata SHAs. On a main push or manual dispatch, all three
+identify the event's commit. Missing, malformed or mismatched identities fail
+the proof; the final artifact check independently verifies both files against
+the checkout and event metadata, even if the files agree with each other.
+
+A passing PR run is evidence for its tested merge candidate. Evidence for a
+merged main commit requires a successful main run with that exact `tested_sha`.
+Failed-run artifacts may still be uploaded for diagnosis and are not PASS
+evidence. These fields are CI provenance, not signed attestations or additional
+execution authority.
+
 ## Runtime outputs
 
 The workflow generates and uploads:
 
 - `report.json` — machine-readable proof conjunction and non-claims;
-- `evidence.json` — source-SHA-bound decision, authorization, capability,
+- `evidence.json` — checkout-SHA-bound decision, authorization, capability,
   consumption, reconciliation and receipt evidence; and
 - the controlled sandbox service log.
 

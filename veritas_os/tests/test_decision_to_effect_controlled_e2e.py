@@ -17,7 +17,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import time
@@ -73,6 +72,7 @@ from veritas_os.tests import (
     test_canonical_promotion_live_adapter_dry_run_endpoint_allowlist as endpoints,
 )
 from veritas_os.tests.helpers.native_approval_source import build_native_authority_source
+from veritas_os.tests.helpers.proof_provenance import capture_proof_provenance
 from veritas_os.tests.test_native_bind_authorization import _setup
 from veritas_os.tests.test_native_bind_authorization_consumption import _fresh
 from veritas_os.tests.test_sandbox_action_binding import contract, deployment
@@ -567,10 +567,11 @@ def _case_evidence(case, result) -> dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
-    source_sha = os.environ.get("VERITAS_E2E_SOURCE_SHA", "")
-    base_sha = os.environ.get("VERITAS_E2E_BASE_SHA", "")
-    assert re.fullmatch(r"[0-9a-f]{40}", source_sha)
-    assert re.fullmatch(r"[0-9a-f]{40}", base_sha)
+    provenance = capture_proof_provenance(
+        source_sha=os.environ.get("VERITAS_E2E_SOURCE_SHA", ""),
+        base_sha=os.environ.get("VERITAS_E2E_BASE_SHA", ""),
+        expected_tested_sha=os.environ.get("VERITAS_E2E_TESTED_SHA", ""),
+    )
 
     ca_path = Path(os.environ["VERITAS_SANDBOX_CA_FILE"])
     ca_pem = ca_path.read_text()
@@ -609,8 +610,7 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
 
     evidence = {
         "format_version": "controlled-decision-to-effect-evidence/v1",
-        "source_sha": source_sha,
-        "base_sha": base_sha,
+        **provenance,
         "normal": _case_evidence(normal_case, normal),
         "fault": _case_evidence(fault_case, fault),
     }
@@ -618,6 +618,7 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
 
     proof_conjunction = {
         "current_head_source_recorded": True,
+        "tested_checkout_sha_verified": True,
         "real_decide_route_exercised": True,
         "canonical_decisions_verified": True,
         "selected_action_bindings_verified": True,
@@ -651,8 +652,7 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
         "result": "PASS" if controlled_e2e else "FAIL",
         "proof": "CONTROLLED_CURRENT_HEAD_DECISION_TO_EFFECT_E2E",
         "production_claim": False,
-        "source_sha": source_sha,
-        "base_sha": base_sha,
+        **provenance,
         "decision_capture_mode": "REAL_POST_V1_DECIDE_WITH_CONTROLLED_MODEL_OUTPUT",
         "external_effect_scope": "SYNTHETIC_SANDBOX_EVENT_PERSISTENCE",
         "endpoint": deployment().endpoint_url,

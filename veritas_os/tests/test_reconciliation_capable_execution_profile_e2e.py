@@ -16,7 +16,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 from typing import Any
 
 import pytest
@@ -37,6 +36,7 @@ from veritas_os.policy.native_bind_authorization import _verified_source
 from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.storage.db import close_pool
 from veritas_os.tests import test_decision_to_effect_controlled_e2e as base
+from veritas_os.tests.helpers.proof_provenance import capture_proof_provenance
 from veritas_os.tests.test_native_bind_authorization_consumption import _fresh
 
 pytestmark = [
@@ -416,10 +416,11 @@ async def test_reproducible_reconciliation_capable_execution_profile(
     tmp_path,
     monkeypatch,
 ):
-    source_sha = os.environ.get("VERITAS_PROFILE_SOURCE_SHA", "")
-    base_sha = os.environ.get("VERITAS_PROFILE_BASE_SHA", "")
-    assert re.fullmatch(r"[0-9a-f]{40}", source_sha)
-    assert re.fullmatch(r"[0-9a-f]{40}", base_sha)
+    provenance = capture_proof_provenance(
+        source_sha=os.environ.get("VERITAS_PROFILE_SOURCE_SHA", ""),
+        base_sha=os.environ.get("VERITAS_PROFILE_BASE_SHA", ""),
+        expected_tested_sha=os.environ.get("VERITAS_PROFILE_TESTED_SHA", ""),
+    )
 
     ca_path = Path(os.environ["VERITAS_SANDBOX_CA_FILE"])
     ca_pem = ca_path.read_text()
@@ -484,8 +485,7 @@ async def test_reproducible_reconciliation_capable_execution_profile(
 
     evidence = {
         "format_version": "reconciliation-capable-execution-evidence/v1",
-        "source_sha": source_sha,
-        "base_sha": base_sha,
+        **provenance,
         "profile_id": POLICY_ID,
         "blocked": {
             "missing": blocked_missing,
@@ -498,6 +498,7 @@ async def test_reproducible_reconciliation_capable_execution_profile(
 
     proof_conjunction = {
         "current_head_source_recorded": True,
+        "tested_checkout_sha_verified": True,
         "real_decide_route_exercised": True,
         "policy_requires_authoritative_reconciliation": (
             normal_gate["result"]["reconciliation_capability_required"]
@@ -573,8 +574,7 @@ async def test_reproducible_reconciliation_capable_execution_profile(
         "result": "PASS" if profile_proven else "FAIL",
         "proof": "CONTROLLED_RECONCILIATION_CAPABLE_EXECUTION_PROFILE_V1",
         "production_claim": False,
-        "source_sha": source_sha,
-        "base_sha": base_sha,
+        **provenance,
         "profile_id": POLICY_ID,
         "endpoint": base.deployment().endpoint_url,
         "deployment_hash": sha256_of_canonical_json(asdict(base.deployment())),

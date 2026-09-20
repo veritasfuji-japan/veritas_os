@@ -14,6 +14,7 @@ it is not part of the product service API.
 from __future__ import annotations
 
 import argparse
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 import os
 from pathlib import Path
@@ -64,16 +65,22 @@ def build_app() -> tuple[object, AsyncConnectionPool]:
 
     ddl = Path(__file__).resolve().parents[1] / "veritas_os" / "policy" / "sandbox_events.sql"
 
-    async def startup() -> None:
-        await pool.open(wait=True)
-        async with pool.connection() as conn:
-            await conn.execute(ddl.read_text())
+    service_lifespan = app.router.lifespan_context
 
-    async def shutdown() -> None:
-        await pool.close()
+    @asynccontextmanager
+    async def lifespan(application):
+        # Current FastAPI uses lifespan instead of app.add_event_handler.
+        # Preserve the service lifecycle and close the pool on startup failure.
+        try:
+            await pool.open(wait=True)
+            async with pool.connection() as conn:
+                await conn.execute(ddl.read_text())
+            async with service_lifespan(application) as state:
+                yield state
+        finally:
+            await pool.close()
 
-    app.add_event_handler("startup", startup)
-    app.add_event_handler("shutdown", shutdown)
+    app.router.lifespan_context = lifespan
 
     outage_flag = os.environ.get("VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG", "").strip()
 

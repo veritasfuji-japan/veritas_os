@@ -79,6 +79,21 @@ The freeze does not depend on copying one ephemeral CI report into source contro
 Instead, the workflow, proof contract, source anchor and required safety semantics
 are versioned. A later proof run must bind its own exact source SHA.
 
+### Current proof-run provenance
+
+Both dedicated Decision-to-Effect and reconciliation-capable profile workflows
+run for all PRs, pushes to `main`, and manual dispatch, without path filters.
+Each report and evidence bundle records `tested_sha` from `git rev-parse HEAD`
+and requires it to match `github.sha`. Existing `source_sha` / `base_sha`
+retain PR head/base metadata; the tested PR merge commit may differ. For push
+and manual events, all three identify the event's commit. Final artifact checks
+revalidate each identity against the checkout and CI metadata.
+
+A prior PR PASS does not establish proof for a later main SHA: the exact main
+commit needs its own successful run. Uploaded failed-run artifacts are
+diagnostic only. This provenance correction does not change the historical
+freeze anchor, safety semantics or controlled-proof claim boundary.
+
 ## 5. Changes permitted after freeze
 
 The following classes are permitted without reopening the architecture, provided
