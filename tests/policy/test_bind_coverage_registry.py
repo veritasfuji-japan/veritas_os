@@ -336,3 +336,105 @@ def test_validator_allows_explicit_no_live_boundary_note() -> None:
         [_valid_entry(boundary_note="no live production integration")]
     )
     assert result.valid is True
+
+
+
+def _valid_entry(**overrides: object) -> BindCoverageEntry:
+    values = {
+        "operation_id": "valid_test_entry",
+        "operation_type": "route",
+        "action_class": "test_action",
+        "effect_level": "medium",
+        "requires_bind": True,
+        "authority_control_type": "none",
+        "requires_authority_evidence": False,
+        "requires_human_approval": False,
+        "requires_policy_snapshot": True,
+        "expected_without_authority": "not_required",
+        "expected_without_human_approval": "not_required",
+        "default_failure_mode": "fail_closed",
+        "implementation_refs": ("veritas_os/policy/bind_execution.py",),
+        "test_refs": ("tests/policy/test_bind_coverage_registry.py",),
+        "docs_refs": ("docs/en/architecture/bind-boundary-governance-artifacts.md",),
+        "boundary_note": "local/offline deterministic fixture",
+    }
+    values.update(overrides)
+    return BindCoverageEntry(**values)  # type: ignore[arg-type]
+
+
+def test_validator_rejects_empty_operation_id() -> None:
+    result = validate_bind_coverage_registry([_valid_entry(operation_id=" ")])
+    assert result.valid is False
+    assert "operation_id must be non-empty" in result.errors
+
+
+def test_validator_rejects_invalid_effect_level() -> None:
+    result = validate_bind_coverage_registry(
+        [_valid_entry(effect_level="extreme")]
+    )
+    assert result.valid is False
+    assert any("invalid effect_level" in error for error in result.errors)
+
+
+def test_validator_rejects_high_effect_non_fail_closed() -> None:
+    result = validate_bind_coverage_registry(
+        [_valid_entry(effect_level="critical", default_failure_mode="not_required")]
+    )
+    assert result.valid is False
+    assert any("must fail closed" in error for error in result.errors)
+
+
+def test_validator_rejects_bind_authority_signal_without_block() -> None:
+    result = validate_bind_coverage_registry(
+        [
+            _valid_entry(
+                authority_control_type="bind_authority_signal",
+                expected_without_authority="not_required",
+            )
+        ]
+    )
+    assert result.valid is False
+    assert any(
+        "bind_authority_signal operation must block without authority" in error
+        for error in result.errors
+    )
+
+
+def test_validator_rejects_required_human_approval_without_block() -> None:
+    result = validate_bind_coverage_registry(
+        [
+            _valid_entry(
+                requires_human_approval=True,
+                expected_without_human_approval="not_required",
+            )
+        ]
+    )
+    assert result.valid is False
+    assert any(
+        "human-approval-required operation must block without approval" in error
+        for error in result.errors
+    )
+
+
+def test_validator_rejects_missing_implementation_and_docs_refs() -> None:
+    result = validate_bind_coverage_registry(
+        [_valid_entry(implementation_refs=(), docs_refs=())]
+    )
+    assert result.valid is False
+    assert any("implementation_refs must be non-empty" in error for error in result.errors)
+    assert any("docs_refs should be non-empty" in error for error in result.errors)
+
+
+def test_validator_rejects_unbounded_live_integration_claim() -> None:
+    result = validate_bind_coverage_registry(
+        [_valid_entry(boundary_note="live production integration")]
+    )
+    assert result.valid is False
+    assert any("may not claim live integration" in error for error in result.errors)
+
+
+def test_validator_allows_explicit_no_live_boundary_note() -> None:
+    result = validate_bind_coverage_registry(
+        [_valid_entry(boundary_note="no live production integration")]
+    )
+    assert result.valid is True
