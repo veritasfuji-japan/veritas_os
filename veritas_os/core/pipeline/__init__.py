@@ -888,7 +888,7 @@ async def run_decide_pipeline(
             try:
                 from ..config import capability_cfg as _cap_cfg
                 if _cap_cfg.enable_continuation_runtime:
-                    from .continuation_runtime.revalidator import (
+                    from ..continuation_runtime.revalidator import (
                         run_continuation_revalidation_shadow as _run_cont_reval,
                     )
                     _cont_lineage, _cont_snap, _cont_rcpt = _run_cont_reval(
@@ -910,7 +910,7 @@ async def run_decide_pipeline(
                     # Only runs when enforcement mode is not "observe".
                     _cont_enf_mode = _cap_cfg.continuation_enforcement_mode
                     if _cont_enf_mode in ("advisory", "enforce"):
-                        from .continuation_runtime.enforcement import (
+                        from ..continuation_runtime.enforcement import (
                             ContinuationEnforcementEvaluator,
                             EnforcementConfig,
                             EnforcementMode,
