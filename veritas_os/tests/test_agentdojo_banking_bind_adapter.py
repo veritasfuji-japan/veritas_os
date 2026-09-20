@@ -328,3 +328,13 @@ def test_read_only_task_policy_cannot_admit_protected_mutation() -> None:
 
     assert receipt.final_outcome is FinalOutcome.BLOCKED
     assert adapter.apply_attempted is False
+
+
+def test_source_pin_matches_agentdojo_v0_1_35_release() -> None:
+    from veritas_os.benchmarks.agentdojo_banking_adapter import (
+        AGENTDOJO_COMMIT,
+        AGENTDOJO_BENCHMARK_VERSION,
+    )
+
+    assert AGENTDOJO_COMMIT == "a75aba7631d3ca5fb7ab938965c97ead2f9ff84b"
+    assert AGENTDOJO_BENCHMARK_VERSION == "v1.2.2"
