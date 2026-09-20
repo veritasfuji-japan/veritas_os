@@ -1,22 +1,11 @@
 name: Reproducible Decision-to-Effect E2E
 
+# Run every PR and every merged-main push: API, policy, storage and proof
+# dependencies extend beyond the former hand-maintained path filters.
 on:
   pull_request:
-    paths:
-      - "veritas_os/tests/test_decision_to_effect_controlled_e2e.py"
-      - "veritas_os/tests/helpers/live_decision_capture.py"
-      - "scripts/run_native_v2_sandbox_service.py"
-      - "veritas_os/policy/canonical_verified_decision_promotion.py"
-      - "veritas_os/policy/native_bind_authorization.py"
-      - "veritas_os/policy/native_bind_authorization_consumption.py"
-      - "veritas_os/policy/sandbox_*.py"
-      - "veritas_os/policy/bind_effect_reconciliation.py"
-      - "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
-      - "alembic/**"
-      - ".github/workflows/reproducible-decision-to-effect-e2e.yml"
-      - "artifacts/real-decision-to-effect-e2e/**"
-      - "docs/en/architecture/native-v2-sandbox-event-spec-v1.md"
-      - "docs/ja/architecture/native-v2-sandbox-event-spec-v1.md"
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -52,6 +41,7 @@ jobs:
       VERITAS_DECISION_TO_EFFECT_REPORT: artifacts/real-decision-to-effect-e2e/report.json
       VERITAS_DECISION_TO_EFFECT_EVIDENCE: artifacts/real-decision-to-effect-e2e/evidence.json
       VERITAS_DECISION_TO_EFFECT_E2E: "1"
+      VERITAS_E2E_TESTED_SHA: ${{ github.sha }}
       VERITAS_E2E_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       VERITAS_E2E_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
       PYTHONUNBUFFERED: "1"
@@ -71,6 +61,9 @@ jobs:
           python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
           python -m pip install --retries 5 --timeout 60 \
             "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
+
+      - name: Check proof provenance and workflow regressions
+        run: PYTHONPATH=. pytest veritas_os/tests/test_proof_provenance.py -q --tb=short
 
       - name: Create dedicated sandbox database
         run: |
@@ -159,7 +152,12 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
+
+          from veritas_os.tests.helpers.proof_provenance import (
+              verify_proof_provenance,
+          )
 
           report = json.loads(
               Path("artifacts/real-decision-to-effect-e2e/report.json").read_text()
@@ -186,8 +184,13 @@ jobs:
           assert report["fault"]["transport_calls"] == 1
           assert report["sandbox_rows_added"] == 2
           assert all(report["proof_conjunction"].values())
-          assert evidence["source_sha"] == report["source_sha"]
-          assert evidence["base_sha"] == report["base_sha"]
+          verify_proof_provenance(
+              report,
+              evidence,
+              source_sha=os.environ["VERITAS_E2E_SOURCE_SHA"],
+              base_sha=os.environ["VERITAS_E2E_BASE_SHA"],
+              expected_tested_sha=os.environ["VERITAS_E2E_TESTED_SHA"],
+          )
           PY
 
       - name: Upload Decision-to-Effect proof artifacts
