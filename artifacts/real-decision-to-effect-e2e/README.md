@@ -84,6 +84,13 @@ outage must leave it unknown with retry prohibited. After lookup recovery, the
 same persisted operation is confirmed. No second POST is permitted, and repeat
 recovery must not perform another reconciliation lookup.
 
+## Controlled fixture timing
+
+The shared synthetic risk fixture records issuance three seconds after decision
+capture. Setup waits for actual UTC to reach that timestamp, with a five-second
+monotonic timeout. Consumption and dispatch keep their real clocks and existing
+fail-closed checks; an expired authorization or unhealthy clock still fails.
+
 ## Claim boundary
 
 A passing report proves a **controlled current-head Decision-to-Effect E2E**

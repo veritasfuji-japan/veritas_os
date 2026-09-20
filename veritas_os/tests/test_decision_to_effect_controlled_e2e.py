@@ -73,6 +73,7 @@ from veritas_os.tests import (
 )
 from veritas_os.tests.helpers.native_approval_source import build_native_authority_source
 from veritas_os.tests.helpers.proof_provenance import capture_proof_provenance
+from veritas_os.tests.helpers.fixture_clock import wait_for_fixture_issuance
 from veritas_os.tests.test_native_bind_authorization import _setup
 from veritas_os.tests.test_native_bind_authorization_consumption import _fresh
 from veritas_os.tests.test_sandbox_action_binding import contract, deployment
@@ -256,6 +257,9 @@ def _build_decision_case(case_dir: Path, payload: dict[str, str]) -> dict[str, A
         source = build_native_authority_source(promotion, promoted_at)
 
     artifact, inputs, *_ = _setup(source, action_contract, promoted_at)
+    # The synthetic risk chain stamps issuance three seconds after capture.
+    # Wait for real UTC; never advance the consumption clock or relax its guard.
+    wait_for_fixture_issuance(inputs["governance_inputs"].verification_now)
     verified_authorization = verify_native_bind_authorization(artifact, **inputs)
     assert verified_authorization == artifact
     assert artifact.execution_intent == promotion.exact_execution_intent
