@@ -22,7 +22,7 @@ from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 AGENTDOJO_REPOSITORY = "ethz-spylab/agentdojo"
-AGENTDOJO_COMMIT = "089ed468cf3ed0322acc66b0211f26d9d90dbf60"
+AGENTDOJO_COMMIT = "a75aba7631d3ca5fb7ab938965c97ead2f9ff84b"
 AGENTDOJO_BENCHMARK_VERSION = "v1.2.2"
 AGENTDOJO_SUITE = "banking"
 PREREGISTRATION_VERSION = "0.2-draft"
