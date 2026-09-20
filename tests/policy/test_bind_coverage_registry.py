@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from veritas_os.policy.bind_coverage_registry import (
     BindCoverageEntry,
     load_bind_coverage_registry,
@@ -235,3 +237,93 @@ def test_validator_allows_bind_authority_signal_without_authority_evidence() -> 
     )
     result = validate_bind_coverage_registry([valid_entry])
     assert result.valid is True
+
+
+
+def test_validator_fails_for_empty_operation_id() -> None:
+    valid = load_bind_coverage_registry()[0]
+    invalid = replace(valid, operation_id="   ")
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert "operation_id must be non-empty" in result.errors
+
+
+def test_validator_fails_for_invalid_effect_level() -> None:
+    valid = load_bind_coverage_registry()[0]
+    invalid = replace(valid, effect_level="unknown")  # type: ignore[arg-type]
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert any("invalid effect_level" in error for error in result.errors)
+
+
+def test_validator_fails_for_high_effect_that_does_not_fail_closed() -> None:
+    valid = load_bind_coverage_registry()[0]
+    invalid = replace(valid, default_failure_mode="allow")  # type: ignore[arg-type]
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert any("must fail closed" in error for error in result.errors)
+
+
+def test_validator_fails_when_bind_authority_signal_does_not_block() -> None:
+    valid = _entry(load_bind_coverage_registry(), "governance_policy_update_put")
+    invalid = replace(valid, expected_without_authority="not_required")
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert any(
+        "bind_authority_signal operation must block without authority" in error
+        for error in result.errors
+    )
+
+
+def test_validator_fails_when_required_human_approval_does_not_block() -> None:
+    valid = load_bind_coverage_registry()[0]
+    invalid = replace(valid, expected_without_human_approval="not_required")
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert any(
+        "human-approval-required operation must block without approval" in error
+        for error in result.errors
+    )
+
+
+def test_validator_fails_without_implementation_refs() -> None:
+    valid = load_bind_coverage_registry()[0]
+    invalid = replace(valid, implementation_refs=())
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert any("implementation_refs must be non-empty" in error for error in result.errors)
+
+
+def test_validator_fails_without_docs_refs() -> None:
+    valid = load_bind_coverage_registry()[0]
+    invalid = replace(valid, docs_refs=())
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert any("docs_refs should be non-empty" in error for error in result.errors)
+
+
+def test_validator_rejects_unqualified_live_integration_claim() -> None:
+    valid = load_bind_coverage_registry()[0]
+    invalid = replace(
+        valid,
+        boundary_note="live production integration is enabled",
+    )
+
+    result = validate_bind_coverage_registry([invalid])
+
+    assert result.valid is False
+    assert any("may not claim live integration" in error for error in result.errors)
