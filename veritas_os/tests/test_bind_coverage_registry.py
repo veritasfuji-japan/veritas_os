@@ -58,3 +58,82 @@ def test_all_runtime_api_routes_are_classified() -> None:
         if classify_bind_coverage(path, method) is None
     ]
     assert not missing, f"Unclassified runtime API routes: {missing}"
+
+
+def test_classify_bind_coverage_normalizes_method_and_rejects_unknown_route() -> None:
+    entry = classify_bind_coverage("/v1/system/halt", "post")
+    assert entry is not None
+    assert entry.coverage_class == BindCoverageClass.BIND_GOVERNED
+    assert classify_bind_coverage("/v1/not-registered", "POST") is None
+
+
+def test_validator_reports_duplicate_registry_entry(monkeypatch) -> None:
+    from veritas_os.policy import bind_coverage as module
+
+    original = module.BIND_COVERAGE_REGISTRY
+    monkeypatch.setattr(module, "BIND_COVERAGE_REGISTRY", original + (original[0],))
+
+    errors = module.validate_bind_coverage_registry()
+
+    assert any("duplicate bind coverage entry" in error for error in errors)
+
+
+def test_validator_rejects_incomplete_audited_exemption(monkeypatch) -> None:
+    from veritas_os.policy import bind_coverage as module
+
+    invalid = module.BindCoverageEntry(
+        "/v1/test/audited-exemption",
+        "POST",
+        module.BindCoverageClass.AUDITED_EXEMPTION,
+        reason=" ",
+        risk_level=None,
+    )
+    monkeypatch.setattr(module, "BIND_COVERAGE_REGISTRY", (invalid,))
+
+    errors = module.validate_bind_coverage_registry()
+
+    assert any("audited exemption missing reason" in error for error in errors)
+    assert any("audited exemption missing risk_level" in error for error in errors)
+
+
+def test_validator_rejects_bind_governed_route_without_target_metadata(
+    monkeypatch,
+) -> None:
+    from veritas_os.policy import bind_coverage as module
+
+    invalid = module.BindCoverageEntry(
+        "/v1/test/unmapped-effect",
+        "POST",
+        module.BindCoverageClass.BIND_GOVERNED,
+    )
+    monkeypatch.setattr(module, "BIND_COVERAGE_REGISTRY", (invalid,))
+    monkeypatch.setattr(
+        module,
+        "resolve_bind_target_metadata",
+        lambda *_args, **_kwargs: {"target_path_type": "other"},
+    )
+    monkeypatch.setattr(module, "CATALOG", ())
+
+    errors = module.validate_bind_coverage_registry()
+
+    assert any("missing bind target metadata" in error for error in errors)
+    assert any("missing from bind target catalog" in error for error in errors)
+
+
+def test_validator_reports_catalog_route_missing_from_registry(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from veritas_os.policy import bind_coverage as module
+
+    monkeypatch.setattr(module, "BIND_COVERAGE_REGISTRY", ())
+    monkeypatch.setattr(
+        module,
+        "CATALOG",
+        (SimpleNamespace(target_path="/v1/test/catalog-only"),),
+    )
+
+    errors = module.validate_bind_coverage_registry()
+
+    assert errors == [
+        "bind target catalog route missing bind_governed registry entry: "
+        "/v1/test/catalog-only"
+    ]
