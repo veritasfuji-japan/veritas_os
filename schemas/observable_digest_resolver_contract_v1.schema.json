@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Observable Digest Resolver Contract v1",
+  "description": "Machine-readable contract for a future observable-digest resolver exchange. This schema formalizes evidence shape only and does not activate resolver behavior, grant authority, change execution permission, or perform boundary validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "request",
+    "result"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0"
+    },
+    "request": {
+      "$ref": "#/$defs/request"
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    }
+  },
+  "$defs": {
+    "sha256_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "utc_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "failure_predicate": {
+      "type": "string",
+      "enum": [
+        "LOCATOR_MISSING",
+        "LOCATOR_MALFORMED",
+        "RESOLUTION_FAILED",
+        "AUTHZ_DENIED",
+        "SCHEMA_MISMATCH",
+        "UNKNOWN_TRANSIENT"
+      ]
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "locator",
+        "caller_id_hash",
+        "requested_at",
+        "resolver_profile"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "caller_id_hash": {
+          "$ref": "#/$defs/sha256_digest"
+        },
+        "requested_at": {
+          "$ref": "#/$defs/utc_timestamp"
+        },
+        "resolver_profile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "semantic_guarantees": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_created",
+        "execution_permission_changed",
+        "digest_match_asserted",
+        "boundary_validation_asserted",
+        "uncertainty_erased",
+        "remediation_executed"
+      ],
+      "properties": {
+        "authority_created": {
+          "const": false
+        },
+        "execution_permission_changed": {
+          "const": false
+        },
+        "digest_match_asserted": {
+          "const": false
+        },
+        "boundary_validation_asserted": {
+          "const": false
+        },
+        "uncertainty_erased": {
+          "const": false
+        },
+        "remediation_executed": {
+          "const": false
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "locator",
+        "resolver_id",
+        "observed_at",
+        "resolution_state",
+        "resolved_digest",
+        "evidence_ref",
+        "failure_predicates",
+        "semantic_guarantees"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolver_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc_timestamp"
+        },
+        "resolution_state": {
+          "type": "string",
+          "enum": [
+            "RESOLVED",
+            "UNRESOLVED"
+          ]
+        },
+        "resolved_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256_digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_predicates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/failure_predicate"
+          }
+        },
+        "semantic_guarantees": {
+          "$ref": "#/$defs/semantic_guarantees"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "resolution_state": {
+                "const": "RESOLVED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolved_digest": {
+                "$ref": "#/$defs/sha256_digest"
+              },
+              "failure_predicates": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "resolution_state": {
+                "const": "UNRESOLVED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolved_digest": {
+                "type": "null"
+              },
+              "failure_predicates": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
