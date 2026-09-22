@@ -3,6 +3,7 @@
 ## 1. Status
 
 - **Phase:** pre-behavior adversarial security review.
+- **Review revision:** 1.1 (16 primary controls + 7 cross-cutting paths + composite scenarios).
 - **Resolver behavior:** not implemented or authorized.
 - **Contract baseline:** `observable-digest-resolver-contract-v1`.
 - **Activation status:** **BLOCKED**.
