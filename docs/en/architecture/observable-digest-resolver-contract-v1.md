@@ -236,6 +236,16 @@ Before resolver behavior may become active, a separate security review must expl
 
 Until that review is complete, this contract remains non-behavioral.
 
+The pre-behavior adversarial security review is now frozen at:
+
+`docs/en/security/observable-digest-resolver-security-review-v1.md`
+
+with machine-readable threat matrix:
+
+`security/observable_digest_resolver_security_review_v1.json`
+
+That review currently leaves behavioral activation **BLOCKED**. It does not itself authorize implementation or runtime activation.
+
 ## 12. Explicit non-scope
 
 This contract adds no:
