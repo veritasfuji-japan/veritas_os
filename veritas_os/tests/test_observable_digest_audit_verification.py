@@ -222,7 +222,7 @@ def test_noncanonical_rewrite_does_not_match_original_receipt(
     receipt = append_observable_digest_audit_entry(entry, path=target)
 
     target.write_text(
-        json.dumps(entry.to_contract_dict(), indent=2) + "\n",
+        json.dumps(entry.to_contract_dict(), ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 
