@@ -23,6 +23,20 @@ For VERITAS v1, `observable_digest_ref` remains **locator-first**:
 
 `observable_digest` may continue as a transitional compatibility field where currently implemented, without changing the locator-first interpretation of `observable_digest_ref`.
 
+### Resolver contract formalization
+
+The future resolver exchange is separately formalized in:
+
+`docs/en/architecture/observable-digest-resolver-contract-v1.md`
+
+with machine-readable shape:
+
+`schemas/observable_digest_resolver_contract_v1.schema.json`
+
+That formalization is contract-only. It does not activate a resolver, change runtime decisions, widen default operator surfaces, or create execution Authority.
+
+The existing `_resolve_observable_digest_ref` helper in `wat_events.py` is locator selection/normalization logic and is not the external/store resolver behavior described by the resolver contract.
+
 ## 3) Failure-code contract
 
 Tooling and callers should receive deterministic failure categorization for locator resolution and digest validation handling.
