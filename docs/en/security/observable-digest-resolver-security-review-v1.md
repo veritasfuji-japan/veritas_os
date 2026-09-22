@@ -50,7 +50,21 @@ No security control, retry, cache, fallback, redirect, credential, or error hand
 
 ## 4. Review result
 
-The review identifies **16 required adversarial-control classes**.
+The review preserves **16 primary adversarial-control classes** and adds **7 cross-cutting adversarial paths** after external review.
+
+The cross-cutting paths are not replacements for the primary controls. They test whether individually reasonable controls can interact to create an unauthorized conclusion.
+
+The review therefore now covers:
+
+```text
+16 primary control classes
++ 7 cross-cutting adversarial paths
++ 10 composite adversarial scenarios
+```
+
+The crucial question is not only whether each control works in isolation, but whether any combination can manufacture a conclusion stronger than the evidence directly supports.
+
+The review identifies **16 required primary adversarial-control classes**.
 
 All are currently marked:
 
@@ -292,7 +306,183 @@ It is not:
 
 A malicious `evidence_ref` must not cause network, filesystem, or execution activity merely because it is present.
 
-## 18. Activation gate
+## 18. Cross-cutting adversarial paths
+
+Before behavior implementation, the review also freezes seven cross-cutting paths.
+
+### 18.1 Canonicalization and parser differentials
+
+Different parsers, encodings, duplicate-key behavior, Unicode normalization, or serialization paths must not produce different resolver semantics from the same bounded input.
+
+Security-critical bytes and structured forms must have one frozen canonical interpretation where hashing, comparison, signing, caching, or auditing depends on it.
+
+Ambiguity must reduce what can be concluded.
+
+It must never produce a parser-dependent `RESOLVED`.
+
+### 18.2 Confused deputy and authority provenance
+
+The resolver service may possess broader store access than a caller.
+
+That broader service capability must not be exercised on behalf of a caller unless the exact tenant/scope/delegation is explicitly permitted and evidence-visible.
+
+The resolver must preserve the provenance of:
+
+- caller identity;
+- resolver identity;
+- tenant;
+- locator namespace;
+- credential class;
+- allowed read scope.
+
+This is **read-access authority provenance only**.
+
+It is never VERITAS execution Authority.
+
+### 18.3 Time-of-check / time-of-use
+
+Security-critical properties can change after validation and before use.
+
+Examples include:
+
+- DNS answer;
+- connected peer;
+- credential validity;
+- trust root;
+- evidence object version;
+- cached object identity.
+
+The identity/version checked must remain bound to the material actually used.
+
+If that continuity cannot be established, the result must remain blocked or unresolved.
+
+### 18.4 Nondeterministic resolution
+
+Ambient state, unordered inputs, race timing, random source selection, or multiple conflicting candidates must not silently determine what evidence is treated as authoritative.
+
+For the same frozen request and pre-state, the resolver must either produce the same bounded interpretation or explicitly surface nondeterminism/conflict.
+
+### 18.5 Resource-exhaustion amplification
+
+Individually bounded mechanisms may still multiply into unbounded aggregate work.
+
+Therefore a future resolver needs one global end-to-end budget across:
+
+- wall time;
+- bytes;
+- decompressed bytes;
+- DNS answers;
+- redirects;
+- retries;
+- parser work;
+- candidate count.
+
+Local limits cannot multiply into a larger implicit budget.
+
+Budget exhaustion remains unresolved and cannot trigger fallback or more work.
+
+### 18.6 Supply-chain and trust-root substitution
+
+Security review of one dependency/trust configuration must not silently transfer to a substituted parser, plugin, CA bundle, trust root, network adapter, or resolver dependency.
+
+Security-critical dependencies and trust material must have explicit identity/version/integrity provenance.
+
+Material changes reopen review.
+
+### 18.7 Evidence integrity and audit ordering tampering
+
+A later audit view must not become more certain because failed, ambiguous, repeated, or late attempts were deleted, reordered, duplicated, spliced, or selectively retained.
+
+Where ordering is claimed, the system must preserve enough evidence to establish:
+
+- attempt identity;
+- request identity;
+- observation time;
+- evidence digest;
+- predecessor/order relation.
+
+If ordering evidence is missing or tampered with, certainty must decrease.
+
+The system must not reconstruct a cleaner history.
+
+## 19. Required proof obligations
+
+Before resolver behavior can be authorized, the exact implementation must prove four things.
+
+### What was observed
+
+The result must bind to the exact:
+
+- request;
+- locator;
+- resolver profile;
+- resolver identity;
+- evidence/digest bytes actually processed.
+
+### When it was observed
+
+The system must preserve enough timing and attempt-order evidence to distinguish:
+
+- initial attempt;
+- retry;
+- cache observation;
+- timeout;
+- late completion;
+- later re-resolution.
+
+### Under which read-access authority
+
+The system must preserve the bounded provenance of:
+
+- caller identity;
+- resolver identity;
+- tenant/scope;
+- credential class;
+- trust configuration.
+
+This must never be confused with execution Authority.
+
+### What the resolver is forbidden to infer
+
+The resolver remains forbidden to infer or manufacture:
+
+- freshness;
+- authenticity beyond the exact validated transport/evidence scope;
+- digest match;
+- boundary-validation success;
+- admissibility;
+- Human Approval;
+- Bind authorization;
+- execution permission;
+- remediation.
+
+## 20. Composition rule
+
+The security boundary must hold under combinations, not only isolated controls.
+
+The frozen rule is:
+
+```text
+No combination of individually permitted mechanisms
+may produce a conclusion stronger than
+the evidence chain directly supports.
+```
+
+The matrix therefore freezes 10 composite adversarial scenarios combining redirects, DNS rebinding, credentials, retries, cache, parser differentials, TOCTOU, fallbacks, resource exhaustion, authority provenance, and audit tampering.
+
+A composite scenario must not manufacture:
+
+- freshness;
+- authenticity;
+- digest match;
+- boundary validation;
+- admissibility;
+- Authority;
+- execution permission.
+
+A missing, conflicting, ambiguous, or tampered evidence chain must remain blocked, unresolved, conflict-visible, or not provable according to the exact case. It must not be repaired into a convenient success.
+
+## 21. Activation gate
 
 Resolver behavior remains **BLOCKED** until all of the following are true:
 
@@ -302,9 +492,12 @@ Resolver behavior remains **BLOCKED** until all of the following are true:
 4. non-amplification constants remain unchanged;
 5. no implicit fallback or ambient credential path exists;
 6. security evidence is re-run after final wiring;
-7. the exact implementation is reviewed for new authority-amplification paths.
+7. the exact implementation is reviewed for new authority-amplification paths;
+8. all seven cross-cutting adversarial paths are implemented or explicitly mitigated and tested;
+9. composite adversarial scenarios pass against the exact behavior SHA;
+10. the implementation can prove what was observed, when, under which bounded read-access authority, and which inferences remain forbidden.
 
-## 19. Non-claims
+## 22. Non-claims
 
 This review does not establish:
 
@@ -320,10 +513,10 @@ This review does not establish:
 
 It is a pre-behavior threat model and activation gate.
 
-## 20. Next step after this review
+## 23. Next step after this review
 
 The next step is **not** to activate the resolver.
 
-The next bounded step is to review this threat model and decide whether the required controls and negative-test set are complete.
+The next bounded step is to review the expanded threat model, cross-cutting paths, proof obligations, and composite adversarial scenarios and decide whether the pre-behavior security boundary is complete.
 
 Only after that review may a minimal behavior implementation be proposed, and that implementation must remain behind the activation gate until the exact behavior path passes the frozen security evidence.
