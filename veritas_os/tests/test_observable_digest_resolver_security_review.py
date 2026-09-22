@@ -106,3 +106,104 @@ def test_security_document_states_non_claims_and_hard_invariant() -> None:
     assert "The answer must remain **yes under adversarial conditions**" in text
     assert "does not establish" in text
     assert "production security" in text
+
+
+def test_cross_cutting_paths_are_frozen_before_behavior() -> None:
+    matrix = _matrix()
+    paths = matrix["cross_cutting_paths"]
+    assert len(paths) == 7
+    assert [item["category"] for item in paths] == [
+        "CANONICALIZATION_AND_PARSER_DIFFERENTIALS",
+        "CONFUSED_DEPUTY_AND_AUTHORITY_PROVENANCE",
+        "TIME_OF_CHECK_TIME_OF_USE",
+        "NONDETERMINISTIC_RESOLUTION",
+        "RESOURCE_EXHAUSTION_AMPLIFICATION",
+        "SUPPLY_CHAIN_AND_TRUST_ROOT_SUBSTITUTION",
+        "EVIDENCE_INTEGRITY_AND_AUDIT_ORDERING_TAMPERING",
+    ]
+    for item in paths:
+        assert item["status"] == "REQUIRED_NOT_IMPLEMENTED"
+        assert item["required_controls"]
+        assert item["required_negative_tests"]
+
+
+def test_proof_obligations_cover_what_when_authority_and_forbidden_inference() -> None:
+    matrix = _matrix()
+    obligations = matrix["proof_obligations"]
+    assert set(obligations) == {
+        "what_was_observed",
+        "when_it_was_observed",
+        "under_which_access_authority",
+        "forbidden_inferences",
+    }
+    for item in obligations.values():
+        assert item["required"] is True
+        assert item["description"]
+
+
+def test_composition_rule_forbids_unauthorized_conclusion_amplification() -> None:
+    matrix = _matrix()
+    assert "No combination of individually permitted mechanisms" in matrix["composition_rule"]
+    assert "Authority" in matrix["composition_rule"]
+    assert "execution permission" in matrix["composition_rule"]
+
+
+def test_composite_adversarial_scenarios_are_frozen() -> None:
+    matrix = _matrix()
+    scenarios = matrix["composite_adversarial_tests"]
+    assert len(scenarios) == 10
+    assert len({item["id"] for item in scenarios}) == 10
+    for item in scenarios:
+        assert item["paths"]
+        assert item["scenario"]
+        assert item["required_outcome"] in {
+            "BLOCKED_OR_UNRESOLVED",
+            "UNRESOLVED",
+            "UNCERTAINTY_PRESERVED",
+            "CONFLICT_VISIBLE_OR_UNRESOLVED",
+            "HISTORY_NOT_PROVABLE",
+        }
+        assert item["invariant"]
+
+
+def test_composite_suite_covers_key_cross_control_combinations() -> None:
+    matrix = _matrix()
+    joined = "\n".join(
+        " ".join(item["paths"]) for item in matrix["composite_adversarial_tests"]
+    )
+    for required in [
+        "REDIRECTS",
+        "DNS_CHANGES_AND_REBINDING",
+        "CREDENTIALS",
+        "RETRIES",
+        "CACHED_EVIDENCE",
+        "TIME_OF_CHECK_TIME_OF_USE",
+        "CANONICALIZATION_AND_PARSER_DIFFERENTIALS",
+        "RESOURCE_EXHAUSTION_AMPLIFICATION",
+        "SUPPLY_CHAIN_AND_TRUST_ROOT_SUBSTITUTION",
+        "EVIDENCE_INTEGRITY_AND_AUDIT_ORDERING_TAMPERING",
+    ]:
+        assert required in joined
+
+
+def test_activation_gate_requires_cross_cutting_and_composite_evidence() -> None:
+    matrix = _matrix()
+    requirements = "\n".join(matrix["activation_gate"]["requirements"])
+    assert "seven cross-cutting adversarial paths" in requirements
+    assert "Composite adversarial tests" in requirements
+    assert "what was observed" in requirements
+    assert "under which bounded read-access authority" in requirements
+
+
+def test_security_document_freezes_cross_cutting_and_composition_review() -> None:
+    text = DOC_PATH.read_text(encoding="utf-8")
+    assert "7 cross-cutting adversarial paths" in text
+    assert "Canonicalization and parser differentials" in text
+    assert "Confused deputy and authority provenance" in text
+    assert "Time-of-check / time-of-use" in text
+    assert "Nondeterministic resolution" in text
+    assert "Supply-chain and trust-root substitution" in text
+    assert "Evidence integrity and audit ordering tampering" in text
+    assert "Required proof obligations" in text
+    assert "Composition rule" in text
+    assert "No combination of individually permitted mechanisms" in text
