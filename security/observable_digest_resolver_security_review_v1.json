@@ -1,0 +1,291 @@
+{
+  "review_version": "1.0",
+  "contract_version": "1.0",
+  "review_status": "PRE_BEHAVIOR_BLOCKED",
+  "behavior_authorized": false,
+  "hard_invariant": {
+    "authority_created": false,
+    "execution_permission_changed": false,
+    "digest_match_asserted": false,
+    "boundary_validation_asserted": false,
+    "uncertainty_erased": false,
+    "remediation_executed": false
+  },
+  "governing_question": "Can the resolver report what it observed without silently deciding what may be believed or done?",
+  "threats": [
+    {
+      "id": "RSR-01",
+      "category": "SCHEME_ALLOWLIST_AND_SSRF",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "A locator could reach local, private, link-local, loopback, metadata-service, file, or otherwise privileged resources.",
+      "required_controls": [
+        "Explicit supported-scheme allowlist with deny-by-default behavior.",
+        "Reject file, local-path, unix-socket, loopback, private, link-local, multicast, reserved, unspecified, and metadata-service targets.",
+        "Apply equivalent checks to IPv4, IPv6, encoded or alternate address forms, and hostname resolutions."
+      ],
+      "required_negative_tests": [
+        "file and local-path locator rejection",
+        "127.0.0.0/8 and ::1 rejection",
+        "RFC1918 and IPv6 unique-local rejection",
+        "link-local and cloud metadata target rejection",
+        "encoded or alternate-form address rejection"
+      ]
+    },
+    {
+      "id": "RSR-02",
+      "category": "REDIRECTS",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "A permitted initial target could redirect to a disallowed target or leak credentials across origins.",
+      "required_controls": [
+        "Redirects disabled by default unless explicitly enabled by a reviewed profile.",
+        "If enabled, every hop must undergo the same scheme, hostname, IP, tenant, and egress checks as the original target.",
+        "Do not forward credentials or authorization material across an origin change.",
+        "Bound redirect count and preserve each hop in evidence."
+      ],
+      "required_negative_tests": [
+        "public-to-private redirect rejection",
+        "cross-origin credential forwarding rejection",
+        "redirect loop exhaustion remains UNRESOLVED"
+      ]
+    },
+    {
+      "id": "RSR-03",
+      "category": "DNS_CHANGES_AND_REBINDING",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Hostname validation could differ from the address actually reached.",
+      "required_controls": [
+        "Validate every resolved address before connection.",
+        "Verify the connected peer address remains within the permitted set.",
+        "Repeat address validation after any allowed redirect or reconnect.",
+        "Hostname allowlisting alone is insufficient evidence of a safe target."
+      ],
+      "required_negative_tests": [
+        "DNS rebinding from public to private address rejection",
+        "mixed public/private answer set rejection unless policy explicitly defines safe selection",
+        "peer-address mismatch rejection"
+      ]
+    },
+    {
+      "id": "RSR-04",
+      "category": "NETWORK_EGRESS",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "A resolver could become a general-purpose network pivot.",
+      "required_controls": [
+        "Use a resolver-specific outbound egress policy rather than ambient process network access.",
+        "Permit only explicitly reviewed destinations or resolver profiles.",
+        "A denied egress path must remain UNRESOLVED and cannot fall back silently."
+      ],
+      "required_negative_tests": [
+        "unlisted destination rejection",
+        "egress-policy denial remains UNRESOLVED",
+        "denied target does not trigger alternate network path"
+      ]
+    },
+    {
+      "id": "RSR-05",
+      "category": "CREDENTIALS",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Resolver credentials could be broadened into execution credentials or leak through logs, redirects, or evidence.",
+      "required_controls": [
+        "Resolver credentials must be read-only and least-privilege for the exact resolver/store scope.",
+        "Resolver credentials must be distinct from execution credentials.",
+        "Secrets must never appear in result, evidence_ref, logs, exceptions, or audit payloads.",
+        "Credential failure cannot manufacture Authority or execution permission."
+      ],
+      "required_negative_tests": [
+        "execution credential rejected for resolver use",
+        "secret redaction from errors and evidence",
+        "expired or revoked resolver credential remains UNRESOLVED",
+        "cross-tenant credential misuse rejected"
+      ]
+    },
+    {
+      "id": "RSR-06",
+      "category": "TENANT_AND_SCOPE_ISOLATION",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "A valid locator or credential for one tenant could resolve material from another tenant or scope.",
+      "required_controls": [
+        "Bind locator namespace, resolver identity, tenant, and allowed scope before resolution.",
+        "Cross-tenant or cross-scope access must fail closed.",
+        "Successful lookup does not widen the caller scope."
+      ],
+      "required_negative_tests": [
+        "cross-tenant locator rejection",
+        "scope mismatch rejection",
+        "same locator text under different tenant cannot silently alias"
+      ]
+    },
+    {
+      "id": "RSR-07",
+      "category": "RETRIES",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Retries could erase uncertainty, change the observed result, or make one later success overwrite earlier failures.",
+      "required_controls": [
+        "Retries disabled by default or bounded by an explicit reviewed profile.",
+        "Each attempt must remain separately observable.",
+        "A later success must not erase earlier timeout, partial-failure, or ambiguous evidence.",
+        "Retry policy cannot change Authority or permission to act."
+      ],
+      "required_negative_tests": [
+        "timeout then success preserves both attempts",
+        "retry exhaustion remains UNRESOLVED",
+        "no unbounded retry loop"
+      ]
+    },
+    {
+      "id": "RSR-08",
+      "category": "FALLBACKS",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Fallback to another scheme, store, resolver, credential, or trust path could silently widen the contract.",
+      "required_controls": [
+        "No implicit fallback across scheme, resolver profile, store, credential, or trust root.",
+        "Any permitted fallback must be explicit in the reviewed profile and separately evidenced.",
+        "Failure of the primary path cannot become success through an unreviewed alternate path."
+      ],
+      "required_negative_tests": [
+        "HTTP failure does not fall back to file or local path",
+        "resolver-profile failure does not select another profile silently",
+        "credential failure does not select ambient credentials"
+      ]
+    },
+    {
+      "id": "RSR-09",
+      "category": "CACHED_EVIDENCE",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Cached material could be mistaken for a current observation or could hide revocation or staleness.",
+      "required_controls": [
+        "Cache use must be explicit and evidence-visible.",
+        "Cached material must retain source provenance, original observed_at, cache age, and applicable expiry metadata.",
+        "Cache presence cannot assert freshness, authenticity, digest match, or current admissibility.",
+        "Cache lookup cannot erase a prior unresolved state."
+      ],
+      "required_negative_tests": [
+        "expired cache does not become current observation",
+        "cache hit preserves original observation time",
+        "cache does not bypass store authorization failure"
+      ]
+    },
+    {
+      "id": "RSR-10",
+      "category": "STALE_RESULTS_AND_TIME",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Old resolver observations could be treated as current truth.",
+      "required_controls": [
+        "Resolver result must preserve observed_at exactly.",
+        "Resolver must not assert freshness; freshness remains a downstream validation concern.",
+        "Clock or timestamp ambiguity cannot be converted into current-validity claims."
+      ],
+      "required_negative_tests": [
+        "old observed_at remains visible",
+        "future or malformed timestamp fails contract processing",
+        "stale result cannot become digest-match or admissibility evidence"
+      ]
+    },
+    {
+      "id": "RSR-11",
+      "category": "PARTIAL_FAILURES",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Partial bytes, truncated payloads, parse failures, or disconnects could be mistaken for a resolved digest.",
+      "required_controls": [
+        "RESOLVED requires complete contract-conformant resolution evidence.",
+        "Partial transport or parsing outcomes remain UNRESOLVED.",
+        "Partial failure evidence must be preserved and must not be overwritten by assumption."
+      ],
+      "required_negative_tests": [
+        "truncated response remains UNRESOLVED",
+        "disconnect after partial body remains UNRESOLVED",
+        "digest parse failure remains UNRESOLVED"
+      ]
+    },
+    {
+      "id": "RSR-12",
+      "category": "AMBIGUOUS_ERRORS",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Free-text or unexpected exceptions could be interpreted as success or as stronger semantics than evidence supports.",
+      "required_controls": [
+        "Contract semantics derive only from typed predicates, never free-text exceptions.",
+        "Unknown or ambiguous operational failures remain UNRESOLVED with bounded typed evidence.",
+        "No exception path may return RESOLVED without complete resolution evidence."
+      ],
+      "required_negative_tests": [
+        "unknown exception cannot produce RESOLVED",
+        "free-text error cannot select a failure code",
+        "ambiguous timeout/cancellation remains UNRESOLVED"
+      ]
+    },
+    {
+      "id": "RSR-13",
+      "category": "TIMEOUTS_AND_CANCELLATION",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Late completion after timeout or cancellation could create contradictory history.",
+      "required_controls": [
+        "Resolution has a bounded timeout.",
+        "Cancellation and timeout are explicit evidence states and do not imply non-occurrence.",
+        "Late results cannot silently replace the timed-out observation."
+      ],
+      "required_negative_tests": [
+        "timeout preserves uncertainty",
+        "late completion after timeout is separately recorded",
+        "cancellation cannot return RESOLVED without completed evidence"
+      ]
+    },
+    {
+      "id": "RSR-14",
+      "category": "RESPONSE_AND_RESOURCE_BOUNDS",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Oversized or compressed responses could exhaust memory/CPU or alter parsing behavior.",
+      "required_controls": [
+        "Bound response bytes, decompressed bytes, parsing depth, and processing time.",
+        "Reject over-limit responses as UNRESOLVED.",
+        "Resource-limit failures cannot trigger fallback to an unsafe path."
+      ],
+      "required_negative_tests": [
+        "oversized response rejection",
+        "decompression expansion rejection",
+        "deep or pathological payload rejection"
+      ]
+    },
+    {
+      "id": "RSR-15",
+      "category": "TRANSPORT_TRUST_AND_AUTHENTICITY",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "An untrusted transport or trust-root substitution could supply attacker-controlled digest material.",
+      "required_controls": [
+        "Network profiles must use authenticated transport with explicit trust configuration.",
+        "Trust-root choice must be explicit and evidence-visible.",
+        "Transport authenticity does not imply digest match, freshness, admissibility, or Authority."
+      ],
+      "required_negative_tests": [
+        "certificate validation failure remains UNRESOLVED",
+        "untrusted trust root rejected",
+        "transport success does not set digest_match_asserted"
+      ]
+    },
+    {
+      "id": "RSR-16",
+      "category": "EVIDENCE_REF_AND_LOGGING",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Evidence references or logs could leak secrets, inject unsafe locators, or be treated as proof without validation.",
+      "required_controls": [
+        "evidence_ref is opaque evidence metadata and never an execution or fetch instruction by itself.",
+        "Audit output must redact secrets and preserve typed resolution state.",
+        "Presence of evidence_ref cannot upgrade authenticity, freshness, admissibility, or Authority."
+      ],
+      "required_negative_tests": [
+        "credential material absent from evidence_ref and logs",
+        "malicious evidence_ref does not trigger a fetch",
+        "evidence_ref presence does not change semantic guarantees"
+      ]
+    }
+  ],
+  "activation_gate": {
+    "state": "BLOCKED",
+    "requirements": [
+      "Every REQUIRED_NOT_IMPLEMENTED control is implemented in a separate behavior PR or an explicitly reviewed dependency.",
+      "All required negative tests execute against the actual behavior path and pass.",
+      "The resolver contract v1 non-amplification constants remain unchanged.",
+      "No implicit fallback or ambient credential path exists.",
+      "Security review evidence is re-run on the exact implementation SHA before behavioral activation."
+    ]
+  }
+}
