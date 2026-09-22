@@ -1,5 +1,5 @@
 {
-  "review_version": "1.0",
+  "review_version": "1.1",
   "contract_version": "1.0",
   "review_status": "PRE_BEHAVIOR_BLOCKED",
   "behavior_authorized": false,
@@ -285,7 +285,275 @@
       "All required negative tests execute against the actual behavior path and pass.",
       "The resolver contract v1 non-amplification constants remain unchanged.",
       "No implicit fallback or ambient credential path exists.",
-      "Security review evidence is re-run on the exact implementation SHA before behavioral activation."
+      "Security review evidence is re-run on the exact implementation SHA before behavioral activation.",
+      "All seven cross-cutting adversarial paths are implemented or explicitly mitigated and their negative tests pass on the exact behavior SHA.",
+      "Composite adversarial tests demonstrate that combinations of permitted mechanisms cannot manufacture an unauthorized conclusion.",
+      "The implementation can prove what was observed, when it was observed, under which bounded read-access authority, and which inferences remain forbidden."
     ]
-  }
+  },
+  "proof_obligations": {
+    "what_was_observed": {
+      "required": true,
+      "description": "The resolver must bind its result to the exact request, locator, resolver profile, resolver identity, and observed digest/evidence bytes it actually processed."
+    },
+    "when_it_was_observed": {
+      "required": true,
+      "description": "The resolver must preserve observed_at plus attempt/order evidence sufficient to distinguish retries, late completions, cached observations, and later re-resolution."
+    },
+    "under_which_access_authority": {
+      "required": true,
+      "description": "The resolver must preserve the provenance of the caller identity, resolver identity, tenant/scope, credential class, and trust configuration used for read-only resolution. This is access-authority provenance only and never execution Authority."
+    },
+    "forbidden_inferences": {
+      "required": true,
+      "description": "The resolver must make explicit which conclusions it is forbidden to infer: freshness, authenticity beyond the validated transport/evidence scope, digest match, boundary validation, admissibility, Human Approval, Bind authorization, execution permission, or remediation."
+    }
+  },
+  "cross_cutting_paths": [
+    {
+      "id": "RSR-X01",
+      "category": "CANONICALIZATION_AND_PARSER_DIFFERENTIALS",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "Different parsers, encodings, normalization rules, duplicate-key handling, Unicode forms, or serialization paths could cause two components to believe they processed the same locator/evidence when they did not.",
+      "required_controls": [
+        "Freeze one canonical representation for any bytes or structured data that are hashed, compared, signed, cached, or audited.",
+        "Reject ambiguous duplicate keys, unsupported encodings, malformed Unicode, and parser-dependent forms rather than normalizing them differently across layers.",
+        "Bind audit evidence to both the observed raw-byte digest and the canonical representation where both are relevant.",
+        "The same input must produce the same contract interpretation across supported parser/runtime implementations."
+      ],
+      "required_negative_tests": [
+        "duplicate JSON keys cannot yield parser-dependent resolver semantics",
+        "Unicode normalization variants cannot silently alias distinct locator or evidence values",
+        "noncanonical serialization cannot reuse canonical evidence hash",
+        "supported parser implementations agree on the same bounded corpus"
+      ]
+    },
+    {
+      "id": "RSR-X02",
+      "category": "CONFUSED_DEPUTY_AND_AUTHORITY_PROVENANCE",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "A caller could cause a more privileged resolver identity or credential to fetch evidence outside the caller's permitted tenant/scope, or later misrepresent store-access authorization as execution Authority.",
+      "required_controls": [
+        "Bind caller_id_hash, resolver_id, tenant, locator namespace, credential class, and allowed scope into the resolution attempt evidence.",
+        "The resolver must never exercise broader read authority merely because its service identity possesses it.",
+        "Store-access authorization provenance must remain distinct from VERITAS execution Authority.",
+        "Delegation or impersonation must be explicit, bounded, reviewable, and evidence-visible."
+      ],
+      "required_negative_tests": [
+        "low-privilege caller cannot induce resolver service account to read higher-privilege tenant data",
+        "resolver service authorization cannot be replayed as execution Authority",
+        "cross-tenant delegated lookup fails closed without explicit bounded delegation",
+        "missing authority provenance remains UNRESOLVED or blocked"
+      ]
+    },
+    {
+      "id": "RSR-X03",
+      "category": "TIME_OF_CHECK_TIME_OF_USE",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "A locator target, DNS answer, credential state, trust root, cached object, or evidence object could change between validation and use, making the used material differ from what was checked.",
+      "required_controls": [
+        "Bind the checked identity/version/digest of security-critical resolution inputs to the actual material used.",
+        "Revalidate mutable security properties at the use boundary where feasible, including peer address, credential validity, trust configuration, and evidence object identity.",
+        "A change between check and use must not be silently accepted as the earlier checked state.",
+        "TOCTOU ambiguity must remain visible and must not upgrade to RESOLVED."
+      ],
+      "required_negative_tests": [
+        "DNS answer changes between validation and connect are rejected",
+        "credential revoked after precheck but before use does not yield RESOLVED",
+        "evidence object version changes between metadata check and body read are detected",
+        "trust-root change between configuration check and transport use is detected"
+      ]
+    },
+    {
+      "id": "RSR-X04",
+      "category": "NONDETERMINISTIC_RESOLUTION",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "The same bounded request and pre-state could produce different resolver interpretations due to unordered inputs, random selection, race timing, ambient state, or multiple candidate sources.",
+      "required_controls": [
+        "Any source selection, address selection, parser choice, or candidate ordering that can affect semantics must be deterministic or explicitly evidenced.",
+        "Ambient process state, unordered collection iteration, random choice, and timing races cannot decide which evidence becomes authoritative.",
+        "Multiple conflicting candidate results must remain explicit rather than being silently collapsed into one convenient answer.",
+        "Repeated evaluation of the same frozen input/pre-state must produce the same bounded interpretation or an explicit nondeterminism finding."
+      ],
+      "required_negative_tests": [
+        "reordered equivalent inputs do not change the selected semantic result",
+        "multiple conflicting resolver candidates remain conflict-visible",
+        "random or ambient source selection is rejected",
+        "same frozen request/pre-state replay does not silently choose a different evidence source"
+      ]
+    },
+    {
+      "id": "RSR-X05",
+      "category": "RESOURCE_EXHAUSTION_AMPLIFICATION",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "An attacker could combine large responses, redirects, retries, decompression, parser complexity, DNS fan-out, or many candidate sources so that individually bounded controls amplify each other into unbounded work.",
+      "required_controls": [
+        "Apply one end-to-end resolution budget covering total wall time, bytes, decompressed bytes, redirects, retries, DNS answers, parser work, and candidate count.",
+        "Per-control limits must compose under a stricter global budget rather than multiply into larger aggregate work.",
+        "Budget exhaustion must fail closed as UNRESOLVED and cannot trigger fallback or additional retry.",
+        "Resource-limit evidence must remain observable for review."
+      ],
+      "required_negative_tests": [
+        "redirect times retry product cannot exceed global attempt budget",
+        "DNS fan-out plus retries remains within total connection budget",
+        "compressed response plus parser complexity cannot exceed global byte/work budget",
+        "budget exhaustion cannot activate fallback or alternate resolver"
+      ]
+    },
+    {
+      "id": "RSR-X06",
+      "category": "SUPPLY_CHAIN_AND_TRUST_ROOT_SUBSTITUTION",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "A dependency, parser, CA bundle, resolver plugin, configuration package, or trust-root source could be replaced so that attacker-controlled evidence appears valid under an unreviewed trust basis.",
+      "required_controls": [
+        "Pin and verify the identity/version/integrity of security-critical resolver dependencies and trust material used by the reviewed behavior path.",
+        "Trust-root provenance and changes must be explicit and evidence-visible.",
+        "Runtime dependency or trust-root substitution must not be accepted merely because transport or parsing still succeeds.",
+        "The security review must be rerun when a pinned security-critical dependency or trust root materially changes."
+      ],
+      "required_negative_tests": [
+        "unreviewed CA/trust-root substitution is rejected or blocks activation",
+        "resolver parser/dependency integrity mismatch blocks activation",
+        "plugin or adapter substitution cannot inherit prior security approval automatically",
+        "dependency update that changes parsing/network semantics triggers review reopen"
+      ]
+    },
+    {
+      "id": "RSR-X07",
+      "category": "EVIDENCE_INTEGRITY_AND_AUDIT_ORDERING_TAMPERING",
+      "status": "REQUIRED_NOT_IMPLEMENTED",
+      "risk": "An attacker or failure could delete, reorder, duplicate, splice, rewrite, or selectively retain attempts so that the audit story no longer reflects what the resolver observed and in what order.",
+      "required_controls": [
+        "Bind each resolution attempt to immutable attempt identity, request identity, observed_at, evidence digest, and explicit predecessor/order evidence where ordering is claimed.",
+        "Repeated, failed, ambiguous, and late attempts must remain visible and cannot be normalized away.",
+        "Tampering or missing ordering evidence must reduce what can be concluded rather than reconstruct a cleaner history.",
+        "Audit verification must distinguish physical record presence, emission evidence, durability evidence, and ordering evidence."
+      ],
+      "required_negative_tests": [
+        "reordered retry records are detected or ordering becomes not provable",
+        "deleted failed attempt cannot be silently reconstructed as success-only history",
+        "duplicate/spliced records remain visible and do not create extra authority",
+        "tampered evidence digest prevents verified reconstruction"
+      ]
+    }
+  ],
+  "composition_rule": "No combination of individually permitted mechanisms may produce a conclusion stronger than the evidence chain directly supports. Composition must never manufacture freshness, authenticity, digest match, boundary validation, admissibility, Authority, or execution permission.",
+  "composite_adversarial_tests": [
+    {
+      "id": "RSR-C01",
+      "paths": [
+        "REDIRECTS",
+        "DNS_CHANGES_AND_REBINDING",
+        "CREDENTIALS",
+        "CONFUSED_DEPUTY_AND_AUTHORITY_PROVENANCE"
+      ],
+      "scenario": "A public allowed host redirects to a hostname that rebinds to a private target while the resolver holds broader service credentials.",
+      "required_outcome": "BLOCKED_OR_UNRESOLVED",
+      "invariant": "No credential forwarding, cross-scope read, or Authority amplification."
+    },
+    {
+      "id": "RSR-C02",
+      "paths": [
+        "RETRIES",
+        "CACHED_EVIDENCE",
+        "TIMEOUTS_AND_CANCELLATION",
+        "EVIDENCE_INTEGRITY_AND_AUDIT_ORDERING_TAMPERING"
+      ],
+      "scenario": "An initial timeout is followed by a cache hit and then a late network success while one failed attempt is missing or reordered in the audit view.",
+      "required_outcome": "UNCERTAINTY_PRESERVED",
+      "invariant": "Later success cannot erase timeout/cache provenance or create success-only history."
+    },
+    {
+      "id": "RSR-C03",
+      "paths": [
+        "CANONICALIZATION_AND_PARSER_DIFFERENTIALS",
+        "EVIDENCE_REF_AND_LOGGING",
+        "AMBIGUOUS_ERRORS"
+      ],
+      "scenario": "Two parser paths disagree on duplicate keys or Unicode normalization while evidence_ref contains attacker-controlled structured text.",
+      "required_outcome": "BLOCKED_OR_UNRESOLVED",
+      "invariant": "No parser-dependent semantic upgrade and evidence_ref remains non-executable metadata."
+    },
+    {
+      "id": "RSR-C04",
+      "paths": [
+        "TIME_OF_CHECK_TIME_OF_USE",
+        "DNS_CHANGES_AND_REBINDING",
+        "TRANSPORT_TRUST_AND_AUTHENTICITY",
+        "SUPPLY_CHAIN_AND_TRUST_ROOT_SUBSTITUTION"
+      ],
+      "scenario": "DNS and trust configuration change after precheck but before the actual connection/use.",
+      "required_outcome": "BLOCKED_OR_UNRESOLVED",
+      "invariant": "Checked identity/trust cannot be silently substituted at use time."
+    },
+    {
+      "id": "RSR-C05",
+      "paths": [
+        "FALLBACKS",
+        "CREDENTIALS",
+        "NETWORK_EGRESS",
+        "CONFUSED_DEPUTY_AND_AUTHORITY_PROVENANCE"
+      ],
+      "scenario": "Primary resolution is denied, then ambient credentials and an alternate egress path are available.",
+      "required_outcome": "BLOCKED_OR_UNRESOLVED",
+      "invariant": "No ambient credential or alternate-path fallback after access denial."
+    },
+    {
+      "id": "RSR-C06",
+      "paths": [
+        "RESPONSE_AND_RESOURCE_BOUNDS",
+        "RETRIES",
+        "REDIRECTS",
+        "RESOURCE_EXHAUSTION_AMPLIFICATION"
+      ],
+      "scenario": "Each redirect and retry is individually within its local limit but their product exceeds the end-to-end budget.",
+      "required_outcome": "UNRESOLVED",
+      "invariant": "Global budget dominates local budgets; exhaustion cannot trigger more work."
+    },
+    {
+      "id": "RSR-C07",
+      "paths": [
+        "NONDETERMINISTIC_RESOLUTION",
+        "CACHED_EVIDENCE",
+        "STALE_RESULTS_AND_TIME"
+      ],
+      "scenario": "Multiple candidate sources disagree and timing determines whether stale cache or live source is selected.",
+      "required_outcome": "CONFLICT_VISIBLE_OR_UNRESOLVED",
+      "invariant": "Timing or ambient ordering cannot silently choose the authoritative-looking answer."
+    },
+    {
+      "id": "RSR-C08",
+      "paths": [
+        "PARTIAL_FAILURES",
+        "AMBIGUOUS_ERRORS",
+        "NONDETERMINISTIC_RESOLUTION",
+        "FALLBACKS"
+      ],
+      "scenario": "A partial body fails parsing while a second source returns a different digest and an exception path offers fallback.",
+      "required_outcome": "BLOCKED_OR_UNRESOLVED",
+      "invariant": "Partial/ambiguous evidence cannot be repaired into RESOLVED through an unreviewed alternate source."
+    },
+    {
+      "id": "RSR-C09",
+      "paths": [
+        "TENANT_AND_SCOPE_ISOLATION",
+        "CONFUSED_DEPUTY_AND_AUTHORITY_PROVENANCE",
+        "CACHED_EVIDENCE"
+      ],
+      "scenario": "A cache contains evidence produced under another tenant's resolver authority and the current caller requests the same locator text.",
+      "required_outcome": "BLOCKED_OR_UNRESOLVED",
+      "invariant": "Cache keys and provenance cannot alias across tenant/scope boundaries."
+    },
+    {
+      "id": "RSR-C10",
+      "paths": [
+        "EVIDENCE_INTEGRITY_AND_AUDIT_ORDERING_TAMPERING",
+        "RETRIES",
+        "TIME_OF_CHECK_TIME_OF_USE"
+      ],
+      "scenario": "An earlier failed attempt is removed and a later success is presented as if it were the only attempt after mutable inputs changed.",
+      "required_outcome": "HISTORY_NOT_PROVABLE",
+      "invariant": "Missing/tampered ordering evidence reduces certainty and never produces a cleaner authorized conclusion."
+    }
+  ]
 }
