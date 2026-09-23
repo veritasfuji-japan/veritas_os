@@ -1,8 +1,15 @@
-# VERITAS OS v2.0 — Decision Governance and Bind-Boundary Control Plane for AI Agents
+<div align="center">
+
+# VERITAS OS v2.0
+
+### AIエージェント向け意思決定ガバナンス / Bind-Boundary Control Plane
+
+**AIが提案したアクションを、現実世界で実行してよいかを、実行直前に検証・統制する。**
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.17838349-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI（日本語論文）](https://img.shields.io/badge/DOI%20(JP)-10.5281%2Fzenodo.17838456-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.17838456)
 [![DOI（Execution Governance論文）](https://img.shields.io/badge/DOI%20(Execution%20Governance)-10.5281%2Fzenodo.22844531-0E76A8?logo=doi&logoColor=white)](https://doi.org/10.5281/zenodo.22844531)
+[![Zenodo Record 22844531](https://img.shields.io/badge/Zenodo-22844531-1682D4?logo=zenodo&logoColor=white)](https://zenodo.org/records/22844531)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
@@ -10,1351 +17,743 @@
 [![Release Gate](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](docs/ja/validation/coverage-report.md) <!-- docs/ja/validation/coverage-report.md のスナップショット値。CIゲートは .github/workflows/main.yml で管理 -->
+[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](docs/ja/validation/coverage-report.md)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README EN](https://img.shields.io/badge/README-English-1d4ed8.svg)](README.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
+
+**[Website](https://veritas-website-navy.vercel.app/)** ·
+**[Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)** ·
+**[Implementation Matrix](docs/en/validation/current-implementation-matrix.md)** ·
+**[Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)** ·
+**[Execution Governance Paper](https://zenodo.org/records/22844531)**
+
+</div>
 
 **Version**: 2.0.0  
 **Release Status**: ベータ版  
 **Author**: Takeshi Fujishita
 
-VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agents**（AIエージェント向け意思決定ガバナンス / bind-boundary 制御プレーン）です。
-エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。これは、AIエージェントの意思決定と実行境界を統治するコントロールプレーンという現在のプロダクトポジショニングを示します。
+---
 
-## 研究論文
+> [!IMPORTANT]
+> ### AIが判断できることと、実行する権限を持つことは別です。
+> AIモデルが「このアクションを実行すべき」と判断しても、それだけでは実行許可にはなりません。VERITAS は、実行時点の権限、ポリシー、人間承認、証拠、現在の状態を確認し、その提案が実行境界を越えてよいかを判定します。
 
-VERITAS OS では、システム全体のアーキテクチャと、Authorization から外部 effect の検証までを扱う実行ガバナンス境界を、それぞれ別論文として公開しています。
+VERITAS OS は、**AIエージェント向けの意思決定ガバナンス / Bind-Boundary Control Plane** です。
 
-- **システム / アーキテクチャ論文:** *VERITAS OS: Auditable Decision OS for LLM Agents* — [DOI: 10.5281/zenodo.17838349](https://doi.org/10.5281/zenodo.17838349)
-- **日本語システム論文:** [DOI: 10.5281/zenodo.17838456](https://doi.org/10.5281/zenodo.17838456)
-- **Execution Governance 論文:** *VERITAS OS: From Authorization to Verified External Effect in AI Agent Execution Governance* — [DOI: 10.5281/zenodo.22844531](https://doi.org/10.5281/zenodo.22844531)
+モデル出力をそのままツールや外部システムへ渡すのではなく、AI出力を **Decision Candidate** として扱い、明示的なガバナンス境界と実行境界を通過した場合にのみ、現実世界での実行を許可します。
 
-Execution Governance 論文では、execution-time revalidation、single-use authorization consumption、`EFFECT_UNKNOWN`、reconciliation-capability gating、独立した read-only reconciliation、controlled reproducible evidence を中心に扱います。
+中心にある考え方はシンプルです。
+
+> **Authorization at issuance ≠ permission at execution.**  
+> **認可が発行されたことと、実行時点で実行してよいことは同じではありません。**
+
+> [!NOTE]
+> VERITAS OS は現在、公開上 **ベータ品質のガバナンス基盤** として位置づけています。リポジトリ上で実装・検証済みの機能と、顧客本番環境での検証、第三者認証、規制当局による承認は明確に区別します。
+
+---
+
+## なぜ VERITAS が必要なのか
+
+AIエージェントは、すでに次のような影響の大きいアクションを準備・実行できるようになりつつあります。
+
+- 支払い・金融オペレーション
+- IAM / 権限変更
+- 本番インフラ変更
+- コンプライアンス / リスク判断
+- 外部API呼び出し
+- 顧客・業務ワークフローの変更
+
+難しい問題は、単に
+
+> *AIが何をすべきか判断できるか？*
+
+ではありません。
+
+本当に重要なのは、
+
+> *組織がその判断を現実世界で実行してよいと認めるために、実行直前にどの条件が満たされている必要があるか？*
+
+です。
+
+意思決定から実行までの間に、次のものは変化する可能性があります。
+
+- 実行主体の権限
+- 適用されるポリシー
+- 実行対象 / スコープ
+- Human Approval（人間承認）の有効性
+- 実行時に使う認証情報
+- Authorization の消費状態
+- 外部システムの状態
+- 以前の外部作用がすでに発生したかどうかの確実性
+
+VERITAS は、この **意思決定と実行の間**を統治します。
+
+---
 
 ## アーキテクチャ概要
 
-```text
-AI / Agent Output
-  ↓
-Decision Candidate
-  ↓
-Governance Evaluation
-  ↓
-Human Approval / Authority Evidence
-  ↓
-Evidence Chain
-  ↓
-Bind Boundary
-  ↓
-Execution Intent
-  ↓
-Outcome Receipt
-  ↓
-Reviewer Evidence Packet
-  ↓
-Validation Report
-```
-
-| レイヤー | 目的 |
-| --- | --- |
-| Decision Candidate | 実行前の構造化された意思決定オブジェクト。 |
-| Governance Evaluation | ポリシー、権限、証跡、承認を確認する。 |
-| Human Approval / Authority Evidence | 人間の権限と承認証明を bind する。 |
-| Evidence Chain | ハッシュ、manifest、検証リンクを保持する。 |
-| Bind Boundary | 実行前の最終制御点。 |
-| Execution Intent | ガバナンス確認後に許可されたアクション。 |
-| Outcome Receipt | 観測された結果を記録する。 |
-| Reviewer Evidence Packet | レビュアー向けの証跡 bundle。 |
-| Validation Report | 決定論的な検証結果と failure reason。 |
-
-レビュアー向け証跡の詳細は、[Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)、[Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)、[Reviewer Evidence Packet](docs/en/demo/reviewer-evidence-packet.md) を参照してください。
-
-公式Webサイト: https://veritas-website-navy.vercel.app/
-
-> メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
-
-外部レビュー担当者向けの入口は `docs/REVIEWER_ENTRYPOINT.md` を参照してください。
-
-## Reviewer Evidence Documentation
-
-Reviewer向けの証跡保証、検証、failure reason taxonomy、生成catalog、demo validation reportについては、以下から確認できます。
-
-- [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
-- [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
-- [Reviewer Evidence Packet](docs/en/demo/reviewer-evidence-packet.md)
-
-- **性能メトリクス**: [日本語補助](docs/ja/benchmarks/performance-metrics.md) / [英語正本](docs/en/benchmarks/performance-metrics.md)
-- **最新ローカル性能メトリクスartifact**: [日本語補助](docs/ja/benchmarks/local-performance-metrics.latest.md) / [英語正本](docs/en/benchmarks/local-performance-metrics.latest.md) / [JSON](docs/en/benchmarks/local-performance-metrics.latest.json)
-- **One-Day PoC証跡パック**: [日本語補助](docs/ja/poc/one-day-poc-evidence-pack.md) / [英語正本](docs/en/poc/one-day-poc-evidence-pack.md)
-- **One-Day PoC運用Runbook**: [日本語補助](docs/ja/poc/one-day-poc-operator-runbook.md) / [英語正本](docs/en/poc/one-day-poc-operator-runbook.md)
-- **One-Day PoCレビュー引き渡しテンプレート**: [日本語補助](docs/ja/poc/one-day-poc-reviewer-handoff-template.md) / [英語正本](docs/en/poc/one-day-poc-reviewer-handoff-template.md)
-- 性能メトリクスおよびOne-Day PoC benchmarkは、local/reviewer-facingな測定であり、本番SLA・第三者認証・顧客環境測定ではありません。
-
-
-## 外部レビュアー向け Fast Path
-
-10 分で実装スナップショットを確認する場合は、次の順で参照してください。
-
-外部レビュアーは [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md) から確認できます。このドキュメントでは、golden fixture の確認、validation report の実行、JSON Schema の確認、local/offline evidence chain の読み方を 10〜15 分で追えるように整理しています。Evidence Bundle の complete checked-in sample flow は [Reviewer Handoff Sample Quickstart](docs/en/validation/reviewer-handoff-sample-quickstart.md) を参照してください。あわせて [External Reviewer Artifact Index](docs/en/demo/external-reviewer-artifact-index.md) も参照してください。
-
-1. [External Validation Brief](docs/REVIEWER_ENTRYPOINT.md)
-2. [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
-3. Authority Evidence Ingestion（local/offline）: docs/en/architecture/authority-evidence-ingestion.md
-4. Human Approval Receipt v1（local/offline）: docs/en/architecture/human-approval-receipt.md
-5. Outcome Receipt v1（local/offline）: docs/en/architecture/outcome-receipt.md
-6. Evidence Chain Manifest v1（local/offline）: docs/en/architecture/evidence-chain-manifest.md
-7. Evidence Chain Verifier v1（local/offline）: docs/en/architecture/evidence-chain-verifier.md
-8. [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-9. [AML/KYC Reviewer Handoff Pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-10. [AML/KYC 1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
-11. [SaaS Permission-Change Governed Demo（local/offline）](docs/en/demo/saas-permission-change-governed-demo.md)
-12. [Reviewer Evidence Packet v1（local/offline）](docs/en/demo/reviewer-evidence-packet.md)
-13. [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
-14. [External Reviewer Artifact Index v1](docs/en/demo/external-reviewer-artifact-index.md)
-15. Bind Coverage Registry v1（local/offline）: docs/en/architecture/bind-coverage-registry.md
-16. LLM-to-Control-Plane Contract（LLMと制御プレーンの責任分界）: docs/ja/architecture/llm-to-control-plane-contract.md
-    - English: docs/en/architecture/llm-to-control-plane-contract.md
-
-境界条件:
-
-- 法的助言ではありません。
-- 規制当局の承認ではありません。
-- 第三者認証ではありません。
-- fixture ベースの PoC 証跡は、実銀行統合の証明として提示してはいけません。
-
-
-## LLMと制御プレーンの責任分界
-
-VERITASは、LLMに自己監査や最終判断を任せる設計ではありません。LLMやエージェントの出力は、まず「提案」として扱われます。実行可能なガバナンス入力になる前に、構造化された制御プレーン境界を通過します。
-
-```mermaid
-flowchart TD
-    A[LLM / Agent Proposal] --> B[DecisionCandidate]
-    B --> C[Normalize]
-    C --> D[Validate]
-    D -->|Incomplete or ambiguous| E[DecisionCandidateRefusalArtifact]
-    D -->|Valid and complete| F[ExecutionIntent]
-    E --> G[Reviewer Evidence Packet]
-    F --> H[Bind Adjudication]
-```
-
-候補が不完全、曖昧、必要な権限情報や人間承認情報を欠く、または自然言語の理由だけに依存している場合、その候補は `ExecutionIntent` へ昇格されません。その場合、`DecisionCandidateRefusalArtifact` として「なぜ `ExecutionIntent` にならなかったのか」を記録できます。
-
-これは pre-`ExecutionIntent` のレビュアー向け証拠であり、`BindReceipt` ではありません。実行が試行されたことも意味せず、live LLM extraction、live authority-source validation、bind adjudication も行いません。法的助言、規制当局の承認、第三者認証、または live IAM / IdP / SaaS / bank / sanctions / customer-system integration の主張でもありません。
-
-- [LLMと制御プレーンの責任分界](docs/ja/architecture/llm-to-control-plane-contract.md)
-- [DecisionCandidate refusal fixture](docs/en/demo/fixtures/reviewer-evidence-packet-decision-candidate-refusal-v1.json)
-- [External Reviewer Quickstart v1](docs/en/demo/external-reviewer-quickstart.md)
-
-## Evaluation Governance レビュアー向け成果物
-
-VERITASには、authority、評価関数の定義、Evaluation Receipt、outcome delta、評価drift、trajectory movement、legitimacyに影響し得る変更を外部レビュー可能にするための Evaluation Governance artifact chain が含まれています。
-
-これらは v1 では非強制のレビュアー向け成果物です。`/v1/decide` の挙動を変更せず、legitimacyを自動的に保証せず、規制適合を認証するものでもありません。目的は、architecture hardening のための証跡を明示的・version管理可能・異議申し立て可能・監査可能にすることです。
-
-- Evaluation Governance overview: [docs/en/architecture/evaluation-governance-overview-v1.md](docs/en/architecture/evaluation-governance-overview-v1.md)
-- Evaluation Governance reviewer demo quickstart: [docs/en/demo/evaluation-governance-reviewer-demo-quickstart-v1.md](docs/en/demo/evaluation-governance-reviewer-demo-quickstart-v1.md)
-- [Evaluation Function Governance v1](docs/en/architecture/evaluation-function-governance-v1.md)
-- [Evaluation Receipt v1](docs/en/architecture/evaluation-receipt-v1.md)
-- [Outcome Delta Attribution v1](docs/en/architecture/outcome-delta-attribution-v1.md)
-- [Evaluation Drift Detection v1](docs/en/architecture/evaluation-drift-detection-v1.md)
-- [Trajectory-Level Admissibility Monitor v1](docs/en/architecture/trajectory-admissibility-monitor-v1.md)
-- [Legitimacy Impact Review v1](docs/en/architecture/legitimacy-impact-review-v1.md)
-- [Adversarial Architecture Test Matrix v1](docs/en/architecture/adversarial-architecture-test-matrix-v1.md)
-- [Adversarial Scenario Fixtures v1](docs/en/architecture/adversarial-scenario-fixtures-v1.md)
-- [Reviewer Evidence Packet v1](docs/en/demo/reviewer-evidence-packet.md)
-- [Reviewer Evidence Packet example with Evaluation Governance attachments](docs/en/demo/examples/reviewer-evidence-packet-with-evaluation-governance-v1.json)
-
-## Authority Evidence Ingestion（権限証拠の取り込み）
-
-VERITAS には、bind-time governance のための deterministic local/offline Authority Evidence ingestion adapter が実装されています。この adapter は、外部システム風または mock の権限証拠 payload を、既存の AuthorityEvidence artifact model に正規化し、決定論的な evidence_hash を付与します。
-
-また、requested scope が AuthorityEvidence.scope_grants に含まれており、AuthorityEvidence.scope_limitations に含まれていないことを検証します。これにより、外部権限情報を VERITAS の実行直前判定に取り込む入口を示しつつ、証拠不足・無効・期限切れ・stale・indeterminate な証拠は fail-closed で停止されます。
-
-- 実装: veritas_os/governance/authority_evidence_ingestion.py
-- 設計メモ: docs/en/architecture/authority-evidence-ingestion.md
-- Focused tests: tests/governance/test_authority_evidence_ingestion.py
-
-境界条件:
-
-- local/offline normalization のみ
-- 実 SaaS・実銀行・実制裁 API・実 IdP・実顧客システムとは接続していない
-- 法的助言・規制承認・第三者認証・本番 authority source validation ではない
-
-
-## Human Approval Receipt v1（人間承認レシート）
-
-VERITAS には local/offline の Human Approval Receipt v1 artifact が追加されています。これは、人間承認を「approved=true」の単純な状態ではなく、誰が・どのscopeを・いつまで承認したかを示す、決定論的で hashable、scope-bound、expiry-aware なガバナンス証跡として扱うためのものです。実 IdP・SSO・IAM・KMS/HSM・電子署名・本番承認ワークフローとの連携は含みません。
-
-境界条件:
-
-- local/offline の決定論的 artifact のみ
-- 実 IdP・SSO・IAM・KMS/HSM・電子署名連携はなし
-- 法的助言・規制承認・第三者認証・本番承認妥当性の主張ではない
-
-## Outcome Receipt v1
-
-VERITAS には local/offline の Outcome Receipt v1 artifact が追加されています。これは、governed execution attempt の実行後結果を記録するための証跡であり、final outcome、commit/block/rollback 状態、postcondition status、state fingerprint、observed effects、決定論的 outcome hash を扱います。本番環境での実行証明ではなく、local/offline の evidence artifact です。
-
-## SaaS Permission-Change Governed Execution Demo
-
-VERITAS には、local/offline の SaaS permission-change governed execution demo が追加されています。このデモでは、AI agent が外部委託者に admin 権限を付与しようとする場面を想定し、commit 前に AuthorityEvidence と HumanApprovalReceipt を検証します。証拠不足・期限切れ・scope mismatch の場合は fail-closed で block されます。実 SaaS・IAM・IdP・顧客ディレクトリとは接続していません。
-
-- ドキュメント: docs/en/demo/saas-permission-change-governed-demo.md
-- スクリプト: scripts/demo/saas_permission_change_governed_demo.py
-
-境界条件:
-
-- local/offline fixture 限定
-- 実 SaaS・実 IAM・実 IdP・実 SSO・実顧客ディレクトリ・本番承認ワークフローとの接続なし
-- 法的助言・規制承認・第三者認証・本番 access-control validation ではない
-
-## Reviewer Evidence Packet v1
-
-Trusted Public Key Provenance の reviewer walkthrough 用に、illustrative sample artifact chain を
-[`samples/evidence_bundle/key_provenance_review/`](samples/evidence_bundle/key_provenance_review/)
-に追加しています。この sample set には `sample-artifact-manifest.json` も含まれ、expected artifact、role、schema、SHA-256 digest を索引化します。さらに `reviewer-handoff-review-result.json` は reviewer Review Result / Acceptance Record として、確認内容と `ACCEPT` / `REJECT` / `NEEDS_FOLLOW_UP` の decision を記録します。sample pack は保存済み reviewer result validation report artifact（`reviewer-review-result-validation.json` と `reviewer-review-result-report-validation.json`）と、保存済み package validation report artifact（`reviewer-handoff-package-validation.json`）も含み、これらは validation output shape と validation status の例示のみです。`reviewer-handoff-package-validation.json` は `validate-reviewer-handoff-package --json` の output shape を示します。これは expected file relationship と sample integrity を確認するためのサンプル限定であり、trust を作成せず、out-of-band public key trust を置き換えず、規制認証を証明せず、完了済み第三者監査承認でもありません。review result と validation report は単独で cryptographic truth を証明しません。manifest/hash の一致は sample integrity を支援するだけで、standalone trust ではありません。fingerprint の一致は correlation を支援するだけで、standalone trust ではありません。`validate-review-result --json` は stable JSON Schema contract で validation report shape と validation status を検証しますが、trust、out-of-band public key trust、規制認証、完了済み第三者監査承認、cryptographic truth をそれ自体で作成・代替・証明しません。`validate-review-result-report` は `validate-review-result --json` が出力した保存済み validation report の shape のみを検証します。reviewer review を再実行せず、trust を作成せず、out-of-band public key trust を置き換えず、規制認証や完了済み第三者監査承認を証明せず、cryptographic truth をそれ自体で証明しません。quickstart command guard（`scripts/quality/check_reviewer_handoff_quickstart_command.py --json`）は machine-readable JSON report mode と optional `--output reviewer-handoff-quickstart-command-validation.json` を提供し、command presence、command executability、output contract status のみを `schemas/reviewer_handoff_quickstart_command_validation_report.schema.json` に沿って記録します。sample package には checked-in の `reviewer-handoff-quickstart-command-validation.json` も含まれ、reviewer が expected machine-readable report shape を確認できます。この report は CI で sample manifest と一緒に検証されます。この report は validation status のみを記録し、それ自体は trust source ではなく、trust、out-of-band public key trust、規制認証、完了済み第三者監査承認、cryptographic truth を作成・代替・証明しません。保存済み quickstart command validation report は `veritas-evidence-bundle validate-quickstart-command-report` で独立に検証でき、second-level report は保存済み report の shape と fixed metadata のみを検証します。この second-level report も validation status のみを記録し、trust を作成せず、out-of-band public key trust を置き換えず、規制認証や完了済み第三者監査承認を証明せず、cryptographic truth をそれ自体で証明しません。
-
-
-checked-in の reviewer handoff sample validation report は CI で検証され、さらに現在の CLI behavior に対する regeneration check も受けます。この gate は `reviewer-review-result-validation.json`、`reviewer-review-result-report-validation.json`、`reviewer-handoff-package-validation.json`、`reviewer-handoff-quickstart-command-validation.json`、`reviewer-handoff-quickstart-command-report-validation.json` を一時ディレクトリへ再生成し、normalized JSON を repository copy と比較します。これにより CLI output と documented sample の drift を減らしますが、検証するのは sample reproducibility のみです。quickstart command guard は `--json` と optional `--output` で CI-safe な machine-readable report を出力し、command presence、command executability、output contract status のみを検証します。checked-in quickstart command validation report sample は expected machine-readable shape を示し、CI で検証され、それ自体は trust source ではありません。trust を作成せず、out-of-band public key trust を置き換えず、規制認証や完了済み第三者監査承認を証明せず、cryptographic truth もそれ自体では証明しません。sample hash は sample integrity のみを支援し、validation report は validation status を記録するだけで cryptographic truth ではありません。
-
-VERITAS には local/offline の Reviewer Evidence Packet v1 export が追加されています。これは、SaaS permission-change governed execution demo の結果を、case outcome、AuthorityEvidence / HumanApproval summary、OutcomeReceipt summary、EvidenceChainManifest summary、EvidenceChainVerification summary、aggregate counts、reviewer notes、決定論的 packet hash を含む JSON-friendly artifact としてまとめるものです。本番導入や監査認証の証明ではなく、local/offline の review packet です。
-
-- ドキュメント: docs/en/demo/reviewer-evidence-packet.md
-- External Reviewer Quickstart: docs/en/demo/external-reviewer-quickstart.md
-- External Reviewer Artifact Index: docs/en/demo/external-reviewer-artifact-index.md
-- Validation report: docs/en/demo/reviewer-evidence-packet-validation-report.md
-- Bundle docs: docs/en/demo/reviewer-evidence-bundle.md
-- スクリプト: scripts/demo/export_reviewer_evidence_packet.py
-- Validator script: scripts/demo/validate_reviewer_evidence_packet.py
-- Local bundle builder: scripts/demo/build_reviewer_evidence_bundle.py
-- CI gate: .github/workflows/reviewer-evidence-packet-validation.yml
-- CI artifacts: reviewer-evidence-packet-validation-artifacts
-- CI artifact manifest: reviewer-evidence-artifact-manifest.json
-- CI artifact manifest verifier: scripts/demo/verify_reviewer_evidence_artifact_manifest.py
-- Golden fixture: docs/en/demo/fixtures/reviewer-evidence-packet-saas-permission-change-v1.json
-- Schema: docs/en/demo/schemas/reviewer-evidence-packet-v1.schema.json
-- テスト: tests/demo/test_reviewer_evidence_packet.py
-
-生成済みの deterministic golden fixture もリポジトリに保存されているため、レビュアーは exporter を実行しなくても packet の内容を確認できます。Reviewer Evidence Packet v1 の JSON Schema もリポジトリに保存されています。これにより、レビュアーは packet の構造契約を確認でき、CI で意図しない shape change を検出できます。CI テストでは、現在生成される packet が fixture と一致することを検証します。
-
-local/offline の validation report も用意されています。これは、生成された packet が golden fixture と一致すること、packet hash が再計算できること、可能な場合は JSON Schema に適合すること、deterministic case expectations を満たすことを検証し、レビュアー向けの pass/fail JSON report を出力します。
-
-Reviewer Evidence Packet validation report を実行する専用 CI gate も追加されています。これにより、reviewer-facing packet、golden fixture、schema / fallback validation、case expectations、evidence-chain verification summaries が継続的に検証されます。
-
-Reviewer Evidence Packet Validation workflow では、生成された validation report、generated packet、golden fixture、schema を GitHub Actions artifact としてアップロードします。これにより、レビュアーは CI 上で生成・検証された成果物を直接確認できます。アップロードされる CI artifact には `reviewer-evidence-artifact-manifest.json` も含まれます。これは、各 reviewer artifact の役割、source、sha256 hash、size を記録した deterministic manifest です。CI workflow では、upload 前に `reviewer-evidence-artifact-manifest.json` も検証します。manifest hash、各file hash、file size を実際の artifact directory に対して再計算し、manifest と実ファイルの整合性を確認します。
-
-レビュアーは Reviewer Evidence Bundle builder を使って、CI と同等の reviewer evidence artifact をローカルでも再生成できます。validation report、generated packet、fixture copy、schema copy、artifact manifest、manifest verification report、step summary を1つのlocal directoryに生成します。
-
-## Bind Coverage Registry v1
-
-VERITAS には local/offline の Bind Coverage Registry v1 が追加されています。これは、effect-bearing な操作が bind-time governance の対象になっているかを記録するための coverage artifact です。高影響アクションが Bind、AuthorityEvidence、HumanApprovalReceipt、policy snapshot、fail-closed を要求しているかを外部レビュアーが確認しやすくするためのものであり、live route scanner や本番導入証明ではありません。
-
-## Evidence Chain Manifest v1
-
-VERITAS には local/offline の Evidence Chain Manifest v1 artifact が追加されています。これは、governed execution attempt について、AuthorityEvidence、HumanApprovalReceipt、bind-time decision evidence、OutcomeReceipt、operation coverage metadata をひとつの証跡チェーンとして結び付けるためのものです。実行前の権限・承認から、bind-time の判定、実行後の outcome evidence までを外部レビュアーが追跡しやすくします。本番環境での実行証明ではなく、local/offline の manifest です。
-
-VERITAS には local/offline の Evidence Chain Verifier v1 が追加されています。これは、EvidenceChainManifest が実際に渡された governance artifacts と整合しているかを検証するためのものです。各 artifact の hash を再計算または読み取り、verified / missing / mismatched / indeterminate な link を報告します。本番監査認証ではなく、local/offline の verifier です。
-
-
-## AML/KYC レビュアー向けウォークスルー Quickstart
-
-VERITAS には、決定論的に確認できる AML/KYC reviewer walkthrough が実装されています。外部レビュアー・企業担当者・投資家は 10 分以内で価値確認できます。
-
-開く URL:
-
-`/?demo_scenario=aml_kyc_reviewer_walkthrough`
-
-確認ポイント:
-
-- Authority Evidence が `missing` であること
-- Bind result が `block` であること
-- Safe audit link が利用可能であること
-- Evidence bundle summary が表示されること
-- Source-state が live ではなく fixture/demo のままであること
-
-このウォークスルーが示すこと:
-
-- AI agent が規制対象の AML/KYC action を試行する
-- 必要な Authority Evidence が不足している
-- VERITAS が Bind Boundary で commit 前に block する
-- 決定論的な audit trace でレビュー可能性が維持される
-
-別途、Authority Evidence ingestion adapter により、外部システム風の権限情報を bind-time AuthorityEvidence artifact として正規化し、fail-closed に検証する入口も実装されています。
-
-境界条件（重要）:
-
-- fixture/demo 限定
-- 法的助言ではない
-- 規制承認ではない
-- 第三者認証ではない
-- 実銀行システム・実制裁 API・実顧客データには接続していない
-
-関連ドキュメント:
-
-- [Full reviewer handoff pack](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-- [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-- [UI walkthrough notes](docs/ui/README_UI.md)
-
-## Governance Review Workflow（ガバナンスレビュー導線）
-
-VERITAS OS は、ガバナンス証跡を記録するだけではありません。Mission Control から Audit へ、証跡を辿って確認できるレビュー導線を提供します。
-
 ```mermaid
 flowchart LR
-  A[Mission Control<br/>Live governance snapshot] --> B[Governance artifacts panel<br/>pre-bind source / bind reason / target metadata / check results]
-  B --> C[Safe operator actions<br/>internal /audit?... links]
-  C --> D[Audit<br/>query validation]
-  D --> E{Supported artifact}
-  E -->|decision_id| F[Auto-load latest logs<br/>focus matching timeline item]
-  E -->|bind_receipt_id| G[Dedicated bind receipt lookup<br/>fallback detail]
-  E -->|execution_intent_id| I[Auto-load latest logs<br/>timeline focus or unavailable]
-  E -->|invalid or unsafe| H[Reject<br/>no fake route]
+    A["AI / Agent"] --> B["Decision Candidate"]
+    B --> C["Governance Evaluation"]
+    C --> D["Authority · Policy · Approval · Evidence"]
+    D --> E["Execution Authorization"]
+    E --> F["Single-Use Consumption"]
+    F --> G["Bind Boundary"]
+    G --> H["External Effect"]
+    H --> I["Receipt / Outcome"]
+    I --> J["Read-Only Reconciliation"]
+    J --> K["Reviewer Evidence"]
 ```
 
-
-1. Mission Control が `/v1/governance/live-snapshot` から live governance snapshot を受け取ります。
-2. UI が pre-bind source / bind reason / target metadata / check results / safe operator actions を表示します。
-3. Operator actions は、supported artifacts（`bind_receipt_id` / `decision_id` / `execution_intent_id`）向けに safe internal `/audit?...` links を提供します。
-4. Audit は supported query parameters を consume し、lookup / navigation 前に query validation を適用します。
-5. decision trace は latest logs を auto-load し、一致する timeline artifact がある場合は focus します。timeline に存在しない場合は direct lookup fallback を表示します。
-6. bind receipt trace は dedicated lookup を使い、timeline に一致項目がない場合も fallback detail を表示します。
-7. unsafe links、external/protocol URLs、malformed hrefs、fake routes は生成しません。
-
-ローカルでの導線確認:
-
-`bash scripts/demo_mission_audit_workflow.sh`
-
-正常に完了する場合、この script は Mission Control actions、Audit page tracing、Audit hook behavior、safe link validation の focused checks を完了します。
-
-```text
-Running VERITAS Mission Control → Audit workflow demo checks...
-✓ Mission Control artifact actions
-✓ Audit page decision / bind receipt tracing
-✓ Audit hook query workflow
-✓ Governance link safety validation
-Mission Control → Audit workflow demo checks completed.
-```
-
-
-### Development-time Observe Mode（開発時の観測モード）
-
-VERITAS は、本番の enforce と開発時の observe を区別します。本番では fail-closed を維持します。Observe Mode は現時点では **foundation semantics（default off）** であり、開発・test・sandbox 文脈で `would_have_blocked` を記録し、違反を隠さない設計を定義します。詳細は `docs/governance/observe_mode.md` を参照してください。
-
-この導線は、次の focused frontend tests でカバーされています。
-
-- `frontend/components/mission-page.test.tsx`
-- `frontend/app/audit/page.test.tsx`
-- `frontend/app/audit/hooks/useAuditData.test.ts`
-- `frontend/lib/governance-link-utils.test.ts`
-
-実装詳細は `docs/ui/README_UI.md` を参照してください。
-
-## VERITAS OS は何か
-
-- 実行前に意思決定を評価し、`proceed / hold / block / human_review_required` を判定するガバナンス層
-- 意思決定を **reviewable / traceable / replayable / auditable / enforceable** にするための製品基盤
-- Mission Control を通じて運用者がガバナンス状態を把握・運用できる実装
-- Intervention Actionability Map v0 には schema と golden fixture contract が追加されています。これにより、marker から intervention guidance への対応が deterministic / inspectable に保たれ、automatic enforcement ではないことも明確化されます。
-  - Intervention Actionability Map schema: `docs/en/demo/schemas/intervention-actionability-map-v0.schema.json`
-  - Intervention Actionability Map fixture: `docs/en/demo/fixtures/intervention-actionability-map-v0.json`
-- Governance Evidence Packet v0 には reviewer-ready contract が追加されています。deterministic representative reviewer packet の構造を安定させ、review guidance が certification ではないことを明示します。
-  - Governance Evidence Packet schema: `docs/en/demo/schemas/governance-evidence-packet-v0.schema.json`
-  - Governance Evidence Packet fixture: `docs/en/demo/fixtures/governance-evidence-packet-v0.json`
-  - Governance Evidence Packet contract test: `frontend/app/api/veritas/v1/report/governance/governance-evidence-packet-contract.test.ts`
-  - Non-claims: not certification; not production security guarantee; not automatic enforcement; not scoring model; not legal conclusion.
-- VERITAS は Governance Recognizability Conditions v0 も文書化し、手続き上の許容可能性が保たれている場合でも、reviewer が maneuverability の収縮を後から認識するための visibility conditions が governance function になり得ることを整理しています。
-- VERITAS は Reviewer-Facing Visibility Roadmap v0 も文書化し、将来の packet expansion 前に、procedural admissibility evidence、maneuverability contraction evidence、recognizability evidence を区別するための docs-only roadmap を整理しています。
-
-## 何を解決するか
-
-企業環境・規制領域では「推論できるか」よりも「統制された実行ができるか」が課題になります。
-VERITAS OS は次を実現します。
-
-- **Reviewable**: 実行前レビュー可能な意思決定
-- **Traceable**: 根拠とポリシーの追跡可能性
-- **Replayable**: 差分検知つき再実行
-- **Auditable**: 改ざん検知可能な監査証跡
-- **Enforceable**: fail-closed 前提の制御強制
-
-## runtime/orchestration ツールとの違い
-
-- 主眼はタスク実行最適化ではなく、**意思決定ガバナンスと bind-boundary 統制**
-- ポリシー・安全ゲートは **real-world effect の前** に適用
-- TrustLog と governance identity により、監査可能な意思決定系譜を保持
-
-## regulated / enterprise に適する理由
-
-- 承認境界とポリシー適用ポイントが明示されている
-- 事後検証向けのエビデンス保存とReplay経路がある
-- secure/prod で fail-closed 起動検証を行うポスチャ設計
-
-## VERITAS OS が「あるもの」と「ないもの」
-
-- **あるもの**: AIエージェント向け Decision Governance and Bind-Boundary Control Plane（実行前ガバナンス＋bind-boundary統制層）
-- **ないもの**: すべてのランタイムを置き換える実行基盤、または単なるオーケストレーション便利層
-
-## 事実とロードマップの境界
-
-- **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済みで、公開上は **ベータ品質のガバナンス基盤** として位置づけます
-- **現時点の事実（bind policy surface）**: 現時点の実装上、bind-boundary adjudication は少なくとも次の5つの運用者管理 effect path に接続されています。
-  - `PUT /v1/governance/policy`
-  - `POST /v1/governance/policy-bundles/promote`
-  - `PUT /v1/compliance/config`
-  - `POST /v1/system/halt`
-  - `POST /v1/system/resume`
-- **現時点の事実（bind outcome公開契約）**: ガバナンス系レスポンスでは従来のフラットな bind フィールド（`bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id`）に加えて、共通のコンパクト語彙として加算的 `bind_summary` も返却されます
-- **現時点の事実（bind coverage registry）**: VERITAS は API 上の effect-bearing path に対して、テスト可能な bind coverage registry を持つ。現実世界に影響する route は `bind_governed` として分類されるか、明示的な `audited_exemption` として理由・リスク付きで記録されるため、記録済み意思決定が binding artifact なしで実行許可と誤認されるリスクを低減します。
-- **現時点の事実（bind artifact family）**: `BindReceipt` は完全なガバナンス成果物として永続化され、成果物契約に canonical target metadata を含みます
-- **現時点の事実（replay/運用フロー）**: 運用画面/API は bind 成果物の list/export/detail エンドポイント（`/v1/governance/bind-receipts` / `/v1/governance/bind-receipts/export` / `/v1/governance/bind-receipts/{bind_receipt_id}`）を提供し、mutation/export レスポンスでは監査トリアージ向けに `bind_summary` を再利用します
-- **現在の事実（completed pre-bind formation refusal operator flow）**: covered `/v1/decide` path では、non-promotable な pre-bind formation lineage は ExecutionIntent 構築前に構造的に拒否されます。レスポンスでは ExecutionIntent / BindReceipt 系フィールドが生成されず、actionability は `formation_transition_refused` に正規化され、operator recovery は `RECONSTRUCT_FROM_ELIGIBLE_FORMATION_LINEAGE` になります。Console では、これを bind failure ではなく pre-bind formation refusal として表示します。
-- **ミニ証跡: covered `/v1/decide` pre-bind formation refusal**: [`docs/en/validation/pre-bind-formation-refusal-mini-proof.md`](docs/en/validation/pre-bind-formation-refusal-mini-proof.md)
-- **現時点の境界**: これは現時点で全ての副作用経路が bind-governed であると主張するものではありません。  
-  本番適用には、環境ごとのハードニング、統合、鍵管理、監査設計、運用審査が必要です。
-- **将来方向（標準化）**: bind-boundary は複数の effect path を統治する標準枠組みへ拡張していく方針ですが、現時点で全経路完了を主張するものではありません
-- **ロードマップ**: IdP/JWT スコープ連携の深耕、分散障害モード検証の拡張
-
-VERITAS には、選択された AI エージェントの action path を bind boundary で reviewable にする **Regulated Action Governance Kernel** が含まれます。Action Class Contract、Authority Evidence、Runtime Authority Validation、Admissibility Predicate、Irreversible Commit Boundary を用いて、execution intent の `commit / block / escalate / refuse` を判定します。AML/KYC customer risk escalation fixture は、この regulated action path を決定論的に確認するための実装済み経路です。
-
-Authority Evidence と Audit Log の違いは明確です。
-- **Audit Log** = 何が起きたかの記録
-- **Authority Evidence** = bind time でその action が authorized / admissible だった理由の証跡
-- audit log 単体では commit を許可しない
-
-外部レビュー向けには、Regulated Action Governance 外部レビュー引き渡しパックを入口として参照してください。実装済み AML/KYC action path、証跡、Quality Gate、制限事項への導線をまとめています。
-外部レビュアーは、Regulated Action Governance 外部レビューフィードバックテンプレートを使って、レビュー範囲、評価基準、指摘事項、証拠要求、推奨事項を記録できます。
-
-### Regulated action governance の事実（実装済み）
-
-- Action Class Contract
-- AML/KYC Customer Risk Escalation contract
-- Authority Evidence artifact
-- Runtime Authority Validation
-- Admissibility Predicate evaluation
-- Commit Boundary Evaluator
-- BindReceipt / BindSummary regulated-action fields
-- AML/KYC deterministic regulated action path
-- Mission Control / Bind Cockpit regulated action display
-- Proof Pack / Quality Gate docs
-
-### Regulated action governance のロードマップ（未実装）
-
-- Real external authority source integration
-- Real bank / sanctions / compliance system integration
-- Third-party review
-- Broader regulated action-class coverage
-- Production customer workflow validation
-
-### Disclaimer
-
-- 本READMEは法的助言ではありません。
-- 規制当局の承認を示すものではありません。
-- 第三者認証を示すものではありません。
-- それ自体で法令適合を保証するものではありません。
-- 外部ガバナンスフレームワークの実装または認証を主張するものではありません。
-
-### Technical Maturity Snapshot（内部）
-
-> 本セクションは **self-assessment / internal re-evaluation**（内部再評価）であり、第三者認証ではありません。
-
-- 最新の内部再評価日: **2026-04-15**
-- 内部総合スナップショット: **85 / 100**（2026-03-15 の 82 から改善）
-- 詳細テーブル・変更点・残存リスク: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
-
----
-
-## クイックリンク
-
-- **AML/KYC Beachhead（1-day PoC quickstart）**: [`docs/ja/guides/poc-pack-financial-quickstart.md`](docs/ja/guides/poc-pack-financial-quickstart.md)
-- **AML/KYC Governance Template Contract**: [`docs/ja/guides/financial-governance-templates.md`](docs/ja/guides/financial-governance-templates.md)（英語正本あり）
-- **External Audit / Evidence Bundle Readiness**: [`docs/ja/validation/external-audit-readiness.md`](docs/ja/validation/external-audit-readiness.md)（英語正本あり）
-- **Reviewer Key Provenance Walkthrough（英語正本）**: [`docs/en/validation/reviewer-key-provenance-walkthrough.md`](docs/en/validation/reviewer-key-provenance-walkthrough.md)
-- **Reviewer Handoff Guide（英語正本）**: [`docs/en/validation/reviewer-handoff-guide.md`](docs/en/validation/reviewer-handoff-guide.md)
-  - `samples/evidence_bundle/key_provenance_review/` の illustrative sample chain には
-    `sample-artifact-manifest.json`、`reviewer-handoff-review-result.json`、`reviewer-review-result-validation.json`、`reviewer-review-result-report-validation.json`、`reviewer-handoff-package-validation.json` が含まれます。CI は
-    JSON Schema conformance、固定 artifact reference、manifest、artifact hash、禁止された
-    sensitive/raw diagnostic pattern を検証します。Reviewer Review Result は確認内容と
-    `ACCEPT` / `REJECT` / `NEEDS_FOLLOW_UP` の decision を記録しますが、単独の
-    certification、regulatory approval、completed third-party audit approval、cryptographic truth
-    ではありません。hash matching は sample integrity を支援するだけで standalone trust ではありません。
-    この CI validation は trust を作成せず、out-of-band public key trust を置き換えず、
-    regulatory certification や completed third-party audit approval を示しません。
-    `veritas-evidence-bundle validate-review-result --result reviewer-handoff-review-result.json --json --output reviewer-review-result-validation.json`
-    は、保存済み review result artifact の schema、acknowledgement structure、required artifact
-    reference、decision、禁止された sensitive/raw diagnostic pattern を検証します。この command は
-    review-result structure を記録・検査するだけで、trust を作成せず、out-of-band public key trust
-    を置き換えず、regulatory certification を証明せず、completed third-party audit approval
-    ではなく、それ単独で cryptographic truth を証明しません。`--json` output には
-    [`schemas/reviewer_handoff_review_result_validation_report.schema.json`](schemas/reviewer_handoff_review_result_validation_report.schema.json)
-    の stable JSON Schema contract があり、validation report shape と validation status を検証しますが、
-    trust、out-of-band public key trust、regulatory certification、completed third-party audit approval、
-    cryptographic truth をそれ自体で作成・代替・証明するものではありません。
-    `veritas-evidence-bundle validate-review-result-report --result reviewer-review-result-validation.json --json --output reviewer-review-result-report-validation.json`
-    は、`validate-review-result --json` が出力した保存済み validation report を検証します。
-    この command は report shape のみを検証し、reviewer review を再実行せず、trust を作成せず、
-    out-of-band public key trust を置き換えず、regulatory certification や completed third-party
-    audit approval を証明せず、それ単独で cryptographic truth を証明しません。
-    [`schemas/reviewer_handoff_review_result_report_validation_report.schema.json`](schemas/reviewer_handoff_review_result_report_validation_report.schema.json)
-    は validation-report structure を記録するための schema であり、cryptographic truth 自体ではありません。
-    `veritas-evidence-bundle validate-reviewer-handoff-package --manifest samples/evidence_bundle/key_provenance_review/sample-artifact-manifest.json --base-dir samples/evidence_bundle/key_provenance_review --json --output reviewer-handoff-package-validation.json`
-    は、sample handoff package structure を manifest から検証し、保存済み sample artifact `reviewer-handoff-package-validation.json` は `validate-reviewer-handoff-package --json` の output shape を示します。manifest、hash、schema、
-    expected artifact name/role/schema ID、validator field、synthetic placeholder fingerprint、
-    safety boundary を検証しますが、trust を作成せず、out-of-band public key trust を置き換えず、
-    regulatory certification を証明せず、completed third-party audit approval ではなく、
-    cryptographic truth をそれ単独で証明しません。sample hash は sample integrity のみを支援し、
-    validation report は validation status のみを記録します。
-- **External Technical Proof Pack（review/pilot/DD/audit）**: [`docs/ja/validation/technical-proof-pack.md`](docs/ja/validation/technical-proof-pack.md)（英語正本あり）
-- **AML/KYC Short Positioning（customer / operator / investor）**: [`docs/ja/positioning/aml-kyc-beachhead-short-positioning.md`](docs/ja/positioning/aml-kyc-beachhead-short-positioning.md)（英語正本あり）
-- **GitHub**: https://github.com/veritasfuji-japan/veritas_os
-- **公式Webサイト**: https://veritas-website-navy.vercel.app/
-- **Zenodo論文（英語）**: https://doi.org/10.5281/zenodo.17838349
-- **Zenodo論文（日本語）**: https://doi.org/10.5281/zenodo.17838456
-- **英語README**: [`README.md`](README.md)
-- **ユーザーマニュアル（日本語）**: [`docs/ja/guides/user-manual.md`](docs/ja/guides/user-manual.md)
-- **コントリビューション**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- **セキュリティポリシー**: [`SECURITY.md`](SECURITY.md)
-- **ドキュメント総合インデックス**: [`docs/INDEX.md`](docs/INDEX.md)
-- **PostgreSQL本番運用ガイド**: [`docs/ja/operations/postgresql-production-guide.md`](docs/ja/operations/postgresql-production-guide.md)
-- **PostgreSQLドリルRunbook**: [`docs/ja/operations/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md)
-- **セキュリティ強化チェックリスト**: [`docs/ja/operations/security-hardening.md`](docs/ja/operations/security-hardening.md)
-- **外部セキュリティレビュー対応サマリー**: [日本語補助](docs/ja/security/external-security-remediation-summary.md) / [英語正本](docs/en/security/external-security-remediation-summary.md)
-- **データベースマイグレーション**: [`docs/ja/operations/database-migrations.md`](docs/ja/operations/database-migrations.md)
-- **バックエンドパリティカバレッジ**: [`docs/ja/validation/backend-parity-coverage.md`](docs/ja/validation/backend-parity-coverage.md)
-- **ライブPostgreSQL検証エビデンス**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
-- [Release Gate Recovery Case Study](docs/en/validation/release-gate-recovery-case-study.md) — Release Gate が実際に失敗したリリースを止め、PostgreSQL governance backend、Docker runtime、file/PostgreSQL test isolation の問題を修正後に passing へ戻した実例。
-- **レガシーパスクリーンアップ**: [`docs/ja/operations/legacy-path-cleanup.md`](docs/ja/operations/legacy-path-cleanup.md)
-- **レビュー文書マップ**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
-- **ドキュメント入口（英語）**: [`docs/en/README.md`](docs/en/README.md)
-- **ドキュメント入口（日本語）**: [`docs/ja/README.md`](docs/ja/README.md)
-- **公開ポジショニングガイド（英語）**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
-- **公開ポジショニングガイド（日本語）**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
-- **Decision Semantics Contract**: [`docs/ja/architecture/decision-semantics.md`](docs/ja/architecture/decision-semantics.md)
-- **Bind-Boundary Governance Artifacts**: [`docs/ja/architecture/bind-boundary-governance-artifacts.md`](docs/ja/architecture/bind-boundary-governance-artifacts.md)
-- **Bind-Time Admissibility Evaluator**: [`docs/ja/architecture/bind_time_admissibility_evaluator.md`](docs/ja/architecture/bind_time_admissibility_evaluator.md)
-- **Regulated Action Governance Kernel（英語正本）**: [`docs/en/architecture/regulated-action-governance-kernel.md`](docs/en/architecture/regulated-action-governance-kernel.md)
-- **Authority Evidence vs Audit Log（英語正本）**: [`docs/en/architecture/authority-evidence-vs-audit-log.md`](docs/en/architecture/authority-evidence-vs-audit-log.md)
-- **AML/KYC Regulated Action Path（英語正本）**: [`docs/en/use-cases/aml-kyc-regulated-action-path.md`](docs/en/use-cases/aml-kyc-regulated-action-path.md)
-- **Regulated Action Governance Proof Pack（英語正本）**: [`docs/en/validation/regulated-action-governance-proof-pack.md`](docs/en/validation/regulated-action-governance-proof-pack.md)
-- **Regulated Action Governance Quality Gate（英語正本）**: [`docs/en/validation/regulated-action-governance-quality-gate.md`](docs/en/validation/regulated-action-governance-quality-gate.md)
-- **Regulated Action Governance External Review Handoff Pack（英語正本）**: [`docs/en/validation/external-review-handoff-regulated-action-governance.md`](docs/en/validation/external-review-handoff-regulated-action-governance.md)
-- **Regulated Action Governance External Review Handoff Pack（日本語要約）**: [`docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md`](docs/ja/validation/external-review-handoff-regulated-action-governance-summary.md)
-- **Regulated Action Governance External Reviewer Feedback Template（英語正本）**: [`docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md`](docs/en/validation/external-reviewer-feedback-template-regulated-action-governance.md)
-- **Regulated Action Governance 外部レビューフィードバックテンプレート（日本語要約）**: [`docs/ja/validation/external-reviewer-feedback-template-regulated-action-governance-summary.md`](docs/ja/validation/external-reviewer-feedback-template-regulated-action-governance-summary.md)
-- **Regulated Action Governance Proof Pack（日本語要約）**: [`docs/ja/validation/regulated-action-governance-proof-pack-summary.md`](docs/ja/validation/regulated-action-governance-proof-pack-summary.md)
-- **Regulated Action Governance Quality Gate（日本語要約）**: [`docs/ja/validation/regulated-action-governance-quality-gate-summary.md`](docs/ja/validation/regulated-action-governance-quality-gate-summary.md)
-
-- Regulated Action Governance の Proof Pack / Quality Gate については、上記の日本語要約ページと英語版詳細ドキュメントを併せて参照してください。
-- **Required Evidence Taxonomy v0**: [`docs/ja/governance/required-evidence-taxonomy.md`](docs/ja/governance/required-evidence-taxonomy.md)
-- **AML/KYC contract hardening（canonical gate + evidence profile）**: [`docs/ja/guides/financial-governance-templates.md`](docs/ja/guides/financial-governance-templates.md)
-- **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
-- **運用Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
-- **ガバナンス署名運用Runbook**: [`docs/ja/operations/governance-artifact-signing.md`](docs/ja/operations/governance-artifact-signing.md)
-- **ポリシーバンドル昇格ガイド（日本語）**: [`docs/ja/guides/governance-policy-bundle-promotion.md`](docs/ja/guides/governance-policy-bundle-promotion.md)
-- **ガバナンスアップグレード概要（Press）**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
-
-## AML/KYC Beachhead PoC Pack（1日で試せる内容）
-
-AML/KYC ワークフローで VERITAS OS を評価する規制領域チーム向けに、beachhead
-pack はポジショニング文書ではなく、実行可能な手順として整備されています。
-
-1. 1-day PoC fixture セットを実行し、pass/fail/warning を定量化する。
-2. 運用者チェックポイント（fail-closed gate、evidence-first 差分、replay consistency）を確認する。
-3. 外部レビュー準備向け evidence-bundle handoff 成果物を出力する。
-
-開始リンク:
-- [1-day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
-- [Financial Governance Templates](docs/ja/guides/financial-governance-templates.md)
-- [External Audit Readiness](docs/ja/validation/external-audit-readiness.md)
-- [Short Positioning by audience](docs/ja/positioning/aml-kyc-beachhead-short-positioning.md)
-
-## 🚀 Quick Start（TL;DR）
-
-```bash
-# Clone & Docker Compose で起動（推奨）
-git clone https://github.com/veritasfuji-japan/veritas_os.git
-cd veritas_os
-cp .env.example .env        # 編集: OPENAI_API_KEY、VERITAS_API_KEY、VERITAS_API_SECRET を設定
-docker compose up --build
-
-# バックエンド: http://localhost:8000 (Swagger UI: /docs)
-# フロントエンド: http://localhost:3000 (Mission Control)
-# PostgreSQL: localhost:5432 (デフォルトストレージバックエンドとして自動設定)
-```
-
-> **Docker ComposeはデフォルトでPostgreSQLを使用** します（Memory・TrustLog両方）。
-> 確認: `curl -s http://localhost:8000/health | python3 -c "import json,sys; print(json.load(sys.stdin)['storage_backends'])"`
->
-> 軽量なファイルベースバックエンドを使用する場合は、`.env`に以下を設定:
-> ```
-> VERITAS_MEMORY_BACKEND=json
-> VERITAS_TRUSTLOG_BACKEND=jsonl
-> ```
-
-> **前提条件**: Docker 20+ と Docker Compose v2。ローカル開発の場合: Python 3.11+、Node.js 20+、pnpm。
-
-## PostgreSQL本番パスと検証ステータス
-
-このリポジトリでは、**MemoryOS と TrustLog の両方で PostgreSQL バックエンドが正式な本番パス**です。
-JSON/JSONL バックエンドは、軽量なローカル開発や移行ワークフロー向けに引き続き利用できますが、
-本番推奨ベースラインではありません。
-
-- **Docker Compose のデフォルト:** `docker-compose.yml` で
-  `VERITAS_MEMORY_BACKEND=postgresql` と
-  `VERITAS_TRUSTLOG_BACKEND=postgresql` が設定されています。
-- **実行時の確認ポイント:** 実行時に `/health` → `storage_backends` を確認し、
-  有効なバックエンドを検証します。
-- **ライブ PostgreSQL 検証は複数レイヤで実施:** CI スモーク（`pytest -m smoke`）、
-  本番相当検証（`pytest -m "production or smoke"`）、ライブ検証エントリポイント
-  （`make validate-postgresql-live`、`make validate-live`、workflow `production-validation.yml`）。
-
-検証志向ドキュメント:
-
-- [`docs/ja/validation/backend-parity-coverage.md` — パリティ/実装検証の正本ソース](docs/ja/validation/backend-parity-coverage.md)
-- [`docs/ja/validation/postgresql-production-proof-map.md` — 本番パス証跡のコンパクト入口](docs/ja/validation/postgresql-production-proof-map.md)
-- [`docs/ja/validation/production-validation.md` — tier/promotion/release-gate の正本ソース](docs/ja/validation/production-validation.md)
-- [`docs/ja/operations/postgresql-production-guide.md` — PostgreSQL運用/監視/復旧の正本ソース](docs/ja/operations/postgresql-production-guide.md)
-- [`docs/live-postgresql-validation.md` — ライブ PostgreSQL 検証の公開エビデンス入口](docs/live-postgresql-validation.md)
-
-### 保証境界（現時点）
-
-- **保証されること:** PostgreSQL が本番パスとして明文化されており、Docker Compose は
-  PostgreSQL をデフォルトにし、バックエンドパリティ期待値が文書化され、
-  本番バリデーション文書に継続的/ライブ検証経路が含まれています。
-- **まだ保証しないこと:** この README セクション単体では、環境ごとの HA/DR 体制、
-  クラウド管理サービス設定の正当性、ターゲット本番環境での運用 Runbook 実行品質までは
-  保証しません。
-
-## 目次
-
-- [ベータ版の位置づけ](#-ベータ版の位置づけ)
-- [PostgreSQL本番パスと検証ステータス](#postgresql本番パスと検証ステータス)
-- [保証境界（現時点）](#保証境界現時点)
-- [ランタイムポスチャ保証](#-ランタイムポスチャ保証)
-- [なぜVERITASか](#-なぜveritasか)
-- [できること](#-できること)
-- [Quick Start](#-quick-start)
-- [プロジェクト構成](#-プロジェクト構成)
-- [フロントエンド — Mission Controlダッシュボード](#-フロントエンド--mission-controlダッシュボード)
-- [API概要](#-api概要)
-- [Docker Compose（フルスタック）](#-docker-composeフルスタック)
-- [Docker（バックエンドのみ）](#-dockerバックエンドのみ)
-- [アーキテクチャ（高レベル）](#-アーキテクチャ高レベル)
-- [TrustLog（ハッシュチェーン監査ログ）](#-trustlogハッシュチェーン監査ログ)
-- [Continuation Runtime](#-continuation-runtime)
-- [テスト](#-テスト)
-- [環境変数リファレンス](#-環境変数リファレンス)
-- [セキュリティ注意（重要）](#-セキュリティ注意重要)
-- [ロードマップ（短期）](#-ロードマップ短期)
-- [ライセンス](#-ライセンス)
-- [コントリビューション](#-コントリビューション)
-- [引用（BibTeX）](#-引用bibtex)
-
----
-
-## 📊 ベータ版の位置づけ
-
-| 領域 | 現在のベータ版としての状態 |
-|---|---|
-| コア意思決定経路 | `/v1/decide` のオーケストレーション、ゲート、永続化、Replay フックまで一通り実装済みです。 |
-| ガバナンス | ポリシー更新、承認フロー、監査証跡、コンプライアンス出力が中核機能として組み込まれています。 |
-| フロントエンド | Mission Control は単なるデモではなく、運用者向けワークフローを意識した構成です。 |
-| 安全性 | FUJI、Replay、TrustLog 周辺を含め、許容的フォールバックより fail-closed を優先する設計です。 |
-| 導入想定 | 評価環境、ステージング、社内パイロット、制御されたベータ導入に適しています。本番利用には環境依存のハードニングと運用審査が必要です。 |
-
-**ここでいう「ベータ版」とは**
-- バックエンド、フロントエンド、Replay、ガバナンス、コンプライアンスまで統合された広いアーキテクチャをすでに持っている状態です。
-- もはやアルファ試作ではなく、監査基盤を備えた実用寄りの段階です。
-- 一方で、ポリシーパック、デプロイ既定値、環境固有の統合については継続的な改善が前提です。
-
-## 🔒 ランタイムポスチャ保証
-
-VERITAS OS は単一の**ランタイムポスチャ**（`VERITAS_POSTURE`）でガバナンスに重要な既定値を制御します。一度設定すれば、すべての安全フラグがそこから導出されます。
-
-| ポスチャ | ガバナンス制御 | 起動時の動作 | エスケープハッチ |
-|---|---|---|---|
-| **dev**（デフォルト） | 明示的に有効化しない限りすべてOFF | 緩和 — 警告のみ | N/A |
-| **staging** | 明示的に有効化しない限りすべてOFF | 緩和 — 警告のみ | N/A |
-| **secure** | すべて**デフォルトON** | Fail-closed — 統合未設定時に起動拒否 | `VERITAS_POSTURE_OVERRIDE_*` 有効 |
-| **prod** | すべて**ON**、例外なし | Fail-closed — 統合未設定時に起動拒否 | オーバーライドは**無視** |
-
-### ポスチャで管理される制御
-
-| 制御 | 環境変数（明示的オーバーライド） | 適用内容 |
+| 実行前 | 実行境界 | 実行後 |
 |---|---|---|
-| ポリシーランタイム適用 | `VERITAS_POLICY_RUNTIME_ENFORCE` | コンパイル済みポリシーのdeny/halt/escalate/require_human_review判定をパイプラインで適用 |
-| 外部シークレットマネージャー | `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | 起動時にVault/KMS/クラウドシークレットマネージャーを要求 |
-| Transparency logアンカーリング | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | Transparencyアンカー未設定時にTrustLog書き込みを失敗させる |
-| WORM hard-fail | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | WORMミラー書き込み失敗時にTrustLog書き込みを失敗させる |
-| 厳密リプレイ | `VERITAS_REPLAY_STRICT` | 重大なリプレイ乖離を中止させる |
-| ガバナンス成果物署名検証 | `VERITAS_POLICY_VERIFY_KEY`（+ポスチャ強制） | secure/prod で信頼済み鍵によるEd25519検証と、署名manifestから実際に評価するbundle本文への完全な結合を要求 |
+| 権限を確認 | 現在のガバナンス状態を再検証 | Outcome を記録 |
+| ポリシーを適用 | Authorization を一度だけ消費 | Evidence を保存 |
+| Human Approval を対象・条件に拘束 | 実行対象と認証情報を確定 | 不確実な外部作用を照合 |
+| 証拠を検証 | 不明確なら fail closed | レビュー担当者が検証できる形で残す |
 
-### 認証主体とMemoryOS所有権
+### 基本イメージ
 
-認証済みAPIリクエストでは、VERITASは認証済みAPIキーから内部principal IDを
-導出し、そのprincipalをMemoryOS / WorldOSの所有権スコープとして扱います。
-request body / contextの `user_id` は業務入力であり、別principalのストレージ
-namespaceを選択する権限にはなりません。また `/v1/memory/put` では、
-callerが指定した `meta.user_id` を保存前に認証principalで上書きします。
-
-decision pipelineは認証principalを業務入力とは別に保持し、memory evidenceを
-採用する直前にもowner一致を確認します。認証HTTP境界を通らないdirect/internal
-呼び出しについては、既存の明示user指定の互換挙動を維持します。
-
-### 意思決定出力に含まれるガバナンス成果物ID
-
-コンパイル済みポリシーガバナンスが有効な場合、`/v1/decide` レスポンスには
-`governance_identity` が含まれ、次の情報を返します。
-
-- `policy_version`
-- `digest`（コンパイル済みバンドルのセマンティックハッシュ）
-- `signature_verified`（信頼済み鍵でEd25519検証が実際に成功した場合のみtrue）
-- `signer_id`（署名検証に成功したmanifestからのみ出力）
-- `verified_at`
-
-このIDは意思決定・Replay・監査成果物に連結され、どのガバナンス制御プレーン成果物が
-適用されていたかを後から証明できます。
-
-### 起動拒否の条件（secure/prod）
-
-以下の条件でアクション可能なエラーとともに起動を拒否します:
-- `VERITAS_SECRET_PROVIDER` 未設定（外部シークレットマネージャー強制）
-- `VERITAS_API_SECRET_REF` 未設定（外部シークレットマネージャー強制）
-- `VERITAS_TRUSTLOG_SIGNER_BACKEND` が `aws_kms` でない、または `VERITAS_TRUSTLOG_KMS_KEY_ID` 未設定
-- `VERITAS_TRUSTLOG_MIRROR_BACKEND` が `s3_object_lock` でない
-- `VERITAS_TRUSTLOG_S3_BUCKET` / `VERITAS_TRUSTLOG_S3_PREFIX` 未設定（S3ミラーモード時）
-- `VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop` かつ `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1`
-- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` 未設定（アンカーバックエンドが `local` かつTransparency必須時）
-
-### TrustLog strict mirror capabilities（secure/prod）
-
-`secure` / `prod` posture では、TrustLog mirror backend が
-`immutable_retention` と `fail_closed` の両方を宣言する必要があります。
-現時点でこの strict capability set を満たす本番サポート backend は
-`s3_object_lock` です。設定する場合は
-`VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock`、
-`VERITAS_TRUSTLOG_S3_BUCKET`、`VERITAS_TRUSTLOG_S3_PREFIX`、
-`VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE`、
-`VERITAS_TRUSTLOG_S3_RETENTION_DAYS` を使用してください。local WORM mirror
-はこのリリースでは secure/prod 要件を満たしません。本番相当の posture
-では、`immutable_retention` と `fail_closed` の両方を実際に提供し、かつ
-宣言する backend が必要です。現時点で本番サポートされる backend は
-`s3_object_lock` です。`VERITAS_POSTURE` を下げるのは、既存ポリシーで
-許可された非本番/local 開発に限定してください。
-
-### エスケープハッチ（secureポスチャのみ）
-
-`secure`ポスチャでは、本番前テスト用に個別制御を無効化できます:
-```bash
-VERITAS_POSTURE_OVERRIDE_POLICY_ENFORCE=0
-VERITAS_POSTURE_OVERRIDE_EXTERNAL_SECRET_MGR=0
-VERITAS_POSTURE_OVERRIDE_TRUSTLOG_TRANSPARENCY=0
-VERITAS_POSTURE_OVERRIDE_TRUSTLOG_WORM=0
-VERITAS_POSTURE_OVERRIDE_REPLAY_STRICT=0
+```text
+AI / Agent
+   proposes
+      ↓
+VERITAS
+   governs
+      ↓
+Bind Boundary
+   permits or blocks
+      ↓
+External System
+   produces an effect
+      ↓
+VERITAS
+   records and reconciles evidence
 ```
-これらのオーバーライドは `prod` ポスチャでは**無視されます**。
-
-## 🎯 なぜVERITASか
-
-### VERITAS OS が「あるもの」と「ないもの」
-
-- **あるもの**: 実行前に配置され、ポリシー・安全・監査制御を強制するガバナンスレイヤ。
-- **ないもの**: 単なるエージェント実行抽象化やオーケストレーションの便利ラッパー。
-
-多くの「エージェントフレームワーク」は自律性やツール実行を最適化します。  
-VERITAS は **ガバナンス** を最適化します。
-
-- **Fail-closed安全性・コンプライアンス**: 最終ゲート（**FUJI Gate**）でPII検出・有害コンテンツブロック・プロンプトインジェクション防御・Web検索結果の毒性フィルタリング・ポリシー駆動ルールを強制 — 全安全経路は例外時に `rejected` / `risk=1.0` を返却（fail-closed）
-- **高再現性意思決定パイプライン**（17トレース済みステージ、構造化出力、差分検知付きリプレイ、取得スナップショットチェックサム、モデルバージョン検証）
-- **ハッシュチェーンTrustLog** による監査可能性（改ざん検知、Ed25519署名、WORM hard-failミラー、**Transparency logアンカー**、**W3C PROV輸出**）
-- **エンタープライズガバナンス** — ポリシー変更の**4-eyes承認**、**RBAC/ABAC**アクセス制御、**SSEリアルタイムガバナンスアラート**、外部シークレットマネージャー強制
-- **MemoryOS**（ベクトル検索）+ **WorldModel**（因果遷移）を一次入力として扱う
-- フルスタック **Mission Controlダッシュボード**（Next.js）によるリアルタイムイベントストリーミング、リスク分析、ガバナンスポリシー管理
-- **規制対応支援機能（実装）** — コンプライアンス向けレポート生成・監査エクスポート・デプロイメント準備チェックを提供（これ自体は法令適合保証を意味しない）
-
-**想定ユーザー**
-- AI safety / エージェント研究者
-- 規制領域・高リスク領域でLLMを運用するチーム
-- ポリシー駆動LLM基盤を作るガバナンス/コンプライアンス担当
 
 ---
 
-## 💡 できること
+## 実行ガバナンスの基本原則
 
-### `/v1/decide` — フル意思決定ループ（構造化JSON）
+VERITAS は、実行ガバナンスに関する明示的な不変条件を中心に設計されています。
 
-`POST /v1/decide` は構造化された意思決定レコードを返します。
-
-主要フィールド（簡易）:
-
-| フィールド | 意味 |
+| Invariant | 意味 |
 |---|---|
-| `chosen` | 選択アクション + 根拠、不確実性、効用、リスク |
-| `alternatives[]` | 他の候補アクション |
-| `evidence[]` | 使用した根拠（MemoryOS / WorldModel / Web検索） |
-| `critique[]` | 自己批判と弱点 |
-| `debate[]` | 賛成/反対/第三者視点 |
-| `telos_score` | ValueCoreに対する整合スコア |
-| `fuji` | FUJI Gate判定（allow / modify / rejected） |
-| `gate.decision_status` | 正規化済み最終ステータス（`DecisionStatus`） |
-| `trust_log` | ハッシュチェーンTrustLogエントリ（`sha256_prev`） |
-| `extras.metrics` | ステージ毎のレイテンシ、メモリヒット数、Webヒット数 |
+| **AI output is a proposal** | モデル出力そのものは実行権限ではありません。 |
+| **Authorization is contextual** | Authorization は、アクション・実行対象・スコープ・ガバナンス状態に拘束されます。 |
+| **Approval is not reusable permission** | Human Approval は汎用的な実行権限にはなりません。 |
+| **Authorization is single-use** | 一度消費された Authorization を別の実行に再利用できません。 |
+| **Current state matters** | 外部作用の直前にガバナンス条件を再検証します。 |
+| **Ambiguity fails closed** | 証拠が欠落・古い・無効・判定不能な場合は、黙って通しません。 |
+| **`EFFECT_UNKNOWN` is explicit** | 応答喪失を自動的に「実行失敗」とみなしません。 |
+| **Blind re-dispatch is prohibited** | 外部作用が未解決なら、むやみに再送せず Reconciliation（照合）を行います。 |
+| **Reconciliation is read-only** | 外部作用の確認そのものが、新たな外部作用を起こしてはいけません。 |
+| **Receipts are evidence, not authority** | Receipt は事後証拠であり、新しい実行権限ではありません。 |
 
-パイプラインステージ:
-
-```text
-入力正規化 → メモリ検索 → Web検索 → オプション正規化
-  → コア実行 → 結果吸収 → フォールバック代替案 → モデルブースト
-  → 討論 → 批評 → FUJIプレチェック → ValueCore → ゲート判定
-  → 価値学習（EMA） → メトリクス計算 → エビデンス強化
-  → レスポンス組立 → 永続化（監査＋メモリ＋世界状態） → エビデンス最終化
-  → リプレイスナップショット構築
-```
-
-同梱サブシステム:
+---
 
 ### 拡張時に重要な責務境界
 
-以下の境界はコードとテストの両方で意識されており、拡張時に崩さないことが重要です。
+VERITAS の内部コンポーネントは責務を分離しています。機能追加時も、判断・安全判定・計画・記憶管理の境界を不用意に混在させないことが重要です。
 
-| コンポーネント | 主責務 | 持ち込むべきでない責務 | 推奨拡張方向 |
-|---|---|---|---|
-| **Planner** | 計画構造、アクションプラン生成、Planner 向け要約 | Kernel オーケストレーション、FUJI ポリシー、Memory 永続化内部 | Planner helper / 正規化レイヤ |
-| **Kernel** | 意思決定計算、スコアリング、討論の接続、根拠の組み立て | API オーケストレーション、永続化、ガバナンス保存処理 | Kernel stages / QA helper / contract |
-| **FUJI** | 最終安全・ポリシー判定、拒否セマンティクス、監査向けゲート状態 | Memory 管理、Planner 分岐、汎用永続化ワークフロー | FUJI policy / safety-head / helper |
-| **MemoryOS** | 保存、検索、要約、ライフサイクル、セキュリティ制御 | Planner の方針、Kernel の意思決定方針、FUJI のゲート判定 | Memory store / search / lifecycle / security helper |
+| コンポーネント | 主な責務 | 境界 |
+|---|---|---|
+| **Planner** | 計画構造、アクションプラン生成、Planner向け要約 | Kernel の意思決定オーケストレーション、FUJI の安全ポリシー、MemoryOS の永続化責務を持ち込まない |
+| **Kernel** | 意思決定計算、スコアリング、根拠構築、各ステージの接続 | API運用、永続化、ガバナンス保存処理を直接抱え込まない |
+| **FUJI** | 最終安全・ポリシー判定、拒否セマンティクス、監査向けゲート状態 | Planner の計画判断や MemoryOS の管理責務を持ち込まない |
+| **MemoryOS** | 保存、検索、要約、ライフサイクル、セキュリティ制御 | Planner / Kernel の意思決定方針や FUJI のゲート判定を担わない |
 
-この責務分離により、単一ファイルの「エージェントループ」よりも監査しやすく、進化させやすい構造になっています。
+この責務分離は、ガバナンス境界をレビュー可能・テスト可能な状態に保つための設計上の前提です。
 
-| サブシステム | 目的 |
-|---|---|
-| **MemoryOS** | エピソード/セマンティック/手続き/感情記憶とベクトル検索（sentence-transformers）、保持クラス、法的ホールド、PIIマスキング |
-| **WorldModel** | 世界状態スナップショット、因果遷移、プロジェクトスコープ、仮想シミュレーション |
-| **ValueCore** | 14次元加重（コア倫理9＋ポリシー5）の価値関数、EMAによるオンライン学習、TrustLogフィードバックからの自動リバランス。コンテキスト対応ドメインプロファイル（医療/金融/法務/安全）、ポリシー対応スコアフロア（strict/balanced/permissive）、ファクター毎の貢献度説明可能性、監査可能な重み調整証跡 |
-| **FUJI Gate** | 多層安全ゲート — PII検出、有害コンテンツブロック、機微ドメインフィルタ、プロンプトインジェクション防御、紛らわしい文字検出、LLM安全ヘッド、ポリシー駆動YAMLルール |
-| **TrustLog** | 追記専用ハッシュチェーン監査ログ（JSONL）、SHA-256完全性、Ed25519署名、WORM hard-failミラー、Transparency logアンカー、PII自動データ分類 |
-| **Debate** | 多視点推論（賛成/反対/第三者）による透明な意思決定根拠 |
-| **Critique** | 重大度ランク付きの自己批評生成と修正提案 |
-| **Planner** | ステップバイステップ実行戦略を持つアクションプラン生成 |
-| **Replay Engine** | 監査検証のための高再現性リプレイ（差分レポート、取得スナップショットチェックサム、モデルバージョン検証、依存バージョン追跡付き） |
-| **Policy Compiler** | YAML/JSONポリシー → 中間表現 → コンパイル済みルール（Ed25519署名バンドル、ランタイム適用アダプター、テスト自動生成） |
-| **Compliance** | EU AI Actコンプライアンスレポート、内部ガバナンスレポート、デプロイメント準備チェック |
+# 実証済みのもの
 
----
+## Controlled Decision-to-Effect E2E
 
-## 📁 プロジェクト構成
+VERITAS には、現在の main 相当のコードで再現できる **Decision-to-Effect E2E の証明経路**があります。
 
 ```text
-veritas_os/                  ← モノレポルート
-├── veritas_os/              ← Pythonバックエンド（FastAPI）
-│   ├── api/                 ← REST APIサーバー、スキーマ、ガバナンス
-│   │   ├── server.py        ← 37エンドポイントを持つFastAPIアプリ
-│   │   ├── routes_decide.py ← 意思決定・リプレイ エンドポイント
-│   │   ├── routes_trust.py  ← TrustLog・監査 エンドポイント
-│   │   ├── routes_memory.py ← メモリCRUD エンドポイント
-│   │   ├── routes_governance.py ← ガバナンス・ポリシー エンドポイント
-│   │   ├── routes_system.py ← ヘルス、メトリクス、コンプライアンス、SSE、停止
-│   │   ├── schemas.py       ← Pydantic v2リクエスト/レスポンスモデル
-│   │   └── governance.py    ← 監査証跡付きポリシー管理
-│   ├── core/                ← 意思決定エンジン
-│   │   ├── kernel.py        ← 意思決定計算エンジン
-│   │   ├── kernel_*.py      ← Kernel拡張（doctor、intent、QA、stages、episode、post_choice）
-│   │   ├── pipeline/        ← 17ステージオーケストレータ（ステージモジュール群）
-│   │   ├── fuji/            ← FUJI安全ゲート（パッケージ — policy、injection、safety head）
-│   │   ├── memory/          ← MemoryOS（パッケージ — store、vector、search、security、compliance）
-│   │   ├── continuation_runtime/ ← チェーンレベル継続観測（Phase-1）
-│   │   ├── value_core.py    ← 価値整合とオンライン学習
-│   │   ├── world.py         ← WorldModel（状態管理）
-│   │   ├── llm_client.py    ← マルチプロバイダLLMゲートウェイ
-│   │   ├── debate.py        ← 討論メカニズム
-│   │   ├── critique.py      ← 批評生成
-│   │   ├── planner.py       ← アクションプランニング（+ planner_helpers、planner_json、planner_normalization）
-│   │   └── sanitize.py      ← PIIマスキングとコンテンツ安全性
-│   ├── policy/              ← ポリシーコンパイラ、署名、ランタイムアダプター、バンドル
-│   ├── logging/             ← TrustLog、データセットライター、暗号化、ローテーション
-│   ├── audit/               ← 署名付き監査ログ（Ed25519）
-│   ├── compliance/          ← EU AI Actレポートエンジン
-│   ├── security/            ← SHA-256ハッシュ、Ed25519署名
-│   ├── tools/               ← Web検索、GitHub検索、LLM安全性
-│   ├── replay/              ← 決定論的リプレイエンジン
-│   ├── observability/       ← OpenTelemetryメトリクス、ミドルウェア
-│   ├── storage/             ← プラガブルストレージバックエンド（JSONL、PostgreSQL、Alembicマイグレーション）
-│   ├── prompts/             ← LLM連携用プロンプトテンプレート
-│   ├── reporting/           ← レポート生成ユーティリティ
-│   ├── benchmarks/          ← パフォーマンスベンチマークデータ
-│   └── tests/               ← 6600以上のPythonテスト（+ トップレベルtests/）
-├── frontend/                ← Next.js 16 Mission Controlダッシュボード
-│   ├── app/                 ← ページ（Home、Console、Audit、Governance、Risk）
-│   ├── components/          ← 共有Reactコンポーネント
-│   ├── features/console/    ← Decision Console機能モジュール
-│   ├── lib/                 ← APIクライアント、バリデータ、ユーティリティ
-│   ├── locales/             ← i18n（日本語 / 英語）
-│   └── e2e/                 ← Playwright E2Eテスト
-├── packages/
-│   ├── types/               ← 共有TypeScript型定義とランタイムバリデータ
-│   └── design-system/       ← Card、Button、AppShellコンポーネント
-├── spec/                    ← OpenAPI仕様（MIT）
-├── sdk/                     ← SDKインターフェース層（MIT）
-├── cli/                     ← CLIインターフェース層（MIT）
-├── policies/                ← ポリシーテンプレート（examplesはMIT）
-├── config/                  ← テスト・ランタイム設定
-├── scripts/                 ← アーキテクチャ・品質・セキュリティ検証スクリプト
-├── docs/                    ← アーキテクチャ文書、レビュー、ユーザーマニュアル、カバレッジレポート
-├── openapi.yaml             ← OpenAPI 3.x仕様
-├── docker-compose.yml       ← フルスタックオーケストレーション
-├── Makefile                 ← 開発/テスト/デプロイコマンド
-└── pyproject.toml           ← Pythonプロジェクト設定
+/v1/decide
+    ↓
+Canonical Decision Artifact
+    ↓
+Verified Promotion
+    ↓
+Native v2 Authorization
+    ↓
+Single-Use Consumption
+    ↓
+Current Governance Rechecks
+    ↓
+TLS POST
+    ↓
+PostgreSQL Persistence
+    ↓
+Read-Only Reconciliation
+    ↓
+BindReceipt / Outcome
+```
+
+専用の証明経路では、以下を実際に使用します。
+
+- 実際のTLS通信
+- 実際のPostgreSQLへの永続化
+- 永続化された Authorization 消費記録
+- dispatch 前の現在ガバナンス状態の再検証
+- 決定論的な Decision / Authorization / Receipt の系譜
+- read-only の Reconciliation
+- 機械可読な証明アーティファクト
+- CIで実際に検証されたコミットの厳密な識別情報
+
+一方で、業務上の判断内容、認証情報、外部作用は **controlled synthetic fixtures（制御された合成フィクスチャ）** です。
+
+### 通常系
+
+通常シナリオでは、次の一連の流れを確認します。
+
+**Decision → Promotion → Authorization → Consumption → Revalidation → External Effect → Reconciliation → Receipt / Outcome**
+
+定義された実行境界を迂回せず、統制されたアクションが外部作用と証拠まで一貫してつながることを確認します。
+
+### 応答喪失時の異常系
+
+より重要なのは、応答喪失ケースです。
+
+```text
+External system commits the effect
+              ↓
+Caller loses the response
+              ↓
+        EFFECT_UNKNOWN
+              ↓
+        No blind retry
+              ↓
+     Read-only reconciliation
+              ↓
+      Original effect confirmed
+```
+
+ここでは、
+
+- **レスポンスを観測できなかった**
+- **外部作用が発生していないことが証明された**
+
+を明確に区別します。
+
+外部作用が未解決の間、VERITAS は応答の欠落を「もう一度同じ業務イベントを送ってよい」という許可にはしません。
+
+### 証明資料
+
+- [Reproducible Decision-to-Effect E2E Evidence](artifacts/real-decision-to-effect-e2e/README.md)
+- [Controlled Execution Proof Architecture Freeze](docs/architecture/controlled-execution-proof-freeze-v1.json)
+- [Reconciliation-Capable Execution Profile Proof](docs/en/validation/reconciliation-capable-execution-profile-proof-v1.md)
+- [Runtime Proof CI Evidence](docs/en/guides/runtime-proof-ci-evidence.md)
+
+> [!NOTE]
+> Controlled proof の PASS は、その証明条件と検証対象コミットに対する証拠です。本番環境に関するすべての性質や保証を証明するものではありません。
+
+---
+
+# この証明でまだ確認していないこと
+
+VERITAS は、**リポジトリ上で実証したこと**と**本番環境について主張できること**を意図的に分けています。
+
+Controlled Decision-to-Effect の証明だけでは、次のことまでは証明されません。
+
+- すべての顧客環境における本番運用準備の完了
+- 実顧客の認証情報
+- 実顧客のエンドポイント
+- 銀行システムとのライブ統合
+- IAM / IdP / SaaS とのライブ統合
+- 外部UTC時刻源への信頼
+- 本番SLA
+- 規制当局による承認
+- コンプライアンス認証
+- 完了済みの第三者監査
+- すべての外部作用を伴うルートに対する完全な Bind Coverage
+
+> [!CAUTION]
+> **リポジトリに実装されていること**と、**顧客の本番環境で検証済みであること**は同じではありません。
+
+正確な実装境界は次を参照してください。
+
+**[Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)**
+
+---
+
+# 現在の実装
+
+## 意思決定ガバナンス
+
+`POST /v1/decide` は主要な構造化意思決定パスです。
+
+Decision と後続のガバナンスアーティファクトをつなぐ、監査向けの系譜を提供します。
+
+AIの意思決定そのものは、外部システムを実行する許可ではありません。
+
+---
+
+## LLM-to-Control-Plane 境界
+
+VERITAS は「LLM自身に自分を統治させる」設計ではありません。
+
+```mermaid
+flowchart TD
+    A["LLM / Agent Proposal"] --> B["DecisionCandidate"]
+    B --> C["Normalize"]
+    C --> D["Validate"]
+    D -->|"Incomplete / ambiguous"| E["Refusal / Human Review Evidence"]
+    D -->|"Valid"| F["Execution Intent"]
+    F --> G["Bind Adjudication"]
+```
+
+不完全または曖昧なモデル出力は、自動的に実行可能な intent へ昇格しません。
+
+参照:
+
+- [LLM-to-Control-Plane Contract](docs/en/architecture/llm-to-control-plane-contract.md)
+- [External Reviewer Quickstart](docs/en/demo/external-reviewer-quickstart.md)
+
+---
+
+## Bind Boundary ガバナンス
+
+VERITAS は、実行の系譜を明示的なアーティファクトと状態遷移として扱います。
+
+```text
+Decision
+   ↓
+Execution Intent
+   ↓
+Authorization
+   ↓
+Consumption
+   ↓
+Bind Adjudication
+   ↓
+External Effect
+   ↓
+BindReceipt
+   ↓
+Outcome
+```
+
+Bind Boundary は、AIが提案したアクションが外部システムへの作用に変わる直前にある、最後のガバナンス境界です。
+
+参照:
+
+- [Bind Boundary Governance Artifacts](docs/ja/architecture/bind-boundary-governance-artifacts.md)
+- [External Bind Integration Path](docs/en/guides/external-bind-integration-path.md)
+
+---
+
+## Bind で統制されるオペレーター操作
+
+リポジトリでは、少なくとも以下のオペレーターによる変更操作を **bind-governed effect path** として明示しています。
+
+```text
+PUT /v1/governance/policy
+POST /v1/governance/policy-bundles/promote
+PUT /v1/compliance/config
+POST /v1/system/halt
+POST /v1/system/resume
+```
+
+これは、明示的に文書化された対象範囲です。
+
+Bind Coverage の文書やテストで確認されていないルートまで、自動的に Bind で統制されているとは主張しません。
+
+---
+
+## Authority Evidence
+
+VERITAS は、ガバナンス判断に利用する構造化された Authority Evidence を扱います。
+
+Authority Evidence は、たとえば次の情報を表現できます。
+
+- identity
+- scope grants
+- scope limitations
+- validity / expiry
+- provenance
+- 決定論的な evidence hash
+
+Authority Evidence が欠落・無効・期限切れ・古い・判定不能な場合は、fail closed にできます。
+
+現在のリポジトリには決定論的なローカル / オフラインの取り込み・検証パターンが含まれますが、すべての企業ID基盤、銀行、制裁情報、顧客側の権限情報源とのライブ統合が完了しているという意味ではありません。
+
+参照:
+
+[Authority Evidence Ingestion](docs/en/architecture/authority-evidence-ingestion.md)
+
+---
+
+## Human Approval Receipt
+
+Human Approval は単純な真偽値ではなく、構造化されたガバナンスアーティファクトとして扱われます。
+
+Approval は次の要素に拘束できます。
+
+- specific action
+- target
+- scope
+- decision context
+- expiry
+- verifier provenance
+
+secure / prod posture では、ローカルテスト用の互換状態よりも強い、検証器に基づく provenance を要求できます。
+
+Human Approval が、無制限に再利用できる実行権限になることはありません。
+
+参照:
+
+[Human Approval Receipt](docs/en/architecture/human-approval-receipt.md)
+
+---
+
+## Single-use authorization
+
+VERITAS は、永続化された Single-Use Authorization Consumption のセマンティクスを実装しています。
+
+目的は、次の不変条件を維持することです。
+
+```text
+one valid decision
+        +
+one valid approval
+        ↓
+one contextual authorization
+        ↓
+one valid consumption
+        ↓
+one governed effect attempt
+```
+
+すでに消費された Authorization を、新しい実行権限として黙って再利用しません。
+
+---
+
+## Outcome Receipt
+
+Outcome Receipt は、統制された実行試行に対する事後証拠です。
+
+次のような情報を記録できます。
+
+- observed outcome
+- commit / block / rollback state
+- postcondition status
+- state fingerprints
+- observed effects
+- deterministic hashes
+
+Outcome evidence は「何が観測されたか」を記録するものです。
+
+新しい実行権限ではありません。
+
+参照:
+
+[Outcome Receipt](docs/en/architecture/outcome-receipt.md)
+
+---
+
+## Evidence Chain / Reviewer Evidence
+
+VERITAS には、レビュー担当者が確認できる Evidence Chain の機能が含まれます。
+
+- deterministic hashes
+- evidence manifests
+- validation reports
+- Reviewer Evidence Packets
+- trusted-public-key provenance workflows
+- Ed25519 verification paths
+- reproducible handoff artifacts
+
+Integrity（完全性）と trust（信頼）は意図的に分離されています。
+
+Hash の一致は expected value に対する integrity（完全性）の確認を支えますが、その authority source や public key 自体を信頼すべきことまで自動的に証明するわけではありません。
+
+最初に読む資料:
+
+- [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
+- [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
+- [Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)
+
+---
+
+## Mission Control
+
+Mission Control は、オペレーター向けのガバナンス画面です。
+
+主に以下を確認できます。
+
+- decisions
+- governance state
+- audit evidence
+- policy workflows
+- bind artifacts
+- risk state
+- system posture
+
+フロントエンド:
+
+- Next.js 16
+- React
+- TypeScript
+- App Router
+
+Mission Control はガバナンスとレビューのための画面であり、UIそのものが実行権限の根拠になるわけではありません。
+
+---
+
+# 外部実行との統合
+
+## WebhookBindAdapter
+
+`WebhookBindAdapter` は、外部実行を Bind Boundary で統制するための最初のリファレンスアダプターです。
+
+次の統合パターンを示します。
+
+- 統制対象アクションの準備
+- target snapshot
+- 外部HTTPS effect
+- deterministic idempotency
+- HMAC signing
+- postcondition verification
+- fail-closed behavior
+- 対応可能な場合の compensation semantics
+- bind receipts
+
+参照:
+
+[WebhookBindAdapter](docs/en/guides/webhook-bind-adapter.md)
+
+これは **リファレンス実装としての統合パターン**です。
+
+本番認証や、完了済みの顧客導入を証明するものではありません。
+
+---
+
+## Minimal Python SDK
+
+Minimal Python SDK:
+
+[sdk/python/README.md](sdk/python/README.md)
+
+SDK は VERITAS API を呼び出し、統合用 payload を準備するための補助です。
+
+実行境界を迂回するものではありません。
+
+```text
+SDK request
+    ≠
+permission for external side effect
 ```
 
 ---
 
-## 💾 ストレージバックエンド
+# Regulated Action Governance
 
-VERITAS OS は MemoryOS と TrustLog の永続化に**プラガブルストレージバックエンド**パターンを採用しています。
+VERITAS には、次の概念を扱う **Regulated Action Governance Kernel** があります。
 
-| バックエンド | MemoryOS | TrustLog | デフォルト（ローカル/CLI） | デフォルト（Docker Compose） | 用途 |
-|-------------|----------|----------|:-------------------:|:------------------------:|------|
-| **JSON / JSONL**（ファイルベース） | `JsonMemoryStore` | `JsonlTrustLogStore` | ✅ はい | — | 単一プロセス開発、デモ、エアギャップ環境 |
-| **PostgreSQL** | `PostgresMemoryStore` | `PostgresTrustLogStore` | — | ✅ はい | マルチワーカー本番、耐久監査 |
+- Action Class Contract
+- Authority Evidence
+- Runtime Authority Validation
+- Admissibility Predicate
+- Human Approval
+- Irreversible Commit Boundary
+- reviewer-facing evidence
 
-> **Docker ComposeはデフォルトでPostgreSQLを使用します。** ファイルベースバックエンドは、
-> 環境変数を上書きせずに `python -m veritas_os` や `uvicorn` で実行する場合のデフォルトです。
+選択された regulated action path では、execution intent を Bind Boundary で `commit / block / escalate / refuse` のいずれにするかを判定します。
 
-### 環境マトリクス
+参照:
 
-| 環境 | 推奨バックエンド | 設定元 |
-|------|-----------------|--------|
-| ローカル開発（Docker なし） | JSON / JSONL | `.env` デフォルト |
-| ローカル開発（Docker Compose） | PostgreSQL | `docker-compose.yml` デフォルト |
-| ステージング | PostgreSQL | 明示的な環境変数 |
-| Secure / Prod | PostgreSQL | 外部シークレットマネージャー |
-
-### クイック切替
-
-```bash
-# PostgreSQL を両バックエンドに使用
-VERITAS_MEMORY_BACKEND=postgresql
-VERITAS_TRUSTLOG_BACKEND=postgresql
-VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
-
-# スキーマ適用
-make db-upgrade
-```
-
-### PostgreSQL バックエンドの主な特徴
-
-- **Alembic 管理スキーマ** — `upgrade` / `downgrade` パスを持つ再現可能なマイグレーション
-- **アドバイザリロックによるチェーン直列化** — `pg_advisory_xact_lock` による並行書込み下での TrustLog ハッシュチェーン整合性保証
-- **JSONB ストレージ** — GIN インデックスによるクエリ可能なペイロード
-- **完全パリティテストスイート** — 195+ テストによるバックエンド間の同一セマンティクス検証
-- **psycopg 3** — コネクションプーリング付きモダン非同期 PostgreSQL ドライバ（`psycopg-pool`）
-- **JSONL → PostgreSQLインポート** — 冪等な `veritas-migrate` CLI（dry-run、レジューム、インポート後ハッシュチェーン検証）
-- **競合テスト** — `test_pg_trustlog_contention.py` に25テスト、並行/バースト/障害シナリオでチェーン完全性を検証
-- **可観測性** — `/v1/metrics` でプール使用率、ヘルス、`pg_stat_activity`（長時間クエリ、idle-in-tx、アドバイザリロック待機者）を公開。`test_pg_metrics.py` に28テスト
-- **リカバリドリル** — `scripts/drill_postgres_recovery.sh` によるバックアップ → リストア → 検証の自動化。`test_drill_postgres_recovery.py` に31テスト
-
-### 既存データの移行（JSONL → PostgreSQL）
-
-```bash
-# 1. Dry-runでソースファイルを検証
-veritas-migrate trustlog --source runtime/trustlog/trust_log.jsonl --dry-run
-veritas-migrate memory   --source runtime/memory/memory.json      --dry-run
-
-# 2. インポート後ハッシュチェーン検証付きでインポート
-veritas-migrate trustlog --source runtime/trustlog/trust_log.jsonl --verify
-veritas-migrate memory   --source runtime/memory/memory.json
-
-# 3. スモークテストで検証
-VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
-  pytest -m smoke veritas_os/tests/ -q
-```
-
-`veritas-migrate` CLIは**冪等**です — 部分的な障害後の再実行は、既にインポート済みのエントリをスキップして安全にレジュームします。
-完全な手順（ロールバック含む）は[`docs/postgresql-production-guide.md` §11](docs/ja/operations/postgresql-production-guide.md)を参照してください。
-
-### 検証ツール
-
-| ツール | 目的 | 実行方法 |
-|--------|------|----------|
-| `veritas-trustlog-verify` | スタンドアロンTrustLogチェーン完全性検証 | `veritas-trustlog-verify --log-dir <path>` |
-| `veritas-migrate --verify` | インポート後ハッシュチェーンチェック（PostgreSQL） | `veritas-migrate trustlog --source … --verify` |
-| `/v1/trustlog/verify` | REST APIチェーン検証 | `curl -H "X-API-Key: …" http://host:8000/v1/trustlog/verify` |
-| `/v1/metrics` | プール使用率、ヘルス、pg_stat_activity | `curl -H "X-API-Key: …" http://host:8000/v1/metrics` |
-| `drill_postgres_recovery.sh` | エンドツーエンド バックアップ → リストア → 検証 | `make drill-recovery` または `make drill-recovery-ci` |
-| `pytest -m smoke` | ガバナンス不変条件スモークテスト | `pytest -m smoke veritas_os/tests/` |
-| `pytest -m production` | 本番相当バリデーションスイート | `make test-production` |
-
-### 本番デプロイ
-
-[`docs/postgresql-production-guide.md`](docs/ja/operations/postgresql-production-guide.md) を参照:
-- プール設定、SSL/TLS、ステートメントタイムアウト
-- バックアップ/リストア、レプリケーション/HAガイダンス
-- JSONL → PostgreSQLインポート（`veritas-migrate` CLI: dry-run、レジューム、ロールバック、検証）
-- スモークテストとリリースバリデーションの関係
-- レガシーパスクリーンアップ状況
-- secure/prodポスチャ推奨設定
-- 競合テストカバレッジと既知の制限事項
-- メトリクスリファレンス（JSONフィールド、Prometheusゲージ、解釈ガイド）
-- 既知の制限事項と将来計画（pgvector、パーティショニング、CDC）
-
-[`docs/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) を参照:
-- バックアップ / リストア / リカバリドリル手順とスクリプト
-- TrustLog書き込みの安全 / 非安全HA境界
-- インシデントレスポンスプレイブック（破損、改ざん）
-- `make drill-backup`、`make drill-restore`、`make drill-recovery`、`make drill-recovery-ci`
-
-関連: [`docs/database-migrations.md`](docs/ja/operations/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/ja/validation/backend-parity-coverage.md) | [`docs/legacy-path-cleanup.md`](docs/ja/operations/legacy-path-cleanup.md)
+- [Regulated Action Governance Kernel（英語正本）](docs/en/architecture/regulated-action-governance-kernel.md)
+- [Authority Evidence vs Audit Log（英語正本）](docs/en/architecture/authority-evidence-vs-audit-log.md)
+- [AML/KYC Regulated Action Path（英語正本）](docs/en/use-cases/aml-kyc-regulated-action-path.md)
+- [Regulated Action Governance Proof Pack（英語正本）](docs/en/validation/regulated-action-governance-proof-pack.md)
+- [Regulated Action Governance Quality Gate（英語正本）](docs/en/validation/regulated-action-governance-quality-gate.md)
 
 ---
 
-## 🖥️ フロントエンド — Mission Controlダッシュボード
+# AML / KYC PoC
 
-フロントエンドは **Next.js 16**（React 18、TypeScript）によるダッシュボードで、意思決定パイプラインの運用可視性を提供します。
+リポジトリには、決定論的な fixture-backed（フィクスチャに基づく）AML/KYC governance PoC が含まれています。
 
-### 技術スタック
+最初に読む資料:
 
-| レイヤー | 技術 |
+- [AML/KYC 1-Day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
+- [One-Day PoC Evidence Pack](docs/en/poc/one-day-poc-evidence-pack.md)
+- [One-Day PoC Operator Runbook](docs/en/poc/one-day-poc-operator-runbook.md)
+- [One-Day PoC Reviewer Handoff Template](docs/en/poc/one-day-poc-reviewer-handoff-template.md)
+
+> [!WARNING]
+> Fixture-backed の AML/KYC evidence を、銀行システムとの本番ライブ統合として表現してはいけません。
+
+AML/KYC customer risk escalation fixture は、regulated-action governance の挙動を確認するための決定論的な engineering fixture です。
+
+**Audit Log と Authority Evidence の違い:** Audit Log は「何が起きたか」を記録します。Authority Evidence は、Bind 時点で「なぜそのアクションが authorized / admissible だったか」を示す証拠です。Audit Log だけでは commit を許可しません。
+
+> [!NOTE]
+> 本READMEは法的助言ではありません。規制当局の承認や第三者認証を示すものでもありません。リポジトリ上の evidence や controlled proof を、コンプライアンス認証や顧客本番環境での検証完了として解釈しないでください。
+
+---
+
+# PostgreSQL / 監査データの永続化
+
+VERITAS は MemoryOS と TrustLog に、切り替え可能な永続化バックエンドを採用しています。
+
+| Environment | 推奨 backend |
 |---|---|
-| フレームワーク | Next.js 16.3.3（App Router） |
-| 言語 | TypeScript 5.7 |
-| スタイリング | Tailwind CSS 3.4 + CVA（class-variance-authority） |
-| アイコン | Lucide React |
-| テスト | Vitest + Testing Library（ユニット）、Playwright + axe-core（E2E + アクセシビリティ） |
-| i18n | カスタムReact Context（日本語デフォルト、英語対応） |
-| セキュリティ | リクエスト毎ノンス付きCSP、httpOnly BFFクッキー、HSTS、X-Frame-Options |
-| デザインシステム | `@veritas/design-system`（Card、Button、AppShell） |
-| 共有型定義 | `@veritas/types`（ランタイム型ガード付き） |
-| Lint設定 | eslint-config-next 15.5.10 |
+| Local development | JSON / JSONL |
+| Docker development | PostgreSQL |
+| Staging | PostgreSQL |
+| Secure / production path | PostgreSQL + environment-specific hardening |
 
-### ページ
+PostgreSQL は、このリポジトリで正式に文書化されている本番向けストレージ経路です。
 
-| ルート | ページ | 説明 |
-|---|---|---|
-| `/` | **コマンドダッシュボード** | ライブイベントストリーム（FUJIリジェクト、ポリシー更新、チェーン破損）、グローバルヘルスサマリー、クリティカルレール指標、運用優先事項 |
-| `/console` | **Decision Console** | インタラクティブ意思決定パイプライン — クエリ入力後、8ステージパイプラインがリアルタイム実行され、FUJIゲート判定、選択/代替/棄却、コストベネフィット分析、リプレイ差分を表示 |
-| `/audit` | **TrustLogエクスプローラ** | ハッシュチェーン監査証跡のブラウズ、チェーン完全性検証（verified/broken/missing/orphan）、ステージフィルタ、規制レポートエクスポート（JSON/CSV、PIIリダクション対応） |
-| `/governance` | **ガバナンスコントロール** | FUJIルール（8つの安全ゲート）、リスク閾値、自動停止サーキットブレーカー、ログ保持の編集。標準モードとEU AI Actモード。ドラフト → 承認ワークフロー、差分ビューア、バージョン履歴 |
-| `/risk` | **リスクダッシュボード** | 24時間ストリーミングリスク/不確実性チャート、重大度クラスタリング、フラグ付きリクエストのドリルダウン、異常パターン分析 |
+主な機能:
 
-### アーキテクチャ
+- Alembic migrations
+- PostgreSQL-backed MemoryOS
+- PostgreSQL-backed TrustLog
+- advisory-lock chain serialization
+- JSONL → PostgreSQL migration tooling
+- contention tests
+- pool / health observability
+- backup / restore / recovery drills
 
-- **BFF（Backend-for-Frontend）**パターン: すべてのAPIリクエストはNext.js（`/api/veritas/*`）経由でプロキシされ、ブラウザはAPI認証情報を見ない
-- **httpOnlyセッションクッキー**（`__veritas_bff`）による認証、`/api/veritas/*`にスコープ
-- **ランタイム型ガード**がすべてのAPIレスポンスを描画前に検証（`isDecideResponse`、`isTrustLogsResponse`、`validateGovernancePolicyResponse`等）
-- **SSE + WebSocket**によるリアルタイムイベントストリーミング（ライブFUJIリジェクト、TrustLog更新、リスクバースト）
-- すべてのAPIレスポンス描画に`sanitizeText()`による**XSS防御**
+参照:
+
+- [PostgreSQL Production Guide](docs/ja/operations/postgresql-production-guide.md)
+- [PostgreSQL Drill Runbook](docs/ja/operations/postgresql-drill-runbook.md)
+- [Database Migrations](docs/ja/operations/database-migrations.md)
+- [PostgreSQL Production Proof Map](docs/en/validation/postgresql-production-proof-map.md)
+
+本番環境での保証内容は、実際のデプロイ基盤と運用上の統制に依存します。
 
 ---
 
-## 📡 API概要
+# Runtime posture
 
-保護対象エンドポイントは `X-API-Key` が必要です。全エンドポイント一覧:
+VERITAS は、環境に応じて動作を切り替える posture-aware な制御をサポートします。
 
-### 意思決定
-
-| Method | Path | 説明 |
-|---|---|---|
-| POST | `/v1/decide` | フル意思決定パイプライン |
-| POST | `/v1/fuji/validate` | 単一アクションをFUJI Gateで評価 |
-| POST | `/v1/replay/{decision_id}` | 差分レポート付き決定論的リプレイ |
-| POST | `/v1/decision/replay/{decision_id}` | 監査用リプレイ。外部APIは常にモックされ、モック無効化要求は拒否 |
-
-### メモリ
-
-| Method | Path | 説明 |
-|---|---|---|
-| POST | `/v1/memory/put` | メモリ保存（エピソード/セマンティック/手続き/感情） |
-| POST | `/v1/memory/get` | キーによるメモリ取得 |
-| POST | `/v1/memory/search` | user_idフィルタ付きベクトル検索 |
-| POST | `/v1/memory/erase` | ユーザーメモリ消去（法的ホールド保護） |
-
-### Trust & 監査
-
-| Method | Path | 説明 |
-|---|---|---|
-| GET | `/v1/trust/logs` | TrustLogエントリ一覧 |
-| GET | `/v1/trust/{request_id}` | 単一TrustLogエントリ取得 |
-| POST | `/v1/trust/feedback` | Trust feedback書き込み。`trust_feedback_write` 権限が必要で、認証principal所有として記録 |
-| GET | `/v1/trust/stats` | TrustLog統計 |
-| GET | `/v1/trustlog/verify` | ハッシュチェーン完全性検証 |
-| GET | `/v1/trustlog/export` | 署名付きTrustLogエクスポート |
-| GET | `/v1/trust/{request_id}/prov` | 監査相互運用性のためのW3C PROV-JSON輸出 |
-
-### ガバナンス
-
-| Method | Path | 説明 |
-|---|---|---|
-| GET | `/v1/governance/policy` | 現行ガバナンスポリシー取得 |
-| PUT | `/v1/governance/policy` | ガバナンスポリシー更新（ホットリロード、**4-eyes承認必須**） |
-| GET | `/v1/governance/policy/history` | ポリシー変更監査証跡 |
-| GET | `/v1/governance/value-drift` | 価値重みEMAドリフト監視 |
-| GET | `/v1/governance/decisions/export` | ガバナンス監査用意思決定エクスポート |
-| POST | `/v1/governance/policy-bundles/promote` | bind-boundaryガバナンスワークフローでポリシーバンドル昇格を実行（bind receipt系譜を返却。governance write権限が必要） |
-| GET | `/v1/governance/bind-receipts` | bind receipt一覧（decision / execution intent 系譜 + target/outcome/reason/failed/recent/sort/limit でフィルタ可） |
-| GET | `/v1/governance/bind-receipts/export` | list と同じフィルタ語彙で、運用/監査パイプライン向けに bind receipt をエクスポート |
-| GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | 単一bind receipt成果物を取得 |
-
-#### Bind artifact family（運用者向けの意味）
-
-- `BindReceipt` は、reviewable/auditable な系譜確認と replay 調査に使う完全な bind 成果物です。
-- `bind_summary` は、bind-governed mutation/export レスポンス間で再利用されるコンパクトな共通語彙です。
-- この分離により、Mission Control + APIs での運用面において、decision approval と bind commitment の境界を明確に保ちます。
-
-#### 運用ワークフロー: policy bundle の昇格
-
-既存の bind-boundary パスで active policy bundle pointer を昇格する場合は、`POST /v1/governance/policy-bundles/promote` を使用します。
-
-- リクエストでは `bundle_id` **または** `bundle_dir_name` の **どちらか1つのみ** を指定できます。
-- 任意のファイルシステムパスは拒否されます（selector で `/`、`\`、`.`、`..` は受け付けません）。
-- レスポンスには bind 系譜フィールド（`bind_outcome` / `bind_receipt_id` / `execution_intent_id`）、加算的 `bind_summary`、完全な `bind_receipt` が含まれます。
-- 結果成果物の確認・エクスポートには、`GET /v1/governance/bind-receipts`、`GET /v1/governance/bind-receipts/export`、`GET /v1/governance/bind-receipts/{bind_receipt_id}` を利用します。
-
-```bash
-curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
-  -H "X-API-Key: ${VERITAS_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "bundle_id": "bundle-v2",
-    "decision_id": "dec-promote-1",
-    "request_id": "req-promote-1",
-    "policy_snapshot_id": "snap-promote-1",
-    "decision_hash": "hash-promote-1"
-  }'
+```text
+dev → staging → secure → prod
 ```
 
-運用ガイドと結果解釈は
-[`docs/en/guides/governance-policy-bundle-promotion.md`](docs/ja/guides/governance-policy-bundle-promotion.md)
-を参照してください。
+より厳格な posture では、次の項目により強い制約を要求できます。
 
-> **署名付きガバナンス成果物** — secure/prodポスチャでは、ポリシーバンドルにEd25519署名が必須です。
-> 意思決定成果物には、適用中のガバナンスポリシー（バージョン、ダイジェスト、署名検証結果、署名者ID）を
-> 示す `governance_identity` フィールドが含まれます。
-> ライフサイクル全体、鍵管理、移行ガイドは [`docs/governance_artifact_lifecycle.md`](docs/ja/governance/governance-artifact-lifecycle.md) を参照してください。
+- signing
+- secret management
+- approval provenance
+- audit persistence
+- replay behavior
+- WORM storage
+- trust evidence
+- runtime configuration
 
-### コンプライアンス & レポート
+参照:
 
-| Method | Path | 説明 |
-|---|---|---|
-| GET | `/v1/report/eu_ai_act/{decision_id}` | EU AI Actコンプライアンスレポート |
-| GET | `/v1/report/governance` | 内部ガバナンスレポート |
-| GET | `/v1/compliance/deployment-readiness` | デプロイメント前コンプライアンスチェック |
-| GET | `/v1/compliance/config` | コンプライアンス設定の取得 |
-| PUT | `/v1/compliance/config` | コンプライアンス設定の更新 |
-
-### システム
-
-| Method | Path | 説明 |
-|---|---|---|
-| GET | `/health`, `/v1/health` | ヘルスチェック |
-| GET | `/status`, `/v1/status` | パイプライン/設定ヘルス付き拡張ステータス |
-| GET | `/v1/metrics` | 運用メトリクス |
-| GET | `/v1/events` | リアルタイムUI更新用SSEストリーム |
-| WS | `/v1/ws/trustlog` | ライブTrustLogストリーミング用WebSocket |
-| POST | `/v1/system/halt` | 緊急停止（停止状態を永続化） |
-| POST | `/v1/system/resume` | 停止後の再開 |
-| GET | `/v1/system/halt-status` | 現在の停止状態 |
-
-### Replay
-
-`POST /v1/replay/{decision_id}` は、保存済み意思決定を元の記録入力で再実行し、`REPLAY_REPORT_DIR`（既定: `audit/replay_reports`）に `replay_{decision_id}_{YYYYMMDD_HHMMSS}.json` として成果物を出力します。
-
-Replayスナップショットには `retrieval_snapshot_checksum`（SHA-256決定論的ハッシュ）、`external_dependency_versions`、`model_version` が含まれ、再現性検証に使用されます。モデルバージョン不一致はデフォルトでチェックされ、`model_version` 未記録のスナップショットはデフォルトで拒否されます（`VERITAS_REPLAY_REQUIRE_MODEL_VERSION=1`）。
-
-> **注意**: LLM応答は `temperature=0` でも本質的に非決定的です。VERITAS Replayは厳密な決定論的リプレイではなく、**差分検知付き高再現性再実行**として設計されています。
-
-`POST /v1/decision/replay/{decision_id}` は監査・再現性確認用の公開境界です。Replay engineには常に `mock_external_apis=True` を渡し、`mock_external_apis=false` を要求するリクエストは外部副作用を有効化せずHTTP 403で拒否します。
-
-`VERITAS_REPLAY_STRICT=1` の場合、Replayは決定論設定（`temperature=0`、固定seed、外部取得の副作用モック）を強制します。
-
-```bash
-BODY='{"strict":true}'
-TS=$(date +%s)
-NONCE="replay-$(uuidgen | tr '[:upper:]' '[:lower:]')"
-SIG=$(python - <<'PY'
-import hashlib
-import hmac
-import os
-
-secret=os.environ["VERITAS_API_SECRET"].encode("utf-8")
-ts=os.environ["TS"]
-nonce=os.environ["NONCE"]
-body=os.environ["BODY"]
-payload=f"{ts}\n{nonce}\n{body}"
-print(hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest())
-PY
-)
-
-curl -X POST "http://127.0.0.1:8000/v1/replay/DECISION_ID" \
-  -H "X-API-Key: ${VERITAS_API_KEY}" \
-  -H "X-VERITAS-TIMESTAMP: ${TS}" \
-  -H "X-VERITAS-NONCE: ${NONCE}" \
-  -H "X-VERITAS-SIGNATURE: ${SIG}" \
-  -H "Content-Type: application/json" \
-  -d "${BODY}"
-```
-
-EU AI Actレポート生成は `replay_{decision_id}_*.json` を既に参照しているため、Replay APIの実行により、コンプライアンスレポートが利用するReplay検証データも自動更新されます。
+[Security Hardening](docs/ja/operations/security-hardening.md)
 
 ---
 
-## 🚀 Quick Start
+# クイックスタート
 
-### オプションA: Docker Compose（推奨）
+## 必要環境
 
-バックエンドとフロントエンドを1コマンドで起動:
+- Python 3.11+
+- 推奨のフルスタック構成では Docker / Docker Compose
+- ローカルでフロントエンドを開発する場合は Node.js 20+
+- 既定のLLM構成では OpenAI API key
+
+## Docker Compose
 
 ```bash
 git clone https://github.com/veritasfuji-japan/veritas_os.git
 cd veritas_os
-
-# 環境変数をコピーして編集
 cp .env.example .env
-# .envを編集 — OPENAI_API_KEY、VERITAS_API_KEY、VERITAS_API_SECRETを設定
+```
 
+必要な `CHANGE_ME` を置き換え、アプリケーション、API、データベース、フロントエンド認証に必要なシークレットを設定します。
+
+起動:
+
+```bash
 docker compose up --build
 ```
 
-- バックエンド: `http://localhost:8000`（Swagger UIは`/docs`）
-- フロントエンド: `http://localhost:3000`（Mission Controlダッシュボード）
+| Component | Address |
+|---|---|
+| Mission Control | `http://localhost:3000` |
+| API | `http://localhost:8000` |
+| Swagger UI | `http://localhost:8000/docs` |
+| PostgreSQL | `localhost:5432` |
 
-### オプションB: ローカル開発
-
-#### バックエンド
+停止:
 
 ```bash
-git clone https://github.com/veritasfuji-japan/veritas_os.git
-cd veritas_os
-
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[full]"     # 全機能（推奨）
-# pip install -e .           # コアのみ（APIサーバー + OpenAI）
-# pip install -e ".[ml]"    # コア + ML ツール
+docker compose down
 ```
 
-> インストールプロファイルの詳細は [`docs/en/operations/dependency-profiles.md`（英語正本）](docs/en/operations/dependency-profiles.md) を参照してください。
+Docker のセキュリティ設定:
 
-> [!WARNING]
-> シークレットをシェル履歴へ直接残す運用は避けてください。`.env`（gitignore対象）または本番向けシークレットマネージャーを推奨します。
+[Docker Compose Security](docs/en/operations/docker-compose-security.md)
 
-環境変数設定（または`.env`ファイル使用）:
+---
 
-```bash
-export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
-export VERITAS_API_KEY="your-secret-api-key"
-export VERITAS_API_SECRET="your-long-random-secret"
-export LLM_PROVIDER="openai"
-export LLM_MODEL="gpt-4.1-mini"
-```
+## ローカル開発
 
-バックエンド起動:
+インストール:
 
 ```bash
-python -m uvicorn veritas_os.api.server:app --reload --port 8000
-```
-
-#### フロントエンド
-
-```bash
-# リポジトリルートから（Node.js 20+とpnpmが必要）
-corepack enable
-pnpm install --frozen-lockfile
-pnpm ui:dev
-```
-
-フロントエンドは `http://localhost:3000` で起動します。
-
-フロントエンドのBFFが `http://localhost:8000` 以外のバックエンドへ接続する場合は `VERITAS_API_BASE_URL` を設定してください。本番環境では `NEXT_PUBLIC_*` 系の API ベースURL変数を設定しないでください。内部ルーティング情報を露出させる恐れがあり、現在はBFFの fail-closed 動作を引き起こします。
-
-#### Makefileショートカット
-
-```bash
-make setup         # 環境初期化
-make dev           # バックエンド起動（ポート8000）
-make dev-frontend  # フロントエンド起動（ポート3000）
-make dev-all       # 両方起動
-```
-
-#### ローカルMac開発（Docker不要）
-
-macOS上でDockerなしにVERITAS OSをネイティブ実行する検証済みフローです。
-
-**1. `.env` を作成** — `.env.example` をコピーして必須値を設定:
-
-```bash
+pip install -e ".[dev]"
 cp .env.example .env
-# .env を編集 — 最低限以下を設定:
-#   OPENAI_API_KEY, VERITAS_API_KEY, VERITAS_API_SECRET, VERITAS_ENCRYPTION_KEY
 ```
 
-暗号鍵の生成:
+バックエンド:
 
 ```bash
-python -c "from veritas_os.logging.encryption import generate_key; print(generate_key())"
+make dev
 ```
 
-TrustLog WORMミラーとTransparencyログのパスをローカル開発用に追加:
+フロントエンド:
 
 ```bash
-# .env に追記
-VERITAS_TRUSTLOG_MIRROR_BACKEND=local
-VERITAS_TRUSTLOG_WORM_MIRROR_PATH=runtime/dev/logs/trustlog_worm.jsonl
-VERITAS_TRUSTLOG_ANCHOR_BACKEND=local
-VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH=runtime/dev/logs/trustlog_transparency.jsonl
+make dev-frontend
 ```
 
-**2. バックエンド起動** — `.env` をシェルに読み込んでから起動:
+両方を起動:
 
 ```bash
-set -a && source .env && set +a
-python -m uvicorn veritas_os.api.server:app --reload --port 8000
-# または: make dev  （Makefileが自動で .env を読み込みます）
+make dev-all
 ```
 
-**3. フロントエンド起動** — 別ターミナルで:
+---
 
-```bash
-# フロントエンドは frontend/.env.development をNext.js経由で自動読み込みします。
-# frontend/.env.development の VERITAS_API_KEY がバックエンドと一致していることを確認してください。
-set -a && source .env && set +a
-pnpm ui:dev
+## Decision API を試す
+
+ブラウザで開く:
+
+```text
+http://127.0.0.1:8000/docs
 ```
 
-**4. BFF認証** — フロントエンドBFFプロキシには有効な認証トークンが必要です。
-`frontend/.env.development` にはdev用デフォルト値（`VERITAS_BFF_AUTH_TOKENS_JSON` と
-`VERITAS_BFF_SESSION_TOKEN`）が設定済みです。ブラウザアクセスには
-`http://localhost:3000/api/auth/dev-login` にアクセスして `__veritas_bff` httpOnlyクッキーを
-発行し、以降の `/api/veritas/*` リクエストを認証します。
+設定済みのAPI認証情報で認証し、
 
-**5. 動作確認済み機能:**
+```text
+POST /v1/decide
+```
 
-| 機能 | エンドポイント / パス |
-|---|---|
-| 意思決定 | `POST /v1/decide` |
-| SSEイベント | `GET /v1/events` |
-| TrustLog保存 | decide時に自動実行 |
-| WORMミラー | `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` |
-| Transparencyログ | `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` |
+を実行します。
 
-**6. 開発アーティファクトの場所** — デフォルト設定でのランタイムデータ出力先:
-
-| パス | 内容 |
-|---|---|
-| `runtime/dev/logs/` | TrustLog JSONL、WORMミラー、Transparencyログ |
-| `runtime/dev/logs/DASH/` | Shadow decide出力、データセット |
-| `runtime/dev/logs/keys/` | Ed25519署名鍵（自動生成） |
-
-> [!TIP]
-> `runtime/` ディレクトリは `VERITAS_RUNTIME_NAMESPACE` または `VERITAS_ENV` マッピングにより
-> 名前空間分離されます（`dev`, `test`, `demo`, `prod`）。デフォルトは `dev` です。
-
-### APIを試す
-
-Swagger UI（`http://127.0.0.1:8000/docs`）を開き、`X-API-Key`で認証して `POST /v1/decide` を実行:
+例:
 
 ```json
 {
-  "query": "明日の外出前に天気を確認すべきですか？",
+  "query": "Should I check tomorrow's weather before going out?",
   "context": {
     "user_id": "test_user",
     "goals": ["health", "efficiency"],
@@ -1364,669 +763,348 @@ Swagger UI（`http://127.0.0.1:8000/docs`）を開き、`X-API-Key`で認証し�
 }
 ```
 
----
+`/v1/decide` は、ガバナンスを通過した意思決定結果を生成します。
 
-## 🐳 Docker Compose（フルスタック）
-
-`docker-compose.yml` が3つのサービスをオーケストレーション:
-
-| サービス | ポート | 説明 |
-|---|---|---|
-| `postgres` | 5432 | PostgreSQL 16（自動設定、ヘルスチェック、リソース制限付き） |
-| `backend` | 8000 | FastAPIサーバー（`Dockerfile`からビルド）、ヘルスチェック付き、`postgres` に依存 |
-| `frontend` | 3000 | Next.js開発サーバー（Node.js 20）、バックエンドの正常起動を待機 |
-
-```bash
-docker compose up --build   # 起動
-docker compose down         # 停止
-docker compose logs -f      # ログ追跡
-```
-
-環境変数（`.env`またはシェルで設定）:
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `OPENAI_API_KEY` | — | OpenAI APIキー（必須） |
-| `VERITAS_API_KEY` | — | バックエンドAPI認証キー |
-| `VERITAS_API_SECRET` | `change-me` | HMAC署名シークレット（推奨32文字以上） |
-| `VERITAS_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORSホワイトリスト |
-| `VERITAS_API_BASE_URL` | `http://backend:8000` | フロントエンドBFF（サーバー専用）→ バックエンドURL |
-| `VERITAS_MEMORY_BACKEND` | `postgresql` | メモリストレージバックエンド（`json` または `postgresql`） |
-| `VERITAS_TRUSTLOG_BACKEND` | `postgresql` | TrustLogストレージバックエンド（`jsonl` または `postgresql`） |
-| `VERITAS_DATABASE_URL` | `postgresql://veritas:veritas@postgres:5432/veritas` | PostgreSQL接続URL |
-| `LLM_PROVIDER` | `openai` | LLMプロバイダ |
-| `LLM_MODEL` | `gpt-4.1-mini` | LLMモデル名 |
+それ自体が外部システムへの作用を許可するわけではありません。
 
 ---
 
-## 🐳 Docker（バックエンドのみ）
+# 検証 / CI
 
-最新イメージ取得:
-
-```bash
-docker pull ghcr.io/veritasfuji-japan/veritas_os:latest
-```
-
-APIサーバー起動:
+## バックエンドテスト
 
 ```bash
-docker run --rm -p 8000:8000 \
-  -e OPENAI_API_KEY="YOUR_OPENAI_API_KEY" \
-  -e VERITAS_API_KEY="your-secret-api-key" \
-  -e LLM_PROVIDER="openai" \
-  -e LLM_MODEL="gpt-4.1-mini" \
-  ghcr.io/veritasfuji-japan/veritas_os:latest
+pytest -q
 ```
 
-FastAPIエントリポイントが `veritas_os.api.server:app` と異なる場合は、イメージビルド前に Dockerfile の `CMD` を環境に合わせて更新してください。
-
----
-
-## 🏗️ アーキテクチャ（高レベル）
-
-```text
-┌──────────────────────────────────────────────────────┐
-│  フロントエンド (Next.js 16 / React 18 / TypeScript)  │
-│  ┌────────┬──────────┬───────────┬──────────┬──────┐ │
-│  │  Home  │ Console  │   Audit   │Governance│ Risk │ │
-│  └────┬───┴────┬─────┴─────┬─────┴────┬─────┴──┬───┘ │
-│       │ BFF Proxy (httpOnlyクッキー, CSPノンス) │      │
-│       └─────────────────┬───────────────────────┘     │
-└─────────────────────────┼─────────────────────────────┘
-                          │ /api/veritas/*
-┌─────────────────────────┼─────────────────────────────┐
-│  バックエンド (FastAPI / Python 3.11+)                  │
-│       ┌─────────────────┴─────────────────────┐       │
-│       │          APIサーバー (server.py)        │       │
-│       │  認証 · レート制限 · CORS · PIIマスク   │       │
-│       └────┬──────┬──────┬──────┬──────┬──────┘       │
-│            │      │      │      │      │              │
-│  ┌─────────┴┐ ┌───┴───┐ ┌┴─────┐ ┌────┴──┐ ┌────────┴┐│
-│  │Pipeline ││ガバナ ││メモリ ││Trust ││コンプラ ││
-│  │オーケスト││ ンス  ││ API  ││ API  ││イアンス ││
-│  └────┬─────┘└────────┘└──┬───┘└───┬───┘└─────────┘│
-│       │                    │       │               │
-│  ┌────┴────────────────────┴───────┴────────────┐  │
-│  │          コア意思決定エンジン                   │  │
-│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ │  │
-│  │  │ Kernel │ │ Debate │ │Critique│ │Planner │ │  │
-│  │  └────┬───┘ └────────┘ └────────┘ └────────┘ │  │
-│  │       │                                       │  │
-│  │  ┌────┴───┐ ┌────────┐ ┌────────┐ ┌────────┐ │  │
-│  │  │  FUJI  │ │Value   │ │MemoryOS│ │ World  │ │  │
-│  │  │  Gate  │ │ Core   │ │(Vector)│ │ Model  │ │  │
-│  │  └────────┘ └────────┘ └────────┘ └────────┘ │  │
-│  └──────────────────┬───────────────────────────┘  │
-│                     │                              │
-│  ┌──────────────────┴───────────────────────────┐  │
-│  │  インフラストラクチャ                          │  │
-│  │  LLMクライアント · TrustLog · Replay · 無害化 │  │
-│  │  Atomic I/O · 署名 · ツール (Web/GitHub)      │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-```
-
-### コア実行パス
-
-| モジュール | 責務 |
-|---|---|
-| `veritas_os/core/kernel.py` | 意思決定計算 — インテント検出、オプション生成、代替案スコアリング |
-| `veritas_os/core/pipeline/` | `/v1/decide` の17ステージオーケストレータ — 検証から監査永続化まで（ステージモジュール群） |
-| `veritas_os/core/llm_client.py` | コネクションプーリング、サーキットブレーカー、リトライ付きマルチプロバイダLLMゲートウェイ |
-
-### 安全性とガバナンス
-
-| モジュール | 責務 |
-|---|---|
-| `veritas_os/core/fuji/` | 多層**fail-closed**安全ゲート — PII、有害コンテンツ、機微ドメイン、プロンプトインジェクション、紛らわしい文字、LLM安全ヘッド、ポリシールール。全例外で `rejected` / `risk=1.0` を返却 |
-| `veritas_os/core/value_core.py` | 14次元加重（コア倫理9＋ポリシー5）の価値関数、EMAによるオンライン学習、TrustLogからの自動リバランス |
-| `veritas_os/api/governance.py` | ホットリロード、**4-eyes承認**（2名・重複不可）、変更コールバック、監査証跡、価値ドリフト監視、**RBAC/ABAC**アクセス制御付きポリシーCRUD |
-| `veritas_os/logging/trust_log.py` | ハッシュチェーンTrustLog `h_t = SHA256(h_{t-1} ∥ r_t)` スレッドセーフ追記 |
-| `veritas_os/audit/trustlog_signed.py` | Ed25519署名付きTrustLog、**WORM hard-fail**ミラー、**Transparency logアンカー**、PII自動**データ分類** |
-| `veritas_os/policy/` | ポリシーコンパイラ — YAML/JSON → IR → コンパイル済みルール、Ed25519署名バンドル、ランタイム適用アダプター |
-
-### 記憶と世界状態
-
-| モジュール | 責務 |
-|---|---|
-| `veritas_os/core/memory/` | エピソード/セマンティック/手続き/感情の統合記憶、ベクトル検索（sentence-transformers、384次元）、保持クラス、法的ホールド、PIIマスキング |
-| `veritas_os/core/world.py` | 世界状態スナップショット、因果遷移、プロジェクトスコープ、仮想シミュレーション |
-
-### 推論
-
-| モジュール | 責務 |
-|---|---|
-| `veritas_os/core/debate.py` | 多視点討論（賛成/反対/第三者） |
-| `veritas_os/core/critique.py` | 重大度ランク付き自己批評と修正提案 |
-| `veritas_os/core/planner.py` | アクションプラン生成 |
-
-### LLMクライアント
-
-`LLM_PROVIDER`環境変数で複数プロバイダをサポート。各プロバイダには本番準備状況を示す**サポートティア**が設定されています:
-
-| ティア | 意味 |
-|---|---|
-| **production** | CIテスト済み・本番デプロイ対象・SLA範囲内 |
-| **planned** | コードパスは実装済みだが本番未検証。上流API変更に追従していない場合あり |
-| **experimental** | 最小限のスキャフォールド。破壊的変更の可能性あり。本番使用禁止 |
-
-| プロバイダ | モデル | ティア |
-|---|---|---|
-| `openai` | GPT-4.1-mini（デフォルト） | **production** |
-| `anthropic` | Claude | planned |
-| `google` | Gemini | planned |
-| `ollama` | ローカルモデル | experimental |
-| `openrouter` | アグリゲータ | experimental |
-
-> **ランタイム通知**: production 以外のプロバイダ使用時は `UserWarning` が発行されます。
->
-> **production への昇格条件**: (1) 該当プロバイダのパスカバレッジ≥90%の結合テストスイート、(2) ステージング環境で2週間以上の成功運用、(3) 上流チェンジログとのAPI互換性レビュー、(4) プルリクエストでの明示的承認。
-
-機能: 共有`httpx.Client`によるコネクションプーリング（`LLM_POOL_MAX_CONNECTIONS=20`）、設定可能なバックオフ付きリトライ（`LLM_MAX_RETRIES=3`）、レスポンスサイズガード（16MB）、プロバイダ単位のサーキットブレーカー、テスト用モンキーパッチ対応。
-
----
-
-## 🔗 TrustLog（ハッシュチェーン監査ログ）
-
-TrustLog は **secure-by-default** の暗号化・ハッシュチェーン監査ログです。
-
-### セキュリティパイプライン（エントリごと）
-
-```text
-entry → redact(PII + secrets) → canonicalize(RFC 8785) → chain hash → encrypt → append
-```
-
-1. **Redact** — PII（メール、電話、住所）およびシークレット（APIキー、Bearerトークン）を永続化前に自動マスキング。
-2. **Canonicalize** — RFC 8785 正規化JSONにより決定論的ハッシュを保証。
-3. **Chain hash** — `h_t = SHA256(h_{t-1} || r_t)` による改ざん検知可能な連鎖。
-4. **Encrypt** — 保存時暗号化は**必須**（AES-256-GCM または HMAC-SHA256 CTR-mode）。暗号鍵なしでは平文保存は**不可能**です。
-5. **Append** — 暗号化済み行をJSONLにfsync付きで追記。
-
-### セットアップ
+本番相当の検証:
 
 ```bash
-# 暗号鍵を生成（必須）
-python -c "from veritas_os.logging.encryption import generate_key; print(generate_key())"
-
-# 鍵を設定（TrustLog動作に必須）
-export VERITAS_ENCRYPTION_KEY="<generated-key>"
-```
-
-> **警告**: `VERITAS_ENCRYPTION_KEY` 未設定の場合、TrustLog書き込みは `EncryptionKeyMissing` で失敗します。これは設計上の仕様です — 平文監査ログは禁止されています。
-
-### 検証
-
-```bash
-# ハッシュチェーンの整合性を検証（復号鍵が必要）
-python -m veritas_os.scripts.verify_trust_log
-```
-
-主要機能:
-
-- **暗号チェーン** — RFC 8785正規化JSON、決定論的SHA-256
-- **スレッドセーフ** — RLockによる保護とアトミックファイル書込み
-- **二重永続化** — インメモリキャッシュ（最大2000件）+ 永続JSONLレジャー
-- **署名付きエクスポート** — 改ざん防止配布のためのEd25519デジタル署名
-- **チェーン検証** — `GET /v1/trustlog/verify` でフルチェーン検証
-- **Transparency logアンカー** — 独立監査検証のための外部ログ連携（`VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1` でfail-closed運用）
-- **WORM hard-fail** — WORMミラー書き込み失敗時に `SignedTrustLogWriteError` を送出（`VERITAS_TRUSTLOG_WORM_HARD_FAIL=1`）
-- **W3C PROV輸出** — `GET /v1/trust/{request_id}/prov` で監査ツール相互運用性のためのPROV-JSONを返却
-- **PIIマスキング・分類** — PII/シークレットの自動リダクションとデータ分類タグ付与（18パターン: メール、クレジットカード、電話、住所、IP、パスポート等）
-- **フロントエンド可視化** — `/audit`のTrustLogエクスプローラでチェーン完全性ステータス表示（verified/broken/missing/orphan）
-
----
-
-## 🔄 Continuation Runtime
-
-VERITAS は既存のステップレベル意思決定インフラの **横に（内部ではなく）** 動作する **チェーンレベル継続観測・限定エンフォースメントレイヤー** を含みます。
-
-### モード
-
-| モード | 動作 | デフォルトポスチャ |
-|---|---|---|
-| **Observe**（Phase-1） | シャドウのみ — エンフォースメントなし、拒否ゲーティングなし | dev, staging |
-| **Advisory**（Phase-2） | エンフォースメントイベントを助言として発行。ブロックなし | secure, prod |
-| **Enforce**（Phase-2） | 限定エンフォースメント: 高確信条件でブロック/停止する場合あり | （環境変数でオプトイン） |
-
-| 側面 | 状態 |
-|---|---|
-| FUJI | 変更なし — 各ステップの最終安全/ポリシーゲートのまま |
-| `gate.decision_status` | 変更なし — 新しい値なし、再解釈なし |
-| フィーチャーフラグOFF | レスポンス、ログ、UI、動作に変更なし |
-| 目的 | 個々のステップが通過しても、チェーンの継続状態が弱化した場合の検知 |
-
-### エンフォースメントアクション（Phase-2）
-
-エンフォースメントエンジンは**高確信・説明可能な条件**でのみトリガーされます:
-
-| 条件 | アクション | 発動条件 |
-|---|---|---|
-| 繰り返しの高リスク劣化 | `require_human_review` | degraded/escalated/haltedレシートが3回以上連続 |
-| 承認なしの承認必須操作 | `halt_chain` | スコープがエスカレーションを要求するが承認がない |
-| リプレイ乖離超過 | `escalate_alert` | センシティブパスで乖離率>0.3 |
-| ポリシー境界違反 | `halt_chain` | 継続状態でポリシー違反を検知 |
-
-### `require_human_review` と `halt_chain` の使い分け
-
-- **`require_human_review`**: *蓄積された劣化*により発動 — 単一の重大障害ではなく、ドリフトを示唆する弱化パターン。オペレーターレビュー待ちでチェーンが一時停止。
-- **`halt_chain`**: *決定論的なガバナンス障害*により発動 — 承認必須の遷移で承認が欠如、またはポリシー境界違反を検知。チェーンを即座に停止。
-- **`escalate_alert`**: *リプレイ乖離*により発動 — 継続パスが予想されるリプレイ動作から乖離しており、環境または設定のドリフトを示唆。
-
-### 設定
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Continuation Runtimeの有効化 |
-| `VERITAS_CONTINUATION_ENFORCEMENT_MODE` | `observe` | エンフォースメントモード（`observe`, `advisory`, `enforce`） |
-
-ポスチャベースのデフォルト:
-- **dev/staging**: `observe`（エンフォースメントなし）
-- **secure/prod**: `advisory`（イベント発行のみ、ブロックなし）
-- `VERITAS_CONTINUATION_ENFORCEMENT_MODE=enforce` で任意のポスチャで限定エンフォースメントを有効化。
-
-### 主要概念
-
-- **Snapshot**（状態）: 最小限のガバナンス可能な事実 — support basis、scope、burden、headroom、law version
-- **Receipt**（監査証人）: 再検証の実施方法、乖離フラグ、理由コード、レシートチェーン連結
-- **Enforcement Event**（監査成果物）: 全エンフォースメントアクションはログ記録され、帰属可能で、リプレイ可視かつオペレーター可視
-- Snapshot は Receipt ではない。Receipt は状態ストアではない。Enforcement Eventは両方とは独立。
-- 再検証はステップレベルのメリット評価の **前** に実行される（pre-merit placement）
-- 継続レベルのエンフォースメントはFUJIステップレベル安全ゲーティングとは概念的に分離
-
-### 全エンフォースメントイベントの特性:
-- **ログ記録** — Python logging + trustlog-ready構造体経由
-- **帰属可能** — `claim_lineage_id`, `receipt_id`, `chain_id` を保持
-- **リプレイ可視** — `snapshot_id`, `receipt_id`, `law_version` を保持
-- **オペレーター可視** — `action`, `reasoning`, `severity`, `conditions_met` を保持
-
-### 設計ノート
-
-参照: `docs/architecture/continuation_enforcement_design_note.md`
-
-有効化: `VERITAS_CAP_CONTINUATION_RUNTIME=1`（デフォルト: OFF）
-
-参照: `docs/architecture/continuation_runtime_adr.md`, `docs/architecture/continuation_runtime_architecture_note.md`
-
----
-
-## 🧪 テスト
-
-### バックエンド（Python）
-
-推奨（`uv`による再現性重視）:
-
-```bash
-make test
-make test-cov
-```
-
-これらのターゲットは `uv` + `PYTHON_VERSION=3.12.12` を利用し、未導入時はインタプリタを自動取得します。`make test-cov` は CI と同じカバレッジゲート（`--cov-fail-under=85`、`veritas_os/tests/.coveragerc`、XML/HTML レポート、`-m "not slow"`）で検証します。
-
-```bash
-# 任意: ローカル検証時のみ閾値/マーカーを上書き
-make test-cov COVERAGE_FAIL_UNDER=0 PYTEST_MARKEXPR=""
-```
-
-スモークチェック:
-
-```bash
-make test TEST_ARGS="-q veritas_os/tests/test_api_constants.py"
-```
-
-オプション上書き:
-
-```bash
-make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
-make test PYTHON_VERSION=3.11
-```
-
-### フロントエンド（TypeScript）
-
-```bash
-# ユニットテスト (Vitest + Testing Library)
-pnpm ui:test
-
-# 型チェック
-pnpm ui:typecheck
-
-# E2Eテスト (Playwright + axe-coreアクセシビリティ)
-pnpm --filter frontend e2e:install
-pnpm --filter frontend e2e
-```
-
-### CI / Quality Gate
-
-VERITAS OS は明示的なブロッキングセマンティクスを持つ **3段階 CI/リリース検証モデル** を採用しています:
-
-| 段階 | ワークフロー | トリガー | ブロッキング？ |
-|------|----------|---------|-----------|
-| **Tier 1** | `main.yml` | 全PR + `main` へのpush | ✅ マージをブロック |
-| **Tier 2** | `release-gate.yml` | `v*` タグpush | ✅ リリースをブロック |
-| **Tier 3** | `production-validation.yml` | 週次 + 手動 | ⚠️ アドバイザリー |
-
-追加CIワークフロー:
-
-| ワークフロー | トリガー | 目的 |
-|------------|---------|------|
-| `codeql.yml` | PR + `main` へのpush | CodeQLセキュリティ分析 |
-| `publish-ghcr.yml` | リリース / タグpush | GHCRへのDockerイメージ公開 |
-| `security-gates.yml` | PR + `main` へのpush | セキュリティゲートチェック（依存関係監査、シークレットスキャン） |
-| `runtime-pickle-guard.yml` | PR + `main` へのpush | ランタイムpickle/joblib成果物のブロック |
-| `sbom-nightly.yml` | ナイトリースケジュール | SBOM生成と脆弱性スキャン |
-
-**Tier 1**（`main.yml`）— 以下がすべて通過するまでPRがブロックされます:
-- Ruff lint + Bandit + アーキテクチャ/セキュリティスクリプトチェック
-- 依存関係CVE監査（Python + Node）
-- **`governance-smoke`**: 明示的高速スモークゲート（`pytest -m smoke`, 約2分）
-- Python 3.11 + 3.12 マトリクスでのフルユニットテスト（85%カバレッジゲート）
-- フロントエンド lint / Vitest / Playwright E2E
-
-**Tier 2**（`release-gate.yml`）— 以下がすべて通過するまで `v*` タグがブロックされます:
-- Tier 1チェックのリリース時再実行
-- 本番相当テストスイート（`pytest -m "production or smoke"` + TLS + 負荷テスト）
-- フルスタック Docker Compose ヘルスチェック
-- ガバナンス準備レポート成果物の生成・アップロード
-
-**Tier 3**（`production-validation.yml`）— 週次スケジュール + 手動ディスパッチ:
-- 長時間実行の本番テスト、負荷テスト、外部ライブテスト
-- アドバイザリー: 障害は可視だがリリースをブロックしない
-
-完全な段階モデルは [`docs/PRODUCTION_VALIDATION.md`](docs/ja/validation/production-validation.md)、
-リリースプロセスは [`docs/en/operations/release-process.md`（英語正本）](docs/en/operations/release-process.md) を参照してください。
-
-### リリースのガバナンス準備状況の確認方法
-
-1. [Actions タブ](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml) で対象タグの `Release Gate` ワークフロー実行を確認
-2. `✅ Release Readiness Gate` ジョブが **🟢 RELEASE IS GOVERNANCE-READY** を表示していること
-3. `release-governance-readiness-report` 成果物をダウンロードし、`"governance_ready": true` を確認
-
-### 本番相当バリデーション
-
-ユニット/結合テストに加え、VERITAS は**本番相当のバリデーション**を備えており、
-TrustLog、暗号化、ガバナンスAPI、Web検索セキュリティなどの実サブシステムを
-本番等価のコードパスで検証します:
-
-```bash
-# 本番相当テストを実行（外部依存なし）
 make test-production
-
-# スモークテストのみ実行
-make test-smoke
-
-# Docker Composeを含む完全バリデーション（Docker必須）
-make validate
 ```
 
-本番バリデーションは **別CIワークフロー**（`production-validation.yml`）としても利用可能で、
-手動トリガーまたは週次スケジュールで実行されます。
-完全な戦略、検証マトリクス、残存する本番リスクについては
-[`docs/PRODUCTION_VALIDATION.md`](docs/ja/validation/production-validation.md) を参照してください。
+PostgreSQL のスモーク検証:
+
+```bash
+VERITAS_MEMORY_BACKEND=postgresql \
+VERITAS_TRUSTLOG_BACKEND=postgresql \
+pytest -m smoke veritas_os/tests/ -q
+```
+
+## CI / リリース証拠
+
+リポジトリには、次の領域をカバーするワークフローがあります。
+
+- core CI
+- CodeQL
+- release gates
+- security checks
+- Reviewer Evidence の検証
+- 再現可能な Decision-to-Effect proof
+- PostgreSQL-backed validation
+- リリース証拠の生成
+
+ワークフローがGreenでも、その結果は各ワークフローの **検証範囲** に沿って解釈する必要があります。
+
+特定範囲の証明がPASSしても、それは定義された証明条件に対する evidence であり、すべてのデプロイ特性に対する包括的な認証ではありません。
+
+参照:
+
+[Operational Readiness Runbook](docs/en/operations/operational-readiness-runbook.md)
 
 ---
 
-## ⚙️ 環境変数リファレンス
+# Reviewer向け最短レビュー経路
 
-すべての環境変数を一覧にまとめました。`.env`（gitignore対象）またはシークレットマネージャーで設定してください。
+VERITAS を評価するために、リポジトリ全体を読む必要はありません。
 
-### 必須
+## 10分レビュー
 
-| 変数 | 説明 | 例 |
-|---|---|---|
-| `OPENAI_API_KEY` | OpenAI APIキー | `sk-...` |
-| `VERITAS_API_KEY` | バックエンドAPI認証キー | ランダム文字列 |
-| `VERITAS_API_SECRET` | HMAC署名シークレット（32文字以上） | ランダム64文字16進数 |
-| `VERITAS_ENCRYPTION_KEY` | TrustLog暗号鍵（base64エンコード32バイト） | `generate_key()` で生成 |
+1. **[README 日本語版](README_JP.md)** — 製品と実行境界の概要
+2. **[Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)** — レビュー手順の案内
+3. **[Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)** — 実装済み / 部分実装 / ロードマップの分離
+4. **[Decision-to-Effect E2E Evidence](artifacts/real-decision-to-effect-e2e/README.md)** — controlled execution の証明
+5. **[Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)** — レビュー用チェックリスト / 証明資料
 
-### LLMプロバイダ
+## より詳しい技術レビュー
 
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `LLM_PROVIDER` | `openai` | LLMプロバイダ（`openai`, `anthropic`, `google`, `ollama`, `openrouter`） |
-| `LLM_MODEL` | `gpt-4.1-mini` | モデル名 |
-| `LLM_POOL_MAX_CONNECTIONS` | `20` | httpxコネクションプールサイズ |
-| `LLM_MAX_RETRIES` | `3` | 指数バックオフ付きリトライ回数 |
-
-### ストレージバックエンド
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_MEMORY_BACKEND` | `json`（ローカル）/ `postgresql`（Docker） | メモリストレージバックエンド（`json` または `postgresql`） |
-| `VERITAS_TRUSTLOG_BACKEND` | `jsonl`（ローカル）/ `postgresql`（Docker） | TrustLogストレージバックエンド（`jsonl` または `postgresql`） |
-| `VERITAS_DATABASE_URL` | — | PostgreSQL接続URL（`postgresql`バックエンド使用時に必須） |
-| `VERITAS_DB_POOL_MIN_SIZE` | `2` | PostgreSQLコネクションプール最小サイズ |
-| `VERITAS_DB_POOL_MAX_SIZE` | `10` | PostgreSQLコネクションプール最大サイズ |
-| `VERITAS_DB_SSLMODE` | `prefer` | PostgreSQL SSLモード（`prefer`, `require`, `verify-full`） |
-| `VERITAS_DB_AUTO_MIGRATE` | `false`（ローカル）/ `true`（Docker） | 起動時にAlembicマイグレーションを自動実行 |
-
-### ネットワーク & CORS
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORSホワイトリスト |
-| `VERITAS_API_BASE_URL` | `http://backend:8000` | フロントエンドBFF → バックエンドURL（サーバー専用） |
-| `VERITAS_MAX_REQUEST_BODY_SIZE` | `10485760`（10 MB） | リクエストボディの最大サイズ |
-
-### 安全性 & ガバナンス
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_ENABLE_DIRECT_FUJI_API` | `0` | `/v1/fuji/validate` エンドポイントの有効化 |
-| `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | `0`（ポスチャ: secure/prodで`1`） | Vault/KMSなしでの起動をブロック |
-| `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER` | `1` | Web検索毒性フィルタ（fail-closed） |
-| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Continuation Runtimeの有効化 |
-| `VERITAS_CONTINUATION_ENFORCEMENT_MODE` | `observe` | Continuation Runtimeエンフォースメントモード（`observe`, `advisory`, `enforce`） |
-
-### ポリシー署名 & 適用
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_POLICY_VERIFY_KEY` | — | ポリシーバンドル署名検証用Ed25519公開鍵PEMファイルのパス |
-| `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` | コンパイル済みポリシー判定のランタイム適用を有効化。リクエスト入力でサーバー必須適用を解除不可 |
-| `VERITAS_POLICY_RUNTIME_BUNDLE_ID` | — | `<VERITAS_RUNTIME_ROOT>/policy_bundles` 配下から選ぶdeployment-controlledなbundle ID。リクエスト由来pathは使用しない |
-| `VERITAS_POLICY_ROLLOUT_KEY` | — | canary/staged用のサーバー管理bucket key。必須適用時に未設定ならfull enforcementへfail-safe |
-| `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Ed25519検証を必須化しレガシーSHA-256 bundleを拒否。Ed25519宣言bundleは信頼済み鍵欠損時にダウングレードしない |
-
-> **ポスチャ対応適用**: `secure`/`prod` ポスチャでは、SHA-256のみ（未署名）のポリシーバンドルは
-> ランタイムアダプターにより拒否されます。Ed25519署名済みバンドルのみが検証を通過します。
-> `dev`/`staging` では、SHA-256完全性チェックは警告付きで受け入れられます。
-> ガバナンスロールバック操作は更新と同じ4-eyes承認・監査要件に従います。
-
-### TrustLog & 監査
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0`（ポスチャ: secure/prodで`1`） | Transparency logアンカーリングを必須化（fail-closed） |
-| `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0`（ポスチャ: secure/prodで`1`） | WORMミラー書込み失敗時にエラーを送出 |
-| `VERITAS_TRUSTLOG_MIRROR_BACKEND` | `local` | TrustLogミラーバックエンド（`local` または `s3_object_lock`） |
-| `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` | — | ローカル追記ミラー先パス（バックエンドが `local` の場合） |
-| `VERITAS_TRUSTLOG_S3_BUCKET` | — | TrustLogミラー書込み用S3バケット名（`s3_object_lock` バックエンド） |
-| `VERITAS_TRUSTLOG_S3_PREFIX` | — | 追記専用TrustLogオブジェクトのS3キープレフィックス |
-| `VERITAS_TRUSTLOG_S3_REGION` | — | S3クライアント用AWSリージョンオーバーライド |
-| `VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` | — | Object Lockモード（`GOVERNANCE` または `COMPLIANCE`） |
-| `VERITAS_TRUSTLOG_S3_RETENTION_DAYS` | — | S3 Object Lockの保持期間（日数） |
-| `VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE` | `0` | TrustLog検証時のリモートS3ミラー検証を有効化 |
-| `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT` | `0` | 厳密ミラー検証: 欠損レシートと保持ギャップで失敗 |
-| `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_REQUIRE_LEGAL_HOLD` | `0` | リモートミラー検証時にS3 Object Legal Hold（`ON`）を必須化 |
-| `VERITAS_TRUSTLOG_ANCHOR_BACKEND` | `local` | TrustLogアンカーバックエンド（`local` または `noop`） |
-| `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` | — | ローカルTransparencyアンカーパス（アンカーバックエンドが `local` かつTransparency必須時に必須） |
-| `VERITAS_TRUSTLOG_SIGNER_BACKEND` | `file` | TrustLog署名バックエンド（`file` または `aws_kms`） |
-| `VERITAS_TRUSTLOG_KMS_KEY_ID` | — | AWS KMSキーID/ARN（`VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms` 時に必須） |
-
-#### TrustLogミラー移行ノート
-
-- 既存デプロイは変更なしで動作します。`VERITAS_TRUSTLOG_MIRROR_BACKEND` はデフォルト `local` で、`VERITAS_TRUSTLOG_WORM_MIRROR_PATH` の動作を維持します。
-- S3 Object Lockに移行するには、`VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` を設定し、最低限 `VERITAS_TRUSTLOG_S3_BUCKET`（任意でprefix/region/retention設定）を指定してください。
-- `VERITAS_TRUSTLOG_WORM_HARD_FAIL` のセマンティクスは変更なく、両バックエンドに適用されます。
-- `secure`/`prod` では、起動時バリデーションが `immutable_retention` と `fail_closed` の両方を実際に提供し、かつ宣言する mirror backend を要求します。local WORM mirror はこのリリースでは secure/prod 要件を満たしません。現在の本番サポート backend は `s3_object_lock` で、`VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` と `VERITAS_TRUSTLOG_S3_BUCKET` / `VERITAS_TRUSTLOG_S3_PREFIX` の設定が必要です。
-
-#### TrustLogミラー検証モード
-
-- **オフラインモード（デフォルト）**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE=0` はレシートスキーマのみ検証し、レガシー互換性を維持。
-- **リモートモード**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE=1` は `s3_object_lock` レシートに対してS3ベースのチェックを実行:
-  - オブジェクト存在確認（`Bucket` + `Key`）
-  - `version_id` 一致（レシートに `version_id` がある場合）
-  - `etag` 一致（レシートに `etag` がある場合）
-  - 保持状態（レシートが保持メタデータを記録している場合）
-- **厳密モード**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT=1` は高保証/本番検証ジョブ向け:
-  - ミラーレシート欠損エントリで失敗（`mirror_receipt_missing`）
-  - 保持検証ギャップで失敗（`mirror_retention_missing`）
-  - レシートサポート以前に作成された古いレジャーでは検証が中断する可能性あり。
-- **Legal hold強制**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_REQUIRE_LEGAL_HOLD=1` は追加でオブジェクトlegal holdが `ON` であることを要求（`mirror_legal_hold_missing`）。
-
-> セキュリティ注意: リモート検証はライブAWS APIアクセスとIAMパーミッション（`s3:HeadObject`, `s3:GetObjectRetention`, `s3:GetObjectLegalHold`）に依存します。最小権限を使用し、検証者の認証情報を分離してください。
-
-### Replay
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_REPLAY_STRICT` | `0` | 決定論的リプレイ設定の強制 |
-| `VERITAS_REPLAY_REQUIRE_MODEL_VERSION` | `1` | model_versionなしのスナップショットを拒否 |
-
-### ランタイム
-
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `VERITAS_POSTURE` | `dev` | ランタイムポスチャ（`dev`/`staging`/`secure`/`prod`）。[ランタイムポスチャ保証](#-ランタイムポスチャ保証)を参照。 |
-| `VERITAS_RUNTIME_ROOT` | `runtime/` | ランタイムデータのルートディレクトリ |
-| `VERITAS_RUNTIME_NAMESPACE` | `dev` | ランタイム名前空間（`dev`/`test`/`demo`/`prod`） |
-
-> 完全なテンプレートは [`.env.example`](.env.example) を参照してください。
+- [Regulated Action Governance Kernel](docs/en/architecture/regulated-action-governance-kernel.md)
+- [External Bind Integration Path](docs/en/guides/external-bind-integration-path.md)
+- [External Bind PoC Evidence](docs/en/guides/external-bind-poc-evidence.md)
+- [Reconciliation-Capable Execution Profile Proof](docs/en/validation/reconciliation-capable-execution-profile-proof-v1.md)
+- [External Audit Readiness](docs/ja/validation/external-audit-readiness.md)
+- [Validation Evidence Map](docs/en/validation/validation-evidence-map.md)
 
 ---
 
-## 🔐 セキュリティ注意（重要）
+# 現在の実装境界
 
-> [!WARNING]
-> VERITAS は fail-closed を前提に設計されていますが、**安全な既定値があること** と **設定なしで安全に運用できること** は同義ではありません。ベータ導入前に、シークレット管理、暗号鍵、WORM / Transparency 設定、公開ネットワーク露出を必ず確認してください。
+詳細な実装状況一覧:
 
-**ベータ運用で特に重要な警告**
-- `VERITAS_API_SECRET=change-me` のような既定値のままバックエンドを公開しないでください。
-- TrustLog 暗号化は secure-by-default を前提としており、`VERITAS_ENCRYPTION_KEY` 未設定時は意図的に書き込み失敗になります。
-- MemoryOS の legacy pickle 移行は一時的な移行専用経路として扱ってください。デシリアライズ経路は高リスクです。
-- BFF / サーバールーティングは慎重に運用してください。`NEXT_PUBLIC_*` で内部 API 構成を漏らすと、想定している境界が弱くなります。
+**[Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)**
 
-### 認証情報・鍵管理
+概要:
 
-- **APIキー**: シェル履歴に直接残る `export` は可能な限り避け、`.env`（gitignore対象）またはシークレットマネージャー利用を推奨。定期ローテーションと最小権限設定を実施してください。
-- **プレースホルダ/短いシークレットを使わない**: `VERITAS_API_SECRET` は長くランダムな値（推奨32文字以上）を設定。短い値や既知値はHMAC保護を実質的に無効化・弱体化する恐れがあります。
-
-### API・ブラウザ向け保護
-
-- **CORS安全性**: `allow_credentials` を有効にしたままワイルドカード（`*`）を許可しないでください。`VERITAS_CORS_ALLOW_ORIGINS`で信頼済みオリジンのみ明示設定してください。
-- **Content Security Policy（CSP）**: フロントエンドミドルウェアがリクエスト毎のノンスベースCSPヘッダーを注入。`connect-src 'self'`でXHR/fetchを同一オリジンに制限。
-- **BFFセッションクッキー**: `__veritas_bff`はhttpOnly、Secure、本番環境ではSameSite=strict。ブラウザはAPI認証情報を見ません。
-- **セキュリティヘッダー**: HSTS（1年、preload）、X-Frame-Options DENY、X-Content-Type-Options nosniff、Permissions-Policy（カメラ/マイク/位置情報無効）。
-- **レート制限と認証失敗追跡**: キー毎のレート制限と認証失敗時の指数バックオフ。
-- **ノンスリプレイ防御**: 重要操作はHMAC署名ノンスとTTLクリーンアップで保護。
-- **リクエストボディサイズ制限**: `VERITAS_MAX_REQUEST_BODY_SIZE`で設定可能（デフォルト10MB）。
-
-### データ安全性・永続化
-
-- **TrustLogデータ**: TrustLogは**デフォルトで暗号化**されています（secure-by-default）。全エントリはPII/シークレットの自動リダクション後に暗号化されてから永続化されます。`VERITAS_ENCRYPTION_KEY` の設定が必須であり、未設定の場合は書き込みが失敗します。
-- **PII/シークレットの自動リダクション**: メール、電話、住所、APIキー、Bearerトークン、シークレット文字列は保存前に自動マスキングされます — 手動の `redact()` 呼び出しは不要です。
-- **保存時暗号化（必須）**: `VERITAS_ENCRYPTION_KEY`（base64エンコードされた32バイト鍵）を設定してください。`generate_key()` で生成できます。鍵はvault/KMSに保存し、ソースコードにコミットしないでください。
-- **運用ログはGit管理対象外**: ランタイムログ（例: `runtime/<namespace>/.../*.jsonl`）は `.gitignore` で除外されます。匿名化サンプルは `veritas_os/sample_data/memory/` 配下にあります。
-- **ランタイム名前空間は用途別に分離**: デフォルトのローカルパスは `runtime/dev`、`runtime/test`、`runtime/demo`、`runtime/prod` です。`VERITAS_RUNTIME_ROOT` と `VERITAS_RUNTIME_NAMESPACE` で上書き可能です。
-- **クリーンクローン用クリーンアップコマンド**: `python scripts/reset_repo_runtime.py --dry-run` と `python scripts/reset_repo_runtime.py --apply` で生成されたランタイムデータを削除できます。詳細は `docs/ja/operations/runtime-data-policy.md` を参照してください。
-
-### Fail-closed安全パイプライン
-
-- **FUJI Gate fail-closed**: 全安全判定の例外は `status=rejected`, `risk=1.0` を返却。エラー時のサイレントパススルーなし。
-- **ガバナンス境界ガード**: `/v1/fuji/validate` はデフォルト403拒否 — 明示的オプトインが必要（`VERITAS_ENABLE_DIRECT_FUJI_API=1`）。
-- **4-eyes承認**: ガバナンスポリシー更新には2名の異なる承認者が必要（重複不可、デフォルト有効）。
-- **RBAC/ABAC**: `require_governance_access` ガードによるロール＋テナント検証をガバナンス管理エンドポイントに適用。
-- **外部シークレットマネージャー強制**: `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER=1` でVault/KMS統合なしの起動をブロック。
-- **Web検索毒性フィルタ**: retrieval poisoning / prompt injectionヒューリスティック（NFKC正規化、URLデコード、base64デコード、leet-speak検知）。デフォルト有効（fail-closed）、`VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER=0` で無効化。
-
-### 移行時の安全性
-
-- **Legacy pickle移行は高リスク**: MemoryOSの旧pickle移行を有効化する場合、短期移行パスとして扱い、移行完了後に必ず無効化してください。レガシーpickle/joblibの読み込みはRCE防止のためランタイムでブロックされます。
+| 領域 | 現在の状態 |
+|---|---|
+| Core decision pipeline | 実装済み |
+| Bind-boundary governance | 実装済み / 一部ルートをカバー |
+| Selected operator mutation routes | Bind で統制する対象として明示 |
+| Authority Evidence | 実装済み / 適用範囲あり |
+| Human Approval Receipt | 実装済み / 適用範囲あり |
+| Single-use authorization | controlled execution path で実装済み |
+| Outcome Receipt | 実装済み |
+| Evidence Chain | 実装済み |
+| Mission Control | 実装済み |
+| PostgreSQL production path | 実装済み / 環境依存 |
+| Controlled Decision-to-Effect E2E | 実装済み |
+| AML/KYC fixture PoC | 実装済み |
+| Live customer integrations | 統合先 / 環境に依存 |
+| Completed third-party certification | 未主張 |
 
 ---
 
-## 🗺️ ロードマップ（短期）
+# VERITAS が担わないもの
 
-**実装済み**（以前ロードマップに記載されていた項目）:
-- ✅ CI（GitHub Actions）: 3段階バリデーションモデル（pytest + coverage + artifactレポート）
-- ✅ セキュリティ強化: 入力検証、秘密情報/ログ衛生、ランタイムポスチャシステム
-- ✅ Policy-as-Code: YAML/JSON → IR → コンパイル済みルール（Ed25519署名バンドル、テスト自動生成）
-- ✅ マルチプロバイダLLM: OpenAI（production）、Anthropic/Google（planned）、Ollama/OpenRouter（experimental）
-- ✅ PostgreSQLストレージバックエンド: MemoryOS・TrustLog用プラガブルバックエンド（Alembicマイグレーション、アドバイザリロックチェーン直列化、195+パリティテスト）。JSONL → PostgreSQLインポート手順、スモーク/リリースバリデーション統合、レガシーパスクリーンアップ含む。[`docs/postgresql-production-guide.md`](docs/ja/operations/postgresql-production-guide.md) 参照。
-- ✅ PostgreSQL本番ハードニング: 競合テスト（25テスト）、プール/アクティビティメトリクス（28テスト）、バックアップ/リストア/リカバリドリルスクリプトとテスト（31テスト）。[`docs/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) 参照。
-- ✅ Continuation Runtime（Phase-1）: チェーンレベル継続観測レイヤー、スナップショット/レシート/エンフォースメントイベントアーキテクチャ。`docs/architecture/continuation_runtime_adr.md` 参照。
-- ✅ ガバナンス成果物署名: Ed25519署名ポリシーバンドル、ランタイム署名検証、意思決定出力へのガバナンスID。[`docs/governance_artifact_lifecycle.md`](docs/ja/governance/governance-artifact-lifecycle.md) 参照。
-- ✅ S3 Object Lock TrustLogミラー: WORM準拠ミラーバックエンド（保持、legal hold、リモート検証）。[`docs/postgresql-drill-runbook.md`](docs/ja/operations/postgresql-drill-runbook.md) 参照。
+VERITAS は次のものではありません。
 
-**今後のマイルストーン**:
-- Anthropic / Google LLMプロバイダのproductionティア昇格
-- CI成果物からのカバレッジバッジ自動更新
-- pgvector統合によるMemoryOSベクトル類似度検索
-- モノレポライセンス（Plan B）からマルチレポ分離（Plan A）への段階的移行
-- Continuation Runtime Phase-2 エンフォースメントのsecure/prodポスチャでのデフォルト有効化
+- LLM自身に「安全か」を判断させる仕組み
+- プロンプトだけに依存するガードレール
+- IAM の代替
+- KMS / HSM 基盤の代替
+- 組織ポリシーの代替
+- すべてのモデル出力が正しいことの証明
+- すべての外部システムが信頼できることの証明
+- 法的助言
+- 規制当局による承認
+- 自動的な本番認証
 
----
+VERITAS の役割はより限定的で、具体的です。
 
-## 📄 ライセンス
-
-このリポジトリは、ディレクトリ単位でスコープが明確な **マルチライセンス** 構成です。
-
-### ライセンスマトリクス（ディレクトリ別）
-
-| Scope | License | 商用利用 | 再配布 | 備考 |
-|---|---|---|---|---|
-| Default（明示上書きのない全体） | VERITAS Core Proprietary EULA（`/LICENSE`） | 契約必要 | 書面許可なし不可 | Core意思決定ロジックとパイプラインを含む |
-| `spec/` | MIT（`/spec/LICENSE`） | 可 | 可 | オープンなインターフェース成果物 |
-| `sdk/` | MIT（`/sdk/LICENSE`） | 可 | 可 | SDKインターフェース層 |
-| `cli/` | MIT（`/cli/LICENSE`） | 可 | 可 | CLIインターフェース層 |
-| `policies/examples/` | MIT（`/policies/examples/LICENSE`） | 可 | 可 | ポリシーテンプレート/例 |
-
-### Core不正利用防止の主な制限（概要）
-
-Core Proprietary EULA の下で、以下は禁止されます。
-
-- Core（または実質的に同等機能）を競合マネージドサービスとして提供する行為
-- ライセンスキー・メータリング・その他技術的保護の回避
-- 著作権表示、帰属表示、プロプライエタリ表示、商標表示の削除
-- 商用契約なしでのCore再配布または商用本番利用
-
-詳細は [`LICENSE`](LICENSE)、[`TRADEMARKS`](TRADEMARKS)、[`NOTICE`](NOTICE) を参照してください。
-
-### 既存ユーザー向け移行ノート
-
-現在の構造は、既存方針をより明確な二層モデルとして明文化したものです。
-
-- Coreは既定でプロプライエタリのまま
-- インターフェース資産はディレクトリ単位で明示的にオープンライセンス化
-- Coreロジック（Planner/Kernel/FUJI/TrustLogパイプライン内部）はオープンソース化されていません
-
-### ライセンス分離ロードマップ（Plan B モノレポ → Plan A マルチレポ）
-
-Phase 1（現行）:
-- モノレポ内でのディレクトリスコープライセンス（Core proprietary + interface MIT）
-
-Phase 2（今後）:
-- `veritas-spec`（OpenAPI/schema）
-- `veritas-sdk-python`, `veritas-sdk-js`
-- `veritas-cli`
-- `veritas-policy-templates`
-- `veritas_os` は proprietary Core に集中
-
-学術用途では Zenodo DOI を引用してください。
+> **AIが提案したアクションを、実行時点の証拠とガバナンス状態に基づいて、実行境界を越えてよいか判定すること。**
 
 ---
 
-## 🤝 コントリビューション
+# 事後監査との違い
 
-コントリビューションを歓迎します！ ガイドラインは [`CONTRIBUTING.md`](CONTRIBUTING.md) をご覧ください：
+従来の監査は、主に次の問いに答えます。
 
-- リポジトリのライセンスモデル（Coreはプロプライエタリ、インターフェースはMIT）
-- 開発環境セットアップとコーディング規約
-- プルリクエストのワークフローとレビュープロセス
-- セキュリティ脆弱性の報告は [`SECURITY.md`](SECURITY.md) を参照
+> **何が起きたか？**
+
+VERITAS は外部作用の **前** に、さらに次の問いを明示します。
+
+| 問い | ガバナンス上の観点 |
+|---|---|
+| 誰に authority があるか？ | Authority |
+| どの policy が適用されるか？ | Admissibility |
+| 人間は何を正確に承認したか？ | Approval binding |
+| Approval はまだ有効か？ | Freshness / expiry |
+| Approval 後に重要な変更はないか？ | Execution-time revalidation |
+| Authorization は既に消費されていないか？ | Replay prevention |
+| 実行対象は正しいか？ | Target / scope integrity |
+| 現在の証拠でアクションを許可できるか？ | Bind adjudication |
+
+そして外部作用の **後** には、
+
+| 問い | 証拠上の観点 |
+|---|---|
+| 何が観測されたか？ | Outcome |
+| 何がその観測を支えるか？ | Receipt / evidence chain |
+| 応答が失われたのか？ | `EFFECT_UNKNOWN` |
+| 再実行せず外部作用を確認できるか？ | Read-only reconciliation |
+| レビュー担当者が系譜を追えるか？ | Reviewer evidence |
+
+を扱います。
 
 ---
 
-## 📝 引用（BibTeX）
+# 研究・論文
+
+VERITAS では、システムアーキテクチャと実行ガバナンスを別々の論文として公開しています。
+
+### System architecture
+
+**VERITAS OS: Auditable Decision OS for LLM Agents**
+
+[DOI: 10.5281/zenodo.17838349](https://doi.org/10.5281/zenodo.17838349)
+
+日本語版:
+
+[DOI: 10.5281/zenodo.17838456](https://doi.org/10.5281/zenodo.17838456)
+
+### Execution governance
+
+**VERITAS OS: From Authorization to Verified External Effect in AI Agent Execution Governance**
+
+- [DOI: 10.5281/zenodo.22844531](https://doi.org/10.5281/zenodo.22844531)
+- [Zenodo Record 22844531](https://zenodo.org/records/22844531)
+
+Execution Governance 論文の主なテーマ:
+
+- execution-time revalidation
+- single-use authorization consumption
+- explicit `EFFECT_UNKNOWN`
+- reconciliation-capability gating
+- read-only の Reconciliation
+- controlled reproducible evidence
+
+---
+
+# 証拠・検証リファレンス
+
+トップレベルREADMEは簡潔に保ちつつ、以下の参照は外部レビュー上の公開契約として維持します。
+
+## 意思決定セマンティクス / 実行契約
+
+- [Decision Semantics](docs/ja/architecture/decision-semantics.md)
+- [Required Evidence Taxonomy](docs/ja/governance/required-evidence-taxonomy.md)
+- [Intervention Actionability Map schema](docs/en/demo/schemas/intervention-actionability-map-v0.schema.json)
+- [Intervention Actionability Map fixture](docs/en/demo/fixtures/intervention-actionability-map-v0.json)
+
+`intervention-actionability-map-v0.schema.json` と `intervention-actionability-map-v0.json` はReviewer向け証拠です。automatic enforcement、automatic blocking、automatic escalation、production decisioning、scoring、certification を意味するものではありません。
+
+## Reviewer Evidence Bundle
+
+- Bundle builder: `scripts/demo/build_reviewer_evidence_bundle.py`
+- Guide: [Reviewer Evidence Bundle](docs/en/demo/reviewer-evidence-bundle.md)
+- Validation workflow: `.github/workflows/reviewer-evidence-packet-validation.yml`
+- CI artifact set: `reviewer-evidence-packet-validation-artifacts`
+- Artifact manifest: `reviewer-evidence-artifact-manifest.json`
+- Manifest verifier: `scripts/demo/verify_reviewer_evidence_artifact_manifest.py`
+
+Illustrative sample:
+
+`samples/evidence_bundle/key_provenance_review/`
+
+このsample chainには次が含まれます。
+
+- `reviewer-handoff-review-result.json`
+- `reviewer-review-result-validation.json`
+- `reviewer-review-result-report-validation.json`
+- `reviewer-handoff-package-validation.json`
+- `reviewer-handoff-quickstart-command-validation.json`
+
+Reviewer result は `ACCEPT` / `REJECT` / `NEEDS_FOLLOW_UP` を記録できます。これらのartifactだけで trust を作ることはなく、public key の信頼元はout-of-bandの reviewer / operator trust channel から取得する必要があります。
+
+## 性能 / One-Day PoC evidence
+
+- [性能メトリクス](docs/ja/benchmarks/performance-metrics.md)
+- [英語正本: Performance Metrics](docs/en/benchmarks/performance-metrics.md)
+- [最新ローカル性能メトリクス](docs/ja/benchmarks/local-performance-metrics.latest.md)
+- [英語正本: Latest local performance metrics](docs/en/benchmarks/local-performance-metrics.latest.md)
+- [英語正本: Latest local performance metrics JSON](docs/en/benchmarks/local-performance-metrics.latest.json)
+- [One-Day PoC Evidence Pack](docs/ja/poc/one-day-poc-evidence-pack.md)
+- [英語正本: One-Day PoC Evidence Pack](docs/en/poc/one-day-poc-evidence-pack.md)
+- [One-Day PoC Operator Runbook](docs/ja/poc/one-day-poc-operator-runbook.md)
+- [英語正本: One-Day PoC Operator Runbook](docs/en/poc/one-day-poc-operator-runbook.md)
+- [One-Day PoC Reviewer Handoff Template](docs/ja/poc/one-day-poc-reviewer-handoff-template.md)
+- [英語正本: One-Day PoC Reviewer Handoff Template](docs/en/poc/one-day-poc-reviewer-handoff-template.md)
+
+これらはローカル / Reviewer向けのengineering evidenceです。**本番SLAではなく、明示されない限り顧客環境測定でもありません。**
+
+## セキュリティ / 運用継続性
+
+VERITAS は、保護対象の監査ストレージを **secure-by-default** として扱います。暗号化が必要な構成では `VERITAS_ENCRYPTION_KEY` が必須であり、必要な鍵がない場合は平文へ黙ってフォールバックせず `EncryptionKeyMissing` で失敗します。
+
+- [External Security Remediation Summary](docs/ja/security/external-security-remediation-summary.md)
+- [英語正本: External Security Remediation Summary](docs/en/security/external-security-remediation-summary.md)
+- [Maintainer Handoff](docs/ja/operations/maintainer-handoff.md)
+- [英語正本: Maintainer Handoff](docs/en/operations/maintainer-handoff.md)
+
+## コンプライアンス境界
+
+VERITAS はガバナンスと証拠の基盤を提供します。本READMEは**法的助言ではありません**。また、**規制当局の承認**や**第三者認証**、法的な認証を示すものではありません。
+
+# ドキュメント案内
+
+## 最初に読む資料
+
+- [Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)
+- [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
+- [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md)
+- [Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)
+
+## Execution governance
+
+- [External Bind Integration Path](docs/en/guides/external-bind-integration-path.md)
+- [WebhookBindAdapter](docs/en/guides/webhook-bind-adapter.md)
+- [External Bind PoC Evidence](docs/en/guides/external-bind-poc-evidence.md)
+- [Reconciliation-Capable Execution Profile Proof](docs/en/validation/reconciliation-capable-execution-profile-proof-v1.md)
+
+## Reviewer向け evidence
+
+- [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
+- [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
+- [Reviewer Handoff Guide](docs/en/validation/reviewer-handoff-guide.md)
+- [Reviewer Handoff Sample Quickstart](docs/en/validation/reviewer-handoff-sample-quickstart.md)
+- [External Audit Readiness](docs/ja/validation/external-audit-readiness.md)
+
+## 運用
+
+- [Operational Readiness Runbook](docs/en/operations/operational-readiness-runbook.md)
+- [Security Hardening](docs/ja/operations/security-hardening.md)
+- [PostgreSQL Production Guide](docs/ja/operations/postgresql-production-guide.md)
+- [Provider Support Matrix](docs/en/operations/provider-support-matrix.md)
+- [Enterprise SLO / SLI 運用Runbook（日本語）](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
+
+## PoC
+
+- [One-Day PoC Reviewer Pack](docs/en/poc/one-day-poc-reviewer-pack.md)
+- [One-Day PoC Evidence Pack](docs/en/poc/one-day-poc-evidence-pack.md)
+- [AML/KYC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
+
+---
+
+# Roadmap
+
+直近の開発では、Authorization から外部で検証可能な effect までの境界をさらに強化することに集中しています。
+
+主な優先領域:
+
+- Bind Coverage の拡大
+- 実外部システムとの統合検証
+- 顧客固有の authority source との統合
+- credential resolution の強化
+- 外部現実性（external reality）の真正性強化
+- clock trust の強化
+- より多くの effect class に対する Reconciliation
+- 顧客本番ワークフローでの検証
+- 独立した外部レビュー
+- ベンチマーク / adversarial evaluation の継続
+
+ロードマップ上の項目を、完了済みの実装として表現することはありません。
+
+---
+
+# License
+
+このリポジトリは、ディレクトリごとに適用範囲を分けたマルチライセンス方式を採用しています。
+
+| Scope | License | Commercial use |
+|---|---|---|
+| Core repository unless overridden | VERITAS Core Proprietary EULA | Contract required |
+| `spec/` | MIT | Permitted |
+| `sdk/` | MIT | Permitted |
+| `cli/` | MIT | Permitted |
+| `policies/examples/` | MIT | Permitted |
+
+参照:
+
+- [LICENSE](LICENSE)
+- [NOTICE](NOTICE)
+- [TRADEMARKS](TRADEMARKS)
+
+---
+
+# コントリビューション
+
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+
+セキュリティ上の問題は [SECURITY.md](SECURITY.md) に従って報告してください。
+
+---
+
+# 引用
 
 ```bibtex
 @software{veritas_os_2025,
@@ -2040,11 +1118,26 @@ Phase 2（今後）:
 
 ---
 
-## 📞 連絡先
+# 連絡先
 
-- Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
-- Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
+**Takeshi Fujishita**
 
-### Reviewer Evidence Packet の key provenance 参照
+- GitHub Issues: https://github.com/veritasfuji-japan/veritas_os/issues
+- Email: veritas.fuji@gmail.com
+- LinkedIn: https://www.linkedin.com/in/takeshi-fujishita-279709392
 
-Reviewer Evidence Packet には、Trusted Public Key Provenance validation artifact（`trusted-public-key-provenance.json`、`key-provenance-validation.json`、`key-provenance-result-validation.json`）への optional な参照を含められます。illustrative sample set には `sample-artifact-manifest.json`、`reviewer-handoff-review-result.json`、保存済み package validation report artifact の `reviewer-handoff-package-validation.json` も含まれ、CI は manifest と artifact hash を検証します。`reviewer-handoff-package-validation.json` は `validate-reviewer-handoff-package --json` の output shape と validation status を示すだけで、trust、out-of-band public key trust、regulatory certification、completed third-party audit approval、cryptographic truth を作成・代替・証明しません。Reviewer Review Result は確認内容と `ACCEPT` / `REJECT` / `NEEDS_FOLLOW_UP` の decision を記録しますが、reviewer scope と out-of-band public key trust context に依存し、単独の certification、regulatory approval、completed third-party audit approval、cryptographic truth ではありません。hash matching は sample integrity を支援するだけで standalone trust ではありません。copyable な review sequence は [Reviewer Key Provenance Walkthrough](docs/en/validation/reviewer-key-provenance-walkthrough.md) を参照してください。これらはレビュアーが public key trust provenance を確認するための手がかりですが、packet 自体が trust を作るものではなく、out-of-band public key trust を置き換えるものでも、cryptographic verification を再実行するものでもありません。また regulatory certification や completed third-party audit approval ではありません。fingerprint の一致は correlation を支援するだけで、単独の trust proof ではありません。Reviewer Evidence Packet は artifact を参照するだけで、単独で trust を証明しません。packet metadata は固定 artifact name と schema identifier のみを参照し、raw fingerprint、raw local path、exception text、schema validator message、外部 artifact 由来の raw JSON value は埋め込みません。`validate-review-result --json` には stable JSON Schema contract があり、validation report shape と validation status を検証しますが、trust、out-of-band public key trust、regulatory certification、completed third-party audit approval、cryptographic truth をそれ自体で作成・代替・証明しません。`validate-review-result-report` は、その保存済み validation report の shape のみを検証し、reviewer review を再実行せず、trust、out-of-band public key trust、regulatory certification、completed third-party audit approval、cryptographic truth を作成・代替・証明しません。
+---
+
+<div align="center">
+
+## 中心原則
+
+### AIはアクションを提案できます。自分自身に実行権限を与えることはできません。
+
+VERITAS は **意思決定 / 権限 / 実行 / 外部作用 / 証拠** を分離して扱います。
+
+そして外部作用を試行した後には、
+
+### 応答がないことは、「何も起きなかった」ことの証明ではありません。
+
+</div>
