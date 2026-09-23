@@ -30,6 +30,10 @@
 
 </div>
 
+**Version**: 2.0.0  
+**Release Status**: ベータ版  
+**Author**: Takeshi Fujishita
+
 ---
 
 > [!IMPORTANT]
@@ -44,6 +48,9 @@ VERITAS OS は、**AIエージェント向けの意思決定ガバナンス / Bi
 
 > **Authorization at issuance ≠ permission at execution.**  
 > **認可が発行されたことと、実行時点で実行してよいことは同じではありません。**
+
+> [!NOTE]
+> VERITAS OS は現在、公開上 **ベータ品質のガバナンス基盤** として位置づけています。リポジトリ上で実装・検証済みの機能と、顧客本番環境での検証、第三者認証、規制当局による承認は明確に区別します。
 
 ---
 
@@ -147,6 +154,19 @@ VERITAS は、実行ガバナンスに関する明示的な不変条件を中心
 | **Receipts are evidence, not authority** | Receipt は事後証拠であり、新しい実行権限ではありません。 |
 
 ---
+
+### 拡張時に重要な責務境界
+
+VERITAS の内部コンポーネントは責務を分離しています。機能追加時も、判断・安全判定・計画・記憶管理の境界を不用意に混在させないことが重要です。
+
+| コンポーネント | 主な責務 | 境界 |
+|---|---|---|
+| **Planner** | 計画構造、アクションプラン生成、Planner向け要約 | Kernel の意思決定オーケストレーション、FUJI の安全ポリシー、MemoryOS の永続化責務を持ち込まない |
+| **Kernel** | 意思決定計算、スコアリング、根拠構築、各ステージの接続 | API運用、永続化、ガバナンス保存処理を直接抱え込まない |
+| **FUJI** | 最終安全・ポリシー判定、拒否セマンティクス、監査向けゲート状態 | Planner の計画判断や MemoryOS の管理責務を持ち込まない |
+| **MemoryOS** | 保存、検索、要約、ライフサイクル、セキュリティ制御 | Planner / Kernel の意思決定方針や FUJI のゲート判定を担わない |
+
+この責務分離は、ガバナンス境界をレビュー可能・テスト可能な状態に保つための設計上の前提です。
 
 # 実証済みのもの
 
@@ -948,6 +968,7 @@ Execution Governance 論文の主なテーマ:
 - [Security Hardening](docs/en/operations/security-hardening.md)
 - [PostgreSQL Production Guide](docs/en/operations/postgresql-production-guide.md)
 - [Provider Support Matrix](docs/en/operations/provider-support-matrix.md)
+- [Enterprise SLO / SLI 運用Runbook（日本語）](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 
 ## PoC
 
