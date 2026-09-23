@@ -922,6 +922,67 @@ The execution-governance work focuses on:
 
 ---
 
+# Evidence & Validation References
+
+The top-level README stays concise, while the following references remain part of the public review contract.
+
+## Decision semantics and execution contracts
+
+- [Decision Semantics](docs/en/architecture/decision-semantics.md)
+- [Required Evidence Taxonomy](docs/en/governance/required-evidence-taxonomy.md)
+- [Intervention Actionability Map schema](docs/en/demo/schemas/intervention-actionability-map-v0.schema.json)
+- [Intervention Actionability Map fixture](docs/en/demo/fixtures/intervention-actionability-map-v0.json)
+
+The Intervention Actionability Map artifacts are reviewer-facing evidence. They are not automatic enforcement, automatic blocking, automatic escalation, production decisioning, scoring, or certification.
+
+## Reviewer Evidence Bundle
+
+- Builder: `scripts/demo/build_reviewer_evidence_bundle.py`
+- Guide: [Reviewer Evidence Bundle](docs/en/demo/reviewer-evidence-bundle.md)
+- Validation workflow: `.github/workflows/reviewer-evidence-packet-validation.yml`
+- CI artifact set: `reviewer-evidence-packet-validation-artifacts`
+- Artifact manifest: `reviewer-evidence-artifact-manifest.json`
+- Manifest verifier: `scripts/demo/verify_reviewer_evidence_artifact_manifest.py`
+
+The checked-in illustrative provenance sample is under:
+
+`samples/evidence_bundle/key_provenance_review/`
+
+That sample chain includes:
+
+- `reviewer-handoff-review-result.json`
+- `reviewer-review-result-validation.json`
+- `reviewer-review-result-report-validation.json`
+- `reviewer-handoff-package-validation.json`
+- `reviewer-handoff-quickstart-command-validation.json`
+
+A reviewer result may record `ACCEPT`, `REJECT`, or `NEEDS_FOLLOW_UP`. These artifacts support review workflow and correlation; the trust source for a public key remains an out-of-band reviewer/operator trust channel.
+
+## Performance and One-Day PoC evidence
+
+- [Performance Metrics](docs/en/benchmarks/performance-metrics.md)
+- [Latest local performance metrics](docs/en/benchmarks/local-performance-metrics.latest.md)
+- [Latest local performance metrics JSON](docs/en/benchmarks/local-performance-metrics.latest.json)
+- [One-Day PoC Evidence Pack](docs/en/poc/one-day-poc-evidence-pack.md)
+- [One-Day PoC Operator Runbook](docs/en/poc/one-day-poc-operator-runbook.md)
+- [One-Day PoC Reviewer Handoff Template](docs/en/poc/one-day-poc-reviewer-handoff-template.md)
+
+These measurements are local/reviewer-facing engineering evidence. They are **not a production SLA** and are not a customer environment measurement unless explicitly stated.
+
+## Security and operational continuity
+
+VERITAS treats protected audit storage as **secure-by-default**. Where encryption is required, `VERITAS_ENCRYPTION_KEY` must be configured; missing required key material raises `EncryptionKeyMissing` rather than silently falling back to plaintext.
+
+- [External Security Remediation Summary](docs/en/security/external-security-remediation-summary.md)
+- [Japanese External Security Remediation Summary](docs/ja/security/external-security-remediation-summary.md)
+- [Maintainer Handoff](docs/en/operations/maintainer-handoff.md)
+
+Security evidence reduces known vulnerability risk; it does not establish vulnerability-free operation.
+
+## Compliance boundary
+
+VERITAS provides governance and evidence infrastructure. It is **not legal certification**, not legal advice, not regulatory approval, and not third-party certification.
+
 # Documentation map
 
 ## Start here
