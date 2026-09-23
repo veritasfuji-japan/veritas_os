@@ -471,10 +471,13 @@ It provides visibility into areas such as:
 
 Frontend stack:
 
-- Next.js 16
-- React
-- TypeScript
-- App Router
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16.3.3 (App Router) |
+| Language | TypeScript 5.7 |
+| Styling | Tailwind CSS 3.4 |
+| Lint config | eslint-config-next 15.5.10 |
+| UI | React |
 
 Mission Control is a governance and review surface. The UI itself is not the source of execution authority.
 
@@ -526,19 +529,23 @@ permission for external side effect
 
 # Regulated Action Governance
 
-VERITAS includes a Regulated Action Governance kernel covering concepts such as:
+VERITAS includes a **Regulated Action Governance Kernel** covering concepts such as:
 
 - Action Class Contract
 - Authority Evidence
 - Runtime Authority Validation
 - Admissibility Predicate
 - Human Approval
-- Commit Boundary evaluation
+- Irreversible Commit Boundary
 - reviewer-facing evidence
+
+For selected regulated action paths, the kernel is designed to determine whether an execution intent should `commit / block / escalate / refuse` at the Bind Boundary.
 
 See:
 
 - [Regulated Action Governance Kernel](docs/en/architecture/regulated-action-governance-kernel.md)
+- [Authority Evidence vs Audit Log](docs/en/architecture/authority-evidence-vs-audit-log.md)
+- [AML/KYC Regulated Action Path](docs/en/use-cases/aml-kyc-regulated-action-path.md)
 - [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
 - [Regulated Action Governance Quality Gate](docs/en/validation/regulated-action-governance-quality-gate.md)
 
@@ -557,6 +564,13 @@ Start here:
 
 > [!WARNING]
 > Fixture-backed AML/KYC evidence must not be represented as live bank-side production integration.
+
+The AML/KYC customer risk escalation fixture is a deterministic engineering path for reviewing regulated-action governance behavior.
+
+**Audit Log vs Authority Evidence:** an Audit Log records what happened. Authority Evidence records why an action was authorized and admissible at bind time. An Audit Log alone does not authorize commit.
+
+> [!NOTE]
+> This is not legal advice, not regulatory approval, and not third-party certification. Repository evidence and controlled proofs should not be interpreted as compliance certification or completed production validation.
 
 ---
 
@@ -928,7 +942,12 @@ The execution-governance work focuses on:
 
 - [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
 - [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
+- [Evidence Bundle Reviewer Checklist](docs/en/validation/evidence-bundle-reviewer-checklist.md)
+- [Evidence Bundle Signature Verification](docs/en/validation/evidence-bundle-signature-verification.md)
+- [Sample Evidence Bundle Verification Output](docs/en/validation/sample-evidence-bundle-verification-output.md)
+- [Reviewer Key Provenance Walkthrough](docs/en/validation/reviewer-key-provenance-walkthrough.md)
 - [Reviewer Handoff Guide](docs/en/validation/reviewer-handoff-guide.md)
+- [Reviewer Handoff Sample Quickstart](docs/en/validation/reviewer-handoff-sample-quickstart.md)
 - [External Audit Readiness](docs/en/validation/external-audit-readiness.md)
 
 ## Operations
