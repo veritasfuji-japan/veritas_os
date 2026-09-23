@@ -8,7 +8,7 @@
 - **Activation gate:** **BLOCKED**.
 - **Contract baseline:** `observable-digest-resolver-contract-v1`.
 - **Security-review baseline:** v1.1.
-- **Product main baseline:** `88f56546ffc9cfa03b26c20deddd2cae7d676448`.
+- **Product main baseline:** `3e5f6c56aa82a78c6020a35525aa68a0fe149159`.
 
 This document proposes the smallest behavior worth implementing next.
 
