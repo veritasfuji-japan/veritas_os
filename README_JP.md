@@ -971,6 +971,7 @@ Execution Governance 論文の主なテーマ:
 - [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
 - [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
 - [Reviewer Handoff Guide](docs/en/validation/reviewer-handoff-guide.md)
+- [Reviewer Handoff Sample Quickstart](docs/en/validation/reviewer-handoff-sample-quickstart.md)
 - [External Audit Readiness](docs/ja/validation/external-audit-readiness.md)
 
 ## 運用
