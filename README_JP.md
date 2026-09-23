@@ -34,7 +34,7 @@
 
 > [!IMPORTANT]
 > ### AIが判断できることと、実行する権限を持つことは別です。
-> AIモデルが「このアクションを実行すべき」と判断しても、それだけでは実行許可にはなりません。VERITAS は、実行時点の権限、ポリシー、人間承認、証拠、現在状態を確認し、その提案が実行境界を越えてよいかを判定します。
+> AIモデルが「このアクションを実行すべき」と判断しても、それだけでは実行許可にはなりません。VERITAS は、実行時点の権限、ポリシー、人間承認、証拠、現在の状態を確認し、その提案が実行境界を越えてよいかを判定します。
 
 VERITAS OS は、**AIエージェント向けの意思決定ガバナンス / Bind-Boundary Control Plane** です。
 
@@ -66,7 +66,7 @@ AIエージェントは、すでに次のような影響の大きいアクショ
 
 本当に重要なのは、
 
-> *組織がその判断を現実世界で実行してよいと認めるために、実行直前にどの条件が満たされていなければならないか？*
+> *組織がその判断を現実世界で実行してよいと認めるために、実行直前にどの条件が満たされている必要があるか？*
 
 です。
 
@@ -106,7 +106,7 @@ flowchart LR
 | 権限を確認 | 現在のガバナンス状態を再検証 | Outcome を記録 |
 | ポリシーを適用 | Authorization を一度だけ消費 | Evidence を保存 |
 | Human Approval を対象・条件に拘束 | 実行対象と認証情報を確定 | 不確実な外部作用を照合 |
-| Evidence を検証 | 不明確なら fail closed | Reviewer が検証できる形で残す |
+| 証拠を検証 | 不明確なら fail closed | レビュー担当者が検証できる形で残す |
 
 ### 基本イメージ
 
@@ -152,7 +152,7 @@ VERITAS は、実行ガバナンスに関する明示的な不変条件を中心
 
 ## Controlled Decision-to-Effect E2E
 
-VERITAS には、現在の main 相当コードで再現できる **Decision-to-Effect E2E の証明経路**があります。
+VERITAS には、現在の main 相当のコードで再現できる **Decision-to-Effect E2E の証明経路**があります。
 
 ```text
 /v1/decide
@@ -195,7 +195,7 @@ BindReceipt / Outcome
 
 **Decision → Promotion → Authorization → Consumption → Revalidation → External Effect → Reconciliation → Receipt / Outcome**
 
-定義された execution boundary を迂回せず、governed action が effect と evidence までつながることを確認します。
+定義された実行境界を迂回せず、統制されたアクションが外部作用と証拠まで一貫してつながることを確認します。
 
 ### 応答喪失時の異常系
 
@@ -232,7 +232,7 @@ Caller loses the response
 - [Runtime Proof CI Evidence](docs/en/guides/runtime-proof-ci-evidence.md)
 
 > [!NOTE]
-> Controlled proof の PASS は、その証明条件と検証対象コミットに対する evidence です。本番環境に関するすべての性質や保証を証明するものではありません。
+> Controlled proof の PASS は、その証明条件と検証対象コミットに対する証拠です。本番環境に関するすべての性質や保証を証明するものではありません。
 
 ---
 
@@ -269,7 +269,7 @@ Controlled Decision-to-Effect の証明だけでは、次のことまでは証�
 
 `POST /v1/decide` は主要な構造化意思決定パスです。
 
-Decision と後続の governance artifacts をつなぐ、監査向けの lineage を提供します。
+Decision と後続のガバナンスアーティファクトをつなぐ、監査向けの系譜を提供します。
 
 AIの意思決定そのものは、外部システムを実行する許可ではありません。
 
@@ -300,7 +300,7 @@ flowchart TD
 
 ## Bind Boundary ガバナンス
 
-VERITAS は、実行の lineage を明示的な artifacts と状態遷移として扱います。
+VERITAS は、実行の系譜を明示的なアーティファクトと状態遷移として扱います。
 
 ```text
 Decision
@@ -358,7 +358,7 @@ Authority Evidence は、たとえば次の情報を表現できます。
 - scope limitations
 - validity / expiry
 - provenance
-- deterministic evidence hashes
+- 決定論的な evidence hash
 
 Authority Evidence が欠落・無効・期限切れ・古い・判定不能な場合は、fail closed にできます。
 
@@ -383,7 +383,7 @@ Approval は次の要素に拘束できます。
 - expiry
 - verifier provenance
 
-secure / prod posture では、ローカルテスト用の互換状態より強い verifier-derived provenance を要求できます。
+secure / prod posture では、ローカルテスト用の互換状態よりも強い、検証器に基づく provenance を要求できます。
 
 Human Approval が、無制限に再利用できる実行権限になることはありません。
 
@@ -395,7 +395,7 @@ Human Approval が、無制限に再利用できる実行権限になること�
 
 ## Single-use authorization
 
-VERITAS は、永続化された single-use authorization consumption のセマンティクスを実装しています。
+VERITAS は、永続化された Single-Use Authorization Consumption のセマンティクスを実装しています。
 
 目的は、次の不変条件を維持することです。
 
@@ -440,7 +440,7 @@ Outcome evidence は「何が観測されたか」を記録するものです。
 
 ## Evidence Chain / Reviewer Evidence
 
-VERITAS には、Reviewer が確認できる Evidence Chain の機能が含まれます。
+VERITAS には、レビュー担当者が確認できる Evidence Chain の機能が含まれます。
 
 - deterministic hashes
 - evidence manifests
@@ -452,7 +452,7 @@ VERITAS には、Reviewer が確認できる Evidence Chain の機能が含ま�
 
 Integrity（完全性）と trust（信頼）は意図的に分離されています。
 
-Hash の一致は expected value に対する integrity の確認を支えますが、その authority source や public key 自体を信頼すべきことまで自動的に証明するわけではありません。
+Hash の一致は expected value に対する integrity（完全性）の確認を支えますが、その authority source や public key 自体を信頼すべきことまで自動的に証明するわけではありません。
 
 最初に読む資料:
 
@@ -495,14 +495,14 @@ Mission Control はガバナンスとレビューのための画面であり、U
 
 次の統合パターンを示します。
 
-- governed action preparation
+- 統制対象アクションの準備
 - target snapshot
-- external HTTPS effect
+- 外部HTTPS effect
 - deterministic idempotency
 - HMAC signing
 - postcondition verification
 - fail-closed behavior
-- compensation semantics where supported
+- 対応可能な場合の compensation semantics
 - bind receipts
 
 参照:
@@ -555,7 +555,7 @@ VERITAS には、次の概念を扱う Regulated Action Governance kernel があ
 
 # AML / KYC PoC
 
-リポジトリには、決定論的な fixture-backed AML/KYC governance PoC が含まれています。
+リポジトリには、決定論的な fixture-backed（フィクスチャに基づく）AML/KYC governance PoC が含まれています。
 
 最初に読む資料:
 
@@ -667,7 +667,7 @@ docker compose up --build
 docker compose down
 ```
 
-Docker security configuration:
+Docker のセキュリティ設定:
 
 [Docker Compose Security](docs/en/operations/docker-compose-security.md)
 
@@ -760,7 +760,7 @@ VERITAS_TRUSTLOG_BACKEND=postgresql \
 pytest -m smoke veritas_os/tests/ -q
 ```
 
-## CI / release evidence
+## CI / リリース証拠
 
 リポジトリには、次の領域をカバーするワークフローがあります。
 
@@ -768,10 +768,10 @@ pytest -m smoke veritas_os/tests/ -q
 - CodeQL
 - release gates
 - security checks
-- reviewer evidence validation
-- reproducible Decision-to-Effect proof
+- Reviewer Evidence の検証
+- 再現可能な Decision-to-Effect proof
 - PostgreSQL-backed validation
-- release evidence generation
+- リリース証拠の生成
 
 ワークフローがGreenでも、その結果は各ワークフローの **検証範囲** に沿って解釈する必要があります。
 
@@ -789,11 +789,11 @@ VERITAS を評価するために、リポジトリ全体を読む必要はあり
 
 ## 10分レビュー
 
-1. **[README 日本語版](README_JP.md)** — product / execution boundary の概要
-2. **[Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)** — guided review path
-3. **[Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)** — implemented / partial / roadmap の分離
-4. **[Decision-to-Effect E2E Evidence](artifacts/real-decision-to-effect-e2e/README.md)** — controlled execution proof
-5. **[Technical Proof Pack](docs/en/validation/technical-proof-pack.md)** — reviewer checklist / proof assets
+1. **[README 日本語版](README_JP.md)** — 製品と実行境界の概要
+2. **[Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)** — レビュー手順の案内
+3. **[Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)** — 実装済み / 部分実装 / ロードマップの分離
+4. **[Decision-to-Effect E2E Evidence](artifacts/real-decision-to-effect-e2e/README.md)** — controlled execution の証明
+5. **[Technical Proof Pack](docs/en/validation/technical-proof-pack.md)** — レビュー用チェックリスト / 証明資料
 
 ## より詳しい技術レビュー
 
@@ -814,22 +814,22 @@ VERITAS を評価するために、リポジトリ全体を読む必要はあり
 
 概要:
 
-| Area | Current repository status |
+| 領域 | 現在の状態 |
 |---|---|
-| Core decision pipeline | Implemented |
-| Bind-boundary governance | Implemented / partial route coverage |
-| Selected operator effect paths | Explicitly bind-governed |
-| Authority Evidence | Implemented / bounded |
-| Human Approval Receipt | Implemented / bounded |
-| Single-use authorization | Implemented in controlled execution path |
-| Outcome Receipt | Implemented |
-| Evidence Chain | Implemented |
-| Mission Control | Implemented |
-| PostgreSQL production path | Implemented / environment dependent |
-| Controlled Decision-to-Effect E2E | Implemented |
-| AML/KYC fixture PoC | Implemented |
-| Live customer integrations | Integration / environment dependent |
-| Completed third-party certification | Not claimed |
+| Core decision pipeline | 実装済み |
+| Bind-boundary governance | 実装済み / 一部ルートをカバー |
+| Selected operator effect paths | Bind で統制する対象として明示 |
+| Authority Evidence | 実装済み / 適用範囲あり |
+| Human Approval Receipt | 実装済み / 適用範囲あり |
+| Single-use authorization | controlled execution path で実装済み |
+| Outcome Receipt | 実装済み |
+| Evidence Chain | 実装済み |
+| Mission Control | 実装済み |
+| PostgreSQL production path | 実装済み / 環境依存 |
+| Controlled Decision-to-Effect E2E | 実装済み |
+| AML/KYC fixture PoC | 実装済み |
+| Live customer integrations | 統合先 / 環境に依存 |
+| Completed third-party certification | 未主張 |
 
 ---
 
@@ -850,7 +850,7 @@ VERITAS は次のものではありません。
 
 VERITAS の役割はより限定的で、具体的です。
 
-> **AIが提案したアクションを、実行時点の evidence とガバナンス状態に基づいて、execution boundary を越えてよいか判定すること。**
+> **AIが提案したアクションを、実行時点の証拠とガバナンス状態に基づいて、実行境界を越えてよいか判定すること。**
 
 ---
 
@@ -862,26 +862,26 @@ VERITAS の役割はより限定的で、具体的です。
 
 VERITAS は外部作用の **前** に、さらに次の問いを明示します。
 
-| Question | Governance concern |
+| 問い | ガバナンス上の観点 |
 |---|---|
 | 誰に authority があるか？ | Authority |
 | どの policy が適用されるか？ | Admissibility |
-| Human は何を正確に承認したか？ | Approval binding |
+| 人間は何を正確に承認したか？ | Approval binding |
 | Approval はまだ有効か？ | Freshness / expiry |
-| Approval 後に material change はないか？ | Execution-time revalidation |
+| Approval 後に重要な変更はないか？ | Execution-time revalidation |
 | Authorization は既に消費されていないか？ | Replay prevention |
 | 実行対象は正しいか？ | Target / scope integrity |
-| 現在の evidence で action を許可できるか？ | Bind adjudication |
+| 現在の証拠でアクションを許可できるか？ | Bind adjudication |
 
 そして外部作用の **後** には、
 
-| Question | Evidence concern |
+| 問い | 証拠上の観点 |
 |---|---|
 | 何が観測されたか？ | Outcome |
 | 何がその観測を支えるか？ | Receipt / evidence chain |
-| Response が失われたのか？ | `EFFECT_UNKNOWN` |
-| 再実行せず effect を確認できるか？ | Read-only reconciliation |
-| Reviewer が lineage を追えるか？ | Reviewer evidence |
+| 応答が失われたのか？ | `EFFECT_UNKNOWN` |
+| 再実行せず外部作用を確認できるか？ | Read-only reconciliation |
+| レビュー担当者が系譜を追えるか？ | Reviewer evidence |
 
 を扱います。
 
@@ -889,7 +889,7 @@ VERITAS は外部作用の **前** に、さらに次の問いを明示します
 
 # 研究・論文
 
-VERITAS では、システムアーキテクチャと execution governance を別々の論文として公開しています。
+VERITAS では、システムアーキテクチャと実行ガバナンスを別々の論文として公開しています。
 
 ### System architecture
 
@@ -959,20 +959,20 @@ Execution Governance 論文の主なテーマ:
 
 # Roadmap
 
-直近の開発では、Authorization から externally verified effect までの境界をさらに強化することに集中しています。
+直近の開発では、Authorization から外部で検証可能な effect までの境界をさらに強化することに集中しています。
 
 主な優先領域:
 
-- broader bind coverage
-- real external integration validation
-- customer-specific authority-source integration
-- credential-resolution hardening
-- stronger external-reality authenticity
-- clock-trust hardening
-- reconciliation across additional effect classes
-- production customer workflow validation
-- independent external review
-- continued benchmark / adversarial evaluation
+- Bind Coverage の拡大
+- 実外部システムとの統合検証
+- 顧客固有の authority source との統合
+- credential resolution の強化
+- 外部現実性（external reality）の真正性強化
+- clock trust の強化
+- より多くの effect class に対する Reconciliation
+- 顧客本番ワークフローでの検証
+- 独立した外部レビュー
+- ベンチマーク / adversarial evaluation の継続
 
 ロードマップ上の項目を、完了済みの実装として表現することはありません。
 
