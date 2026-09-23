@@ -25,7 +25,7 @@
 **[Website](https://veritas-website-navy.vercel.app/)** ·
 **[Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)** ·
 **[Implementation Matrix](docs/en/validation/current-implementation-matrix.md)** ·
-**[Technical Proof Pack](docs/en/validation/technical-proof-pack.md)** ·
+**[Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)** ·
 **[Execution Governance Paper](https://zenodo.org/records/22844531)**
 
 </div>
@@ -344,7 +344,7 @@ Bind Boundary は、AIが提案したアクションが外部システムへの�
 
 参照:
 
-- [Bind Boundary Governance Artifacts](docs/en/architecture/bind-boundary-governance-artifacts.md)
+- [Bind Boundary Governance Artifacts](docs/ja/architecture/bind-boundary-governance-artifacts.md)
 - [External Bind Integration Path](docs/en/guides/external-bind-integration-path.md)
 
 ---
@@ -478,7 +478,7 @@ Hash の一致は expected value に対する integrity（完全性）の確認�
 
 - [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
 - [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
-- [Technical Proof Pack](docs/en/validation/technical-proof-pack.md)
+- [Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)
 
 ---
 
@@ -555,21 +555,25 @@ permission for external side effect
 
 # Regulated Action Governance
 
-VERITAS には、次の概念を扱う Regulated Action Governance kernel があります。
+VERITAS には、次の概念を扱う **Regulated Action Governance Kernel** があります。
 
 - Action Class Contract
 - Authority Evidence
 - Runtime Authority Validation
 - Admissibility Predicate
 - Human Approval
-- Commit Boundary evaluation
+- Irreversible Commit Boundary
 - reviewer-facing evidence
+
+選択された regulated action path では、execution intent を Bind Boundary で `commit / block / escalate / refuse` のいずれにするかを判定します。
 
 参照:
 
-- [Regulated Action Governance Kernel](docs/en/architecture/regulated-action-governance-kernel.md)
-- [Regulated Action Governance Proof Pack](docs/en/validation/regulated-action-governance-proof-pack.md)
-- [Regulated Action Governance Quality Gate](docs/en/validation/regulated-action-governance-quality-gate.md)
+- [Regulated Action Governance Kernel（英語正本）](docs/en/architecture/regulated-action-governance-kernel.md)
+- [Authority Evidence vs Audit Log（英語正本）](docs/en/architecture/authority-evidence-vs-audit-log.md)
+- [AML/KYC Regulated Action Path（英語正本）](docs/en/use-cases/aml-kyc-regulated-action-path.md)
+- [Regulated Action Governance Proof Pack（英語正本）](docs/en/validation/regulated-action-governance-proof-pack.md)
+- [Regulated Action Governance Quality Gate（英語正本）](docs/en/validation/regulated-action-governance-quality-gate.md)
 
 ---
 
@@ -579,13 +583,20 @@ VERITAS には、次の概念を扱う Regulated Action Governance kernel があ
 
 最初に読む資料:
 
-- [AML/KYC 1-Day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+- [AML/KYC 1-Day PoC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
 - [One-Day PoC Evidence Pack](docs/en/poc/one-day-poc-evidence-pack.md)
 - [One-Day PoC Operator Runbook](docs/en/poc/one-day-poc-operator-runbook.md)
 - [One-Day PoC Reviewer Handoff Template](docs/en/poc/one-day-poc-reviewer-handoff-template.md)
 
 > [!WARNING]
 > Fixture-backed の AML/KYC evidence を、銀行システムとの本番ライブ統合として表現してはいけません。
+
+AML/KYC customer risk escalation fixture は、regulated-action governance の挙動を確認するための決定論的な engineering fixture です。
+
+**Audit Log と Authority Evidence の違い:** Audit Log は「何が起きたか」を記録します。Authority Evidence は、Bind 時点で「なぜそのアクションが authorized / admissible だったか」を示す証拠です。Audit Log だけでは commit を許可しません。
+
+> [!NOTE]
+> 本READMEは法的助言ではありません。規制当局の承認や第三者認証を示すものでもありません。リポジトリ上の evidence や controlled proof を、コンプライアンス認証や顧客本番環境での検証完了として解釈しないでください。
 
 ---
 
@@ -615,9 +626,9 @@ PostgreSQL は、このリポジトリで正式に文書化されている本番
 
 参照:
 
-- [PostgreSQL Production Guide](docs/en/operations/postgresql-production-guide.md)
-- [PostgreSQL Drill Runbook](docs/en/operations/postgresql-drill-runbook.md)
-- [Database Migrations](docs/en/operations/database-migrations.md)
+- [PostgreSQL Production Guide](docs/ja/operations/postgresql-production-guide.md)
+- [PostgreSQL Drill Runbook](docs/ja/operations/postgresql-drill-runbook.md)
+- [Database Migrations](docs/ja/operations/database-migrations.md)
 - [PostgreSQL Production Proof Map](docs/en/validation/postgresql-production-proof-map.md)
 
 本番環境での保証内容は、実際のデプロイ基盤と運用上の統制に依存します。
@@ -645,7 +656,7 @@ dev → staging → secure → prod
 
 参照:
 
-[Security Hardening](docs/en/operations/security-hardening.md)
+[Security Hardening](docs/ja/operations/security-hardening.md)
 
 ---
 
@@ -813,7 +824,7 @@ VERITAS を評価するために、リポジトリ全体を読む必要はあり
 2. **[Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)** — レビュー手順の案内
 3. **[Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)** — 実装済み / 部分実装 / ロードマップの分離
 4. **[Decision-to-Effect E2E Evidence](artifacts/real-decision-to-effect-e2e/README.md)** — controlled execution の証明
-5. **[Technical Proof Pack](docs/en/validation/technical-proof-pack.md)** — レビュー用チェックリスト / 証明資料
+5. **[Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)** — レビュー用チェックリスト / 証明資料
 
 ## より詳しい技術レビュー
 
@@ -821,7 +832,7 @@ VERITAS を評価するために、リポジトリ全体を読む必要はあり
 - [External Bind Integration Path](docs/en/guides/external-bind-integration-path.md)
 - [External Bind PoC Evidence](docs/en/guides/external-bind-poc-evidence.md)
 - [Reconciliation-Capable Execution Profile Proof](docs/en/validation/reconciliation-capable-execution-profile-proof-v1.md)
-- [External Audit Readiness](docs/en/validation/external-audit-readiness.md)
+- [External Audit Readiness](docs/ja/validation/external-audit-readiness.md)
 - [Validation Evidence Map](docs/en/validation/validation-evidence-map.md)
 
 ---
@@ -946,7 +957,7 @@ Execution Governance 論文の主なテーマ:
 - [Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md)
 - [Current Implementation Matrix](docs/en/validation/current-implementation-matrix.md)
 - [Enterprise Value Brief](docs/en/positioning/enterprise-value-brief.md)
-- [Technical Proof Pack](docs/en/validation/technical-proof-pack.md)
+- [Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)
 
 ## Execution governance
 
@@ -960,13 +971,13 @@ Execution Governance 論文の主なテーマ:
 - [Reviewer Evidence Index](docs/en/demo/reviewer-evidence-index.md)
 - [Reviewer Evidence Assurance Overview](docs/en/demo/reviewer-evidence-assurance-overview.md)
 - [Reviewer Handoff Guide](docs/en/validation/reviewer-handoff-guide.md)
-- [External Audit Readiness](docs/en/validation/external-audit-readiness.md)
+- [External Audit Readiness](docs/ja/validation/external-audit-readiness.md)
 
 ## 運用
 
 - [Operational Readiness Runbook](docs/en/operations/operational-readiness-runbook.md)
-- [Security Hardening](docs/en/operations/security-hardening.md)
-- [PostgreSQL Production Guide](docs/en/operations/postgresql-production-guide.md)
+- [Security Hardening](docs/ja/operations/security-hardening.md)
+- [PostgreSQL Production Guide](docs/ja/operations/postgresql-production-guide.md)
 - [Provider Support Matrix](docs/en/operations/provider-support-matrix.md)
 - [Enterprise SLO / SLI 運用Runbook（日本語）](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 
@@ -974,7 +985,7 @@ Execution Governance 論文の主なテーマ:
 
 - [One-Day PoC Reviewer Pack](docs/en/poc/one-day-poc-reviewer-pack.md)
 - [One-Day PoC Evidence Pack](docs/en/poc/one-day-poc-evidence-pack.md)
-- [AML/KYC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+- [AML/KYC Quickstart](docs/ja/guides/poc-pack-financial-quickstart.md)
 
 ---
 
