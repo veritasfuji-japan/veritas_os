@@ -354,9 +354,9 @@ Bind Boundary は、AIが提案したアクションが外部システムへの�
 リポジトリでは、少なくとも以下のオペレーターによる変更操作を Bind で統制する対象として明示しています。
 
 ```text
-PUT  /v1/governance/policy
+PUT /v1/governance/policy
 POST /v1/governance/policy-bundles/promote
-PUT  /v1/compliance/config
+PUT /v1/compliance/config
 POST /v1/system/halt
 POST /v1/system/resume
 ```
