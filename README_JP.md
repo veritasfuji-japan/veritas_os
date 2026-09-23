@@ -351,7 +351,7 @@ Bind Boundary は、AIが提案したアクションが外部システムへの�
 
 ## Bind で統制されるオペレーター操作
 
-リポジトリでは、少なくとも以下のオペレーターによる変更操作を Bind で統制する対象として明示しています。
+リポジトリでは、少なくとも以下のオペレーターによる変更操作を **bind-governed effect path** として明示しています。
 
 ```text
 PUT /v1/governance/policy
@@ -849,7 +849,7 @@ VERITAS を評価するために、リポジトリ全体を読む必要はあり
 |---|---|
 | Core decision pipeline | 実装済み |
 | Bind-boundary governance | 実装済み / 一部ルートをカバー |
-| Selected operator effect paths | Bind で統制する対象として明示 |
+| Selected operator mutation routes | Bind で統制する対象として明示 |
 | Authority Evidence | 実装済み / 適用範囲あり |
 | Human Approval Receipt | 実装済み / 適用範囲あり |
 | Single-use authorization | controlled execution path で実装済み |
@@ -949,6 +949,71 @@ Execution Governance 論文の主なテーマ:
 - controlled reproducible evidence
 
 ---
+
+# 証拠・検証リファレンス
+
+トップレベルREADMEは簡潔に保ちつつ、以下の参照は外部レビュー上の公開契約として維持します。
+
+## 意思決定セマンティクス / 実行契約
+
+- [Decision Semantics](docs/ja/architecture/decision-semantics.md)
+- [Required Evidence Taxonomy](docs/ja/governance/required-evidence-taxonomy.md)
+- [Intervention Actionability Map schema](docs/en/demo/schemas/intervention-actionability-map-v0.schema.json)
+- [Intervention Actionability Map fixture](docs/en/demo/fixtures/intervention-actionability-map-v0.json)
+
+`intervention-actionability-map-v0.schema.json` と `intervention-actionability-map-v0.json` はReviewer向け証拠です。automatic enforcement、automatic blocking、automatic escalation、production decisioning、scoring、certification を意味するものではありません。
+
+## Reviewer Evidence Bundle
+
+- Bundle builder: `scripts/demo/build_reviewer_evidence_bundle.py`
+- Guide: [Reviewer Evidence Bundle](docs/en/demo/reviewer-evidence-bundle.md)
+- Validation workflow: `.github/workflows/reviewer-evidence-packet-validation.yml`
+- CI artifact set: `reviewer-evidence-packet-validation-artifacts`
+- Artifact manifest: `reviewer-evidence-artifact-manifest.json`
+- Manifest verifier: `scripts/demo/verify_reviewer_evidence_artifact_manifest.py`
+
+Illustrative sample:
+
+`samples/evidence_bundle/key_provenance_review/`
+
+このsample chainには次が含まれます。
+
+- `reviewer-handoff-review-result.json`
+- `reviewer-review-result-validation.json`
+- `reviewer-review-result-report-validation.json`
+- `reviewer-handoff-package-validation.json`
+- `reviewer-handoff-quickstart-command-validation.json`
+
+Reviewer result は `ACCEPT` / `REJECT` / `NEEDS_FOLLOW_UP` を記録できます。これらのartifactだけで trust を作ることはなく、public key の信頼元はout-of-bandの reviewer / operator trust channel から取得する必要があります。
+
+## 性能 / One-Day PoC evidence
+
+- [性能メトリクス](docs/ja/benchmarks/performance-metrics.md)
+- [英語正本: Performance Metrics](docs/en/benchmarks/performance-metrics.md)
+- [最新ローカル性能メトリクス](docs/ja/benchmarks/local-performance-metrics.latest.md)
+- [英語正本: Latest local performance metrics](docs/en/benchmarks/local-performance-metrics.latest.md)
+- [英語正本: Latest local performance metrics JSON](docs/en/benchmarks/local-performance-metrics.latest.json)
+- [One-Day PoC Evidence Pack](docs/ja/poc/one-day-poc-evidence-pack.md)
+- [英語正本: One-Day PoC Evidence Pack](docs/en/poc/one-day-poc-evidence-pack.md)
+- [One-Day PoC Operator Runbook](docs/ja/poc/one-day-poc-operator-runbook.md)
+- [英語正本: One-Day PoC Operator Runbook](docs/en/poc/one-day-poc-operator-runbook.md)
+- [One-Day PoC Reviewer Handoff Template](docs/ja/poc/one-day-poc-reviewer-handoff-template.md)
+- [英語正本: One-Day PoC Reviewer Handoff Template](docs/en/poc/one-day-poc-reviewer-handoff-template.md)
+
+これらはローカル / Reviewer向けのengineering evidenceです。**本番SLAではなく、明示されない限り顧客環境測定でもありません。**
+
+## セキュリティ / 運用継続性
+
+VERITAS は、保護対象の監査ストレージを **secure-by-default** として扱います。暗号化が必要な構成では `VERITAS_ENCRYPTION_KEY` が必須であり、必要な鍵がない場合は平文へ黙ってフォールバックせず `EncryptionKeyMissing` で失敗します。
+
+- [External Security Remediation Summary](docs/ja/security/external-security-remediation-summary.md)
+- [英語正本: External Security Remediation Summary](docs/en/security/external-security-remediation-summary.md)
+- [Maintainer Handoff](docs/ja/operations/maintainer-handoff.md)
+- [英語正本: Maintainer Handoff](docs/en/operations/maintainer-handoff.md)
+
+## コンプライアンス境界
+
+VERITAS はガバナンスと証拠の基盤を提供します。本READMEは**法的助言ではありません**。また、**規制当局の承認**や**第三者認証**、法的な認証を示すものではありません。
 
 # ドキュメント案内
 
