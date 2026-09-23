@@ -7,7 +7,7 @@
   "baseline": {
     "resolver_contract": "observable-digest-resolver-contract-v1",
     "security_review_revision": "1.1",
-    "product_main": "88f56546ffc9cfa03b26c20deddd2cae7d676448"
+    "product_main": "3e5f6c56aa82a78c6020a35525aa68a0fe149159"
   },
   "governing_invariants": {
     "resolution_evidence_not_boundary_validation": true,
