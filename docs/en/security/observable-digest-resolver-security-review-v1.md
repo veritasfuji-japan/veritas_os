@@ -518,6 +518,21 @@ It is a pre-behavior threat model and activation gate.
 
 The next step is **not** to activate the resolver.
 
-The next bounded step is to review the expanded threat model, cross-cutting paths, proof obligations, and composite adversarial scenarios and decide whether the pre-behavior security boundary is complete.
+The minimal behavior boundary is now proposed separately at:
 
-Only after that review may a minimal behavior implementation be proposed, and that implementation must remain behind the activation gate until the exact behavior path passes the frozen security evidence.
+`docs/en/architecture/observable-digest-resolver-minimal-behavior-proposal-v1.md`
+
+with machine-readable companion:
+
+`security/observable_digest_resolver_minimal_behavior_proposal_v1.json`
+
+That proposal remains:
+
+```text
+PROPOSAL_ONLY
+behavior_implemented = false
+behavior_authorized = false
+activation_gate = BLOCKED
+```
+
+Any behavior implementation must be a later, separate change and must pass the frozen negative/composite evidence on the exact implementation SHA before any activation decision.
