@@ -1,0 +1,215 @@
+{
+  "proposal_version": "1.0",
+  "status": "PROPOSAL_ONLY",
+  "behavior_implemented": false,
+  "behavior_authorized": false,
+  "activation_gate": "BLOCKED",
+  "baseline": {
+    "resolver_contract": "observable-digest-resolver-contract-v1",
+    "security_review_revision": "1.1",
+    "product_main": "88f56546ffc9cfa03b26c20deddd2cae7d676448"
+  },
+  "governing_invariants": {
+    "resolution_evidence_not_boundary_validation": true,
+    "resolution_evidence_not_admissibility": true,
+    "resolution_evidence_not_authority": true,
+    "resolution_evidence_not_execution_permission": true,
+    "evidence_degradation_never_increases_conclusion_authority": true,
+    "fail_closed_when_evidence_chain_no_longer_justifies_requested_conclusion": true
+  },
+  "proposed_initial_profile": {
+    "profile_id": "separate_store_readonly_v1",
+    "purpose": "A single deterministic, non-network, read-only resolver profile for exact separate_store locators.",
+    "supported_scheme": "separate_store",
+    "locator_form": "separate_store://<namespace>/<object-key>",
+    "locator_rules": {
+      "ascii_only": true,
+      "percent_encoding_allowed": false,
+      "query_allowed": false,
+      "fragment_allowed": false,
+      "userinfo_allowed": false,
+      "empty_segments_allowed": false,
+      "dot_segments_allowed": false,
+      "max_locator_length": 500,
+      "namespace_pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "object_key_segment_pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "min_object_key_segments": 1,
+      "max_object_key_segments": 8
+    },
+    "data_source": {
+      "kind": "injected_immutable_snapshot",
+      "network_access": false,
+      "filesystem_access": false,
+      "database_access": false,
+      "object_store_access": false,
+      "environment_lookup": false,
+      "ambient_credentials": false,
+      "mutable_shared_state": false,
+      "description": "The first behavior implementation, if approved later, receives an immutable typed snapshot from its caller/test harness and performs exact-key lookup only."
+    },
+    "access_model": {
+      "credential_bearing": false,
+      "caller_allowlist_required": true,
+      "namespace_scope_pinned_in_profile": true,
+      "cross_namespace_access": false,
+      "resolver_service_privilege_escalation": false,
+      "execution_authority_created": false,
+      "description": "Read access is limited by explicit caller hash plus profile-pinned namespace. There is no service credential, delegation, impersonation, or execution credential in this profile."
+    },
+    "behavior": {
+      "redirects": false,
+      "dns": false,
+      "retries": false,
+      "fallbacks": false,
+      "cache": false,
+      "network_egress": false,
+      "credential_lookup": false,
+      "trust_root_selection": false,
+      "remediation": false,
+      "external_effect": false,
+      "policy_decision": false,
+      "human_approval": false,
+      "bind_authorization": false,
+      "automatic_invocation": false,
+      "decide_route_wiring": false
+    },
+    "lookup_semantics": {
+      "exact_locator_match": true,
+      "canonicalization": "reject_noncanonical",
+      "source_selection": "single_pinned_snapshot",
+      "nondeterministic_selection": false,
+      "digest_source": "typed_store_record",
+      "result_states": [
+        "RESOLVED",
+        "UNRESOLVED"
+      ],
+      "evidence_ref": "null_in_initial_profile"
+    },
+    "time_model": {
+      "observed_at_source": "explicit_injected_utc_clock",
+      "wall_clock_reads_hidden": false,
+      "test_clock_injectable": true,
+      "retries_or_late_completion": false,
+      "note": "Determinism is defined over request + profile + immutable snapshot + injected observed_at."
+    },
+    "resource_budget": {
+      "locator_length_max": 500,
+      "key_segments_max": 8,
+      "snapshot_lookup_count_max": 1,
+      "redirect_count_max": 0,
+      "retry_count_max": 0,
+      "network_request_count_max": 0,
+      "cache_lookup_count_max": 0,
+      "parser_count_max": 1
+    }
+  },
+  "proposed_failure_mapping": {
+    "LOCATOR_MISSING": "empty or missing locator before lookup",
+    "LOCATOR_MALFORMED": "unsupported scheme or noncanonical/invalid locator grammar",
+    "AUTHZ_DENIED": "caller hash not allowed or namespace outside pinned profile scope",
+    "RESOLUTION_FAILED": "canonical locator absent from the immutable snapshot",
+    "SCHEMA_MISMATCH": "typed store record violates the frozen minimal record shape",
+    "UNKNOWN_TRANSIENT": "not emitted by the initial pure snapshot profile"
+  },
+  "proposed_store_record": {
+    "type": "immutable_typed_record",
+    "required_fields": [
+      "resolved_digest",
+      "record_version"
+    ],
+    "resolved_digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "record_version_const": "1",
+    "additional_fields_allowed": false
+  },
+  "proposed_internal_observation": {
+    "public_contract_change": false,
+    "purpose": "Internal immutable proof object for tests and later audit integration; not a new authority surface.",
+    "fields": [
+      "request_id",
+      "request_hash",
+      "locator",
+      "resolver_profile",
+      "resolver_id",
+      "caller_id_hash",
+      "access_scope",
+      "profile_hash",
+      "snapshot_hash",
+      "observed_at",
+      "lookup_outcome",
+      "resolved_digest",
+      "failure_predicates",
+      "semantic_guarantees"
+    ],
+    "evidence_ref_public_result": null,
+    "persistence": false,
+    "audit_emission": false
+  },
+  "proof_obligations": {
+    "what_was_observed": "Exact request, locator, profile, snapshot identity and typed record/digest outcome are bound in the internal observation.",
+    "when_it_was_observed": "observed_at comes from an explicit injected UTC clock and is preserved exactly.",
+    "under_which_bounded_read_access_authority": "caller_id_hash and profile-pinned namespace scope are preserved; there are no ambient or execution credentials.",
+    "forbidden_inferences": [
+      "freshness",
+      "authenticity beyond exact typed snapshot membership",
+      "digest match",
+      "boundary validation",
+      "admissibility",
+      "Human Approval",
+      "Bind authorization",
+      "execution permission",
+      "remediation"
+    ]
+  },
+  "required_behavior_tests_if_implemented": [
+    "valid exact locator returns RESOLVED with the exact stored sha256 digest and all semantic guarantees false",
+    "missing locator returns UNRESOLVED with LOCATOR_MISSING",
+    "unsupported scheme returns UNRESOLVED with LOCATOR_MALFORMED",
+    "percent encoding, query, fragment, dot segment, empty segment, Unicode, and overlength locator forms are rejected",
+    "caller outside the profile allowlist returns AUTHZ_DENIED before snapshot lookup",
+    "cross-namespace locator returns AUTHZ_DENIED before snapshot lookup",
+    "missing exact key returns RESOLUTION_FAILED",
+    "invalid typed store record returns SCHEMA_MISMATCH",
+    "same request/profile/snapshot/clock input produces byte-equivalent bounded result and observation",
+    "reordered snapshot construction does not change lookup outcome",
+    "snapshot mutation is impossible through the resolver interface",
+    "no network, DNS, redirect, retry, cache, filesystem, database, environment, or credential path is reachable",
+    "no result field can set Authority, digest-match, boundary-validation, execution-permission, uncertainty-erasure, or remediation guarantees true",
+    "evidence degradation or missing provenance changes success to UNRESOLVED or blocked, never to a stronger conclusion"
+  ],
+  "explicit_non_scope": [
+    "HTTP/HTTPS resolution",
+    "DNS resolution",
+    "redirect handling",
+    "network egress",
+    "filesystem resolution",
+    "database resolution",
+    "object-store SDK access",
+    "cloud metadata access",
+    "credential provider integration",
+    "ambient credentials",
+    "retry loops",
+    "fallbacks",
+    "caching",
+    "trust-root selection",
+    "signature verification",
+    "freshness validation",
+    "digest comparison",
+    "policy/admissibility decision",
+    "Human Approval",
+    "Bind authorization",
+    "execution permission",
+    "remediation",
+    "audit persistence",
+    "TrustLog integration",
+    "/v1/decide wiring",
+    "default operator UI"
+  ],
+  "activation_requirements": [
+    "This proposal is separately reviewed and accepted before any behavior code is introduced.",
+    "Behavior implementation is a separate PR from this proposal.",
+    "The separate implementation PR preserves the exact non-network profile boundary or explicitly reopens security review.",
+    "All frozen minimal behavior tests and applicable v1.1 security-review negative/composite tests pass on the exact implementation SHA.",
+    "Any introduction of network, credentials, retries, redirects, cache, mutable shared state, persistence, or another scheme reopens security review before activation.",
+    "Behavior remains unwired from /v1/decide and execution paths until an explicit later activation decision."
+  ]
+}
