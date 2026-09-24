@@ -29,6 +29,7 @@ def _observation(**updates) -> TrustContinuityObservation:
         "external_effect_state": "NONE",
         "historical_authorization_present": True,
         "historical_authorization_consumed": False,
+        "historical_authorization_reuse_attempted": False,
     }
     values.update(updates)
     return TrustContinuityObservation(**values)
@@ -114,10 +115,11 @@ SCENARIOS = (
             observation_generation=42,
             historical_authorization_present=True,
             historical_authorization_consumed=True,
+            historical_authorization_reuse_attempted=True,
         ),
-        RecoveryTrustState.TRUST_REVALIDATED,
-        "PTC_TRUST_REVALIDATED_NEW_AUTHORIZATION_REQUIRED",
-        True,
+        RecoveryTrustState.TRUST_INVALID,
+        "PTC_HISTORICAL_AUTHORIZATION_REUSE_REJECTED",
+        False,
     ),
     Scenario(
         "T31-10",
@@ -206,3 +208,19 @@ def test_result_is_deterministic_and_snapshot_state_is_not_authority():
     assert first == second
     assert first.historical_authorization_reusable is False
     assert first.reason_code == "PTC_TRUST_REVALIDATED_NEW_AUTHORIZATION_REQUIRED"
+
+
+def test_historical_authorization_reuse_attempt_is_always_rejected():
+    result = evaluate_post_compromise_trust(
+        _observation(
+            current_trust_generation=42,
+            observation_generation=42,
+            historical_authorization_present=True,
+            historical_authorization_consumed=False,
+            historical_authorization_reuse_attempted=True,
+        )
+    )
+    assert result.state == RecoveryTrustState.TRUST_INVALID
+    assert result.reason_code == "PTC_HISTORICAL_AUTHORIZATION_REUSE_REJECTED"
+    assert result.historical_authorization_reusable is False
+    assert not result.new_authorization_eligible
