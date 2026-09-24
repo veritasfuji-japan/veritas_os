@@ -201,13 +201,13 @@ async def test_prior_same_business_event_blocks_replacement_before_current_reche
 async def test_lost_claim_acknowledgement_never_returns_prepared_result(prepared_inputs, monkeypatch):
     artifact, args = await _args(prepared_inputs)
     store = args["effect_store"]
-    create = store.create_in_flight
+    create = store.create_sandbox_pre_dispatch_attempt
 
-    async def lost(record, **kwargs):
-        await create(record, **kwargs)
+    async def lost(**kwargs):
+        await create(**kwargs)
         raise RuntimeError("secret-dsn")
 
-    monkeypatch.setattr(store, "create_in_flight", lost)
+    monkeypatch.setattr(store, "create_sandbox_pre_dispatch_attempt", lost)
     with pytest.raises(module.SandboxPreEffectError, match="^SPE_CLAIM_FAILED_OR_UNKNOWN$"):
         await _prepare(artifact, args)
     assert await store.get(prepared_inputs[2].consumption_id) is not None

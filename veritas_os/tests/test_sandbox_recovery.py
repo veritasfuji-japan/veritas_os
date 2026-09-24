@@ -102,15 +102,15 @@ async def test_pre_dispatch_crash_closes_no_effect_without_reader_or_resend(prep
 async def test_lost_no_effect_transition_ack_is_recovered_from_durable_read(prepared_inputs, monkeypatch):
     artifact, args = await _pre_dispatch_case(prepared_inputs)
     store = args["effect_store"]
-    original = store.transition
+    original = store.confirm_pre_dispatch_no_effect
 
     async def lost_ack(**kwargs):
         changed = await original(**kwargs)
-        if changed:
+        if changed is not None:
             raise RuntimeError("synthetic acknowledgement loss")
         return changed
 
-    monkeypatch.setattr(store, "transition", lost_ack)
+    monkeypatch.setattr(store, "confirm_pre_dispatch_no_effect", lost_ack)
     result = await _recover(artifact, args)
     assert result.recovery_status == "CONFIRMED_NO_EFFECT"
     assert (await store.get(result.operation_id)).state == module.EffectExecutionState.CONFIRMED_NO_EFFECT

@@ -9,13 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+import hashlib
 import json
 import math
+import secrets
+import threading
 from typing import Any, Callable
 
 from veritas_os.policy.bind_effect_reconciliation import (
-    EffectExecutionState, EffectStateRecord, InMemoryAtomicEffectStateStore,
-    PostgresAtomicEffectStateStore, _build_record,
+    EffectStateRecord, InMemoryAtomicEffectStateStore,
+    PostgresAtomicEffectStateStore, _build_record, _immutable_effect_lineage_digest,
 )
 from veritas_os.policy.live_adapter_bind_authorization_codec import _timestamp
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
@@ -43,6 +46,55 @@ from veritas_os.security.hash import sha256_of_canonical_json
 
 class SandboxPreEffectError(ValueError):
     """Sanitized preparation error; never a retry authorization."""
+
+
+_OWNERSHIP_DOMAIN = b"veritas.sandbox-execution-ownership/v1\x00"
+
+
+def _ownership_digest(secret: bytes) -> str:
+    if type(secret) is not bytes or len(secret) != 32:
+        raise SandboxPreEffectError("SEO_HANDLE_INVALID")
+    return hashlib.sha256(_OWNERSHIP_DOMAIN + secret).hexdigest()
+
+
+class _SandboxExecutionOwnershipHandle:
+    """Process-local linear authority; DB state cannot reconstruct this object."""
+
+    __slots__ = (
+        "operation_id", "origin_record_hash", "immutable_lineage_digest",
+        "_secret", "_state", "_lock",
+    )
+
+    def __init__(self, attempt: EffectStateRecord, secret: bytes) -> None:
+        self.operation_id = attempt.operation_id
+        self.origin_record_hash = attempt.record_hash
+        self.immutable_lineage_digest = _immutable_effect_lineage_digest(attempt)
+        self._secret = secret
+        self._state = "UNUSED"
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> str:
+        return self._state
+
+    def _spend(self) -> bytes:
+        with self._lock:
+            if self._state != "UNUSED":
+                raise SandboxPreEffectError("SEO_HANDLE_ALREADY_SPENT")
+            self._state = "SPENT"
+            return self._secret
+
+    def __copy__(self):
+        raise TypeError("Sandbox execution ownership handle cannot be copied")
+
+    def __deepcopy__(self, memo):
+        raise TypeError("Sandbox execution ownership handle cannot be copied")
+
+    def __reduce__(self):
+        raise TypeError("Sandbox execution ownership handle cannot be serialized")
+
+    def __reduce_ex__(self, protocol):
+        raise TypeError("Sandbox execution ownership handle cannot be serialized")
 
 
 def _sandbox_business_event_key(
@@ -94,7 +146,11 @@ class SandboxCurrentInputs:
 
 @dataclass(frozen=True)
 class SandboxPreparedAttempt:
-    """Audit-only result; must not be serialized and reused as a capability."""
+    """Prepared origin plus a private one-shot live execution ownership handle.
+
+    The handle is process-local, non-copyable and non-serializable. Durable
+    readback reconstructs audit state only and can never recreate this authority.
+    """
 
     binding: VerifiedSandboxActionBinding
     attempt: EffectStateRecord
@@ -104,6 +160,7 @@ class SandboxPreparedAttempt:
     authorization: NativeBindAuthorizationArtifact = field(repr=False)
     issued_context: _VerifiedContext = field(repr=False)
     clock: SandboxClockReading = field(repr=False)
+    ownership_handle: _SandboxExecutionOwnershipHandle = field(repr=False, compare=False)
 
 
 def _clock(reading: SandboxClockReading) -> datetime:
@@ -206,28 +263,29 @@ async def prepare_sandbox_attempt(
         and consumed_at < datetime.fromisoformat(verified.valid_until)
     ):
         raise SandboxPreEffectError("SPE_CONSUMPTION_LINEAGE_MISMATCH")
-    attempt = _build_record(
-        consumption=expected, state=EffectExecutionState.IN_FLIGHT,
-        revision=1, updated_at=_timestamp(started.now),
-        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
-    )
+    ownership_secret = secrets.token_bytes(32)
+    ownership_digest = _ownership_digest(ownership_secret)
     try:
-        claimed = await effect_store.create_in_flight(
-            attempt, business_event_key=business_event_key,
+        attempt = await effect_store.create_sandbox_pre_dispatch_attempt(
+            consumption=expected,
+            updated_at=_timestamp(started.now),
+            business_event_key=business_event_key,
+            ownership_digest=ownership_digest,
         )
     except Exception:
+        # A commit may have succeeded before the acknowledgement was lost.
+        # Never reconstruct execution ownership from durable readback.
         raise SandboxPreEffectError("SPE_CLAIM_FAILED_OR_UNKNOWN") from None
-    if claimed is not True:
-        # Distinguish replay of the same consumed authorization from a new
-        # authorization colliding on the same business event. The unique store
-        # claim remains the race arbiter; this read is classification only.
+    if attempt is None:
+        # Existing durable state is classification only and never ownership.
         try:
-            existing_attempt = await effect_store.get(attempt.operation_id)
+            existing_attempt = await effect_store.get(expected.consumption_id)
         except Exception:
             raise SandboxPreEffectError("SPE_CLAIM_FAILED_OR_UNKNOWN") from None
         if existing_attempt is not None:
             raise SandboxPreEffectError("SPE_ATTEMPT_ALREADY_EXISTS")
         raise SandboxPreEffectError("SPE_BUSINESS_EVENT_ALREADY_CLAIMED")
+    ownership_handle = _SandboxExecutionOwnershipHandle(attempt, ownership_secret)
     risk_hash, finished = _recheck_sandbox_current(
         verified=verified, binding=binding, issued_context=issued_context,
         payload_json=payload_json, deployment=deployment, started=started,
@@ -235,8 +293,46 @@ async def prepare_sandbox_attempt(
     )
     return SandboxPreparedAttempt(
         binding, attempt, risk_hash, _timestamp(finished.now), durable,
-        verified, issued_context, finished,
+        verified, issued_context, finished, ownership_handle,
     )
+
+
+async def consume_sandbox_ownership(
+    prepared: SandboxPreparedAttempt,
+    *,
+    effect_store: PostgresAtomicEffectStateStore | InMemoryAtomicEffectStateStore,
+    updated_at: str | None = None,
+) -> SandboxPreparedAttempt:
+    """Consume the unique live continuation authority exactly once.
+
+    Local spending is irreversible and occurs before the first await. The
+    durable CAS races pre-dispatch NO_EFFECT recovery on the same exact origin
+    predicate. An ambiguous CAS result never restores the local handle.
+    """
+    if type(prepared) is not SandboxPreparedAttempt:
+        raise SandboxPreEffectError("SEO_HANDLE_REQUIRED")
+    handle = prepared.ownership_handle
+    if (
+        handle.operation_id != prepared.attempt.operation_id
+        or handle.origin_record_hash != prepared.attempt.record_hash
+        or handle.immutable_lineage_digest
+        != _immutable_effect_lineage_digest(prepared.attempt)
+    ):
+        raise SandboxPreEffectError("SEO_HANDLE_BINDING_MISMATCH")
+    secret = handle._spend()
+    digest = _ownership_digest(secret)
+    try:
+        consumed = await effect_store.consume_sandbox_ownership(
+            expected=prepared.attempt,
+            ownership_digest=digest,
+            immutable_lineage_digest=handle.immutable_lineage_digest,
+            updated_at=updated_at or prepared.checked_at,
+        )
+    except Exception:
+        raise SandboxPreEffectError("SEO_OWNERSHIP_COMMIT_FAILED_OR_UNKNOWN") from None
+    if consumed is not True:
+        raise SandboxPreEffectError("SEO_PRE_DISPATCH_ARBITRATION_LOST")
+    return prepared
 
 
 def _recheck_sandbox_current(

@@ -10,8 +10,10 @@ import pytest
 
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState,
+    SandboxOwnershipState,
     PostgresAtomicEffectStateStore,
     _build_record,
+    _immutable_effect_lineage_digest,
 )
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
     build_authorization_consumption_record,
@@ -111,7 +113,7 @@ async def test_real_postgres_consumption_read_and_attempt_creation_have_one_winn
 
 
 @pytest.mark.asyncio
-async def test_real_postgres_business_event_claim_blocks_replacement_until_no_effect() -> None:
+async def test_real_postgres_unknown_never_releases_business_event_claim() -> None:
     _require_real_postgresql()
     key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
     first = _consumption(uuid4().hex)
@@ -152,12 +154,12 @@ async def test_real_postgres_business_event_claim_blocks_replacement_until_no_ef
         revision=3, updated_at="2026-08-24T00:00:02+00:00",
         reason_code="VERIFIED_EXTERNAL_NO_EFFECT_CONFIRMED",
     )
-    assert await store.transition(
+    assert not await store.transition(
         operation_id=unknown.operation_id,
         expected_state=EffectExecutionState.EFFECT_UNKNOWN,
         record=no_effect,
     )
-    assert await PostgresAtomicEffectStateStore().create_in_flight(
+    assert not await PostgresAtomicEffectStateStore().create_in_flight(
         replacement_record, business_event_key=key,
     )
 
@@ -293,14 +295,13 @@ async def test_real_postgres_pre_dispatch_recovery_releases_business_event_claim
     first = _consumption(uuid4().hex)
     replacement = _consumption(uuid4().hex)
     store = PostgresAtomicEffectStateStore()
-    inflight = _build_record(
+    inflight = await store.create_sandbox_pre_dispatch_attempt(
         consumption=first,
-        state=EffectExecutionState.IN_FLIGHT,
-        revision=1,
         updated_at=first.consumed_at,
-        reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+        business_event_key=key,
+        ownership_digest="d" * 64,
     )
-    assert await store.create_in_flight(inflight, business_event_key=key)
+    assert inflight is not None
 
     terminal = await _confirm_pre_dispatch_no_effect(
         consumption=first,
@@ -322,3 +323,151 @@ async def test_real_postgres_pre_dispatch_recovery_releases_business_event_claim
         replacement_record,
         business_event_key=key,
     )
+
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_ownership_and_no_effect_share_one_arbitration_predicate() -> None:
+    """32 ownership contenders and recovery can produce only one durable winner."""
+    _require_real_postgresql()
+    token = uuid4().hex
+    consumption = _consumption(token)
+    key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
+    ownership_digest = "d" * 64
+    creator = PostgresAtomicEffectStateStore()
+    origin = await creator.create_sandbox_pre_dispatch_attempt(
+        consumption=consumption,
+        updated_at=consumption.consumed_at,
+        business_event_key=key,
+        ownership_digest=ownership_digest,
+    )
+    assert origin is not None
+    lineage = _immutable_effect_lineage_digest(origin)
+
+    start = asyncio.Event()
+
+    async def consume(index: int):
+        await start.wait()
+        return await PostgresAtomicEffectStateStore().consume_sandbox_ownership(
+            expected=origin,
+            ownership_digest=ownership_digest,
+            immutable_lineage_digest=lineage,
+            updated_at=f"2026-08-24T00:00:{index + 1:02d}+00:00",
+        )
+
+    async def recover():
+        await start.wait()
+        return await PostgresAtomicEffectStateStore().confirm_pre_dispatch_no_effect(
+            expected=origin,
+            updated_at="2026-08-24T00:01:00+00:00",
+        )
+
+    ownership_tasks = [asyncio.create_task(consume(i)) for i in range(32)]
+    recovery_task = asyncio.create_task(recover())
+    start.set()
+    ownership_results = await asyncio.gather(*ownership_tasks)
+    recovery_result = await recovery_task
+
+    ownership_successes = ownership_results.count(True)
+    no_effect_successes = int(recovery_result is not None)
+    assert ownership_successes <= 1
+    assert no_effect_successes <= 1
+    assert ownership_successes + no_effect_successes == 1
+
+    restarted = PostgresAtomicEffectStateStore()
+    effect = await restarted.get(origin.operation_id)
+    ownership = await restarted.get_sandbox_ownership(origin.operation_id)
+    assert effect is not None and ownership is not None
+    assert not (
+        ownership.state == SandboxOwnershipState.CONSUMED
+        and effect.state == EffectExecutionState.CONFIRMED_NO_EFFECT
+    )
+
+    if ownership_successes == 1:
+        assert ownership.state == SandboxOwnershipState.CONSUMED
+        assert effect.state == EffectExecutionState.IN_FLIGHT
+        assert await restarted.confirm_pre_dispatch_no_effect(
+            expected=origin,
+            updated_at="2026-08-24T00:02:00+00:00",
+        ) is None
+    else:
+        assert ownership.state == SandboxOwnershipState.CANCELLED
+        assert effect.state == EffectExecutionState.CONFIRMED_NO_EFFECT
+        assert not await restarted.consume_sandbox_ownership(
+            expected=origin,
+            ownership_digest=ownership_digest,
+            immutable_lineage_digest=lineage,
+            updated_at="2026-08-24T00:02:00+00:00",
+        )
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_consumed_ownership_survives_restart_and_blocks_no_effect() -> None:
+    _require_real_postgresql()
+    consumption = _consumption(uuid4().hex)
+    key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
+    digest = "e" * 64
+    store = PostgresAtomicEffectStateStore()
+    origin = await store.create_sandbox_pre_dispatch_attempt(
+        consumption=consumption,
+        updated_at=consumption.consumed_at,
+        business_event_key=key,
+        ownership_digest=digest,
+    )
+    assert origin is not None
+    assert await store.consume_sandbox_ownership(
+        expected=origin,
+        ownership_digest=digest,
+        immutable_lineage_digest=_immutable_effect_lineage_digest(origin),
+        updated_at="2026-08-24T00:00:01+00:00",
+    )
+
+    restarted = PostgresAtomicEffectStateStore()
+    assert await restarted.confirm_pre_dispatch_no_effect(
+        expected=origin,
+        updated_at="2026-08-24T00:00:02+00:00",
+    ) is None
+    effect = await restarted.get(origin.operation_id)
+    ownership = await restarted.get_sandbox_ownership(origin.operation_id)
+    assert effect is not None and effect.state == EffectExecutionState.IN_FLIGHT
+    assert ownership is not None and ownership.state == SandboxOwnershipState.CONSUMED
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_no_effect_cancels_ownership_and_releases_replacement_claim() -> None:
+    _require_real_postgresql()
+    key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
+    first = _consumption(uuid4().hex)
+    replacement = _consumption(uuid4().hex)
+    digest = "f" * 64
+    store = PostgresAtomicEffectStateStore()
+    origin = await store.create_sandbox_pre_dispatch_attempt(
+        consumption=first,
+        updated_at=first.consumed_at,
+        business_event_key=key,
+        ownership_digest=digest,
+    )
+    assert origin is not None
+    terminal = await store.confirm_pre_dispatch_no_effect(
+        expected=origin,
+        updated_at="2026-08-24T00:00:01+00:00",
+    )
+    assert terminal is not None and terminal.state == EffectExecutionState.CONFIRMED_NO_EFFECT
+
+    restarted = PostgresAtomicEffectStateStore()
+    ownership = await restarted.get_sandbox_ownership(origin.operation_id)
+    assert ownership is not None and ownership.state == SandboxOwnershipState.CANCELLED
+    assert not await restarted.consume_sandbox_ownership(
+        expected=origin,
+        ownership_digest=digest,
+        immutable_lineage_digest=_immutable_effect_lineage_digest(origin),
+        updated_at="2026-08-24T00:00:02+00:00",
+    )
+
+    replacement_origin = await restarted.create_sandbox_pre_dispatch_attempt(
+        consumption=replacement,
+        updated_at=replacement.consumed_at,
+        business_event_key=key,
+        ownership_digest="1" * 64,
+    )
+    assert replacement_origin is not None

@@ -72,7 +72,7 @@ async def test_real_runtime_apply_attempt_automatically_becomes_effect_unknown(m
 
 
 @pytest.mark.asyncio
-async def test_real_runtime_block_before_apply_is_confirmed_no_effect(monkeypatch) -> None:
+async def test_real_runtime_block_before_apply_remains_effect_unknown(monkeypatch) -> None:
     _install_fake_trustlog(monkeypatch)
     artifact, governance, trust = _build()
     effects = InMemoryAtomicEffectStateStore()
@@ -90,8 +90,8 @@ async def test_real_runtime_block_before_apply_is_confirmed_no_effect(monkeypatc
     )
 
     assert result.lineage.consumption_result.adapter_apply_attempted is False
-    assert result.effect_state.state == EffectExecutionState.CONFIRMED_NO_EFFECT
-    assert result.effect_state.reason_code == "BIND_COMPLETED_WITHOUT_ADAPTER_APPLY"
+    assert result.effect_state.state == EffectExecutionState.EFFECT_UNKNOWN
+    assert result.effect_state.reason_code == "GENERIC_NO_EFFECT_NOT_DURABLY_PROVEN"
 
 
 @pytest.mark.asyncio

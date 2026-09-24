@@ -92,7 +92,7 @@ async def test_apply_attempt_without_external_ack_becomes_effect_unknown() -> No
 
 
 @pytest.mark.asyncio
-async def test_no_apply_is_confirmed_no_effect() -> None:
+async def test_no_apply_remains_effect_unknown_without_durable_pre_dispatch_proof() -> None:
     base = InMemoryAtomicAuthorizationConsumptionStore()
     effects = InMemoryAtomicEffectStateStore()
     store = EffectStateTrackingConsumptionStore(base, effects)
@@ -109,7 +109,8 @@ async def test_no_apply_is_confirmed_no_effect() -> None:
         effect_store=effects,
         updated_at="2026-08-24T00:00:01+00:00",
     )
-    assert state.state == EffectExecutionState.CONFIRMED_NO_EFFECT
+    assert state.state == EffectExecutionState.EFFECT_UNKNOWN
+    assert state.reason_code == "GENERIC_NO_EFFECT_NOT_DURABLY_PROVEN"
 
 
 @pytest.mark.asyncio
