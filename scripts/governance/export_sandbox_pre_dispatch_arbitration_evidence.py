@@ -11,6 +11,7 @@ from typing import Any
 
 from veritas_os.policy.bind_effect_reconciliation import (
     PostgresAtomicEffectStateStore,
+    _SANDBOX_ORIGIN_CAPABILITY,
     _immutable_effect_lineage_digest,
 )
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
@@ -71,6 +72,7 @@ async def _case(token: str, winner: str) -> dict[str, Any]:
         updated_at=consumption.consumed_at,
         business_event_key=business_event_key,
         ownership_digest=ownership_digest,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     if origin is None:
         raise RuntimeError("origin creation failed")
