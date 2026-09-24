@@ -1,0 +1,112 @@
+{
+  "format_version": "post-compromise-trust-state-continuity-freeze/v1",
+  "status": "FROZEN_PREREGISTRATION_SCOPE",
+  "proof_scope": "bounded-post-compromise-trust-state-continuity",
+  "core_invariants": [
+    "operational_rollback_is_not_trust_rollback",
+    "historical_state_is_not_current_authority",
+    "recovered_service_health_is_not_execution_permission",
+    "historical_snapshot_data_is_lineage_not_current_trust",
+    "fresh_trust_revalidation_precedes_new_execution_permission",
+    "revocation_history_must_survive_operational_rollback",
+    "historical_authorization_must_not_be_reactivated_by_restore",
+    "historical_approval_must_not_be_reactivated_by_restore",
+    "historical_credential_material_must_not_be_reused_as_current_material",
+    "effect_unknown_must_survive_recovery_without_blind_redispatch"
+  ],
+  "proposed_recovery_states": [
+    "OPERATIONALLY_RECOVERED__TRUST_NOT_REVALIDATED",
+    "OPERATIONALLY_RECOVERED__TRUST_REVALIDATING",
+    "OPERATIONALLY_RECOVERED__TRUST_REVALIDATED",
+    "OPERATIONALLY_RECOVERED__TRUST_INVALID"
+  ],
+  "required_current_observations": [
+    "authority_revocation_state",
+    "credential_provider_state",
+    "credential_scope_endpoint_binding",
+    "policy_state",
+    "human_approval_state_when_required",
+    "execution_intent_action_binding",
+    "authorization_consumption_state",
+    "unresolved_external_effect_state"
+  ],
+  "initial_scenarios": [
+    {
+      "id": "T31-01",
+      "name": "control_unchanged_trust_after_rollback",
+      "expected": "FRESH_REVALIDATION_REQUIRED_THEN_ELIGIBLE"
+    },
+    {
+      "id": "T31-02",
+      "name": "credential_revoked_after_snapshot",
+      "expected": "FAIL_CLOSED"
+    },
+    {
+      "id": "T31-03",
+      "name": "authority_revoked_after_snapshot",
+      "expected": "FAIL_CLOSED"
+    },
+    {
+      "id": "T31-04",
+      "name": "human_approval_invalidated_or_expired_after_snapshot",
+      "expected": "FAIL_CLOSED_OR_FRESH_APPROVAL_REQUIRED"
+    },
+    {
+      "id": "T31-05",
+      "name": "credential_version_changed_after_snapshot",
+      "expected": "CURRENT_PROVIDER_RESOLUTION_REQUIRED"
+    },
+    {
+      "id": "T31-06",
+      "name": "trust_generation_mismatch",
+      "expected": "HISTORICAL_AUTHORIZATION_NOT_EXECUTABLE"
+    },
+    {
+      "id": "T31-07",
+      "name": "current_trust_evidence_unavailable_or_ambiguous",
+      "expected": "FAIL_CLOSED"
+    },
+    {
+      "id": "T31-08",
+      "name": "policy_changed_after_snapshot",
+      "expected": "CURRENT_POLICY_WINS"
+    },
+    {
+      "id": "T31-09",
+      "name": "historical_authorization_replay_after_recovery",
+      "expected": "REJECT"
+    },
+    {
+      "id": "T31-10",
+      "name": "fresh_requalification_after_recovery",
+      "expected": "NEW_AUTHORIZATION_ONLY"
+    }
+  ],
+  "evidence_requirements": [
+    "tested_source_sha",
+    "protocol_version",
+    "snapshot_identity",
+    "historical_trust_generation",
+    "current_trust_generation",
+    "authority_revocation_observation",
+    "credential_reference_and_non_secret_resolution_evidence",
+    "policy_state",
+    "human_approval_state",
+    "authorization_identity_and_consumption_state",
+    "recovery_classification",
+    "allow_block_reason_code",
+    "runtime_record_hashes",
+    "reconciliation_evidence_if_used"
+  ],
+  "explicit_non_claims": [
+    "production_disaster_recovery_readiness",
+    "universal_incident_response_correctness",
+    "production_iam_kms_hsm_trust",
+    "independent_ultimate_trust_root_legitimacy",
+    "production_customer_credential_lifecycle_correctness",
+    "ha_dr_sla_compliance",
+    "third_party_certification",
+    "regulatory_approval"
+  ],
+  "implementation_rule": "No Product semantics change before this preregistration scope is merged and treated as the test contract."
+}
