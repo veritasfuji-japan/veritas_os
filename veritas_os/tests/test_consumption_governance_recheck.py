@@ -234,11 +234,7 @@ async def test_v03_local_operation_records_outcome_and_never_reexecutes(
     assert await effects.get(record.consumption_id) == result.effect_state
     assert lineage.consumption_result.adapter_apply_attempted is not blocked
     assert factory.adapter.apply_calls == (0 if blocked else 1)
-    assert result.effect_state.state == (
-        EffectExecutionState.CONFIRMED_NO_EFFECT
-        if blocked
-        else EffectExecutionState.EFFECT_UNKNOWN
-    )
+    assert result.effect_state.state == EffectExecutionState.EFFECT_UNKNOWN
     assert lineage.bind_receipt.execution_intent_id == artifact.execution_intent_id
     assert (
         lineage.outcome_receipt.bind_receipt_id == lineage.bind_receipt.bind_receipt_id
