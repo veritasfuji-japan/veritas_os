@@ -17,7 +17,8 @@ import threading
 from typing import Any, Callable
 
 from veritas_os.policy.bind_effect_reconciliation import (
-    EffectExecutionState, EffectStateRecord, InMemoryAtomicEffectStateStore,
+    EffectExecutionState as _EffectExecutionState, EffectStateRecord,
+    InMemoryAtomicEffectStateStore,
     PostgresAtomicEffectStateStore, _SANDBOX_ORIGIN_CAPABILITY, _build_record,
     _immutable_effect_lineage_digest,
 )
@@ -43,6 +44,11 @@ from veritas_os.policy.sandbox_action_binding import (
     build_sandbox_action_binding, verify_sandbox_action_binding,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
+
+
+# Backward-compatible test/module surface; the execution-state enum remains owned by
+# bind_effect_reconciliation.
+EffectExecutionState = _EffectExecutionState
 
 
 class SandboxPreEffectError(ValueError):
