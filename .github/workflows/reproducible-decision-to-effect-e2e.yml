@@ -173,7 +173,7 @@ jobs:
           assert report["production_decision_to_effect_e2e_proven"] is False
           assert report["trustlog_exactly_once_proven"] is False
           assert report["production_validation_proven"] is False
-          assert report["alembic_head"] == "0009"
+          assert report["alembic_head"] == "0010"
           assert report["normal"]["dispatch_reason"] == "HTTP_201_MATCHING_ACK"
           assert report["normal"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
           assert report["fault"]["dispatch_reason"] == "TRANSPORT_FAILED_OR_UNKNOWN"
