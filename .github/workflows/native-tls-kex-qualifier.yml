@@ -1,0 +1,33 @@
+name: Native TLS KEX Qualifier
+
+on:
+  pull_request:
+    paths:
+      - "native/tls_kex_qualifier/**"
+      - "veritas_os/security/tls_kex_execution.py"
+      - "veritas_os/tests/test_tls_kex_execution.py"
+      - ".github/workflows/native-tls-kex-qualifier.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  openssl-3-qualification-foundation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Record toolchain identity
+        run: |
+          openssl version -a
+          cc --version
+      - name: Install focused test dependency
+        run: python -m pip install pytest==9.0.3
+      - name: Build probe and run qualifier tests
+        run: |
+          make -C native/tls_kex_qualifier clean all
+          PYTHONPATH=. pytest -q veritas_os/tests/test_tls_kex_execution.py
