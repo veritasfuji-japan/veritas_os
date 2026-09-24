@@ -19,6 +19,7 @@ from veritas_os.policy import sandbox_pre_effect as pre
 from veritas_os.tests.test_sandbox_pre_effect import (
     _args,
     _prepare,
+    issued,
     prepared_inputs as prepared_inputs_fixture,
 )
 
