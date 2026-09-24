@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import hashlib
 from typing import Any, Callable, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, SecretBytes
@@ -17,6 +18,10 @@ from pydantic import BaseModel, ConfigDict, SecretBytes
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState, EffectStateRecord, InMemoryAtomicEffectStateStore,
     PostgresAtomicEffectStateStore,
+)
+from veritas_os.policy.bind_execution_capability import (
+    ImmutableFinalDispatch, PermitBinding, _mint_bound_execution_permit,
+    canonical_headers, runtime_implementation_identity,
 )
 from veritas_os.policy.live_adapter_bind_authorization_codec import _timestamp
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
@@ -73,6 +78,8 @@ A concrete implementation and its timing/TLS tests are a deployment prerequisite
 
     async def send_once(
         self, request: SandboxDispatchRequest, *, take_material: Callable[[], SecretBytes],
+        permit: object, permit_binding: PermitBinding,
+        final_dispatch: ImmutableFinalDispatch,
     ) -> SandboxHTTPObservation | None:
         ...
 
@@ -140,6 +147,58 @@ never upgraded from an HTTP response. Reconciliation/receipts remain separate.
             idempotency_key=prepared.binding.idempotency_key,
             attempt_id=prepared.attempt.operation_id,
         )
+        body_bytes = request.payload_json.encode("utf-8")
+        runtime_identity = runtime_implementation_identity(transport)
+        request_identity = hashlib.sha256(
+            b"sandbox-dispatch-v1\x00"
+            + request.endpoint_url.encode("utf-8")
+            + b"\x00"
+            + body_bytes
+            + b"\x00"
+            + request.idempotency_key.encode("utf-8")
+        ).hexdigest()
+        final_dispatch = ImmutableFinalDispatch(
+            effect_boundary_id="native-v2-sandbox-action",
+            dispatch_kind="ACTION",
+            method="POST",
+            canonical_endpoint=request.endpoint_url,
+            canonical_bound_headers=canonical_headers({
+                "content-type": "application/json",
+                "idempotency-key": request.idempotency_key,
+            }),
+            body_bytes=body_bytes,
+            body_digest=request.payload_digest,
+            request_identity=request_identity,
+            idempotency_identity=request.idempotency_key,
+            credential_reference_digest=(
+                prepared.issued_context.credential_reference_digest
+            ),
+            credential_scope_digest=(
+                prepared.issued_context.credential_scope_binding_digest
+            ),
+            authorization_consumption_id=prepared.attempt.consumption_id,
+            runtime_implementation_identity=runtime_identity,
+        )
+        permit_binding = PermitBinding(
+            coverage_entry_id="bcb-v1-native-v2-sandbox-action",
+            operation_id=prepared.attempt.operation_id,
+            action_class="sandbox.event.register.v1",
+            dispatch_kind="ACTION",
+            execution_intent_hash=prepared.authorization.execution_intent_hash,
+            authorization_id=prepared.binding.authorization_id,
+            authorization_hash=prepared.binding.authorization_hash,
+            authorization_consumption_id=prepared.attempt.consumption_id,
+            target_identity=deployment.target_system,
+            runtime_implementation_identity=runtime_identity,
+            effect_boundary_id=final_dispatch.effect_boundary_id,
+            endpoint_identity=final_dispatch.canonical_endpoint,
+            credential_reference_digest=final_dispatch.credential_reference_digest,
+            credential_scope_digest=final_dispatch.credential_scope_digest,
+            request_body_digest=final_dispatch.body_digest,
+            request_identity=final_dispatch.request_identity,
+            idempotency_identity=final_dispatch.idempotency_identity,
+        )
+        permit = _mint_bound_execution_permit(permit_binding)
 
         def check_send_window() -> None:
             now = trusted_clock()
@@ -186,7 +245,13 @@ never upgraded from an HTTP response. Reconciliation/receipts remain separate.
         reason = "TRANSPORT_FAILED_OR_UNKNOWN"
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
-                response = await transport.send_once(request, take_material=take_material)
+                response = await transport.send_once(
+                    request,
+                    take_material=take_material,
+                    permit=permit,
+                    permit_binding=permit_binding,
+                    final_dispatch=final_dispatch,
+                )
             if taken:
                 reason = "TRANSPORT_RETURNED_UNVERIFIED"
                 if type(response) is str and response in {

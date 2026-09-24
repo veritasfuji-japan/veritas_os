@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Export and check the frozen V1 executable effect-boundary inventory."""
+
+from __future__ import annotations
+
+import ast
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+
+from veritas_os.policy.bind_coverage_registry import (
+    load_bind_coverage_registry,
+    validate_bind_coverage_registry,
+)
+from veritas_os.policy.bind_execution_capability import PROOF_SCOPE
+
+
+ROOT = Path(__file__).resolve().parents[2]
+OUTPUT = ROOT / "artifacts" / "bind-coverage-bypass-resistance-v1"
+SOURCES = (
+    "veritas_os/policy/sandbox_https_transport.py",
+    "veritas_os/policy/webhook_bind_adapter.py",
+)
+EXPECTED_SINKS = {
+    ("veritas_os/policy/sandbox_https_transport.py", "asyncio.open_connection"),
+    ("veritas_os/policy/sandbox_https_transport.py", "writer.write"),
+    ("veritas_os/policy/webhook_bind_adapter.py", "opener.open"),
+    ("veritas_os/policy/webhook_bind_adapter.py", "transport.request"),
+}
+MATRIX_CASES = (
+    "direct adapter invocation", "direct helper invocation",
+    "direct transport invocation", "fake Permit", "reconstructed Permit",
+    "serialized Permit", "Permit replay", "concurrent Permit use",
+    "leaked consumed Permit", "wrong operation", "wrong resource",
+    "changed credential identity", "stale/expired authorization",
+    "consumed authorization", "alternate adapter", "unregistered subclass",
+    "wrapper/proxy", "alternate factory implementation", "duplicate coverage",
+    "ambiguous coverage", "registry/runtime mismatch", "undeclared effect sink",
+    "ACTION Permit used for COMPENSATION", "direct COMPENSATION Permit mint",
+    "fake CompensationEligibilityGrant", "reconstructed Grant", "Grant replay",
+    "concurrent Grant consumption", "cross-ACTION Grant reuse",
+    "compensation endpoint mutation", "compensation payload mutation",
+    "recovery ACTION remint attempt", "recovery Grant fabrication",
+    "valid P2/H(P2) against Permit(P1)", "post-validation P1-to-P2 TOCTOU attempt",
+    "exact outbound representation equality", "legitimate ACTION",
+    "legitimate COMPENSATION",
+)
+
+
+def _call_name(node: ast.Call) -> str:
+    parts: list[str] = []
+    current = node.func
+    while isinstance(current, ast.Attribute):
+        parts.append(current.attr)
+        current = current.value
+    if isinstance(current, ast.Name):
+        parts.append(current.id)
+    return ".".join(reversed(parts))
+
+
+def discover() -> list[dict[str, object]]:
+    """Return the exact reviewed production sink inventory."""
+    found: list[dict[str, object]] = []
+    for relative in SOURCES:
+        tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = _call_name(node)
+            candidate = (relative, name)
+            if candidate in EXPECTED_SINKS:
+                found.append({"path": relative, "primitive": name, "line": node.lineno})
+    return sorted(found, key=lambda item: (str(item["path"]), int(item["line"])))
+
+
+def _write(name: str, value: object) -> None:
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    (OUTPUT / name).write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def main() -> int:
+    entries = [
+        entry for entry in load_bind_coverage_registry()
+        if entry.proof_scope == PROOF_SCOPE
+    ]
+    validation = validate_bind_coverage_registry(load_bind_coverage_registry())
+    discovered = discover()
+    discovered_set = {(str(row["path"]), str(row["primitive"])) for row in discovered}
+    registered_boundaries = {
+        (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
+    }
+    expected_boundaries = {
+        ("registered-webhook-action", "ACTION"),
+        ("registered-webhook-compensation", "COMPENSATION"),
+        ("native-v2-sandbox-action", "ACTION"),
+    }
+    passed = (
+        validation.valid
+        and discovered_set == EXPECTED_SINKS
+        and registered_boundaries == expected_boundaries
+        and len(entries) == 3
+    )
+    registry_payload = [entry.__dict__ for entry in entries]
+    registry_bytes = json.dumps(
+        registry_payload, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    tested_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    provenance = {
+        "proof_scope": PROOF_SCOPE,
+        "tested_sha": tested_sha,
+        "source_sha": os.environ.get("GITHUB_SHA", tested_sha),
+        "registry_digest": hashlib.sha256(registry_bytes).hexdigest(),
+        "architecture_status": "FROZEN",
+        "implementation_status": "IMPLEMENTED",
+        "proof_status": "NOT_PROVEN",
+    }
+    _write("execution-boundary-inventory.json", discovered)
+    _write("bind-coverage-registry.json", registry_payload)
+    _write("adversarial-matrix.json", {
+        "cases": [{"name": name, "required": True} for name in MATRIX_CASES],
+        "result_source": "pytest workflow; this inventory does not assert results",
+    })
+    _write("near-miss.json", {"undeclared_sink_count": len(discovered_set ^ EXPECTED_SINKS)})
+    _write("immutable-dispatch-evidence.json", {
+        "representation": "ImmutableFinalDispatch", "proof_status": "NOT_PROVEN"
+    })
+    _write("compensation-authority-evidence.json", {
+        "authority": "CompensationEligibilityGrant", "proof_status": "NOT_PROVEN"
+    })
+    _write("provenance.json", provenance)
+    _write("proof-report.json", {
+        **provenance,
+        "inventory_set_equality": discovered_set == EXPECTED_SINKS,
+        "registry_set_equality": registered_boundaries == expected_boundaries,
+        "result": "PASS" if passed else "FAIL",
+        "explicit_non_claims": [
+            "all VERITAS external I/O is Bind-governed",
+            "arbitrary equivalent-privilege in-process compromise resistance",
+            "TLS/provider identity proof",
+            "universal exactly-once external delivery",
+            "production readiness",
+        ],
+    })
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

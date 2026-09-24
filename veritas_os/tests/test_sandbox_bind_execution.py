@@ -30,7 +30,10 @@ class Transport:
         self.calls = []
         self.sent = []
 
-    async def send_once(self, request, *, take_material):
+    async def send_once(
+        self, request, *, take_material, permit, permit_binding, final_dispatch
+    ):
+        del permit, permit_binding, final_dispatch
         self.calls.append(request)
         self.take_material = take_material
         row = await self.args["effect_store"].get(request.attempt_id)

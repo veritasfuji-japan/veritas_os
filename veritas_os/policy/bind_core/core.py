@@ -480,7 +480,12 @@ def execute_bind_adjudication(
                 ),
             )
 
+    dispatch_token = None
+    authorize_dispatch = getattr(adapter, "_authorize_action_dispatch", None)
+    clear_dispatch = getattr(adapter, "_clear_authorized_dispatch", None)
     try:
+        if authorize_dispatch is not None:
+            dispatch_token = authorize_dispatch(normalized_intent)
         adapter.apply(normalized_intent, pre_snapshot)
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
         if bind_policy.rollback_on_apply_failure:
@@ -521,6 +526,9 @@ def execute_bind_adjudication(
                 rollback_reason=f"{BindReasonCode.APPLY_FAILED.value}:{exc}",
             ),
         )
+    finally:
+        if dispatch_token is not None and clear_dispatch is not None:
+            clear_dispatch(dispatch_token)
 
     if not adapter.verify_postconditions(normalized_intent, pre_snapshot):
         return _finalize_receipt(
@@ -792,7 +800,9 @@ def _rollback_after_verification_failure(
     recommended_outcome: str,
 ) -> BindReceipt:
     try:
-        reverted = adapter.revert(execution_intent, pre_snapshot)
+        reverted = _invoke_revert(
+            adapter, execution_intent, pre_snapshot, "POSTCONDITION_FAILED"
+        )
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _with_receipt(
             base_receipt,
@@ -887,7 +897,9 @@ def _rollback_after_runtime_signal_failure(
     recommended_outcome: str,
 ) -> BindReceipt:
     try:
-        reverted = adapter.revert(execution_intent, pre_snapshot)
+        reverted = _invoke_revert(
+            adapter, execution_intent, pre_snapshot, reason
+        )
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _with_receipt(
             base_receipt,
@@ -960,7 +972,9 @@ def _rollback_after_apply_failure(
 ) -> BindReceipt:
     apply_reason = f"{BindReasonCode.APPLY_FAILED.value}:{apply_error}"
     try:
-        reverted = adapter.revert(execution_intent, pre_snapshot)
+        reverted = _invoke_revert(
+            adapter, execution_intent, pre_snapshot, apply_reason
+        )
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _with_receipt(
             base_receipt,
@@ -1023,6 +1037,23 @@ def _check_from_runtime(check_result: Any) -> dict[str, str]:
         reason_code=check_result.reason_code,
         message=check_result.message,
     ).to_dict()
+
+
+def _invoke_revert(
+    adapter: BindBoundaryAdapter,
+    execution_intent: ExecutionIntent,
+    pre_snapshot: Any,
+    reason: str,
+) -> bool:
+    """Enter a compensation boundary only through Bind core's transition."""
+    authorize = getattr(adapter, "_authorize_compensation_dispatch", None)
+    clear = getattr(adapter, "_clear_authorized_dispatch", None)
+    token = authorize(execution_intent, reason) if authorize is not None else None
+    try:
+        return adapter.revert(execution_intent, pre_snapshot)
+    finally:
+        if token is not None and clear is not None:
+            clear(token)
 
 
 def _check_unknown(reason_code: str, message: str) -> dict[str, str]:

@@ -17,6 +17,9 @@ from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent, hash_
 from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.policy.bind_core.core import execute_bind_adjudication
 from veritas_os.policy.bind_core.normalizers import normalize_execution_intent
+from veritas_os.policy.bind_execution_capability import (
+    ConsumedAuthorizationLineage, _transport_consumed_authorization_lineage,
+)
 from veritas_os.policy.live_adapter_bind_authorization import (
     BindAuthorizationTrustInputs,
     CanonicalLiveAdapterBindAuthorizationArtifact,
@@ -145,6 +148,25 @@ class _BindInvocationTrackingAdapter(BindAdapterContract):
     def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         self.apply_attempted = True
         return self._delegate.apply(intent, snapshot)
+
+    def _authorize_action_dispatch(self, intent: ExecutionIntent) -> object:
+        authorize = getattr(self._delegate, "_authorize_action_dispatch", None)
+        if authorize is None:
+            return None
+        return authorize(intent)
+
+    def _clear_authorized_dispatch(self, token: object) -> None:
+        clear = getattr(self._delegate, "_clear_authorized_dispatch", None)
+        if clear is not None:
+            clear(token)
+
+    def _authorize_compensation_dispatch(
+        self, intent: ExecutionIntent, reason: str
+    ) -> object:
+        authorize = getattr(self._delegate, "_authorize_compensation_dispatch", None)
+        if authorize is None:
+            return None
+        return authorize(intent, reason)
 
     def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         return self._delegate.verify_postconditions(intent, snapshot)
@@ -383,12 +405,24 @@ async def consume_live_adapter_bind_authorization_and_invoke_bind(
     _validate_adapter_binding(authorization, built)
 
     tracked_adapter = _BindInvocationTrackingAdapter(built.adapter)
-    receipt = execute_bind_adjudication(
-        execution_intent=intent,
-        adapter=tracked_adapter,
-        bind_ts=bind_ts or current,
-        append_trustlog=append_trustlog,
+    lineage = ConsumedAuthorizationLineage(
+        authorization_id=authorization.live_adapter_bind_authorization_id,
+        authorization_hash=authorization.live_adapter_bind_authorization_hash,
+        consumption_id=record.consumption_id,
+        execution_intent_hash=authorization.execution_intent_hash,
+        operation_id=record.consumption_id,
+        action_class=intent.intended_action,
+        target_identity=intent.target_resource,
+        credential_reference_digest=authorization.credential_reference_digest,
+        credential_scope_digest=authorization.credential_scope_binding_digest,
     )
+    with _transport_consumed_authorization_lineage(lineage):
+        receipt = execute_bind_adjudication(
+            execution_intent=intent,
+            adapter=tracked_adapter,
+            bind_ts=bind_ts or current,
+            append_trustlog=append_trustlog,
+        )
     return BindAuthorizationConsumptionResult(
         consumption_record=record,
         bind_receipt=receipt,
