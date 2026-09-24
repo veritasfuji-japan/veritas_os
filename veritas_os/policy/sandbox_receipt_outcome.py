@@ -123,6 +123,7 @@ async def publish_sandbox_receipts(
             consumption=consumption, state=EffectExecutionState.CONFIRMED_EFFECT, revision=3,
             updated_at=archive.proof.verified_at, reason_code="SANDBOX_READONLY_LOOKUP_CONFIRMED",
             reconciliation_evidence_hash=archive.proof.deterministic_digest(),
+            effect_provenance=archive.original_record.effect_provenance,
         )
         event = parse_event(binding.binding.payload_json.encode("utf-8"))
         if (record != expected_record or archive.operation.event_id != event.event_id
