@@ -1,0 +1,199 @@
+name: TASK-031 Trust Continuity Proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: task031-trust-continuity-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  source-bound-proof:
+    name: task031-trust-continuity-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout proof source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install proof dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install '.[signing,dev]'
+
+      - name: Run focused TASK-031 implementation and integration tests
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/task031-trust-continuity-proof
+          python -m pytest             veritas_os/tests/test_post_compromise_trust_continuity.py             veritas_os/tests/test_sandbox_reentry.py             veritas_os/tests/test_task031_trust_continuity_proof.py             -q             --junitxml=artifacts/task031-trust-continuity-proof/pytest.xml
+
+      - name: Generate two deterministic corpus proof runs
+        id: proof
+        run: |
+          set -euxo pipefail
+          FIRST="$(mktemp -d)"
+          SECOND="$(mktemp -d)"
+          TARGET="artifacts/task031-trust-continuity-proof"
+          trap 'rm -rf "$FIRST" "$SECOND"' EXIT
+
+          python scripts/run_task031_trust_continuity_proof.py --output-dir "$FIRST"
+          python scripts/run_task031_trust_continuity_proof.py --output-dir "$SECOND"
+
+          diff -ru "$FIRST" "$SECOND"
+          cp "$FIRST"/*.json "$TARGET"/
+
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify frozen proof claims and bind artifacts to source
+        env:
+          SOURCE_SHA: ${{ steps.proof.outputs.source_sha }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          root = Path("artifacts/task031-trust-continuity-proof")
+          source_sha = os.environ["SOURCE_SHA"]
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+          proof = json.loads((root / "corpus-results.json").read_text(encoding="utf-8"))
+          freeze_path = Path(
+              "docs/architecture/post-compromise-trust-state-continuity-freeze-v1.json"
+          )
+
+          if summary["scenario_count"] != 10 or summary["matched_count"] != 10:
+              raise SystemExit("TASK-031 frozen corpus did not match 10/10")
+          if summary["all_scenarios_matched"] is not True:
+              raise SystemExit("TASK-031 frozen corpus mismatch")
+          if summary["runtime_received_expected_labels"] is not False:
+              raise SystemExit("runtime expected-label isolation violated")
+          if summary["offline_oracle_applied_after_runtime"] is not True:
+              raise SystemExit("offline oracle ordering not established")
+          if summary["historical_authorization_reusable_in_any_case"] is not False:
+              raise SystemExit("historical authorization became reusable")
+          if summary["external_effect_retry_permitted_in_any_case"] is not False:
+              raise SystemExit("recovery proof created retry permission")
+          if any(
+              item["credential_reference_and_non_secret_resolution_evidence"][
+                  "raw_secret_present"
+              ]
+              is not False
+              for item in proof["scenarios"]
+          ):
+              raise SystemExit("raw secret entered TASK-031 proof artifact")
+
+          junit = ET.parse(root / "pytest.xml").getroot()
+          suites = (
+              [junit]
+              if junit.tag == "testsuite"
+              else list(junit.findall("testsuite"))
+          )
+          tests = sum(int(suite.attrib.get("tests", "0")) for suite in suites)
+          failures = sum(int(suite.attrib.get("failures", "0")) for suite in suites)
+          errors = sum(int(suite.attrib.get("errors", "0")) for suite in suites)
+          if tests < 10 or failures or errors:
+              raise SystemExit(
+                  "focused TASK-031 integration tests were not clean: "
+                  f"tests={tests} failures={failures} errors={errors}"
+              )
+
+          artifact_hashes = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(root.glob("*"))
+              if path.name != "run-manifest.json"
+          }
+          test_source_hashes = {
+              path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+              for path in (
+                  "veritas_os/tests/test_post_compromise_trust_continuity.py",
+                  "veritas_os/tests/test_sandbox_reentry.py",
+                  "veritas_os/tests/test_task031_trust_continuity_proof.py",
+              )
+          }
+
+          run_manifest = {
+              "format_version": "task031-source-bound-run-manifest/v1",
+              "tested_source_sha": source_sha,
+              "protocol_version": summary["protocol_version"],
+              "freeze_contract_sha256": hashlib.sha256(
+                  freeze_path.read_bytes()
+              ).hexdigest(),
+              "scenario_count": summary["scenario_count"],
+              "matched_count": summary["matched_count"],
+              "focused_pytest": {
+                  "tests": tests,
+                  "failures": failures,
+                  "errors": errors,
+              },
+              "deterministic_replay_match": True,
+              "runtime_received_expected_labels": False,
+              "historical_authorization_reusable": False,
+              "external_effect_retry_permitted": False,
+              "artifact_sha256": artifact_hashes,
+              "test_source_sha256": test_source_hashes,
+              "claim_boundary": {
+                  "corpus_bounded": True,
+                  "synthetic_controlled": True,
+                  "source_bound": True,
+                  "production_dr_readiness": False,
+                  "production_iam_kms_hsm_trust": False,
+                  "third_party_certification": False,
+                  "regulatory_approval": False,
+              },
+              "environment": {
+                  "implementation": platform.python_implementation().lower(),
+                  "python_version": platform.python_version(),
+              },
+              "github": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "run_id": os.environ["GITHUB_RUN_ID"],
+                  "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                  "event_name": os.environ["GITHUB_EVENT_NAME"],
+                  "workflow": os.environ["GITHUB_WORKFLOW"],
+              },
+          }
+          (root / "run-manifest.json").write_text(
+              json.dumps(
+                  run_manifest,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  indent=2,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload source-bound TASK-031 proof artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: task031-trust-continuity-proof-${{ steps.proof.outputs.source_sha }}
+          path: artifacts/task031-trust-continuity-proof/
+          if-no-files-found: error
+          retention-days: 90
