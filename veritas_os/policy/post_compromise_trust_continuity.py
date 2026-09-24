@@ -82,6 +82,7 @@ class TrustContinuityObservation(BaseModel):
 
     historical_authorization_present: bool = False
     historical_authorization_consumed: bool | None = None
+    historical_authorization_reuse_attempted: bool = False
 
 
 class TrustContinuityResult(BaseModel):
@@ -113,7 +114,7 @@ def _result(
 ) -> TrustContinuityResult:
     observation_payload = observation.model_dump(mode="json")
     observation_hash = sha256_of_canonical_json(observation_payload)
-    payload = {
+    hash_payload = {
         "format_version": "post-compromise-trust-result/v1",
         "snapshot_id": observation.snapshot_id,
         "historical_trust_generation": observation.historical_trust_generation,
@@ -126,8 +127,17 @@ def _result(
         "observation_hash": observation_hash,
     }
     return TrustContinuityResult(
-        **payload,
-        result_hash=sha256_of_canonical_json(payload),
+        format_version="post-compromise-trust-result/v1",
+        snapshot_id=observation.snapshot_id,
+        historical_trust_generation=observation.historical_trust_generation,
+        current_trust_generation=observation.current_trust_generation,
+        state=state,
+        reason_code=reason_code,
+        new_authorization_eligible=eligible,
+        historical_authorization_reusable=False,
+        external_effect_retry_permitted=False,
+        observation_hash=observation_hash,
+        result_hash=sha256_of_canonical_json(hash_payload),
     )
 
 
@@ -221,6 +231,14 @@ def evaluate_post_compromise_trust(
             observation,
             state=RecoveryTrustState.TRUST_NOT_REVALIDATED,
             reason_code="PTC_EXTERNAL_EFFECT_NOT_CLEAR_FOR_NEW_EXECUTION",
+            eligible=False,
+        )
+
+    if observation.historical_authorization_reuse_attempted:
+        return _result(
+            observation,
+            state=RecoveryTrustState.TRUST_INVALID,
+            reason_code="PTC_HISTORICAL_AUTHORIZATION_REUSE_REJECTED",
             eligible=False,
         )
 
