@@ -766,11 +766,21 @@ class PostgresAtomicEffectStateStore:
                         "SELECT ownership_digest, ownership_origin_record_hash, "
                         "ownership_lineage_digest, ownership_revision "
                         "FROM bind_effect_states "
-                        "WHERE operation_id=%s AND state=%s AND revision=%s AND record_hash=%s "
+                        "WHERE operation_id=%s "
+                        "AND authorization_id=%s AND authorization_hash=%s "
+                        "AND consumption_id=%s AND consumption_hash=%s "
+                        "AND execution_intent_id=%s AND idempotency_key=%s "
+                        "AND state=%s AND revision=%s AND record_hash=%s "
                         "AND effect_provenance=%s AND record::jsonb=%s::jsonb "
                         "AND ownership_state=%s FOR UPDATE",
                         (
                             expected.operation_id,
+                            expected.authorization_id,
+                            expected.authorization_hash,
+                            expected.consumption_id,
+                            expected.consumption_hash,
+                            expected.execution_intent_id,
+                            expected.idempotency_key,
                             expected.state.value,
                             expected.revision,
                             expected.record_hash,
@@ -803,7 +813,11 @@ class PostgresAtomicEffectStateStore:
                         "state=%s, revision=%s, record_hash=%s, updated_at=%s, record=%s, "
                         "ownership_state=%s, ownership_revision=%s, ownership_updated_at=%s, "
                         "ownership_record_hash=%s, business_event_key=NULL "
-                        "WHERE operation_id=%s AND state=%s AND revision=%s AND record_hash=%s "
+                        "WHERE operation_id=%s "
+                        "AND authorization_id=%s AND authorization_hash=%s "
+                        "AND consumption_id=%s AND consumption_hash=%s "
+                        "AND execution_intent_id=%s AND idempotency_key=%s "
+                        "AND state=%s AND revision=%s AND record_hash=%s "
                         "AND effect_provenance=%s AND record::jsonb=%s::jsonb "
                         "AND ownership_state=%s AND ownership_digest=%s "
                         "AND ownership_origin_record_hash=%s AND ownership_lineage_digest=%s "
@@ -820,6 +834,12 @@ class PostgresAtomicEffectStateStore:
                             cancelled.updated_at,
                             cancelled.record_hash,
                             expected.operation_id,
+                            expected.authorization_id,
+                            expected.authorization_hash,
+                            expected.consumption_id,
+                            expected.consumption_hash,
+                            expected.execution_intent_id,
+                            expected.idempotency_key,
                             expected.state.value,
                             expected.revision,
                             expected.record_hash,
