@@ -154,7 +154,7 @@ jobs:
               == "CONTROLLED_RECONCILIATION_CAPABLE_EXECUTION_PROFILE_V1"
           )
           assert report["production_claim"] is False
-          assert report["alembic_head"] == "0009"
+          assert report["alembic_head"] == "0010"
           assert (
               report["controlled_policy_gated_reconciliation_profile_proven"]
               is True
