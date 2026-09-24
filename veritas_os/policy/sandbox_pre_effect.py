@@ -18,7 +18,8 @@ from typing import Any, Callable
 
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectStateRecord, InMemoryAtomicEffectStateStore,
-    PostgresAtomicEffectStateStore, _build_record, _immutable_effect_lineage_digest,
+    PostgresAtomicEffectStateStore, _SANDBOX_ORIGIN_CAPABILITY, _build_record,
+    _immutable_effect_lineage_digest,
 )
 from veritas_os.policy.live_adapter_bind_authorization_codec import _timestamp
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
@@ -271,6 +272,7 @@ async def prepare_sandbox_attempt(
             updated_at=_timestamp(started.now),
             business_event_key=business_event_key,
             ownership_digest=ownership_digest,
+            origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
         )
     except Exception:
         # A commit may have succeeded before the acknowledgement was lost.
