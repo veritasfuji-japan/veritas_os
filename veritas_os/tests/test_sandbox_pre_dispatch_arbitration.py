@@ -322,14 +322,6 @@ async def test_generic_or_raw_caller_cannot_originate_sandbox_security_provenanc
     _, fresh_args = await _args(prepared_inputs)
     record = prepared_inputs[2]
     store = fresh_args["effect_store"]
-    binding = pre.verify_sandbox_action_binding(
-        prepared_inputs[0],
-        pre.json.dumps(pre.PAYLOAD) if hasattr(pre, "PAYLOAD") else '{"event_id":"unused"}',
-        deployment=fresh_args["deployment"],
-        source_inputs=fresh_args["issuance_source_inputs"],
-        governance_inputs=fresh_args["governance_inputs"],
-        trust_inputs=fresh_args["trust_inputs"],
-    ) if False else None
     # Semantic sandbox origin rejects any caller that lacks the private capability.
     with pytest.raises(BindEffectStateError, match="BES_SANDBOX_ORIGIN_AUTHORITY_REQUIRED"):
         await store.create_sandbox_pre_dispatch_attempt(
