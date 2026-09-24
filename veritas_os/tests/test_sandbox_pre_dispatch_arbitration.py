@@ -9,8 +9,11 @@ import pickle
 import pytest
 
 from veritas_os.policy.bind_effect_reconciliation import (
+    BindEffectStateError,
     EffectExecutionState,
+    EffectProvenance,
     SandboxOwnershipState,
+    _build_record,
 )
 from veritas_os.policy import sandbox_pre_effect as pre
 from veritas_os.tests.test_sandbox_pre_effect import (
@@ -307,3 +310,43 @@ async def test_cancellation_during_durable_ownership_await_spends_handle_and_all
     ownership = await store.get_sandbox_ownership(prepared.attempt.operation_id)
     assert ownership is not None
     assert ownership.state == SandboxOwnershipState.CANCELLED
+
+
+
+@pytest.mark.asyncio
+async def test_generic_or_raw_caller_cannot_originate_sandbox_security_provenance(
+    prepared_inputs,
+):
+    _, args, _ = await _prepared(prepared_inputs)
+    # Use a fresh store/operation because _prepared already claimed the fixture operation.
+    _, fresh_args = await _args(prepared_inputs)
+    record = prepared_inputs[2]
+    store = fresh_args["effect_store"]
+    binding = pre.verify_sandbox_action_binding(
+        prepared_inputs[0],
+        pre.json.dumps(pre.PAYLOAD) if hasattr(pre, "PAYLOAD") else '{"event_id":"unused"}',
+        deployment=fresh_args["deployment"],
+        source_inputs=fresh_args["issuance_source_inputs"],
+        governance_inputs=fresh_args["governance_inputs"],
+        trust_inputs=fresh_args["trust_inputs"],
+    ) if False else None
+    # Semantic sandbox origin rejects any caller that lacks the private capability.
+    with pytest.raises(BindEffectStateError, match="BES_SANDBOX_ORIGIN_AUTHORITY_REQUIRED"):
+        await store.create_sandbox_pre_dispatch_attempt(
+            consumption=record,
+            updated_at=record.consumed_at,
+            business_event_key="sandbox-business-event:v1:sha256:" + "a" * 64,
+            ownership_digest="b" * 64,
+            origin_authority=object(),
+        )
+
+    forged = _build_record(
+        consumption=record,
+        state=EffectExecutionState.IN_FLIGHT,
+        revision=1,
+        updated_at=record.consumed_at,
+        reason_code="FORGED_SANDBOX_ORIGIN",
+        effect_provenance=EffectProvenance.SANDBOX_PRE_DISPATCH_V1,
+    )
+    with pytest.raises(BindEffectStateError, match="BES_RAW_SANDBOX_ORIGIN_FORBIDDEN"):
+        await store.create_in_flight(forged)
