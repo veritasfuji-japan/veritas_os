@@ -263,3 +263,47 @@ async def test_raw_transition_cannot_bypass_pre_dispatch_no_effect_arbitration(
         expected_state=EffectExecutionState.IN_FLIGHT,
         record=forged,
     )
+
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_durable_ownership_await_spends_handle_and_allows_only_recovery(
+    prepared_inputs, monkeypatch,
+):
+    _, args, prepared = await _prepared(prepared_inputs)
+    store = args["effect_store"]
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original = store.consume_sandbox_ownership
+
+    async def blocked(**kwargs):
+        entered.set()
+        await release.wait()
+        return await original(**kwargs)
+
+    monkeypatch.setattr(store, "consume_sandbox_ownership", blocked)
+    task = asyncio.create_task(
+        pre.consume_sandbox_ownership(prepared, effect_store=store)
+    )
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert prepared.ownership_handle.state == "SPENT"
+    ownership = await store.get_sandbox_ownership(prepared.attempt.operation_id)
+    assert ownership is not None
+    assert ownership.state == SandboxOwnershipState.AVAILABLE
+
+    with pytest.raises(pre.SandboxPreEffectError, match="SEO_HANDLE_ALREADY_SPENT"):
+        await pre.consume_sandbox_ownership(prepared, effect_store=store)
+
+    terminal = await store.confirm_pre_dispatch_no_effect(
+        expected=prepared.attempt,
+        updated_at="2026-08-24T00:00:04+00:00",
+    )
+    assert terminal is not None
+    assert terminal.state == EffectExecutionState.CONFIRMED_NO_EFFECT
+    ownership = await store.get_sandbox_ownership(prepared.attempt.operation_id)
+    assert ownership is not None
+    assert ownership.state == SandboxOwnershipState.CANCELLED
