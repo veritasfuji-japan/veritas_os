@@ -9,6 +9,7 @@ from veritas_os.policy import sandbox_pre_effect as pre_effect
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState,
     InMemoryAtomicEffectStateStore,
+    _SANDBOX_ORIGIN_CAPABILITY,
     _build_record,
 )
 from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
@@ -95,10 +96,16 @@ async def test_confirmed_effect_keeps_claim_but_confirmed_no_effect_releases_it(
     replacement = _consumption("d2")
     original = _record(first)
     assert await effect_store.create_in_flight(original, business_event_key=key)
-    confirmed = _record(first, EffectExecutionState.CONFIRMED_EFFECT, 2)
+    unknown = _record(first, EffectExecutionState.EFFECT_UNKNOWN, 2)
     assert await effect_store.transition(
         operation_id=original.operation_id,
         expected_state=EffectExecutionState.IN_FLIGHT,
+        record=unknown,
+    )
+    confirmed = _record(first, EffectExecutionState.CONFIRMED_EFFECT, 3)
+    assert await effect_store.transition(
+        operation_id=original.operation_id,
+        expected_state=EffectExecutionState.EFFECT_UNKNOWN,
         record=confirmed,
     )
     assert not await effect_store.create_in_flight(
@@ -108,14 +115,20 @@ async def test_confirmed_effect_keeps_claim_but_confirmed_no_effect_releases_it(
     no_effect_store = InMemoryAtomicEffectStateStore()
     first = _consumption("e3")
     replacement = _consumption("f4")
-    original = _record(first)
-    assert await no_effect_store.create_in_flight(original, business_event_key=key)
-    no_effect = _record(first, EffectExecutionState.CONFIRMED_NO_EFFECT, 2)
-    assert await no_effect_store.transition(
-        operation_id=original.operation_id,
-        expected_state=EffectExecutionState.IN_FLIGHT,
-        record=no_effect,
+    original = await no_effect_store.create_sandbox_pre_dispatch_attempt(
+        consumption=first,
+        updated_at=first.consumed_at,
+        business_event_key=key,
+        ownership_digest="d" * 64,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
+    assert original is not None
+    no_effect = await no_effect_store.confirm_pre_dispatch_no_effect(
+        expected=original,
+        updated_at="2026-09-09T00:00:02+00:00",
+    )
+    assert no_effect is not None
+    assert no_effect.state == EffectExecutionState.CONFIRMED_NO_EFFECT
     assert await no_effect_store.create_in_flight(
         _record(replacement), business_event_key=key,
     )
