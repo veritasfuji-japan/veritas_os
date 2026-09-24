@@ -471,3 +471,167 @@ async def test_real_postgres_no_effect_cancels_ownership_and_releases_replacemen
         ownership_digest="1" * 64,
     )
     assert replacement_origin is not None
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", ["ownership", "no_effect"])
+async def test_real_postgres_arbitration_update_failure_rolls_back_atomically(
+    monkeypatch, target,
+) -> None:
+    """Raise after the security-sensitive UPDATE but before transaction commit."""
+    from contextlib import asynccontextmanager
+    from veritas_os.storage import db
+    from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
+
+    _require_real_postgresql()
+    consumption = _consumption(uuid4().hex)
+    key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
+    digest = "7" * 64
+    store = PostgresAtomicEffectStateStore()
+    origin = await store.create_sandbox_pre_dispatch_attempt(
+        consumption=consumption,
+        updated_at=consumption.consumed_at,
+        business_event_key=key,
+        ownership_digest=digest,
+    )
+    assert origin is not None
+    lineage = _immutable_effect_lineage_digest(origin)
+
+    real_get_pool = db.get_pool
+    pool = await real_get_pool()
+
+    class FaultConn:
+        def __init__(self, conn):
+            self._conn = conn
+
+        def transaction(self):
+            return self._conn.transaction()
+
+        async def execute(self, sql, params=()):
+            cur = await self._conn.execute(sql, params)
+            normalized = " ".join(sql.split())
+            if (
+                target == "ownership"
+                and normalized.startswith("UPDATE bind_effect_states SET ownership_state=")
+            ) or (
+                target == "no_effect"
+                and normalized.startswith("UPDATE bind_effect_states SET state=")
+                and "business_event_key=NULL" in normalized
+            ):
+                raise RuntimeError("synthetic pre-commit connection loss")
+            return cur
+
+    class FaultPool:
+        @asynccontextmanager
+        async def connection(self):
+            async with pool.connection() as conn:
+                yield FaultConn(conn)
+
+    async def faulty_pool():
+        return FaultPool()
+
+    monkeypatch.setattr(db, "get_pool", faulty_pool)
+    if target == "ownership":
+        with pytest.raises(BindEffectStateError, match="BES_POSTGRES_OWNERSHIP_CONSUME_FAILED"):
+            await PostgresAtomicEffectStateStore().consume_sandbox_ownership(
+                expected=origin,
+                ownership_digest=digest,
+                immutable_lineage_digest=lineage,
+                updated_at="2026-08-24T00:00:01+00:00",
+            )
+    else:
+        with pytest.raises(BindEffectStateError, match="BES_POSTGRES_NO_EFFECT_ARBITRATION_FAILED"):
+            await PostgresAtomicEffectStateStore().confirm_pre_dispatch_no_effect(
+                expected=origin,
+                updated_at="2026-08-24T00:00:01+00:00",
+            )
+
+    monkeypatch.setattr(db, "get_pool", real_get_pool)
+    restarted = PostgresAtomicEffectStateStore()
+    effect = await restarted.get(origin.operation_id)
+    ownership = await restarted.get_sandbox_ownership(origin.operation_id)
+    assert effect == origin
+    assert ownership is not None and ownership.state == SandboxOwnershipState.AVAILABLE
+
+    async with pool.connection() as conn:
+        cur = await conn.execute(
+            "SELECT business_event_key FROM bind_effect_states WHERE operation_id=%s",
+            (origin.operation_id,),
+        )
+        assert (await cur.fetchone())[0] == key
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", ["ownership", "no_effect"])
+async def test_real_postgres_arbitration_commit_ack_loss_is_classified_only_by_readback(
+    monkeypatch, target,
+) -> None:
+    """Commit may succeed before result loss; durable readback must show one winner."""
+    from veritas_os.storage import db
+    from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
+
+    _require_real_postgresql()
+    consumption = _consumption(uuid4().hex)
+    key = "sandbox-business-event:v1:sha256:" + uuid4().hex + uuid4().hex
+    digest = "8" * 64
+    store = PostgresAtomicEffectStateStore()
+    origin = await store.create_sandbox_pre_dispatch_attempt(
+        consumption=consumption,
+        updated_at=consumption.consumed_at,
+        business_event_key=key,
+        ownership_digest=digest,
+    )
+    assert origin is not None
+    lineage = _immutable_effect_lineage_digest(origin)
+
+    if target == "ownership":
+        original = store.consume_sandbox_ownership
+
+        async def lost_ack(**kwargs):
+            assert await original(**kwargs) is True
+            raise BindEffectStateError("BES_POSTGRES_OWNERSHIP_CONSUME_FAILED")
+
+        monkeypatch.setattr(store, "consume_sandbox_ownership", lost_ack)
+        with pytest.raises(BindEffectStateError):
+            await store.consume_sandbox_ownership(
+                expected=origin,
+                ownership_digest=digest,
+                immutable_lineage_digest=lineage,
+                updated_at="2026-08-24T00:00:01+00:00",
+            )
+    else:
+        original = store.confirm_pre_dispatch_no_effect
+
+        async def lost_ack(**kwargs):
+            assert await original(**kwargs) is not None
+            raise BindEffectStateError("BES_POSTGRES_NO_EFFECT_ARBITRATION_FAILED")
+
+        monkeypatch.setattr(store, "confirm_pre_dispatch_no_effect", lost_ack)
+        with pytest.raises(BindEffectStateError):
+            await store.confirm_pre_dispatch_no_effect(
+                expected=origin,
+                updated_at="2026-08-24T00:00:01+00:00",
+            )
+
+    restarted = PostgresAtomicEffectStateStore()
+    effect = await restarted.get(origin.operation_id)
+    ownership = await restarted.get_sandbox_ownership(origin.operation_id)
+    assert effect is not None and ownership is not None
+
+    if target == "ownership":
+        assert ownership.state == SandboxOwnershipState.CONSUMED
+        assert effect.state == EffectExecutionState.IN_FLIGHT
+        assert await restarted.confirm_pre_dispatch_no_effect(
+            expected=origin,
+            updated_at="2026-08-24T00:00:02+00:00",
+        ) is None
+    else:
+        assert ownership.state == SandboxOwnershipState.CANCELLED
+        assert effect.state == EffectExecutionState.CONFIRMED_NO_EFFECT
+        assert not await restarted.consume_sandbox_ownership(
+            expected=origin,
+            ownership_digest=digest,
+            immutable_lineage_digest=lineage,
+            updated_at="2026-08-24T00:00:02+00:00",
+        )
