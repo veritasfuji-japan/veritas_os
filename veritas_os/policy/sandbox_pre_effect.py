@@ -17,7 +17,7 @@ import threading
 from typing import Any, Callable
 
 from veritas_os.policy.bind_effect_reconciliation import (
-    EffectStateRecord, InMemoryAtomicEffectStateStore,
+    EffectExecutionState, EffectStateRecord, InMemoryAtomicEffectStateStore,
     PostgresAtomicEffectStateStore, _SANDBOX_ORIGIN_CAPABILITY, _build_record,
     _immutable_effect_lineage_digest,
 )
