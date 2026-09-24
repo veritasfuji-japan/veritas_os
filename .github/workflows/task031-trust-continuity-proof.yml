@@ -109,11 +109,19 @@ jobs:
               raise SystemExit("raw secret entered TASK-031 proof artifact")
 
           junit = ET.parse(root / "pytest.xml").getroot()
-          tests = int(junit.attrib.get("tests", "0"))
-          failures = int(junit.attrib.get("failures", "0"))
-          errors = int(junit.attrib.get("errors", "0"))
+          suites = (
+              [junit]
+              if junit.tag == "testsuite"
+              else list(junit.findall("testsuite"))
+          )
+          tests = sum(int(suite.attrib.get("tests", "0")) for suite in suites)
+          failures = sum(int(suite.attrib.get("failures", "0")) for suite in suites)
+          errors = sum(int(suite.attrib.get("errors", "0")) for suite in suites)
           if tests < 10 or failures or errors:
-              raise SystemExit("focused TASK-031 integration tests were not clean")
+              raise SystemExit(
+                  "focused TASK-031 integration tests were not clean: "
+                  f"tests={tests} failures={failures} errors={errors}"
+              )
 
           artifact_hashes = {
               path.name: hashlib.sha256(path.read_bytes()).hexdigest()
