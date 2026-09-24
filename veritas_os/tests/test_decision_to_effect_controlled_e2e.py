@@ -610,7 +610,7 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
     assert rows_after_fault == rows_before + 2
 
     migration = await _migration_head()
-    assert migration == "0009"
+    assert migration == "0010"
 
     evidence = {
         "format_version": "controlled-decision-to-effect-evidence/v1",
