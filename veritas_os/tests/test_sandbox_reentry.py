@@ -14,8 +14,12 @@ from veritas_os.policy.sandbox_credential_resolution import SandboxCredentialMet
 from veritas_os.policy.sandbox_recovery import SandboxRecoveryResult
 from veritas_os.tests.test_native_bind_authorization_consumption import _Revocation
 from veritas_os.tests.test_sandbox_action_binding import PAYLOAD
-from veritas_os.tests.test_sandbox_pre_effect import prepared_inputs as prepared_fixture
+from veritas_os.tests.test_sandbox_pre_effect import (
+    issued as issued_fixture,
+    prepared_inputs as prepared_fixture,
+)
 
+issued = issued_fixture
 prepared_inputs = prepared_fixture
 
 
