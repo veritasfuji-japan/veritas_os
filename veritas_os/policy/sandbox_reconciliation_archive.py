@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState, EffectStateRecord, ReconciliationClaim,
-    VerifiedReconciliationEvidence, _record_hash_payload,
+    VerifiedReconciliationEvidence, _record_hash_valid,
 )
 from veritas_os.policy.live_adapter_bind_authorization_codec import _timestamp
 from veritas_os.policy.sandbox_event_store import SandboxOperation, validate_uuid, validate_key
@@ -56,8 +56,9 @@ def validate_archive(record: EffectStateRecord, archive: SandboxReconciliationAr
     original, operation, proof = archive.original_record, archive.operation, archive.proof
     evidence = proof.evidence
     for item in (original, record):
-        if item.format_version != "bind-effect-state/v1" or item.record_hash != sha256_of_canonical_json(
-            _record_hash_payload(item.model_dump(mode="json"))
+        if (
+            item.format_version not in ("bind-effect-state/v1", "bind-effect-state/v2")
+            or not _record_hash_valid(item)
         ):
             raise ValueError("record hash")
     if (original.state != EffectExecutionState.EFFECT_UNKNOWN or original.revision != 2
@@ -67,7 +68,8 @@ def validate_archive(record: EffectStateRecord, archive: SandboxReconciliationAr
             or record.reason_code != "SANDBOX_READONLY_LOOKUP_CONFIRMED"):
         raise ValueError("state")
     for field in ("operation_id", "authorization_id", "authorization_hash", "consumption_id",
-                  "consumption_hash", "execution_intent_id", "idempotency_key"):
+                  "consumption_hash", "execution_intent_id", "idempotency_key",
+                  "effect_provenance"):
         if getattr(original, field) != getattr(record, field):
             raise ValueError("lineage")
     if original.operation_id != original.consumption_id:

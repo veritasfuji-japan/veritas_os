@@ -7,8 +7,9 @@ from copy import deepcopy
 import pytest
 
 from veritas_os.policy.bind_effect_reconciliation import (
-    BindEffectStateError, EffectExecutionState, InMemoryAtomicEffectStateStore,
-    ReconciliationClaim, ReconciliationEvidence, VerifiedReconciliationEvidence, _build_record,
+    BindEffectStateError, EffectExecutionState, EffectProvenance,
+    InMemoryAtomicEffectStateStore, ReconciliationClaim, ReconciliationEvidence,
+    VerifiedReconciliationEvidence, _build_record, _record_hash_payload,
 )
 from veritas_os.policy.sandbox_event_store import SandboxOperation
 from veritas_os.policy.sandbox_reconciliation_archive import SandboxReconciliationArchive, validate_archive
@@ -87,6 +88,18 @@ def test_archive_substitution_is_rejected(path, value):
     node[path[-1]] = value
     with pytest.raises(ValueError):
         validate_archive(record, SandboxReconciliationArchive.model_validate(data))
+
+
+def test_v2_archive_rejects_effect_provenance_substitution():
+    original, record, archive = archive_case("provenance-substitution")
+    assert original.format_version == "bind-effect-state/v2"
+    assert record.format_version == "bind-effect-state/v2"
+    values = record.model_dump(mode="json")
+    values["effect_provenance"] = EffectProvenance.SANDBOX_PRE_DISPATCH_V1.value
+    values["record_hash"] = sha256_of_canonical_json(_record_hash_payload(values))
+    substituted = record.__class__.model_validate(values)
+    with pytest.raises(ValueError, match="lineage"):
+        validate_archive(substituted, archive)
 
 
 def test_missing_operation_state_and_unknown_fields_rejected():

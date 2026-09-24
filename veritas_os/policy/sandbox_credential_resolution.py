@@ -30,7 +30,8 @@ from veritas_os.policy.native_bind_authorization import NativeAuthorizationSourc
 from veritas_os.policy.sandbox_action_binding import SandboxDeployment
 from veritas_os.policy.sandbox_pre_effect import (
     SandboxClockReading, SandboxCurrentInputs, SandboxPreparedAttempt,
-    _clock, _recheck_sandbox_current, _window, prepare_sandbox_attempt,
+    _clock, _recheck_sandbox_current, _window, consume_sandbox_ownership,
+    prepare_sandbox_attempt,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
 
@@ -232,6 +233,13 @@ async def prepare_and_resolve_sandbox_credential(
             effect_store=effect_store, trusted_clock=trusted_clock,
             load_current_inputs=load_current_inputs,
             allow_in_memory_for_testing=allow_in_memory_for_testing,
+        )
+        # Ownership is consumed before any credential-provider call. Once this
+        # succeeds it is never reset, even if later continuation work fails.
+        prepared = await consume_sandbox_ownership(
+            prepared,
+            effect_store=effect_store,
+            updated_at=prepared.checked_at,
         )
         request = SandboxCredentialRequest(
             prepared.binding.authorization_id, prepared.attempt.operation_id,

@@ -77,10 +77,18 @@ jobs:
             --tb=short \
             --junitxml=test-reports/bind-effect-state-postgresql.xml
 
+      - name: Export sandbox pre-dispatch arbitration proof
+        run: |
+          set -euxo pipefail
+          python scripts/governance/export_sandbox_pre_dispatch_arbitration_evidence.py \
+            --output test-reports/sandbox-pre-dispatch-arbitration-proof-v1.json
+
       - name: Upload contention report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bind-effect-state-postgresql-${{ github.run_id }}
-          path: test-reports/bind-effect-state-postgresql.xml
+          path: |
+            test-reports/bind-effect-state-postgresql.xml
+            test-reports/sandbox-pre-dispatch-arbitration-proof-v1.json
           if-no-files-found: warn

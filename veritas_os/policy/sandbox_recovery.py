@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict
 
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState,
+    EffectProvenance,
     EffectStateRecord,
     InMemoryAtomicEffectStateStore,
     PostgresAtomicEffectStateStore,
@@ -144,6 +145,7 @@ def _exact_pre_dispatch_record(
         revision=1,
         updated_at=current.updated_at,
         reason_code="SANDBOX_PRE_EFFECT_ATTEMPT_CLAIMED",
+        effect_provenance=EffectProvenance.SANDBOX_PRE_DISPATCH_V1,
     )
     if current != expected:
         raise ValueError("not exact sandbox pre-dispatch state")
@@ -172,22 +174,22 @@ async def _confirm_pre_dispatch_no_effect(
         revision=2,
         updated_at=observed_at,
         reason_code="SANDBOX_RECOVERY_PRE_DISPATCH_CONFIRMED_NO_EFFECT",
+        effect_provenance=EffectProvenance.SANDBOX_PRE_DISPATCH_V1,
     )
     try:
-        changed = await effect_store.transition(
-            operation_id=current.operation_id,
-            expected_state=EffectExecutionState.IN_FLIGHT,
-            record=terminal,
+        changed = await effect_store.confirm_pre_dispatch_no_effect(
+            expected=current,
+            updated_at=observed_at,
         )
     except Exception:
-        changed = False
+        changed = None
 
-    # The transition acknowledgement may be lost. Trust a fresh durable read,
-    # never the return value alone.
+    # The transaction acknowledgement may be lost. Readback may classify a
+    # terminal outcome, but it never creates or restores execution ownership.
     stored = await effect_store.get(current.operation_id)
     if stored == terminal:
         return terminal
-    if changed is True:
+    if changed is not None and stored != changed:
         raise ValueError("no-effect readback mismatch")
     if stored is not None and stored.state in {
         EffectExecutionState.EFFECT_UNKNOWN,

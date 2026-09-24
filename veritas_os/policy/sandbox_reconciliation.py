@@ -170,6 +170,7 @@ async def reconcile_sandbox_effect(
             consumption=stored, state=EffectExecutionState.EFFECT_UNKNOWN, revision=2,
             updated_at=current.updated_at,
             reason_code="SANDBOX_DISPATCH_INTENT_PERSISTED_EFFECT_UNCONFIRMED",
+            effect_provenance=current.effect_provenance,
         )
         if current != expected_current or not consumed_at <= datetime.fromisoformat(_timestamp(current.updated_at)) <= now:
             raise ValueError("dispatch lineage")
@@ -240,6 +241,7 @@ async def reconcile_sandbox_effect(
             revision=current.revision + 1, updated_at=observed_at,
             reason_code="SANDBOX_READONLY_LOOKUP_CONFIRMED",
             reconciliation_evidence_hash=proof.deterministic_digest(),
+            effect_provenance=current.effect_provenance,
         )
         if await effect_store.get(current.operation_id) != current:
             raise ValueError("changed attempt")

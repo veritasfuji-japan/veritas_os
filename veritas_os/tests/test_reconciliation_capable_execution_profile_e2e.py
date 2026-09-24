@@ -478,7 +478,7 @@ async def test_reproducible_reconciliation_capable_execution_profile(
     assert rows_after_fault == rows_before + 2
 
     migration = await base._migration_head()
-    assert migration == "0009"
+    assert migration == "0010"
 
     normal_gate = gate_capture[normal_case["artifact"].authorization_id]
     fault_gate = gate_capture[fault_case["artifact"].authorization_id]
