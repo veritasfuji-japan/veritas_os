@@ -12,6 +12,7 @@ from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState,
     SandboxOwnershipState,
     PostgresAtomicEffectStateStore,
+    _SANDBOX_ORIGIN_CAPABILITY,
     _build_record,
     _immutable_effect_lineage_digest,
 )
@@ -300,6 +301,7 @@ async def test_real_postgres_pre_dispatch_recovery_releases_business_event_claim
         updated_at=first.consumed_at,
         business_event_key=key,
         ownership_digest="d" * 64,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     assert inflight is not None
 
@@ -340,6 +342,7 @@ async def test_real_postgres_ownership_and_no_effect_share_one_arbitration_predi
         updated_at=consumption.consumed_at,
         business_event_key=key,
         ownership_digest=ownership_digest,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     assert origin is not None
     lineage = _immutable_effect_lineage_digest(origin)
@@ -413,6 +416,7 @@ async def test_real_postgres_consumed_ownership_survives_restart_and_blocks_no_e
         updated_at=consumption.consumed_at,
         business_event_key=key,
         ownership_digest=digest,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     assert origin is not None
     assert await store.consume_sandbox_ownership(
@@ -446,6 +450,7 @@ async def test_real_postgres_no_effect_cancels_ownership_and_releases_replacemen
         updated_at=first.consumed_at,
         business_event_key=key,
         ownership_digest=digest,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     assert origin is not None
     terminal = await store.confirm_pre_dispatch_no_effect(
@@ -469,6 +474,7 @@ async def test_real_postgres_no_effect_cancels_ownership_and_releases_replacemen
         updated_at=replacement.consumed_at,
         business_event_key=key,
         ownership_digest="1" * 64,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     assert replacement_origin is not None
 
@@ -494,6 +500,7 @@ async def test_real_postgres_arbitration_update_failure_rolls_back_atomically(
         updated_at=consumption.consumed_at,
         business_event_key=key,
         ownership_digest=digest,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     assert origin is not None
     lineage = _immutable_effect_lineage_digest(origin)
@@ -581,6 +588,7 @@ async def test_real_postgres_arbitration_commit_ack_loss_is_classified_only_by_r
         updated_at=consumption.consumed_at,
         business_event_key=key,
         ownership_digest=digest,
+        origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
     )
     assert origin is not None
     lineage = _immutable_effect_lineage_digest(origin)
