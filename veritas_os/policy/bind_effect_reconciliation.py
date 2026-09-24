@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from veritas_os.policy.sandbox_reconciliation_archive import SandboxReconciliationArchive
 
 _HASH = r"^[0-9a-f]{64}$"
+_SANDBOX_ORIGIN_CAPABILITY = object()
 
 
 class EffectExecutionState(StrEnum):
@@ -155,6 +156,7 @@ class AtomicEffectStateStore(Protocol):
         updated_at: str,
         business_event_key: str,
         ownership_digest: str,
+        origin_authority: object,
     ) -> EffectStateRecord | None:
         ...
 
@@ -349,7 +351,10 @@ class InMemoryAtomicEffectStateStore:
         updated_at: str,
         business_event_key: str,
         ownership_digest: str,
+        origin_authority: object,
     ) -> EffectStateRecord | None:
+        if origin_authority is not _SANDBOX_ORIGIN_CAPABILITY:
+            raise BindEffectStateError("BES_SANDBOX_ORIGIN_AUTHORITY_REQUIRED")
         record = _build_record(
             consumption=consumption,
             state=EffectExecutionState.IN_FLIGHT,
@@ -583,7 +588,10 @@ class PostgresAtomicEffectStateStore:
         updated_at: str,
         business_event_key: str,
         ownership_digest: str,
+        origin_authority: object,
     ) -> EffectStateRecord | None:
+        if origin_authority is not _SANDBOX_ORIGIN_CAPABILITY:
+            raise BindEffectStateError("BES_SANDBOX_ORIGIN_AUTHORITY_REQUIRED")
         record = _build_record(
             consumption=consumption,
             state=EffectExecutionState.IN_FLIGHT,
