@@ -926,10 +926,7 @@ class PostgresAtomicEffectStateStore:
                 cur = await conn.execute(
                     "UPDATE bind_effect_states SET state=%s, revision=%s, record_hash=%s, "
                     "updated_at=%s, record=%s, reconciliation_archive=%s "
-                    "WHERE operation_id=%s AND authorization_id=%s AND authorization_hash=%s "
-                    "AND consumption_id=%s AND consumption_hash=%s "
-                    "AND execution_intent_id=%s AND idempotency_key=%s "
-                    "AND effect_provenance=%s AND state=%s AND revision=%s AND record_hash=%s "
+                    "WHERE operation_id=%s AND state=%s AND revision=%s AND record_hash=%s "
                     "AND record::jsonb=%s::jsonb AND reconciliation_archive IS NULL "
                     "RETURNING operation_id",
                     (
@@ -940,13 +937,6 @@ class PostgresAtomicEffectStateStore:
                         Jsonb(record.model_dump(mode="json")),
                         Jsonb(archive.model_dump(mode="json")),
                         expected.operation_id,
-                        expected.authorization_id,
-                        expected.authorization_hash,
-                        expected.consumption_id,
-                        expected.consumption_hash,
-                        expected.execution_intent_id,
-                        expected.idempotency_key,
-                        expected.effect_provenance.value,
                         expected.state.value,
                         expected.revision,
                         expected.record_hash,
