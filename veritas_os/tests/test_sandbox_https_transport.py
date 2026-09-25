@@ -33,21 +33,30 @@ def request():
 
 
 async def authorized_send(transport, req, take):
-    body = req.payload_json.encode()
+    authority_request = request()
+    body = authority_request.payload_json.encode()
     runtime = runtime_implementation_identity(transport)
-    identity = hashlib.sha256(body + req.endpoint_url.encode()).hexdigest()
+    identity = hashlib.sha256(
+        b"sandbox-dispatch-v1\x00"
+        + authority_request.endpoint_url.encode()
+        + b"\x00"
+        + body
+        + b"\x00"
+        + authority_request.idempotency_key.encode()
+    ).hexdigest()
     dispatch = ImmutableFinalDispatch(
         effect_boundary_id="native-v2-sandbox-action",
         dispatch_kind="ACTION",
         method="POST",
-        canonical_endpoint=req.endpoint_url,
+        canonical_endpoint=authority_request.endpoint_url,
         canonical_bound_headers=canonical_headers({
-            "content-type": "application/json", "idempotency-key": req.idempotency_key,
+            "content-type": "application/json",
+            "idempotency-key": authority_request.idempotency_key,
         }),
         body_bytes=body,
-        body_digest=req.payload_digest,
+        body_digest=authority_request.payload_digest,
         request_identity=identity,
-        idempotency_identity=req.idempotency_key,
+        idempotency_identity=authority_request.idempotency_key,
         credential_reference_digest="reference",
         credential_scope_digest="scope",
         authorization_consumption_id="consumption",

@@ -158,28 +158,6 @@ class ControlledCredentialProvider:
         )
 
 
-class LoseObservedResponseTransport:
-    """Perform one real POST, then model caller-side response loss."""
-
-    def __init__(self, delegate: SandboxHTTPSTransport) -> None:
-        self._delegate = delegate
-        self.delegate_observation: str | None = None
-        self.calls = 0
-
-    async def send_once(
-        self, request, *, take_material, permit, permit_binding, final_dispatch
-    ):
-        self.calls += 1
-        self.delegate_observation = await self._delegate.send_once(
-            request,
-            take_material=take_material,
-            permit=permit,
-            permit_binding=permit_binding,
-            final_dispatch=final_dispatch,
-        )
-        raise RuntimeError("controlled response loss after remote commit")
-
-
 def _build_decision_case(case_dir: Path, payload: dict[str, str]) -> dict[str, Any]:
     """Capture /v1/decide, verify CDA/promotion, then issue exact native v2 auth."""
 
@@ -452,9 +430,15 @@ async def _run_fault_case(
     consumption_store, consumption = await _consume(case)
     effect_store = PostgresAtomicEffectStateStore()
     writer = ControlledCredentialProvider(writer_token)
-    transport = LoseObservedResponseTransport(
-        SandboxHTTPSTransport(endpoint_url=config.endpoint_url, ca_pem=ca_pem)
+    transport = SandboxHTTPSTransport(
+        endpoint_url=config.endpoint_url,
+        ca_pem=ca_pem,
     )
+    observed: list[str | None] = []
+
+    def lose_response(response):
+        observed.append(response)
+        raise RuntimeError("controlled response loss after remote commit")
     load_current, governance_calls = _load_current(inputs)
 
     dispatch = await execute_sandbox_bind(
@@ -470,12 +454,12 @@ async def _run_fault_case(
         load_current_inputs=load_current,
         provider=writer,
         transport=transport,
+        transport_result_observer=lose_response,
     )
     state = await effect_store.get(consumption.consumption_id)
     assert state is not None and state.state == EffectExecutionState.EFFECT_UNKNOWN
     assert dispatch.reason_code == "TRANSPORT_FAILED_OR_UNKNOWN"
-    assert transport.delegate_observation == "HTTP_201_MATCHING_ACK"
-    assert transport.calls == 1
+    assert observed == ["HTTP_201_MATCHING_ACK"]
 
     reader_policy, verifier_policy, reader = _reader_inputs(
         config,
@@ -503,7 +487,7 @@ async def _run_fault_case(
         assert unavailable.state == EffectExecutionState.EFFECT_UNKNOWN
         assert unavailable.recovery_status == "STILL_UNKNOWN"
         assert unavailable.external_effect_retry_permitted is False
-        assert transport.calls == 1
+        assert len(observed) == 1
     finally:
         outage_flag.unlink(missing_ok=True)
 
@@ -542,7 +526,7 @@ async def _run_fault_case(
         trusted_clock=_clock,
     )
     assert repeated == recovered
-    assert transport.calls == 1
+    assert len(observed) == 1
     assert reader.describe_calls == reader_calls_after_confirmation
 
     archive = await effect_store.get_reconciliation(consumption.consumption_id)
@@ -555,8 +539,8 @@ async def _run_fault_case(
         "repeated": repeated,
         "archive": archive,
         "consumption": consumption,
-        "transport_calls": transport.calls,
-        "transport_delegate_observation": transport.delegate_observation,
+        "transport_calls": len(observed),
+        "transport_delegate_observation": observed[0],
         "reader_calls_after_confirmation": reader_calls_after_confirmation,
         "reader_calls_after_repeat": reader.describe_calls,
         "governance_recheck_calls": governance_calls["count"],

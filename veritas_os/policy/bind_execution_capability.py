@@ -209,6 +209,10 @@ class _PermitAuthority:
         ] = weakref.WeakKeyDictionary()
 
     def mint(self, binding: PermitBinding) -> BoundExecutionPermit:
+        if binding.dispatch_kind != "ACTION":
+            raise BindExecutionCapabilityError(
+                "COMPENSATION_GRANT_REQUIRED_FOR_PERMIT_MINT"
+            )
         permit = object.__new__(BoundExecutionPermit)
         with self._lock:
             self._permits[permit] = _PermitRecord(binding, _task_identity())
@@ -279,6 +283,52 @@ class _PermitAuthority:
                 raise BindExecutionCapabilityError("GRANT_NOT_ACTIVE")
             record.state = "CONSUMED"
 
+    def mint_compensation_permit(
+        self,
+        grant: object,
+        grant_binding: CompensationGrantBinding,
+        permit_binding: PermitBinding,
+        dispatch: ImmutableFinalDispatch,
+    ) -> BoundExecutionPermit:
+        """Atomically consume a Grant and mint its exact compensation Permit."""
+        if (
+            permit_binding.dispatch_kind != "COMPENSATION"
+            or dispatch.dispatch_kind != "COMPENSATION"
+            or not _dispatch_matches(permit_binding, dispatch)
+            or grant_binding.authorization_consumption_id
+            != permit_binding.authorization_consumption_id
+            or grant_binding.execution_intent_hash
+            != permit_binding.execution_intent_hash
+            or grant_binding.operation_id != permit_binding.operation_id
+            or grant_binding.action_class != permit_binding.action_class
+            or grant_binding.effect_boundary_id != permit_binding.effect_boundary_id
+            or grant_binding.endpoint_identity != permit_binding.endpoint_identity
+            or grant_binding.request_body_digest != permit_binding.request_body_digest
+            or grant_binding.runtime_implementation_identity
+            != permit_binding.runtime_implementation_identity
+        ):
+            raise BindExecutionCapabilityError(
+                "COMPENSATION_PERMIT_BINDING_MISMATCH"
+            )
+        with self._lock:
+            try:
+                record = self._grants.get(grant)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                record = None
+            if record is None:
+                raise BindExecutionCapabilityError("GRANT_PROVENANCE_INVALID")
+            if record.binding != grant_binding:
+                raise BindExecutionCapabilityError("GRANT_BINDING_MISMATCH")
+            if record.state != "ACTIVE":
+                raise BindExecutionCapabilityError("GRANT_NOT_ACTIVE")
+            record.state = "CONSUMED"
+            permit = object.__new__(BoundExecutionPermit)
+            self._permits[permit] = _PermitRecord(
+                permit_binding,
+                _task_identity(),
+            )
+            return permit
+
 
 def _dispatch_matches(
     binding: PermitBinding, dispatch: ImmutableFinalDispatch
@@ -321,11 +371,18 @@ def _mint_grant_from_consumed_action(
     return _AUTHORITY.mint_grant_for_consumed_action(parent_permit, binding)
 
 
-def consume_compensation_eligibility_grant(
-    grant: object, binding: CompensationGrantBinding
-) -> None:
-    """Atomically consume an exact Bind-core compensation transition grant."""
-    _AUTHORITY.consume_grant(grant, binding)
+def _mint_compensation_permit(
+    grant: object,
+    grant_binding: CompensationGrantBinding,
+    permit_binding: PermitBinding,
+    dispatch: ImmutableFinalDispatch,
+) -> BoundExecutionPermit:
+    return _AUTHORITY.mint_compensation_permit(
+        grant,
+        grant_binding,
+        permit_binding,
+        dispatch,
+    )
 
 
 def runtime_implementation_identity(runtime: object | type[object]) -> str:
@@ -353,6 +410,5 @@ __all__ = [
     "PermitBinding",
     "canonical_headers",
     "consume_bound_execution_permit",
-    "consume_compensation_eligibility_grant",
     "runtime_implementation_identity",
 ]

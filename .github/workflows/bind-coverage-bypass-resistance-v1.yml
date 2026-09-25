@@ -23,10 +23,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r veritas_os/requirements.txt pytest pytest-asyncio
+      - name: Run frozen adversarial proof tests
+        run: |
+          mkdir -p artifacts/bind-coverage-bypass-resistance-v1
+          PYTHONPATH=. pytest \
+            tests/policy/test_bind_coverage_bypass_resistance_v1.py \
+            -q -o junit_family=legacy \
+            --junitxml=artifacts/bind-coverage-bypass-resistance-v1/pytest.xml
       - name: Verify inventory and export evidence
         run: PYTHONPATH=. python scripts/quality/check_bind_coverage_bypass_resistance_v1.py
-      - name: Run frozen adversarial proof tests
-        run: PYTHONPATH=. pytest tests/policy/test_bind_coverage_bypass_resistance_v1.py -q
       - name: Bind artifact to exact tested SHA
         run: |
           python - <<'PY'

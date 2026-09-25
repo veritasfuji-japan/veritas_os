@@ -77,7 +77,9 @@ _BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
         coverage_entry_id="bcb-v1-registered-webhook-action",
         authorization_mode="consumed_live_adapter_bind_authorization",
         execution_entrypoint_id="webhook-bind-adapter.apply",
-        runtime_implementation="veritas_os.policy.webhook_bind_adapter.WebhookBindAdapter",
+        runtime_implementation=(
+            "veritas_os.policy.webhook_bind_adapter._UrllibWebhookTransport"
+        ),
         effect_boundary_id="registered-webhook-action",
         dispatch_kind="ACTION",
         endpoint_binding_requirements=("canonical_https_endpoint",),
@@ -105,7 +107,9 @@ _BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
         coverage_entry_id="bcb-v1-registered-webhook-compensation",
         authorization_mode="bind_core_compensation_grant",
         execution_entrypoint_id="webhook-bind-adapter.revert",
-        runtime_implementation="veritas_os.policy.webhook_bind_adapter.WebhookBindAdapter",
+        runtime_implementation=(
+            "veritas_os.policy.webhook_bind_adapter._UrllibWebhookTransport"
+        ),
         effect_boundary_id="registered-webhook-compensation",
         dispatch_kind="COMPENSATION",
         endpoint_binding_requirements=("canonical_https_endpoint",),

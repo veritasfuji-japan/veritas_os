@@ -8,16 +8,31 @@ public-looking HTTPS URLs to a loopback receiver without changing the
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 from threading import Thread
 from typing import Any, Mapping
+from unittest.mock import patch
 from urllib.request import Request, urlopen
 
-from veritas_os.policy.bind_artifacts import ExecutionIntent, hash_bind_receipt
+from veritas_os.policy.bind_artifacts import (
+    ExecutionIntent,
+    hash_bind_receipt,
+    hash_execution_intent,
+)
 from veritas_os.policy.bind_core import execute_bind_adjudication
-from veritas_os.policy.webhook_bind_adapter import WebhookBindAdapter, WebhookResponse
+from veritas_os.policy.bind_execution_capability import (
+    ConsumedAuthorizationLineage,
+    _transport_consumed_authorization_lineage,
+)
+from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
+    InMemoryAtomicAuthorizationConsumptionStore,
+    build_authorization_consumption_record,
+)
+from veritas_os.policy import webhook_bind_adapter as webhook_module
+from veritas_os.policy.webhook_bind_adapter import WebhookBindAdapter
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 FIXED_TIMESTAMP = "2026-08-13T00:00:00Z"
@@ -116,33 +131,22 @@ class LocalFixture:
         self.thread.join(timeout=2)
 
 
-@dataclass
-class FixtureTransport:
-    """Test-only transport preserving the adapter request flow."""
+class _FixtureOpener:
+    """Move synthetic URL mapping below the exact registered transport sink."""
 
-    origin: str
+    def __init__(self, origin: str) -> None:
+        self._origin = origin
 
-    def request(
-        self,
-        method: str,
-        url: str,
-        *,
-        headers: Mapping[str, str] | None = None,
-        json_body: Mapping[str, Any] | None = None,
-        timeout: float,
-        allow_redirects: bool = False,
-    ) -> WebhookResponse:
-        del allow_redirects
-        if not url.startswith(BASE_URL):
-            raise RuntimeError("fixture transport received an unexpected target")
-        local_url = self.origin + url.removeprefix(BASE_URL)
-        data = None
-        if json_body is not None:
-            data = canonical_json_dumps(dict(json_body)).encode("utf-8")
-        request = Request(local_url, data=data, headers=dict(headers or {}), method=method)
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310
-            body = json.loads(response.read().decode("utf-8"))
-            return WebhookResponse(response.status, body)
+    def open(self, request: Request, *, timeout: float):
+        if not request.full_url.startswith(BASE_URL):
+            raise RuntimeError("fixture opener received an unexpected target")
+        local = Request(
+            self._origin + request.full_url.removeprefix(BASE_URL),
+            data=request.data,
+            headers=dict(request.header_items()),
+            method=request.method,
+        )
+        return urlopen(local, timeout=timeout)  # noqa: S310
 
 
 def _synthetic_decision_candidate() -> dict[str, Any]:
@@ -172,7 +176,6 @@ def _adapter(fixture: LocalFixture) -> WebhookBindAdapter:
         allowed_hosts={FIXTURE_HOST},
         hmac_secret=HMAC_SECRET,
         dns_resolver=lambda hostname: ["93.184.216.34"],
-        transport=FixtureTransport(fixture.origin),
     )
 
 
@@ -201,13 +204,48 @@ def run_scenario(name: str) -> dict[str, Any]:
             expected_state_fingerprint=sha256_of_canonical_json(SNAPSHOT),
             approval_context={"external_webhook_action_approved": approved},
         )
-        receipt = execute_bind_adjudication(
-            execution_intent=intent,
-            adapter=_adapter(fixture),
-            bind_ts=FIXED_TIMESTAMP,
-            bind_receipt_id=f"receipt-{name}",
-            append_trustlog=False,
+        intent_hash = hash_execution_intent(intent)
+        record = build_authorization_consumption_record(
+            live_adapter_bind_authorization_id=f"synthetic-authorization-{name}",
+            live_adapter_bind_authorization_hash="a" * 64,
+            idempotency_key=f"synthetic-idempotency-{name}",
+            bind_context_hash="b" * 64,
+            execution_intent_id=intent.execution_intent_id,
+            execution_intent_hash=intent_hash,
+            endpoint_identity_binding_digest="endpoint-binding",
+            credential_reference_digest="credential-reference",
+            credential_scope_binding_digest="credential-scope",
+            consumed_at=FIXED_TIMESTAMP,
         )
+        store = InMemoryAtomicAuthorizationConsumptionStore()
+        if not asyncio.run(store.consume_once(record)):
+            raise RuntimeError("synthetic authorization consumption failed")
+        lineage = ConsumedAuthorizationLineage(
+            authorization_id=record.live_adapter_bind_authorization_id,
+            authorization_hash=record.live_adapter_bind_authorization_hash,
+            consumption_id=record.consumption_id,
+            execution_intent_hash=intent_hash,
+            operation_id=record.consumption_id,
+            action_class=intent.intended_action,
+            target_identity=intent.target_resource,
+            credential_reference_digest=record.credential_reference_digest,
+            credential_scope_digest=record.credential_scope_binding_digest,
+        )
+        with (
+            patch.object(
+                webhook_module,
+                "build_opener",
+                return_value=_FixtureOpener(fixture.origin),
+            ),
+            _transport_consumed_authorization_lineage(lineage),
+        ):
+            receipt = execute_bind_adjudication(
+                execution_intent=intent,
+                adapter=_adapter(fixture),
+                bind_ts=FIXED_TIMESTAMP,
+                bind_receipt_id=f"receipt-{name}",
+                append_trustlog=False,
+            )
         action_posts = sum(
             item["method"] == "POST" and item["path"] == "/action"
             for item in fixture.state.requests

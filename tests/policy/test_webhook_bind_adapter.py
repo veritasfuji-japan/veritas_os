@@ -21,7 +21,9 @@ from veritas_os.policy.bind_core import (
 from veritas_os.policy.bind_execution_capability import (
     ConsumedAuthorizationLineage,
     _transport_consumed_authorization_lineage,
+    consume_bound_execution_permit,
 )
+from veritas_os.policy import webhook_bind_adapter as webhook_module
 from veritas_os.policy.webhook_bind_adapter import WebhookBindAdapter, WebhookResponse
 from veritas_os.security.hash import sha256_of_canonical_json
 
@@ -71,6 +73,45 @@ class FakeTransport:
         return sum(
             1 for call in self.calls if call["method"] == method and call["url"] == url
         )
+
+
+_ACTIVE_FAKE_TRANSPORT: FakeTransport | None = None
+
+
+@pytest.fixture(autouse=True)
+def _registered_transport_stub(monkeypatch):
+    def request(
+        self,
+        method,
+        url,
+        *,
+        permit=None,
+        permit_binding=None,
+        final_dispatch=None,
+        take_signature=None,
+        **kwargs,
+    ):
+        del self
+        if _ACTIVE_FAKE_TRANSPORT is None:
+            raise TransportError("missing fake transport")
+        consumption_identity = ""
+        if method == "POST":
+            consumption_identity = consume_bound_execution_permit(
+                permit,
+                permit_binding,
+                final_dispatch,
+            )
+            kwargs["headers"] = dict(kwargs.get("headers") or {})
+            kwargs["headers"]["X-Veritas-Signature"] = take_signature()
+        response = _ACTIVE_FAKE_TRANSPORT.request(method, url, **kwargs)
+        return WebhookResponse(
+            response.status_code,
+            response.json_data,
+            response.headers,
+            consumption_identity,
+        )
+
+    monkeypatch.setattr(webhook_module._UrllibWebhookTransport, "request", request)
 
 
 def execute_bind_adjudication(**kwargs: Any):
@@ -137,6 +178,8 @@ def transport_for_success() -> FakeTransport:
 def adapter(
     transport: FakeTransport | None = None, **overrides: Any
 ) -> WebhookBindAdapter:
+    global _ACTIVE_FAKE_TRANSPORT
+    _ACTIVE_FAKE_TRANSPORT = transport or transport_for_success()
     values = {
         "snapshot_url": SNAPSHOT_URL,
         "action_url": ACTION_URL,
@@ -145,7 +188,7 @@ def adapter(
         "expected_postcondition": {"nested": {"ok": True}},
         "allowed_hosts": {"hooks.example.test"},
         "hmac_secret": "super-secret",
-        "transport": transport or transport_for_success(),
+        "transport": None,
         "dns_resolver": lambda hostname: PUBLIC_IP,
     }
     values.update(overrides)
@@ -204,8 +247,8 @@ def test_successful_governed_execution_commits_and_posts_once() -> None:
     assert fake.count("POST", ACTION_URL) == 1
     call = next(call for call in fake.calls if call["method"] == "POST")
     assert call["allow_redirects"] is False
-    assert call["headers"]["X-Veritas-Decision-Id"] == "dec-1"
-    assert call["headers"]["X-Veritas-Execution-Intent-Id"] == "ei-1"
+    assert call["headers"]["x-veritas-decision-id"] == "dec-1"
+    assert call["headers"]["x-veritas-execution-intent-id"] == "ei-1"
     assert call["headers"]["X-Veritas-Signature"].startswith("sha256=")
     assert "super-secret" not in json.dumps(call)
 
@@ -215,7 +258,7 @@ def test_constraint_and_runtime_risk_failures_prevent_action_post() -> None:
         adapter(action_payload=[]),
         adapter(action_url="https://evil.example.test/action"),
     ]:
-        fake = subject.transport
+        fake = _ACTIVE_FAKE_TRANSPORT
         receipt = execute_bind_adjudication(
             execution_intent=intent(),
             adapter=subject,
@@ -415,7 +458,7 @@ def test_invalid_action_configuration_is_blocked_without_escaping_bind_core() ->
         adapter(action_url="https://hooks.example.test:invalid/action"),
         adapter(action_payload={"invalid": object()}),
     ]:
-        fake = subject.transport
+        fake = _ACTIVE_FAKE_TRANSPORT
         receipt = execute_bind_adjudication(
             execution_intent=intent(),
             adapter=subject,
@@ -454,7 +497,7 @@ def test_resolver_exception_is_a_runtime_deny() -> None:
 )
 def test_url_security_rejections_prevent_action(kwargs: dict[str, Any]) -> None:
     subject = adapter(**kwargs)
-    fake = subject.transport
+    fake = _ACTIVE_FAKE_TRANSPORT
     receipt = execute_bind_adjudication(
         execution_intent=intent(),
         adapter=subject,

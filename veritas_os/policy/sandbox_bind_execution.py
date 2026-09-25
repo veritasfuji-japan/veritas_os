@@ -109,6 +109,9 @@ async def execute_sandbox_bind(
     load_current_inputs: Callable[[datetime], SandboxCurrentInputs],
     provider: SandboxCredentialProvider,
     transport: SandboxDispatchTransport,
+    transport_result_observer: Callable[
+        [SandboxHTTPObservation | None], SandboxHTTPObservation | None
+    ] | None = None,
     allow_in_memory_for_testing: bool = False,
 ) -> SandboxDispatchObservation:
     """Own preparation/resolution, persist possible dispatch, then send at most once.
@@ -252,6 +255,8 @@ never upgraded from an HTTP response. Reconciliation/receipts remain separate.
                     permit_binding=permit_binding,
                     final_dispatch=final_dispatch,
                 )
+                if transport_result_observer is not None:
+                    response = transport_result_observer(response)
             if taken:
                 reason = "TRANSPORT_RETURNED_UNVERIFIED"
                 if type(response) is str and response in {

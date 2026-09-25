@@ -128,28 +128,6 @@ class ControlledCredentialProvider:
         )
 
 
-class LoseObservedResponseTransport:
-    """Delegate one real TLS POST, then simulate response loss at the caller."""
-
-    def __init__(self, delegate: SandboxHTTPSTransport) -> None:
-        self._delegate = delegate
-        self.delegate_observation = None
-        self.calls = 0
-
-    async def send_once(
-        self, request, *, take_material, permit, permit_binding, final_dispatch
-    ):
-        self.calls += 1
-        self.delegate_observation = await self._delegate.send_once(
-            request,
-            take_material=take_material,
-            permit=permit,
-            permit_binding=permit_binding,
-            final_dispatch=final_dispatch,
-        )
-        raise RuntimeError("controlled lost response after remote commit")
-
-
 async def _sandbox_row_count() -> int:
     dsn = os.environ["VERITAS_SANDBOX_DATABASE_URL"].replace(
         "postgresql+psycopg://", "postgresql://", 1
@@ -212,11 +190,15 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         )
 
     writer_provider = ControlledCredentialProvider(writer_token)
-    real_transport = SandboxHTTPSTransport(
+    transport = SandboxHTTPSTransport(
         endpoint_url=config.endpoint_url,
         ca_pem=ca_pem,
     )
-    transport = LoseObservedResponseTransport(real_transport)
+    observed: list[str | None] = []
+
+    def lose_response(response):
+        observed.append(response)
+        raise RuntimeError("controlled lost response after remote commit")
 
     dispatch = await execute_sandbox_bind(
         artifact,
@@ -231,13 +213,13 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         load_current_inputs=load_current,
         provider=writer_provider,
         transport=transport,
+        transport_result_observer=lose_response,
     )
 
     after_dispatch = await effect_store.get(consumption.consumption_id)
     assert after_dispatch is not None
     assert after_dispatch.state == EffectExecutionState.EFFECT_UNKNOWN
-    assert transport.calls == 1
-    assert transport.delegate_observation == "HTTP_201_MATCHING_ACK"
+    assert observed == ["HTTP_201_MATCHING_ACK"]
     assert dispatch.reason_code == "TRANSPORT_FAILED_OR_UNKNOWN"
     assert await _sandbox_row_count() == 1
 
@@ -302,7 +284,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
     assert recovered.receipt_bundle is not None
     assert await _sandbox_row_count() == 1
 
-    writer_calls_after_effect = transport.calls
+    writer_calls_after_effect = len(observed)
     reader_calls_after_confirmation = reader_provider.describe_calls
 
     repeated = await recover_sandbox_attempt(
@@ -320,7 +302,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         trusted_clock=_clock,
     )
     assert repeated == recovered
-    assert transport.calls == writer_calls_after_effect == 1
+    assert len(observed) == writer_calls_after_effect == 1
     assert reader_provider.describe_calls == reader_calls_after_confirmation
     assert await _sandbox_row_count() == 1
 
@@ -346,7 +328,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         "authorization_consumed": True,
         "dispatch_intent_state": after_dispatch.state.value,
         "controlled_lost_response": True,
-        "transport_delegate_observation": transport.delegate_observation,
+        "transport_delegate_observation": observed[0],
         "lookup_outage_state": unavailable.state.value,
         "lookup_outage_retry_permitted": unavailable.external_effect_retry_permitted,
         "terminal_effect_state": recovered.state.value,
@@ -354,7 +336,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         "external_operation_reference": archive.operation.operation_id,
         "reconciliation_evidence_hash": archive.proof.deterministic_digest(),
         "receipt_bundle_hash": recovered.receipt_bundle.bundle_hash,
-        "no_blind_redispatch": transport.calls == 1,
+        "no_blind_redispatch": len(observed) == 1,
         "repeat_recovery_avoids_lookup": reader_provider.describe_calls == reader_calls_after_confirmation,
         "trustlog_exactly_once_proven": False,
         "real_decision_to_effect_e2e_proven": False,
