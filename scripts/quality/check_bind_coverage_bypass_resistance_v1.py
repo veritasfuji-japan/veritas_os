@@ -30,6 +30,16 @@ EXPECTED_SINKS = {
     ("veritas_os/policy/webhook_bind_adapter.py", "transport.request"),
     ("veritas_os/policy/webhook_bind_adapter.py", "self._delegate.request"),
 }
+_EFFECT_CALL_NAMES = {
+    "open",
+    "open_connection",
+    "post",
+    "request",
+    "send",
+    "sendall",
+    "urlopen",
+    "write",
+}
 MATRIX_CASES = (
     "direct adapter invocation", "direct helper invocation",
     "direct transport invocation", "fake Permit", "reconstructed Permit",
@@ -111,8 +121,7 @@ def discover() -> list[dict[str, object]]:
             if not isinstance(node, ast.Call):
                 continue
             name = _call_name(node)
-            candidate = (relative, name)
-            if candidate in EXPECTED_SINKS:
+            if name.rsplit(".", 1)[-1] in _EFFECT_CALL_NAMES:
                 found.append({"path": relative, "primitive": name, "line": node.lineno})
     return sorted(found, key=lambda item: (str(item["path"]), int(item["line"])))
 

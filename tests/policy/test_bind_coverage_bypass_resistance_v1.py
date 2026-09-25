@@ -11,6 +11,7 @@ import hashlib
 
 import pytest
 
+from scripts.quality import check_bind_coverage_bypass_resistance_v1 as inventory
 from scripts.quality.check_bind_coverage_bypass_resistance_v1 import (
     EXPECTED_SINKS,
     discover,
@@ -121,8 +122,11 @@ def _request() -> SandboxDispatchRequest:
 
 
 def test_fake_permit_is_rejected() -> None:
+    dispatch, binding, _ = _sandbox_capability(
+        SandboxHTTPSTransport(endpoint_url=ENDPOINT), _request()
+    )
     with pytest.raises(BindExecutionCapabilityError):
-        BoundExecutionPermit()
+        consume_bound_execution_permit(object(), binding, dispatch)
 
 
 def test_reconstructed_permit_is_rejected() -> None:
@@ -144,14 +148,16 @@ def test_serialized_permit_is_rejected() -> None:
 
 
 def test_fake_compensation_grant_is_rejected() -> None:
+    _, binding = _active_grant()
     with pytest.raises(BindExecutionCapabilityError):
-        CompensationEligibilityGrant()
+        consume_compensation_eligibility_grant(object(), binding)
 
 
 def test_reconstructed_compensation_grant_is_rejected() -> None:
+    _, binding = _active_grant()
     reconstructed = object.__new__(CompensationEligibilityGrant)
     with pytest.raises(BindExecutionCapabilityError):
-        pickle.dumps(reconstructed)
+        consume_compensation_eligibility_grant(reconstructed, binding)
 
 
 def test_permit_atomic_consumption_has_exactly_one_winner() -> None:
@@ -716,9 +722,15 @@ def test_parent_action_permit_identity_is_authority_validated() -> None:
         )
 
 
-def test_undeclared_effect_sink_breaks_exact_inventory_equality() -> None:
+def test_undeclared_effect_sink_breaks_exact_inventory_equality(
+    tmp_path, monkeypatch
+) -> None:
+    sink = tmp_path / "new_runtime.py"
+    sink.write_text("client.send(b'effect')\n", encoding="utf-8")
+    monkeypatch.setattr(inventory, "SOURCES", (str(sink),))
     discovered = {
-        (str(row["path"]), str(row["primitive"])) for row in discover()
+        (str(row["path"]), str(row["primitive"]))
+        for row in inventory.discover()
     }
-    assert discovered == EXPECTED_SINKS
-    assert discovered | {("new_runtime.py", "client.send")} != EXPECTED_SINKS
+    assert discovered == {(str(sink), "client.send")}
+    assert discovered != EXPECTED_SINKS
