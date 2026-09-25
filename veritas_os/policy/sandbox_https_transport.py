@@ -16,6 +16,11 @@ from typing import Callable
 from pydantic import SecretBytes
 
 from veritas_os.policy.sandbox_action_binding import _unique_object
+from veritas_os.policy.bind_coverage_registry import match_frozen_runtime_boundary
+from veritas_os.policy.bind_execution_capability import (
+    ImmutableFinalDispatch, PermitBinding, consume_bound_execution_permit,
+    runtime_implementation_identity,
+)
 from veritas_os.policy.sandbox_bind_execution import (
     SandboxDispatchRequest, SandboxHTTPObservation,
 )
@@ -54,6 +59,9 @@ class SandboxHTTPSTransport:
 
     async def send_once(
         self, request: SandboxDispatchRequest, *, take_material: Callable[[], SecretBytes],
+        permit: object | None = None,
+        permit_binding: PermitBinding | None = None,
+        final_dispatch: ImmutableFinalDispatch | None = None,
     ) -> SandboxHTTPObservation:
         """Take material after TLS, then write without any intervening await.
 
@@ -65,10 +73,25 @@ class SandboxHTTPSTransport:
         token = material = wire = None
         cancelled = False
         try:
+            if (
+                type(permit_binding) is not PermitBinding
+                or type(final_dispatch) is not ImmutableFinalDispatch
+                or final_dispatch.runtime_implementation_identity
+                != runtime_implementation_identity(self)
+            ):
+                raise ValueError("capability")
+            match_frozen_runtime_boundary(
+                self,
+                effect_boundary_id="native-v2-sandbox-action",
+                dispatch_kind="ACTION",
+            )
+            consume_bound_execution_permit(permit, permit_binding, final_dispatch)
             request = SandboxDispatchRequest.model_validate(request.model_dump())
             if request.endpoint_url != self._endpoint:
                 raise ValueError("endpoint")
-            body = request.payload_json.encode("utf-8")
+            body = final_dispatch.body_bytes
+            if body != request.payload_json.encode("utf-8"):
+                raise ValueError("frozen body")
             event = parse_event(body)
             if (request.payload_digest != sha256_of_canonical_json(event.model_dump())
                     or request.payload_json != canonical_json_dumps(event.model_dump())):

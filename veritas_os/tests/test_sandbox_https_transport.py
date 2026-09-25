@@ -1,6 +1,7 @@
 """Synthetic stream tests only: no DNS, TLS handshake or external effect."""
 
 import asyncio
+import hashlib
 import json
 import ssl
 
@@ -9,6 +10,13 @@ from pydantic import SecretBytes
 
 from veritas_os.policy import sandbox_https_transport as module
 from veritas_os.policy.sandbox_bind_execution import SandboxDispatchRequest
+from veritas_os.policy.bind_execution_capability import (
+    ImmutableFinalDispatch,
+    PermitBinding,
+    _mint_bound_execution_permit,
+    canonical_headers,
+    runtime_implementation_identity,
+)
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 ENDPOINT = "https://sandbox.example.test/v1/events"
@@ -21,6 +29,55 @@ def request():
         endpoint_url=ENDPOINT, payload_json=canonical_json_dumps(EVENT),
         payload_digest=sha256_of_canonical_json(EVENT), idempotency_key="original-key",
         attempt_id="attempt",
+    )
+
+
+async def authorized_send(transport, req, take):
+    body = req.payload_json.encode()
+    runtime = runtime_implementation_identity(transport)
+    identity = hashlib.sha256(body + req.endpoint_url.encode()).hexdigest()
+    dispatch = ImmutableFinalDispatch(
+        effect_boundary_id="native-v2-sandbox-action",
+        dispatch_kind="ACTION",
+        method="POST",
+        canonical_endpoint=req.endpoint_url,
+        canonical_bound_headers=canonical_headers({
+            "content-type": "application/json", "idempotency-key": req.idempotency_key,
+        }),
+        body_bytes=body,
+        body_digest=req.payload_digest,
+        request_identity=identity,
+        idempotency_identity=req.idempotency_key,
+        credential_reference_digest="reference",
+        credential_scope_digest="scope",
+        authorization_consumption_id="consumption",
+        runtime_implementation_identity=runtime,
+    )
+    binding = PermitBinding(
+        coverage_entry_id="bcb-v1-native-v2-sandbox-action",
+        operation_id=req.attempt_id,
+        action_class="sandbox.event.register.v1",
+        dispatch_kind="ACTION",
+        execution_intent_hash="intent",
+        authorization_id="authorization",
+        authorization_hash="hash",
+        authorization_consumption_id="consumption",
+        target_identity=req.endpoint_url,
+        runtime_implementation_identity=runtime,
+        effect_boundary_id=dispatch.effect_boundary_id,
+        endpoint_identity=dispatch.canonical_endpoint,
+        credential_reference_digest=dispatch.credential_reference_digest,
+        credential_scope_digest=dispatch.credential_scope_digest,
+        request_body_digest=dispatch.body_digest,
+        request_identity=dispatch.request_identity,
+        idempotency_identity=dispatch.idempotency_identity,
+    )
+    return await transport.send_once(
+        req,
+        take_material=take,
+        permit=_mint_bound_execution_permit(binding),
+        permit_binding=binding,
+        final_dispatch=dispatch,
     )
 
 
@@ -78,7 +135,9 @@ def setup(monkeypatch, raw):
 ])
 async def test_single_exact_post_and_observations(monkeypatch, status, expected):
     writer, calls, taken, take = setup(monkeypatch, response(status))
-    result = await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(request(), take_material=take)
+    result = await authorized_send(
+        module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), request(), take
+    )
     assert result == expected
     assert len(writer.writes) == len(calls) == len(taken) == 1
     wire = writer.writes[0]
@@ -100,7 +159,9 @@ async def test_single_exact_post_and_observations(monkeypatch, status, expected)
 async def test_mismatched_response_is_unknown(monkeypatch, field, value):
     writer, calls, taken, take = setup(monkeypatch, response(**{field: value}))
     with pytest.raises(module.SandboxHTTPTransportError) as caught:
-        await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(request(), take_material=take)
+        await authorized_send(
+            module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), request(), take
+        )
     assert caught.value.__context__ is None
     assert len(calls) == len(writer.writes) == 1 and writer.aborted
 
@@ -116,7 +177,9 @@ async def test_mismatched_response_is_unknown(monkeypatch, field, value):
 async def test_malformed_bounded_response_no_retry(monkeypatch, raw):
     writer, calls, taken, take = setup(monkeypatch, raw)
     with pytest.raises(module.SandboxHTTPTransportError):
-        await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(request(), take_material=take)
+        await authorized_send(
+            module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), request(), take
+        )
     assert len(calls) == 1 and writer.aborted
 
 
@@ -144,7 +207,9 @@ async def test_failure_prevents_write(monkeypatch, mode):
         req = req.model_copy(update=updates[mode])
     error = asyncio.CancelledError if mode == "cancel" else module.SandboxHTTPTransportError
     with pytest.raises(error) as caught:
-        await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(req, take_material=take)
+        await authorized_send(
+            module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), req, take
+        )
     assert not writer.writes
     assert TOKEN.decode() not in str(caught.value) and caught.value.__context__ is None
 
@@ -166,7 +231,9 @@ async def test_timeout_after_write_does_not_retry(monkeypatch):
     writer.drain = stall
     monkeypatch.setattr(module, "REQUEST_TIMEOUT_SECONDS", 0.01)
     with pytest.raises(module.SandboxHTTPTransportError):
-        await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(request(), take_material=take)
+        await authorized_send(
+            module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), request(), take
+        )
     assert len(writer.writes) == len(calls) == 1 and writer.aborted
 
 
@@ -181,4 +248,6 @@ async def test_missing_persisted_state_is_not_inferred(monkeypatch):
            f"Content-Length: {len(body)}\r\n\r\n").encode() + body
     writer, calls, taken, take = setup(monkeypatch, raw)
     with pytest.raises(module.SandboxHTTPTransportError):
-        await module.SandboxHTTPSTransport(endpoint_url=ENDPOINT).send_once(request(), take_material=take)
+        await authorized_send(
+            module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), request(), take
+        )

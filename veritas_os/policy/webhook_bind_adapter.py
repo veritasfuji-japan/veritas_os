@@ -18,11 +18,13 @@ Action and compensation receivers get JSON POST requests with these headers:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import hashlib
 import hmac
 import ipaddress
 import json
+import re
 import socket
 from typing import Any, Callable, Mapping, Protocol
 from urllib.error import HTTPError, URLError
@@ -31,6 +33,21 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.policy.bind_core.contracts import BindAdapterContract
+from veritas_os.policy.bind_coverage_registry import match_frozen_runtime_boundary
+from veritas_os.policy.bind_execution_capability import (
+    BindExecutionCapabilityError,
+    ImmutableFinalDispatch,
+    CompensationGrantBinding,
+    PermitBinding,
+    _current_consumed_authorization_lineage,
+    _bound_execution_permit_identity,
+    _consume_grant_and_mint_compensation_permit,
+    _mint_bound_execution_permit,
+    _mint_grant_from_consumed_action,
+    canonical_headers,
+    consume_bound_execution_permit,
+    runtime_implementation_identity,
+)
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 
@@ -44,6 +61,10 @@ class WebhookTransport(Protocol):
         *,
         headers: Mapping[str, str] | None = None,
         json_body: Mapping[str, Any] | None = None,
+        body_bytes: bytes | None = None,
+        final_dispatch: ImmutableFinalDispatch | None = None,
+        permit_binding: PermitBinding | None = None,
+        permit: object | None = None,
         timeout: float,
         allow_redirects: bool = False,
     ) -> "WebhookResponse":
@@ -57,6 +78,17 @@ class WebhookResponse:
     status_code: int
     json_data: Any
     headers: Mapping[str, str] = field(default_factory=dict, repr=False)
+
+
+_AUTHORIZED_WEBHOOK_DISPATCH: ContextVar[
+    tuple[ImmutableFinalDispatch, PermitBinding, object, WebhookTransport] | None
+] = ContextVar("authorized_webhook_dispatch", default=None)
+_WEBHOOK_PERMIT_CONSUMPTION: ContextVar[
+    tuple[object, PermitBinding, str] | None
+] = ContextVar("webhook_permit_consumption", default=None)
+_CONSUMED_WEBHOOK_ACTION: ContextVar[
+    tuple[object, PermitBinding, str, int, str, str] | None
+] = ContextVar("consumed_webhook_action", default=None)
 
 
 @dataclass(frozen=True, repr=False)
@@ -165,6 +197,163 @@ class WebhookBindAdapter(BindAdapterContract):
         )
         return True
 
+    def _authorize_action_dispatch(self, intent: ExecutionIntent) -> object:
+        """Called by Bind core immediately before the registered ACTION apply."""
+        return self._authorize_dispatch(
+            intent,
+            url=self.action_url,
+            body=self.action_payload,
+            dispatch_kind="ACTION",
+            effect_boundary_id="registered-webhook-action",
+        )
+
+    def _authorize_dispatch(
+        self,
+        intent: ExecutionIntent,
+        *,
+        url: str,
+        body: dict[str, Any],
+        dispatch_kind: str,
+        effect_boundary_id: str,
+        compensation_authority: tuple[object, CompensationGrantBinding] | None = None,
+    ) -> object:
+        lineage = _current_consumed_authorization_lineage()
+        transport = self.transport or _UrllibWebhookTransport()
+        coverage = match_frozen_runtime_boundary(
+            transport,
+            effect_boundary_id=effect_boundary_id,
+            dispatch_kind=dispatch_kind,
+        )
+        endpoint = self._normalized_url(url)
+        body_bytes = canonical_json_dumps(body).encode("utf-8")
+        body_digest = hashlib.sha256(body_bytes).hexdigest()
+        idempotency_key = self.build_idempotency_key(intent)
+        timestamp = (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
+        headers = {
+            "Content-Type": "application/json",
+            "X-Veritas-Decision-Id": intent.decision_id,
+            "X-Veritas-Execution-Intent-Id": intent.execution_intent_id,
+            "X-Veritas-Idempotency-Key": idempotency_key,
+            "X-Veritas-Timestamp": timestamp,
+        }
+        request_identity = hashlib.sha256(
+            b"webhook-dispatch-v1\x00"
+            + endpoint.encode("utf-8")
+            + b"\x00"
+            + body_bytes
+            + b"\x00"
+            + idempotency_key.encode("utf-8")
+        ).hexdigest()
+        runtime_identity = runtime_implementation_identity(transport)
+        final_dispatch = ImmutableFinalDispatch(
+            effect_boundary_id=effect_boundary_id,
+            dispatch_kind=dispatch_kind,  # type: ignore[arg-type]
+            method="POST",
+            canonical_endpoint=endpoint,
+            canonical_bound_headers=canonical_headers(headers),
+            body_bytes=body_bytes,
+            body_digest=body_digest,
+            request_identity=request_identity,
+            idempotency_identity=idempotency_key,
+            credential_reference_digest=lineage.credential_reference_digest,
+            credential_scope_digest=lineage.credential_scope_digest,
+            authorization_consumption_id=lineage.consumption_id,
+            runtime_implementation_identity=runtime_identity,
+        )
+        binding = PermitBinding(
+            coverage_entry_id=coverage.coverage_entry_id,
+            operation_id=lineage.operation_id,
+            action_class=lineage.action_class,
+            dispatch_kind=dispatch_kind,  # type: ignore[arg-type]
+            execution_intent_hash=lineage.execution_intent_hash,
+            authorization_id=lineage.authorization_id,
+            authorization_hash=lineage.authorization_hash,
+            authorization_consumption_id=lineage.consumption_id,
+            target_identity=lineage.target_identity,
+            runtime_implementation_identity=runtime_identity,
+            effect_boundary_id=effect_boundary_id,
+            endpoint_identity=endpoint,
+            credential_reference_digest=lineage.credential_reference_digest,
+            credential_scope_digest=lineage.credential_scope_digest,
+            request_body_digest=body_digest,
+            request_identity=request_identity,
+            idempotency_identity=idempotency_key,
+        )
+        if dispatch_kind == "COMPENSATION":
+            if compensation_authority is None:
+                raise BindExecutionCapabilityError(
+                    "COMPENSATION_GRANT_REQUIRED"
+                )
+            grant, grant_binding = compensation_authority
+            permit = _consume_grant_and_mint_compensation_permit(
+                grant, grant_binding, binding
+            )
+        else:
+            permit = _mint_bound_execution_permit(binding)
+        return _AUTHORIZED_WEBHOOK_DISPATCH.set(
+            (final_dispatch, binding, permit, transport)
+        )
+
+    def _authorize_compensation_dispatch(
+        self, intent: ExecutionIntent, reason: str, transition: object | None = None
+    ) -> object:
+        parent = _CONSUMED_WEBHOOK_ACTION.get()
+        if parent is None or not self.compensation_url:
+            raise RuntimeError("BIND_WEBHOOK_COMPENSATION_GRANT_REQUIRED")
+        (
+            parent_permit,
+            parent_binding,
+            parent_consumption,
+            parent_adapter_identity,
+            expected_endpoint,
+            expected_body_digest,
+        ) = parent
+        body = self.compensation_payload or {}
+        endpoint = self._normalized_url(self.compensation_url)
+        body_digest = hashlib.sha256(
+            canonical_json_dumps(body).encode("utf-8")
+        ).hexdigest()
+        if (
+            parent_adapter_identity != id(self)
+            or endpoint != expected_endpoint
+            or body_digest != expected_body_digest
+        ):
+            raise RuntimeError("BIND_WEBHOOK_COMPENSATION_LINEAGE_MISMATCH")
+        grant_binding = CompensationGrantBinding(
+            parent_permit_identity=_bound_execution_permit_identity(parent_permit),
+            parent_permit_consumption_identity=parent_consumption,
+            authorization_consumption_id=parent_binding.authorization_consumption_id,
+            execution_intent_hash=parent_binding.execution_intent_hash,
+            operation_id=parent_binding.operation_id,
+            action_class=parent_binding.action_class,
+            compensation_reason=reason,
+            effect_boundary_id="registered-webhook-compensation",
+            endpoint_identity=endpoint,
+            request_body_digest=body_digest,
+            runtime_implementation_identity=(
+                parent_binding.runtime_implementation_identity
+            ),
+        )
+        grant = _mint_grant_from_consumed_action(
+            parent_permit, grant_binding, transition
+        )
+        return self._authorize_dispatch(
+            intent,
+            url=self.compensation_url,
+            body=body,
+            dispatch_kind="COMPENSATION",
+            effect_boundary_id="registered-webhook-compensation",
+            compensation_authority=(grant, grant_binding),
+        )
+
+    @staticmethod
+    def _clear_authorized_dispatch(token: object) -> None:
+        _AUTHORIZED_WEBHOOK_DISPATCH.reset(token)  # type: ignore[arg-type]
+
     def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         del intent, snapshot
         try:
@@ -234,26 +423,22 @@ class WebhookBindAdapter(BindAdapterContract):
         intent: ExecutionIntent,
         error_code: str,
     ) -> dict[str, Any]:
-        idempotency_key = self.build_idempotency_key(intent)
-        canonical_body = canonical_json_dumps(body)
-        timestamp = (
-            datetime.now(timezone.utc)
-            .isoformat(timespec="seconds")
-            .replace("+00:00", "Z")
+        del intent
+        authorized = _AUTHORIZED_WEBHOOK_DISPATCH.get()
+        if authorized is None:
+            raise RuntimeError("BIND_WEBHOOK_ACTION_PERMIT_REQUIRED")
+        final_dispatch, binding, permit, transport = authorized
+        del url, body
+        response = self._request(
+            "POST",
+            final_dispatch.canonical_endpoint,
+            headers=dict(final_dispatch.canonical_bound_headers),
+            json_body=None,
+            final_dispatch=final_dispatch,
+            permit_binding=binding,
+            permit=permit,
+            authorized_transport=transport,
         )
-        signature_input = f"{timestamp}.{canonical_body}".encode("utf-8")
-        signature = hmac.new(
-            self.hmac_secret, signature_input, hashlib.sha256
-        ).hexdigest()
-        headers = {
-            "Content-Type": "application/json",
-            "X-Veritas-Decision-Id": intent.decision_id,
-            "X-Veritas-Execution-Intent-Id": intent.execution_intent_id,
-            "X-Veritas-Idempotency-Key": idempotency_key,
-            "X-Veritas-Timestamp": timestamp,
-            "X-Veritas-Signature": f"sha256={signature}",
-        }
-        response = self._request("POST", url, headers=headers, json_body=body)
         return self._require_json_object(response, error_code)
 
     def _request(
@@ -263,19 +448,82 @@ class WebhookBindAdapter(BindAdapterContract):
         *,
         headers: Mapping[str, str] | None,
         json_body: Mapping[str, Any] | None,
+        final_dispatch: ImmutableFinalDispatch | None = None,
+        permit_binding: PermitBinding | None = None,
+        permit: object | None = None,
+        authorized_transport: WebhookTransport | None = None,
     ) -> WebhookResponse:
         if not self._url_allowed(url):
             raise RuntimeError("BIND_WEBHOOK_URL_NOT_ALLOWED")
-        transport = self.transport or _UrllibWebhookTransport()
+        transport = authorized_transport or self.transport or _UrllibWebhookTransport()
         try:
-            return transport.request(
+            body_bytes = None
+            if method == "POST":
+                if (
+                    type(final_dispatch) is not ImmutableFinalDispatch
+                    or type(permit_binding) is not PermitBinding
+                ):
+                    raise RuntimeError("BIND_WEBHOOK_ACTION_PERMIT_REQUIRED")
+                body_bytes = final_dispatch.body_bytes
+                if canonical_headers(dict(headers or {})) != (
+                    final_dispatch.canonical_bound_headers
+                ):
+                    raise RuntimeError("BIND_WEBHOOK_BOUND_HEADERS_MISMATCH")
+                timestamp = dict(
+                    final_dispatch.canonical_bound_headers
+                )["x-veritas-timestamp"]
+                signature = hmac.new(
+                    self.hmac_secret,
+                    timestamp.encode("utf-8") + b"." + body_bytes,
+                    hashlib.sha256,
+                ).hexdigest()
+                headers = dict(headers or {})
+                headers["X-Veritas-Signature"] = f"sha256={signature}"
+            request_kwargs: dict[str, Any] = {
+                "headers": headers,
+                "json_body": json_body,
+                "timeout": float(self.timeout_seconds),
+                "allow_redirects": False,
+            }
+            if body_bytes is not None:
+                request_kwargs["body_bytes"] = body_bytes
+                request_kwargs.update(
+                    final_dispatch=final_dispatch,
+                    permit_binding=permit_binding,
+                    permit=permit,
+                )
+            response = transport.request(
                 method,
                 self._normalized_url(url),
-                headers=headers,
-                json_body=json_body,
-                timeout=float(self.timeout_seconds),
-                allow_redirects=False,
+                **request_kwargs,
             )
+            consumed = _WEBHOOK_PERMIT_CONSUMPTION.get()
+            if (
+                method == "POST"
+                and final_dispatch is not None
+                and final_dispatch.dispatch_kind == "ACTION"
+                and consumed is not None
+                and consumed[:2] == (permit, permit_binding)
+            ):
+                compensation_endpoint = (
+                    self._normalized_url(self.compensation_url)
+                    if self.compensation_url
+                    else ""
+                )
+                compensation_digest = hashlib.sha256(
+                    canonical_json_dumps(self.compensation_payload or {}).encode("utf-8")
+                ).hexdigest()
+                _CONSUMED_WEBHOOK_ACTION.set(
+                    (
+                        permit,
+                        permit_binding,
+                        consumed[2],
+                        id(self),
+                        compensation_endpoint,
+                        compensation_digest,
+                    )
+                )
+            return response
         except Exception:
             # Do not preserve transport exception text or chaining: injected
             # clients can include request headers or secret material in errors.
@@ -344,6 +592,22 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 class _UrllibWebhookTransport:
     """Default transport using urllib with redirects disabled."""
 
+    def __init__(self, delegate: WebhookTransport | None = None) -> None:
+        self._delegate = delegate
+
+    @property
+    def calls(self) -> object:
+        """Expose synthetic delegate observations for compatibility tests only."""
+        if self._delegate is None or not hasattr(self._delegate, "calls"):
+            raise AttributeError("transport has no synthetic call observations")
+        return self._delegate.calls
+
+    def count(self, method: str, url: str) -> int:
+        """Forward the legacy synthetic transport counter when configured."""
+        if self._delegate is None or not hasattr(self._delegate, "count"):
+            raise AttributeError("transport has no synthetic counter")
+        return int(self._delegate.count(method, url))
+
     def request(
         self,
         method: str,
@@ -351,12 +615,50 @@ class _UrllibWebhookTransport:
         *,
         headers: Mapping[str, str] | None = None,
         json_body: Mapping[str, Any] | None = None,
+        body_bytes: bytes | None = None,
+        final_dispatch: ImmutableFinalDispatch | None = None,
+        permit_binding: PermitBinding | None = None,
+        permit: object | None = None,
         timeout: float,
         allow_redirects: bool = False,
     ) -> WebhookResponse:
+        if method == "POST":
+            if (
+                type(final_dispatch) is not ImmutableFinalDispatch
+                or type(permit_binding) is not PermitBinding
+                or body_bytes != final_dispatch.body_bytes
+                or url != final_dispatch.canonical_endpoint
+                or final_dispatch.runtime_implementation_identity
+                != runtime_implementation_identity(self)
+            ):
+                raise RuntimeError("BIND_WEBHOOK_FINAL_CAPABILITY_REQUIRED")
+            outbound_headers = dict(headers or {})
+            signature = outbound_headers.pop("X-Veritas-Signature", "")
+            if not re.fullmatch(r"sha256=[0-9a-f]{64}", signature):
+                raise RuntimeError("BIND_WEBHOOK_SECRET_SLOT_INVALID")
+            if canonical_headers(outbound_headers) != (
+                final_dispatch.canonical_bound_headers
+            ):
+                raise RuntimeError("BIND_WEBHOOK_FINAL_HEADERS_MISMATCH")
+            consumption_identity = consume_bound_execution_permit(
+                permit, permit_binding, final_dispatch
+            )
+            _WEBHOOK_PERMIT_CONSUMPTION.set(
+                (permit, permit_binding, consumption_identity)
+            )
+        if self._delegate is not None:
+            return self._delegate.request(
+                method,
+                url,
+                headers=headers,
+                json_body=json_body,
+                body_bytes=body_bytes,
+                timeout=timeout,
+                allow_redirects=allow_redirects,
+            )
         del allow_redirects
-        data = None
-        if json_body is not None:
+        data = body_bytes
+        if data is None and json_body is not None:
             data = canonical_json_dumps(json_body).encode("utf-8")
         request = Request(url, data=data, headers=dict(headers or {}), method=method)
         opener = build_opener(_NoRedirectHandler)

@@ -8,6 +8,7 @@ public-looking HTTPS URLs to a loopback receiver without changing the
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -15,9 +16,25 @@ from threading import Thread
 from typing import Any, Mapping
 from urllib.request import Request, urlopen
 
-from veritas_os.policy.bind_artifacts import ExecutionIntent, hash_bind_receipt
+from veritas_os.policy.bind_artifacts import (
+    ExecutionIntent,
+    hash_bind_receipt,
+    hash_execution_intent,
+)
 from veritas_os.policy.bind_core import execute_bind_adjudication
-from veritas_os.policy.webhook_bind_adapter import WebhookBindAdapter, WebhookResponse
+from veritas_os.policy.bind_execution_capability import (
+    _mint_consumed_authorization_lineage,
+    _transport_consumed_authorization_lineage,
+)
+from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
+    InMemoryAtomicAuthorizationConsumptionStore,
+    build_authorization_consumption_record,
+)
+from veritas_os.policy.webhook_bind_adapter import (
+    WebhookBindAdapter,
+    WebhookResponse,
+    _UrllibWebhookTransport,
+)
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 FIXED_TIMESTAMP = "2026-08-13T00:00:00Z"
@@ -129,6 +146,7 @@ class FixtureTransport:
         *,
         headers: Mapping[str, str] | None = None,
         json_body: Mapping[str, Any] | None = None,
+        body_bytes: bytes | None = None,
         timeout: float,
         allow_redirects: bool = False,
     ) -> WebhookResponse:
@@ -137,7 +155,9 @@ class FixtureTransport:
             raise RuntimeError("fixture transport received an unexpected target")
         local_url = self.origin + url.removeprefix(BASE_URL)
         data = None
-        if json_body is not None:
+        if body_bytes is not None:
+            data = body_bytes
+        elif json_body is not None:
             data = canonical_json_dumps(dict(json_body)).encode("utf-8")
         request = Request(local_url, data=data, headers=dict(headers or {}), method=method)
         with urlopen(request, timeout=timeout) as response:  # noqa: S310
@@ -172,7 +192,7 @@ def _adapter(fixture: LocalFixture) -> WebhookBindAdapter:
         allowed_hosts={FIXTURE_HOST},
         hmac_secret=HMAC_SECRET,
         dns_resolver=lambda hostname: ["93.184.216.34"],
-        transport=FixtureTransport(fixture.origin),
+        transport=_UrllibWebhookTransport(FixtureTransport(fixture.origin)),
     )
 
 
@@ -201,13 +221,49 @@ def run_scenario(name: str) -> dict[str, Any]:
             expected_state_fingerprint=sha256_of_canonical_json(SNAPSHOT),
             approval_context={"external_webhook_action_approved": approved},
         )
-        receipt = execute_bind_adjudication(
-            execution_intent=intent,
-            adapter=_adapter(fixture),
-            bind_ts=FIXED_TIMESTAMP,
-            bind_receipt_id=f"receipt-{name}",
-            append_trustlog=False,
+        authorization_hash = sha256_of_canonical_json(
+            {"scenario": name, "execution_intent": hash_execution_intent(intent)}
         )
+        consumption = build_authorization_consumption_record(
+            live_adapter_bind_authorization_id=f"fixture-authorization-{name}",
+            live_adapter_bind_authorization_hash=authorization_hash,
+            idempotency_key=f"fixture-idempotency-{name}",
+            bind_context_hash=sha256_of_canonical_json({"scenario": name}),
+            execution_intent_id=intent.execution_intent_id,
+            execution_intent_hash=hash_execution_intent(intent),
+            endpoint_identity_binding_digest=sha256_of_canonical_json(
+                {"endpoint": BASE_URL + "/action"}
+            ),
+            credential_reference_digest=sha256_of_canonical_json(
+                {"credential": "synthetic-hmac"}
+            ),
+            credential_scope_binding_digest=sha256_of_canonical_json(
+                {"scope": "synthetic-action"}
+            ),
+            consumed_at=FIXED_TIMESTAMP,
+        )
+        store = InMemoryAtomicAuthorizationConsumptionStore()
+        if not asyncio.run(store.consume_once(consumption)):
+            raise RuntimeError("fixture authorization consumption failed")
+        lineage = _mint_consumed_authorization_lineage(
+            authorization_id=consumption.live_adapter_bind_authorization_id,
+            authorization_hash=consumption.live_adapter_bind_authorization_hash,
+            consumption_id=consumption.consumption_id,
+            execution_intent_hash=consumption.execution_intent_hash,
+            operation_id=consumption.consumption_id,
+            action_class=intent.intended_action,
+            target_identity=intent.target_resource,
+            credential_reference_digest=consumption.credential_reference_digest,
+            credential_scope_digest=consumption.credential_scope_binding_digest,
+        )
+        with _transport_consumed_authorization_lineage(lineage):
+            receipt = execute_bind_adjudication(
+                execution_intent=intent,
+                adapter=_adapter(fixture),
+                bind_ts=FIXED_TIMESTAMP,
+                bind_receipt_id=f"receipt-{name}",
+                append_trustlog=False,
+            )
         action_posts = sum(
             item["method"] == "POST" and item["path"] == "/action"
             for item in fixture.state.requests

@@ -166,11 +166,16 @@ class LoseObservedResponseTransport:
         self.delegate_observation: str | None = None
         self.calls = 0
 
-    async def send_once(self, request, *, take_material):
+    async def send_once(
+        self, request, *, take_material, permit, permit_binding, final_dispatch
+    ):
         self.calls += 1
         self.delegate_observation = await self._delegate.send_once(
             request,
             take_material=take_material,
+            permit=permit,
+            permit_binding=permit_binding,
+            final_dispatch=final_dispatch,
         )
         raise RuntimeError("controlled response loss after remote commit")
 
