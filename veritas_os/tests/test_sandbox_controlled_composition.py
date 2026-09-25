@@ -128,28 +128,6 @@ class ControlledCredentialProvider:
         )
 
 
-class LoseObservedResponseTransport:
-    """Delegate one real TLS POST, then simulate response loss at the caller."""
-
-    def __init__(self, delegate: SandboxHTTPSTransport) -> None:
-        self._delegate = delegate
-        self.delegate_observation = None
-        self.calls = 0
-
-    async def send_once(
-        self, request, *, take_material, permit, permit_binding, final_dispatch
-    ):
-        self.calls += 1
-        self.delegate_observation = await self._delegate.send_once(
-            request,
-            take_material=take_material,
-            permit=permit,
-            permit_binding=permit_binding,
-            final_dispatch=final_dispatch,
-        )
-        raise RuntimeError("controlled lost response after remote commit")
-
-
 async def _sandbox_row_count() -> int:
     dsn = os.environ["VERITAS_SANDBOX_DATABASE_URL"].replace(
         "postgresql+psycopg://", "postgresql://", 1
@@ -212,11 +190,11 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         )
 
     writer_provider = ControlledCredentialProvider(writer_token)
-    real_transport = SandboxHTTPSTransport(
+    transport = SandboxHTTPSTransport(
         endpoint_url=config.endpoint_url,
         ca_pem=ca_pem,
+        _discard_response_after_observation=True,
     )
-    transport = LoseObservedResponseTransport(real_transport)
 
     dispatch = await execute_sandbox_bind(
         artifact,
@@ -236,8 +214,8 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
     after_dispatch = await effect_store.get(consumption.consumption_id)
     assert after_dispatch is not None
     assert after_dispatch.state == EffectExecutionState.EFFECT_UNKNOWN
-    assert transport.calls == 1
-    assert transport.delegate_observation == "HTTP_201_MATCHING_ACK"
+    assert transport.send_calls == 1
+    assert transport.last_observation == "HTTP_201_MATCHING_ACK"
     assert dispatch.reason_code == "TRANSPORT_FAILED_OR_UNKNOWN"
     assert await _sandbox_row_count() == 1
 

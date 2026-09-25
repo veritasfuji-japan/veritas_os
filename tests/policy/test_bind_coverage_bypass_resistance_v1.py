@@ -13,8 +13,7 @@ import pytest
 
 from scripts.quality import check_bind_coverage_bypass_resistance_v1 as inventory
 from scripts.quality.check_bind_coverage_bypass_resistance_v1 import (
-    EXPECTED_SINKS,
-    discover,
+    DECLARED_EFFECT_CANDIDATES,
 )
 
 from veritas_os.policy.bind_artifacts import (
@@ -23,6 +22,8 @@ from veritas_os.policy.bind_artifacts import (
     hash_execution_intent,
 )
 from veritas_os.policy.bind_core import execute_bind_adjudication
+from veritas_os.policy.bind_core import core as bind_core_module
+from veritas_os.policy import bind_execution_capability as capability_module
 from veritas_os.policy.bind_coverage_registry import (
     load_bind_coverage_registry,
     match_frozen_runtime_boundary,
@@ -36,7 +37,7 @@ from veritas_os.policy.bind_execution_capability import (
     _mint_consumed_authorization_lineage,
     _bound_execution_permit_identity,
     _authority_object_counts,
-    _mint_bind_core_compensation_transition,
+    _claim_bind_core_transition_issuer,
     _mint_grant_from_consumed_action,
     ImmutableFinalDispatch,
     PermitBinding,
@@ -62,6 +63,11 @@ from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_j
 
 ENDPOINT = "https://sandbox.example.test/v1/events"
 EVENT = {"event_id": "11111111-1111-4111-8111-111111111111", "message": "p1"}
+
+
+def _bind_core_transition(**kwargs: str) -> object:
+    """Use Bind core's already-claimed issuer only in authority unit tests."""
+    return bind_core_module._COMPENSATION_TRANSITION_ISSUER.mint(**kwargs)
 
 
 def _sandbox_capability(
@@ -223,7 +229,7 @@ def _active_grant() -> tuple[object, CompensationGrantBinding]:
             "veritas_os.policy.webhook_bind_adapter._UrllibWebhookTransport"
         ),
     )
-    transition = _mint_bind_core_compensation_transition(
+    transition = _bind_core_transition(
         execution_intent_hash=binding.execution_intent_hash,
         operation_id=binding.operation_id,
         reason=grant_binding.compensation_reason,
@@ -463,6 +469,15 @@ def test_direct_compensation_authorization_without_core_transition_is_rejected()
             adapter._clear_authorized_dispatch(action_token)
         before_counts = _authority_object_counts()
         with pytest.raises(BindExecutionCapabilityError):
+            _claim_bind_core_transition_issuer()
+        with pytest.raises(BindExecutionCapabilityError):
+            capability_module._AUTHORITY.mint_transition(
+                object(),
+                execution_intent_hash=hash_execution_intent(intent),
+                operation_id=lineage.operation_id,
+                reason="POSTCONDITION_FAILED",
+            )
+        with pytest.raises(BindExecutionCapabilityError):
             adapter._authorize_compensation_dispatch(
                 intent, "POSTCONDITION_FAILED"
             )
@@ -537,7 +552,7 @@ def test_compensation_endpoint_mutation_is_rejected() -> None:
             "compensation_url",
             "https://hooks.example.test/other-compensation",
         )
-        transition = _mint_bind_core_compensation_transition(
+        transition = _bind_core_transition(
             execution_intent_hash=hash_execution_intent(intent),
             operation_id=lineage.operation_id,
             reason="POSTCONDITION_FAILED",
@@ -568,7 +583,7 @@ def test_compensation_payload_mutation_is_rejected() -> None:
         _consume_webhook_action(adapter, intent)
         assert adapter.compensation_payload is not None
         adapter.compensation_payload["undo"] = "valid-but-different-p2"
-        transition = _mint_bind_core_compensation_transition(
+        transition = _bind_core_transition(
             execution_intent_hash=hash_execution_intent(intent),
             operation_id=lineage.operation_id,
             reason="POSTCONDITION_FAILED",
@@ -711,7 +726,7 @@ def test_parent_action_permit_identity_is_authority_validated() -> None:
             "veritas_os.policy.webhook_bind_adapter._UrllibWebhookTransport"
         ),
     )
-    transition = _mint_bind_core_compensation_transition(
+    transition = _bind_core_transition(
         execution_intent_hash=binding.execution_intent_hash,
         operation_id=binding.operation_id,
         reason=grant_binding.compensation_reason,
@@ -723,14 +738,15 @@ def test_parent_action_permit_identity_is_authority_validated() -> None:
 
 
 def test_undeclared_effect_sink_breaks_exact_inventory_equality(
-    tmp_path, monkeypatch
+    tmp_path,
 ) -> None:
-    sink = tmp_path / "new_runtime.py"
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    sink = policy_root / "new_runtime.py"
     sink.write_text("client.send(b'effect')\n", encoding="utf-8")
-    monkeypatch.setattr(inventory, "SOURCES", (str(sink),))
     discovered = {
         (str(row["path"]), str(row["primitive"]))
-        for row in inventory.discover()
+        for row in inventory.discover(policy_root)
     }
-    assert discovered == {(str(sink), "client.send")}
-    assert discovered != EXPECTED_SINKS
+    assert discovered == {("policy/new_runtime.py", "client.send")}
+    assert discovered != set(DECLARED_EFFECT_CANDIDATES)

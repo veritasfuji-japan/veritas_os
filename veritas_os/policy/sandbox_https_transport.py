@@ -45,7 +45,13 @@ class SandboxHTTPSTransport:
     Production use still requires section 9 deployment approval and TLS tests.
     """
 
-    def __init__(self, *, endpoint_url: str, ca_pem: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        endpoint_url: str,
+        ca_pem: str | None = None,
+        _discard_response_after_observation: bool = False,
+    ) -> None:
         if type(endpoint_url) is not str or not re.fullmatch(
             r"https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
             r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?/v1/events", endpoint_url,
@@ -56,6 +62,11 @@ class SandboxHTTPSTransport:
         self._tls = ssl.create_default_context(cadata=ca_pem)
         self._tls.minimum_version = ssl.TLSVersion.TLSv1_2
         self._tls.set_alpn_protocols(["http/1.1"])
+        self._discard_response_after_observation = (
+            _discard_response_after_observation is True
+        )
+        self.last_observation: SandboxHTTPObservation | None = None
+        self.send_calls = 0
 
     async def send_once(
         self, request: SandboxDispatchRequest, *, take_material: Callable[[], SecretBytes],
@@ -73,6 +84,7 @@ class SandboxHTTPSTransport:
         token = material = wire = None
         cancelled = False
         try:
+            self.send_calls += 1
             if (
                 type(permit_binding) is not PermitBinding
                 or type(final_dispatch) is not ImmutableFinalDispatch
@@ -116,7 +128,13 @@ class SandboxHTTPSTransport:
                 writer.write(wire)
                 token = material = wire = None
                 await writer.drain()
-                return await _read_observation(reader, request, event.event_id)
+                observation = await _read_observation(
+                    reader, request, event.event_id
+                )
+                self.last_observation = observation
+                if self._discard_response_after_observation:
+                    raise RuntimeError("controlled response observation loss")
+                return observation
         except asyncio.CancelledError:
             cancelled = True
         except Exception:

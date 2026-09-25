@@ -144,6 +144,32 @@ class BindCoreCompensationTransition:
         )
 
 
+class _BindCoreTransitionIssuer:
+    """One process-local transition mint authority claimed once by Bind core."""
+
+    __slots__ = ()
+
+    def __new__(cls, *args: object, **kwargs: object) -> "_BindCoreTransitionIssuer":
+        del args, kwargs
+        raise BindExecutionCapabilityError(
+            "BIND_CORE_TRANSITION_ISSUER_CONSTRUCTION_FORBIDDEN"
+        )
+
+    def mint(
+        self,
+        *,
+        execution_intent_hash: str,
+        operation_id: str,
+        reason: str,
+    ) -> BindCoreCompensationTransition:
+        return _AUTHORITY.mint_transition(
+            self,
+            execution_intent_hash=execution_intent_hash,
+            operation_id=operation_id,
+            reason=reason,
+        )
+
+
 @dataclass(frozen=True)
 class CompensationGrantBinding:
     """Exact parent ACTION and proposed compensation semantics."""
@@ -278,6 +304,7 @@ class _PermitAuthority:
         self._transitions: weakref.WeakKeyDictionary[
             BindCoreCompensationTransition, _TransitionRecord
         ] = weakref.WeakKeyDictionary()
+        self._transition_issuer_identity: int | None = None
 
     def mint(self, binding: PermitBinding) -> BoundExecutionPermit:
         if binding.dispatch_kind != "ACTION":
@@ -305,11 +332,16 @@ class _PermitAuthority:
 
     def mint_transition(
         self,
+        issuer: object,
         *,
         execution_intent_hash: str,
         operation_id: str,
         reason: str,
     ) -> BindCoreCompensationTransition:
+        if id(issuer) != self._transition_issuer_identity:
+            raise BindExecutionCapabilityError(
+                "BIND_CORE_TRANSITION_ISSUER_INVALID"
+            )
         transition = object.__new__(BindCoreCompensationTransition)
         with self._lock:
             self._transitions[transition] = _TransitionRecord(
@@ -466,6 +498,8 @@ def _dispatch_matches(
 
 
 _AUTHORITY = _PermitAuthority()
+_ISSUER_CLAIM_LOCK = threading.Lock()
+_ISSUER_CLAIMED = False
 
 
 def _mint_bound_execution_permit(binding: PermitBinding) -> BoundExecutionPermit:
@@ -493,18 +527,18 @@ def _mint_grant_from_consumed_action(
     )
 
 
-def _mint_bind_core_compensation_transition(
-    *,
-    execution_intent_hash: str,
-    operation_id: str,
-    reason: str,
-) -> BindCoreCompensationTransition:
-    """Mint one rollback-transition authority for Bind core's immediate use."""
-    return _AUTHORITY.mint_transition(
-        execution_intent_hash=execution_intent_hash,
-        operation_id=operation_id,
-        reason=reason,
-    )
+def _claim_bind_core_transition_issuer() -> _BindCoreTransitionIssuer:
+    """Transfer the sole transition-mint authority to Bind core at import time."""
+    global _ISSUER_CLAIMED
+    with _ISSUER_CLAIM_LOCK:
+        if _ISSUER_CLAIMED:
+            raise BindExecutionCapabilityError(
+                "BIND_CORE_TRANSITION_ISSUER_ALREADY_CLAIMED"
+            )
+        _ISSUER_CLAIMED = True
+        issuer = object.__new__(_BindCoreTransitionIssuer)
+        _AUTHORITY._transition_issuer_identity = id(issuer)
+        return issuer
 
 
 def _authority_object_counts() -> tuple[int, int]:

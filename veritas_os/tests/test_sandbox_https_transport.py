@@ -11,6 +11,7 @@ from pydantic import SecretBytes
 from veritas_os.policy import sandbox_https_transport as module
 from veritas_os.policy.sandbox_bind_execution import SandboxDispatchRequest
 from veritas_os.policy.bind_execution_capability import (
+    BindExecutionCapabilityError,
     ImmutableFinalDispatch,
     PermitBinding,
     _mint_bound_execution_permit,
@@ -205,12 +206,19 @@ async def test_failure_prevents_write(monkeypatch, mode):
                    "digest": {"payload_digest": "0" * 64},
                    "key": {"idempotency_key": "bad\r\nkey"}}
         req = req.model_copy(update=updates[mode])
-    error = asyncio.CancelledError if mode == "cancel" else module.SandboxHTTPTransportError
+    if mode == "cancel":
+        error = asyncio.CancelledError
+    elif mode in {"digest", "key"}:
+        error = BindExecutionCapabilityError
+    else:
+        error = module.SandboxHTTPTransportError
     with pytest.raises(error) as caught:
         await authorized_send(
             module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), req, take
         )
     assert not writer.writes
+    if mode in {"digest", "key"}:
+        assert calls == []
     assert TOKEN.decode() not in str(caught.value) and caught.value.__context__ is None
 
 
@@ -235,6 +243,20 @@ async def test_timeout_after_write_does_not_retry(monkeypatch):
             module.SandboxHTTPSTransport(endpoint_url=ENDPOINT), request(), take
         )
     assert len(writer.writes) == len(calls) == 1 and writer.aborted
+
+
+@pytest.mark.asyncio
+async def test_exact_transport_can_model_observation_loss_after_send(monkeypatch):
+    writer, calls, taken, take = setup(monkeypatch, response())
+    transport = module.SandboxHTTPSTransport(
+        endpoint_url=ENDPOINT,
+        _discard_response_after_observation=True,
+    )
+    with pytest.raises(module.SandboxHTTPTransportError):
+        await authorized_send(transport, request(), take)
+    assert transport.last_observation == "HTTP_201_MATCHING_ACK"
+    assert transport.send_calls == 1
+    assert len(writer.writes) == len(calls) == len(taken) == 1
 
 
 @pytest.mark.asyncio

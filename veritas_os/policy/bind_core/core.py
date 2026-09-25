@@ -36,12 +36,13 @@ from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.policy.bind_core.normalizers import normalize_execution_intent
 from veritas_os.policy.bind_execution_capability import (
     _current_consumed_authorization_lineage,
-    _mint_bind_core_compensation_transition,
+    _claim_bind_core_transition_issuer,
 )
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 MAX_BIND_DECISION_SOURCE_LENGTH = 80
 _BIND_DECISION_SOURCE_REPLACEMENT = "_"
+_COMPENSATION_TRANSITION_ISSUER = _claim_bind_core_transition_issuer()
 
 
 @dataclass(frozen=True)
@@ -1055,7 +1056,7 @@ def _invoke_revert(
     token = None
     if authorize is not None:
         lineage = _current_consumed_authorization_lineage()
-        transition = _mint_bind_core_compensation_transition(
+        transition = _COMPENSATION_TRANSITION_ISSUER.mint(
             execution_intent_hash=hash_execution_intent(execution_intent),
             operation_id=lineage.operation_id,
             reason=reason,

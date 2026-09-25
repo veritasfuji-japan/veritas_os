@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import ast
+import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 from veritas_os.policy.bind_coverage_registry import (
     load_bind_coverage_registry,
@@ -19,16 +21,43 @@ from veritas_os.policy.bind_execution_capability import PROOF_SCOPE
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "artifacts" / "bind-coverage-bypass-resistance-v1"
-SOURCES = (
-    "veritas_os/policy/sandbox_https_transport.py",
-    "veritas_os/policy/webhook_bind_adapter.py",
-)
-EXPECTED_SINKS = {
-    ("veritas_os/policy/sandbox_https_transport.py", "asyncio.open_connection"),
-    ("veritas_os/policy/sandbox_https_transport.py", "writer.write"),
-    ("veritas_os/policy/webhook_bind_adapter.py", "opener.open"),
-    ("veritas_os/policy/webhook_bind_adapter.py", "transport.request"),
-    ("veritas_os/policy/webhook_bind_adapter.py", "self._delegate.request"),
+POLICY_ROOT = ROOT / "veritas_os" / "policy"
+DECLARED_EFFECT_CANDIDATES = {
+    ("veritas_os/policy/bundle.py", "archive_path.open"): "local_file_io",
+    ("veritas_os/policy/bundle.py", "open"): "local_file_io",
+    ("veritas_os/policy/bundle.py", "tarfile.open"): "local_file_io",
+    (
+        "veritas_os/policy/sandbox_event_service.py",
+        "app.post",
+    ): "route_registration_not_dispatch",
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "asyncio.open_connection",
+    ): "auxiliary_reconciliation_read_outside_v1",
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "writer.write",
+    ): "auxiliary_reconciliation_read_outside_v1",
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "asyncio.open_connection",
+    ): "native_v2_sandbox_action",
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "writer.write",
+    ): "native_v2_sandbox_action",
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "opener.open",
+    ): "registered_webhook_action_or_compensation",
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "transport.request",
+    ): "registered_webhook_dispatch_to_exact_sink",
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "self._delegate.request",
+    ): "controlled_test_delegate_below_exact_sink",
 }
 _EFFECT_CALL_NAMES = {
     "open",
@@ -112,11 +141,15 @@ def _call_name(node: ast.Call) -> str:
     return ".".join(reversed(parts))
 
 
-def discover() -> list[dict[str, object]]:
-    """Return the exact reviewed production sink inventory."""
+def discover(root: Path = POLICY_ROOT) -> list[dict[str, object]]:
+    """Discover effect-shaped calls across the complete policy package."""
     found: list[dict[str, object]] = []
-    for relative in SOURCES:
-        tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+    for source in sorted(root.rglob("*.py")):
+        try:
+            relative = str(source.relative_to(ROOT))
+        except ValueError:
+            relative = str(source.relative_to(root.parent))
+        tree = ast.parse(source.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -133,6 +166,67 @@ def _write(name: str, value: object) -> None:
     )
 
 
+def run_mandatory_matrix() -> int:
+    """Execute every mapped node and retain per-case execution results."""
+    results: list[dict[str, object]] = []
+    passed = True
+    positive_cases = {
+        "exact outbound representation equality",
+        "legitimate ACTION",
+        "legitimate COMPENSATION",
+    }
+    for case_name in MATRIX_CASES:
+        node = MATRIX_CASE_TO_PYTEST_NODE[case_name]
+        completed = subprocess.run(
+            [sys.executable, "-m", "pytest", "-q", node],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        status = "PASS" if completed.returncode == 0 else "FAIL"
+        passed = passed and completed.returncode == 0
+        if completed.returncode != 0:
+            sys.stderr.write(completed.stdout)
+            sys.stderr.write(completed.stderr)
+        negative = case_name not in positive_cases
+        results.append(
+            {
+                "case_name": case_name,
+                "pytest_node": node,
+                "executed": True,
+                "status": status,
+                "expected_outcome": (
+                    "LEGITIMATE_EFFECT" if not negative else "REJECTED_FAIL_CLOSED"
+                ),
+                "zero_effect_evidence": (
+                    "asserted_by_behavioral_test" if negative else "not_applicable"
+                ),
+            }
+        )
+    matrix_payload = {
+            "proof_scope": PROOF_SCOPE,
+            "executed_case_count": len(results),
+            "passed_case_count": sum(row["status"] == "PASS" for row in results),
+            "all_mapped_cases_executed": len(results) == len(MATRIX_CASES),
+            "cases": results,
+        }
+    _write("adversarial-matrix.json", matrix_payload)
+    report_path = OUTPUT / "proof-report.json"
+    if report_path.exists():
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        matrix_bytes = json.dumps(
+            matrix_payload, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        report.update(
+            adversarial_matrix_digest=hashlib.sha256(matrix_bytes).hexdigest(),
+            adversarial_matrix_executed=len(results) == len(MATRIX_CASES),
+            adversarial_matrix_passed=passed,
+        )
+        _write("proof-report.json", report)
+    return 0 if passed and len(results) == len(MATRIX_CASES) else 1
+
+
 def main() -> int:
     entries = [
         entry for entry in load_bind_coverage_registry()
@@ -141,6 +235,7 @@ def main() -> int:
     validation = validate_bind_coverage_registry(load_bind_coverage_registry())
     discovered = discover()
     discovered_set = {(str(row["path"]), str(row["primitive"])) for row in discovered}
+    declared_set = set(DECLARED_EFFECT_CANDIDATES)
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -151,7 +246,7 @@ def main() -> int:
     }
     passed = (
         validation.valid
-        and discovered_set == EXPECTED_SINKS
+        and discovered_set == declared_set
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -171,7 +266,15 @@ def main() -> int:
         "implementation_status": "IMPLEMENTED",
         "proof_status": "NOT_PROVEN",
     }
-    _write("execution-boundary-inventory.json", discovered)
+    _write("execution-boundary-inventory.json", [
+        {
+            **row,
+            "classification": DECLARED_EFFECT_CANDIDATES.get(
+                (str(row["path"]), str(row["primitive"])), "UNDECLARED"
+            ),
+        }
+        for row in discovered
+    ])
     _write("bind-coverage-registry.json", registry_payload)
     if set(MATRIX_CASE_TO_PYTEST_NODE) != set(MATRIX_CASES):
         raise RuntimeError("mandatory matrix mapping is incomplete")
@@ -188,7 +291,10 @@ def main() -> int:
         ],
         "result_source": "each pytest node performs the named behavior",
     })
-    _write("near-miss.json", {"undeclared_sink_count": len(discovered_set ^ EXPECTED_SINKS)})
+    _write("near-miss.json", {
+        "undeclared_candidates": sorted(discovered_set - declared_set),
+        "missing_declared_candidates": sorted(declared_set - discovered_set),
+    })
     _write("immutable-dispatch-evidence.json", {
         "representation": "ImmutableFinalDispatch", "proof_status": "NOT_PROVEN"
     })
@@ -198,7 +304,7 @@ def main() -> int:
     _write("provenance.json", provenance)
     _write("proof-report.json", {
         **provenance,
-        "inventory_set_equality": discovered_set == EXPECTED_SINKS,
+        "inventory_set_equality": discovered_set == declared_set,
         "registry_set_equality": registered_boundaries == expected_boundaries,
         "result": "PASS" if passed else "FAIL",
         "explicit_non_claims": [
@@ -213,4 +319,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-matrix", action="store_true")
+    arguments = parser.parse_args()
+    raise SystemExit(run_mandatory_matrix() if arguments.run_matrix else main())

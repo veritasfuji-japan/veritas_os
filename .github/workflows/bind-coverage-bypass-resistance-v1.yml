@@ -26,12 +26,7 @@ jobs:
       - name: Verify inventory and export evidence
         run: PYTHONPATH=. python scripts/quality/check_bind_coverage_bypass_resistance_v1.py
       - name: Run frozen adversarial proof tests
-        run: |
-          PYTHONPATH=. pytest -q \
-            tests/policy/test_bind_coverage_bypass_resistance_v1.py \
-            veritas_os/tests/test_live_adapter_bind_authorization_consumption.py \
-            veritas_os/tests/test_sandbox_recovery.py \
-            veritas_os/tests/test_sandbox_https_transport.py
+        run: PYTHONPATH=. python scripts/quality/check_bind_coverage_bypass_resistance_v1.py --run-matrix
       - name: Bind artifact to exact tested SHA
         run: |
           python - <<'PY'
@@ -42,6 +37,11 @@ jobs:
           assert report["proof_scope"] == "BIND_COVERAGE_BYPASS_RESISTANCE_V1"
           assert report["result"] == "PASS"
           assert report["proof_status"] == "NOT_PROVEN"
+          matrix = json.loads(Path("artifacts/bind-coverage-bypass-resistance-v1/adversarial-matrix.json").read_text())
+          assert matrix["executed_case_count"] == 38
+          assert matrix["passed_case_count"] == 38
+          assert matrix["all_mapped_cases_executed"] is True
+          assert all(case["executed"] and case["status"] == "PASS" for case in matrix["cases"])
           PY
       - uses: actions/upload-artifact@v4
         if: always()
