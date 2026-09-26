@@ -1,0 +1,51 @@
+name: Bind Coverage Bypass Resistance V1
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bind-coverage-bypass-resistance-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt pytest pytest-asyncio
+      - name: Verify inventory and export evidence
+        run: PYTHONPATH=. python scripts/quality/check_bind_coverage_bypass_resistance_v1.py
+      - name: Run frozen adversarial proof tests
+        run: PYTHONPATH=. python scripts/quality/check_bind_coverage_bypass_resistance_v1.py --run-matrix
+      - name: Bind artifact to exact tested SHA
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/bind-coverage-bypass-resistance-v1/proof-report.json").read_text())
+          assert report["tested_sha"] == "${{ github.sha }}"
+          assert report["proof_scope"] == "BIND_COVERAGE_BYPASS_RESISTANCE_V1"
+          assert report["result"] == "PASS"
+          assert report["proof_status"] == "NOT_PROVEN"
+          matrix = json.loads(Path("artifacts/bind-coverage-bypass-resistance-v1/adversarial-matrix.json").read_text())
+          assert matrix["executed_case_count"] == 38
+          assert matrix["passed_case_count"] == 38
+          assert matrix["all_mapped_cases_executed"] is True
+          assert all(case["executed"] and case["status"] == "PASS" for case in matrix["cases"])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bind-coverage-bypass-resistance-v1-${{ github.sha }}
+          path: artifacts/bind-coverage-bypass-resistance-v1/*.json
+          retention-days: 90
