@@ -280,7 +280,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
     assert recovered.receipt_bundle is not None
     assert await _sandbox_row_count() == 1
 
-    writer_calls_after_effect = transport.calls
+    writer_calls_after_effect = transport.send_calls
     reader_calls_after_confirmation = reader_provider.describe_calls
 
     repeated = await recover_sandbox_attempt(
@@ -298,7 +298,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         trusted_clock=_clock,
     )
     assert repeated == recovered
-    assert transport.calls == writer_calls_after_effect == 1
+    assert transport.send_calls == writer_calls_after_effect == 1
     assert reader_provider.describe_calls == reader_calls_after_confirmation
     assert await _sandbox_row_count() == 1
 
@@ -324,7 +324,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         "authorization_consumed": True,
         "dispatch_intent_state": after_dispatch.state.value,
         "controlled_lost_response": True,
-        "transport_delegate_observation": transport.delegate_observation,
+        "transport_delegate_observation": transport.last_observation,
         "lookup_outage_state": unavailable.state.value,
         "lookup_outage_retry_permitted": unavailable.external_effect_retry_permitted,
         "terminal_effect_state": recovered.state.value,
@@ -332,7 +332,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         "external_operation_reference": archive.operation.operation_id,
         "reconciliation_evidence_hash": archive.proof.deterministic_digest(),
         "receipt_bundle_hash": recovered.receipt_bundle.bundle_hash,
-        "no_blind_redispatch": transport.calls == 1,
+        "no_blind_redispatch": transport.send_calls == 1,
         "repeat_recovery_avoids_lookup": reader_provider.describe_calls == reader_calls_after_confirmation,
         "trustlog_exactly_once_proven": False,
         "real_decision_to_effect_e2e_proven": False,

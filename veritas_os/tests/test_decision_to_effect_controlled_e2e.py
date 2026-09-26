@@ -483,7 +483,7 @@ async def _run_fault_case(
         assert unavailable.state == EffectExecutionState.EFFECT_UNKNOWN
         assert unavailable.recovery_status == "STILL_UNKNOWN"
         assert unavailable.external_effect_retry_permitted is False
-        assert transport.calls == 1
+        assert transport.send_calls == 1
     finally:
         outage_flag.unlink(missing_ok=True)
 
@@ -522,7 +522,7 @@ async def _run_fault_case(
         trusted_clock=_clock,
     )
     assert repeated == recovered
-    assert transport.calls == 1
+    assert transport.send_calls == 1
     assert reader.describe_calls == reader_calls_after_confirmation
 
     archive = await effect_store.get_reconciliation(consumption.consumption_id)
@@ -535,8 +535,8 @@ async def _run_fault_case(
         "repeated": repeated,
         "archive": archive,
         "consumption": consumption,
-        "transport_calls": transport.calls,
-        "transport_delegate_observation": transport.delegate_observation,
+        "transport_calls": transport.send_calls,
+        "transport_delegate_observation": transport.last_observation,
         "reader_calls_after_confirmation": reader_calls_after_confirmation,
         "reader_calls_after_repeat": reader.describe_calls,
         "governance_recheck_calls": governance_calls["count"],
