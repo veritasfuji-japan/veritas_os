@@ -8,7 +8,7 @@
 - **Authority / execution semantics:** unchanged.
 - **Default operator surface:** unchanged.
 
-This document defines the machine-readable boundary for a future observable-digest resolver. It does not implement or authorize resolver behavior.
+This document defines the machine-readable boundary for observable-digest resolution. A later isolated `separate_store_readonly_v1` implementation candidate now exists, but this contract does not authorize or activate it.
 
 The corresponding schema is:
 
@@ -62,7 +62,7 @@ The existing v1 rule remains locator-first:
 
 The existing helper `_resolve_observable_digest_ref` in `wat_events.py` selects and normalizes locator input. It is **not** the external/store resolver behavior defined by this contract.
 
-Formalizing this contract does not activate any new resolver.
+Formalizing this contract did not activate a resolver. The later minimal implementation remains separately blocked from authorization and activation.
 
 ## 4. Request contract
 
@@ -234,7 +234,7 @@ Before resolver behavior may become active, a separate security review must expl
 - audit emission;
 - no implicit fallback to unsafe locator types.
 
-Until that review is complete, this contract remains non-behavioral.
+The pre-behavior review is complete and frozen. The later minimal implementation remains blocked until exact-SHA security evidence and a separate activation decision are complete.
 
 The pre-behavior adversarial security review is now frozen at:
 
@@ -244,7 +244,7 @@ with machine-readable threat matrix:
 
 `security/observable_digest_resolver_security_review_v1.json`
 
-That review currently leaves behavioral activation **BLOCKED**. It does not itself authorize implementation or runtime activation.
+That review leaves behavioral activation **BLOCKED**. A minimal implementation candidate now exists, but neither the review nor the implementation itself authorizes runtime activation.
 
 ## 12. Explicit non-scope
 
@@ -271,7 +271,7 @@ This contract adds no:
 
 ## 13. Activation gate
 
-Resolver behavior may be added only in a later, separate change after:
+Resolver behavior was added only in a later, separate change after:
 
 1. this contract is reviewed;
 2. the security boundary is reviewed;
@@ -292,3 +292,20 @@ This contract formalization is complete when:
 - uncertainty cannot be silently erased;
 - runtime resolver behavior remains absent;
 - existing runtime decisions remain unchanged.
+
+
+## 15. Minimal implementation status
+
+The isolated implementation candidate is documented at:
+
+`docs/en/architecture/observable-digest-resolver-minimal-behavior-implementation-v1.md`
+
+and:
+
+`security/observable_digest_resolver_minimal_behavior_implementation_v1.json`
+
+It implements only the non-network `separate_store_readonly_v1` profile over an immutable caller-supplied snapshot.
+
+It remains unwired from `/v1/decide`, Bind, execution permission, and effect-bearing paths.
+
+Implementation does not equal authorization or activation.
