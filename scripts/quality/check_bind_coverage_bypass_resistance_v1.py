@@ -128,6 +128,54 @@ DECLARED_EFFECT_CAPABILITIES = {
     ): "governed_v1_effect_transport",
 }
 
+# This outer inventory is intentionally independent of effect-family knowledge.
+# A new non-VERITAS dependency therefore requires review even when this scanner
+# does not yet understand that dependency's effect mechanisms.
+DECLARED_REVIEWED_DEPENDENCIES = {
+    "__future__": "stdlib_non_effect",
+    "abc": "stdlib_non_effect",
+    "asyncio": "effect_capable",
+    "base64": "stdlib_non_effect",
+    "binascii": "stdlib_non_effect",
+    "concurrent.futures": "stdlib_non_effect",
+    "contextlib": "stdlib_non_effect",
+    "contextvars": "stdlib_non_effect",
+    "cryptography.exceptions": "non_effect_support",
+    "cryptography.hazmat.primitives": "non_effect_support",
+    "cryptography.hazmat.primitives.asymmetric.ed25519": "non_effect_support",
+    "dataclasses": "stdlib_non_effect",
+    "datetime": "stdlib_non_effect",
+    "enum": "stdlib_non_effect",
+    "fastapi": "non_effect_support",
+    "fastapi.responses": "non_effect_support",
+    "functools": "stdlib_non_effect",
+    "gzip": "local_io_capable",
+    "hashlib": "stdlib_non_effect",
+    "hmac": "stdlib_non_effect",
+    "httpx": "effect_capable",
+    "ipaddress": "stdlib_non_effect",
+    "json": "stdlib_non_effect",
+    "logging": "stdlib_non_effect",
+    "math": "stdlib_non_effect",
+    "os": "process_launch_capable",
+    "pathlib": "local_io_capable",
+    "psycopg.types.json": "non_effect_support",
+    "pydantic": "non_effect_support",
+    "re": "stdlib_non_effect",
+    "secrets": "stdlib_non_effect",
+    "socket": "effect_capable",
+    "ssl": "non_effect_support",
+    "tarfile": "local_io_capable",
+    "threading": "stdlib_non_effect",
+    "typing": "stdlib_non_effect",
+    "urllib.error": "non_effect_support",
+    "urllib.parse": "non_effect_support",
+    "urllib.request": "effect_capable",
+    "uuid": "stdlib_non_effect",
+    "weakref": "stdlib_non_effect",
+    "yaml": "non_effect_support",
+}
+
 # Compatibility name for callers of the historical one-inventory interface.
 DECLARED_EFFECT_CANDIDATES = DECLARED_EFFECT_SINKS
 
@@ -315,8 +363,19 @@ class _EffectVisitor(ast.NodeVisitor):
         self.relative = relative
         self.aliases: dict[str, str] = {}
         self.instances: dict[str, str] = {}
+        self.dependencies: list[dict[str, object]] = []
         self.capabilities: list[dict[str, object]] = []
         self.sinks: list[dict[str, object]] = []
+
+    def _add_dependency(self, identity: str, line: int) -> None:
+        if not identity.startswith("veritas_os"):
+            self.dependencies.append(
+                {
+                    "path": self.relative,
+                    "dependency": identity,
+                    "line": line,
+                }
+            )
 
     def _add_capability(self, identity: str, line: int) -> None:
         self.capabilities.append(
@@ -335,10 +394,12 @@ class _EffectVisitor(ast.NodeVisitor):
             )
             if _is_capability_import(imported.name):
                 self._add_capability(imported.name, node.lineno)
+            self._add_dependency(imported.name, node.lineno)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
-        if node.module is None:
+        if node.module is None or node.level:
             return
+        self._add_dependency(node.module, node.lineno)
         for imported in node.names:
             identity = f"{node.module}.{imported.name}"
             self.aliases[imported.asname or imported.name] = identity
@@ -404,6 +465,7 @@ class _EffectVisitor(ast.NodeVisitor):
         if canonical in {"__import__", "importlib.import_module"} and node.args:
             argument = node.args[0]
             if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                self._add_dependency(argument.value, node.lineno)
                 if _is_capability_import(argument.value):
                     self._add_capability(argument.value, node.lineno)
         if _is_effect_sink(canonical) or raw in _PRESERVED_SINKS:
@@ -417,15 +479,20 @@ class _EffectVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def discover_inventories(
+def _discover_inventories(
     root: Path = POLICY_ROOT,
-) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    """Discover canonical capability imports and effect sinks package-wide.
+) -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
+    """Discover dependencies, capability imports, and sinks package-wide.
 
     This deliberately bounded static analysis resolves direct import aliases and
     simple assigned client/socket objects.  It is not whole-program Python
     soundness and does not resolve reflective or data-dependent dispatch.
     """
+    dependencies: list[dict[str, object]] = []
     capabilities: list[dict[str, object]] = []
     sinks: list[dict[str, object]] = []
     for source in sorted(root.rglob("*.py")):
@@ -436,13 +503,34 @@ def discover_inventories(
         tree = ast.parse(source.read_text(encoding="utf-8"))
         visitor = _EffectVisitor(relative)
         visitor.visit(tree)
+        dependencies.extend(visitor.dependencies)
         capabilities.extend(visitor.capabilities)
         sinks.extend(visitor.sinks)
 
     def key(item: dict[str, object]) -> tuple[str, int]:
         return str(item["path"]), int(item["line"])
 
-    return sorted(capabilities, key=key), sorted(sinks, key=key)
+    return (
+        sorted(dependencies, key=key),
+        sorted(capabilities, key=key),
+        sorted(sinks, key=key),
+    )
+
+
+def discover_inventories(
+    root: Path = POLICY_ROOT,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Return effect capabilities and sinks through the existing interface."""
+    _, capabilities, sinks = _discover_inventories(root)
+    return capabilities, sinks
+
+
+def discover_reviewed_dependencies(
+    root: Path = POLICY_ROOT,
+) -> list[dict[str, object]]:
+    """Return all non-VERITAS imports regardless of known effect capability."""
+    dependencies, _, _ = _discover_inventories(root)
+    return dependencies
 
 
 def discover(root: Path = POLICY_ROOT) -> list[dict[str, object]]:
@@ -477,6 +565,14 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "unlisted_transport.py",
             "import socket\nsocket.create_connection(('example.com', 443))\n",
         ),
+        "unknown_dependency": (
+            "unknown_dependency.py",
+            "import urllib3\nurllib3.PoolManager()\n",
+        ),
+        "unknown_dependency_alias": (
+            "unknown_dependency_alias.py",
+            "import urllib3 as u3\nu3.PoolManager()\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -486,25 +582,35 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             for old_source in policy_root.glob("*.py"):
                 old_source.unlink()
             (policy_root / filename).write_text(source, encoding="utf-8")
-            capabilities, sinks = discover_inventories(policy_root)
+            dependencies, capabilities, sinks = _discover_inventories(policy_root)
+            dependency_set = {str(row["dependency"]) for row in dependencies}
             capability_set = {
                 (str(row["path"]), str(row["capability"])) for row in capabilities
             }
             sink_set = {(str(row["path"]), str(row["primitive"])) for row in sinks}
-            canonical_sink_found = any(
+            canonical_socket_sink_found = any(
                 primitive == "socket.create_connection" for _, primitive in sink_set
             )
-            rejected = capability_set != set(
+            effect_inventories_rejected = capability_set != set(
                 DECLARED_EFFECT_CAPABILITIES
             ) and sink_set != set(DECLARED_EFFECT_SINKS)
-            passed = canonical_sink_found and rejected
+            dependency_rejected = dependency_set != set(DECLARED_REVIEWED_DEPENDENCIES)
+            unknown_dependency = name.startswith("unknown_dependency")
+            passed = dependency_rejected and (
+                "urllib3" in dependency_set
+                and "urllib3" not in DECLARED_REVIEWED_DEPENDENCIES
+                if unknown_dependency
+                else canonical_socket_sink_found and effect_inventories_rejected
+            )
             results.append(
                 {
                     "name": name,
                     "passed": passed,
+                    "dependencies": dependencies,
                     "capabilities": capabilities,
                     "sinks": sinks,
-                    "inventory_equality": False if rejected else True,
+                    "dependency_set_equality": not dependency_rejected,
+                    "effect_inventory_equality": not effect_inventories_rejected,
                     "automatic_package_scan": name == "automatic_new_module",
                 }
             )
@@ -579,7 +685,14 @@ def main() -> int:
         if entry.proof_scope == PROOF_SCOPE
     ]
     validation = validate_bind_coverage_registry(load_bind_coverage_registry())
-    discovered_capabilities, discovered_sinks = discover_inventories()
+    (
+        discovered_dependencies,
+        discovered_capabilities,
+        discovered_sinks,
+    ) = _discover_inventories()
+    discovered_dependency_set = {
+        str(row["dependency"]) for row in discovered_dependencies
+    }
     discovered_capability_set = {
         (str(row["path"]), str(row["capability"])) for row in discovered_capabilities
     }
@@ -588,6 +701,7 @@ def main() -> int:
     }
     declared_capability_set = set(DECLARED_EFFECT_CAPABILITIES)
     declared_sink_set = set(DECLARED_EFFECT_SINKS)
+    declared_dependency_set = set(DECLARED_REVIEWED_DEPENDENCIES)
     regressions_passed, regression_results = run_static_inventory_regressions()
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
@@ -599,6 +713,7 @@ def main() -> int:
     }
     passed = (
         validation.valid
+        and discovered_dependency_set == declared_dependency_set
         and discovered_capability_set == declared_capability_set
         and discovered_sink_set == declared_sink_set
         and regressions_passed
@@ -639,11 +754,21 @@ def main() -> int:
         }
         for row in discovered_capabilities
     ]
+    reviewed_dependency_inventory = [
+        {
+            **row,
+            "classification": DECLARED_REVIEWED_DEPENDENCIES.get(
+                str(row["dependency"]), "UNDECLARED"
+            ),
+        }
+        for row in discovered_dependencies
+    ]
     # Retain the historical artifact name while making the separate sink
     # inventory explicit for this closure.
     _write("execution-boundary-inventory.json", effect_sink_inventory)
     _write("effect-capability-inventory.json", effect_capability_inventory)
     _write("effect-sink-inventory.json", effect_sink_inventory)
+    _write("reviewed-dependency-inventory.json", reviewed_dependency_inventory)
     _write(
         "static-inventory-regressions.json",
         {
@@ -685,6 +810,12 @@ def main() -> int:
             ),
             "undeclared_sinks": sorted(discovered_sink_set - declared_sink_set),
             "missing_declared_sinks": sorted(declared_sink_set - discovered_sink_set),
+            "undeclared_dependencies": sorted(
+                discovered_dependency_set - declared_dependency_set
+            ),
+            "missing_declared_dependencies": sorted(
+                declared_dependency_set - discovered_dependency_set
+            ),
         },
     )
     _write(
@@ -700,6 +831,9 @@ def main() -> int:
         "proof-report.json",
         {
             **provenance,
+            "dependency_set_equality": (
+                discovered_dependency_set == declared_dependency_set
+            ),
             "inventory_set_equality": discovered_sink_set == declared_sink_set,
             "effect_capability_set_equality": (
                 discovered_capability_set == declared_capability_set

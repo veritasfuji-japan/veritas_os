@@ -23,11 +23,13 @@ It helps reviewers answer a practical question:
 
 ## Static effect inventory boundary
 
-The `BIND_COVERAGE_BYPASS_RESISTANCE_V1` proof gate separately inventories
-effect-capable imports and effect sink call sites across every Python module
-under `veritas_os/policy`. Both discovered sets must exactly equal their
-reviewed declarations; the executable Bind boundary registry must also remain
-an exact match.
+The `BIND_COVERAGE_BYPASS_RESISTANCE_V1` proof gate separately inventories all
+non-VERITAS import dependencies, known effect-capable imports, and effect sink
+call sites across every Python module under `veritas_os/policy`. All three
+discovered sets must exactly equal their reviewed declarations; the executable
+Bind boundary registry must also remain an exact match. The outer dependency
+inventory ensures that adding a library unknown to the effect scanner still
+requires explicit review.
 
 The scanner canonicalizes direct import aliases and simple assigned
 network-client, event-loop, and socket objects. It covers the declared

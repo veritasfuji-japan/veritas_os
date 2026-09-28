@@ -37,6 +37,7 @@ jobs:
           assert report["proof_scope"] == "BIND_COVERAGE_BYPASS_RESISTANCE_V1"
           assert report["result"] == "PASS"
           assert report["proof_status"] == "NOT_PROVEN"
+          assert report["dependency_set_equality"] is True
           assert report["effect_capability_set_equality"] is True
           assert report["effect_sink_set_equality"] is True
           assert report["static_inventory_regressions_passed"] is True
@@ -45,7 +46,7 @@ jobs:
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert len(regressions["cases"]) == 4
+          assert len(regressions["cases"]) == 6
           assert all(case["passed"] for case in regressions["cases"])
           matrix = json.loads(
               (artifact_root / "adversarial-matrix.json").read_text()

@@ -16,6 +16,7 @@ from scripts.quality.check_bind_coverage_bypass_resistance_v1 import (
     DECLARED_EFFECT_CAPABILITIES,
     DECLARED_EFFECT_CANDIDATES,
     DECLARED_EFFECT_SINKS,
+    DECLARED_REVIEWED_DEPENDENCIES,
 )
 
 from veritas_os.policy.bind_artifacts import (
@@ -797,3 +798,26 @@ def test_automatic_policy_scan_finds_assigned_socket_object(tmp_path) -> None:
         ("policy/not_named_in_scanner.py", "socket.socket"),
         ("policy/not_named_in_scanner.py", "socket.socket.connect"),
     }
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import urllib3\nurllib3.PoolManager()\n",
+        "import urllib3 as u3\nu3.PoolManager()\n",
+    ],
+    ids=["direct", "module-alias"],
+)
+def test_unknown_dependency_breaks_exact_dependency_inventory(
+    tmp_path, source: str
+) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "unknown_transport.py").write_text(source, encoding="utf-8")
+
+    dependencies = inventory.discover_reviewed_dependencies(policy_root)
+    dependency_set = {str(row["dependency"]) for row in dependencies}
+
+    assert dependency_set == {"urllib3"}
+    assert "urllib3" not in DECLARED_REVIEWED_DEPENDENCIES
+    assert dependency_set != set(DECLARED_REVIEWED_DEPENDENCIES)
