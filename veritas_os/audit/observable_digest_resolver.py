@@ -17,7 +17,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Final, Literal
 
@@ -297,6 +297,7 @@ class ImmutableSeparateStoreSnapshot:
     """Canonical immutable snapshot supplied by the caller/test harness."""
 
     entries: tuple[tuple[str, ImmutableSeparateStoreRecord], ...]
+    _snapshot_hash: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if len(self.entries) > MAX_SNAPSHOT_ENTRIES:
@@ -317,7 +318,16 @@ class ImmutableSeparateStoreSnapshot:
             seen.add(locator)
             normalized.append((locator, record))
 
-        object.__setattr__(self, "entries", tuple(sorted(normalized, key=lambda item: item[0])))
+        canonical_entries = tuple(sorted(normalized, key=lambda item: item[0]))
+        object.__setattr__(self, "entries", canonical_entries)
+        payload = [
+            {
+                "locator": locator,
+                "record": record.to_canonical_dict(),
+            }
+            for locator, record in canonical_entries
+        ]
+        object.__setattr__(self, "_snapshot_hash", _sha256_ref(payload))
 
     @classmethod
     def from_mapping(
@@ -355,7 +365,7 @@ class ImmutableSeparateStoreSnapshot:
 
     @property
     def snapshot_hash(self) -> str:
-        return _sha256_ref(self.to_canonical_payload())
+        return self._snapshot_hash
 
 
 ResolutionState = Literal["RESOLVED", "UNRESOLVED"]
@@ -429,7 +439,7 @@ class ObservableDigestResolverObservation:
     caller_id_hash: str
     access_scope: str
     profile_hash: str
-    snapshot_hash: str
+    snapshot_hash: str | None
     observed_at: str
     lookup_outcome: str
     resolved_digest: str | None
@@ -445,7 +455,8 @@ class ObservableDigestResolverObservation:
         _require_sha256_ref(self.caller_id_hash, "caller_id_hash")
         _require_non_empty_text(self.access_scope, "access_scope")
         _require_sha256_ref(self.profile_hash, "profile_hash")
-        _require_sha256_ref(self.snapshot_hash, "snapshot_hash")
+        if self.snapshot_hash is not None:
+            _require_sha256_ref(self.snapshot_hash, "snapshot_hash")
         _require_utc_z(self.observed_at, "observed_at")
         _require_non_empty_text(self.lookup_outcome, "lookup_outcome")
         if self.resolved_digest is not None:
@@ -505,7 +516,7 @@ def _build_resolution(
     *,
     request: ObservableDigestResolverRequest,
     profile: SeparateStoreReadonlyProfile,
-    snapshot: ImmutableSeparateStoreSnapshot,
+    snapshot_hash: str | None,
     observed_at: str,
     resolution_state: ResolutionState,
     resolved_digest: str | None,
@@ -532,7 +543,7 @@ def _build_resolution(
         caller_id_hash=request.caller_id_hash,
         access_scope=profile.namespace,
         profile_hash=profile.profile_hash,
-        snapshot_hash=snapshot.snapshot_hash,
+        snapshot_hash=snapshot_hash,
         observed_at=observed_at,
         lookup_outcome=lookup_outcome,
         resolved_digest=resolved_digest,
@@ -568,7 +579,7 @@ def resolve_separate_store_readonly_v1(
         return _build_resolution(
             request=request,
             profile=profile,
-            snapshot=snapshot,
+            snapshot_hash=None,
             observed_at=observed_at,
             resolution_state="UNRESOLVED",
             resolved_digest=None,
@@ -581,7 +592,7 @@ def resolve_separate_store_readonly_v1(
         return _build_resolution(
             request=request,
             profile=profile,
-            snapshot=snapshot,
+            snapshot_hash=None,
             observed_at=observed_at,
             resolution_state="UNRESOLVED",
             resolved_digest=None,
@@ -595,7 +606,7 @@ def resolve_separate_store_readonly_v1(
         return _build_resolution(
             request=request,
             profile=profile,
-            snapshot=snapshot,
+            snapshot_hash=None,
             observed_at=observed_at,
             resolution_state="UNRESOLVED",
             resolved_digest=None,
@@ -607,7 +618,7 @@ def resolve_separate_store_readonly_v1(
         return _build_resolution(
             request=request,
             profile=profile,
-            snapshot=snapshot,
+            snapshot_hash=None,
             observed_at=observed_at,
             resolution_state="UNRESOLVED",
             resolved_digest=None,
@@ -615,12 +626,13 @@ def resolve_separate_store_readonly_v1(
             lookup_outcome="AUTHZ_DENIED",
         )
 
+    snapshot_hash = snapshot.snapshot_hash
     record = snapshot.lookup_exact(request.locator)
     if record is None:
         return _build_resolution(
             request=request,
             profile=profile,
-            snapshot=snapshot,
+            snapshot_hash=snapshot_hash,
             observed_at=observed_at,
             resolution_state="UNRESOLVED",
             resolved_digest=None,
@@ -633,7 +645,7 @@ def resolve_separate_store_readonly_v1(
         return _build_resolution(
             request=request,
             profile=profile,
-            snapshot=snapshot,
+            snapshot_hash=snapshot_hash,
             observed_at=observed_at,
             resolution_state="UNRESOLVED",
             resolved_digest=None,
@@ -644,7 +656,7 @@ def resolve_separate_store_readonly_v1(
     return _build_resolution(
         request=request,
         profile=profile,
-        snapshot=snapshot,
+        snapshot_hash=snapshot_hash,
         observed_at=observed_at,
         resolution_state="RESOLVED",
         resolved_digest=digest,
