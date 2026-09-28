@@ -99,7 +99,7 @@ The profile contains:
 
 There is no service credential, execution credential, delegation, impersonation, ambient credential, or credential-provider lookup.
 
-Caller authorization and namespace scope are checked before snapshot lookup.
+Caller authorization and namespace scope are checked before any snapshot provenance or lookup is exposed by the resolver. Pre-snapshot failures keep `snapshot_hash = null`.
 
 Read-access authorization remains separate from VERITAS execution Authority.
 
@@ -144,7 +144,7 @@ The implementation produces an immutable internal observation binding:
 - caller ID hash;
 - bounded access scope;
 - profile hash;
-- snapshot hash;
+- snapshot hash only after caller + namespace authorization reaches the snapshot boundary; pre-snapshot failures keep it null;
 - observed timestamp;
 - lookup outcome;
 - resolved digest or null;
