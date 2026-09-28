@@ -2,17 +2,26 @@
 
 ## 1. Status
 
-- **Proposal only.**
-- **Resolver behavior implemented:** no.
+- **Proposal baseline:** accepted for the bounded implementation step.
+- **Resolver behavior implemented:** yes, as an isolated non-network candidate.
 - **Resolver behavior authorized:** no.
+- **Resolver behavior activated:** no.
 - **Activation gate:** **BLOCKED**.
 - **Contract baseline:** `observable-digest-resolver-contract-v1`.
 - **Security-review baseline:** v1.1.
 - **Product main baseline:** `3e5f6c56aa82a78c6020a35525aa68a0fe149159`.
 
-This document proposes the smallest behavior worth implementing next.
+This document freezes the smallest behavior boundary. A separate isolated implementation candidate now exists, but it is not authorized or activated.
 
-It does **not** activate a resolver, wire `/v1/decide`, access a network, fetch credentials, perform policy decisions, or change execution permission.
+The implementation does **not** wire `/v1/decide`, access a network, fetch credentials, perform policy decisions, or change execution permission.
+
+Implementation module:
+
+`veritas_os/audit/observable_digest_resolver.py`
+
+Behavior proof:
+
+`veritas_os/tests/test_observable_digest_resolver_behavior.py`
 
 The machine-readable companion is:
 
@@ -238,7 +247,7 @@ All six existing non-amplification guarantees remain hard `false`.
 
 The proposed first profile uses only existing resolver-scoped predicates:
 
-- `LOCATOR_MISSING` — no usable locator;
+- `LOCATOR_MISSING` — retained as an upstream locator-selection predicate; the contract-valid `separate_store_readonly_v1` request requires a non-empty locator, so this profile does not emit it after request construction;
 - `LOCATOR_MALFORMED` — unsupported scheme or invalid/noncanonical grammar;
 - `AUTHZ_DENIED` — caller or namespace outside the frozen read scope;
 - `RESOLUTION_FAILED` — exact canonical locator absent from the snapshot;
@@ -370,7 +379,7 @@ A separate implementation PR must prove at least:
 
 - valid exact locator returns `RESOLVED` with the exact stored digest;
 - all non-amplification guarantees remain false;
-- missing locator -> `LOCATOR_MISSING`;
+- missing or empty locator is rejected before a contract-valid resolver request is constructed; `LOCATOR_MISSING` remains an upstream locator-selection predicate;
 - unsupported or noncanonical locator -> `LOCATOR_MALFORMED`;
 - percent encoding / query / fragment / dot segments / empty segments / Unicode / overlength forms are rejected;
 - disallowed caller -> `AUTHZ_DENIED` before lookup;
@@ -416,7 +425,7 @@ The minimal profile does not add:
 
 ## 18. Activation gate
 
-This proposal does not authorize behavior.
+This proposal and the isolated implementation candidate do not authorize or activate behavior.
 
 Behavior remains blocked until:
 

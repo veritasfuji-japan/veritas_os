@@ -1,13 +1,14 @@
 {
   "proposal_version": "1.0",
-  "status": "PROPOSAL_ONLY",
-  "behavior_implemented": false,
+  "status": "IMPLEMENTED_NOT_AUTHORIZED_NOT_ACTIVATED",
+  "behavior_implemented": true,
   "behavior_authorized": false,
   "activation_gate": "BLOCKED",
   "baseline": {
     "resolver_contract": "observable-digest-resolver-contract-v1",
     "security_review_revision": "1.1",
-    "product_main": "3e5f6c56aa82a78c6020a35525aa68a0fe149159"
+    "product_main": "3e5f6c56aa82a78c6020a35525aa68a0fe149159",
+    "implementation_base_main": "d5f4e916c07513331c0a6bb30db711fdebf42b37"
   },
   "governing_invariants": {
     "resolution_evidence_not_boundary_validation": true,
@@ -100,11 +101,13 @@
       "retry_count_max": 0,
       "network_request_count_max": 0,
       "cache_lookup_count_max": 0,
-      "parser_count_max": 1
+      "parser_count_max": 1,
+      "snapshot_entry_count_max": 4096,
+      "record_field_count_max": 8
     }
   },
   "proposed_failure_mapping": {
-    "LOCATOR_MISSING": "empty or missing locator before lookup",
+    "LOCATOR_MISSING": "pre-contract locator-selection predicate; not emitted by a contract-valid separate_store_readonly_v1 request because request.locator is required and non-empty",
     "LOCATOR_MALFORMED": "unsupported scheme or noncanonical/invalid locator grammar",
     "AUTHZ_DENIED": "caller hash not allowed or namespace outside pinned profile scope",
     "RESOLUTION_FAILED": "canonical locator absent from the immutable snapshot",
@@ -142,7 +145,8 @@
     ],
     "evidence_ref_public_result": null,
     "persistence": false,
-    "audit_emission": false
+    "audit_emission": false,
+    "snapshot_hash_rule": "snapshot_hash is null for failures before authorized namespace scope reaches the snapshot; populated only once snapshot access is permitted"
   },
   "proof_obligations": {
     "what_was_observed": "Exact request, locator, profile, snapshot identity and typed record/digest outcome are bound in the internal observation.",
@@ -162,7 +166,7 @@
   },
   "required_behavior_tests_if_implemented": [
     "valid exact locator returns RESOLVED with the exact stored sha256 digest and all semantic guarantees false",
-    "missing locator returns UNRESOLVED with LOCATOR_MISSING",
+    "missing or empty locator is rejected before a contract-valid resolver request is constructed; LOCATOR_MISSING remains an upstream locator-selection predicate",
     "unsupported scheme returns UNRESOLVED with LOCATOR_MALFORMED",
     "percent encoding, query, fragment, dot segment, empty segment, Unicode, and overlength locator forms are rejected",
     "caller outside the profile allowlist returns AUTHZ_DENIED before snapshot lookup",
@@ -206,10 +210,21 @@
   ],
   "activation_requirements": [
     "This proposal is separately reviewed and accepted before any behavior code is introduced.",
-    "Behavior implementation is a separate PR from this proposal.",
+    "Behavior implementation is carried in a separate PR from the proposal baseline and remains independently reviewable.",
     "The separate implementation PR preserves the exact non-network profile boundary or explicitly reopens security review.",
     "All frozen minimal behavior tests and applicable v1.1 security-review negative/composite tests pass on the exact implementation SHA.",
     "Any introduction of network, credentials, retries, redirects, cache, mutable shared state, persistence, or another scheme reopens security review before activation.",
     "Behavior remains unwired from /v1/decide and execution paths until an explicit later activation decision."
-  ]
+  ],
+  "behavior_activated": false,
+  "implementation": {
+    "module": "veritas_os/audit/observable_digest_resolver.py",
+    "behavior_test": "veritas_os/tests/test_observable_digest_resolver_behavior.py",
+    "profile_id": "separate_store_readonly_v1",
+    "external_io": false,
+    "decide_route_wired": false,
+    "execution_path_wired": false,
+    "persistence": false,
+    "audit_emission": false
+  }
 }
