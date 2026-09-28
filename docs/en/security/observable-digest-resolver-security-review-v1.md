@@ -4,7 +4,7 @@
 
 - **Phase:** pre-behavior adversarial security review.
 - **Review revision:** 1.1 (16 primary controls + 7 cross-cutting paths + composite scenarios).
-- **Resolver behavior:** not implemented or authorized.
+- **Resolver behavior:** isolated `separate_store_readonly_v1` implementation candidate exists; not authorized or activated.
 - **Contract baseline:** `observable-digest-resolver-contract-v1`.
 - **Activation status:** **BLOCKED**.
 
@@ -73,7 +73,7 @@ All are currently marked:
 REQUIRED_NOT_IMPLEMENTED
 ```
 
-That status is intentional because resolver behavior does not yet exist.
+Those statuses remain activation requirements until the exact implementation SHA proves or explicitly scopes each applicable control. The presence of an implementation candidate does not close the security review automatically.
 
 Therefore the security review does **not** claim the resolver is secure or ready to activate.
 
@@ -518,7 +518,7 @@ It is a pre-behavior threat model and activation gate.
 
 The next step is **not** to activate the resolver.
 
-The minimal behavior boundary is now proposed separately at:
+The minimal behavior boundary was proposed separately at:
 
 `docs/en/architecture/observable-digest-resolver-minimal-behavior-proposal-v1.md`
 
@@ -526,13 +526,21 @@ with machine-readable companion:
 
 `security/observable_digest_resolver_minimal_behavior_proposal_v1.json`
 
-That proposal remains:
+The isolated implementation candidate is documented at:
+
+`docs/en/architecture/observable-digest-resolver-minimal-behavior-implementation-v1.md`
+
+with machine-readable implementation record:
+
+`security/observable_digest_resolver_minimal_behavior_implementation_v1.json`
+
+Current state remains:
 
 ```text
-PROPOSAL_ONLY
-behavior_implemented = false
+behavior_implemented = true
 behavior_authorized = false
+behavior_activated = false
 activation_gate = BLOCKED
 ```
 
-Any behavior implementation must be a later, separate change and must pass the frozen negative/composite evidence on the exact implementation SHA before any activation decision.
+The implementation candidate is a separate change and must pass the frozen negative/composite evidence on its exact implementation SHA before any activation decision.
