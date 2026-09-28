@@ -46,7 +46,9 @@
     "evidence_ref_null": true,
     "no_implicit_normalization": true,
     "no_implicit_inference": true,
-    "monotonic_evidence_degradation": true
+    "monotonic_evidence_degradation": true,
+    "snapshot_provenance_withheld_before_authorization": true,
+    "snapshot_hash_precomputed_at_snapshot_construction": true
   },
   "locator_missing_disposition": {
     "runtime_emitted": false,
