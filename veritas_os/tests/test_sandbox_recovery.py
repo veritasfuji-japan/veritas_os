@@ -5,6 +5,7 @@ import json
 import pytest
 
 from veritas_os.policy import sandbox_recovery as module
+from veritas_os.policy import bind_execution_capability as capability
 from veritas_os.policy import sandbox_reconciliation as reconciliation
 from veritas_os.policy.trusted_https_reconciliation import ApprovedReconciliationVerifier
 from veritas_os.tests.test_sandbox_action_binding import PAYLOAD
@@ -74,8 +75,26 @@ async def _recover(artifact, args):
 
 
 @pytest.mark.asyncio
-async def test_pre_dispatch_crash_closes_no_effect_without_reader_or_resend(prepared_inputs):
+async def test_pre_dispatch_crash_closes_no_effect_without_reader_or_resend(
+    prepared_inputs, monkeypatch
+):
     artifact, args = await _pre_dispatch_case(prepared_inputs)
+    mints = {"action": 0, "grant": 0}
+
+    def action_mint(*args, **kwargs):
+        del args, kwargs
+        mints["action"] += 1
+        raise AssertionError("recovery minted ACTION authority")
+
+    def grant_mint(*args, **kwargs):
+        del args, kwargs
+        mints["grant"] += 1
+        raise AssertionError("recovery minted compensation eligibility")
+
+    monkeypatch.setattr(capability._AUTHORITY, "mint", action_mint)
+    monkeypatch.setattr(
+        capability._AUTHORITY, "mint_grant_for_consumed_action", grant_mint
+    )
     operation_id = prepared_inputs[2].consumption_id
     before = await args["effect_store"].get(operation_id)
     assert before is not None
@@ -96,6 +115,7 @@ async def test_pre_dispatch_crash_closes_no_effect_without_reader_or_resend(prep
     # Idempotent restart: terminal no-effect is returned without any reader access.
     repeated = await _recover(artifact, args)
     assert repeated == result
+    assert mints == {"action": 0, "grant": 0}
 
 
 @pytest.mark.asyncio
@@ -137,6 +157,22 @@ async def test_lookup_absence_remains_unknown_and_never_posts(prepared_inputs, m
         monkeypatch,
         status=404,
     )
+    mints = {"action": 0, "grant": 0}
+
+    def action_mint(*args, **kwargs):
+        del args, kwargs
+        mints["action"] += 1
+        raise AssertionError("recovery minted ACTION authority")
+
+    def grant_mint(*args, **kwargs):
+        del args, kwargs
+        mints["grant"] += 1
+        raise AssertionError("recovery minted compensation eligibility")
+
+    monkeypatch.setattr(capability._AUTHORITY, "mint", action_mint)
+    monkeypatch.setattr(
+        capability._AUTHORITY, "mint_grant_for_consumed_action", grant_mint
+    )
     result = await _recover(artifact, args)
 
     assert result.recovery_status == "STILL_UNKNOWN"
@@ -147,6 +183,7 @@ async def test_lookup_absence_remains_unknown_and_never_posts(prepared_inputs, m
     assert len(writer.writes) == 1
     assert writer.writes[0].startswith(b"GET ")
     assert b"POST" not in writer.writes[0]
+    assert mints == {"action": 0, "grant": 0}
 
 
 @pytest.mark.asyncio

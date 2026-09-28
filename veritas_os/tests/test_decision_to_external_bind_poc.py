@@ -78,6 +78,7 @@ def test_positive_decision_to_external_bind_proof(tmp_path: Path) -> None:
     assert report["runtime_authority_recommended_outcome"] == "commit"
     assert report["bind_adjudication_invoked"] is True
     assert report["webhook_bind_adapter_invoked"] is True
+    assert report["authorization_consumption_exercised"] is True
     assert report["external_post_count"] == 1
     assert report["bind_final_outcome"] == "COMMITTED"
     assert report["decision_to_bind_receipt_lineage_verified"] is True

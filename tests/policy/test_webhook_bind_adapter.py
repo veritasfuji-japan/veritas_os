@@ -12,9 +12,21 @@ from veritas_os.policy.bind_artifacts import (
     ExecutionIntent,
     FinalOutcome,
     canonical_bind_receipt_json,
+    hash_execution_intent,
 )
-from veritas_os.policy.bind_core import BindAdapterContract, execute_bind_adjudication
-from veritas_os.policy.webhook_bind_adapter import WebhookBindAdapter, WebhookResponse
+from veritas_os.policy.bind_core import (
+    BindAdapterContract,
+    execute_bind_adjudication as _execute_bind_adjudication,
+)
+from veritas_os.policy.bind_execution_capability import (
+    _mint_consumed_authorization_lineage,
+    _transport_consumed_authorization_lineage,
+)
+from veritas_os.policy.webhook_bind_adapter import (
+    WebhookBindAdapter,
+    WebhookResponse,
+    _UrllibWebhookTransport,
+)
 from veritas_os.security.hash import sha256_of_canonical_json
 
 
@@ -34,6 +46,7 @@ class FakeTransport:
         *,
         headers: Mapping[str, str] | None = None,
         json_body: Mapping[str, Any] | None = None,
+        body_bytes: bytes | None = None,
         timeout: float,
         allow_redirects: bool = False,
     ) -> WebhookResponse:
@@ -42,7 +55,10 @@ class FakeTransport:
                 "method": method,
                 "url": url,
                 "headers": dict(headers or {}),
-                "json_body": dict(json_body or {}),
+                "json_body": (
+                    json.loads(body_bytes) if body_bytes is not None
+                    else dict(json_body or {})
+                ),
                 "timeout": timeout,
                 "allow_redirects": allow_redirects,
             }
@@ -59,6 +75,26 @@ class FakeTransport:
         return sum(
             1 for call in self.calls if call["method"] == method and call["url"] == url
         )
+
+
+def execute_bind_adjudication(**kwargs: Any):
+    execution_intent = kwargs["execution_intent"]
+    adapter_value = kwargs["adapter"]
+    if type(adapter_value) is not WebhookBindAdapter:
+        return _execute_bind_adjudication(**kwargs)
+    lineage = _mint_consumed_authorization_lineage(
+        authorization_id="test-authorization",
+        authorization_hash="a" * 64,
+        consumption_id="test-consumption",
+        execution_intent_hash=hash_execution_intent(execution_intent),
+        operation_id="test-operation",
+        action_class=execution_intent.intended_action,
+        target_identity=execution_intent.target_resource,
+        credential_reference_digest="test-reference",
+        credential_scope_digest="test-scope",
+    )
+    with _transport_consumed_authorization_lineage(lineage):
+        return _execute_bind_adjudication(**kwargs)
 
 
 PUBLIC_IP = ["93.184.216.34"]
@@ -113,7 +149,9 @@ def adapter(
         "expected_postcondition": {"nested": {"ok": True}},
         "allowed_hosts": {"hooks.example.test"},
         "hmac_secret": "super-secret",
-        "transport": transport or transport_for_success(),
+        "transport": _UrllibWebhookTransport(
+            transport or transport_for_success()
+        ),
         "dns_resolver": lambda hostname: PUBLIC_IP,
     }
     values.update(overrides)
@@ -172,8 +210,8 @@ def test_successful_governed_execution_commits_and_posts_once() -> None:
     assert fake.count("POST", ACTION_URL) == 1
     call = next(call for call in fake.calls if call["method"] == "POST")
     assert call["allow_redirects"] is False
-    assert call["headers"]["X-Veritas-Decision-Id"] == "dec-1"
-    assert call["headers"]["X-Veritas-Execution-Intent-Id"] == "ei-1"
+    assert call["headers"]["x-veritas-decision-id"] == "dec-1"
+    assert call["headers"]["x-veritas-execution-intent-id"] == "ei-1"
     assert call["headers"]["X-Veritas-Signature"].startswith("sha256=")
     assert "super-secret" not in json.dumps(call)
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 from datetime import UTC, datetime, timedelta
 import importlib
@@ -66,6 +67,14 @@ from veritas_os.policy.bind_artifacts import (  # noqa: E402
     hash_execution_intent,
 )
 from veritas_os.policy.bind_core import execute_bind_adjudication  # noqa: E402
+from veritas_os.policy.bind_execution_capability import (  # noqa: E402
+    _mint_consumed_authorization_lineage,
+    _transport_consumed_authorization_lineage,
+)
+from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (  # noqa: E402
+    InMemoryAtomicAuthorizationConsumptionStore,
+    build_authorization_consumption_record,
+)
 from veritas_os.policy.compiler import compile_policy_to_bundle  # noqa: E402
 from veritas_os.policy.decision_candidate import (  # noqa: E402
     DecisionCandidate,
@@ -530,16 +539,69 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             and runtime_result.recommended_outcome == "commit"
         )
         bind_invoked = False
+        authorization_consumed = False
         receipt = None
         with LocalFixture() as fixture:
             if governance_commit:
-                bind_invoked = True
-                receipt = execute_bind_adjudication(
-                    execution_intent=intent,
-                    adapter=_adapter(fixture),
-                    bind_ts=FIXED_TIMESTAMP,
-                    append_trustlog=False,
+                authorization_hash = sha256_of_canonical_json(
+                    {
+                        "execution_intent_hash": hash_execution_intent(intent),
+                        "authority_evidence_id": (
+                            proof.authority_evidence.authority_evidence_id
+                        ),
+                    }
                 )
+                consumption = build_authorization_consumption_record(
+                    live_adapter_bind_authorization_id=(
+                        "decision-bind-poc:" + authorization_hash
+                    ),
+                    live_adapter_bind_authorization_hash=authorization_hash,
+                    idempotency_key="decision-bind-poc:" + intent.execution_intent_id,
+                    bind_context_hash=sha256_of_canonical_json(
+                        {"proof": "decision-to-external-bind-poc"}
+                    ),
+                    execution_intent_id=intent.execution_intent_id,
+                    execution_intent_hash=hash_execution_intent(intent),
+                    endpoint_identity_binding_digest=sha256_of_canonical_json(
+                        {"endpoint": "https://external-bind-poc.example.test/action"}
+                    ),
+                    credential_reference_digest=sha256_of_canonical_json(
+                        {"credential": "synthetic-webhook-hmac"}
+                    ),
+                    credential_scope_binding_digest=sha256_of_canonical_json(
+                        {"scope": "synthetic-webhook-action"}
+                    ),
+                    consumed_at=NOW.isoformat(),
+                )
+                consumption_store = InMemoryAtomicAuthorizationConsumptionStore()
+                authorization_consumed = asyncio.run(
+                    consumption_store.consume_once(consumption)
+                )
+                if not authorization_consumed:
+                    raise RuntimeError("synthetic Bind authorization was not consumed")
+                lineage = _mint_consumed_authorization_lineage(
+                    authorization_id=consumption.live_adapter_bind_authorization_id,
+                    authorization_hash=consumption.live_adapter_bind_authorization_hash,
+                    consumption_id=consumption.consumption_id,
+                    execution_intent_hash=consumption.execution_intent_hash,
+                    operation_id=consumption.consumption_id,
+                    action_class=intent.intended_action,
+                    target_identity=intent.target_resource,
+                    credential_reference_digest=(
+                        consumption.credential_reference_digest
+                    ),
+                    credential_scope_digest=(
+                        consumption.credential_scope_binding_digest
+                    ),
+                )
+                bind_invoked = True
+                with _transport_consumed_authorization_lineage(lineage):
+                    receipt = execute_bind_adjudication(
+                        execution_intent=intent,
+                        adapter=_adapter(fixture),
+                        bind_ts=FIXED_TIMESTAMP,
+                        append_trustlog=False,
+                    )
             action_posts = sum(
                 item["method"] == "POST" and item["path"] == "/action"
                 for item in fixture.state.requests
@@ -648,7 +710,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
             "bind_reason_code": receipt.bind_reason_code if receipt else None,
             "decision_to_bind_receipt_lineage_verified": receipt_lineage,
             "real_bind_authorization_artifact_created": False,
-            "authorization_consumption_exercised": False,
+            "authorization_consumption_exercised": authorization_consumed,
             "real_customer_endpoint_used": False,
             "production_credentials_used": False,
             "production_deployment_claimed": False,
@@ -661,7 +723,7 @@ def run_proof(report_path: Path, *, invalid_authority: bool = False) -> int:
                 "real S3 Object Lock durability",
                 "production TrustLog infrastructure",
                 "Real Bind Authorization",
-                "authorization consumption or atomic single-use enforcement",
+                "production authorization consumption storage",
                 "production deployment",
                 "regulatory approval or certification",
             ],
