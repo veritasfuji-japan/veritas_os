@@ -15,11 +15,12 @@ def _proposal() -> dict[str, object]:
     return json.loads(PROPOSAL_PATH.read_text(encoding="utf-8"))
 
 
-def test_proposal_is_non_behavioral_and_blocked() -> None:
+def test_proposal_records_implementation_without_authorization_or_activation() -> None:
     proposal = _proposal()
-    assert proposal["status"] == "PROPOSAL_ONLY"
-    assert proposal["behavior_implemented"] is False
+    assert proposal["status"] == "IMPLEMENTED_NOT_AUTHORIZED_NOT_ACTIVATED"
+    assert proposal["behavior_implemented"] is True
     assert proposal["behavior_authorized"] is False
+    assert proposal["behavior_activated"] is False
     assert proposal["activation_gate"] == "BLOCKED"
 
 
@@ -112,10 +113,10 @@ def test_behavior_implementation_must_be_separate_and_unwired() -> None:
 
 def test_document_preserves_proposal_only_claim_boundary() -> None:
     text = DOC_PATH.read_text(encoding="utf-8")
-    assert "**Proposal only.**" in text
+    assert "**Resolver behavior implemented:** yes, as an isolated non-network candidate." in text
     assert "**Activation gate:** **BLOCKED**." in text
     assert "evidence degradation" in text
     assert "must never increase conclusion authority" in text
     assert "separate_store_readonly_v1" in text
     assert "No resolver runtime" not in text  # exact wording intentionally not used
-    assert "This proposal does not authorize behavior." in text
+    assert "do not authorize or activate behavior" in text
