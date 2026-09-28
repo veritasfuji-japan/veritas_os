@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from dataclasses import FrozenInstanceError
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 
@@ -166,8 +166,13 @@ def test_overlength_locator_fails_closed() -> None:
     )
 
 
-def test_unauthorized_caller_fails_before_snapshot_lookup() -> None:
+def test_unauthorized_caller_fails_before_snapshot_access() -> None:
     with patch.object(
+        ImmutableSeparateStoreSnapshot,
+        "snapshot_hash",
+        new_callable=PropertyMock,
+        side_effect=AssertionError("snapshot provenance must not be observed"),
+    ), patch.object(
         ImmutableSeparateStoreSnapshot,
         "lookup_exact",
         side_effect=AssertionError("snapshot lookup must not occur"),
@@ -178,11 +183,17 @@ def test_unauthorized_caller_fails_before_snapshot_lookup() -> None:
     assert resolution.result.failure_predicates == (
         ObservableDigestFailurePredicate.AUTHZ_DENIED,
     )
+    assert resolution.observation.snapshot_hash is None
 
 
-def test_cross_namespace_fails_before_snapshot_lookup() -> None:
+def test_cross_namespace_fails_before_snapshot_access() -> None:
     request = _request("separate_store://other/wat-5")
     with patch.object(
+        ImmutableSeparateStoreSnapshot,
+        "snapshot_hash",
+        new_callable=PropertyMock,
+        side_effect=AssertionError("snapshot provenance must not be observed"),
+    ), patch.object(
         ImmutableSeparateStoreSnapshot,
         "lookup_exact",
         side_effect=AssertionError("snapshot lookup must not occur"),
@@ -192,6 +203,7 @@ def test_cross_namespace_fails_before_snapshot_lookup() -> None:
     assert resolution.result.failure_predicates == (
         ObservableDigestFailurePredicate.AUTHZ_DENIED,
     )
+    assert resolution.observation.snapshot_hash is None
 
 
 def test_missing_exact_key_is_resolution_failed() -> None:
