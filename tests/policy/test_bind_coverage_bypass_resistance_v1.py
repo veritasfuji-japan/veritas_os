@@ -13,7 +13,10 @@ import pytest
 
 from scripts.quality import check_bind_coverage_bypass_resistance_v1 as inventory
 from scripts.quality.check_bind_coverage_bypass_resistance_v1 import (
+    DECLARED_EFFECT_CAPABILITIES,
     DECLARED_EFFECT_CANDIDATES,
+    DECLARED_EFFECT_SINKS,
+    DECLARED_REVIEWED_DEPENDENCIES,
 )
 
 from veritas_os.policy.bind_artifacts import (
@@ -82,10 +85,12 @@ def _sandbox_capability(
         dispatch_kind="ACTION",
         method="POST",
         canonical_endpoint=request.endpoint_url,
-        canonical_bound_headers=canonical_headers({
-            "content-type": "application/json",
-            "idempotency-key": request.idempotency_key,
-        }),
+        canonical_bound_headers=canonical_headers(
+            {
+                "content-type": "application/json",
+                "idempotency-key": request.idempotency_key,
+            }
+        ),
         body_bytes=body,
         body_digest=request.payload_digest,
         request_identity=identity,
@@ -211,9 +216,7 @@ def _active_grant() -> tuple[object, CompensationGrantBinding]:
     dispatch, binding, permit = _sandbox_capability(
         SandboxHTTPSTransport(endpoint_url=ENDPOINT), _request()
     )
-    consumption_identity = consume_bound_execution_permit(
-        permit, binding, dispatch
-    )
+    consumption_identity = consume_bound_execution_permit(permit, binding, dispatch)
     grant_binding = CompensationGrantBinding(
         parent_permit_identity=_bound_execution_permit_identity(permit),
         parent_permit_consumption_identity=consumption_identity,
@@ -234,9 +237,7 @@ def _active_grant() -> tuple[object, CompensationGrantBinding]:
         operation_id=binding.operation_id,
         reason=grant_binding.compensation_reason,
     )
-    grant = _mint_grant_from_consumed_action(
-        permit, grant_binding, transition
-    )
+    grant = _mint_grant_from_consumed_action(permit, grant_binding, transition)
     return grant, grant_binding
 
 
@@ -283,9 +284,7 @@ def test_direct_compensation_permit_mint_is_rejected() -> None:
         SandboxHTTPSTransport(endpoint_url=ENDPOINT), _request()
     )
     with pytest.raises(BindExecutionCapabilityError):
-        _mint_bound_execution_permit(
-            replace(binding, dispatch_kind="COMPENSATION")
-        )
+        _mint_bound_execution_permit(replace(binding, dispatch_kind="COMPENSATION"))
 
 
 @pytest.mark.parametrize(
@@ -446,7 +445,9 @@ def test_legitimate_webhook_action_sends_exact_frozen_bytes() -> None:
     assert transport.posts == [canonical_json_dumps({"change": "p1"}).encode()]
 
 
-def test_direct_compensation_authorization_without_core_transition_is_rejected() -> None:
+def test_direct_compensation_authorization_without_core_transition_is_rejected() -> (
+    None
+):
     transport = _RecordingWebhookTransport()
     adapter = _webhook(transport)
     intent = _intent()
@@ -478,9 +479,7 @@ def test_direct_compensation_authorization_without_core_transition_is_rejected()
                 reason="POSTCONDITION_FAILED",
             )
         with pytest.raises(BindExecutionCapabilityError):
-            adapter._authorize_compensation_dispatch(
-                intent, "POSTCONDITION_FAILED"
-            )
+            adapter._authorize_compensation_dispatch(intent, "POSTCONDITION_FAILED")
         assert _authority_object_counts() == before_counts
     assert transport.posts == [canonical_json_dumps({"change": "p1"}).encode()]
 
@@ -638,7 +637,10 @@ def test_duplicate_coverage_is_rejected() -> None:
     duplicate = next(entry for entry in entries if entry.proof_scope)
     result = validate_bind_coverage_registry(entries + [duplicate])
     assert result.valid is False
-    assert any("exact boundary" in error or "coverage_entry_id" in error for error in result.errors)
+    assert any(
+        "exact boundary" in error or "coverage_entry_id" in error
+        for error in result.errors
+    )
 
 
 def test_registry_runtime_mismatch_is_rejected() -> None:
@@ -708,9 +710,7 @@ def test_parent_action_permit_identity_is_authority_validated() -> None:
     dispatch, binding, permit = _sandbox_capability(
         SandboxHTTPSTransport(endpoint_url=ENDPOINT), _request()
     )
-    consumption_identity = consume_bound_execution_permit(
-        permit, binding, dispatch
-    )
+    consumption_identity = consume_bound_execution_permit(permit, binding, dispatch)
     grant_binding = CompensationGrantBinding(
         parent_permit_identity="caller-forged-parent-identity",
         parent_permit_consumption_identity=consumption_identity,
@@ -732,9 +732,7 @@ def test_parent_action_permit_identity_is_authority_validated() -> None:
         reason=grant_binding.compensation_reason,
     )
     with pytest.raises(BindExecutionCapabilityError):
-        _mint_grant_from_consumed_action(
-            permit, grant_binding, transition
-        )
+        _mint_grant_from_consumed_action(permit, grant_binding, transition)
 
 
 def test_undeclared_effect_sink_breaks_exact_inventory_equality(
@@ -743,10 +741,83 @@ def test_undeclared_effect_sink_breaks_exact_inventory_equality(
     policy_root = tmp_path / "veritas_os" / "policy"
     policy_root.mkdir(parents=True)
     sink = policy_root / "new_runtime.py"
-    sink.write_text("client.send(b'effect')\n", encoding="utf-8")
+    sink.write_text(
+        "import socket\nsocket.create_connection(('example.com', 443))\n",
+        encoding="utf-8",
+    )
     discovered = {
         (str(row["path"]), str(row["primitive"]))
         for row in inventory.discover(policy_root)
     }
-    assert discovered == {("policy/new_runtime.py", "client.send")}
+    assert discovered == {("policy/new_runtime.py", "socket.create_connection")}
     assert discovered != set(DECLARED_EFFECT_CANDIDATES)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import socket\nsocket.create_connection(('example.com', 443))\n",
+        (
+            "from socket import create_connection as connect_external\n"
+            "connect_external(('example.com', 443))\n"
+        ),
+        "import socket as sock\nsock.create_connection(('example.com', 443))\n",
+    ],
+    ids=["direct", "imported-alias", "module-alias"],
+)
+def test_socket_capability_and_sink_are_canonical_and_undeclared(
+    tmp_path, source: str
+) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "new_transport.py").write_text(source, encoding="utf-8")
+
+    capabilities, sinks = inventory.discover_inventories(policy_root)
+    capability_set = {
+        (str(row["path"]), str(row["capability"])) for row in capabilities
+    }
+    sink_set = {(str(row["path"]), str(row["primitive"])) for row in sinks}
+
+    assert any(identity.startswith("socket") for _, identity in capability_set)
+    assert sink_set == {("policy/new_transport.py", "socket.create_connection")}
+    assert capability_set != set(DECLARED_EFFECT_CAPABILITIES)
+    assert sink_set != set(DECLARED_EFFECT_SINKS)
+
+
+def test_automatic_policy_scan_finds_assigned_socket_object(tmp_path) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "not_named_in_scanner.py").write_text(
+        "import socket\ns = socket.socket()\ns.connect(('example.com', 443))\n",
+        encoding="utf-8",
+    )
+
+    _, sinks = inventory.discover_inventories(policy_root)
+
+    assert {(str(row["path"]), str(row["primitive"])) for row in sinks} == {
+        ("policy/not_named_in_scanner.py", "socket.socket"),
+        ("policy/not_named_in_scanner.py", "socket.socket.connect"),
+    }
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import urllib3\nurllib3.PoolManager()\n",
+        "import urllib3 as u3\nu3.PoolManager()\n",
+    ],
+    ids=["direct", "module-alias"],
+)
+def test_unknown_dependency_breaks_exact_dependency_inventory(
+    tmp_path, source: str
+) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "unknown_transport.py").write_text(source, encoding="utf-8")
+
+    dependencies = inventory.discover_reviewed_dependencies(policy_root)
+    dependency_set = {str(row["dependency"]) for row in dependencies}
+
+    assert dependency_set == {"urllib3"}
+    assert "urllib3" not in DECLARED_REVIEWED_DEPENDENCIES
+    assert dependency_set != set(DECLARED_REVIEWED_DEPENDENCIES)
