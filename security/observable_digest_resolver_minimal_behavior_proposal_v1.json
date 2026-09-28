@@ -145,7 +145,8 @@
     ],
     "evidence_ref_public_result": null,
     "persistence": false,
-    "audit_emission": false
+    "audit_emission": false,
+    "snapshot_hash_rule": "snapshot_hash is null for failures before authorized namespace scope reaches the snapshot; populated only once snapshot access is permitted"
   },
   "proof_obligations": {
     "what_was_observed": "Exact request, locator, profile, snapshot identity and typed record/digest outcome are bound in the internal observation.",
