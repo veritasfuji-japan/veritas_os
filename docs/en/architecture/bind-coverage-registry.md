@@ -21,6 +21,22 @@ It helps reviewers answer a practical question:
 - Not live integration with SaaS, IdP, IAM, banks, sanctions providers, or customer systems.
 - Not runtime enforcement changes by itself.
 
+## Static effect inventory boundary
+
+The `BIND_COVERAGE_BYPASS_RESISTANCE_V1` proof gate separately inventories
+effect-capable imports and effect sink call sites across every Python module
+under `veritas_os/policy`. Both discovered sets must exactly equal their
+reviewed declarations; the executable Bind boundary registry must also remain
+an exact match.
+
+The scanner canonicalizes direct import aliases and simple assigned
+network-client, event-loop, and socket objects. It covers the declared
+network, process-launch, dynamic-import, and retained local-I/O patterns. This
+is bounded AST analysis, not arbitrary whole-program Python soundness:
+reflective or data-dependent dispatch that cannot be statically resolved is
+outside this proof inventory's threat model. An inventory PASS does not imply
+that every declared capability is Bind-governed.
+
 ## How it complements existing governance artifacts
 
 Bind Coverage Registry v1 complements:
