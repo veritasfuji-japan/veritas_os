@@ -70,5 +70,13 @@
     "no hidden external-I/O or credential path may be introduced",
     "behavior remains unwired from /v1/decide and effect-bearing execution paths",
     "activation requires a later explicit review and decision"
-  ]
+  ],
+  "activation_review": {
+    "review": "security/observable_digest_resolver_activation_evidence_review_v1.json",
+    "status": "ACTIVATION_EVIDENCE_REVIEW_OPEN",
+    "activation_authorized": false,
+    "activation_approved": false,
+    "activation_performed": false,
+    "effect_path_connection_authorized": false
+  }
 }
