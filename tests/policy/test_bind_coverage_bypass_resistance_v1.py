@@ -914,6 +914,70 @@ def test_effect_inventory_binds_calls_to_nested_lexical_context(tmp_path) -> Non
     ]
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_qualname"),
+    [
+        (
+            "import socket\n\n"
+            "class Transport:\n"
+            "    def send_once(self):\n"
+            "        socket.create_connection(('example.com', 443))\n",
+            "Transport.send_once",
+        ),
+        (
+            "import socket\n\n"
+            "class Transport:\n"
+            "    def send_once(\n"
+            "        self,\n"
+            "        connection=socket.create_connection(\n"
+            "            ('example.com', 443)),\n"
+            "    ):\n"
+            "        pass\n",
+            "Transport",
+        ),
+        (
+            "import socket\n\n"
+            "class Transport:\n"
+            "    async def send_once(\n"
+            "        self,\n"
+            "        connection=socket.create_connection(\n"
+            "            ('example.com', 443)),\n"
+            "    ):\n"
+            "        pass\n",
+            "Transport",
+        ),
+        (
+            "import socket\n\n"
+            "def send_once(\n"
+            "    connection=socket.create_connection(('example.com', 443)),\n"
+            "):\n"
+            "    pass\n",
+            "<module>",
+        ),
+        (
+            "import socket\n\n"
+            "class Transport(\n"
+            "    socket.create_connection(('example.com', 443)),\n"
+            "):\n"
+            "    pass\n",
+            "<module>",
+        ),
+    ],
+)
+def test_definition_time_effect_uses_enclosing_context(
+    tmp_path, source_text: str, expected_qualname: str
+) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "reviewed_transport.py").write_text(source_text, encoding="utf-8")
+
+    usages = inventory.discover_effect_usages(policy_root)
+
+    assert [(row["enclosing_qualname"], row["usage"]) for row in usages] == [
+        (expected_qualname, "socket.create_connection")
+    ]
+
+
 def test_relocated_effect_changes_usage_and_sink_context_only(tmp_path) -> None:
     policy_root = tmp_path / "veritas_os" / "policy"
     policy_root.mkdir(parents=True)

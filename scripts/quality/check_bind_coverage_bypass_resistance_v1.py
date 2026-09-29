@@ -490,7 +490,7 @@ DECLARED_EFFECT_SINK_CONTEXTS: dict[tuple[str, str, str], str] = {
     ("veritas_os/policy/bundle.py", "create_bundle_archive", "open"): "local_file_io",
     (
         "veritas_os/policy/sandbox_event_service.py",
-        "create_sandbox_event_service.register",
+        "create_sandbox_event_service",
         "app.post",
     ): "route_registration_not_dispatch",
     (
@@ -776,21 +776,42 @@ class _EffectVisitor(ast.NodeVisitor):
     def _current_qualname(self) -> str:
         return ".".join(self.context_stack) if self.context_stack else "<module>"
 
-    def _visit_lexical_context(self, node: ast.AST, name: str) -> None:
+    def _visit_body_context(self, body: list[ast.stmt], name: str) -> None:
         self.context_stack.append(name)
         try:
-            self.generic_visit(node)
+            for statement in body:
+                self.visit(statement)
         finally:
             self.context_stack.pop()
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
-        self._visit_lexical_context(node, node.name)
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for base in node.bases:
+            self.visit(base)
+        for keyword in node.keywords:
+            self.visit(keyword)
+        for type_parameter in getattr(node, "type_params", ()):
+            self.visit(type_parameter)
+        self._visit_body_context(node.body, node.name)
+
+    def _visit_function_definition(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        self.visit(node.args)
+        if node.returns is not None:
+            self.visit(node.returns)
+        for type_parameter in getattr(node, "type_params", ()):
+            self.visit(type_parameter)
+        self._visit_body_context(node.body, node.name)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
-        self._visit_lexical_context(node, node.name)
+        self._visit_function_definition(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
-        self._visit_lexical_context(node, node.name)
+        self._visit_function_definition(node)
 
     def _add_dependency(self, identity: str, line: int) -> None:
         if not identity.startswith("veritas_os"):
@@ -1103,6 +1124,32 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "    async def send_once(self):\n"
             "        return await self._unguarded_effect()\n",
         ),
+        "definition_time_body_baseline": (
+            "reviewed_transport.py",
+            "import socket\n\n"
+            "class Transport:\n"
+            "    def send_once(self):\n"
+            "        socket.create_connection(('example.com', 443))\n",
+        ),
+        "definition_time_method_default": (
+            "reviewed_transport.py",
+            "import socket\n\n"
+            "class Transport:\n"
+            "    def send_once(\n"
+            "        self,\n"
+            "        connection=socket.create_connection(\n"
+            "            ('example.com', 443)),\n"
+            "    ):\n"
+            "        pass\n",
+        ),
+        "definition_time_module_default": (
+            "reviewed_transport.py",
+            "import socket\n\n"
+            "def send_once(\n"
+            "    connection=socket.create_connection(('example.com', 443)),\n"
+            "):\n"
+            "    pass\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -1147,7 +1194,23 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             ) and sink_set != set(DECLARED_EFFECT_SINKS)
             dependency_rejected = dependency_set != set(DECLARED_REVIEWED_DEPENDENCIES)
             unknown_dependency = name.startswith("unknown_dependency")
-            if name.startswith("reviewed_location_"):
+            if name.startswith("definition_time_"):
+                expected_qualname = {
+                    "definition_time_body_baseline": "Transport.send_once",
+                    "definition_time_method_default": "Transport",
+                    "definition_time_module_default": "<module>",
+                }[name]
+                expected_context = Counter(
+                    {
+                        (
+                            "policy/reviewed_transport.py",
+                            expected_qualname,
+                            "socket.create_connection",
+                        ): 1
+                    }
+                )
+                passed = usage_context_counter == expected_context
+            elif name.startswith("reviewed_location_"):
                 expected_usage = Counter(
                     {("policy/reviewed_transport.py", "asyncio.open_connection"): 1}
                 )
@@ -1247,6 +1310,20 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                     "effect_sink_context_equality": (
                         sink_context_equal
                         if name.startswith("sandbox_location_")
+                        else None
+                    ),
+                    "definition_time_context_equality": (
+                        usage_context_counter
+                        == Counter(
+                            {
+                                (
+                                    "policy/reviewed_transport.py",
+                                    "Transport.send_once",
+                                    "socket.create_connection",
+                                ): 1
+                            }
+                        )
+                        if name.startswith("definition_time_")
                         else None
                     ),
                     "automatic_package_scan": name == "automatic_new_module",
