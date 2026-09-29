@@ -16,6 +16,7 @@ from scripts.quality.check_bind_coverage_bypass_resistance_v1 import (
     DECLARED_EFFECT_CAPABILITIES,
     DECLARED_EFFECT_CANDIDATES,
     DECLARED_EFFECT_SINKS,
+    DECLARED_EFFECT_USAGES,
     DECLARED_REVIEWED_DEPENDENCIES,
 )
 
@@ -62,7 +63,6 @@ from veritas_os.policy.webhook_bind_adapter import (
     _UrllibWebhookTransport,
 )
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
-
 
 ENDPOINT = "https://sandbox.example.test/v1/events"
 EVENT = {"event_id": "11111111-1111-4111-8111-111111111111", "message": "p1"}
@@ -821,3 +821,94 @@ def test_unknown_dependency_breaks_exact_dependency_inventory(
     assert dependency_set == {"urllib3"}
     assert "urllib3" not in DECLARED_REVIEWED_DEPENDENCIES
     assert dependency_set != set(DECLARED_REVIEWED_DEPENDENCIES)
+
+
+def test_asyncio_udp_usage_is_found_without_a_new_dependency(tmp_path) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "reviewed_asyncio.py").write_text(
+        "import asyncio\n\n"
+        "async def undeclared_external_effect():\n"
+        "    loop = asyncio.get_running_loop()\n"
+        "    transport, _ = await loop.create_datagram_endpoint(\n"
+        "        asyncio.DatagramProtocol,\n"
+        "        remote_addr=('example.com', 9999),\n"
+        "    )\n"
+        "    transport.sendto(b'effect')\n",
+        encoding="utf-8",
+    )
+
+    dependencies = inventory.discover_reviewed_dependencies(policy_root)
+    capabilities, _ = inventory.discover_inventories(policy_root)
+    usages = inventory.discover_effect_usages(policy_root)
+    usage_names = {str(row["usage"]) for row in usages}
+
+    assert {str(row["dependency"]) for row in dependencies} == {"asyncio"}
+    assert {str(row["capability"]) for row in capabilities} == {"asyncio"}
+    assert "asyncio.loop.create_datagram_endpoint" in usage_names
+    assert "result(asyncio.loop.create_datagram_endpoint)[0].sendto" in usage_names
+
+
+def test_reviewed_asyncio_near_miss_is_selective(tmp_path) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    source = policy_root / "reviewed_asyncio.py"
+    source.write_text("import asyncio\nasyncio.Lock()\n", encoding="utf-8")
+    reviewed = inventory.discover_effect_usages(policy_root)
+    assert [str(row["usage"]) for row in reviewed] == ["asyncio.Lock"]
+
+    source.write_text(
+        "import asyncio\nasyncio.Lock()\n"
+        "loop = asyncio.get_running_loop()\n"
+        "loop.create_datagram_endpoint(asyncio.DatagramProtocol)\n",
+        encoding="utf-8",
+    )
+    changed = inventory.discover_effect_usages(policy_root)
+    assert [str(row["usage"]) for row in changed] != ["asyncio.Lock"]
+    assert any(
+        row["usage"] == "asyncio.loop.create_datagram_endpoint" for row in changed
+    )
+
+
+def test_effect_usage_inventory_is_occurrence_sensitive(tmp_path) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "duplicate.py").write_text(
+        "import asyncio\nasyncio.Lock()\nasyncio.Lock()\n", encoding="utf-8"
+    )
+    usages = inventory.discover_effect_usages(policy_root)
+    assert [str(row["usage"]) for row in usages].count("asyncio.Lock") == 2
+    assert any(count == 2 for count, _ in DECLARED_EFFECT_USAGES.values())
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("import asyncio\nasyncio.brand_new_call()\n", "asyncio.brand_new_call"),
+        (
+            "import socket\ns = socket.socket()\ns.brand_new_call()\n",
+            "socket.socket.brand_new_call",
+        ),
+        (
+            "import httpx\nc = httpx.AsyncClient()\nc.brand_new_call()\n",
+            "httpx.AsyncClient.brand_new_call",
+        ),
+        (
+            "import requests\ns = requests.Session()\ns.brand_new_call()\n",
+            "requests.Session.brand_new_call",
+        ),
+        (
+            "import subprocess\nsubprocess.brand_new_call()\n",
+            "subprocess.brand_new_call",
+        ),
+        ("import os\nos.brand_new_call()\n", "os.brand_new_call"),
+    ],
+)
+def test_unknown_calls_on_effect_capable_roots_are_usages(
+    tmp_path, source: str, expected: str
+) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    (policy_root / "new_usage.py").write_text(source, encoding="utf-8")
+    usages = inventory.discover_effect_usages(policy_root)
+    assert expected in {str(row["usage"]) for row in usages}

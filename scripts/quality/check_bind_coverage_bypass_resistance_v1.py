@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import argparse
+from collections import Counter
 import hashlib
 import json
 import os
@@ -18,7 +19,6 @@ from veritas_os.policy.bind_coverage_registry import (
     validate_bind_coverage_registry,
 )
 from veritas_os.policy.bind_execution_capability import PROOF_SCOPE
-
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "artifacts" / "bind-coverage-bypass-resistance-v1"
@@ -126,6 +126,161 @@ DECLARED_EFFECT_CAPABILITIES = {
         "veritas_os/policy/webhook_bind_adapter.py",
         "urllib.request.build_opener",
     ): "governed_v1_effect_transport",
+}
+
+# Counts are deliberate: unlike a set of (path, usage), this inventory changes
+# when a second copy of an already-reviewed call is added to a production file.
+# It is populated below from the reviewed policy tree and kept as source data,
+# not inferred at proof time.
+DECLARED_EFFECT_USAGES: dict[tuple[str, str], tuple[int, str]] = {
+    ("veritas_os/policy/bind_effect_reconciliation.py", "asyncio.Lock"): (
+        1,
+        "synchronization_only",
+    ),
+    ("veritas_os/policy/bind_execution_capability.py", "asyncio.current_task"): (
+        1,
+        "synchronization_only",
+    ),
+    ("veritas_os/policy/debate_safety_policy_runtime_shadow.py", "os.getenv"): (
+        1,
+        "process_capable_but_non_effect_use",
+    ),
+    (
+        "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
+        "asyncio.Lock",
+    ): (1, "synchronization_only"),
+    ("veritas_os/policy/runtime_adapter.py", "os.environ.get"): (
+        1,
+        "process_capable_but_non_effect_use",
+    ),
+    ("veritas_os/policy/runtime_adapter.py", "os.getenv"): (
+        1,
+        "process_capable_but_non_effect_use",
+    ),
+    ("veritas_os/policy/sandbox_bind_execution.py", "asyncio.CancelledError"): (
+        1,
+        "reviewed_non_effect_usage",
+    ),
+    ("veritas_os/policy/sandbox_bind_execution.py", "asyncio.timeout"): (
+        1,
+        "synchronization_only",
+    ),
+    ("veritas_os/policy/sandbox_credential_resolution.py", "asyncio.CancelledError"): (
+        1,
+        "reviewed_non_effect_usage",
+    ),
+    ("veritas_os/policy/sandbox_credential_resolution.py", "asyncio.timeout"): (
+        2,
+        "synchronization_only",
+    ),
+    ("veritas_os/policy/sandbox_https_transport.py", "asyncio.CancelledError"): (
+        1,
+        "reviewed_non_effect_usage",
+    ),
+    ("veritas_os/policy/sandbox_https_transport.py", "asyncio.open_connection"): (
+        1,
+        "governed_v1_effect",
+    ),
+    ("veritas_os/policy/sandbox_https_transport.py", "asyncio.timeout"): (
+        1,
+        "synchronization_only",
+    ),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "result(asyncio.open_connection)[0].readexactly",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "result(asyncio.open_connection)[0].readuntil",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "result(asyncio.open_connection)[1].drain",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "result(asyncio.open_connection)[1].transport.abort",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "result(asyncio.open_connection)[1].write",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "result(result(asyncio.open_connection)[0].readexactly).decode",
+    ): (1, "reviewed_non_effect_usage"),
+    ("veritas_os/policy/sandbox_receipt_outcome.py", "asyncio.CancelledError"): (
+        1,
+        "reviewed_non_effect_usage",
+    ),
+    ("veritas_os/policy/sandbox_reconciliation.py", "asyncio.CancelledError"): (
+        1,
+        "reviewed_non_effect_usage",
+    ),
+    ("veritas_os/policy/sandbox_reconciliation.py", "asyncio.open_connection"): (
+        1,
+        "auxiliary_read_only_network",
+    ),
+    ("veritas_os/policy/sandbox_reconciliation.py", "asyncio.timeout"): (
+        1,
+        "synchronization_only",
+    ),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "result(asyncio.open_connection)[1].drain",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "result(asyncio.open_connection)[1].transport.abort",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "result(asyncio.open_connection)[1].write",
+    ): (1, "auxiliary_read_only_network"),
+    ("veritas_os/policy/sandbox_recovery.py", "asyncio.CancelledError"): (
+        1,
+        "reviewed_non_effect_usage",
+    ),
+    ("veritas_os/policy/trusted_https_reconciliation.py", "httpx.AsyncClient"): (
+        1,
+        "capability_factory",
+    ),
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "httpx.AsyncClient.get",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "result(httpx.AsyncClient.get).json",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "result(httpx.AsyncClient.get).raise_for_status",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "result(result(urllib.request.build_opener).open).headers.items",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "result(result(urllib.request.build_opener).open).read",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "result(urllib.request.build_opener).open",
+    ): (1, "governed_v1_effect"),
+    ("veritas_os/policy/webhook_bind_adapter.py", "socket.getaddrinfo"): (
+        1,
+        "auxiliary_read_only_network",
+    ),
+    ("veritas_os/policy/webhook_bind_adapter.py", "urllib.request.Request"): (
+        1,
+        "capability_factory",
+    ),
+    ("veritas_os/policy/webhook_bind_adapter.py", "urllib.request.build_opener"): (
+        1,
+        "capability_factory",
+    ),
 }
 
 # This outer inventory is intentionally independent of effect-family knowledge.
@@ -365,6 +520,7 @@ class _EffectVisitor(ast.NodeVisitor):
         self.instances: dict[str, str] = {}
         self.dependencies: list[dict[str, object]] = []
         self.capabilities: list[dict[str, object]] = []
+        self.usages: list[dict[str, object]] = []
         self.sinks: list[dict[str, object]] = []
 
     def _add_dependency(self, identity: str, line: int) -> None:
@@ -406,14 +562,25 @@ class _EffectVisitor(ast.NodeVisitor):
             if _is_capability_import(identity):
                 self._add_capability(identity, node.lineno)
 
-    def _record_instance(self, target: ast.AST, value: ast.AST) -> None:
-        if not isinstance(target, ast.Name):
-            return
+    @staticmethod
+    def _unwrap_await(value: ast.AST) -> ast.AST:
+        return value.value if isinstance(value, ast.Await) else value
+
+    def _resolve_name(self, node: ast.AST) -> str:
+        raw = _expression_name(node)
+        canonical = _canonical_name(raw, self.aliases)
+        head, separator, tail = canonical.partition(".")
+        if head in self.instances:
+            return self.instances[head] + (separator + tail if separator else "")
+        return canonical
+
+    def _value_provenance(self, value: ast.AST) -> str | None:
+        value = self._unwrap_await(value)
         expression = value.func if isinstance(value, ast.Call) else value
-        canonical = _canonical_name(_expression_name(expression), self.aliases)
+        canonical = self._resolve_name(expression)
         if canonical.endswith((".get_event_loop", ".get_running_loop")):
-            self.instances[target.id] = "asyncio.loop"
-        elif canonical == "socket.socket" or canonical.endswith(
+            return "asyncio.loop"
+        if canonical == "socket.socket" or canonical.endswith(
             (
                 ".Client",
                 ".AsyncClient",
@@ -423,7 +590,31 @@ class _EffectVisitor(ast.NodeVisitor):
                 ".Session",
             )
         ):
-            self.instances[target.id] = canonical
+            return canonical
+        if isinstance(value, ast.Call) and self._has_effect_provenance(canonical):
+            return f"result({canonical})"
+        if self._has_effect_provenance(canonical):
+            return canonical
+        return None
+
+    def _bind_provenance(self, target: ast.AST, provenance: str) -> None:
+        if isinstance(target, ast.Name):
+            self.instances[target.id] = provenance
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for index, element in enumerate(target.elts):
+                self._bind_provenance(element, f"{provenance}[{index}]")
+
+    def _record_instance(self, target: ast.AST, value: ast.AST) -> None:
+        provenance = self._value_provenance(value)
+        if provenance is not None:
+            self._bind_provenance(target, provenance)
+
+    @staticmethod
+    def _has_effect_provenance(canonical: str) -> bool:
+        root = canonical.split(".", 1)[0]
+        if root.startswith("result("):
+            return True
+        return _is_capability_import(canonical) or root in _CAPABILITY_MODULES
 
     def _record_dynamic_import(self, target: ast.AST, value: ast.AST) -> None:
         if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
@@ -458,21 +649,26 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
         raw = _expression_name(node.func)
-        canonical = _canonical_name(raw, self.aliases)
-        head, separator, tail = canonical.partition(".")
-        if head in self.instances:
-            canonical = self.instances[head] + (separator + tail if separator else "")
+        canonical = self._resolve_name(node.func)
         if canonical in {"__import__", "importlib.import_module"} and node.args:
             argument = node.args[0]
             if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
                 self._add_dependency(argument.value, node.lineno)
                 if _is_capability_import(argument.value):
                     self._add_capability(argument.value, node.lineno)
+        if self._has_effect_provenance(canonical):
+            self.usages.append(
+                {
+                    "path": self.relative,
+                    "usage": canonical,
+                    "line": node.lineno,
+                }
+            )
         if _is_effect_sink(canonical) or raw in _PRESERVED_SINKS:
             self.sinks.append(
                 {
                     "path": self.relative,
-                    "primitive": canonical,
+                    "primitive": raw if raw in _PRESERVED_SINKS else canonical,
                     "line": node.lineno,
                 }
             )
@@ -485,6 +681,7 @@ def _discover_inventories(
     list[dict[str, object]],
     list[dict[str, object]],
     list[dict[str, object]],
+    list[dict[str, object]],
 ]:
     """Discover dependencies, capability imports, and sinks package-wide.
 
@@ -494,6 +691,7 @@ def _discover_inventories(
     """
     dependencies: list[dict[str, object]] = []
     capabilities: list[dict[str, object]] = []
+    usages: list[dict[str, object]] = []
     sinks: list[dict[str, object]] = []
     for source in sorted(root.rglob("*.py")):
         try:
@@ -505,6 +703,7 @@ def _discover_inventories(
         visitor.visit(tree)
         dependencies.extend(visitor.dependencies)
         capabilities.extend(visitor.capabilities)
+        usages.extend(visitor.usages)
         sinks.extend(visitor.sinks)
 
     def key(item: dict[str, object]) -> tuple[str, int]:
@@ -513,6 +712,7 @@ def _discover_inventories(
     return (
         sorted(dependencies, key=key),
         sorted(capabilities, key=key),
+        sorted(usages, key=key),
         sorted(sinks, key=key),
     )
 
@@ -521,7 +721,7 @@ def discover_inventories(
     root: Path = POLICY_ROOT,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     """Return effect capabilities and sinks through the existing interface."""
-    _, capabilities, sinks = _discover_inventories(root)
+    _, capabilities, _, sinks = _discover_inventories(root)
     return capabilities, sinks
 
 
@@ -529,8 +729,14 @@ def discover_reviewed_dependencies(
     root: Path = POLICY_ROOT,
 ) -> list[dict[str, object]]:
     """Return all non-VERITAS imports regardless of known effect capability."""
-    dependencies, _, _ = _discover_inventories(root)
+    dependencies, _, _, _ = _discover_inventories(root)
     return dependencies
+
+
+def discover_effect_usages(root: Path = POLICY_ROOT) -> list[dict[str, object]]:
+    """Return occurrence-sensitive calls through effect-capable provenance."""
+    _, _, usages, _ = _discover_inventories(root)
+    return usages
 
 
 def discover(root: Path = POLICY_ROOT) -> list[dict[str, object]]:
@@ -546,7 +752,7 @@ def _write(name: str, value: object) -> None:
 
 
 def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
-    """Prove representative undeclared capabilities fail both inventories."""
+    """Prove representative undeclared dependencies, capabilities, and usages fail."""
     fixtures = {
         "raw_socket_create_connection": (
             "raw_socket.py",
@@ -573,6 +779,21 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "unknown_dependency_alias.py",
             "import urllib3 as u3\nu3.PoolManager()\n",
         ),
+        "reviewed_asyncio_near_miss": (
+            "reviewed_asyncio.py",
+            "import asyncio\nasyncio.Lock()\n",
+        ),
+        "declared_capability_undeclared_udp_usage": (
+            "reviewed_asyncio.py",
+            "import asyncio\n\n"
+            "async def undeclared_external_effect():\n"
+            "    loop = asyncio.get_running_loop()\n"
+            "    transport, _ = await loop.create_datagram_endpoint(\n"
+            "        asyncio.DatagramProtocol,\n"
+            "        remote_addr=('example.com', 9999),\n"
+            "    )\n"
+            "    transport.sendto(b'effect')\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -582,12 +803,17 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             for old_source in policy_root.glob("*.py"):
                 old_source.unlink()
             (policy_root / filename).write_text(source, encoding="utf-8")
-            dependencies, capabilities, sinks = _discover_inventories(policy_root)
+            dependencies, capabilities, usages, sinks = _discover_inventories(
+                policy_root
+            )
             dependency_set = {str(row["dependency"]) for row in dependencies}
             capability_set = {
                 (str(row["path"]), str(row["capability"])) for row in capabilities
             }
             sink_set = {(str(row["path"]), str(row["primitive"])) for row in sinks}
+            usage_counter = Counter(
+                (str(row["path"]), str(row["usage"])) for row in usages
+            )
             canonical_socket_sink_found = any(
                 primitive == "socket.create_connection" for _, primitive in sink_set
             )
@@ -596,18 +822,45 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             ) and sink_set != set(DECLARED_EFFECT_SINKS)
             dependency_rejected = dependency_set != set(DECLARED_REVIEWED_DEPENDENCIES)
             unknown_dependency = name.startswith("unknown_dependency")
-            passed = dependency_rejected and (
-                "urllib3" in dependency_set
-                and "urllib3" not in DECLARED_REVIEWED_DEPENDENCIES
-                if unknown_dependency
-                else canonical_socket_sink_found and effect_inventories_rejected
-            )
+            if name == "reviewed_asyncio_near_miss":
+                expected_usage = Counter(
+                    {("policy/reviewed_asyncio.py", "asyncio.Lock"): 1}
+                )
+                passed = (
+                    dependency_set == {"asyncio"}
+                    and {capability for _, capability in capability_set} == {"asyncio"}
+                    and usage_counter == expected_usage
+                )
+            elif name == "declared_capability_undeclared_udp_usage":
+                passed = (
+                    dependency_set == {"asyncio"}
+                    and {capability for _, capability in capability_set} == {"asyncio"}
+                    and usage_counter
+                    != Counter({("policy/reviewed_asyncio.py", "asyncio.Lock"): 1})
+                    and any(
+                        usage == "asyncio.loop.create_datagram_endpoint"
+                        for _, usage in usage_counter
+                    )
+                    and any(
+                        usage
+                        == "result(asyncio.loop.create_datagram_endpoint)[0].sendto"
+                        for _, usage in usage_counter
+                    )
+                )
+            else:
+                passed = dependency_rejected and (
+                    "urllib3" in dependency_set
+                    and "urllib3" not in DECLARED_REVIEWED_DEPENDENCIES
+                    if unknown_dependency
+                    else canonical_socket_sink_found and effect_inventories_rejected
+                )
             results.append(
                 {
                     "name": name,
                     "passed": passed,
                     "dependencies": dependencies,
                     "capabilities": capabilities,
+                    "usages": usages,
                     "sinks": sinks,
                     "dependency_set_equality": not dependency_rejected,
                     "effect_inventory_equality": not effect_inventories_rejected,
@@ -619,6 +872,8 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
 
 def run_mandatory_matrix() -> int:
     """Execute every mapped node and retain per-case execution results."""
+    if main() != 0:
+        return 1
     results: list[dict[str, object]] = []
     passed = True
     positive_cases = {
@@ -674,6 +929,21 @@ def run_mandatory_matrix() -> int:
             adversarial_matrix_executed=len(results) == len(MATRIX_CASES),
             adversarial_matrix_passed=passed,
         )
+        inventory_checks = (
+            "dependency_set_equality",
+            "effect_capability_set_equality",
+            "effect_usage_set_equality",
+            "effect_sink_set_equality",
+            "registry_set_equality",
+            "static_inventory_regressions_passed",
+        )
+        report["result"] = (
+            "PASS"
+            if all(report.get(check) is True for check in inventory_checks)
+            and len(results) == 38
+            and sum(row["status"] == "PASS" for row in results) == 38
+            else "FAIL"
+        )
         _write("proof-report.json", report)
     return 0 if passed and len(results) == len(MATRIX_CASES) else 1
 
@@ -688,6 +958,7 @@ def main() -> int:
     (
         discovered_dependencies,
         discovered_capabilities,
+        discovered_usages,
         discovered_sinks,
     ) = _discover_inventories()
     discovered_dependency_set = {
@@ -699,6 +970,15 @@ def main() -> int:
     discovered_sink_set = {
         (str(row["path"]), str(row["primitive"])) for row in discovered_sinks
     }
+    discovered_usage_counter = Counter(
+        (str(row["path"]), str(row["usage"])) for row in discovered_usages
+    )
+    declared_usage_counter = Counter(
+        {
+            identity: count_and_classification[0]
+            for identity, count_and_classification in DECLARED_EFFECT_USAGES.items()
+        }
+    )
     declared_capability_set = set(DECLARED_EFFECT_CAPABILITIES)
     declared_sink_set = set(DECLARED_EFFECT_SINKS)
     declared_dependency_set = set(DECLARED_REVIEWED_DEPENDENCIES)
@@ -715,6 +995,7 @@ def main() -> int:
         validation.valid
         and discovered_dependency_set == declared_dependency_set
         and discovered_capability_set == declared_capability_set
+        and discovered_usage_counter == declared_usage_counter
         and discovered_sink_set == declared_sink_set
         and regressions_passed
         and registered_boundaries == expected_boundaries
@@ -754,6 +1035,24 @@ def main() -> int:
         }
         for row in discovered_capabilities
     ]
+    seen_usages: Counter[tuple[str, str]] = Counter()
+    effect_usage_inventory = []
+    for row in discovered_usages:
+        identity = (str(row["path"]), str(row["usage"]))
+        seen_usages[identity] += 1
+        declaration = DECLARED_EFFECT_USAGES.get(identity)
+        effect_usage_inventory.append(
+            {
+                **row,
+                "occurrence": seen_usages[identity],
+                "classification": (
+                    declaration[1]
+                    if declaration is not None
+                    and seen_usages[identity] <= declaration[0]
+                    else "UNDECLARED"
+                ),
+            }
+        )
     reviewed_dependency_inventory = [
         {
             **row,
@@ -767,6 +1066,7 @@ def main() -> int:
     # inventory explicit for this closure.
     _write("execution-boundary-inventory.json", effect_sink_inventory)
     _write("effect-capability-inventory.json", effect_capability_inventory)
+    _write("effect-usage-inventory.json", effect_usage_inventory)
     _write("effect-sink-inventory.json", effect_sink_inventory)
     _write("reviewed-dependency-inventory.json", reviewed_dependency_inventory)
     _write(
@@ -775,8 +1075,11 @@ def main() -> int:
             "passed": regressions_passed,
             "cases": regression_results,
             "limitation": (
-                "bounded AST analysis; reflective and data-dependent dispatch are "
-                "outside the reviewed static threat model"
+                "bounded intraprocedural AST analysis; assignment, Await, simple "
+                "tuple/list unpacking, and direct invocation on known capability "
+                "provenance are in scope; reflection, monkeypatching, arbitrary "
+                "data-dependent or interprocedural dispatch, and interpreter/native "
+                "compromise are out of scope"
             ),
         },
     )
@@ -810,6 +1113,18 @@ def main() -> int:
             ),
             "undeclared_sinks": sorted(discovered_sink_set - declared_sink_set),
             "missing_declared_sinks": sorted(declared_sink_set - discovered_sink_set),
+            "undeclared_usage_occurrences": sorted(
+                (path, usage, count)
+                for (path, usage), count in (
+                    discovered_usage_counter - declared_usage_counter
+                ).items()
+            ),
+            "missing_declared_usage_occurrences": sorted(
+                (path, usage, count)
+                for (path, usage), count in (
+                    declared_usage_counter - discovered_usage_counter
+                ).items()
+            ),
             "undeclared_dependencies": sorted(
                 discovered_dependency_set - declared_dependency_set
             ),
@@ -838,16 +1153,29 @@ def main() -> int:
             "effect_capability_set_equality": (
                 discovered_capability_set == declared_capability_set
             ),
+            "effect_usage_set_equality": (
+                discovered_usage_counter == declared_usage_counter
+            ),
+            "effect_usage_occurrence_equality": (
+                discovered_usage_counter == declared_usage_counter
+            ),
             "effect_sink_set_equality": discovered_sink_set == declared_sink_set,
             "static_inventory_regressions_passed": regressions_passed,
             "registry_set_equality": registered_boundaries == expected_boundaries,
-            "result": "PASS" if passed else "FAIL",
+            "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
                 "all VERITAS external I/O is Bind-governed",
                 "arbitrary equivalent-privilege in-process compromise resistance",
                 "TLS/provider identity proof",
                 "universal exactly-once external delivery",
                 "production readiness",
+            ],
+            "bounded_analysis_limitations": [
+                "reflection not statically resolvable",
+                "arbitrary data-dependent dispatch",
+                "monkeypatching",
+                "arbitrary interprocedural provenance",
+                "interpreter or native compromise",
             ],
         },
     )
