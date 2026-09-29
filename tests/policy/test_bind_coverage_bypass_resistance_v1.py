@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import asyncio
 import pickle
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 import hashlib
@@ -879,6 +880,85 @@ def test_effect_usage_inventory_is_occurrence_sensitive(tmp_path) -> None:
     usages = inventory.discover_effect_usages(policy_root)
     assert [str(row["usage"]) for row in usages].count("asyncio.Lock") == 2
     assert any(count == 2 for count, _ in DECLARED_EFFECT_USAGES.values())
+
+
+def test_effect_inventory_binds_calls_to_nested_lexical_context(tmp_path) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    source = policy_root / "reviewed_transport.py"
+    source.write_text(
+        "import asyncio\n\n"
+        "class Transport:\n"
+        "    async def send_once(self):\n"
+        "        def nested():\n"
+        "            return asyncio.open_connection('example.com', 443)\n"
+        "        return await nested()\n",
+        encoding="utf-8",
+    )
+
+    usages = inventory.discover_effect_usages(policy_root)
+
+    assert [
+        (
+            row["path"],
+            row["enclosing_qualname"],
+            row["usage"],
+        )
+        for row in usages
+    ] == [
+        (
+            "policy/reviewed_transport.py",
+            "Transport.send_once.nested",
+            "asyncio.open_connection",
+        )
+    ]
+
+
+def test_relocated_effect_changes_usage_and_sink_context_only(tmp_path) -> None:
+    policy_root = tmp_path / "veritas_os" / "policy"
+    policy_root.mkdir(parents=True)
+    source = policy_root / "reviewed_transport.py"
+    baseline = (
+        "import asyncio\n\n"
+        "class SandboxHTTPSTransport:\n"
+        "    async def send_once(self):\n"
+        "        reader, writer = await asyncio.open_connection(\n"
+        "            'example.com', 443)\n"
+        "        writer.write(b'effect')\n"
+        "        await writer.drain()\n"
+    )
+    relocated = (
+        "import asyncio\n\n"
+        "class SandboxHTTPSTransport:\n"
+        "    async def _unguarded_effect(self):\n"
+        "        reader, writer = await asyncio.open_connection(\n"
+        "            'example.com', 443)\n"
+        "        writer.write(b'effect')\n"
+        "        await writer.drain()\n\n"
+        "    async def send_once(self):\n"
+        "        return await self._unguarded_effect()\n"
+    )
+
+    def identities(text: str) -> tuple[Counter, Counter, Counter, Counter]:
+        source.write_text(text, encoding="utf-8")
+        capabilities, sinks = inventory.discover_inventories(policy_root)
+        usages = inventory.discover_effect_usages(policy_root)
+        return (
+            Counter(row["capability"] for row in capabilities),
+            Counter(row["usage"] for row in usages),
+            Counter((row["enclosing_qualname"], row["usage"]) for row in usages),
+            Counter((row["enclosing_qualname"], row["primitive"]) for row in sinks),
+        )
+
+    baseline_identities = identities(baseline)
+    relocated_identities = identities(relocated)
+
+    assert baseline_identities[:2] == relocated_identities[:2]
+    assert baseline_identities[2] != relocated_identities[2]
+    assert baseline_identities[3] != relocated_identities[3]
+    assert {qualname for qualname, _ in relocated_identities[2]} == {
+        "SandboxHTTPSTransport._unguarded_effect"
+    }
 
 
 @pytest.mark.parametrize(

@@ -41,15 +41,22 @@ jobs:
           assert report["effect_capability_set_equality"] is True
           assert report["effect_usage_set_equality"] is True
           assert report["effect_usage_occurrence_equality"] is True
+          assert report["effect_usage_context_equality"] is True
           assert report["effect_sink_set_equality"] is True
+          assert report["effect_sink_context_equality"] is True
+          assert report["registry_set_equality"] is True
           assert report["static_inventory_regressions_passed"] is True
           artifact_root = Path("artifacts/bind-coverage-bypass-resistance-v1")
           regressions = json.loads(
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert len(regressions["cases"]) >= 8
+          assert len(regressions["cases"]) >= 12
           assert all(case["passed"] for case in regressions["cases"])
+          regression_cases = {case["name"]: case for case in regressions["cases"]}
+          assert regression_cases["reviewed_location_relocated"]["effect_usage_context_equality"] is False
+          assert regression_cases["sandbox_location_relocated"]["effect_usage_context_equality"] is False
+          assert regression_cases["sandbox_location_relocated"]["effect_sink_context_equality"] is False
           matrix = json.loads(
               (artifact_root / "adversarial-matrix.json").read_text()
           )
