@@ -46,12 +46,15 @@ jobs:
           assert report["effect_sink_context_equality"] is True
           assert report["registry_set_equality"] is True
           assert report["static_inventory_regressions_passed"] is True
+          assert report["direct_attribute_provenance_regressions_passed"] is True
           artifact_root = Path("artifacts/bind-coverage-bypass-resistance-v1")
           regressions = json.loads(
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert len(regressions["cases"]) >= 15
+          assert regressions["case_count"] >= 21
+          assert len(regressions["cases"]) >= 21
+          assert regressions["direct_attribute_provenance_regressions_passed"] is True
           assert all(case["passed"] for case in regressions["cases"])
           regression_cases = {case["name"]: case for case in regressions["cases"]}
           assert regression_cases["reviewed_location_relocated"]["effect_usage_context_equality"] is False

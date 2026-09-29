@@ -768,6 +768,7 @@ class _EffectVisitor(ast.NodeVisitor):
         self.context_stack: list[str] = []
         self.aliases: dict[str, str] = {}
         self.instances: dict[str, str] = {}
+        self.attribute_instances: dict[tuple[str, str], str] = {}
         self.dependencies: list[dict[str, object]] = []
         self.capabilities: list[dict[str, object]] = []
         self.usages: list[dict[str, object]] = []
@@ -858,6 +859,14 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def _resolve_name(self, node: ast.AST) -> str:
         raw = _expression_name(node)
+        attribute_parts = raw.split(".")
+        scope = self._current_qualname()
+        for end in range(len(attribute_parts), 1, -1):
+            prefix = ".".join(attribute_parts[:end])
+            provenance = self.attribute_instances.get((scope, prefix))
+            if provenance is not None:
+                suffix = ".".join(attribute_parts[end:])
+                return provenance + (f".{suffix}" if suffix else "")
         canonical = _canonical_name(raw, self.aliases)
         head, separator, tail = canonical.partition(".")
         if head in self.instances:
@@ -890,14 +899,43 @@ class _EffectVisitor(ast.NodeVisitor):
     def _bind_provenance(self, target: ast.AST, provenance: str) -> None:
         if isinstance(target, ast.Name):
             self.instances[target.id] = provenance
+            return
+        identity = self._attribute_identity(target)
+        if identity is not None:
+            self.attribute_instances[(self._current_qualname(), identity)] = provenance
         elif isinstance(target, (ast.Tuple, ast.List)):
             for index, element in enumerate(target.elts):
                 self._bind_provenance(element, f"{provenance}[{index}]")
+
+    @staticmethod
+    def _attribute_identity(target: ast.AST) -> str | None:
+        """Return a direct attribute chain rooted in a syntactic name."""
+        if not isinstance(target, ast.Attribute):
+            return None
+        parts = [target.attr]
+        value = target.value
+        while isinstance(value, ast.Attribute):
+            parts.append(value.attr)
+            value = value.value
+        if not isinstance(value, ast.Name):
+            return None
+        parts.append(value.id)
+        return ".".join(reversed(parts))
+
+    def _clear_attribute_provenance(self, target: ast.AST) -> None:
+        identity = self._attribute_identity(target)
+        if identity is not None:
+            self.attribute_instances.pop((self._current_qualname(), identity), None)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for element in target.elts:
+                self._clear_attribute_provenance(element)
 
     def _record_instance(self, target: ast.AST, value: ast.AST) -> None:
         provenance = self._value_provenance(value)
         if provenance is not None:
             self._bind_provenance(target, provenance)
+        else:
+            self._clear_attribute_provenance(target)
 
     @staticmethod
     def _has_effect_provenance(canonical: str) -> bool:
@@ -1150,6 +1188,55 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "):\n"
             "    pass\n",
         ),
+        "direct_attribute_callable": (
+            "attribute_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    async def _unguarded_effect(self):\n"
+            "        self._open = asyncio.open_connection\n"
+            "        reader, writer = await self._open(\n"
+            "            'example.com', 443)\n"
+            "        writer.writelines([b'effect'])\n"
+            "        await writer.drain()\n",
+        ),
+        "direct_attribute_non_effect_near_miss": (
+            "attribute_transport.py",
+            "class Transport:\n    def label(self):\n        self._label = 'network'\n",
+        ),
+        "direct_attribute_callable_near_miss": (
+            "attribute_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    async def send(self):\n"
+            "        self._open = asyncio.open_connection\n"
+            "        await self._open('example.com', 443)\n",
+        ),
+        "direct_attribute_object_factory": (
+            "attribute_transport.py",
+            "import httpx\n\n"
+            "class Transport:\n"
+            "    async def send(self):\n"
+            "        self._client = httpx.AsyncClient()\n"
+            "        await self._client.post('https://example.com')\n",
+        ),
+        "direct_attribute_rebinding_clears": (
+            "attribute_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    async def send(self, harmless_value):\n"
+            "        self._open = asyncio.open_connection\n"
+            "        self._open = harmless_value\n"
+            "        await self._open('example.com', 443)\n",
+        ),
+        "direct_attribute_scope_bounded": (
+            "attribute_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    def configure(self):\n"
+            "        self._open = asyncio.open_connection\n\n"
+            "    async def send(self):\n"
+            "        await self._open('example.com', 443)\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -1210,6 +1297,58 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                     }
                 )
                 passed = usage_context_counter == expected_context
+            elif name == "direct_attribute_callable":
+                expected_context = Counter(
+                    {
+                        (
+                            "policy/attribute_transport.py",
+                            "Transport._unguarded_effect",
+                            usage,
+                        ): 1
+                        for usage in (
+                            "asyncio.open_connection",
+                            "result(asyncio.open_connection)[1].writelines",
+                            "result(asyncio.open_connection)[1].drain",
+                        )
+                    }
+                )
+                passed = (
+                    dependency_set == {"asyncio"}
+                    and {capability for _, capability in capability_set} == {"asyncio"}
+                    and usage_context_counter == expected_context
+                )
+            elif name == "direct_attribute_non_effect_near_miss":
+                passed = not dependencies and not capabilities and not usages
+            elif name == "direct_attribute_callable_near_miss":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/attribute_transport.py",
+                            "Transport.send",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+            elif name == "direct_attribute_object_factory":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/attribute_transport.py",
+                            "Transport.send",
+                            "httpx.AsyncClient",
+                        ): 1,
+                        (
+                            "policy/attribute_transport.py",
+                            "Transport.send",
+                            "httpx.AsyncClient.post",
+                        ): 1,
+                    }
+                )
+            elif name in {
+                "direct_attribute_rebinding_clears",
+                "direct_attribute_scope_bounded",
+            }:
+                passed = not usages
             elif name.startswith("reviewed_location_"):
                 expected_usage = Counter(
                     {("policy/reviewed_transport.py", "asyncio.open_connection"): 1}
@@ -1401,6 +1540,7 @@ def run_mandatory_matrix() -> int:
             "effect_sink_context_equality",
             "registry_set_equality",
             "static_inventory_regressions_passed",
+            "direct_attribute_provenance_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -1475,6 +1615,14 @@ def main() -> int:
     declared_sink_set = set(DECLARED_EFFECT_SINKS)
     declared_dependency_set = set(DECLARED_REVIEWED_DEPENDENCIES)
     regressions_passed, regression_results = run_static_inventory_regressions()
+    attribute_regression_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("direct_attribute_")
+    ]
+    attribute_regressions_passed = len(attribute_regression_results) == 6 and all(
+        bool(row["passed"]) for row in attribute_regression_results
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -1492,6 +1640,7 @@ def main() -> int:
         and discovered_sink_set == declared_sink_set
         and discovered_sink_context_counter == declared_sink_context_counter
         and regressions_passed
+        and attribute_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -1581,6 +1730,10 @@ def main() -> int:
         "static-inventory-regressions.json",
         {
             "passed": regressions_passed,
+            "direct_attribute_provenance_regressions_passed": (
+                attribute_regressions_passed
+            ),
+            "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
                 "bounded intraprocedural AST analysis; assignment, Await, simple "
@@ -1699,6 +1852,9 @@ def main() -> int:
                 discovered_sink_context_counter == declared_sink_context_counter
             ),
             "static_inventory_regressions_passed": regressions_passed,
+            "direct_attribute_provenance_regressions_passed": (
+                attribute_regressions_passed
+            ),
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
