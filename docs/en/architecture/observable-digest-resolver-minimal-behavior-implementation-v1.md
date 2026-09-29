@@ -221,3 +221,28 @@ Implementation is not activation.
 This implementation remains blocked from activation until exact-SHA evidence closes the applicable behavior/security tests and a separate explicit activation decision is made.
 
 Any addition of network, credentials, retries, redirects, cache, persistence, mutable shared state, another locator scheme, or execution wiring reopens the relevant security review.
+
+
+## Activation evidence review
+
+The implementation has passed external implementation review for the described boundary, but that does not authorize activation.
+
+The independent activation-evidence gate is now defined at:
+
+`docs/en/security/observable-digest-resolver-activation-evidence-review-v1.md`
+
+with machine-readable companion:
+
+`security/observable_digest_resolver_activation_evidence_review_v1.json`
+
+Current activation-review posture:
+
+```text
+ACTIVATION_EVIDENCE_REVIEW_OPEN
+activation_authorized = false
+activation_approved = false
+activation_performed = false
+effect_path_connection_authorized = false
+```
+
+The gate intentionally records unresolved activation-specific evidence rather than treating implementation correctness as sufficient.

@@ -1,0 +1,199 @@
+{
+  "review_version": "1.0",
+  "status": "ACTIVATION_EVIDENCE_REVIEW_OPEN",
+  "activation_authorized": false,
+  "activation_approved": false,
+  "activation_performed": false,
+  "effect_path_connection_authorized": false,
+  "self_authorization_allowed": false,
+  "baseline": {
+    "implementation_merge_sha": "f3db837d8233afbb998195890525fcbe511c2f2c",
+    "validated_pr_head_sha": "0fe3e95364fe9c7abdd3e58e5ec3f861935123ff",
+    "validated_pr_head_workflows": "23/23 observed workflows success",
+    "merge_file_identical_to_validated_head": true,
+    "exact_merge_sha_ci_rerun_observed": false,
+    "implementation_blob_sha": "64431fecf69579d8554cbc590a67ce8ca9d4a612",
+    "behavior_test_blob_sha": "a247bf768ca7a0ac6f65ac13fbb2e07664336b30",
+    "implementation_manifest_blob_sha": "6f17cb0bb2027efda7516e71050feb23d9828283",
+    "implementation_review_outcome": "NO_CORRECTION_REQUIRED_BEFORE_NEXT_EVIDENCE_ACTIVATION_REVIEW_STAGE",
+    "implementation_review_scope": "IMPLEMENTATION_REVIEW_ONLY"
+  },
+  "current_posture": {
+    "behavior_implemented": true,
+    "behavior_authorized": false,
+    "behavior_activated": false,
+    "activation_gate": "BLOCKED",
+    "production_runtime_callers_known": 0,
+    "production_runtime_reachability": "SOURCE_LEVEL_ISOLATED_PENDING_CI_ASSERTION",
+    "activation_target": "UNDEFINED",
+    "authorized_runtime_caller": "UNDEFINED",
+    "snapshot_supplier": "UNDEFINED",
+    "consumer_semantics": "NOT_PROVEN",
+    "explicit_activation_authorization": "NOT_GRANTED",
+    "explicit_activation_approval": "NOT_GRANTED",
+    "deactivation_mechanism": "NOT_DEFINED",
+    "effect_path_connection": "PROHIBITED"
+  },
+  "governing_invariants": [
+    "Implementation correctness does not imply authorization.",
+    "Authorization does not imply admissibility.",
+    "Admissibility does not imply approval.",
+    "Approval does not imply execution permission.",
+    "Resolver RESOLVED does not imply Authority, Human Approval, Bind authorization, admissibility, or execution permission.",
+    "Uncertainty, contradiction, mutation, delay, or provenance loss may weaken a conclusion but must never strengthen it.",
+    "No activation-review artifact may self-authorize activation."
+  ],
+  "activation_target_boundary": {
+    "target_id": "RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1",
+    "description": "If later approved, activation may only make the existing separate_store_readonly_v1 resolver callable from one explicitly named evidence-only consumer. It does not authorize any effect-bearing path.",
+    "permitted_profile": "separate_store_readonly_v1",
+    "permitted_result_role": "EVIDENCE_ONLY",
+    "direct_effect_path_use": false,
+    "direct_policy_allow_use": false,
+    "direct_bind_authorization_use": false,
+    "direct_execution_permission_use": false,
+    "default_state": "DISABLED",
+    "note": "The exact caller/consumer is intentionally not named yet; therefore activation is not currently justifiable."
+  },
+  "gates": [
+    {
+      "id": "AER-01",
+      "name": "EXACT_IMPLEMENTATION_IDENTITY",
+      "status": "PARTIAL",
+      "current_evidence": [
+        "validated PR head 0fe3e953... had 23/23 observed workflows success",
+        "merge f3db837d... is file-identical to validated PR head",
+        "implementation and test Git blob identities are frozen"
+      ],
+      "missing_evidence": [
+        "separate exact-merge-SHA focused CI/proof run is not observed"
+      ],
+      "closure_condition": "Obtain exact-merge-SHA focused resolver behavior/security evidence or an equally explicit independently reproducible proof pinned to f3db837d8233afbb998195890525fcbe511c2f2c."
+    },
+    {
+      "id": "AER-02",
+      "name": "RUNTIME_REACHABILITY_INVENTORY",
+      "status": "PENDING_CI_PROOF",
+      "current_evidence": [
+        "repository search found the resolver callable only in its implementation module and focused tests"
+      ],
+      "missing_evidence": [
+        "source-level isolation must be frozen by executable regression test",
+        "future activation wiring must be added to a declared runtime reachability inventory"
+      ],
+      "closure_condition": "Executable source-level proof shows no undeclared production caller/import path; any later caller is explicitly declared and reviewed."
+    },
+    {
+      "id": "AER-03",
+      "name": "NAMED_ACTIVATION_TARGET_AND_CALLER",
+      "status": "NOT_DEFINED",
+      "current_evidence": [],
+      "missing_evidence": [
+        "exact production or controlled runtime caller module",
+        "caller identity / caller_id_hash provenance",
+        "exact namespace scope",
+        "exact activation configuration"
+      ],
+      "closure_condition": "One exact evidence-only activation target and caller are named, scope-pinned, reviewable, and default-disabled."
+    },
+    {
+      "id": "AER-04",
+      "name": "SNAPSHOT_PROVENANCE_AND_ADMISSIBILITY",
+      "status": "NOT_PROVEN",
+      "current_evidence": [
+        "resolver proves exact membership in caller-supplied immutable snapshot only"
+      ],
+      "missing_evidence": [
+        "who or what creates the activation-time snapshot",
+        "why that snapshot is admissible for the intended consumer",
+        "provenance continuity from source to immutable snapshot",
+        "freshness policy if freshness is required by the consumer"
+      ],
+      "closure_condition": "Activation-time snapshot provenance/admissibility is independently defined and verified without making RESOLVED itself an admissibility claim."
+    },
+    {
+      "id": "AER-05",
+      "name": "CONSUMER_NON_AMPLIFICATION",
+      "status": "NOT_PROVEN",
+      "current_evidence": [
+        "resolver hard-false semantic guarantees prevent self-issued authority"
+      ],
+      "missing_evidence": [
+        "downstream consumer does not translate RESOLVED directly into ALLOW, Authority, Human Approval, Bind authorization, or execution permission",
+        "consumer preserves the forbidden-inference boundary"
+      ],
+      "closure_condition": "Executable consumer tests prove resolver output remains evidence-only and cannot directly or indirectly create stronger authority."
+    },
+    {
+      "id": "AER-06",
+      "name": "FAILURE_AND_UNCERTAINTY_PROPAGATION",
+      "status": "NOT_PROVEN",
+      "current_evidence": [
+        "resolver itself fails closed to UNRESOLVED for malformed, unauthorized, absent, or schema-invalid evidence"
+      ],
+      "missing_evidence": [
+        "activation-time consumer propagates UNRESOLVED/failure without fallback or authority amplification",
+        "missing or degraded provenance cannot be repaired into an admissible success"
+      ],
+      "closure_condition": "End-to-end evidence-only consumer tests show all degraded resolver outcomes preserve or reduce conclusion strength."
+    },
+    {
+      "id": "AER-07",
+      "name": "EXPLICIT_AUTHORIZATION_AND_APPROVAL",
+      "status": "NOT_GRANTED",
+      "current_evidence": [],
+      "missing_evidence": [
+        "explicit authorization for the exact activation target",
+        "explicit human approval for the exact bounded activation configuration"
+      ],
+      "closure_condition": "A separate explicit authorization/approval record names the exact target, profile, scope, implementation identity, and non-effect-bearing boundary.",
+      "self_satisfied_by_this_review": false
+    },
+    {
+      "id": "AER-08",
+      "name": "EFFECT_PATH_SEPARATION",
+      "status": "CURRENTLY_PROHIBITED_NOT_YET_ACTIVATION_PROVEN",
+      "current_evidence": [
+        "current implementation is unwired from /v1/decide, Bind, execution permission, and effect-bearing paths"
+      ],
+      "missing_evidence": [
+        "future activation wiring must preserve that separation",
+        "negative proof must show no resolver result can bypass downstream authorization/admissibility boundaries"
+      ],
+      "closure_condition": "Exact activation wiring has executable negative proof that no direct or indirect effect-bearing path is created."
+    },
+    {
+      "id": "AER-09",
+      "name": "DEFAULT_DISABLED_DEACTIVATION_AND_ROLLBACK",
+      "status": "NOT_DEFINED",
+      "current_evidence": [],
+      "missing_evidence": [
+        "default-disabled activation mechanism",
+        "bounded disable/deactivation control",
+        "rollback semantics that do not create new authority",
+        "material-change rule reopening review"
+      ],
+      "closure_condition": "Activation can be explicitly enabled/disabled for the named target, with fail-closed rollback and no hidden fallback."
+    },
+    {
+      "id": "AER-10",
+      "name": "POST_ACTIVATION_EVIDENCE",
+      "status": "NOT_AVAILABLE",
+      "current_evidence": [],
+      "missing_evidence": [
+        "exact activated code/config identity",
+        "runtime evidence that intended caller is the only declared caller",
+        "runtime proof semantic guarantees remain hard-false",
+        "evidence of disabled effect-path connection"
+      ],
+      "closure_condition": "After any separately approved activation, a bounded post-activation proof confirms the exact runtime identity and preserved boundaries before activation is treated as closed."
+    }
+  ],
+  "closure_rule": {
+    "activation_review_can_close_only_when": "AER-01 through AER-09 are CLOSED/PASS and a separate explicit authorization/approval record exists.",
+    "activation_can_occur_before_review_closure": false,
+    "effect_path_connection_can_be_authorized_by_this_gate": false,
+    "post_activation_closure_requires": "AER-10 evidence after the separately approved activation.",
+    "material_change_reopens_review": true
+  }
+}
