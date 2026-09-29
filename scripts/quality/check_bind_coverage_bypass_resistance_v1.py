@@ -286,6 +286,255 @@ DECLARED_EFFECT_USAGES: dict[tuple[str, str], tuple[int, str]] = {
 # This outer inventory is intentionally independent of effect-family knowledge.
 # A new non-VERITAS dependency therefore requires review even when this scanner
 # does not yet understand that dependency's effect mechanisms.
+
+# Lexical context is an authority-bearing inventory dimension; source lines are
+# retained only as evidence and deliberately do not participate in equality.
+DECLARED_EFFECT_USAGE_CONTEXTS: dict[tuple[str, str, str], tuple[int, str]] = {
+    (
+        "veritas_os/policy/bind_effect_reconciliation.py",
+        "InMemoryAtomicEffectStateStore.__init__",
+        "asyncio.Lock",
+    ): (1, "synchronization_only"),
+    (
+        "veritas_os/policy/bind_execution_capability.py",
+        "_task_identity",
+        "asyncio.current_task",
+    ): (1, "synchronization_only"),
+    (
+        "veritas_os/policy/debate_safety_policy_runtime_shadow.py",
+        "build_debate_safety_policy_shadow_diagnostics_from_env",
+        "os.getenv",
+    ): (1, "process_capable_but_non_effect_use"),
+    (
+        "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
+        "InMemoryAtomicAuthorizationConsumptionStore.__init__",
+        "asyncio.Lock",
+    ): (1, "synchronization_only"),
+    ("veritas_os/policy/runtime_adapter.py", "_ed25519_required", "os.getenv"): (
+        1,
+        "process_capable_but_non_effect_use",
+    ),
+    (
+        "veritas_os/policy/runtime_adapter.py",
+        "_resolve_verification_public_key",
+        "os.environ.get",
+    ): (1, "process_capable_but_non_effect_use"),
+    (
+        "veritas_os/policy/sandbox_bind_execution.py",
+        "execute_sandbox_bind",
+        "asyncio.timeout",
+    ): (1, "synchronization_only"),
+    (
+        "veritas_os/policy/sandbox_bind_execution.py",
+        "execute_sandbox_bind",
+        "asyncio.CancelledError",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/sandbox_credential_resolution.py",
+        "prepare_and_resolve_sandbox_credential",
+        "asyncio.timeout",
+    ): (2, "synchronization_only"),
+    (
+        "veritas_os/policy/sandbox_credential_resolution.py",
+        "prepare_and_resolve_sandbox_credential",
+        "asyncio.CancelledError",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "asyncio.timeout",
+    ): (1, "synchronization_only"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "asyncio.open_connection",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "result(asyncio.open_connection)[1].write",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "result(asyncio.open_connection)[1].drain",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "result(asyncio.open_connection)[1].transport.abort",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "asyncio.CancelledError",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "_read_bounded_response",
+        "result(asyncio.open_connection)[0].readuntil",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "_read_bounded_response",
+        "result(asyncio.open_connection)[0].readexactly",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "_parse_operation",
+        "result(result(asyncio.open_connection)[0].readexactly).decode",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/sandbox_receipt_outcome.py",
+        "publish_sandbox_receipts",
+        "asyncio.CancelledError",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "asyncio.timeout",
+    ): (1, "synchronization_only"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "asyncio.open_connection",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "result(asyncio.open_connection)[1].write",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "result(asyncio.open_connection)[1].drain",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "result(asyncio.open_connection)[1].transport.abort",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "asyncio.CancelledError",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/sandbox_recovery.py",
+        "recover_sandbox_attempt",
+        "asyncio.CancelledError",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "TrustedHttpsReconciliationVerifier._retrieve",
+        "httpx.AsyncClient",
+    ): (1, "capability_factory"),
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "TrustedHttpsReconciliationVerifier._retrieve",
+        "httpx.AsyncClient.get",
+    ): (1, "auxiliary_read_only_network"),
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "TrustedHttpsReconciliationVerifier._retrieve",
+        "result(httpx.AsyncClient.get).raise_for_status",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "TrustedHttpsReconciliationVerifier._retrieve",
+        "result(httpx.AsyncClient.get).json",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_UrllibWebhookTransport.request",
+        "urllib.request.Request",
+    ): (1, "capability_factory"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_UrllibWebhookTransport.request",
+        "urllib.request.build_opener",
+    ): (1, "capability_factory"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_UrllibWebhookTransport.request",
+        "result(urllib.request.build_opener).open",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_UrllibWebhookTransport.request",
+        "result(result(urllib.request.build_opener).open).read",
+    ): (1, "governed_v1_effect"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_UrllibWebhookTransport.request",
+        "result(result(urllib.request.build_opener).open).headers.items",
+    ): (1, "reviewed_non_effect_usage"),
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_resolve_host",
+        "socket.getaddrinfo",
+    ): (1, "auxiliary_read_only_network"),
+}
+
+DECLARED_EFFECT_SINK_CONTEXTS: dict[tuple[str, str, str], str] = {
+    (
+        "veritas_os/policy/bundle.py",
+        "create_bundle_archive",
+        "archive_path.open",
+    ): "local_file_io",
+    (
+        "veritas_os/policy/bundle.py",
+        "create_bundle_archive",
+        "tarfile.open",
+    ): "local_file_io",
+    ("veritas_os/policy/bundle.py", "create_bundle_archive", "open"): "local_file_io",
+    (
+        "veritas_os/policy/sandbox_event_service.py",
+        "create_sandbox_event_service",
+        "app.post",
+    ): "route_registration_not_dispatch",
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "asyncio.open_connection",
+    ): "native_v2_sandbox_action",
+    (
+        "veritas_os/policy/sandbox_https_transport.py",
+        "SandboxHTTPSTransport.send_once",
+        "writer.write",
+    ): "native_v2_sandbox_action",
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "asyncio.open_connection",
+    ): "auxiliary_reconciliation_read_outside_v1",
+    (
+        "veritas_os/policy/sandbox_reconciliation.py",
+        "reconcile_sandbox_effect",
+        "writer.write",
+    ): "auxiliary_reconciliation_read_outside_v1",
+    (
+        "veritas_os/policy/trusted_https_reconciliation.py",
+        "TrustedHttpsReconciliationVerifier._retrieve",
+        "httpx.AsyncClient.get",
+    ): "auxiliary_read_only_network",
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "WebhookBindAdapter._request",
+        "transport.request",
+    ): "registered_webhook_dispatch_to_exact_sink",
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_UrllibWebhookTransport.request",
+        "self._delegate.request",
+    ): "controlled_test_delegate_below_exact_sink",
+    (
+        "veritas_os/policy/webhook_bind_adapter.py",
+        "_UrllibWebhookTransport.request",
+        "opener.open",
+    ): "registered_webhook_action_or_compensation",
+}
+
 DECLARED_REVIEWED_DEPENDENCIES = {
     "__future__": "stdlib_non_effect",
     "abc": "stdlib_non_effect",
@@ -516,12 +765,53 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def __init__(self, relative: str) -> None:
         self.relative = relative
+        self.context_stack: list[str] = []
         self.aliases: dict[str, str] = {}
         self.instances: dict[str, str] = {}
         self.dependencies: list[dict[str, object]] = []
         self.capabilities: list[dict[str, object]] = []
         self.usages: list[dict[str, object]] = []
         self.sinks: list[dict[str, object]] = []
+
+    def _current_qualname(self) -> str:
+        return ".".join(self.context_stack) if self.context_stack else "<module>"
+
+    def _visit_body_context(self, body: list[ast.stmt], name: str) -> None:
+        self.context_stack.append(name)
+        try:
+            for statement in body:
+                self.visit(statement)
+        finally:
+            self.context_stack.pop()
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for base in node.bases:
+            self.visit(base)
+        for keyword in node.keywords:
+            self.visit(keyword)
+        for type_parameter in getattr(node, "type_params", ()):
+            self.visit(type_parameter)
+        self._visit_body_context(node.body, node.name)
+
+    def _visit_function_definition(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> None:
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        self.visit(node.args)
+        if node.returns is not None:
+            self.visit(node.returns)
+        for type_parameter in getattr(node, "type_params", ()):
+            self.visit(type_parameter)
+        self._visit_body_context(node.body, node.name)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._visit_function_definition(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
+        self._visit_function_definition(node)
 
     def _add_dependency(self, identity: str, line: int) -> None:
         if not identity.startswith("veritas_os"):
@@ -660,6 +950,7 @@ class _EffectVisitor(ast.NodeVisitor):
             self.usages.append(
                 {
                     "path": self.relative,
+                    "enclosing_qualname": self._current_qualname(),
                     "usage": canonical,
                     "line": node.lineno,
                 }
@@ -668,6 +959,7 @@ class _EffectVisitor(ast.NodeVisitor):
             self.sinks.append(
                 {
                     "path": self.relative,
+                    "enclosing_qualname": self._current_qualname(),
                     "primitive": raw if raw in _PRESERVED_SINKS else canonical,
                     "line": node.lineno,
                 }
@@ -794,6 +1086,70 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "    )\n"
             "    transport.sendto(b'effect')\n",
         ),
+        "reviewed_location_baseline": (
+            "reviewed_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    async def send_once(self):\n"
+            "        await asyncio.open_connection('example.com', 443)\n",
+        ),
+        "reviewed_location_relocated": (
+            "reviewed_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    async def _direct_effect(self):\n"
+            "        await asyncio.open_connection('example.com', 443)\n\n"
+            "    async def send_once(self):\n"
+            "        return await self._direct_effect()\n",
+        ),
+        "sandbox_location_baseline": (
+            "reviewed_transport.py",
+            "import asyncio\n\n"
+            "class SandboxHTTPSTransport:\n"
+            "    async def send_once(self):\n"
+            "        reader, writer = await asyncio.open_connection(\n"
+            "            'example.com', 443)\n"
+            "        writer.write(b'effect')\n"
+            "        await writer.drain()\n",
+        ),
+        "sandbox_location_relocated": (
+            "reviewed_transport.py",
+            "import asyncio\n\n"
+            "class SandboxHTTPSTransport:\n"
+            "    async def _unguarded_effect(self):\n"
+            "        reader, writer = await asyncio.open_connection(\n"
+            "            'example.com', 443)\n"
+            "        writer.write(b'effect')\n"
+            "        await writer.drain()\n\n"
+            "    async def send_once(self):\n"
+            "        return await self._unguarded_effect()\n",
+        ),
+        "definition_time_body_baseline": (
+            "reviewed_transport.py",
+            "import socket\n\n"
+            "class Transport:\n"
+            "    def send_once(self):\n"
+            "        socket.create_connection(('example.com', 443))\n",
+        ),
+        "definition_time_method_default": (
+            "reviewed_transport.py",
+            "import socket\n\n"
+            "class Transport:\n"
+            "    def send_once(\n"
+            "        self,\n"
+            "        connection=socket.create_connection(\n"
+            "            ('example.com', 443)),\n"
+            "    ):\n"
+            "        pass\n",
+        ),
+        "definition_time_module_default": (
+            "reviewed_transport.py",
+            "import socket\n\n"
+            "def send_once(\n"
+            "    connection=socket.create_connection(('example.com', 443)),\n"
+            "):\n"
+            "    pass\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -814,6 +1170,22 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             usage_counter = Counter(
                 (str(row["path"]), str(row["usage"])) for row in usages
             )
+            usage_context_counter = Counter(
+                (
+                    str(row["path"]),
+                    str(row["enclosing_qualname"]),
+                    str(row["usage"]),
+                )
+                for row in usages
+            )
+            sink_context_counter = Counter(
+                (
+                    str(row["path"]),
+                    str(row["enclosing_qualname"]),
+                    str(row["primitive"]),
+                )
+                for row in sinks
+            )
             canonical_socket_sink_found = any(
                 primitive == "socket.create_connection" for _, primitive in sink_set
             )
@@ -822,7 +1194,71 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             ) and sink_set != set(DECLARED_EFFECT_SINKS)
             dependency_rejected = dependency_set != set(DECLARED_REVIEWED_DEPENDENCIES)
             unknown_dependency = name.startswith("unknown_dependency")
-            if name == "reviewed_asyncio_near_miss":
+            if name.startswith("definition_time_"):
+                expected_qualname = {
+                    "definition_time_body_baseline": "Transport.send_once",
+                    "definition_time_method_default": "Transport",
+                    "definition_time_module_default": "<module>",
+                }[name]
+                expected_context = Counter(
+                    {
+                        (
+                            "policy/reviewed_transport.py",
+                            expected_qualname,
+                            "socket.create_connection",
+                        ): 1
+                    }
+                )
+                passed = usage_context_counter == expected_context
+            elif name.startswith("reviewed_location_"):
+                expected_usage = Counter(
+                    {("policy/reviewed_transport.py", "asyncio.open_connection"): 1}
+                )
+                expected_context = Counter(
+                    {
+                        (
+                            "policy/reviewed_transport.py",
+                            "Transport.send_once",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+                context_equal = usage_context_counter == expected_context
+                passed = usage_counter == expected_usage and context_equal == (
+                    name == "reviewed_location_baseline"
+                )
+            elif name.startswith("sandbox_location_"):
+                baseline_qualname = "SandboxHTTPSTransport.send_once"
+                expected_usage_contexts = {
+                    ("policy/reviewed_transport.py", baseline_qualname, usage): 1
+                    for usage in (
+                        "asyncio.open_connection",
+                        "result(asyncio.open_connection)[1].write",
+                        "result(asyncio.open_connection)[1].drain",
+                    )
+                }
+                expected_sink_contexts = {
+                    (
+                        "policy/reviewed_transport.py",
+                        baseline_qualname,
+                        primitive,
+                    ): 1
+                    for primitive in ("asyncio.open_connection", "writer.write")
+                }
+                usage_context_equal = usage_context_counter == Counter(
+                    expected_usage_contexts
+                )
+                sink_context_equal = sink_context_counter == Counter(
+                    expected_sink_contexts
+                )
+                is_baseline = name == "sandbox_location_baseline"
+                passed = (
+                    usage_context_equal == is_baseline
+                    and sink_context_equal == is_baseline
+                    and sum(usage_counter.values()) == 3
+                    and len(sink_set) == 2
+                )
+            elif name == "reviewed_asyncio_near_miss":
                 expected_usage = Counter(
                     {("policy/reviewed_asyncio.py", "asyncio.Lock"): 1}
                 )
@@ -864,6 +1300,32 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                     "sinks": sinks,
                     "dependency_set_equality": not dependency_rejected,
                     "effect_inventory_equality": not effect_inventories_rejected,
+                    "effect_usage_context_equality": (
+                        usage_context_counter == Counter(expected_context)
+                        if name.startswith("reviewed_location_")
+                        else usage_context_equal
+                        if name.startswith("sandbox_location_")
+                        else None
+                    ),
+                    "effect_sink_context_equality": (
+                        sink_context_equal
+                        if name.startswith("sandbox_location_")
+                        else None
+                    ),
+                    "definition_time_context_equality": (
+                        usage_context_counter
+                        == Counter(
+                            {
+                                (
+                                    "policy/reviewed_transport.py",
+                                    "Transport.send_once",
+                                    "socket.create_connection",
+                                ): 1
+                            }
+                        )
+                        if name.startswith("definition_time_")
+                        else None
+                    ),
                     "automatic_package_scan": name == "automatic_new_module",
                 }
             )
@@ -933,7 +1395,10 @@ def run_mandatory_matrix() -> int:
             "dependency_set_equality",
             "effect_capability_set_equality",
             "effect_usage_set_equality",
+            "effect_usage_occurrence_equality",
+            "effect_usage_context_equality",
             "effect_sink_set_equality",
+            "effect_sink_context_equality",
             "registry_set_equality",
             "static_inventory_regressions_passed",
         )
@@ -973,11 +1438,38 @@ def main() -> int:
     discovered_usage_counter = Counter(
         (str(row["path"]), str(row["usage"])) for row in discovered_usages
     )
+    discovered_usage_context_counter = Counter(
+        (
+            str(row["path"]),
+            str(row["enclosing_qualname"]),
+            str(row["usage"]),
+        )
+        for row in discovered_usages
+    )
     declared_usage_counter = Counter(
         {
             identity: count_and_classification[0]
             for identity, count_and_classification in DECLARED_EFFECT_USAGES.items()
         }
+    )
+    declared_usage_context_counter = Counter(
+        {
+            identity: count_and_classification[0]
+            for identity, count_and_classification in (
+                DECLARED_EFFECT_USAGE_CONTEXTS.items()
+            )
+        }
+    )
+    discovered_sink_context_counter = Counter(
+        (
+            str(row["path"]),
+            str(row["enclosing_qualname"]),
+            str(row["primitive"]),
+        )
+        for row in discovered_sinks
+    )
+    declared_sink_context_counter = Counter(
+        {identity: 1 for identity in DECLARED_EFFECT_SINK_CONTEXTS}
     )
     declared_capability_set = set(DECLARED_EFFECT_CAPABILITIES)
     declared_sink_set = set(DECLARED_EFFECT_SINKS)
@@ -996,7 +1488,9 @@ def main() -> int:
         and discovered_dependency_set == declared_dependency_set
         and discovered_capability_set == declared_capability_set
         and discovered_usage_counter == declared_usage_counter
+        and discovered_usage_context_counter == declared_usage_context_counter
         and discovered_sink_set == declared_sink_set
+        and discovered_sink_context_counter == declared_sink_context_counter
         and regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
@@ -1023,6 +1517,14 @@ def main() -> int:
             "classification": DECLARED_EFFECT_SINKS.get(
                 (str(row["path"]), str(row["primitive"])), "UNDECLARED"
             ),
+            "context_classification": DECLARED_EFFECT_SINK_CONTEXTS.get(
+                (
+                    str(row["path"]),
+                    str(row["enclosing_qualname"]),
+                    str(row["primitive"]),
+                ),
+                "UNDECLARED",
+            ),
         }
         for row in discovered_sinks
     ]
@@ -1035,20 +1537,24 @@ def main() -> int:
         }
         for row in discovered_capabilities
     ]
-    seen_usages: Counter[tuple[str, str]] = Counter()
+    seen_usages: Counter[tuple[str, str, str]] = Counter()
     effect_usage_inventory = []
     for row in discovered_usages:
-        identity = (str(row["path"]), str(row["usage"]))
-        seen_usages[identity] += 1
-        declaration = DECLARED_EFFECT_USAGES.get(identity)
+        context_identity = (
+            str(row["path"]),
+            str(row["enclosing_qualname"]),
+            str(row["usage"]),
+        )
+        seen_usages[context_identity] += 1
+        declaration = DECLARED_EFFECT_USAGE_CONTEXTS.get(context_identity)
         effect_usage_inventory.append(
             {
                 **row,
-                "occurrence": seen_usages[identity],
+                "occurrence": seen_usages[context_identity],
                 "classification": (
                     declaration[1]
                     if declaration is not None
-                    and seen_usages[identity] <= declaration[0]
+                    and seen_usages[context_identity] <= declaration[0]
                     else "UNDECLARED"
                 ),
             }
@@ -1067,7 +1573,9 @@ def main() -> int:
     _write("execution-boundary-inventory.json", effect_sink_inventory)
     _write("effect-capability-inventory.json", effect_capability_inventory)
     _write("effect-usage-inventory.json", effect_usage_inventory)
+    _write("effect-usage-context-inventory.json", effect_usage_inventory)
     _write("effect-sink-inventory.json", effect_sink_inventory)
+    _write("effect-sink-context-inventory.json", effect_sink_inventory)
     _write("reviewed-dependency-inventory.json", reviewed_dependency_inventory)
     _write(
         "static-inventory-regressions.json",
@@ -1113,6 +1621,18 @@ def main() -> int:
             ),
             "undeclared_sinks": sorted(discovered_sink_set - declared_sink_set),
             "missing_declared_sinks": sorted(declared_sink_set - discovered_sink_set),
+            "undeclared_sink_contexts": sorted(
+                (identity, count)
+                for identity, count in (
+                    discovered_sink_context_counter - declared_sink_context_counter
+                ).items()
+            ),
+            "missing_declared_sink_contexts": sorted(
+                (identity, count)
+                for identity, count in (
+                    declared_sink_context_counter - discovered_sink_context_counter
+                ).items()
+            ),
             "undeclared_usage_occurrences": sorted(
                 (path, usage, count)
                 for (path, usage), count in (
@@ -1123,6 +1643,18 @@ def main() -> int:
                 (path, usage, count)
                 for (path, usage), count in (
                     declared_usage_counter - discovered_usage_counter
+                ).items()
+            ),
+            "undeclared_usage_context_occurrences": sorted(
+                (identity, count)
+                for identity, count in (
+                    discovered_usage_context_counter - declared_usage_context_counter
+                ).items()
+            ),
+            "missing_declared_usage_context_occurrences": sorted(
+                (identity, count)
+                for identity, count in (
+                    declared_usage_context_counter - discovered_usage_context_counter
                 ).items()
             ),
             "undeclared_dependencies": sorted(
@@ -1154,12 +1686,18 @@ def main() -> int:
                 discovered_capability_set == declared_capability_set
             ),
             "effect_usage_set_equality": (
-                discovered_usage_counter == declared_usage_counter
+                set(discovered_usage_counter) == set(declared_usage_counter)
             ),
             "effect_usage_occurrence_equality": (
                 discovered_usage_counter == declared_usage_counter
             ),
+            "effect_usage_context_equality": (
+                discovered_usage_context_counter == declared_usage_context_counter
+            ),
             "effect_sink_set_equality": discovered_sink_set == declared_sink_set,
+            "effect_sink_context_equality": (
+                discovered_sink_context_counter == declared_sink_context_counter
+            ),
             "static_inventory_regressions_passed": regressions_passed,
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
