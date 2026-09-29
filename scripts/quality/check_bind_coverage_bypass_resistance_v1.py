@@ -931,6 +931,17 @@ class _EffectVisitor(ast.NodeVisitor):
                 self._clear_attribute_provenance(element)
 
     def _record_instance(self, target: ast.AST, value: ast.AST) -> None:
+        if (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, (ast.Tuple, ast.List))
+            and len(target.elts) == len(value.elts)
+            and not any(isinstance(element, ast.Starred) for element in target.elts)
+        ):
+            for target_element, value_element in zip(
+                target.elts, value.elts, strict=True
+            ):
+                self._record_instance(target_element, value_element)
+            return
         provenance = self._value_provenance(value)
         if provenance is not None:
             self._bind_provenance(target, provenance)
@@ -1237,6 +1248,29 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "    async def send(self):\n"
             "        await self._open('example.com', 443)\n",
         ),
+        "direct_attribute_tuple_pairwise": (
+            "attribute_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    async def send(self):\n"
+            "        (self._open,) = (asyncio.open_connection,)\n"
+            "        await self._open('example.com', 443)\n",
+        ),
+        "direct_attribute_list_pairwise": (
+            "attribute_transport.py",
+            "import asyncio\n\n"
+            "class Transport:\n"
+            "    async def send(self):\n"
+            "        [self._open] = [asyncio.open_connection]\n"
+            "        await self._open('example.com', 443)\n",
+        ),
+        "direct_attribute_pairwise_non_effect_near_miss": (
+            "attribute_transport.py",
+            "class Transport:\n"
+            "    async def send(self):\n"
+            "        (self._label,) = ('network',)\n"
+            "        await self._label()\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -1347,8 +1381,22 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             elif name in {
                 "direct_attribute_rebinding_clears",
                 "direct_attribute_scope_bounded",
+                "direct_attribute_pairwise_non_effect_near_miss",
             }:
                 passed = not usages
+            elif name in {
+                "direct_attribute_tuple_pairwise",
+                "direct_attribute_list_pairwise",
+            }:
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/attribute_transport.py",
+                            "Transport.send",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
             elif name.startswith("reviewed_location_"):
                 expected_usage = Counter(
                     {("policy/reviewed_transport.py", "asyncio.open_connection"): 1}
@@ -1620,7 +1668,7 @@ def main() -> int:
         for row in regression_results
         if str(row["name"]).startswith("direct_attribute_")
     ]
-    attribute_regressions_passed = len(attribute_regression_results) == 6 and all(
+    attribute_regressions_passed = len(attribute_regression_results) == 9 and all(
         bool(row["passed"]) for row in attribute_regression_results
     )
     registered_boundaries = {

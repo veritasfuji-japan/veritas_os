@@ -52,8 +52,8 @@ jobs:
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert regressions["case_count"] >= 21
-          assert len(regressions["cases"]) >= 21
+          assert regressions["case_count"] >= 24
+          assert len(regressions["cases"]) >= 24
           assert regressions["direct_attribute_provenance_regressions_passed"] is True
           assert all(case["passed"] for case in regressions["cases"])
           regression_cases = {case["name"]: case for case in regressions["cases"]}
