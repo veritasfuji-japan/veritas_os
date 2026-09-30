@@ -1,5 +1,7 @@
 # Observable Digest Resolver Activation Evidence Review v1
 
+Review revision: **1.1**
+
 ## 1. Status
 
 ```text
@@ -378,7 +380,130 @@ If activation is ever separately approved, the next proof must bind:
 
 Activation is not considered closed merely because an enable switch was changed.
 
-## 17. Current activation decision
+## 17. Gate AER-11 — Independent challenge and auditability
+
+Current status:
+
+```text
+NOT_DEFINED
+```
+
+The initial ten-gate foundation has been externally reviewed for completeness and was assessed as capturing the essential activation boundaries.
+
+One additional activation-specific dimension is now frozen:
+
+```text
+Independent Challenge / Auditability
+```
+
+This gate asks:
+
+> Who, separate from the implementation author and activation requester, is responsible for challenging the activation evidence, which exact artifacts must they inspect, and how is their approval or refusal preserved so the decision remains independently examinable?
+
+AER-11 does **not** replace AER-07.
+
+```text
+Explicit Authorization / Approval
+!= Independent Challenge / Auditability
+```
+
+Authorization cannot substitute for independent review.
+
+Independent review cannot manufacture authorization.
+
+### Reviewer separation
+
+The independent reviewer must be explicitly identified and must be separate from:
+
+- the implementation author;
+- the activation requester.
+
+The authorization approver does not automatically count as the independent reviewer.
+
+Any role overlap or conflict must be explicitly disclosed and reviewed rather than silently accepted.
+
+### Minimum review package
+
+The reviewer must inspect a frozen artifact manifest that includes at least:
+
+- exact implementation identity and code/test artifact identities;
+- AER-01 through AER-09 evidence and current status;
+- exact proposed activation target;
+- exact proposed caller;
+- exact resolver profile;
+- exact namespace;
+- exact activation configuration;
+- snapshot provenance / admissibility evidence;
+- consumer non-amplification evidence;
+- failure / uncertainty propagation evidence;
+- the separate AER-07 authorization / approval record;
+- effect-path separation evidence;
+- default-disabled enable / disable / rollback evidence;
+- all open findings, limitations and non-claims.
+
+The package must make adverse or incomplete evidence visible.
+
+It must not present only successful evidence.
+
+### Challenge semantics
+
+The independent review must permit:
+
+- challenge;
+- refusal;
+- abstention;
+- unresolved findings.
+
+It must not be structured as an approval-only path.
+
+The frozen decision vocabulary is:
+
+```text
+APPROVE
+REFUSE
+ABSTAIN
+```
+
+Rules:
+
+- missing reviewer decision blocks activation;
+- `REFUSE` blocks activation;
+- `ABSTAIN` blocks activation;
+- unresolved blocking findings block activation;
+- `APPROVE` does not create execution Authority;
+- `APPROVE` does not authorize an effect-path connection.
+
+### Auditability
+
+The preserved review record must bind:
+
+- reviewer identity and role;
+- reviewer-separation / conflict disclosure;
+- review timestamp;
+- exact implementation identity reviewed;
+- exact activation configuration reviewed;
+- reviewed-artifact manifest identity;
+- decision;
+- unresolved findings, if any;
+- explicit limitations and non-claims.
+
+The review record and artifact manifest must be durably preserved and independently reconstructable.
+
+If the review record is missing, stale, contradictory, or cannot be verified against the frozen package, activation remains blocked.
+
+### Closure condition
+
+AER-11 closes only when an identified independent reviewer:
+
+1. is demonstrably separate from the implementation author and activation requester;
+2. inspects the frozen activation evidence package;
+3. records an independently verifiable `APPROVE` decision;
+4. has no unresolved blocking finding;
+5. has the decision and reviewed-artifact manifest durably preserved and reconstructable.
+
+This gate remains distinct from both authorization and post-activation evidence.
+
+## 18. Current activation decision
 
 Current result:
 
@@ -401,20 +526,23 @@ Current blockers include:
 - post-activation evidence cannot exist before activation;
 - no separate exact-merge-SHA focused rerun observed.
 
-## 18. Closure rule
+## 19. Closure rule
 
 Activation review may close only when:
 
-1. AER-01 through AER-09 are closed;
+1. AER-01 through AER-09 and AER-11 are closed;
 2. a separate explicit authorization/approval record exists;
-3. exact activation wiring remains evidence-only and non-effect-bearing;
-4. no material change has reopened the security review.
+3. independent review remains separate from authorization and is durably auditable;
+4. exact activation wiring remains evidence-only and non-effect-bearing;
+5. no material change has reopened the security review.
 
 AER-10 closes only after any separately approved activation.
 
+AER-11 must close before activation.
+
 The activation-review document itself can never authorize activation.
 
-## 19. Non-claims
+## 20. Non-claims
 
 This review does not establish:
 
@@ -429,4 +557,4 @@ This review does not establish:
 - certification;
 - permission to connect an effect-bearing path.
 
-Its purpose is to make the missing activation evidence explicit before any activation decision is considered.
+Its purpose is to make the missing activation evidence explicit before any activation decision is considered, including the independent challenge and auditability required to make that decision externally examinable.
