@@ -788,6 +788,9 @@ class _EffectVisitor(ast.NodeVisitor):
         self.helper_definitions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
         self.helper_stack: tuple[str, ...] = ()
         self.return_provenances: list[tuple[str | None, ...]] = []
+        # Kept separate from the live source-order module frames. Bodies receive
+        # copies, so local traversal cannot mutate this completed binding snapshot.
+        self.module_runtime: tuple[dict[str, str], dict[str, str | None]] | None = None
         self.context_stack: list[str] = []
         self.alias_frames: list[tuple[str, dict[str, str]]] = [("module", {})]
         self.name_frames: list[dict[str, str | None]] = [{}]
@@ -798,6 +801,12 @@ class _EffectVisitor(ast.NodeVisitor):
         self.sinks: list[dict[str, object]] = []
 
     def visit_Module(self, node: ast.Module) -> None:  # noqa: N802
+        collector = _ModuleBindingCollector(self.relative)
+        collector.visit(node)
+        self.module_runtime = (
+            collector.alias_frames[0][1].copy(),
+            collector.name_frames[0].copy(),
+        )
         for statement in node.body:
             if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if statement.name in self.helper_names:
@@ -854,6 +863,7 @@ class _EffectVisitor(ast.NodeVisitor):
             raise ValueError("reviewed helper arguments are incomplete")
         child = _EffectVisitor(self.relative, self.helper_names)
         child.helper_definitions = self.helper_definitions
+        child.module_runtime = self.module_runtime
         child.helper_stack = self.helper_stack + (name,)
         child.alias_frames = [
             ("module", self.alias_frames[0][1].copy()),
@@ -901,6 +911,12 @@ class _EffectVisitor(ast.NodeVisitor):
     def _visit_body_context(
         self, body: list[ast.stmt], name: str, frame_kind: str
     ) -> None:
+        source_alias_frame = self.alias_frames[0]
+        source_name_frame = self.name_frames[0]
+        if frame_kind == "function" and self.module_runtime is not None:
+            aliases, names = self.module_runtime
+            self.alias_frames[0] = ("module", aliases.copy())
+            self.name_frames[0] = names.copy()
         self.context_stack.append(name)
         self.alias_frames.append((frame_kind, {}))
         self.name_frames.append({})
@@ -911,6 +927,8 @@ class _EffectVisitor(ast.NodeVisitor):
             self.name_frames.pop()
             self.alias_frames.pop()
             self.context_stack.pop()
+            self.alias_frames[0] = source_alias_frame
+            self.name_frames[0] = source_name_frame
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
         for decorator in node.decorator_list:
@@ -1014,6 +1032,12 @@ class _EffectVisitor(ast.NodeVisitor):
                 )
             if head in aliases:
                 return aliases[head] + (separator + tail if separator else "")
+        if self.module_runtime is not None:
+            runtime_aliases, runtime_names = self.module_runtime
+            if head in runtime_aliases or head in runtime_names:
+                # A name known only in the completed environment is not yet
+                # available to a definition-time/source-order expression.
+                return ""
         return raw
 
     def _value_provenance(self, value: ast.AST) -> str | None:
@@ -1193,6 +1217,121 @@ class _EffectVisitor(ast.NodeVisitor):
                 }
             )
         self.generic_visit(node)
+
+
+class _ModuleBindingReviewRequired(ValueError):
+    """An effect-relevant conditional module binding requires explicit review."""
+
+
+class _ModuleBindingCollector(_EffectVisitor):
+    """Collect only source-ordered initialization bindings, emitting no evidence.
+
+    Function/method and class bodies are not descended into. Definition-time
+    expressions retain source order. Control-flow-dependent effect bindings are
+    rejected rather than picking a branch; non-effect writes become unknown.
+    """
+
+    def __init__(self, relative: str) -> None:
+        super().__init__(relative, frozenset())
+        self.conditional_writes: set[str] | None = None
+
+    def visit_Module(self, node: ast.Module) -> None:  # noqa: N802
+        for statement in node.body:
+            self.visit(statement)
+
+    def _visit_body_context(
+        self, body: list[ast.stmt], name: str, frame_kind: str
+    ) -> None:
+        # Only their definition-time expressions are visited by the parent hooks.
+        return
+
+    def _add_dependency(self, identity: str, line: int) -> None:
+        return
+
+    def _add_capability(self, identity: str, line: int) -> None:
+        return
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        # Retain expression-level NamedExpr binding, never call/effect evidence.
+        self.generic_visit(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:  # noqa: N802
+        self.visit(node.args)
+
+    def _resolve_name(self, node: ast.AST) -> str:
+        if isinstance(node, ast.NamedExpr):
+            return super()._resolve_name(node)
+        head = _expression_name(node).split(".", 1)[0]
+        if head not in self.alias_frames[0][1] and head not in self.name_frames[0]:
+            # Only the supported builtin import mechanism has an implicit binding.
+            return "__import__" if head == "__import__" else ""
+        return super()._resolve_name(node)
+
+    def visit_Name(self, node: ast.Name) -> None:  # noqa: N802
+        if isinstance(node.ctx, ast.Store):
+            self._check_conditional_write(node.id, None)
+
+    def _check_conditional_write(self, name: str, provenance: str | None) -> None:
+        if self.conditional_writes is None:
+            return
+        old = self._resolve_name(ast.Name(id=name, ctx=ast.Load()))
+        if (provenance and self._has_effect_provenance(provenance)) or (
+            old and self._has_effect_provenance(old)
+        ):
+            raise _ModuleBindingReviewRequired(
+                f"conditional effect-relevant module binding requires review: {name}"
+            )
+        self.conditional_writes.add(name)
+
+    def _bind_alias(self, local: str, identity: str) -> None:
+        self._check_conditional_write(local, identity)
+        super()._bind_alias(local, identity)
+
+    def _bind_provenance(self, target: ast.AST, provenance: str) -> None:
+        if isinstance(target, ast.Name):
+            self._check_conditional_write(target.id, provenance)
+        super()._bind_provenance(target, provenance)
+
+    def _clear_provenance(self, target: ast.AST) -> None:
+        if isinstance(target, ast.Name):
+            self._check_conditional_write(target.id, None)
+        super()._clear_provenance(target)
+
+    def _visit_conditional(self, node: ast.AST) -> None:
+        outer_writes = self.conditional_writes
+        self.conditional_writes = set()
+        try:
+            self.generic_visit(node)
+        finally:
+            writes = self.conditional_writes
+            self.conditional_writes = outer_writes
+            for name in writes:
+                self.alias_frames[0][1].pop(name, None)
+                self.name_frames[0][name] = None
+            if outer_writes is not None:
+                outer_writes.update(writes)
+
+    def visit_If(self, node: ast.If) -> None:  # noqa: N802
+        # The test itself executes before either branch is selected.
+        self.visit(node.test)
+        self._visit_conditional(
+            ast.Module(body=node.body + node.orelse, type_ignores=[])
+        )
+
+    visit_For = _visit_conditional
+    visit_AsyncFor = _visit_conditional
+    visit_While = _visit_conditional
+    visit_Try = _visit_conditional
+    visit_TryStar = _visit_conditional
+    visit_With = _visit_conditional
+    visit_AsyncWith = _visit_conditional
+    visit_Match = _visit_conditional
+    visit_IfExp = _visit_conditional
+    visit_ListComp = _visit_conditional
+    visit_SetComp = _visit_conditional
+    visit_DictComp = _visit_conditional
+    visit_GeneratorExp = _visit_conditional
+    visit_BoolOp = _visit_conditional
 
 
 def _discover_inventories(
@@ -2031,7 +2170,241 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                     "automatic_package_scan": name == "automatic_new_module",
                 }
             )
+    results.extend(run_forward_module_binding_regressions())
     return all(bool(row["passed"]) for row in results), results
+
+
+def run_forward_module_binding_regressions() -> list[dict[str, object]]:
+    """Parse inert fixtures to verify runtime/definition-time environment isolation.
+
+    These strings are never executed. Even capability calls have no network
+    arguments; only the scanner's provenance and occurrence evidence is tested.
+    """
+    fixtures = {
+        "late_import": (
+            "async def effect():\n    reader, writer = await late_asyncio.open_connection()\n    writer.writelines([])\n    await writer.drain()\n\nimport asyncio as late_asyncio\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_name": (
+            "import asyncio\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n\nopener = asyncio.open_connection\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "early_equivalence": (
+            "import asyncio\nopener = asyncio.open_connection\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_importfrom": (
+            "async def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n\nfrom asyncio import open_connection as opener\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_dynamic_builtin": (
+            "async def effect():\n    reader, writer = await late_asyncio.open_connection()\n    writer.writelines([])\n    await writer.drain()\n\nlate_asyncio = __import__('asyncio')\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_dynamic_importlib": (
+            "import importlib\nasync def effect():\n    reader, writer = await late_asyncio.open_connection()\n    writer.writelines([])\n    await writer.drain()\n\nlate_asyncio = importlib.import_module('asyncio')\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_annassign": (
+            "import asyncio\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n\nopener: object = asyncio.open_connection\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_namedexpr": (
+            "import asyncio\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n\n(opener := asyncio.open_connection)\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_unpack": (
+            "import asyncio\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n\nopener, harmless = asyncio.open_connection, print\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "late_namedexpr_condition": (
+            "import asyncio\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n\nif (opener := asyncio.open_connection):\n    pass\n",
+            [
+                ("effect", "asyncio.open_connection"),
+                ("effect", "result(asyncio.open_connection)[1].writelines"),
+                ("effect", "result(asyncio.open_connection)[1].drain"),
+            ],
+        ),
+        "default_forward": (
+            "async def effect(opener=late_asyncio.open_connection()):\n    pass\nimport asyncio as late_asyncio\n",
+            [],
+        ),
+        "default_early": (
+            "import asyncio as late_asyncio\nasync def effect(opener=late_asyncio.open_connection()):\n    pass\n",
+            [("<module>", "asyncio.open_connection")],
+        ),
+        "default_reference": (
+            "async def effect(opener=late_asyncio.open_connection):\n    pass\nimport asyncio as late_asyncio\n",
+            [],
+        ),
+        "annotation_forward": (
+            "def effect(value: late_asyncio.Lock()) -> late_asyncio.Lock():\n    pass\nimport asyncio as late_asyncio\n",
+            [],
+        ),
+        "decorator_forward": (
+            "@late_asyncio.Lock()\ndef effect():\n    pass\nimport asyncio as late_asyncio\n",
+            [],
+        ),
+        "class_base_forward": (
+            "class Example(late_asyncio.Lock()):\n    pass\nimport asyncio as late_asyncio\n",
+            [],
+        ),
+        "class_decorator_forward": (
+            "@late_asyncio.Lock()\nclass Example:\n    pass\nimport asyncio as late_asyncio\n",
+            [],
+        ),
+        "method_global": (
+            "import asyncio\nclass Example:\n    opener = print\n    async def effect(self):\n        await opener()\nopener = asyncio.open_connection\n",
+            [("Example.effect", "asyncio.open_connection")],
+        ),
+        "method_default_forward": (
+            "class Example:\n    async def effect(self, value=late_asyncio.Lock()):\n        await late_asyncio.open_connection()\nimport asyncio as late_asyncio\n",
+            [("Example.effect", "asyncio.open_connection")],
+        ),
+        "nested_lexical": (
+            "import asyncio\ndef outer():\n    local = asyncio.Lock\n    def inner():\n        local()\n        opener()\nopener = asyncio.open_connection\n",
+            [
+                ("outer.inner", "asyncio.Lock"),
+                ("outer.inner", "asyncio.open_connection"),
+            ],
+        ),
+        "helper_global": (
+            "def leaf():\n    return factory()\ndef entry():\n    lock = leaf()\n    lock.acquire()\nimport asyncio\nfactory = asyncio.Lock\n",
+            [("leaf", "asyncio.Lock"), ("entry", "result(asyncio.Lock).acquire")],
+        ),
+        "prepass_source_order": (
+            "opener = late_asyncio.open_connection\nimport asyncio as late_asyncio\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n",
+            [],
+        ),
+        "prepass_unbound_family": (
+            "opener = asyncio.open_connection\nimport asyncio\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n",
+            [],
+        ),
+        "final_harmless": (
+            "import asyncio\nopener = asyncio.open_connection\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n\nopener = print\n",
+            [],
+        ),
+        "module_expression_forward": (
+            "late_asyncio.Lock()\nimport asyncio as late_asyncio\n",
+            [],
+        ),
+        "conditional_name_rejected": (
+            "import asyncio\nif condition:\n    opener = asyncio.open_connection\nelse:\n    opener = print\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n",
+            None,
+        ),
+        "conditional_alias_rejected": (
+            "if condition:\n    import asyncio as late_asyncio\nelse:\n    import json as late_asyncio\nasync def effect():\n    reader, writer = await late_asyncio.open_connection()\n    writer.writelines([])\n    await writer.drain()\n",
+            None,
+        ),
+        "conditional_clear_rejected": (
+            "import asyncio\nopener = asyncio.open_connection\nif condition:\n    opener = print\nasync def effect():\n    reader, writer = await opener()\n    writer.writelines([])\n    await writer.drain()\n",
+            None,
+        ),
+        "default_family_forward": (
+            "def effect(value=asyncio.Lock()):\n    pass\nimport asyncio\n",
+            [],
+        ),
+        "class_family_forward": (
+            "class Example(asyncio.Lock()):\n    pass\nimport asyncio\n",
+            [],
+        ),
+    }
+    results: list[dict[str, object]] = []
+    observed: dict[str, Counter] = {}
+    for name, (source, expected) in fixtures.items():
+        tree = ast.parse(source)
+        collector = _ModuleBindingCollector("policy/forward_module.py")
+        visitor = _EffectVisitor("policy/forward_module.py", frozenset({"leaf"}))
+        try:
+            collector.visit(tree)
+            visitor.visit(tree)
+        except _ModuleBindingReviewRequired:
+            passed = expected is None
+            results.append(
+                {
+                    "name": "forward_module_" + name,
+                    "passed": passed,
+                    "requires_review": True,
+                }
+            )
+            continue
+        actual = Counter(
+            (str(row["enclosing_qualname"]), str(row["usage"]))
+            for row in visitor.usages
+        )
+        observed[name] = actual
+        collector_empty = not any(
+            (
+                collector.dependencies,
+                collector.capabilities,
+                collector.usages,
+                collector.sinks,
+            )
+        )
+        # The normal pass is the sole source of import occurrences.
+        direct_imports = sum(
+            isinstance(node, (ast.Import, ast.ImportFrom)) for node in tree.body
+        )
+        no_duplicate_dependencies = len(visitor.dependencies) == direct_imports + (
+            1 if name.startswith("late_dynamic_") else 0
+        )
+        passed = (
+            expected is not None
+            and actual == Counter(expected)
+            and collector_empty
+            and no_duplicate_dependencies
+        )
+        results.append(
+            {
+                "name": "forward_module_" + name,
+                "passed": passed,
+                "usages": visitor.usages,
+                "prepass_emits_no_evidence": collector_empty,
+                "single_pass_dependency_occurrences": no_duplicate_dependencies,
+            }
+        )
+    equivalent = observed.get("early_equivalence") == observed.get("late_name")
+    for row in results:
+        if row["name"] == "forward_module_early_equivalence":
+            row["passed"] = bool(row["passed"]) and equivalent
+            row["early_late_body_equivalence"] = equivalent
+    return results
 
 
 def run_mandatory_matrix() -> int:
@@ -2108,6 +2481,7 @@ def run_mandatory_matrix() -> int:
             "lexical_alias_scope_regressions_passed",
             "lexical_name_provenance_regressions_passed",
             "reviewed_helper_flow_regressions_passed",
+            "forward_module_binding_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -2220,6 +2594,14 @@ def main() -> int:
     helper_regressions_passed = len(helper_regression_results) == 8 and all(
         bool(row["passed"]) for row in helper_regression_results
     )
+    forward_regression_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("forward_module_")
+    ]
+    forward_regressions_passed = len(forward_regression_results) == 30 and all(
+        bool(row["passed"]) for row in forward_regression_results
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -2242,6 +2624,7 @@ def main() -> int:
         and lexical_alias_regressions_passed
         and lexical_name_regressions_passed
         and helper_regressions_passed
+        and forward_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -2342,11 +2725,13 @@ def main() -> int:
                 lexical_name_regressions_passed
             ),
             "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
+            "forward_module_binding_regressions_passed": forward_regressions_passed,
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
                 "bounded lexical alias/Name and intraprocedural AST analysis; direct "
                 "Import/ImportFrom and constant-string dynamic-import aliases, "
+                "separate source-order initialization and completed direct module bindings, "
                 "reviewed same-module direct helper argument/return flow, "
                 "assignment, NamedExpr, Await, simple "
                 "tuple/list unpacking, and direct invocation on known capability "
@@ -2475,6 +2860,7 @@ def main() -> int:
                 lexical_name_regressions_passed
             ),
             "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
+            "forward_module_binding_regressions_passed": forward_regressions_passed,
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
@@ -2490,6 +2876,8 @@ def main() -> int:
                 "monkeypatching",
                 "arbitrary interprocedural provenance",
                 "full Python compiler symbol-table or closure equivalence",
+                "function-body globals before normal module initialization completes",
+                "arbitrary module control-flow execution",
                 "interpreter or native compromise",
             ],
         },
