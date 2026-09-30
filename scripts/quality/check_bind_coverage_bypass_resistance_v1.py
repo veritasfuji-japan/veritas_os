@@ -761,13 +761,17 @@ def _is_effect_sink(name: str) -> bool:
 
 
 class _EffectVisitor(ast.NodeVisitor):
-    """Resolve effect-family imports, aliases, and simple client instances."""
+    """Resolve bounded effect provenance with isolated lexical Name frames.
+
+    None bindings explicitly shadow outer names. Class-body bindings are not
+    bare-name parents of methods; arbitrary interprocedural flow is unsupported.
+    """
 
     def __init__(self, relative: str) -> None:
         self.relative = relative
         self.context_stack: list[str] = []
         self.alias_frames: list[tuple[str, dict[str, str]]] = [("module", {})]
-        self.instances: dict[str, str] = {}
+        self.name_frames: list[dict[str, str | None]] = [{}]
         self.attribute_instances: dict[tuple[str, str], str] = {}
         self.dependencies: list[dict[str, object]] = []
         self.capabilities: list[dict[str, object]] = []
@@ -777,28 +781,21 @@ class _EffectVisitor(ast.NodeVisitor):
     def _current_qualname(self) -> str:
         return ".".join(self.context_stack) if self.context_stack else "<module>"
 
-    def _visible_aliases(self) -> dict[str, str]:
-        """Return aliases visible in the current bounded lexical scope."""
-        aliases: dict[str, str] = {}
-        function_body = self.alias_frames[-1][0] == "function"
-        for frame_kind, frame in self.alias_frames:
-            if function_body and frame_kind == "class":
-                continue
-            aliases.update(frame)
-        return aliases
-
     def _bind_alias(self, local: str, identity: str) -> None:
         self.alias_frames[-1][1][local] = identity
+        self.name_frames[-1].pop(local, None)
 
     def _visit_body_context(
         self, body: list[ast.stmt], name: str, frame_kind: str
     ) -> None:
         self.context_stack.append(name)
         self.alias_frames.append((frame_kind, {}))
+        self.name_frames.append({})
         try:
             for statement in body:
                 self.visit(statement)
         finally:
+            self.name_frames.pop()
             self.alias_frames.pop()
             self.context_stack.pop()
 
@@ -887,11 +884,24 @@ class _EffectVisitor(ast.NodeVisitor):
             if provenance is not None:
                 suffix = ".".join(attribute_parts[end:])
                 return provenance + (f".{suffix}" if suffix else "")
-        canonical = _canonical_name(raw, self._visible_aliases())
-        head, separator, tail = canonical.partition(".")
-        if head in self.instances:
-            return self.instances[head] + (separator + tail if separator else "")
-        return canonical
+        head, separator, tail = raw.partition(".")
+        function_body = self.alias_frames[-1][0] == "function"
+        for (kind, aliases), names in reversed(
+            list(zip(self.alias_frames, self.name_frames, strict=True))
+        ):
+            if function_body and kind == "class":
+                continue
+            if head in names:
+                # None is an explicit local shadow, not a missing binding.
+                provenance = names[head]
+                return (
+                    provenance + (separator + tail if separator else "")
+                    if provenance is not None
+                    else ""
+                )
+            if head in aliases:
+                return aliases[head] + (separator + tail if separator else "")
+        return raw
 
     def _value_provenance(self, value: ast.AST) -> str | None:
         value = self._unwrap_await(value)
@@ -918,7 +928,7 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def _bind_provenance(self, target: ast.AST, provenance: str) -> None:
         if isinstance(target, ast.Name):
-            self.instances[target.id] = provenance
+            self.name_frames[-1][target.id] = provenance
             return
         identity = self._attribute_identity(target)
         if identity is not None:
@@ -944,7 +954,7 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def _clear_provenance(self, target: ast.AST) -> None:
         if isinstance(target, ast.Name):
-            self.instances.pop(target.id, None)
+            self.name_frames[-1][target.id] = None
             return
         identity = self._attribute_identity(target)
         if identity is not None:
@@ -989,9 +999,7 @@ class _EffectVisitor(ast.NodeVisitor):
     def _record_dynamic_import(self, target: ast.AST, value: ast.AST) -> None:
         if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
             return
-        canonical = _canonical_name(
-            _expression_name(value.func), self._visible_aliases()
-        )
+        canonical = self._resolve_name(value.func)
         if canonical not in {"__import__", "importlib.import_module"} or not value.args:
             return
         argument = value.args[0]
@@ -1320,8 +1328,7 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
         ),
         "namedexpr_non_effect_near_miss": (
             "namedexpr_transport.py",
-            "if (label := 'network'):\n"
-            "    pass\n",
+            "if (label := 'network'):\n    pass\n",
         ),
         "namedexpr_rebinding_clears": (
             "namedexpr_transport.py",
@@ -1405,6 +1412,50 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "def harmless():\n"
             "    local_asyncio.Lock()\n",
         ),
+        "lexical_name_module_preserved": (
+            "name_scope.py",
+            "import asyncio\nfactory = asyncio.Lock\ndef helper():\n    factory = print\nasync def sibling():\n    lock = factory()\n    await lock.acquire()\n",
+        ),
+        "lexical_name_reverse_isolation": (
+            "name_scope.py",
+            "import asyncio\ndef helper():\n    factory = asyncio.Lock\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_local_shadow": (
+            "name_scope.py",
+            "import asyncio\nfactory = asyncio.Lock\ndef helper():\n    factory = print\n    factory()\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_namedexpr_clear": (
+            "name_scope.py",
+            "import asyncio\nfactory = asyncio.Lock\ndef helper():\n    (factory := print)\n    factory()\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_namedexpr_bind": (
+            "name_scope.py",
+            "import asyncio\ndef helper():\n    (factory := asyncio.Lock)\n    factory()\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_class_outer": (
+            "name_scope.py",
+            "import asyncio\nfactory = asyncio.Lock\nclass Example:\n    factory = print\n    def method(self):\n        factory()\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_class_local": (
+            "name_scope.py",
+            "import asyncio\nclass Example:\n    factory = asyncio.Lock\n    factory()\n    def method(self):\n        factory()\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_enclosing_function": (
+            "name_scope.py",
+            "import asyncio\ndef outer():\n    factory = asyncio.Lock\n    def inner():\n        factory()\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_unpacking": (
+            "name_scope.py",
+            "import asyncio\nfactory = asyncio.Lock\ndef helper():\n    factory, other = print, print\n    factory()\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_import_shadow": (
+            "name_scope.py",
+            "import asyncio\nfactory = asyncio.Lock\ndef helper():\n    from json import dumps as factory\n    factory({})\ndef sibling():\n    factory()\n",
+        ),
+        "lexical_name_alias_shadow": (
+            "name_scope.py",
+            "import asyncio\nfrom asyncio import Lock as factory\ndef helper():\n    factory = print\n    factory()\ndef sibling():\n    factory()\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -1482,8 +1533,7 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                 )
                 passed = (
                     dependency_set == {"asyncio"}
-                    and {capability for _, capability in capability_set}
-                    == {"asyncio"}
+                    and {capability for _, capability in capability_set} == {"asyncio"}
                     and usage_context_counter == expected_context
                 )
             elif name == "direct_attribute_non_effect_near_miss":
@@ -1629,6 +1679,32 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                             "asyncio.Lock",
                         ): 1
                     }
+                )
+            elif name.startswith("lexical_name_"):
+                expected_name_usages = {
+                    "lexical_name_module_preserved": [
+                        ("sibling", "asyncio.Lock"),
+                        ("sibling", "result(asyncio.Lock).acquire"),
+                    ],
+                    "lexical_name_reverse_isolation": [],
+                    "lexical_name_local_shadow": [("sibling", "asyncio.Lock")],
+                    "lexical_name_namedexpr_clear": [("sibling", "asyncio.Lock")],
+                    "lexical_name_namedexpr_bind": [("helper", "asyncio.Lock")],
+                    "lexical_name_class_outer": [
+                        ("Example.method", "asyncio.Lock"),
+                        ("sibling", "asyncio.Lock"),
+                    ],
+                    "lexical_name_class_local": [("Example", "asyncio.Lock")],
+                    "lexical_name_enclosing_function": [
+                        ("outer.inner", "asyncio.Lock")
+                    ],
+                    "lexical_name_unpacking": [("sibling", "asyncio.Lock")],
+                    "lexical_name_import_shadow": [("sibling", "asyncio.Lock")],
+                    "lexical_name_alias_shadow": [("sibling", "asyncio.Lock")],
+                }
+                passed = usage_context_counter == Counter(
+                    ("policy/name_scope.py", context, usage)
+                    for context, usage in expected_name_usages[name]
                 )
             elif name.startswith("reviewed_location_"):
                 expected_usage = Counter(
@@ -1824,6 +1900,7 @@ def run_mandatory_matrix() -> int:
             "direct_attribute_provenance_regressions_passed",
             "namedexpr_provenance_regressions_passed",
             "lexical_alias_scope_regressions_passed",
+            "lexical_name_provenance_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -1907,9 +1984,7 @@ def main() -> int:
         bool(row["passed"]) for row in attribute_regression_results
     )
     namedexpr_regression_results = [
-        row
-        for row in regression_results
-        if str(row["name"]).startswith("namedexpr_")
+        row for row in regression_results if str(row["name"]).startswith("namedexpr_")
     ]
     namedexpr_regressions_passed = len(namedexpr_regression_results) == 4 and all(
         bool(row["passed"]) for row in namedexpr_regression_results
@@ -1922,6 +1997,14 @@ def main() -> int:
     lexical_alias_regressions_passed = len(
         lexical_alias_regression_results
     ) == 7 and all(bool(row["passed"]) for row in lexical_alias_regression_results)
+    lexical_name_regression_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("lexical_name_")
+    ]
+    lexical_name_regressions_passed = len(
+        lexical_name_regression_results
+    ) == 11 and all(bool(row["passed"]) for row in lexical_name_regression_results)
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -1942,6 +2025,7 @@ def main() -> int:
         and attribute_regressions_passed
         and namedexpr_regressions_passed
         and lexical_alias_regressions_passed
+        and lexical_name_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -2034,16 +2118,17 @@ def main() -> int:
             "direct_attribute_provenance_regressions_passed": (
                 attribute_regressions_passed
             ),
-            "namedexpr_provenance_regressions_passed": (
-                namedexpr_regressions_passed
-            ),
+            "namedexpr_provenance_regressions_passed": (namedexpr_regressions_passed),
             "lexical_alias_scope_regressions_passed": (
                 lexical_alias_regressions_passed
+            ),
+            "lexical_name_provenance_regressions_passed": (
+                lexical_name_regressions_passed
             ),
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
-                "bounded lexical alias and intraprocedural AST analysis; direct "
+                "bounded lexical alias/Name and intraprocedural AST analysis; direct "
                 "Import/ImportFrom and constant-string dynamic-import aliases, "
                 "assignment, NamedExpr, Await, simple "
                 "tuple/list unpacking, and direct invocation on known capability "
@@ -2164,11 +2249,12 @@ def main() -> int:
             "direct_attribute_provenance_regressions_passed": (
                 attribute_regressions_passed
             ),
-            "namedexpr_provenance_regressions_passed": (
-                namedexpr_regressions_passed
-            ),
+            "namedexpr_provenance_regressions_passed": (namedexpr_regressions_passed),
             "lexical_alias_scope_regressions_passed": (
                 lexical_alias_regressions_passed
+            ),
+            "lexical_name_provenance_regressions_passed": (
+                lexical_name_regressions_passed
             ),
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",

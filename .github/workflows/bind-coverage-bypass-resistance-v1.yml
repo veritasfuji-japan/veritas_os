@@ -49,16 +49,20 @@ jobs:
           assert report["direct_attribute_provenance_regressions_passed"] is True
           assert report["namedexpr_provenance_regressions_passed"] is True
           assert report["lexical_alias_scope_regressions_passed"] is True
+          assert report["lexical_name_provenance_regressions_passed"] is True
           artifact_root = Path("artifacts/bind-coverage-bypass-resistance-v1")
           regressions = json.loads(
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert regressions["case_count"] >= 35
-          assert len(regressions["cases"]) >= 35
+          assert regressions["case_count"] >= 46
+          assert len(regressions["cases"]) >= 46
           assert regressions["direct_attribute_provenance_regressions_passed"] is True
           assert regressions["namedexpr_provenance_regressions_passed"] is True
           assert regressions["lexical_alias_scope_regressions_passed"] is True
+          assert regressions["lexical_name_provenance_regressions_passed"] is True
+          name_cases = [case for case in regressions["cases"] if case["name"].startswith("lexical_name_")]
+          assert len(name_cases) == 11
           assert all(case["passed"] for case in regressions["cases"])
           regression_cases = {case["name"]: case for case in regressions["cases"]}
           assert regression_cases["reviewed_location_relocated"]["effect_usage_context_equality"] is False
