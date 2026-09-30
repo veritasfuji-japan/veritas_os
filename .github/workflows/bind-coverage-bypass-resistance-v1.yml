@@ -52,25 +52,29 @@ jobs:
           assert report["lexical_name_provenance_regressions_passed"] is True
           assert report["reviewed_helper_flow_regressions_passed"] is True
           assert report["forward_module_binding_regressions_passed"] is True
+          assert report["default_parameter_provenance_regressions_passed"] is True
           artifact_root = Path("artifacts/bind-coverage-bypass-resistance-v1")
           regressions = json.loads(
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert regressions["case_count"] >= 84
-          assert len(regressions["cases"]) >= 84
+          assert regressions["case_count"] >= 106
+          assert len(regressions["cases"]) >= 106
           assert regressions["direct_attribute_provenance_regressions_passed"] is True
           assert regressions["namedexpr_provenance_regressions_passed"] is True
           assert regressions["lexical_alias_scope_regressions_passed"] is True
           assert regressions["lexical_name_provenance_regressions_passed"] is True
           assert regressions["reviewed_helper_flow_regressions_passed"] is True
           assert regressions["forward_module_binding_regressions_passed"] is True
+          assert regressions["default_parameter_provenance_regressions_passed"] is True
           name_cases = [case for case in regressions["cases"] if case["name"].startswith("lexical_name_")]
           assert len(name_cases) == 11
           helper_cases = [case for case in regressions["cases"] if case["name"].startswith("reviewed_helper_")]
           assert len(helper_cases) == 8
           forward_cases = [case for case in regressions["cases"] if case["name"].startswith("forward_module_")]
           assert len(forward_cases) == 30
+          default_cases = [case for case in regressions["cases"] if case["name"].startswith("default_parameter_")]
+          assert len(default_cases) == 22
           assert all(case["passed"] for case in regressions["cases"])
           regression_cases = {case["name"]: case for case in regressions["cases"]}
           assert regression_cases["reviewed_location_relocated"]["effect_usage_context_equality"] is False

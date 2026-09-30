@@ -786,8 +786,10 @@ class _EffectVisitor(ast.NodeVisitor):
             )
         )
         self.helper_definitions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+        self.parameter_defaults: dict[int, tuple[dict[str, str | None], set[str]]] = {}
         self.helper_stack: tuple[str, ...] = ()
         self.return_provenances: list[tuple[str | None, ...]] = []
+        self.call_evidence: set[tuple[int, str, str]] = set()
         # Kept separate from the live source-order module frames. Bodies receive
         # copies, so local traversal cannot mutate this completed binding snapshot.
         self.module_runtime: tuple[dict[str, str], dict[str, str | None]] | None = None
@@ -807,6 +809,7 @@ class _EffectVisitor(ast.NodeVisitor):
             collector.alias_frames[0][1].copy(),
             collector.name_frames[0].copy(),
         )
+        self.parameter_defaults.update(collector.parameter_defaults)
         for statement in node.body:
             if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if statement.name in self.helper_names:
@@ -836,22 +839,17 @@ class _EffectVisitor(ast.NodeVisitor):
         ):
             raise ValueError("nested reviewed helper definitions are unsupported")
         args = definition.args
-        if (
-            args.vararg
-            or args.kwarg
-            or args.defaults
-            or args.kw_defaults
-            or definition.decorator_list
-        ):
+        if args.vararg or args.kwarg or definition.decorator_list:
             raise ValueError("reviewed helper signature is unsupported")
-        parameters = [arg.arg for arg in args.posonlyargs + args.args]
-        if len(call.args) > len(parameters) or any(
+        positional = [arg.arg for arg in args.posonlyargs + args.args]
+        parameters = positional + [arg.arg for arg in args.kwonlyargs]
+        if len(call.args) > len(positional) or any(
             isinstance(arg, ast.Starred) for arg in call.args
         ):
             raise ValueError("reviewed helper positional binding is unsupported")
         bindings = {
             parameter: self._value_provenance(value)
-            for parameter, value in zip(parameters, call.args, strict=False)
+            for parameter, value in zip(positional, call.args, strict=False)
         }
         for keyword in call.keywords:
             if keyword.arg not in parameters or keyword.arg in bindings:
@@ -859,11 +857,20 @@ class _EffectVisitor(ast.NodeVisitor):
             if keyword.arg in {arg.arg for arg in args.posonlyargs}:
                 raise ValueError("reviewed helper positional-only parameter")
             bindings[keyword.arg] = self._value_provenance(keyword.value)
-        if set(bindings) != set(parameters):
-            raise ValueError("reviewed helper arguments are incomplete")
+        defaults, unresolved = self.parameter_defaults.get(id(definition), ({}, set()))
+        for parameter in set(parameters) - set(bindings):
+            if parameter not in defaults:
+                raise ValueError("reviewed helper arguments are incomplete")
+            if parameter in unresolved:
+                raise ValueError(
+                    "reviewed helper default requires definition-time review"
+                )
+            bindings[parameter] = defaults[parameter]
         child = _EffectVisitor(self.relative, self.helper_names)
         child.helper_definitions = self.helper_definitions
+        child.parameter_defaults = self.parameter_defaults
         child.module_runtime = self.module_runtime
+        child.call_evidence = self.call_evidence
         child.helper_stack = self.helper_stack + (name,)
         child.alias_frames = [
             ("module", self.alias_frames[0][1].copy()),
@@ -909,7 +916,11 @@ class _EffectVisitor(ast.NodeVisitor):
         self.name_frames[-1].pop(local, None)
 
     def _visit_body_context(
-        self, body: list[ast.stmt], name: str, frame_kind: str
+        self,
+        body: list[ast.stmt],
+        name: str,
+        frame_kind: str,
+        initial_name_bindings: dict[str, str | None] | None = None,
     ) -> None:
         source_alias_frame = self.alias_frames[0]
         source_name_frame = self.name_frames[0]
@@ -919,7 +930,7 @@ class _EffectVisitor(ast.NodeVisitor):
             self.name_frames[0] = names.copy()
         self.context_stack.append(name)
         self.alias_frames.append((frame_kind, {}))
-        self.name_frames.append({})
+        self.name_frames.append(dict(initial_name_bindings or {}))
         try:
             for statement in body:
                 self.visit(statement)
@@ -946,12 +957,68 @@ class _EffectVisitor(ast.NodeVisitor):
     ) -> None:
         for decorator in node.decorator_list:
             self.visit(decorator)
-        self.visit(node.args)
+        parameter_bindings = self._visit_parameter_defaults(node.args, id(node))
         if node.returns is not None:
             self.visit(node.returns)
         for type_parameter in getattr(node, "type_params", ()):
             self.visit(type_parameter)
-        self._visit_body_context(node.body, node.name, "function")
+        self._visit_body_context(node.body, node.name, "function", parameter_bindings)
+
+    def _visit_parameter_defaults(
+        self, args: ast.arguments, definition_id: int
+    ) -> dict[str, str | None]:
+        """Capture defaults once, in definition-time order, before body globals.
+
+        Every parameter shadows outer names. Default lookup uses a state-only
+        visitor, so deriving provenance cannot emit a second call evidence row.
+        Unknown helper defaults are retained as unresolved and require review
+        only when a reviewed call actually omits that argument.
+        """
+        positional = args.posonlyargs + args.args
+        parameters = positional + args.kwonlyargs
+        parameters += [arg for arg in (args.vararg, args.kwarg) if arg is not None]
+        bindings: dict[str, str | None] = {arg.arg: None for arg in parameters}
+        for arg in parameters:
+            self.visit(arg)
+        pairs = list(
+            zip(
+                positional[len(positional) - len(args.defaults) :],
+                args.defaults,
+                strict=True,
+            )
+        )
+        pairs.extend(zip(args.kwonlyargs, args.kw_defaults, strict=True))
+        defaults: dict[str, str | None] = {}
+        unresolved: set[str] = set()
+        for arg, value in pairs:
+            if value is None:
+                continue
+            self.visit(value)
+            lookup = _ModuleBindingCollector(self.relative)
+            lookup.alias_frames = [
+                (kind, frame.copy()) for kind, frame in self.alias_frames
+            ]
+            lookup.name_frames = [frame.copy() for frame in self.name_frames]
+            lookup.context_stack = self.context_stack.copy()
+            lookup.attribute_instances = self.attribute_instances.copy()
+            provenance = lookup._value_provenance(value)
+            defaults[arg.arg] = bindings[arg.arg] = provenance
+            # Only direct resolved provenance, literals and explicitly harmless
+            # builtins constitute a safe omitted default in the bounded helper model.
+            if provenance is None and not (
+                isinstance(value, ast.Constant)
+                or isinstance(value, ast.Name)
+                and value.id in {"print", "len", "str", "int", "bool", "object"}
+                and not any(
+                    value.id in aliases or value.id in names
+                    for (_, aliases), names in zip(
+                        self.alias_frames, self.name_frames, strict=True
+                    )
+                )
+            ):
+                unresolved.add(arg.arg)
+        self.parameter_defaults[definition_id] = (defaults, unresolved)
+        return bindings
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
         self._visit_function_definition(node)
@@ -1198,7 +1265,10 @@ class _EffectVisitor(ast.NodeVisitor):
                 self._add_dependency(argument.value, node.lineno)
                 if _is_capability_import(argument.value):
                     self._add_capability(argument.value, node.lineno)
-        if self._has_effect_provenance(canonical):
+        evidence_key = (id(node), canonical, self._current_qualname())
+        already_recorded = evidence_key in self.call_evidence
+        self.call_evidence.add(evidence_key)
+        if self._has_effect_provenance(canonical) and not already_recorded:
             self.usages.append(
                 {
                     "path": self.relative,
@@ -1207,7 +1277,9 @@ class _EffectVisitor(ast.NodeVisitor):
                     "line": node.lineno,
                 }
             )
-        if _is_effect_sink(canonical) or raw in _PRESERVED_SINKS:
+        if not already_recorded and (
+            _is_effect_sink(canonical) or raw in _PRESERVED_SINKS
+        ):
             self.sinks.append(
                 {
                     "path": self.relative,
@@ -1240,7 +1312,11 @@ class _ModuleBindingCollector(_EffectVisitor):
             self.visit(statement)
 
     def _visit_body_context(
-        self, body: list[ast.stmt], name: str, frame_kind: str
+        self,
+        body: list[ast.stmt],
+        name: str,
+        frame_kind: str,
+        initial_name_bindings: dict[str, str | None] | None = None,
     ) -> None:
         # Only their definition-time expressions are visited by the parent hooks.
         return
@@ -1262,7 +1338,12 @@ class _ModuleBindingCollector(_EffectVisitor):
         if isinstance(node, ast.NamedExpr):
             return super()._resolve_name(node)
         head = _expression_name(node).split(".", 1)[0]
-        if head not in self.alias_frames[0][1] and head not in self.name_frames[0]:
+        if not any(
+            head in aliases or head in names
+            for (_, aliases), names in zip(
+                self.alias_frames, self.name_frames, strict=True
+            )
+        ):
             # Only the supported builtin import mechanism has an implicit binding.
             return "__import__" if head == "__import__" else ""
         return super()._resolve_name(node)
@@ -2171,6 +2252,7 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                 }
             )
     results.extend(run_forward_module_binding_regressions())
+    results.extend(run_default_parameter_regressions())
     return all(bool(row["passed"]) for row in results), results
 
 
@@ -2407,6 +2489,192 @@ def run_forward_module_binding_regressions() -> list[dict[str, object]]:
     return results
 
 
+def run_default_parameter_regressions() -> list[dict[str, object]]:
+    """Scan inert AST fixtures only; no fixture code or external calls execute."""
+    effect = "asyncio.open_connection"
+    downstream = [
+        effect,
+        f"result({effect})[1].writelines",
+        f"result({effect})[1].drain",
+    ]
+    fixtures = {
+        "positional_effect": (
+            "import asyncio\nasync def effect(open_fn=asyncio.open_connection):\n    await open_fn()\n",
+            [("effect", effect)],
+        ),
+        "positional_harmless": (
+            "async def effect(open_fn=print):\n    open_fn()\n",
+            [],
+        ),
+        "kwonly_effect": (
+            "import asyncio\nasync def effect(*, open_fn=asyncio.open_connection):\n    await open_fn()\n",
+            [("effect", effect)],
+        ),
+        "early_binding": (
+            "import asyncio as early\nasync def effect(open_fn=early.open_connection):\n    await open_fn()\n",
+            [("effect", effect)],
+        ),
+        "forward_binding_unavailable": (
+            "async def effect(open_fn=late.open_connection):\n    await open_fn()\nimport asyncio as late\n",
+            [],
+        ),
+        "result_provenance": (
+            "import asyncio\nasync def effect(open_fn=asyncio.open_connection):\n    reader, writer = await open_fn()\n    writer.writelines([])\n    await writer.drain()\n",
+            [("effect", item) for item in downstream],
+        ),
+        "object_factory": (
+            "import httpx\nasync def effect(client=httpx.AsyncClient()):\n    await client.post()\n",
+            [("<module>", "httpx.AsyncClient"), ("effect", "httpx.AsyncClient.post")],
+        ),
+        "without_default_shadows_outer": (
+            "import asyncio\nopen_fn = asyncio.open_connection\nasync def effect(open_fn):\n    await open_fn()\n",
+            [],
+        ),
+        "positional_alignment": (
+            "import asyncio\na = b = asyncio.open_connection\ndef effect(a, b, /, c=asyncio.open_connection):\n    a()\n    b()\n    c()\n",
+            [("effect", effect)],
+        ),
+        "required_kwonly_shadow": (
+            "import asyncio\nopen_fn = asyncio.open_connection\ndef effect(*, open_fn, harmless=print):\n    open_fn()\n    harmless()\n",
+            [],
+        ),
+        "method_class_default": (
+            "import asyncio\nclass Example:\n    factory = asyncio.open_connection\n    async def effect(self, open_fn=factory):\n        await open_fn()\n",
+            [("Example.effect", effect)],
+        ),
+        "variadic_parameter_shadow": (
+            "import asyncio\nargs = kwargs = asyncio.open_connection\ndef effect(*args, **kwargs):\n    args()\n    kwargs()\n",
+            [],
+        ),
+    }
+    results: list[dict[str, object]] = []
+    for name, (source, expected) in fixtures.items():
+        tree = ast.parse(source)
+        visitor = _EffectVisitor("policy/default_parameters.py")
+        visitor.visit(tree)
+        collector = _ModuleBindingCollector(visitor.relative)
+        collector.visit(tree)
+        actual = Counter(
+            (row["enclosing_qualname"], row["usage"]) for row in visitor.usages
+        )
+        no_prepass_evidence = not any(
+            (
+                collector.dependencies,
+                collector.capabilities,
+                collector.usages,
+                collector.sinks,
+            )
+        )
+        passed = actual == Counter(expected) and no_prepass_evidence
+        if not expected:
+            passed = passed and not visitor.sinks
+        results.append(
+            {
+                "name": "default_parameter_" + name,
+                "passed": passed,
+                "usages": visitor.usages,
+                "prepass_emits_no_evidence": no_prepass_evidence,
+            }
+        )
+    # Isolate reviewed callsite evidence from the generic definition inventory:
+    # the definition may inventory its default path, but an explicit override
+    # must not inject that path into this call's return/effect evidence.
+    helper_source = "import asyncio\nasync def helper(open_fn=asyncio.open_connection):\n    reader, writer = await open_fn()\n    writer.writelines([])\n    await writer.drain()\n    return writer\n"
+    # A caller may precede the helper definition in source order. Its omitted
+    # default must come from the state-only definition-time capture, not from
+    # the caller's globals or from a later evidence visit to the helper.
+    for label, default, expected in (
+        ("harmless", "print", []),
+        ("effect", "asyncio.open_connection", downstream),
+    ):
+        source = (
+            "import asyncio\ndef entry():\n    return helper()\n"
+            + helper_source.replace("import asyncio\n", "").replace(
+                "open_fn=asyncio.open_connection", "open_fn=" + default
+            )
+        )
+        visitor = _EffectVisitor("policy/default_parameters.py", frozenset({"helper"}))
+        visitor.visit(ast.parse(source))
+        actual = Counter(row["usage"] for row in visitor.usages)
+        results.append(
+            {
+                "name": "default_parameter_helper_later_definition_" + label,
+                "passed": actual == Counter(expected),
+            }
+        )
+    helper_cases = {
+        "helper_explicit_override": (helper_source, "helper(print)", [], (None,)),
+        "helper_omitted_uses_default": (
+            helper_source,
+            "helper()",
+            downstream,
+            (f"result({effect})[1]",),
+        ),
+        "helper_keyword_override": (
+            helper_source,
+            "helper(open_fn=print)",
+            [],
+            (None,),
+        ),
+        "helper_kwonly_default": (
+            helper_source.replace("helper(open_fn=", "helper(*, open_fn="),
+            "helper()",
+            downstream,
+            (f"result({effect})[1]",),
+        ),
+        "helper_forward_requires_review": (
+            helper_source.replace("import asyncio\n", "") + "import asyncio\n",
+            "helper()",
+            None,
+            None,
+        ),
+        "helper_forward_explicit_override": (
+            helper_source.replace("import asyncio\n", "") + "import asyncio\n",
+            "helper(print)",
+            [],
+            (None,),
+        ),
+        "helper_missing_required": (
+            helper_source.replace("open_fn=asyncio.open_connection", "open_fn"),
+            "helper()",
+            None,
+            None,
+        ),
+        "helper_harmless_default": (
+            helper_source.replace("open_fn=asyncio.open_connection", "open_fn=print"),
+            "helper()",
+            [],
+            (None,),
+        ),
+    }
+    for name, (source, call, expected, expected_return) in helper_cases.items():
+        visitor = _EffectVisitor("policy/default_parameters.py", frozenset({"helper"}))
+        visitor.visit(ast.parse(source))
+        visitor.usages.clear()
+        visitor.sinks.clear()
+        visitor.call_evidence.clear()
+        try:
+            returned = visitor._helper_result(ast.parse(call, mode="eval").body)
+            actual = Counter(row["usage"] for row in visitor.usages)
+            passed = (
+                expected is not None
+                and actual == Counter(expected)
+                and returned == expected_return
+            )
+            if expected == []:
+                passed = passed and not visitor.sinks
+        except ValueError:
+            passed = expected is None
+        results.append(
+            {
+                "name": "default_parameter_" + name,
+                "passed": passed,
+                "callsite_usages": visitor.usages,
+            }
+        )
+    return results
+
+
 def run_mandatory_matrix() -> int:
     """Execute every mapped node and retain per-case execution results."""
     if main() != 0:
@@ -2482,6 +2750,7 @@ def run_mandatory_matrix() -> int:
             "lexical_name_provenance_regressions_passed",
             "reviewed_helper_flow_regressions_passed",
             "forward_module_binding_regressions_passed",
+            "default_parameter_provenance_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -2602,6 +2871,14 @@ def main() -> int:
     forward_regressions_passed = len(forward_regression_results) == 30 and all(
         bool(row["passed"]) for row in forward_regression_results
     )
+    default_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("default_parameter_")
+    ]
+    default_regressions_passed = len(default_results) == 22 and all(
+        bool(row["passed"]) for row in default_results
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -2625,6 +2902,7 @@ def main() -> int:
         and lexical_name_regressions_passed
         and helper_regressions_passed
         and forward_regressions_passed
+        and default_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -2726,6 +3004,7 @@ def main() -> int:
             ),
             "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
             "forward_module_binding_regressions_passed": forward_regressions_passed,
+            "default_parameter_provenance_regressions_passed": default_regressions_passed,
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
@@ -2861,6 +3140,7 @@ def main() -> int:
             ),
             "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
             "forward_module_binding_regressions_passed": forward_regressions_passed,
+            "default_parameter_provenance_regressions_passed": default_regressions_passed,
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
