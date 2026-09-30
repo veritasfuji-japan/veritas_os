@@ -858,6 +858,8 @@ class _EffectVisitor(ast.NodeVisitor):
         return value.value if isinstance(value, ast.Await) else value
 
     def _resolve_name(self, node: ast.AST) -> str:
+        if isinstance(node, ast.NamedExpr):
+            return self._namedexpr_provenance(node) or ""
         raw = _expression_name(node)
         attribute_parts = raw.split(".")
         scope = self._current_qualname()
@@ -922,13 +924,24 @@ class _EffectVisitor(ast.NodeVisitor):
         parts.append(value.id)
         return ".".join(reversed(parts))
 
-    def _clear_attribute_provenance(self, target: ast.AST) -> None:
+    def _clear_provenance(self, target: ast.AST) -> None:
+        if isinstance(target, ast.Name):
+            self.instances.pop(target.id, None)
+            return
         identity = self._attribute_identity(target)
         if identity is not None:
             self.attribute_instances.pop((self._current_qualname(), identity), None)
         elif isinstance(target, (ast.Tuple, ast.List)):
             for element in target.elts:
-                self._clear_attribute_provenance(element)
+                self._clear_provenance(element)
+
+    def _namedexpr_provenance(self, node: ast.NamedExpr) -> str | None:
+        provenance = self._value_provenance(node.value)
+        if provenance is not None:
+            self._bind_provenance(node.target, provenance)
+        else:
+            self._clear_provenance(node.target)
+        return provenance
 
     def _record_instance(self, target: ast.AST, value: ast.AST) -> None:
         if (
@@ -946,7 +959,7 @@ class _EffectVisitor(ast.NodeVisitor):
         if provenance is not None:
             self._bind_provenance(target, provenance)
         else:
-            self._clear_attribute_provenance(target)
+            self._clear_provenance(target)
 
     @staticmethod
     def _has_effect_provenance(canonical: str) -> bool:
@@ -976,6 +989,10 @@ class _EffectVisitor(ast.NodeVisitor):
         if node.value is not None:
             self._record_instance(node.target, node.value)
             self._record_dynamic_import(node.target, node.value)
+        self.generic_visit(node)
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:  # noqa: N802
+        self._namedexpr_provenance(node)
         self.generic_visit(node)
 
     def visit_With(self, node: ast.With) -> None:  # noqa: N802
@@ -1271,6 +1288,36 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "        (self._label,) = ('network',)\n"
             "        await self._label()\n",
         ),
+        "namedexpr_immediate_invocation": (
+            "namedexpr_transport.py",
+            "import asyncio\n\n"
+            "async def effect():\n"
+            "    reader, writer = await (\n"
+            "        open_fn := asyncio.open_connection\n"
+            "    )('example.com', 443)\n"
+            "    writer.writelines([b'effect'])\n"
+            "    await writer.drain()\n",
+        ),
+        "namedexpr_non_effect_near_miss": (
+            "namedexpr_transport.py",
+            "if (label := 'network'):\n"
+            "    pass\n",
+        ),
+        "namedexpr_rebinding_clears": (
+            "namedexpr_transport.py",
+            "import asyncio\n\n"
+            "async def effect(harmless_callable):\n"
+            "    (open_fn := asyncio.open_connection)\n"
+            "    (open_fn := harmless_callable)\n"
+            "    await open_fn('example.com', 443)\n",
+        ),
+        "namedexpr_later_invocation": (
+            "namedexpr_transport.py",
+            "import asyncio\n\n"
+            "async def effect():\n"
+            "    (open_fn := asyncio.open_connection)\n"
+            "    await open_fn('example.com', 443)\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -1393,6 +1440,37 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                         (
                             "policy/attribute_transport.py",
                             "Transport.send",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+            elif name == "namedexpr_immediate_invocation":
+                expected_context = Counter(
+                    {
+                        ("policy/namedexpr_transport.py", "effect", usage): 1
+                        for usage in (
+                            "asyncio.open_connection",
+                            "result(asyncio.open_connection)[1].writelines",
+                            "result(asyncio.open_connection)[1].drain",
+                        )
+                    }
+                )
+                passed = (
+                    dependency_set == {"asyncio"}
+                    and {capability for _, capability in capability_set}
+                    == {"asyncio"}
+                    and usage_context_counter == expected_context
+                )
+            elif name == "namedexpr_non_effect_near_miss":
+                passed = not dependencies and not capabilities and not usages
+            elif name == "namedexpr_rebinding_clears":
+                passed = not usages
+            elif name == "namedexpr_later_invocation":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/namedexpr_transport.py",
+                            "effect",
                             "asyncio.open_connection",
                         ): 1
                     }
@@ -1589,6 +1667,7 @@ def run_mandatory_matrix() -> int:
             "registry_set_equality",
             "static_inventory_regressions_passed",
             "direct_attribute_provenance_regressions_passed",
+            "namedexpr_provenance_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -1671,6 +1750,14 @@ def main() -> int:
     attribute_regressions_passed = len(attribute_regression_results) == 9 and all(
         bool(row["passed"]) for row in attribute_regression_results
     )
+    namedexpr_regression_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("namedexpr_")
+    ]
+    namedexpr_regressions_passed = len(namedexpr_regression_results) == 4 and all(
+        bool(row["passed"]) for row in namedexpr_regression_results
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -1689,6 +1776,7 @@ def main() -> int:
         and discovered_sink_context_counter == declared_sink_context_counter
         and regressions_passed
         and attribute_regressions_passed
+        and namedexpr_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -1781,10 +1869,14 @@ def main() -> int:
             "direct_attribute_provenance_regressions_passed": (
                 attribute_regressions_passed
             ),
+            "namedexpr_provenance_regressions_passed": (
+                namedexpr_regressions_passed
+            ),
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
-                "bounded intraprocedural AST analysis; assignment, Await, simple "
+                "bounded intraprocedural AST analysis; assignment, NamedExpr, "
+                "Await, simple "
                 "tuple/list unpacking, and direct invocation on known capability "
                 "provenance are in scope; reflection, monkeypatching, arbitrary "
                 "data-dependent or interprocedural dispatch, and interpreter/native "
@@ -1902,6 +1994,9 @@ def main() -> int:
             "static_inventory_regressions_passed": regressions_passed,
             "direct_attribute_provenance_regressions_passed": (
                 attribute_regressions_passed
+            ),
+            "namedexpr_provenance_regressions_passed": (
+                namedexpr_regressions_passed
             ),
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
