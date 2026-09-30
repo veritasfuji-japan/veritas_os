@@ -49,7 +49,7 @@ def test_activation_target_is_evidence_only_and_effect_path_is_forbidden() -> No
 
 def test_all_activation_gates_are_present_and_not_falsely_closed() -> None:
     gates = _gate()["gates"]
-    assert [item["id"] for item in gates] == [f"AER-{index:02d}" for index in range(1, 11)]
+    assert [item["id"] for item in gates] == [f"AER-{index:02d}" for index in range(1, 12)]
     status_by_id = {item["id"]: item["status"] for item in gates}
     assert status_by_id == {
         "AER-01": "PARTIAL",
@@ -62,6 +62,7 @@ def test_all_activation_gates_are_present_and_not_falsely_closed() -> None:
         "AER-08": "CURRENTLY_PROHIBITED_NOT_YET_ACTIVATION_PROVEN",
         "AER-09": "NOT_DEFINED",
         "AER-10": "NOT_AVAILABLE",
+        "AER-11": "NOT_DEFINED",
     }
 
 
@@ -75,6 +76,9 @@ def test_closure_rule_forbids_activation_before_gate_closure() -> None:
     closure = _gate()["closure_rule"]
     assert closure["activation_can_occur_before_review_closure"] is False
     assert closure["effect_path_connection_can_be_authorized_by_this_gate"] is False
+    assert closure["independent_review_required_before_activation"] is True
+    assert closure["independent_review_cannot_substitute_for_authorization"] is True
+    assert closure["authorization_cannot_substitute_for_independent_review"] is True
     assert closure["material_change_reopens_review"] is True
 
 
@@ -107,3 +111,61 @@ def test_activation_review_document_preserves_non_authorization_boundary() -> No
     assert "does **not** authorize activation" in text
     assert "This activation gate can never authorize an effect-path connection." in text
     assert "The activation-review document itself can never authorize activation." in text
+
+
+def test_completeness_review_adds_independent_challenge_without_activation_approval() -> None:
+    review = _gate()["completeness_review"]
+    assert review["review_scope"] == "ACTIVATION_EVIDENCE_GATE_COMPLETENESS_ONLY"
+    assert review["ten_gate_outcome"] == "ESSENTIAL_BOUNDARIES_CAPTURED"
+    assert review["additional_category_requested"] == "INDEPENDENT_CHALLENGE_AND_AUDITABILITY"
+    assert review["activation_approval_granted"] is False
+    assert review["effect_path_connection_permission_granted"] is False
+
+
+def test_aer11_requires_reviewer_separation_and_auditable_decision() -> None:
+    gate = next(item for item in _gate()["gates"] if item["id"] == "AER-11")
+    assert gate["name"] == "INDEPENDENT_CHALLENGE_AND_AUDITABILITY"
+    assert gate["status"] == "NOT_DEFINED"
+
+    separation = gate["reviewer_separation"]
+    assert separation["implementation_author_may_be_independent_reviewer"] is False
+    assert separation["activation_requester_may_be_independent_reviewer"] is False
+    assert separation["authorization_approver_may_automatically_substitute_for_independent_reviewer"] is False
+
+    decisions = gate["decision_semantics"]
+    assert decisions["allowed_decisions"] == ["APPROVE", "REFUSE", "ABSTAIN"]
+    assert decisions["missing_decision_blocks_activation"] is True
+    assert decisions["refuse_blocks_activation"] is True
+    assert decisions["abstain_blocks_activation"] is True
+    assert decisions["unresolved_finding_blocks_activation"] is True
+    assert decisions["approval_does_not_create_execution_authority"] is True
+    assert decisions["approval_does_not_authorize_effect_path_connection"] is True
+
+
+def test_aer11_freezes_minimum_review_artifact_manifest() -> None:
+    gate = next(item for item in _gate()["gates"] if item["id"] == "AER-11")
+    artifacts = gate["minimum_review_artifacts"]
+    required = {
+        "exact implementation identity and code/test artifact identities",
+        "AER-01 through AER-09 status/evidence package",
+        "exact proposed activation target, caller, profile, namespace and configuration",
+        "snapshot provenance/admissibility evidence",
+        "consumer non-amplification evidence",
+        "failure/uncertainty propagation evidence",
+        "explicit authorization/approval record from AER-07",
+        "effect-path separation evidence",
+        "default-disabled enable/disable/rollback evidence",
+        "all open findings, limitations and non-claims",
+    }
+    assert set(artifacts) == required
+
+
+def test_activation_review_document_freezes_independent_challenge_boundary() -> None:
+    text = DOC_PATH.read_text(encoding="utf-8")
+    assert "Gate AER-11 — Independent challenge and auditability" in text
+    assert "Explicit Authorization / Approval" in text
+    assert "!= Independent Challenge / Auditability" in text
+    assert "APPROVE" in text
+    assert "REFUSE" in text
+    assert "ABSTAIN" in text
+    assert "AER-11 must close before activation." in text

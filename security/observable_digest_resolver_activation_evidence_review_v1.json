@@ -1,5 +1,5 @@
 {
-  "review_version": "1.0",
+  "review_version": "1.1",
   "status": "ACTIVATION_EVIDENCE_REVIEW_OPEN",
   "activation_authorized": false,
   "activation_approved": false,
@@ -41,7 +41,8 @@
     "Approval does not imply execution permission.",
     "Resolver RESOLVED does not imply Authority, Human Approval, Bind authorization, admissibility, or execution permission.",
     "Uncertainty, contradiction, mutation, delay, or provenance loss may weaken a conclusion but must never strengthen it.",
-    "No activation-review artifact may self-authorize activation."
+    "No activation-review artifact may self-authorize activation.",
+    "Activation evidence must be independently challengeable and auditable by a reviewer separate from the implementation author and activation requester."
   ],
   "activation_target_boundary": {
     "target_id": "RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1",
@@ -187,13 +188,78 @@
         "evidence of disabled effect-path connection"
       ],
       "closure_condition": "After any separately approved activation, a bounded post-activation proof confirms the exact runtime identity and preserved boundaries before activation is treated as closed."
+    },
+    {
+      "id": "AER-11",
+      "name": "INDEPENDENT_CHALLENGE_AND_AUDITABILITY",
+      "status": "NOT_DEFINED",
+      "current_evidence": [
+        "the activation review is self-non-authorizing",
+        "external design review identified independent challenge/auditability as a separate activation-evidence dimension"
+      ],
+      "missing_evidence": [
+        "exact independent reviewer identity and role",
+        "reviewer separation from implementation author and activation requester",
+        "conflict-of-interest / independence disclosure",
+        "frozen manifest of exact artifacts the reviewer must inspect",
+        "review procedure that permits challenge, refusal, and unresolved findings rather than approval-only flow",
+        "structured reviewer decision with APPROVE / REFUSE / ABSTAIN semantics",
+        "review timestamp and exact implementation/config/gate identities reviewed",
+        "durable preservation of reviewer decision and reviewed-artifact manifest",
+        "read-only reconstruction / verification path for the preserved review record",
+        "rule that missing, stale, contradictory, or unverifiable independent-review evidence keeps activation blocked"
+      ],
+      "reviewer_separation": {
+        "implementation_author_may_be_independent_reviewer": false,
+        "activation_requester_may_be_independent_reviewer": false,
+        "authorization_approver_may_automatically_substitute_for_independent_reviewer": false,
+        "note": "AER-11 does not replace AER-07. Role separation must be explicit and reviewable."
+      },
+      "minimum_review_artifacts": [
+        "exact implementation identity and code/test artifact identities",
+        "AER-01 through AER-09 status/evidence package",
+        "exact proposed activation target, caller, profile, namespace and configuration",
+        "snapshot provenance/admissibility evidence",
+        "consumer non-amplification evidence",
+        "failure/uncertainty propagation evidence",
+        "explicit authorization/approval record from AER-07",
+        "effect-path separation evidence",
+        "default-disabled enable/disable/rollback evidence",
+        "all open findings, limitations and non-claims"
+      ],
+      "decision_semantics": {
+        "allowed_decisions": [
+          "APPROVE",
+          "REFUSE",
+          "ABSTAIN"
+        ],
+        "missing_decision_blocks_activation": true,
+        "refuse_blocks_activation": true,
+        "abstain_blocks_activation": true,
+        "unresolved_finding_blocks_activation": true,
+        "approval_does_not_create_execution_authority": true,
+        "approval_does_not_authorize_effect_path_connection": true
+      },
+      "closure_condition": "An identified independent reviewer, separate from the implementation author and activation requester, inspects the frozen activation evidence package, records an independently verifiable APPROVE decision with no unresolved blocking findings, and the decision plus artifact manifest are durably preserved and reconstructable."
     }
   ],
   "closure_rule": {
-    "activation_review_can_close_only_when": "AER-01 through AER-09 are CLOSED/PASS and a separate explicit authorization/approval record exists.",
+    "activation_review_can_close_only_when": "AER-01 through AER-09 and AER-11 are CLOSED/PASS and a separate explicit authorization/approval record exists.",
     "activation_can_occur_before_review_closure": false,
     "effect_path_connection_can_be_authorized_by_this_gate": false,
     "post_activation_closure_requires": "AER-10 evidence after the separately approved activation.",
-    "material_change_reopens_review": true
+    "material_change_reopens_review": true,
+    "independent_review_required_before_activation": true,
+    "independent_review_cannot_substitute_for_authorization": true,
+    "authorization_cannot_substitute_for_independent_review": true
+  },
+  "completeness_review": {
+    "reviewer": "Mark Kerchenski",
+    "review_scope": "ACTIVATION_EVIDENCE_GATE_COMPLETENESS_ONLY",
+    "ten_gate_outcome": "ESSENTIAL_BOUNDARIES_CAPTURED",
+    "additional_category_requested": "INDEPENDENT_CHALLENGE_AND_AUDITABILITY",
+    "activation_approval_granted": false,
+    "effect_path_connection_permission_granted": false,
+    "note": "External design-review feedback accepted the ten-gate foundation and requested one additional independent challenge/auditability dimension before gate-by-gate closure."
   }
 }
