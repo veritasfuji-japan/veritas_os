@@ -766,7 +766,7 @@ class _EffectVisitor(ast.NodeVisitor):
     def __init__(self, relative: str) -> None:
         self.relative = relative
         self.context_stack: list[str] = []
-        self.aliases: dict[str, str] = {}
+        self.alias_frames: list[tuple[str, dict[str, str]]] = [("module", {})]
         self.instances: dict[str, str] = {}
         self.attribute_instances: dict[tuple[str, str], str] = {}
         self.dependencies: list[dict[str, object]] = []
@@ -777,12 +777,29 @@ class _EffectVisitor(ast.NodeVisitor):
     def _current_qualname(self) -> str:
         return ".".join(self.context_stack) if self.context_stack else "<module>"
 
-    def _visit_body_context(self, body: list[ast.stmt], name: str) -> None:
+    def _visible_aliases(self) -> dict[str, str]:
+        """Return aliases visible in the current bounded lexical scope."""
+        aliases: dict[str, str] = {}
+        function_body = self.alias_frames[-1][0] == "function"
+        for frame_kind, frame in self.alias_frames:
+            if function_body and frame_kind == "class":
+                continue
+            aliases.update(frame)
+        return aliases
+
+    def _bind_alias(self, local: str, identity: str) -> None:
+        self.alias_frames[-1][1][local] = identity
+
+    def _visit_body_context(
+        self, body: list[ast.stmt], name: str, frame_kind: str
+    ) -> None:
         self.context_stack.append(name)
+        self.alias_frames.append((frame_kind, {}))
         try:
             for statement in body:
                 self.visit(statement)
         finally:
+            self.alias_frames.pop()
             self.context_stack.pop()
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
@@ -794,7 +811,7 @@ class _EffectVisitor(ast.NodeVisitor):
             self.visit(keyword)
         for type_parameter in getattr(node, "type_params", ()):
             self.visit(type_parameter)
-        self._visit_body_context(node.body, node.name)
+        self._visit_body_context(node.body, node.name, "class")
 
     def _visit_function_definition(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef
@@ -806,7 +823,7 @@ class _EffectVisitor(ast.NodeVisitor):
             self.visit(node.returns)
         for type_parameter in getattr(node, "type_params", ()):
             self.visit(type_parameter)
-        self._visit_body_context(node.body, node.name)
+        self._visit_body_context(node.body, node.name, "function")
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
         self._visit_function_definition(node)
@@ -836,8 +853,9 @@ class _EffectVisitor(ast.NodeVisitor):
     def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
         for imported in node.names:
             local = imported.asname or imported.name.split(".", 1)[0]
-            self.aliases[local] = (
-                imported.name if imported.asname else imported.name.split(".", 1)[0]
+            self._bind_alias(
+                local,
+                imported.name if imported.asname else imported.name.split(".", 1)[0],
             )
             if _is_capability_import(imported.name):
                 self._add_capability(imported.name, node.lineno)
@@ -849,7 +867,7 @@ class _EffectVisitor(ast.NodeVisitor):
         self._add_dependency(node.module, node.lineno)
         for imported in node.names:
             identity = f"{node.module}.{imported.name}"
-            self.aliases[imported.asname or imported.name] = identity
+            self._bind_alias(imported.asname or imported.name, identity)
             if _is_capability_import(identity):
                 self._add_capability(identity, node.lineno)
 
@@ -869,7 +887,7 @@ class _EffectVisitor(ast.NodeVisitor):
             if provenance is not None:
                 suffix = ".".join(attribute_parts[end:])
                 return provenance + (f".{suffix}" if suffix else "")
-        canonical = _canonical_name(raw, self.aliases)
+        canonical = _canonical_name(raw, self._visible_aliases())
         head, separator, tail = canonical.partition(".")
         if head in self.instances:
             return self.instances[head] + (separator + tail if separator else "")
@@ -971,13 +989,15 @@ class _EffectVisitor(ast.NodeVisitor):
     def _record_dynamic_import(self, target: ast.AST, value: ast.AST) -> None:
         if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
             return
-        canonical = _canonical_name(_expression_name(value.func), self.aliases)
+        canonical = _canonical_name(
+            _expression_name(value.func), self._visible_aliases()
+        )
         if canonical not in {"__import__", "importlib.import_module"} or not value.args:
             return
         argument = value.args[0]
         if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
             if _is_capability_import(argument.value):
-                self.aliases[target.id] = argument.value
+                self._bind_alias(target.id, argument.value)
 
     def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
         for target in node.targets:
@@ -1318,6 +1338,73 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "    (open_fn := asyncio.open_connection)\n"
             "    await open_fn('example.com', 443)\n",
         ),
+        "lexical_alias_local_poisoning_attack": (
+            "alias_transport.py",
+            "import asyncio\n"
+            "import json\n\n"
+            "def scanner_shadow():\n"
+            "    import json as asyncio\n\n"
+            "async def undeclared_external_effect():\n"
+            "    reader, writer = await asyncio.open_connection(\n"
+            "        'example.com', 443)\n"
+            "    writer.writelines([b'effect'])\n"
+            "    await writer.drain()\n",
+        ),
+        "lexical_alias_sibling_scope_isolation": (
+            "alias_transport.py",
+            "import asyncio\n"
+            "import json\n\n"
+            "def configure():\n"
+            "    import json as asyncio\n"
+            "    asyncio.dumps({})\n\n"
+            "async def send():\n"
+            "    await asyncio.open_connection('example.com', 443)\n",
+        ),
+        "lexical_alias_harmless_near_miss": (
+            "alias_transport.py",
+            "import json\n\n"
+            "def helper():\n"
+            "    import json as parser\n"
+            "    parser.dumps({})\n",
+        ),
+        "lexical_alias_method_scope_isolation": (
+            "alias_transport.py",
+            "import asyncio\n"
+            "import json\n\n"
+            "class A:\n"
+            "    def configure(self):\n"
+            "        import json as asyncio\n\n"
+            "class B:\n"
+            "    async def send(self):\n"
+            "        await asyncio.open_connection('example.com', 443)\n",
+        ),
+        "lexical_alias_class_body_not_method_parent": (
+            "alias_transport.py",
+            "import asyncio\n"
+            "import json\n\n"
+            "class Transport:\n"
+            "    import json as asyncio\n\n"
+            "    async def send(self):\n"
+            "        await asyncio.open_connection('example.com', 443)\n",
+        ),
+        "lexical_alias_importfrom_scope_isolation": (
+            "alias_transport.py",
+            "import asyncio\n"
+            "import json\n\n"
+            "def configure():\n"
+            "    from json import dumps as asyncio\n"
+            "    asyncio({})\n\n"
+            "async def send():\n"
+            "    await asyncio.open_connection('example.com', 443)\n",
+        ),
+        "lexical_alias_dynamic_import_scope_isolation": (
+            "alias_transport.py",
+            "def configure():\n"
+            "    local_asyncio = __import__('asyncio')\n"
+            "    local_asyncio.Lock()\n\n"
+            "def harmless():\n"
+            "    local_asyncio.Lock()\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -1395,7 +1482,8 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                 )
                 passed = (
                     dependency_set == {"asyncio"}
-                    and {capability for _, capability in capability_set} == {"asyncio"}
+                    and {capability for _, capability in capability_set}
+                    == {"asyncio"}
                     and usage_context_counter == expected_context
                 )
             elif name == "direct_attribute_non_effect_near_miss":
@@ -1457,8 +1545,7 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                 )
                 passed = (
                     dependency_set == {"asyncio"}
-                    and {capability for _, capability in capability_set}
-                    == {"asyncio"}
+                    and {capability for _, capability in capability_set} == {"asyncio"}
                     and usage_context_counter == expected_context
                 )
             elif name == "namedexpr_non_effect_near_miss":
@@ -1472,6 +1559,74 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                             "policy/namedexpr_transport.py",
                             "effect",
                             "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+            elif name == "lexical_alias_local_poisoning_attack":
+                expected_context = Counter(
+                    {
+                        (
+                            "policy/alias_transport.py",
+                            "undeclared_external_effect",
+                            usage,
+                        ): 1
+                        for usage in (
+                            "asyncio.open_connection",
+                            "result(asyncio.open_connection)[1].writelines",
+                            "result(asyncio.open_connection)[1].drain",
+                        )
+                    }
+                )
+                passed = usage_context_counter == expected_context
+            elif name == "lexical_alias_sibling_scope_isolation":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/alias_transport.py",
+                            "send",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+            elif name == "lexical_alias_harmless_near_miss":
+                passed = not capabilities and not usages and not sinks
+            elif name == "lexical_alias_method_scope_isolation":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/alias_transport.py",
+                            "B.send",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+            elif name == "lexical_alias_class_body_not_method_parent":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/alias_transport.py",
+                            "Transport.send",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+            elif name == "lexical_alias_importfrom_scope_isolation":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/alias_transport.py",
+                            "send",
+                            "asyncio.open_connection",
+                        ): 1
+                    }
+                )
+            elif name == "lexical_alias_dynamic_import_scope_isolation":
+                passed = usage_context_counter == Counter(
+                    {
+                        (
+                            "policy/alias_transport.py",
+                            "configure",
+                            "asyncio.Lock",
                         ): 1
                     }
                 )
@@ -1668,6 +1823,7 @@ def run_mandatory_matrix() -> int:
             "static_inventory_regressions_passed",
             "direct_attribute_provenance_regressions_passed",
             "namedexpr_provenance_regressions_passed",
+            "lexical_alias_scope_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -1758,6 +1914,14 @@ def main() -> int:
     namedexpr_regressions_passed = len(namedexpr_regression_results) == 4 and all(
         bool(row["passed"]) for row in namedexpr_regression_results
     )
+    lexical_alias_regression_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("lexical_alias_")
+    ]
+    lexical_alias_regressions_passed = len(
+        lexical_alias_regression_results
+    ) == 7 and all(bool(row["passed"]) for row in lexical_alias_regression_results)
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -1777,6 +1941,7 @@ def main() -> int:
         and regressions_passed
         and attribute_regressions_passed
         and namedexpr_regressions_passed
+        and lexical_alias_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -1872,11 +2037,15 @@ def main() -> int:
             "namedexpr_provenance_regressions_passed": (
                 namedexpr_regressions_passed
             ),
+            "lexical_alias_scope_regressions_passed": (
+                lexical_alias_regressions_passed
+            ),
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
-                "bounded intraprocedural AST analysis; assignment, NamedExpr, "
-                "Await, simple "
+                "bounded lexical alias and intraprocedural AST analysis; direct "
+                "Import/ImportFrom and constant-string dynamic-import aliases, "
+                "assignment, NamedExpr, Await, simple "
                 "tuple/list unpacking, and direct invocation on known capability "
                 "provenance are in scope; reflection, monkeypatching, arbitrary "
                 "data-dependent or interprocedural dispatch, and interpreter/native "
@@ -1998,6 +2167,9 @@ def main() -> int:
             "namedexpr_provenance_regressions_passed": (
                 namedexpr_regressions_passed
             ),
+            "lexical_alias_scope_regressions_passed": (
+                lexical_alias_regressions_passed
+            ),
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
@@ -2012,6 +2184,7 @@ def main() -> int:
                 "arbitrary data-dependent dispatch",
                 "monkeypatching",
                 "arbitrary interprocedural provenance",
+                "full Python compiler symbol-table or closure equivalence",
                 "interpreter or native compromise",
             ],
         },
