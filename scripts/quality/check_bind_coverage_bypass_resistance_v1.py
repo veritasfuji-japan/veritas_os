@@ -764,11 +764,30 @@ class _EffectVisitor(ast.NodeVisitor):
     """Resolve bounded effect provenance with isolated lexical Name frames.
 
     None bindings explicitly shadow outer names. Class-body bindings are not
-    bare-name parents of methods; arbitrary interprocedural flow is unsupported.
+    bare-name parents of methods. Only explicitly reviewed direct helper flows
+    receive argument/return provenance; arbitrary interprocedural flow is unsupported.
     """
 
-    def __init__(self, relative: str) -> None:
+    def __init__(
+        self, relative: str, helper_names: frozenset[str] | None = None
+    ) -> None:
         self.relative = relative
+        # Explicitly reviewed, same-module direct helper calls only. Provenance
+        # comes from actual call arguments and return expressions, never names.
+        self.helper_names = (
+            helper_names
+            if helper_names is not None
+            else (
+                frozenset(
+                    {"_read_observation", "_read_bounded_response", "_parse_operation"}
+                )
+                if relative == "veritas_os/policy/sandbox_https_transport.py"
+                else frozenset()
+            )
+        )
+        self.helper_definitions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+        self.helper_stack: tuple[str, ...] = ()
+        self.return_provenances: list[tuple[str | None, ...]] = []
         self.context_stack: list[str] = []
         self.alias_frames: list[tuple[str, dict[str, str]]] = [("module", {})]
         self.name_frames: list[dict[str, str | None]] = [{}]
@@ -777,6 +796,100 @@ class _EffectVisitor(ast.NodeVisitor):
         self.capabilities: list[dict[str, object]] = []
         self.usages: list[dict[str, object]] = []
         self.sinks: list[dict[str, object]] = []
+
+    def visit_Module(self, node: ast.Module) -> None:  # noqa: N802
+        for statement in node.body:
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if statement.name in self.helper_names:
+                    if statement.name in self.helper_definitions:
+                        raise ValueError("duplicate reviewed helper definition")
+                    self.helper_definitions[statement.name] = statement
+        self.generic_visit(node)
+
+    def _helper_result(self, call: ast.Call) -> tuple[str | None, ...] | None:
+        """Resolve reviewed direct calls with explicit argument/return binding.
+
+        No callback, method, variadic, recursive, or arbitrary call-graph inference
+        is supported. Unsupported reviewed call shapes fail the inventory gate.
+        """
+        if not isinstance(call.func, ast.Name):
+            return None
+        name = call.func.id
+        if name not in self.helper_definitions or self._resolve_name(call.func) != name:
+            return None
+        definition = self.helper_definitions[name]
+        if name in self.helper_stack or len(self.helper_stack) >= 4:
+            raise ValueError("reviewed helper recursion/depth is unsupported")
+        if any(
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            for statement in definition.body
+            for node in ast.walk(statement)
+        ):
+            raise ValueError("nested reviewed helper definitions are unsupported")
+        args = definition.args
+        if (
+            args.vararg
+            or args.kwarg
+            or args.defaults
+            or args.kw_defaults
+            or definition.decorator_list
+        ):
+            raise ValueError("reviewed helper signature is unsupported")
+        parameters = [arg.arg for arg in args.posonlyargs + args.args]
+        if len(call.args) > len(parameters) or any(
+            isinstance(arg, ast.Starred) for arg in call.args
+        ):
+            raise ValueError("reviewed helper positional binding is unsupported")
+        bindings = {
+            parameter: self._value_provenance(value)
+            for parameter, value in zip(parameters, call.args, strict=False)
+        }
+        for keyword in call.keywords:
+            if keyword.arg not in parameters or keyword.arg in bindings:
+                raise ValueError("reviewed helper keyword binding is unsupported")
+            if keyword.arg in {arg.arg for arg in args.posonlyargs}:
+                raise ValueError("reviewed helper positional-only parameter")
+            bindings[keyword.arg] = self._value_provenance(keyword.value)
+        if set(bindings) != set(parameters):
+            raise ValueError("reviewed helper arguments are incomplete")
+        child = _EffectVisitor(self.relative, self.helper_names)
+        child.helper_definitions = self.helper_definitions
+        child.helper_stack = self.helper_stack + (name,)
+        child.alias_frames = [
+            ("module", self.alias_frames[0][1].copy()),
+            ("function", {}),
+        ]
+        child.name_frames = [self.name_frames[0].copy(), bindings]
+        child.context_stack = [name]
+        for statement in definition.body:
+            child.visit(statement)
+        # A definition may be reached from multiple callsites. Count each actual
+        # syntactic use once per provenance, retaining conflicting provenances.
+        for attribute in ("dependencies", "capabilities", "usages", "sinks"):
+            destination = getattr(self, attribute)
+            for row in getattr(child, attribute):
+                if row not in destination:
+                    destination.append(row)
+        returns = set(child.return_provenances)
+        if len(returns) > 1 and any(any(item for item in row) for row in returns):
+            raise ValueError("ambiguous reviewed helper return provenance")
+        result = next(iter(returns)) if len(returns) == 1 else None
+        return result
+
+    def visit_Return(self, node: ast.Return) -> None:  # noqa: N802
+        if self.helper_stack:
+            values = (
+                node.value.elts
+                if isinstance(node.value, (ast.Tuple, ast.List))
+                else [node.value]
+            )
+            self.return_provenances.append(
+                tuple(
+                    self._value_provenance(value) if value is not None else None
+                    for value in values
+                )
+            )
+        self.generic_visit(node)
 
     def _current_qualname(self) -> str:
         return ".".join(self.context_stack) if self.context_stack else "<module>"
@@ -905,6 +1018,10 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def _value_provenance(self, value: ast.AST) -> str | None:
         value = self._unwrap_await(value)
+        if isinstance(value, ast.Call):
+            result = self._helper_result(value)
+            if result is not None:
+                return result[0] if len(result) == 1 else None
         expression = value.func if isinstance(value, ast.Call) else value
         canonical = self._resolve_name(expression)
         if canonical.endswith((".get_event_loop", ".get_running_loop")):
@@ -972,6 +1089,22 @@ class _EffectVisitor(ast.NodeVisitor):
         return provenance
 
     def _record_instance(self, target: ast.AST, value: ast.AST) -> None:
+        unwrapped = self._unwrap_await(value)
+        if isinstance(unwrapped, ast.Call) and isinstance(
+            target, (ast.Tuple, ast.List)
+        ):
+            result = self._helper_result(unwrapped)
+            if result is not None:
+                if len(result) != len(target.elts) or any(
+                    isinstance(item, ast.Starred) for item in target.elts
+                ):
+                    raise ValueError("reviewed helper return unpacking is unsupported")
+                for element, provenance in zip(target.elts, result, strict=True):
+                    if provenance is None:
+                        self._clear_provenance(element)
+                    else:
+                        self._bind_provenance(element, provenance)
+                return
         if (
             isinstance(target, (ast.Tuple, ast.List))
             and isinstance(value, (ast.Tuple, ast.List))
@@ -1032,6 +1165,7 @@ class _EffectVisitor(ast.NodeVisitor):
     visit_AsyncWith = visit_With
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        self._helper_result(node)
         raw = _expression_name(node.func)
         canonical = self._resolve_name(node.func)
         if canonical in {"__import__", "importlib.import_module"} and node.args:
@@ -1063,6 +1197,7 @@ class _EffectVisitor(ast.NodeVisitor):
 
 def _discover_inventories(
     root: Path = POLICY_ROOT,
+    helper_names: frozenset[str] | None = None,
 ) -> tuple[
     list[dict[str, object]],
     list[dict[str, object]],
@@ -1085,7 +1220,7 @@ def _discover_inventories(
         except ValueError:
             relative = str(source.relative_to(root.parent))
         tree = ast.parse(source.read_text(encoding="utf-8"))
-        visitor = _EffectVisitor(relative)
+        visitor = _EffectVisitor(relative, helper_names)
         visitor.visit(tree)
         dependencies.extend(visitor.dependencies)
         capabilities.extend(visitor.capabilities)
@@ -1456,6 +1591,38 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             "name_scope.py",
             "import asyncio\nfrom asyncio import Lock as factory\ndef helper():\n    factory = print\n    factory()\ndef sibling():\n    factory()\n",
         ),
+        "reviewed_helper_chain": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, outcome\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client)\n    consume(outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    await middle(client)\n",
+        ),
+        "reviewed_helper_unrelated_names": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, outcome\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client)\n    consume(outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    await middle(client)\n\ndef unrelated():\n    client.acquire()\n    outcome.bit_length()\n",
+        ),
+        "reviewed_helper_changed_argument": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, outcome\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client)\n    consume(outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    await middle(None)\n",
+        ),
+        "reviewed_helper_changed_return": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, None\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client)\n    consume(outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    await middle(client)\n",
+        ),
+        "reviewed_helper_keyword_arguments": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, outcome\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client=client)\n    consume(value=outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    await middle(client=client)\n",
+        ),
+        "reviewed_helper_shadowed_helper": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, outcome\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client)\n    consume(outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    middle = print\n    middle(client)\n",
+        ),
+        "reviewed_helper_multiple_calls": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, outcome\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client)\n    consume(outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    await middle(client)\n    await middle(client)\n",
+        ),
+        "reviewed_helper_uncalled_helper": (
+            "reviewed_helpers.py",
+            "import asyncio\nasync def leaf(client):\n    outcome = await client.acquire()\n    return 0, outcome\n\ndef consume(value):\n    value.bit_length()\n\nasync def middle(client):\n    _, outcome = await leaf(client)\n    consume(outcome)\n\nasync def entry():\n    client = asyncio.Lock()\n    pass\n",
+        ),
     }
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory() as directory:
@@ -1466,7 +1633,12 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                 old_source.unlink()
             (policy_root / filename).write_text(source, encoding="utf-8")
             dependencies, capabilities, usages, sinks = _discover_inventories(
-                policy_root
+                policy_root,
+                helper_names=(
+                    frozenset({"middle", "leaf", "consume"})
+                    if name.startswith("reviewed_helper_")
+                    else None
+                ),
             )
             dependency_set = {str(row["dependency"]) for row in dependencies}
             capability_set = {
@@ -1706,6 +1878,40 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
                     ("policy/name_scope.py", context, usage)
                     for context, usage in expected_name_usages[name]
                 )
+            elif name.startswith("reviewed_helper_"):
+                expected_helper_usages = {
+                    "reviewed_helper_chain": [
+                        ("entry", "asyncio.Lock"),
+                        ("leaf", "result(asyncio.Lock).acquire"),
+                        ("consume", "result(result(asyncio.Lock).acquire).bit_length"),
+                    ],
+                    "reviewed_helper_unrelated_names": [
+                        ("entry", "asyncio.Lock"),
+                        ("leaf", "result(asyncio.Lock).acquire"),
+                        ("consume", "result(result(asyncio.Lock).acquire).bit_length"),
+                    ],
+                    "reviewed_helper_changed_argument": [("entry", "asyncio.Lock")],
+                    "reviewed_helper_changed_return": [
+                        ("entry", "asyncio.Lock"),
+                        ("leaf", "result(asyncio.Lock).acquire"),
+                    ],
+                    "reviewed_helper_keyword_arguments": [
+                        ("entry", "asyncio.Lock"),
+                        ("leaf", "result(asyncio.Lock).acquire"),
+                        ("consume", "result(result(asyncio.Lock).acquire).bit_length"),
+                    ],
+                    "reviewed_helper_shadowed_helper": [("entry", "asyncio.Lock")],
+                    "reviewed_helper_multiple_calls": [
+                        ("entry", "asyncio.Lock"),
+                        ("leaf", "result(asyncio.Lock).acquire"),
+                        ("consume", "result(result(asyncio.Lock).acquire).bit_length"),
+                    ],
+                    "reviewed_helper_uncalled_helper": [("entry", "asyncio.Lock")],
+                }
+                passed = usage_context_counter == Counter(
+                    ("policy/reviewed_helpers.py", context, usage)
+                    for context, usage in expected_helper_usages[name]
+                )
             elif name.startswith("reviewed_location_"):
                 expected_usage = Counter(
                     {("policy/reviewed_transport.py", "asyncio.open_connection"): 1}
@@ -1901,6 +2107,7 @@ def run_mandatory_matrix() -> int:
             "namedexpr_provenance_regressions_passed",
             "lexical_alias_scope_regressions_passed",
             "lexical_name_provenance_regressions_passed",
+            "reviewed_helper_flow_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -2005,6 +2212,14 @@ def main() -> int:
     lexical_name_regressions_passed = len(
         lexical_name_regression_results
     ) == 11 and all(bool(row["passed"]) for row in lexical_name_regression_results)
+    helper_regression_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("reviewed_helper_")
+    ]
+    helper_regressions_passed = len(helper_regression_results) == 8 and all(
+        bool(row["passed"]) for row in helper_regression_results
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -2026,6 +2241,7 @@ def main() -> int:
         and namedexpr_regressions_passed
         and lexical_alias_regressions_passed
         and lexical_name_regressions_passed
+        and helper_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -2125,11 +2341,13 @@ def main() -> int:
             "lexical_name_provenance_regressions_passed": (
                 lexical_name_regressions_passed
             ),
+            "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
                 "bounded lexical alias/Name and intraprocedural AST analysis; direct "
                 "Import/ImportFrom and constant-string dynamic-import aliases, "
+                "reviewed same-module direct helper argument/return flow, "
                 "assignment, NamedExpr, Await, simple "
                 "tuple/list unpacking, and direct invocation on known capability "
                 "provenance are in scope; reflection, monkeypatching, arbitrary "
@@ -2256,6 +2474,7 @@ def main() -> int:
             "lexical_name_provenance_regressions_passed": (
                 lexical_name_regressions_passed
             ),
+            "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
