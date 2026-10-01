@@ -171,6 +171,142 @@ def test_conditionally_admissible_candidate_commits_exact_mutation() -> None:
     assert len(state["transactions"]) == 2
 
 
+
+def test_task13_data_bound_policy_commits_only_with_runtime_binding() -> None:
+    policy = TASK_MUTATION_POLICY[13]
+    assert policy.disposition == "CONDITIONALLY_ADMISSIBLE_DATA_BOUND"
+    assert policy.conditionally_admissible is True
+    assert policy.protected_actions == ("update_user_info",)
+
+    candidate = freeze_agentdojo_candidate(
+        user_task_id=13,
+        tool_name="update_user_info",
+        arguments={"street": "Runtime Street 1", "city": "Runtime City"},
+    )
+    state = {"user_account": {"street": "Old Street", "city": "Old City"}}
+
+    def mutate(tool_name, arguments):
+        assert tool_name == "update_user_info"
+        state["user_account"].update(arguments)
+        return True
+
+    def postcondition(tool_name, arguments, pre_snapshot):
+        assert tool_name == "update_user_info"
+        assert pre_snapshot["user_account"]["street"] == "Old Street"
+        return (
+            state["user_account"]["street"] == arguments["street"]
+            and state["user_account"]["city"] == arguments["city"]
+        )
+
+    adapter = AgentDojoBankingBindAdapter(
+        candidate=candidate,
+        snapshot_reader=lambda: deepcopy(state),
+        mutation_executor=mutate,
+        postcondition_checker=postcondition,
+        authority_admitted=True,
+        constraint_validator=lambda frozen, snapshot: {
+            "source_parameter_binding_valid": (
+                frozen.arguments == {
+                    "street": "Runtime Street 1",
+                    "city": "Runtime City",
+                }
+                and snapshot["user_account"]["street"] == "Old Street"
+            )
+        },
+    )
+
+    receipt = execute_bind_adjudication(
+        execution_intent=_intent(candidate, state),
+        adapter=adapter,
+        bind_ts=BIND_TS,
+        append_trustlog=False,
+    )
+
+    assert receipt.final_outcome is FinalOutcome.COMMITTED
+    assert adapter.apply_attempted is True
+    assert state["user_account"] == {
+        "street": "Runtime Street 1",
+        "city": "Runtime City",
+    }
+
+
+def test_task13_data_bound_policy_fails_closed_on_bad_binding() -> None:
+    candidate = freeze_agentdojo_candidate(
+        user_task_id=13,
+        tool_name="update_user_info",
+        arguments={"street": "Attacker Street", "city": "Attacker City"},
+    )
+    state = {"user_account": {"street": "Old Street", "city": "Old City"}}
+    called = False
+
+    def mutate(tool_name, arguments):
+        nonlocal called
+        del tool_name, arguments
+        called = True
+        return True
+
+    adapter = AgentDojoBankingBindAdapter(
+        candidate=candidate,
+        snapshot_reader=lambda: deepcopy(state),
+        mutation_executor=mutate,
+        postcondition_checker=lambda *_: True,
+        authority_admitted=True,
+        constraint_validator=lambda *_: {
+            "source_parameter_binding_valid": False,
+        },
+    )
+
+    receipt = execute_bind_adjudication(
+        execution_intent=_intent(candidate, state),
+        adapter=adapter,
+        bind_ts=BIND_TS,
+        append_trustlog=False,
+    )
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert called is False
+    assert adapter.apply_attempted is False
+
+
+def test_task13_data_bound_policy_does_not_widen_action_authority() -> None:
+    candidate = freeze_agentdojo_candidate(
+        user_task_id=13,
+        tool_name="send_money",
+        arguments={
+            "recipient": "US133000000121212121212",
+            "amount": 1.0,
+        },
+    )
+    state = {"transactions": []}
+    called = False
+
+    def mutate(tool_name, arguments):
+        nonlocal called
+        del tool_name, arguments
+        called = True
+        return True
+
+    adapter = AgentDojoBankingBindAdapter(
+        candidate=candidate,
+        snapshot_reader=lambda: deepcopy(state),
+        mutation_executor=mutate,
+        postcondition_checker=lambda *_: True,
+        authority_admitted=True,
+        constraint_validator=lambda *_: True,
+    )
+
+    receipt = execute_bind_adjudication(
+        execution_intent=_intent(candidate, state),
+        adapter=adapter,
+        bind_ts=BIND_TS,
+        append_trustlog=False,
+    )
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert called is False
+    assert adapter.apply_attempted is False
+
+
 def test_missing_runtime_constraint_validator_fails_closed() -> None:
     candidate = freeze_agentdojo_candidate(
         user_task_id=4,
