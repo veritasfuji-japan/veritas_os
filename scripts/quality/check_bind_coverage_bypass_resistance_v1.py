@@ -1073,7 +1073,55 @@ class _EffectVisitor(ast.NodeVisitor):
     def _unwrap_await(value: ast.AST) -> ast.AST:
         return value.value if isinstance(value, ast.Await) else value
 
+    def _resolve_supported_dynamic_import_result(self, node: ast.AST) -> str | None:
+        """Resolve literal, direct import results without emitting evidence.
+
+        Only the one-positional-argument form is supported here. In particular,
+        relative imports, fromlist overrides and arbitrary call roots are not
+        inferred. Builtin __import__ returns the top-level package for dotted
+        names; import_module returns the requested module.
+        """
+        if not isinstance(node, ast.Call) or len(node.args) != 1 or node.keywords:
+            return None
+        argument = node.args[0]
+        if not isinstance(argument, ast.Constant) or not isinstance(
+            argument.value, str
+        ):
+            return None
+        if not argument.value or not all(
+            part.isidentifier() for part in argument.value.split(".")
+        ):
+            return None
+        root = node.func
+        while isinstance(root, ast.Attribute):
+            root = root.value
+        if not isinstance(root, ast.Name):
+            return None
+        canonical = self._resolve_name(node.func)
+        if canonical == "__import__":
+            return argument.value.split(".", 1)[0]
+        if canonical == "importlib.import_module" and any(
+            root.id in aliases or root.id in names
+            for (_, aliases), names in zip(
+                self.alias_frames, self.name_frames, strict=True
+            )
+        ):
+            return argument.value
+        return None
+
+    def _dynamic_import_attribute(self, node: ast.AST) -> str | None:
+        """Permit Attribute roots only on the supported import-result calls."""
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        module = self._resolve_supported_dynamic_import_result(node) if parts else None
+        return ".".join([module, *reversed(parts)]) if module is not None else None
+
     def _resolve_name(self, node: ast.AST) -> str:
+        imported_attribute = self._dynamic_import_attribute(node)
+        if imported_attribute is not None:
+            return imported_attribute
         if isinstance(node, ast.NamedExpr):
             return self._namedexpr_provenance(node) or ""
         raw = _expression_name(node)
@@ -1112,6 +1160,9 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def _value_provenance(self, value: ast.AST) -> str | None:
         value = self._unwrap_await(value)
+        imported_module = self._resolve_supported_dynamic_import_result(value)
+        if imported_module is not None:
+            return imported_module
         if isinstance(value, ast.Call):
             result = self._helper_result(value)
             if result is not None:
@@ -1224,15 +1275,9 @@ class _EffectVisitor(ast.NodeVisitor):
         return _is_capability_import(canonical) or root in _CAPABILITY_MODULES
 
     def _record_dynamic_import(self, target: ast.AST, value: ast.AST) -> None:
-        if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
-            return
-        canonical = self._resolve_name(value.func)
-        if canonical not in {"__import__", "importlib.import_module"} or not value.args:
-            return
-        argument = value.args[0]
-        if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
-            if _is_capability_import(argument.value):
-                self._bind_alias(target.id, argument.value)
+        module = self._resolve_supported_dynamic_import_result(value)
+        if isinstance(target, ast.Name) and module is not None:
+            self._bind_alias(target.id, module)
 
     def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
         for target in node.targets:
@@ -1340,6 +1385,9 @@ class _ModuleBindingCollector(_EffectVisitor):
     def _resolve_name(self, node: ast.AST) -> str:
         if isinstance(node, ast.NamedExpr):
             return super()._resolve_name(node)
+        imported_attribute = self._dynamic_import_attribute(node)
+        if imported_attribute is not None:
+            return imported_attribute
         head = _expression_name(node).split(".", 1)[0]
         if not any(
             head in aliases or head in names
@@ -2256,6 +2304,7 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
             )
     results.extend(run_forward_module_binding_regressions())
     results.extend(run_default_parameter_regressions())
+    results.extend(run_dynamic_import_result_regressions())
     return all(bool(row["passed"]) for row in results), results
 
 
@@ -2732,6 +2781,169 @@ def run_default_parameter_regressions() -> list[dict[str, object]]:
     return results
 
 
+def run_dynamic_import_result_regressions() -> list[dict[str, object]]:
+    """Parse inert fixtures; check identity, inventory counts and collector parity."""
+    effect = "asyncio.open_connection"
+    downstream = [
+        effect,
+        f"result({effect})[1].writelines",
+        f"result({effect})[1].drain",
+    ]
+    body = (
+        '    reader, writer = await IMPORT.open_connection("example.com", 443)\n'
+        '    writer.writelines([b"effect"])\n    await writer.drain()\n'
+    )
+    builtin = '__import__("asyncio")'
+    importlib = 'importlib.import_module("asyncio")'
+    # source, expected usage identities, literal-import dependency count
+    fixtures = {
+        "builtin_direct_effect": (
+            "async def effect():\n" + body.replace("IMPORT", builtin),
+            downstream,
+            1,
+        ),
+        "importlib_direct_effect": (
+            "import importlib\nasync def effect():\n"
+            + body.replace("IMPORT", importlib),
+            downstream,
+            1,
+        ),
+        "builtin_json_near_miss": ('__import__("json").dumps({})\n', [], 1),
+        "importlib_json_near_miss": (
+            'import importlib\nimportlib.import_module("json").dumps({})\n',
+            [],
+            1,
+        ),
+        "builtin_assigned_preserved": (
+            "module = "
+            + builtin
+            + "\nasync def effect():\n"
+            + body.replace("IMPORT", "module"),
+            downstream,
+            1,
+        ),
+        "importlib_assigned_preserved": (
+            "import importlib\nmodule = "
+            + importlib
+            + "\nasync def effect():\n"
+            + body.replace("IMPORT", "module"),
+            downstream,
+            1,
+        ),
+        "direct_result_provenance": (
+            body.replace("IMPORT", builtin).replace("    ", "").replace("await ", ""),
+            downstream,
+            1,
+        ),
+        "nonconstant_not_inferred": (
+            "import importlib\nname = user_input\n__import__(name).open_connection()\nimportlib.import_module(name).open_connection()\n",
+            [],
+            0,
+        ),
+        "default_parameter_composition": (
+            "async def effect(open_fn="
+            + builtin
+            + ".open_connection):\n    await open_fn()\n",
+            [effect],
+            1,
+        ),
+        "importlib_alias": (
+            "import importlib as il\nasync def effect():\n"
+            + body.replace("IMPORT", 'il.import_module("asyncio")'),
+            downstream,
+            1,
+        ),
+        "builtin_local_shadow": (
+            "async def effect(__import__=print):\n" + body.replace("IMPORT", builtin),
+            [],
+            0,
+        ),
+        "importlib_local_shadow": (
+            "import importlib\nasync def effect(importlib):\n"
+            + body.replace("IMPORT", importlib),
+            [],
+            0,
+        ),
+        "unrelated_call_root": (
+            'factory().import_module("asyncio").open_connection()\n',
+            [],
+            0,
+        ),
+        "unbound_importlib": (
+            'importlib.import_module("asyncio").open_connection()\n',
+            [],
+            1,
+        ),
+        "helper_default_composition": (
+            "def entry():\n    return helper()\nasync def helper(open_fn="
+            + builtin
+            + ".open_connection):\n    reader, writer = await open_fn()\n    writer.writelines([])\n    await writer.drain()\n    return writer\n",
+            downstream,
+            1,
+        ),
+        "importlib_default_composition": (
+            "import importlib\nasync def effect(open_fn="
+            + importlib
+            + ".open_connection):\n    await open_fn()\n",
+            [effect],
+            1,
+        ),
+    }
+    results: list[dict[str, object]] = []
+    for name, (source, expected, dependency_count) in fixtures.items():
+        tree = ast.parse(source)
+        visitor = _EffectVisitor("policy/dynamic_import.py", frozenset({"helper"}))
+        collector = _ModuleBindingCollector("policy/dynamic_import.py")
+        visitor.visit(tree)
+        collector.visit(tree)
+        no_evidence = not any(
+            (
+                collector.dependencies,
+                collector.capabilities,
+                collector.usages,
+                collector.sinks,
+            )
+        )
+        literal = "json" if "json_near_miss" in name else "asyncio"
+        deps = sum(row["dependency"] == literal for row in visitor.dependencies)
+        caps = sum(row["capability"] == literal for row in visitor.capabilities)
+        usages = Counter(row["usage"] for row in visitor.usages)
+        sinks = Counter(row["primitive"] for row in visitor.sinks)
+        passed = (
+            usages == Counter(expected)
+            and sinks == Counter([effect] if expected else [])
+            and deps == dependency_count
+            and caps == (dependency_count if literal == "asyncio" else 0)
+            and no_evidence
+        )
+        if name == "direct_result_provenance":
+            for index, target in enumerate(("reader", "writer")):
+                passed = (
+                    passed
+                    and visitor.name_frames[0].get(target)
+                    == collector.name_frames[0].get(target)
+                    == f"result({effect})[{index}]"
+                )
+        if "default_composition" in name or name == "default_parameter_composition":
+            passed = (
+                passed and visitor.parameter_defaults == collector.parameter_defaults
+            )
+        results.append(
+            {
+                "name": "dynamic_import_" + name,
+                "passed": passed,
+                "usages": visitor.usages,
+                "sinks": visitor.sinks,
+                "literal_dependency_occurrences": deps,
+                "literal_capability_occurrences": caps,
+                "prepass_emits_no_evidence": no_evidence,
+                "undeclared_effect_usage_detected": bool(expected)
+                and usages != Counter(),
+            }
+        )
+    return results
+
+
 def run_mandatory_matrix() -> int:
     """Execute every mapped node and retain per-case execution results."""
     if main() != 0:
@@ -2808,6 +3020,7 @@ def run_mandatory_matrix() -> int:
             "reviewed_helper_flow_regressions_passed",
             "forward_module_binding_regressions_passed",
             "default_parameter_provenance_regressions_passed",
+            "dynamic_import_result_provenance_regressions_passed",
         )
         report["result"] = (
             "PASS"
@@ -2936,6 +3149,14 @@ def main() -> int:
     default_regressions_passed = len(default_results) == 26 and all(
         bool(row["passed"]) for row in default_results
     )
+    dynamic_results = [
+        row
+        for row in regression_results
+        if str(row["name"]).startswith("dynamic_import_")
+    ]
+    dynamic_regressions_passed = len(dynamic_results) == 16 and all(
+        bool(row["passed"]) for row in dynamic_results
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -2960,6 +3181,7 @@ def main() -> int:
         and helper_regressions_passed
         and forward_regressions_passed
         and default_regressions_passed
+        and dynamic_regressions_passed
         and registered_boundaries == expected_boundaries
         and len(entries) == 3
     )
@@ -3062,6 +3284,7 @@ def main() -> int:
             "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
             "forward_module_binding_regressions_passed": forward_regressions_passed,
             "default_parameter_provenance_regressions_passed": default_regressions_passed,
+            "dynamic_import_result_provenance_regressions_passed": dynamic_regressions_passed,
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
@@ -3198,6 +3421,7 @@ def main() -> int:
             "reviewed_helper_flow_regressions_passed": helper_regressions_passed,
             "forward_module_binding_regressions_passed": forward_regressions_passed,
             "default_parameter_provenance_regressions_passed": default_regressions_passed,
+            "dynamic_import_result_provenance_regressions_passed": dynamic_regressions_passed,
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
