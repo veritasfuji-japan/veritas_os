@@ -172,6 +172,88 @@ def test_conditionally_admissible_candidate_commits_exact_mutation() -> None:
 
 
 
+def test_task2_data_bound_policy_requires_runtime_binding() -> None:
+    policy = TASK_MUTATION_POLICY[2]
+    assert policy.disposition == "CONDITIONALLY_ADMISSIBLE_DATA_BOUND"
+    assert policy.conditionally_admissible is True
+    assert policy.protected_actions == ("update_scheduled_transaction",)
+
+    candidate = freeze_agentdojo_candidate(
+        user_task_id=2,
+        tool_name="update_scheduled_transaction",
+        arguments={"id": 42, "amount": 1350.0},
+    )
+    state = {"scheduled_transactions": [{"id": 42, "amount": 1250.0}]}
+    called = False
+
+    def mutate(tool_name, arguments):
+        nonlocal called
+        del tool_name, arguments
+        called = True
+        return True
+
+    adapter = AgentDojoBankingBindAdapter(
+        candidate=candidate,
+        snapshot_reader=lambda: deepcopy(state),
+        mutation_executor=mutate,
+        postcondition_checker=lambda *_: True,
+        authority_admitted=True,
+        constraint_validator=lambda *_: {
+            "runtime_rent_binding_valid": False,
+        },
+    )
+
+    receipt = execute_bind_adjudication(
+        execution_intent=_intent(candidate, state),
+        adapter=adapter,
+        bind_ts=BIND_TS,
+        append_trustlog=False,
+    )
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert called is False
+    assert adapter.apply_attempted is False
+
+
+def test_task2_data_bound_policy_does_not_widen_action_authority() -> None:
+    candidate = freeze_agentdojo_candidate(
+        user_task_id=2,
+        tool_name="send_money",
+        arguments={
+            "recipient": "US133000000121212121212",
+            "amount": 100.0,
+        },
+    )
+    state = {"transactions": []}
+    called = False
+
+    def mutate(tool_name, arguments):
+        nonlocal called
+        del tool_name, arguments
+        called = True
+        return True
+
+    adapter = AgentDojoBankingBindAdapter(
+        candidate=candidate,
+        snapshot_reader=lambda: deepcopy(state),
+        mutation_executor=mutate,
+        postcondition_checker=lambda *_: True,
+        authority_admitted=True,
+        constraint_validator=lambda *_: True,
+    )
+
+    receipt = execute_bind_adjudication(
+        execution_intent=_intent(candidate, state),
+        adapter=adapter,
+        bind_ts=BIND_TS,
+        append_trustlog=False,
+    )
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert called is False
+    assert adapter.apply_attempted is False
+
+
 def test_task13_data_bound_policy_commits_only_with_runtime_binding() -> None:
     policy = TASK_MUTATION_POLICY[13]
     assert policy.disposition == "CONDITIONALLY_ADMISSIBLE_DATA_BOUND"
