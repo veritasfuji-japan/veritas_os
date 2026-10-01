@@ -967,7 +967,7 @@ class _EffectVisitor(ast.NodeVisitor):
     def _visit_parameter_defaults(
         self, args: ast.arguments, definition_id: int
     ) -> dict[str, str | None]:
-        """Capture defaults once, in definition-time order, before body globals.
+        """Capture positional/kw-only defaults before annotations and body globals.
 
         Every parameter shadows outer names. Default lookup uses a state-only
         visitor, so deriving provenance cannot emit a second call evidence row.
@@ -978,8 +978,6 @@ class _EffectVisitor(ast.NodeVisitor):
         parameters = positional + args.kwonlyargs
         parameters += [arg for arg in (args.vararg, args.kwarg) if arg is not None]
         bindings: dict[str, str | None] = {arg.arg: None for arg in parameters}
-        for arg in parameters:
-            self.visit(arg)
         pairs = list(
             zip(
                 positional[len(positional) - len(args.defaults) :],
@@ -1018,6 +1016,11 @@ class _EffectVisitor(ast.NodeVisitor):
             ):
                 unresolved.add(arg.arg)
         self.parameter_defaults[definition_id] = (defaults, unresolved)
+        # Annotation NamedExpr writes may change the outer environment, but
+        # cannot change the default identities already captured above. The
+        # state-only collector inherits this same definition-time ordering.
+        for arg in parameters:
+            self.visit(arg)
         return bindings
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
@@ -2546,11 +2549,32 @@ def run_default_parameter_regressions() -> list[dict[str, object]]:
             "import asyncio\nargs = kwargs = asyncio.open_connection\ndef effect(*args, **kwargs):\n    args()\n    kwargs()\n",
             [],
         ),
+        "default_before_annotation_effect": (
+            "import asyncio\nopener = asyncio.open_connection\nasync def effect(open_fn: (opener := print) = opener):\n    reader, writer = await open_fn()\n    writer.writelines([])\n    await writer.drain()\n",
+            [("effect", item) for item in downstream],
+        ),
+        "default_before_annotation_reverse_harmless": (
+            "import asyncio\nopener = print\nasync def effect(open_fn: (opener := asyncio.open_connection) = opener):\n    open_fn()\n",
+            [],
+        ),
+        "kwonly_default_before_annotation": (
+            "import asyncio\nopener = asyncio.open_connection\nasync def effect(*, open_fn: (opener := print) = opener):\n    await open_fn()\n",
+            [("effect", effect)],
+        ),
+        "collector_normal_default_order_equivalence": (
+            "import asyncio\nopener = asyncio.open_connection\ndef entry():\n    return helper()\nasync def helper(open_fn: (opener := print) = opener):\n    reader, writer = await open_fn()\n    writer.writelines([])\n    await writer.drain()\n    return writer\n",
+            [("helper", item) for item in downstream],
+        ),
     }
     results: list[dict[str, object]] = []
     for name, (source, expected) in fixtures.items():
         tree = ast.parse(source)
-        visitor = _EffectVisitor("policy/default_parameters.py")
+        visitor = _EffectVisitor(
+            "policy/default_parameters.py",
+            frozenset({"helper"})
+            if name == "collector_normal_default_order_equivalence"
+            else frozenset(),
+        )
         visitor.visit(tree)
         collector = _ModuleBindingCollector(visitor.relative)
         collector.visit(tree)
@@ -2566,6 +2590,38 @@ def run_default_parameter_regressions() -> list[dict[str, object]]:
             )
         )
         passed = actual == Counter(expected) and no_prepass_evidence
+        order_case = "before_annotation" in name or name.endswith(
+            "default_order_equivalence"
+        )
+        order_evidence: dict[str, object] = {}
+        if order_case:
+            definition = next(
+                node for node in tree.body if isinstance(node, ast.AsyncFunctionDef)
+            )
+            normal_default = visitor.parameter_defaults[id(definition)][0]["open_fn"]
+            collector_default = collector.parameter_defaults[id(definition)][0][
+                "open_fn"
+            ]
+            expected_default = None if not expected else effect
+            equivalent = (
+                normal_default == collector_default == expected_default
+                and visitor.parameter_defaults[id(definition)]
+                == collector.parameter_defaults[id(definition)]
+            )
+            # Annotation writes must affect module state, while the captured
+            # default identity remains the value from before that write.
+            expected_module = effect if not expected else None
+            annotation_applied = (
+                visitor.name_frames[0]["opener"]
+                == collector.name_frames[0]["opener"]
+                == expected_module
+            )
+            passed = passed and equivalent and annotation_applied
+            order_evidence = {
+                "captured_default_provenance": normal_default,
+                "collector_normal_default_order_equivalence": equivalent,
+                "annotation_module_mutation_applied": annotation_applied,
+            }
         if not expected:
             passed = passed and not visitor.sinks
         results.append(
@@ -2574,6 +2630,7 @@ def run_default_parameter_regressions() -> list[dict[str, object]]:
                 "passed": passed,
                 "usages": visitor.usages,
                 "prepass_emits_no_evidence": no_prepass_evidence,
+                **order_evidence,
             }
         )
     # Isolate reviewed callsite evidence from the generic definition inventory:
@@ -2876,7 +2933,7 @@ def main() -> int:
         for row in regression_results
         if str(row["name"]).startswith("default_parameter_")
     ]
-    default_regressions_passed = len(default_results) == 22 and all(
+    default_regressions_passed = len(default_results) == 26 and all(
         bool(row["passed"]) for row in default_results
     )
     registered_boundaries = {

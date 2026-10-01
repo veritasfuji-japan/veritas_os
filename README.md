@@ -473,7 +473,7 @@ Frontend stack:
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16.3.3 (App Router) |
+| Framework | Next.js 16.3.6 (App Router) |
 | Language | TypeScript 5.7 |
 | Styling | Tailwind CSS 3.4 |
 | Lint config | eslint-config-next 15.5.10 |
