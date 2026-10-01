@@ -10,7 +10,7 @@ FULL_REQUIREMENTS = REPOSITORY_ROOT / "veritas_os" / "requirements.txt"
 CI_REQUIREMENTS = REPOSITORY_ROOT / "veritas_os" / "requirements-ci.txt"
 EXPECTED_CI_OMISSIONS = {
     "scikit-learn==1.5.2",
-    "sentence-transformers==5.3.0",
+    "sentence-transformers==5.6.0",
     "transformers==5.10.0",
 }
 
