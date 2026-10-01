@@ -801,6 +801,7 @@ class _EffectVisitor(ast.NodeVisitor):
         self.capabilities: list[dict[str, object]] = []
         self.usages: list[dict[str, object]] = []
         self.sinks: list[dict[str, object]] = []
+        self.unsupported_provenance_compositions: list[dict[str, object]] = []
 
     def visit_Module(self, node: ast.Module) -> None:  # noqa: N802
         collector = _ModuleBindingCollector(self.relative)
@@ -810,6 +811,9 @@ class _EffectVisitor(ast.NodeVisitor):
             collector.name_frames[0].copy(),
         )
         self.parameter_defaults.update(collector.parameter_defaults)
+        self.unsupported_provenance_compositions.extend(
+            collector.unsupported_provenance_compositions
+        )
         for statement in node.body:
             if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if statement.name in self.helper_names:
@@ -882,7 +886,13 @@ class _EffectVisitor(ast.NodeVisitor):
             child.visit(statement)
         # A definition may be reached from multiple callsites. Count each actual
         # syntactic use once per provenance, retaining conflicting provenances.
-        for attribute in ("dependencies", "capabilities", "usages", "sinks"):
+        for attribute in (
+            "dependencies",
+            "capabilities",
+            "usages",
+            "sinks",
+            "unsupported_provenance_compositions",
+        ):
             destination = getattr(self, attribute)
             for row in getattr(child, attribute):
                 if row not in destination:
@@ -1092,23 +1102,24 @@ class _EffectVisitor(ast.NodeVisitor):
             part.isidentifier() for part in argument.value.split(".")
         ):
             return None
-        canonical = self._supported_importer_callable(node.func)
+        canonical = self._resolve_supported_importer_expr(node.func)
         if canonical == "__import__":
             return argument.value.split(".", 1)[0]
         if canonical == "importlib.import_module":
             return argument.value
         return None
 
-    def _supported_importer_callable(self, node: ast.AST) -> str | None:
-        """Retain only the two lexical importer identities, never effect identity."""
+    def _resolve_supported_importer_expr(self, node: ast.AST) -> str | None:
+        """ImporterExpr := lexical terminal | NamedExpr(Name, ImporterExpr).
+
+        Terminals are only lexical __import__ / bound importlib.import_module.
+        Recursion follows the finite AST, with no depth-specific production and
+        no general value, helper, or Call-result inference.
+        """
         if isinstance(node, ast.NamedExpr):
             # Same-expression invocation needs the binding before child traversal.
             # Resolve references only; never infer arbitrary Call/helper results.
-            canonical = (
-                self._supported_importer_callable(node.value)
-                if isinstance(node.value, (ast.Name, ast.Attribute))
-                else None
-            )
+            canonical = self._resolve_supported_importer_expr(node.value)
             if canonical is not None:
                 self._bind_provenance(node.target, canonical)
             else:
@@ -1130,6 +1141,86 @@ class _EffectVisitor(ast.NodeVisitor):
         ):
             return canonical
         return None
+
+    def _check_importer_composition(self, node: ast.AST) -> None:
+        """Retain review-required evidence, without guessing runtime semantics.
+
+        Supported literal import Calls consume their importer identity. Other
+        compositions carrying lexical importer terminals into a value/callable
+        position must not silently lose that identity. This scanner walks syntax
+        only; it never evaluates branches or arbitrary factories.
+        """
+
+        def sources(value: ast.AST) -> set[str]:
+            if isinstance(value, (ast.Name, ast.Attribute)):
+                identity = self._resolve_supported_importer_expr(value)
+                if identity is not None:
+                    return {identity}
+            if isinstance(value, ast.Call):
+                # A recognized import result has module, not callable, identity.
+                if self._resolve_supported_dynamic_import_result(value) is not None:
+                    return set()
+                # Nonliteral invocation of a supported importer remains outside
+                # literal inference, but is not an unsupported callable shape.
+                if self._resolve_supported_importer_expr(value.func) is not None:
+                    return set()
+            if isinstance(value, ast.Lambda):
+                # Defaults use the outer environment; lambda parameters shadow
+                # names in its body even though lambda semantics are unsupported.
+                found = set()
+                for default in [*value.args.defaults, *value.args.kw_defaults]:
+                    if default is not None:
+                        found.update(sources(default))
+                bindings = {
+                    arg.arg: None
+                    for arg in [
+                        *value.args.posonlyargs,
+                        *value.args.args,
+                        *value.args.kwonlyargs,
+                    ]
+                }
+                for arg in (value.args.vararg, value.args.kwarg):
+                    if arg is not None:
+                        bindings[arg.arg] = None
+                self.name_frames.append(bindings)
+                self.alias_frames.append(("function", {}))
+                try:
+                    found.update(sources(value.body))
+                finally:
+                    self.alias_frames.pop()
+                    self.name_frames.pop()
+                return found
+            if isinstance(value, ast.NamedExpr):
+                return sources(value.value)
+            found: set[str] = set()
+            for child in ast.iter_child_nodes(value):
+                found.update(sources(child))
+            return found
+
+        # Inspect the pre-binding environment: clearing a NamedExpr target
+        # must not erase an importer referenced by its unsupported RHS.
+        saved_names = [frame.copy() for frame in self.name_frames]
+        try:
+            identities = sources(node)
+            supported = self._resolve_supported_importer_expr(node) is not None
+        finally:
+            for frame, saved in zip(self.name_frames, saved_names, strict=True):
+                frame.clear()
+                frame.update(saved)
+        if supported:
+            return
+        if identities:
+            row = {
+                "path": self.relative,
+                "enclosing_qualname": self._current_qualname(),
+                "line": getattr(node, "lineno", 0),
+                "column": getattr(node, "col_offset", 0),
+                "ast_kind": type(node).__name__,
+                "importer_sources": sorted(identities),
+                "classification": "UNSUPPORTED_REVIEW_REQUIRED",
+            }
+            if row not in self.unsupported_provenance_compositions:
+                self.unsupported_provenance_compositions.append(row)
 
     def _dynamic_import_attribute(self, node: ast.AST) -> str | None:
         """Resolve direct or NamedExpr-wrapped literal import roots, state only."""
@@ -1193,8 +1284,11 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def _value_provenance(self, value: ast.AST) -> str | None:
         value = self._unwrap_await(value)
+        self._check_importer_composition(value)
+        if isinstance(value, ast.NamedExpr):
+            return self._namedexpr_provenance(value)
         if isinstance(value, (ast.Name, ast.Attribute)):
-            importer = self._supported_importer_callable(value)
+            importer = self._resolve_supported_importer_expr(value)
             if importer is not None:
                 return importer
         imported_module = self._resolve_supported_dynamic_import_result(value)
@@ -1341,6 +1435,7 @@ class _EffectVisitor(ast.NodeVisitor):
     visit_AsyncWith = visit_With
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        self._check_importer_composition(node.func)
         self._helper_result(node)
         raw = _expression_name(node.func)
         canonical = self._resolve_name(node.func)
@@ -1413,7 +1508,8 @@ class _ModuleBindingCollector(_EffectVisitor):
         return
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
-        # Retain expression-level NamedExpr binding, never call/effect evidence.
+        # Same grammar and rejection state, never call/effect evidence.
+        self._check_importer_composition(node.func)
         self.generic_visit(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:  # noqa: N802
@@ -1506,6 +1602,7 @@ class _ModuleBindingCollector(_EffectVisitor):
 def _discover_inventories(
     root: Path = POLICY_ROOT,
     helper_names: frozenset[str] | None = None,
+    unsupported: list[dict[str, object]] | None = None,
 ) -> tuple[
     list[dict[str, object]],
     list[dict[str, object]],
@@ -1534,6 +1631,10 @@ def _discover_inventories(
         capabilities.extend(visitor.capabilities)
         usages.extend(visitor.usages)
         sinks.extend(visitor.sinks)
+        if unsupported is not None:
+            unsupported.extend(visitor.unsupported_provenance_compositions)
+        elif visitor.unsupported_provenance_compositions:
+            raise ValueError("unsupported importer composition requires review")
 
     def key(item: dict[str, object]) -> tuple[str, int]:
         return str(item["path"]), int(item["line"])
@@ -2345,6 +2446,7 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
     results.extend(run_namedexpr_dynamic_import_regressions())
     results.extend(run_importer_callable_alias_regressions())
     results.extend(run_immediate_importer_regressions())
+    results.extend(run_importer_grammar_regressions())
     return all(bool(row["passed"]) for row in results), results
 
 
@@ -3580,6 +3682,156 @@ def run_immediate_importer_regressions() -> list[dict[str, object]]:
     return results
 
 
+def run_importer_grammar_regressions() -> list[dict[str, object]]:
+    """Exercise grammar closure and rejection, using inert ASTs only."""
+    results: list[dict[str, object]] = []
+    usage = "asyncio.open_connection"
+    downstream = [
+        usage,
+        "result(asyncio.open_connection)[1].writelines",
+        "result(asyncio.open_connection)[1].drain",
+    ]
+    for depth in (2, 3, 7, 32):
+        for terminal in ("__import__", "importlib.import_module"):
+            expr = terminal
+            for index in range(depth):
+                expr = f"(n{index} := {expr})"
+            source = (
+                "import importlib\n"
+                + f'reader, writer = await {expr}("asyncio").open_connection("example.com", 443)\nwriter.writelines([b"effect"])\nawait writer.drain()\n'
+            )
+            tree = ast.parse(source)
+            visitor = _EffectVisitor("policy/grammar.py")
+            collector = _ModuleBindingCollector("policy/grammar.py")
+            visitor.visit(tree)
+            collector.visit(tree)
+            parity = visitor.name_frames == collector.name_frames
+            zero = not any(
+                (
+                    collector.dependencies,
+                    collector.capabilities,
+                    collector.usages,
+                    collector.sinks,
+                )
+            )
+            expected_bindings = all(
+                visitor.name_frames[0].get(f"n{i}") == terminal for i in range(depth)
+            )
+            counts = (
+                sum(r["dependency"] == "asyncio" for r in visitor.dependencies) == 1
+                and sum(r["capability"] == "asyncio" for r in visitor.capabilities) == 1
+            )
+            async_source = "import importlib\nasync def effect():\n" + "\n".join(
+                "    " + line for line in source.splitlines()[1:]
+            )
+            asynchronous = _EffectVisitor("policy/grammar.py")
+            asynchronous.visit(ast.parse(async_source))
+            passed = (
+                expected_bindings
+                and parity
+                and zero
+                and counts
+                and not visitor.unsupported_provenance_compositions
+                and Counter(r["usage"] for r in visitor.usages) == Counter(downstream)
+                and Counter(r["usage"] for r in asynchronous.usages)
+                == Counter(downstream)
+                and sum(r["primitive"] == usage for r in visitor.sinks) == 1
+            )
+            results.append(
+                {
+                    "name": f"nested_importer_{terminal}_depth_{depth}",
+                    "passed": passed,
+                    "collector_state_matches": parity,
+                    "prepass_emits_no_evidence": zero,
+                    "bindings": visitor.name_frames[0],
+                    "no_double_count": counts,
+                }
+            )
+    controls = {
+        "harmless": '(outer := (inner := print))("asyncio")',
+        "lambda_shadow": "(lambda __import__: __import__)(print)",
+        "nonconstant": "(outer := (inner := __import__))(runtime_name)",
+        "builtin_shadow": 'async def effect(__import__=print):\n    (outer := (inner := __import__))("asyncio")',
+        "importlib_shadow": 'import importlib\nasync def effect(importlib):\n    (outer := (inner := importlib.import_module))("asyncio")',
+        "rebind": '(outer := (inner := __import__))\ninner = print\nouter = print\ninner("asyncio")\nouter("asyncio")',
+    }
+    for name, source in controls.items():
+        visitor = _EffectVisitor("policy/grammar.py")
+        visitor.visit(ast.parse(source))
+        passed = not any(
+            (visitor.usages, visitor.sinks, visitor.unsupported_provenance_compositions)
+        ) and not any(r["dependency"] == "asyncio" for r in visitor.dependencies)
+        if name == "nonconstant":
+            passed = passed and all(
+                visitor.name_frames[0].get(n) == "__import__"
+                for n in ("inner", "outer")
+            )
+        results.append({"name": "nested_importer_" + name, "passed": passed})
+    # Every unsupported syntax is rejected rather than assigned guessed runtime
+    # semantics. Assignment tests ensure the identity cannot disappear before use.
+    shapes = {
+        "conditional": "(__import__ if flag else print)",
+        "boolean": "(__import__ or print)",
+        "subscript": "([__import__][0])",
+        "lambda": "(lambda: __import__)",
+        "factory": "factory(__import__)",
+        "binary": "(__import__ + print)",
+        "importlib": "(importlib.import_module if flag else print)",
+        "lexical_alias": "(alias if flag else print)",
+        "self_rebinding": "(alias := (alias if flag else print))",
+    }
+    for name, expr in shapes.items():
+        source = f'import importlib\nalias = __import__\nf = {expr}\nf("asyncio")\n'
+        visitor = _EffectVisitor("policy/grammar.py")
+        collector = _ModuleBindingCollector("policy/grammar.py")
+        tree = ast.parse(source)
+        visitor.visit(tree)
+        collector.visit(tree)
+        direct = _EffectVisitor("policy/grammar.py")
+        direct.visit(
+            ast.parse(f'import importlib\nalias = __import__\n{expr}("asyncio")\n')
+        )
+        rejected = bool(visitor.unsupported_provenance_compositions) and bool(
+            direct.unsupported_provenance_compositions
+        )
+        parity = (
+            visitor.unsupported_provenance_compositions
+            == collector.unsupported_provenance_compositions
+        )
+        zero = not any(
+            (
+                collector.dependencies,
+                collector.capabilities,
+                collector.usages,
+                collector.sinks,
+            )
+        )
+        # Exercise the public inventory gate too, not just an internal flag.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "fixture.py").write_text(source, encoding="utf-8")
+            try:
+                _discover_inventories(root)
+            except ValueError as error:
+                failed = "unsupported importer composition" in str(error)
+            else:
+                failed = False
+        results.append(
+            {
+                "name": "unsupported_importer_" + name,
+                "passed": rejected and parity and zero and failed,
+                "inventory_rejected": failed,
+                "direct_callable_rejected": bool(
+                    direct.unsupported_provenance_compositions
+                ),
+                "collector_state_matches": parity,
+                "prepass_emits_no_evidence": zero,
+                "unsupported_provenance_compositions": visitor.unsupported_provenance_compositions,
+            }
+        )
+    return results
+
+
 def run_mandatory_matrix() -> int:
     """Execute every mapped node and retain per-case execution results."""
     if main() != 0:
@@ -3660,6 +3912,9 @@ def run_mandatory_matrix() -> int:
             "namedexpr_dynamic_import_composition_regressions_passed",
             "dynamic_import_callable_alias_regressions_passed",
             "namedexpr_importer_callable_immediate_invocation_regressions_passed",
+            "nested_namedexpr_importer_provenance_regressions_passed",
+            "unsupported_provenance_composition_fail_closed_passed",
+            "unsupported_provenance_compositions_absent",
         )
         report["result"] = (
             "PASS"
@@ -3679,12 +3934,13 @@ def main() -> int:
         if entry.proof_scope == PROOF_SCOPE
     ]
     validation = validate_bind_coverage_registry(load_bind_coverage_registry())
+    unsupported: list[dict[str, object]] = []
     (
         discovered_dependencies,
         discovered_capabilities,
         discovered_usages,
         discovered_sinks,
-    ) = _discover_inventories()
+    ) = _discover_inventories(unsupported=unsupported)
     discovered_dependency_set = {
         str(row["dependency"]) for row in discovered_dependencies
     }
@@ -3823,6 +4079,20 @@ def main() -> int:
     immediate_regressions_passed = len(immediate_results) == 12 and all(
         bool(row["passed"]) for row in immediate_results
     )
+    nested_rows = [
+        r for r in regression_results if str(r["name"]).startswith("nested_importer_")
+    ]
+    unsupported_rows = [
+        r
+        for r in regression_results
+        if str(r["name"]).startswith("unsupported_importer_")
+    ]
+    nested_regressions_passed = len(nested_rows) >= 10 and all(
+        r["passed"] for r in nested_rows
+    )
+    unsupported_regressions_passed = len(unsupported_rows) >= 1 and all(
+        r["passed"] for r in unsupported_rows
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -3833,6 +4103,9 @@ def main() -> int:
     }
     passed = (
         validation.valid
+        and not unsupported
+        and nested_regressions_passed
+        and unsupported_regressions_passed
         and discovered_dependency_set == declared_dependency_set
         and discovered_capability_set == declared_capability_set
         and discovered_usage_counter == declared_usage_counter
@@ -3957,6 +4230,10 @@ def main() -> int:
             "namedexpr_dynamic_import_composition_regressions_passed": composition_regressions_passed,
             "dynamic_import_callable_alias_regressions_passed": importer_regressions_passed,
             "namedexpr_importer_callable_immediate_invocation_regressions_passed": immediate_regressions_passed,
+            "nested_namedexpr_importer_provenance_regressions_passed": nested_regressions_passed,
+            "unsupported_provenance_composition_fail_closed_passed": unsupported_regressions_passed,
+            "unsupported_provenance_compositions": unsupported,
+            "unsupported_provenance_compositions_absent": not unsupported,
             "case_count": len(regression_results),
             "cases": regression_results,
             "limitation": (
@@ -4097,6 +4374,10 @@ def main() -> int:
             "namedexpr_dynamic_import_composition_regressions_passed": composition_regressions_passed,
             "dynamic_import_callable_alias_regressions_passed": importer_regressions_passed,
             "namedexpr_importer_callable_immediate_invocation_regressions_passed": immediate_regressions_passed,
+            "nested_namedexpr_importer_provenance_regressions_passed": nested_regressions_passed,
+            "unsupported_provenance_composition_fail_closed_passed": unsupported_regressions_passed,
+            "unsupported_provenance_compositions": unsupported,
+            "unsupported_provenance_compositions_absent": not unsupported,
             "registry_set_equality": registered_boundaries == expected_boundaries,
             "result": "PENDING_MATRIX" if passed else "FAIL",
             "explicit_non_claims": [
