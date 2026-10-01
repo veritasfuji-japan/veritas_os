@@ -4,7 +4,7 @@ Status: **CLOSURE CANDIDATE — merge requires green blocking dependency audits*
 
 Reviewed Product baseline:
 
-`5e2a8d84ed59540d4d4e21c1a96df9d212289426`
+`a0f24f2f68cc18269798bb0d8a5093b3e618b1b7`
 
 ## Purpose
 
@@ -15,7 +15,8 @@ patched versions that can be enforced in CI.
 
 ## Observed pre-change audit result
 
-The full-profile `pip-audit` run on the reviewed baseline reported six known
+The original full-profile `pip-audit` run on baseline
+`5e2a8d84ed59540d4d4e21c1a96df9d212289426` reported six known
 vulnerabilities in two packages:
 
 - Starlette 0.49.1 / resolved transitive 0.49.x family:
@@ -27,6 +28,12 @@ vulnerabilities in two packages:
 - Transformers 5.5.0:
   - `PYSEC-2026-3929`, fixed in Transformers 5.10.0.
 
+The 2026-10-01 full-profile audit for PR #2313 additionally reported
+`GHSA-jhr6-gm9c-rqjv` in sentence-transformers 5.3.0, with 5.6.0 listed
+as the fixed version. The core audit passed. This follow-up updates the
+full and ML profiles in a separate dependency PR; BCBR scanner logic is
+outside this dependency change.
+
 ## Disposition
 
 This closure does not rely only on a non-reachability waiver.
@@ -35,7 +42,7 @@ The dependency set is moved to:
 
 - FastAPI `0.137.2`
 - Starlette `1.3.1` in the full-profile compatibility pin
-- sentence-transformers `5.3.0`
+- sentence-transformers `5.6.0`
 - Transformers `5.10.0`
 
 FastAPI 0.137.x accepts Starlette 1.x, removing the old resolver constraint
@@ -70,8 +77,23 @@ The ML path loads `SentenceTransformer(model_name)` only when
 false. Even with that bounded reachability, the full-profile dependency is
 upgraded to Transformers 5.10.0 instead of being audit-exempted.
 
-sentence-transformers 5.3.0 declares Transformers `>=4.41.0,<6.0.0`, so
+sentence-transformers 5.6.0 declares Transformers `>=4.41.0,<6.0.0`, so
 Transformers 5.10.0 remains within its supported dependency range.
+
+### Sentence Transformers
+
+The optional memory vector path calls `SentenceTransformer(model_name)`.
+Capability gating is not an audit exemption. Both dependency declarations
+now pin the audit-reported fixed version 5.6.0, and the existing blocking
+full-profile audit must pass before merge. This disposition does not claim
+that arbitrary local model code is safe; upstream 5.6.0 release notes still
+describe a deprecation path for local custom-code loading.
+
+Upstream references:
+
+- [5.6.0 dependency metadata](https://github.com/huggingface/sentence-transformers/blob/v5.6.0/pyproject.toml)
+- [5.6.0 release notes](https://github.com/huggingface/sentence-transformers/releases/tag/v5.6.0)
+- [GHSA-jhr6-gm9c-rqjv](https://github.com/advisories/GHSA-jhr6-gm9c-rqjv)
 
 ## Closure gate
 

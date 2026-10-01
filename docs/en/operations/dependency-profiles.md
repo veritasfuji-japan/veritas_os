@@ -45,7 +45,7 @@ keeping full backward compatibility via the `[full]` extra.
 | Package | Version | Role | Graceful degradation |
 |---|---|---|---|
 | scikit-learn | 1.5.2 | Memory model training (scripts) | Lazy import in `memory_train.py` |
-| sentence-transformers | 5.3.0 | Sentence embeddings (memory vector) | Lazy import with env-var guard in `memory_vector.py` |
+| sentence-transformers | 5.6.0 | Sentence embeddings (memory vector) | Lazy import with env-var guard in `memory_vector.py`; GHSA-jhr6-gm9c-rqjv audit-reported fixed pin |
 | transformers | 5.10.0 | ML runtime used by sentence-transformers | Optional ML profile; direct `save_pretrained()` use is absent from VERITAS runtime |
 
 ### Optional `[reports]`

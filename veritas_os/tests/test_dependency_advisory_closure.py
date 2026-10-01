@@ -29,13 +29,22 @@ def test_dependency_closure_manifest_and_pins_are_aligned() -> None:
     env = manifest["closure_environment"]
     assert env["fastapi"] == "0.137.2"
     assert env["starlette_full_profile_pin"] == "1.3.1"
-    assert env["sentence_transformers"] == "5.3.0"
+    assert env["sentence_transformers"] == "5.6.0"
     assert env["transformers"] == "5.10.0"
 
     for source in (pyproject, requirements):
         assert "fastapi==0.137.2" in source
         assert "transformers==5.10.0" in source
         assert "starlette==1.3.1" in source
+        assert "sentence-transformers==5.6.0" in source
+        assert "sentence-transformers==5.3.0" not in source
+
+    assert manifest["reported_advisories"]["sentence_transformers"] == [
+        "GHSA-jhr6-gm9c-rqjv"
+    ]
+    assert manifest["disposition"]["sentence_transformers"] == (
+        "upgrade_to_audit_reported_fixed_version"
+    )
 
     assert "fastapi==0.121.0" not in pyproject
     assert "transformers==5.5.0" not in pyproject
@@ -46,6 +55,7 @@ def test_dependency_audits_have_no_temporary_starlette_waiver() -> None:
     for path in (MAIN_WORKFLOW, SECURITY_WORKFLOW):
         workflow = path.read_text(encoding="utf-8")
         assert "starlette_temp_ignores" not in workflow
+        assert "GHSA-jhr6-gm9c-rqjv" not in workflow
         for advisory in STARLETTE_ADVISORIES:
             assert advisory not in workflow
         assert "Python full/optional dependency audit" in workflow
