@@ -55,13 +55,14 @@ jobs:
           assert report["default_parameter_provenance_regressions_passed"] is True
           assert report["dynamic_import_result_provenance_regressions_passed"] is True
           assert report["namedexpr_dynamic_import_composition_regressions_passed"] is True
+          assert report["dynamic_import_callable_alias_regressions_passed"] is True
           artifact_root = Path("artifacts/bind-coverage-bypass-resistance-v1")
           regressions = json.loads(
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert regressions["case_count"] >= 138
-          assert len(regressions["cases"]) >= 138
+          assert regressions["case_count"] >= 152
+          assert len(regressions["cases"]) >= 152
           assert regressions["direct_attribute_provenance_regressions_passed"] is True
           assert regressions["namedexpr_provenance_regressions_passed"] is True
           assert regressions["lexical_alias_scope_regressions_passed"] is True
@@ -71,6 +72,10 @@ jobs:
           assert regressions["default_parameter_provenance_regressions_passed"] is True
           assert regressions["dynamic_import_result_provenance_regressions_passed"] is True
           assert regressions["namedexpr_dynamic_import_composition_regressions_passed"] is True
+          assert regressions["dynamic_import_callable_alias_regressions_passed"] is True
+          importer_cases = [case for case in regressions["cases"] if case["name"].startswith("importer_callable_alias_")]
+          assert len(importer_cases) == 14
+          assert all(case["passed"] and case["prepass_emits_no_evidence"] and case["collector_state_matches"] for case in importer_cases)
           dynamic_cases = [case for case in regressions["cases"] if case["name"].startswith("dynamic_import_")]
           composition_cases = [case for case in regressions["cases"] if case["name"].startswith("namedexpr_dynamic_import_")]
           assert len(composition_cases) == 12
