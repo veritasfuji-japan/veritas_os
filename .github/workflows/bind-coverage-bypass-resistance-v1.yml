@@ -62,7 +62,7 @@ jobs:
               (artifact_root / "static-inventory-regressions.json").read_text()
           )
           assert regressions["passed"] is True
-          assert regressions["case_count"] >= 187
+          assert regressions["case_count"] >= 213
           assert len(regressions["cases"]) >= 164
           assert regressions["direct_attribute_provenance_regressions_passed"] is True
           assert regressions["namedexpr_provenance_regressions_passed"] is True
@@ -104,6 +104,13 @@ jobs:
           assert len(nested_cases) >= 14
           assert len(unsupported_cases) >= 9
           assert all(case["inventory_rejected"] for case in unsupported_cases)
+          assert report["unsupported_importer_signature_fail_closed_passed"] is True
+          assert regressions["unsupported_importer_signature_fail_closed_passed"] is True
+          signature_cases = [case for case in regressions["cases"] if case["name"].startswith("importer_signature_")]
+          signature_negatives = [case for case in signature_cases if not case["name"].startswith("importer_signature_control_")]
+          assert len(signature_cases) == 26
+          assert len(signature_negatives) == 20
+          assert all(case["inventory_rejected"] and case["collector_diagnostics_match"] and case["collector_state_matches"] and case["prepass_emits_no_evidence"] and case["no_guessed_evidence"] and case["unsupported_provenance_compositions"] for case in signature_negatives)
           assert all(case["passed"] for case in regressions["cases"])
           regression_cases = {case["name"]: case for case in regressions["cases"]}
           for name in (

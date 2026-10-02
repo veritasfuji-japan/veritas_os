@@ -1083,6 +1083,35 @@ class _EffectVisitor(ast.NodeVisitor):
     def _unwrap_await(value: ast.AST) -> ast.AST:
         return value.value if isinstance(value, ast.Await) else value
 
+    def _classify_importer_call(self, node: ast.AST) -> tuple[str, str | None]:
+        """Partition importer calls without inferring unsupported signatures.
+
+        Nonconstant is an explicit non-claim only for one ordinary positional
+        expression. Starred arguments, keywords, arity and invalid constants
+        require review. Resolving the callable preserves bounded NamedExpr state.
+        """
+        if not isinstance(node, ast.Call):
+            return "NOT_IMPORTER", None
+        identity = self._resolve_supported_importer_expr(node.func)
+        if identity is None:
+            return "NOT_IMPORTER", None
+        if (
+            len(node.args) != 1
+            or node.keywords
+            or isinstance(node.args[0], ast.Starred)
+        ):
+            return "UNSUPPORTED_IMPORTER_SIGNATURE", identity
+        argument = node.args[0]
+        if not isinstance(argument, ast.Constant):
+            return "EXPLICIT_NONCONSTANT_IMPORT", identity
+        if (
+            isinstance(argument.value, str)
+            and argument.value
+            and all(part.isidentifier() for part in argument.value.split("."))
+        ):
+            return "SUPPORTED_LITERAL_IMPORT", identity
+        return "UNSUPPORTED_IMPORTER_SIGNATURE", identity
+
     def _resolve_supported_dynamic_import_result(self, node: ast.AST) -> str | None:
         """Resolve literal, direct import results without emitting evidence.
 
@@ -1091,18 +1120,11 @@ class _EffectVisitor(ast.NodeVisitor):
         inferred. Builtin __import__ returns the top-level package for dotted
         names; import_module returns the requested module.
         """
-        if not isinstance(node, ast.Call) or len(node.args) != 1 or node.keywords:
+        classification, canonical = self._classify_importer_call(node)
+        if classification != "SUPPORTED_LITERAL_IMPORT":
             return None
+        assert isinstance(node, ast.Call) and isinstance(node.args[0], ast.Constant)
         argument = node.args[0]
-        if not isinstance(argument, ast.Constant) or not isinstance(
-            argument.value, str
-        ):
-            return None
-        if not argument.value or not all(
-            part.isidentifier() for part in argument.value.split(".")
-        ):
-            return None
-        canonical = self._resolve_supported_importer_expr(node.func)
         if canonical == "__import__":
             return argument.value.split(".", 1)[0]
         if canonical == "importlib.import_module":
@@ -1157,13 +1179,15 @@ class _EffectVisitor(ast.NodeVisitor):
                 if identity is not None:
                     return {identity}
             if isinstance(value, ast.Call):
-                # A recognized import result has module, not callable, identity.
-                if self._resolve_supported_dynamic_import_result(value) is not None:
+                classification, identity = self._classify_importer_call(value)
+                if classification in {
+                    "SUPPORTED_LITERAL_IMPORT",
+                    "EXPLICIT_NONCONSTANT_IMPORT",
+                }:
                     return set()
-                # Nonliteral invocation of a supported importer remains outside
-                # literal inference, but is not an unsupported callable shape.
-                if self._resolve_supported_importer_expr(value.func) is not None:
-                    return set()
+                if classification == "UNSUPPORTED_IMPORTER_SIGNATURE":
+                    assert identity is not None
+                    return {identity}
             if isinstance(value, ast.Lambda):
                 # Defaults use the outer environment; lambda parameters shadow
                 # names in its body even though lambda semantics are unsupported.
@@ -1436,10 +1460,21 @@ class _EffectVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
         self._check_importer_composition(node.func)
+        self._check_importer_composition(node)
         self._helper_result(node)
         raw = _expression_name(node.func)
         canonical = self._resolve_name(node.func)
-        if canonical in {"__import__", "importlib.import_module"} and node.args:
+        classification, _ = self._classify_importer_call(node)
+        # Preserve the pre-existing syntactic dependency-reference evidence for
+        # an unbound importlib spelling; this does not grant module provenance.
+        # Recognized unsupported signatures never take this NOT_IMPORTER path.
+        unbound_literal_reference = (
+            classification == "NOT_IMPORTER"
+            and canonical == "importlib.import_module"
+            and len(node.args) == 1
+            and not node.keywords
+        )
+        if classification == "SUPPORTED_LITERAL_IMPORT" or unbound_literal_reference:
             argument = node.args[0]
             if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
                 self._add_dependency(argument.value, node.lineno)
@@ -1510,6 +1545,7 @@ class _ModuleBindingCollector(_EffectVisitor):
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
         # Same grammar and rejection state, never call/effect evidence.
         self._check_importer_composition(node.func)
+        self._check_importer_composition(node)
         self.generic_visit(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:  # noqa: N802
@@ -2447,6 +2483,7 @@ def run_static_inventory_regressions() -> tuple[bool, list[dict[str, object]]]:
     results.extend(run_importer_callable_alias_regressions())
     results.extend(run_immediate_importer_regressions())
     results.extend(run_importer_grammar_regressions())
+    results.extend(run_importer_signature_regressions())
     return all(bool(row["passed"]) for row in results), results
 
 
@@ -3832,6 +3869,144 @@ def run_importer_grammar_regressions() -> list[dict[str, object]]:
     return results
 
 
+def run_importer_signature_regressions() -> list[dict[str, object]]:
+    """Check real inventory rejection and evidence neutrality for call shapes."""
+    shapes = {
+        "builtin_2_args": '__import__("asyncio", {})',
+        "builtin_3_args": '__import__("asyncio", {}, {})',
+        "builtin_4_args": '__import__("asyncio", {}, {}, ())',
+        "builtin_5_args": '__import__("asyncio", {}, {}, (), 0)',
+        "builtin_keyword": '__import__(name="asyncio")',
+        "importlib_keyword": 'importlib.import_module(name="asyncio")',
+        "importlib_2_args": 'importlib.import_module("asyncio", None)',
+        "lexical_alias": 'alias("asyncio", {})',
+        "namedexpr": '(importer := __import__)("asyncio", {})',
+        "nested_namedexpr": '(a := (b := (c := __import__)))("asyncio", {})',
+        "direct_effect": '__import__("asyncio", {}).open_connection("example.com", 443)',
+        "assigned_result": '__import__("asyncio", {})',
+        "invalid_literal": '__import__(".asyncio")',
+        "importlib_alias_keyword": 'il_alias(name="asyncio")',
+        "empty_literal": '__import__("")',
+        "nonstring_literal": "__import__(42)",
+        "zero_args": "__import__()",
+        "starred_args": "__import__(*names)",
+        "expanded_keywords": "__import__(**options)",
+        "mixed_keywords": '__import__("asyncio", level=0)',
+    }
+    prefix = (
+        "import importlib\nalias = __import__\nil_alias = importlib.import_module\n"
+    )
+    results: list[dict[str, object]] = []
+    for name, expression in shapes.items():
+        source = prefix + f"module = {expression}\n"
+        tree = ast.parse(source)
+        visitor = _EffectVisitor("policy/signature.py")
+        collector = _ModuleBindingCollector("policy/signature.py")
+        visitor.visit(tree)
+        collector.visit(tree)
+        diagnostics = visitor.unsupported_provenance_compositions
+        parity = diagnostics == collector.unsupported_provenance_compositions
+        zero = not any(
+            (
+                collector.dependencies,
+                collector.capabilities,
+                collector.usages,
+                collector.sinks,
+            )
+        )
+        neutral = (
+            not visitor.capabilities
+            and not visitor.usages
+            and not visitor.sinks
+            and [r["dependency"] for r in visitor.dependencies] == ["importlib"]
+        )
+        state = visitor.name_frames == collector.name_frames
+        expected = {"importer": "__import__"} if name == "namedexpr" else {}
+        if name == "nested_namedexpr":
+            expected = dict.fromkeys(("a", "b", "c"), "__import__")
+        bindings = all(visitor.name_frames[0].get(k) == v for k, v in expected.items())
+        # All signatures must reject the real public API in assigned, standalone,
+        # and function-body positions, not just populate an internal list.
+        rejected = []
+        for variant in (
+            source,
+            prefix + expression,
+            prefix + "async def effect():\n    " + expression,
+        ):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "fixture.py").write_text(variant, encoding="utf-8")
+                try:
+                    _discover_inventories(root)
+                except ValueError as error:
+                    rejected.append("unsupported importer composition" in str(error))
+                else:
+                    rejected.append(False)
+        results.append(
+            {
+                "name": "importer_signature_" + name,
+                "passed": bool(diagnostics)
+                and parity
+                and zero
+                and neutral
+                and state
+                and bindings
+                and all(rejected),
+                "inventory_rejected": all(rejected),
+                "collector_diagnostics_match": parity,
+                "collector_state_matches": state,
+                "prepass_emits_no_evidence": zero,
+                "no_guessed_evidence": neutral,
+                "bindings_retained": bindings,
+                "unsupported_provenance_compositions": diagnostics,
+            }
+        )
+    controls = {
+        "builtin_literal": (
+            '__import__("asyncio")',
+            "SUPPORTED_LITERAL_IMPORT",
+            "asyncio",
+        ),
+        "importlib_literal": (
+            'importlib.import_module("asyncio")',
+            "SUPPORTED_LITERAL_IMPORT",
+            "asyncio",
+        ),
+        "builtin_nonconstant": (
+            "__import__(runtime_name)",
+            "EXPLICIT_NONCONSTANT_IMPORT",
+            None,
+        ),
+        "importlib_nonconstant": (
+            "importlib.import_module(runtime_name)",
+            "EXPLICIT_NONCONSTANT_IMPORT",
+            None,
+        ),
+        "harmless": ('print("asyncio", {})', "NOT_IMPORTER", None),
+        "shadow": ('alias("asyncio", {})', "NOT_IMPORTER", None),
+    }
+    for name, (expression, expected, module) in controls.items():
+        visitor = _EffectVisitor("policy/signature.py")
+        visitor.visit(ast.parse("import importlib\nalias = print\n"))
+        call = ast.parse(expression, mode="eval").body
+        actual, _ = visitor._classify_importer_call(call)
+        resolved = visitor._resolve_supported_dynamic_import_result(call)
+        visitor.visit(call)
+        results.append(
+            {
+                "name": "importer_signature_control_" + name,
+                "passed": actual == expected
+                and resolved == module
+                and not visitor.unsupported_provenance_compositions
+                and not visitor.usages
+                and not visitor.sinks,
+                "call_classification": actual,
+                "module_provenance": resolved,
+            }
+        )
+    return results
+
+
 def run_mandatory_matrix() -> int:
     """Execute every mapped node and retain per-case execution results."""
     if main() != 0:
@@ -3914,6 +4089,7 @@ def run_mandatory_matrix() -> int:
             "namedexpr_importer_callable_immediate_invocation_regressions_passed",
             "nested_namedexpr_importer_provenance_regressions_passed",
             "unsupported_provenance_composition_fail_closed_passed",
+            "unsupported_importer_signature_fail_closed_passed",
             "unsupported_provenance_compositions_absent",
         )
         report["result"] = (
@@ -4093,6 +4269,14 @@ def main() -> int:
     unsupported_regressions_passed = len(unsupported_rows) >= 1 and all(
         r["passed"] for r in unsupported_rows
     )
+    signature_rows = [
+        r
+        for r in regression_results
+        if str(r["name"]).startswith("importer_signature_")
+    ]
+    signature_regressions_passed = len(signature_rows) == 26 and all(
+        r["passed"] for r in signature_rows
+    )
     registered_boundaries = {
         (entry.effect_boundary_id, entry.dispatch_kind) for entry in entries
     }
@@ -4106,6 +4290,7 @@ def main() -> int:
         and not unsupported
         and nested_regressions_passed
         and unsupported_regressions_passed
+        and signature_regressions_passed
         and discovered_dependency_set == declared_dependency_set
         and discovered_capability_set == declared_capability_set
         and discovered_usage_counter == declared_usage_counter
@@ -4232,6 +4417,7 @@ def main() -> int:
             "namedexpr_importer_callable_immediate_invocation_regressions_passed": immediate_regressions_passed,
             "nested_namedexpr_importer_provenance_regressions_passed": nested_regressions_passed,
             "unsupported_provenance_composition_fail_closed_passed": unsupported_regressions_passed,
+            "unsupported_importer_signature_fail_closed_passed": signature_regressions_passed,
             "unsupported_provenance_compositions": unsupported,
             "unsupported_provenance_compositions_absent": not unsupported,
             "case_count": len(regression_results),
@@ -4376,6 +4562,7 @@ def main() -> int:
             "namedexpr_importer_callable_immediate_invocation_regressions_passed": immediate_regressions_passed,
             "nested_namedexpr_importer_provenance_regressions_passed": nested_regressions_passed,
             "unsupported_provenance_composition_fail_closed_passed": unsupported_regressions_passed,
+            "unsupported_importer_signature_fail_closed_passed": signature_regressions_passed,
             "unsupported_provenance_compositions": unsupported,
             "unsupported_provenance_compositions_absent": not unsupported,
             "registry_set_equality": registered_boundaries == expected_boundaries,
