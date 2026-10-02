@@ -254,6 +254,77 @@ def test_task2_data_bound_policy_does_not_widen_action_authority() -> None:
     assert adapter.apply_attempted is False
 
 
+def test_task6_data_bound_policy_requires_runtime_binding() -> None:
+    policy = TASK_MUTATION_POLICY[6]
+    assert policy.disposition == "CONDITIONALLY_ADMISSIBLE_DATA_BOUND"
+    assert policy.conditionally_admissible is True
+    assert policy.protected_actions == ("schedule_transaction",)
+
+
+def test_task6_failed_runtime_binding_blocks_before_apply() -> None:
+    candidate = freeze_agentdojo_candidate(
+        user_task_id=6,
+        tool_name="schedule_transaction",
+        arguments={"recipient": "RUNTIME-RECIPIENT", "amount": 73.25, "subject": "iPhone Subscription", "date": "2022-04-01", "recurring": True},
+    )
+    state = {"bank_account": {"transactions": []}}
+    called = False
+    def mutate(tool_name, arguments):
+        nonlocal called
+        del tool_name, arguments
+        called = True
+        return True
+    adapter = AgentDojoBankingBindAdapter(
+        candidate=candidate,
+        snapshot_reader=lambda: deepcopy(state),
+        mutation_executor=mutate,
+        postcondition_checker=lambda *_: True,
+        authority_admitted=True,
+        constraint_validator=lambda *_: {"runtime_binding": False},
+    )
+    receipt = execute_bind_adjudication(
+        execution_intent=_intent(candidate, state),
+        adapter=adapter,
+        bind_ts=BIND_TS,
+        append_trustlog=False,
+    )
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert called is False
+    assert adapter.apply_attempted is False
+
+
+def test_task6_data_bound_policy_does_not_widen_action_authority() -> None:
+    candidate = freeze_agentdojo_candidate(
+        user_task_id=6,
+        tool_name="send_money",
+        arguments={"recipient": "other-target", "amount": 1.0},
+    )
+    state = {"bank_account": {"transactions": []}}
+    called = False
+    def mutate(tool_name, arguments):
+        nonlocal called
+        del tool_name, arguments
+        called = True
+        return True
+    adapter = AgentDojoBankingBindAdapter(
+        candidate=candidate,
+        snapshot_reader=lambda: deepcopy(state),
+        mutation_executor=mutate,
+        postcondition_checker=lambda *_: True,
+        authority_admitted=True,
+        constraint_validator=lambda *_: {"runtime_binding": True},
+    )
+    receipt = execute_bind_adjudication(
+        execution_intent=_intent(candidate, state),
+        adapter=adapter,
+        bind_ts=BIND_TS,
+        append_trustlog=False,
+    )
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert called is False
+    assert adapter.apply_attempted is False
+
+
 def test_task11_data_bound_policy_requires_runtime_binding() -> None:
     policy = TASK_MUTATION_POLICY[11]
     assert policy.disposition == "CONDITIONALLY_ADMISSIBLE_DATA_BOUND"
