@@ -8,6 +8,8 @@ with all fields validated, sanitised and defaults applied.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import secrets
 import time
@@ -31,6 +33,49 @@ _PIPELINE_PRIVATE_PREFIXES = (
 )
 _TEST_ONLY_PRE_BIND_SIGNAL_KEY = "pre_bind_participation_signal"
 _EXTERNAL_REPLAY_KEYS = {"_replay_mode", "_mock_external_apis"}
+_REQUEST_ID_PROFILE = "veritas.rveval.request-id-derivation/v1"
+_REQUEST_ID_PREFIX = "rveval-request:v1:sha256:"
+
+
+def _canonical_bound_request_id(body: Dict[str, Any], context: Dict[str, Any]) -> str | None:
+    """Verify the opt-in content-bound request identity before decision formation.
+
+    Legacy/random request IDs remain unchanged unless the explicit profile is
+    selected. The hash contract matches REQUEST_ID_DERIVATION_V1.
+    """
+    profile = body.get("request_id_profile")
+    if profile is None:
+        return None
+    if profile != _REQUEST_ID_PROFILE:
+        raise ValueError("REQUEST_ID_PROFILE_UNSUPPORTED")
+    supplied = body.get("request_id")
+    if not isinstance(supplied, str) or not supplied.startswith(_REQUEST_ID_PREFIX):
+        raise ValueError("REQUEST_ID_BOUND_VALUE_REQUIRED")
+    alternatives = body.get("alternatives")
+    if not isinstance(alternatives, list) or not alternatives:
+        raise ValueError("REQUEST_ID_ALTERNATIVES_REQUIRED")
+    query = body.get("query")
+    if not isinstance(query, str) or not query:
+        raise ValueError("REQUEST_ID_QUERY_REQUIRED")
+    frozen_context = body.get("context")
+    if not isinstance(frozen_context, dict):
+        raise ValueError("REQUEST_ID_CONTEXT_REQUIRED")
+    request = {
+        "query": query,
+        "context": frozen_context,
+        "alternatives": alternatives,
+        "min_evidence": body.get("min_evidence", 1),
+        "memory_auto_put": body.get("memory_auto_put", False),
+        "persona_evolve": body.get("persona_evolve", False),
+    }
+    encoded = json.dumps(
+        {"profile": _REQUEST_ID_PROFILE, "request": request},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")
+    expected = _REQUEST_ID_PREFIX + hashlib.sha256(encoded).hexdigest()
+    if not secrets.compare_digest(supplied, expected):
+        raise ValueError("REQUEST_ID_CONTENT_MISMATCH")
+    return expected
 
 
 def _to_bool(v: Any) -> bool:
@@ -259,7 +304,12 @@ def normalize_pipeline_inputs(
     }
 
     # --- request_id ---
-    if replay_mode:
+    # Explicit content-bound requests are independently recomputed at the real
+    # pipeline input boundary. Legacy/random IDs retain historical semantics.
+    bound_request_id = _canonical_bound_request_id(body, context)
+    if bound_request_id is not None:
+        request_id = bound_request_id
+    elif replay_mode:
         request_id = str(
             body.get("request_id") or context.get("request_id") or secrets.token_hex(16)
         )
