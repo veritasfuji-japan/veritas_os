@@ -37,7 +37,7 @@ _REQUEST_ID_PROFILE = "veritas.rveval.request-id-derivation/v1"
 _REQUEST_ID_PREFIX = "rveval-request:v1:sha256:"
 
 
-def _canonical_bound_request_id(body: Dict[str, Any], context: Dict[str, Any]) -> str | None:
+def _canonical_bound_request_id(body: Dict[str, Any]) -> str | None:
     """Verify the opt-in content-bound request identity before decision formation.
 
     Legacy/random request IDs remain unchanged unless the explicit profile is
@@ -306,7 +306,10 @@ def normalize_pipeline_inputs(
     # --- request_id ---
     # Explicit content-bound requests are independently recomputed at the real
     # pipeline input boundary. Legacy/random IDs retain historical semantics.
-    bound_request_id = _canonical_bound_request_id(body, context)
+    # Verify against the immutable request body, not the mutable working context.
+    # Pipeline normalization may add runtime-only keys (for example fast=False)
+    # before this stage; those keys were not part of the caller's frozen request.
+    bound_request_id = _canonical_bound_request_id(body)
     if bound_request_id is not None:
         request_id = bound_request_id
     elif replay_mode:
