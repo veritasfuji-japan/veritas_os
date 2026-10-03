@@ -129,7 +129,7 @@ def normalize_pipeline_inputs(
     if not isinstance(body, dict):
         body = {}
 
-    # Content-bound identity must be verified before normalization mutates any
+    # Content-bound identity is verified immediately after body decoding, before normalization mutates any
     # nested request objects. In particular, body["context"] and the working
     # context below initially alias the same dict.
     bound_request_id = _canonical_bound_request_id(body)
