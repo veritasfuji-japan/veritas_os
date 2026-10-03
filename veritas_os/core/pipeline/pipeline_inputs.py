@@ -129,6 +129,11 @@ def normalize_pipeline_inputs(
     if not isinstance(body, dict):
         body = {}
 
+    # Content-bound identity must be verified before normalization mutates any
+    # nested request objects. In particular, body["context"] and the working
+    # context below initially alias the same dict.
+    bound_request_id = _canonical_bound_request_id(body)
+
     # --- context ---
     context: Dict[str, Any] = body.get("context") or {}
     if not isinstance(context, dict):
@@ -304,12 +309,9 @@ def normalize_pipeline_inputs(
     }
 
     # --- request_id ---
-    # Explicit content-bound requests are independently recomputed at the real
-    # pipeline input boundary. Legacy/random IDs retain historical semantics.
-    # Verify against the immutable request body, not the mutable working context.
-    # Pipeline normalization may add runtime-only keys (for example fast=False)
-    # before this stage; those keys were not part of the caller's frozen request.
-    bound_request_id = _canonical_bound_request_id(body)
+    # Explicit content-bound requests were independently verified above, before
+    # normalization could mutate nested request objects. Legacy/random IDs retain
+    # historical semantics.
     if bound_request_id is not None:
         request_id = bound_request_id
     elif replay_mode:
