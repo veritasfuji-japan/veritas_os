@@ -175,3 +175,34 @@ def test_stale_policy_evidence_fails_closed() -> None:
             candidate,
             promoted_at=PROMOTED_AT + timedelta(minutes=10),
         )
+
+
+
+def test_request_decision_binding_v1_request_id_survives_promotion() -> None:
+    first = _packet("one")
+    second = _packet("two")
+
+    assert first.canonical_decision_artifact["request_id"] == "request-one"
+    assert second.canonical_decision_artifact["request_id"] == "request-two"
+    assert first.canonical_decision_hash != second.canonical_decision_hash
+    assert first.canonical_decision_id != second.canonical_decision_id
+    assert first.exact_execution_intent["request_id"] == "request-one"
+    assert second.exact_execution_intent["request_id"] == "request-two"
+    assert first.execution_intent_hash != second.execution_intent_hash
+    assert first.execution_intent_id != second.execution_intent_id
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "canonical_decision_artifact",
+        "source_decision_identity",
+        "exact_execution_intent",
+    ],
+)
+def test_request_decision_binding_v1_substitution_fails_closed(section: str) -> None:
+    raw = deepcopy(_packet("one").model_dump(mode="json"))
+    raw[section]["request_id"] = "request-two"
+
+    with pytest.raises(CanonicalVerifiedDecisionPromotionError):
+        verify_canonical_verified_decision_promotion_packet(raw)
