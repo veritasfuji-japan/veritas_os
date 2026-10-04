@@ -52,7 +52,7 @@ def test_all_activation_gates_are_present_and_not_falsely_closed() -> None:
     assert [item["id"] for item in gates] == [f"AER-{index:02d}" for index in range(1, 12)]
     status_by_id = {item["id"]: item["status"] for item in gates}
     assert status_by_id == {
-        "AER-01": "PROOF_PENDING_EXACT_MAIN",
+        "AER-01": "CLOSED_PASS",
         "AER-02": "PENDING_CI_PROOF",
         "AER-03": "NOT_DEFINED",
         "AER-04": "NOT_PROVEN",
@@ -174,7 +174,7 @@ def test_activation_review_document_freezes_independent_challenge_boundary() -> 
 def test_aer01_exact_identity_proof_plan_is_frozen_and_non_authorizing() -> None:
     gate = next(item for item in _gate()["gates"] if item["id"] == "AER-01")
     plan = gate["proof_plan"]
-    assert gate["status"] == "PROOF_PENDING_EXACT_MAIN"
+    assert gate["status"] == "CLOSED_PASS"
     assert plan["rule_of_one"] == "AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1"
     assert plan["expected_runtime_blob_sha"] == "64431fecf69579d8554cbc590a67ce8ca9d4a612"
     assert plan["expected_behavior_test_blob_sha"] == "a247bf768ca7a0ac6f65ac13fbb2e07664336b30"
@@ -183,3 +183,22 @@ def test_aer01_exact_identity_proof_plan_is_frozen_and_non_authorizing() -> None
     assert plan["independent_closure_record_required"] is True
     assert plan["activation_authorized_by_proof"] is False
     assert plan["activation_approved_by_proof"] is False
+
+
+def test_aer01_closure_is_pinned_to_exact_main_evidence() -> None:
+    gate = next(item for item in _gate()["gates"] if item["id"] == "AER-01")
+    closure = gate["closure_record"]
+    assert closure["determination"] == "CLOSED_PASS"
+    assert closure["exact_merged_main_sha"] == "94faafa1a42fde18a3cf03c41e54e731266e82fb"
+    assert closure["workflow_run_id"] == 37208356216
+    assert closure["workflow_run_event"] == "push"
+    assert closure["workflow_run_conclusion"] == "success"
+    assert closure["job_id"] == 111454223084
+    assert closure["artifact_id"] == 11305563535
+    assert closure["artifact_sha256"] == "8103465d432ef2470a887dacca70c5a76d88561ba18c5c9b090735c89ed8f989"
+    assert closure["expected_and_observed_blob_identities_match"] is True
+    assert closure["activation_authorized"] is False
+    assert closure["activation_approved"] is False
+    assert closure["activation_performed"] is False
+    assert closure["effect_path_connection_authorized"] is False
+    assert gate["missing_evidence"] == []
