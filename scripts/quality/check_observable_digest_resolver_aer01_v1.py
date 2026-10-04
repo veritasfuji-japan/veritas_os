@@ -61,6 +61,23 @@ def main() -> int:
     )
     PYTEST_LOG.write_text(proc.stdout, encoding="utf-8")
 
+    closure = aer01.get("closure_record")
+    closure_state_valid = aer01["status"] == "PROOF_PENDING_EXACT_MAIN"
+    if aer01["status"] == "CLOSED_PASS":
+        closure_state_valid = (
+            isinstance(closure, dict)
+            and closure.get("determination") == "CLOSED_PASS"
+            and closure.get("exact_merged_main_sha") == "94faafa1a42fde18a3cf03c41e54e731266e82fb"
+            and closure.get("workflow_run_id") == 37208356216
+            and closure.get("job_id") == 111454223084
+            and closure.get("artifact_id") == 11305563535
+            and closure.get("artifact_sha256") == "8103465d432ef2470a887dacca70c5a76d88561ba18c5c9b090735c89ed8f989"
+            and closure.get("activation_authorized") is False
+            and closure.get("activation_approved") is False
+            and closure.get("activation_performed") is False
+            and closure.get("effect_path_connection_authorized") is False
+        )
+
     invariants = {
         "behavior_implemented": implementation_manifest["behavior_implemented"] is True,
         "behavior_authorized_false": implementation_manifest["behavior_authorized"] is False,
@@ -70,7 +87,7 @@ def main() -> int:
         "review_activation_approved_false": activation_gate["activation_approved"] is False,
         "review_activation_performed_false": activation_gate["activation_performed"] is False,
         "effect_path_connection_authorized_false": activation_gate["effect_path_connection_authorized"] is False,
-        "aer01_proof_pending": aer01["status"] == "PROOF_PENDING_EXACT_MAIN",
+        "aer01_state_is_proof_pending_or_validly_closed": closure_state_valid,
     }
 
     passed = all(identity_matches.values()) and all(invariants.values()) and proc.returncode == 0
@@ -80,7 +97,7 @@ def main() -> int:
         "tested_sha": tested_sha,
         "github_sha_env": os.environ.get("GITHUB_SHA"),
         "result": "PASS" if passed else "FAIL",
-        "proof_status": "PENDING_INDEPENDENT_CLOSURE",
+        "proof_status": "CLOSED_PASS" if aer01["status"] == "CLOSED_PASS" else "PENDING_INDEPENDENT_CLOSURE",
         "expected_git_blob_identities": EXPECTED,
         "observed_git_blob_identities": observed,
         "identity_matches": identity_matches,
@@ -93,7 +110,7 @@ def main() -> int:
             "This report does not authorize activation.",
             "This report does not approve activation.",
             "This report does not authorize effect-path connection.",
-            "AER-01 is not CLOSED until a successful exact-main run and retained artifact are independently pinned in a later closure record.",
+            "AER-01 may be CLOSED only when the pinned exact-main run, job, artifact and digest match the frozen independent closure record.",
         ],
     }
     REPORT_PATH.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
