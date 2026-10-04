@@ -52,7 +52,7 @@ def test_all_activation_gates_are_present_and_not_falsely_closed() -> None:
     assert [item["id"] for item in gates] == [f"AER-{index:02d}" for index in range(1, 12)]
     status_by_id = {item["id"]: item["status"] for item in gates}
     assert status_by_id == {
-        "AER-01": "PARTIAL",
+        "AER-01": "PROOF_PENDING_EXACT_MAIN",
         "AER-02": "PENDING_CI_PROOF",
         "AER-03": "NOT_DEFINED",
         "AER-04": "NOT_PROVEN",
@@ -169,3 +169,17 @@ def test_activation_review_document_freezes_independent_challenge_boundary() -> 
     assert "REFUSE" in text
     assert "ABSTAIN" in text
     assert "AER-11 must close before activation." in text
+
+
+def test_aer01_exact_identity_proof_plan_is_frozen_and_non_authorizing() -> None:
+    gate = next(item for item in _gate()["gates"] if item["id"] == "AER-01")
+    plan = gate["proof_plan"]
+    assert gate["status"] == "PROOF_PENDING_EXACT_MAIN"
+    assert plan["rule_of_one"] == "AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1"
+    assert plan["expected_runtime_blob_sha"] == "64431fecf69579d8554cbc590a67ce8ca9d4a612"
+    assert plan["expected_behavior_test_blob_sha"] == "a247bf768ca7a0ac6f65ac13fbb2e07664336b30"
+    assert plan["expected_implementation_manifest_blob_sha"] == "5174dab99f9284498966a4bd8968db5ec910b052"
+    assert plan["exact_main_run_required"] is True
+    assert plan["independent_closure_record_required"] is True
+    assert plan["activation_authorized_by_proof"] is False
+    assert plan["activation_approved_by_proof"] is False

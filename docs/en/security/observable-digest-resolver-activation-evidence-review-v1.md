@@ -160,22 +160,71 @@ It may not directly transform `RESOLVED` into:
 Current status:
 
 ```text
-PARTIAL
+PROOF_PENDING_EXACT_MAIN
 ```
 
-Evidence already present:
+The runtime implementation and focused behavior test remain byte-identical at the Git-blob level to the previously reviewed minimal resolver implementation:
 
-- 23/23 observed workflows succeeded on the final PR head;
-- merge commit is file-identical to the validated head;
-- implementation/test/manifest Git blob identities are frozen.
+```text
+resolver runtime blob:
+64431fecf69579d8554cbc590a67ce8ca9d4a612
 
-Still missing:
+focused behavior-test blob:
+a247bf768ca7a0ac6f65ac13fbb2e07664336b30
+```
 
-- a separate exact-merge-SHA focused proof or equivalently explicit independently reproducible proof pinned to the merge SHA.
+The current implementation manifest is frozen for this proof round at:
 
-The absence of that evidence does not invalidate the implementation review.
+```text
+5174dab99f9284498966a4bd8968db5ec910b052
+```
 
-It simply prevents this gate from being described as exact-merge-SHA proven.
+AER-01 is intentionally not marked CLOSED merely because those identities are known.
+
+The frozen Rule-of-One proof is:
+
+```text
+AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1
+```
+
+Dedicated checker:
+
+`scripts/quality/check_observable_digest_resolver_aer01_v1.py`
+
+Dedicated workflow:
+
+`.github/workflows/observable-digest-resolver-aer01-v1.yml`
+
+The workflow:
+
+1. verifies the exact Git blob identities;
+2. verifies activation remains unauthorized / unapproved / unperformed;
+3. executes the focused resolver behavior and activation-review regression tests;
+4. binds the proof report to `github.sha`;
+5. uploads a retained artifact named with the exact tested SHA.
+
+Closure requires two stages:
+
+```text
+proof-enablement merge
+→ exact-main dedicated run
+→ retained exact-SHA artifact
+→ independent closure record
+→ AER-01 CLOSED/PASS
+```
+
+The PR-head run is useful but is not sufficient to close AER-01.
+
+AER-01 closes only after a successful run on the exact merged-main SHA of this proof-enablement change and a later closure record independently pins:
+
+- exact main SHA;
+- workflow run;
+- workflow job;
+- artifact ID;
+- artifact content/hash;
+- frozen implementation/test/manifest identities.
+
+This proof does not authorize activation, approve activation, or authorize any effect-path connection.
 
 ## 8. Gate AER-02 — Runtime reachability inventory
 
