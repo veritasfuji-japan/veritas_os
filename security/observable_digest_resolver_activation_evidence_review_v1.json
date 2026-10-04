@@ -60,16 +60,34 @@
     {
       "id": "AER-01",
       "name": "EXACT_IMPLEMENTATION_IDENTITY",
-      "status": "PARTIAL",
+      "status": "PROOF_PENDING_EXACT_MAIN",
       "current_evidence": [
         "validated PR head 0fe3e953... had 23/23 observed workflows success",
         "merge f3db837d... is file-identical to validated PR head",
-        "implementation and test Git blob identities are frozen"
+        "resolver runtime Git blob identity is frozen at 64431fecf69579d8554cbc590a67ce8ca9d4a612",
+        "focused behavior-test Git blob identity is frozen at a247bf768ca7a0ac6f65ac13fbb2e07664336b30",
+        "current implementation-manifest Git blob identity is frozen at 5174dab99f9284498966a4bd8968db5ec910b052",
+        "dedicated AER-01 exact-SHA workflow and proof checker are defined"
       ],
       "missing_evidence": [
-        "separate exact-merge-SHA focused CI/proof run is not observed"
+        "successful dedicated AER-01 workflow on the exact merged-main SHA of this proof-enablement change",
+        "retained AER-01 artifact bound to that exact SHA",
+        "independent closure record pinning the exact main SHA, workflow run, job, artifact ID and artifact content/hash"
       ],
-      "closure_condition": "Obtain exact-merge-SHA focused resolver behavior/security evidence or an equally explicit independently reproducible proof pinned to f3db837d8233afbb998195890525fcbe511c2f2c."
+      "closure_condition": "A successful dedicated exact-main AER-01 run proves the frozen resolver/test/manifest Git blob identities on the exact merged-main SHA, retains the bound artifact, and a later independent closure record pins and verifies that evidence.",
+      "proof_plan": {
+        "rule_of_one": "AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1",
+        "workflow": ".github/workflows/observable-digest-resolver-aer01-v1.yml",
+        "checker": "scripts/quality/check_observable_digest_resolver_aer01_v1.py",
+        "artifact_name_pattern": "observable-digest-resolver-aer01-v1-<exact-tested-sha>",
+        "expected_runtime_blob_sha": "64431fecf69579d8554cbc590a67ce8ca9d4a612",
+        "expected_behavior_test_blob_sha": "a247bf768ca7a0ac6f65ac13fbb2e07664336b30",
+        "expected_implementation_manifest_blob_sha": "5174dab99f9284498966a4bd8968db5ec910b052",
+        "exact_main_run_required": true,
+        "independent_closure_record_required": true,
+        "activation_authorized_by_proof": false,
+        "activation_approved_by_proof": false
+      }
     },
     {
       "id": "AER-02",
