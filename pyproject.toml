@@ -118,6 +118,7 @@ veritas_os = [
   "policies/*.yaml",
   "prompts/*.txt",
   "sample_data/memory/*.jsonl",
+  "sample_data/governance/*.json",
   "storage/migrations/sql/*.sql",
   "policy/sandbox_events.sql",
   "templates/**/*.txt",
