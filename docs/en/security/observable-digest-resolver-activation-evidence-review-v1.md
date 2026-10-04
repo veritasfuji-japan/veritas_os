@@ -160,10 +160,50 @@ It may not directly transform `RESOLVED` into:
 Current status:
 
 ```text
-PROOF_PENDING_EXACT_MAIN
+CLOSED / PASS
 ```
 
-The runtime implementation and focused behavior test remain byte-identical at the Git-blob level to the previously reviewed minimal resolver implementation:
+Rule of One:
+
+```text
+AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1
+```
+
+AER-01 is closed only for the exact implementation identity evidenced below.
+
+### Exact merged-main proof target
+
+```text
+94faafa1a42fde18a3cf03c41e54e731266e82fb
+```
+
+Dedicated workflow:
+
+`Observable Digest Resolver AER-01 Exact Identity V1`
+
+Exact-main push run:
+
+`37208356216`
+
+Job:
+
+`111454223084`
+
+Artifact:
+
+`11305563535`
+
+Artifact name:
+
+`observable-digest-resolver-aer01-v1-94faafa1a42fde18a3cf03c41e54e731266e82fb`
+
+Artifact ZIP SHA-256, independently recomputed after download:
+
+`8103465d432ef2470a887dacca70c5a76d88561ba18c5c9b090735c89ed8f989`
+
+The GitHub artifact metadata reported the same SHA-256 digest.
+
+### Frozen identities verified by the proof report
 
 ```text
 resolver runtime blob:
@@ -171,60 +211,42 @@ resolver runtime blob:
 
 focused behavior-test blob:
 a247bf768ca7a0ac6f65ac13fbb2e07664336b30
-```
 
-The current implementation manifest is frozen for this proof round at:
-
-```text
+implementation-manifest blob:
 5174dab99f9284498966a4bd8968db5ec910b052
 ```
 
-AER-01 is intentionally not marked CLOSED merely because those identities are known.
+All expected and observed identities matched.
 
-The frozen Rule-of-One proof is:
+The downloaded `proof-report.json` recorded:
 
-```text
-AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1
-```
+- `result = PASS`;
+- `tested_sha = 94faafa1a42fde18a3cf03c41e54e731266e82fb`;
+- `github_sha_env = 94faafa1a42fde18a3cf03c41e54e731266e82fb`;
+- all identity matches true;
+- all frozen activation-safety invariants true.
 
-Dedicated checker:
-
-`scripts/quality/check_observable_digest_resolver_aer01_v1.py`
-
-Dedicated workflow:
-
-`.github/workflows/observable-digest-resolver-aer01-v1.yml`
-
-The workflow:
-
-1. verifies the exact Git blob identities;
-2. verifies activation remains unauthorized / unapproved / unperformed;
-3. executes the focused resolver behavior and activation-review regression tests;
-4. binds the proof report to `github.sha`;
-5. uploads a retained artifact named with the exact tested SHA.
-
-Closure requires two stages:
+The downloaded focused test log recorded:
 
 ```text
-proof-enablement merge
-→ exact-main dedicated run
-→ retained exact-SHA artifact
-→ independent closure record
-→ AER-01 CLOSED/PASS
+49 passed in 0.43s
 ```
 
-The PR-head run is useful but is not sufficient to close AER-01.
+### Closure determination
 
-AER-01 closes only after a successful run on the exact merged-main SHA of this proof-enablement change and a later closure record independently pins:
+AER-01 is therefore:
 
-- exact main SHA;
-- workflow run;
-- workflow job;
-- artifact ID;
-- artifact content/hash;
-- frozen implementation/test/manifest identities.
+```text
+CLOSED / PASS
+```
 
-This proof does not authorize activation, approve activation, or authorize any effect-path connection.
+for this exact identity only.
+
+This closure does not authorize activation, approve activation, perform activation, or authorize effect-path connection.
+
+It does not close AER-02 through AER-11.
+
+Any material implementation-identity change invalidates this exact AER-01 pin and requires a new evidence round.
 
 ## 8. Gate AER-02 — Runtime reachability inventory
 
