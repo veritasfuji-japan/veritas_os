@@ -60,21 +60,20 @@
     {
       "id": "AER-01",
       "name": "EXACT_IMPLEMENTATION_IDENTITY",
-      "status": "PROOF_PENDING_EXACT_MAIN",
+      "status": "CLOSED_PASS",
       "current_evidence": [
-        "validated PR head 0fe3e953... had 23/23 observed workflows success",
-        "merge f3db837d... is file-identical to validated PR head",
-        "resolver runtime Git blob identity is frozen at 64431fecf69579d8554cbc590a67ce8ca9d4a612",
-        "focused behavior-test Git blob identity is frozen at a247bf768ca7a0ac6f65ac13fbb2e07664336b30",
-        "current implementation-manifest Git blob identity is frozen at 5174dab99f9284498966a4bd8968db5ec910b052",
-        "dedicated AER-01 exact-SHA workflow and proof checker are defined"
+        "exact merged-main SHA 94faafa1a42fde18a3cf03c41e54e731266e82fb",
+        "dedicated push run 37208356216 completed success on that exact SHA",
+        "job 111454223084 completed success",
+        "artifact 11305563535 retained under exact-SHA name",
+        "artifact ZIP SHA-256 8103465d432ef2470a887dacca70c5a76d88561ba18c5c9b090735c89ed8f989 independently recomputed after download",
+        "proof-report.json result PASS and tested_sha/github_sha_env both equal exact merged-main SHA",
+        "all three frozen Git blob identities matched expected values",
+        "focused resolver behavior + activation-review tests: 49 passed",
+        "activation remained unauthorized, unapproved, unperformed and effect-path connection unauthorized"
       ],
-      "missing_evidence": [
-        "successful dedicated AER-01 workflow on the exact merged-main SHA of this proof-enablement change",
-        "retained AER-01 artifact bound to that exact SHA",
-        "independent closure record pinning the exact main SHA, workflow run, job, artifact ID and artifact content/hash"
-      ],
-      "closure_condition": "A successful dedicated exact-main AER-01 run proves the frozen resolver/test/manifest Git blob identities on the exact merged-main SHA, retains the bound artifact, and a later independent closure record pins and verifies that evidence.",
+      "missing_evidence": [],
+      "closure_condition": "SATISFIED for AER-01 only at exact merged-main SHA 94faafa1a42fde18a3cf03c41e54e731266e82fb using run 37208356216, job 111454223084 and artifact 11305563535 with independently recomputed ZIP SHA-256 8103465d432ef2470a887dacca70c5a76d88561ba18c5c9b090735c89ed8f989.",
       "proof_plan": {
         "rule_of_one": "AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1",
         "workflow": ".github/workflows/observable-digest-resolver-aer01-v1.yml",
@@ -87,6 +86,42 @@
         "independent_closure_record_required": true,
         "activation_authorized_by_proof": false,
         "activation_approved_by_proof": false
+      },
+      "closure_record": {
+        "rule_of_one": "AER-01_EXACT_IMPLEMENTATION_IDENTITY_V1",
+        "determination": "CLOSED_PASS",
+        "exact_merged_main_sha": "94faafa1a42fde18a3cf03c41e54e731266e82fb",
+        "workflow_name": "Observable Digest Resolver AER-01 Exact Identity V1",
+        "workflow_run_id": 37208356216,
+        "workflow_run_event": "push",
+        "workflow_run_conclusion": "success",
+        "job_id": 111454223084,
+        "job_name": "aer01-exact-implementation-identity",
+        "artifact_id": 11305563535,
+        "artifact_name": "observable-digest-resolver-aer01-v1-94faafa1a42fde18a3cf03c41e54e731266e82fb",
+        "artifact_sha256": "8103465d432ef2470a887dacca70c5a76d88561ba18c5c9b090735c89ed8f989",
+        "artifact_expiry": "2027-01-02T14:11:44Z",
+        "proof_report_result": "PASS",
+        "proof_report_status": "PENDING_INDEPENDENT_CLOSURE",
+        "focused_pytest": "49 passed in 0.43s",
+        "expected_and_observed_blob_identities_match": true,
+        "activation_authorized": false,
+        "activation_approved": false,
+        "activation_performed": false,
+        "effect_path_connection_authorized": false,
+        "closure_scope_only": "AER-01 exact implementation identity",
+        "does_not_close": [
+          "AER-02",
+          "AER-03",
+          "AER-04",
+          "AER-05",
+          "AER-06",
+          "AER-07",
+          "AER-08",
+          "AER-09",
+          "AER-10",
+          "AER-11"
+        ]
       }
     },
     {

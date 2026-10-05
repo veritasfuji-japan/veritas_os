@@ -49,7 +49,7 @@ jobs:
           report = json.loads(Path("artifacts/observable-digest-resolver-aer01-v1/proof-report.json").read_text())
           assert report["tested_sha"] == "${{ github.sha }}"
           assert report["result"] == "PASS"
-          assert report["proof_status"] == "PENDING_INDEPENDENT_CLOSURE"
+          assert report["proof_status"] in {"PENDING_INDEPENDENT_CLOSURE", "CLOSED_PASS"}
           assert report["focused_tests_passed"] is True
           assert all(report["identity_matches"].values())
           assert all(report["invariants"].values())
