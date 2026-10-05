@@ -80,7 +80,7 @@ def main() -> int:
         "proof_scope":"AER-02_RUNTIME_REACHABILITY_INVENTORY_V1",
         "tested_sha":subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
         "result":"PASS" if passed else "FAIL",
-        "proof_status":"PENDING_EXACT_MAIN_AND_INDEPENDENT_CLOSURE",
+        "proof_status":"CLOSED_PASS" if json.loads((ROOT / "security/observable_digest_resolver_activation_evidence_review_v1.json").read_text(encoding="utf-8"))["gates"][1]["status"] == "CLOSED_PASS" else "PENDING_EXACT_MAIN_AND_INDEPENDENT_CLOSURE",
         "target_module":TARGET_MODULE,
         "declared_nonimplementation_caller":ALLOWED_CALLER,
         "repository_python_file_count":len(scans),
