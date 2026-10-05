@@ -127,15 +127,30 @@
     {
       "id": "AER-02",
       "name": "RUNTIME_REACHABILITY_INVENTORY",
-      "status": "PENDING_CI_PROOF",
+      "status": "PROOF_PENDING_EXACT_MAIN",
       "current_evidence": [
-        "repository search found the resolver callable only in its implementation module and focused tests"
+        "repository code search at AER-02 start found direct resolver-module import only in focused behavior tests",
+        "dedicated AST-based repository-wide Python reachability checker added",
+        "checker classifies implementation/test/tooling/production paths and fails on any undeclared nonimplementation import/call path"
       ],
       "missing_evidence": [
-        "source-level isolation must be frozen by executable regression test",
-        "future activation wiring must be added to a declared runtime reachability inventory"
+        "successful dedicated AER-02 workflow on exact merged-main SHA of proof-enablement change",
+        "retained exact-SHA artifact containing the runtime reachability inventory",
+        "independent closure record pinning exact main SHA, workflow run, job, artifact identity/digest and proof contents"
       ],
-      "closure_condition": "Executable source-level proof shows no undeclared production caller/import path; any later caller is explicitly declared and reviewed."
+      "closure_condition": "Executable repository-wide source-level proof shows no undeclared production import/call path; successful exact-main artifact is independently pinned in a later closure record. Any future declared runtime caller requires review and a new AER-02 proof round.",
+      "proof_plan": {
+        "rule_of_one": "AER-02_RUNTIME_REACHABILITY_INVENTORY_V1",
+        "workflow": ".github/workflows/observable-digest-resolver-aer02-v1.yml",
+        "checker": "scripts/quality/check_observable_digest_resolver_aer02_v1.py",
+        "artifact_name_pattern": "observable-digest-resolver-aer02-v1-<exact-tested-sha>",
+        "declared_nonimplementation_caller": "veritas_os/tests/test_observable_digest_resolver_behavior.py",
+        "production_runtime_paths_expected": 0,
+        "exact_main_run_required": true,
+        "independent_closure_record_required": true,
+        "activation_authorized_by_proof": false,
+        "activation_approved_by_proof": false
+      }
     },
     {
       "id": "AER-03",
