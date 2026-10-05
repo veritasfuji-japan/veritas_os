@@ -127,18 +127,17 @@
     {
       "id": "AER-02",
       "name": "RUNTIME_REACHABILITY_INVENTORY",
-      "status": "PROOF_PENDING_EXACT_MAIN",
+      "status": "CLOSED_PASS",
       "current_evidence": [
-        "repository code search at AER-02 start found direct resolver-module import only in focused behavior tests",
-        "dedicated AST-based repository-wide Python reachability checker added",
-        "checker classifies implementation/test/tooling/production paths and fails on any undeclared nonimplementation import/call path"
+        "exact merged-main SHA a1d66aef02262cf8a913295270c3aafd159c6adb",
+        "dedicated push run 37270472912 and job 111636190369 completed success",
+        "artifact 11328615731 retained under the exact-SHA name",
+        "artifact ZIP SHA-256 bb10f9e8de335e1c299174cf19c083a275cd500036b3e39b0d9e16450d3cd62e matched after independent download",
+        "proof report PASS; production_runtime_paths and undeclared_paths are empty",
+        "repository-wide AST inventory scanned 1237 Python files; all four reachability invariants true"
       ],
-      "missing_evidence": [
-        "successful dedicated AER-02 workflow on exact merged-main SHA of proof-enablement change",
-        "retained exact-SHA artifact containing the runtime reachability inventory",
-        "independent closure record pinning exact main SHA, workflow run, job, artifact identity/digest and proof contents"
-      ],
-      "closure_condition": "Executable repository-wide source-level proof shows no undeclared production import/call path; successful exact-main artifact is independently pinned in a later closure record. Any future declared runtime caller requires review and a new AER-02 proof round.",
+      "missing_evidence": [],
+      "closure_condition": "SATISFIED for AER-02 only on exact merged-main SHA a1d66aef02262cf8a913295270c3aafd159c6adb.",
       "proof_plan": {
         "rule_of_one": "AER-02_RUNTIME_REACHABILITY_INVENTORY_V1",
         "workflow": ".github/workflows/observable-digest-resolver-aer02-v1.yml",
@@ -150,6 +149,25 @@
         "independent_closure_record_required": true,
         "activation_authorized_by_proof": false,
         "activation_approved_by_proof": false
+      },
+      "closure_record": {
+        "rule_of_one": "AER-02_RUNTIME_REACHABILITY_INVENTORY_V1",
+        "determination": "CLOSED_PASS",
+        "exact_merged_main_sha": "a1d66aef02262cf8a913295270c3aafd159c6adb",
+        "workflow_run_id": 37270472912,
+        "job_id": 111636190369,
+        "artifact_id": 11328615731,
+        "artifact_sha256": "bb10f9e8de335e1c299174cf19c083a275cd500036b3e39b0d9e16450d3cd62e",
+        "proof_report_result": "PASS",
+        "repository_python_file_count": 1237,
+        "production_runtime_paths": 0,
+        "undeclared_paths": 0,
+        "all_invariants_true": true,
+        "activation_authorized": false,
+        "activation_approved": false,
+        "activation_performed": false,
+        "effect_path_connection_authorized": false,
+        "closure_scope_only": "AER-02 runtime reachability inventory"
       }
     },
     {
