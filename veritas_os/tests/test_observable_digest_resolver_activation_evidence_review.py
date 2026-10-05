@@ -53,7 +53,7 @@ def test_all_activation_gates_are_present_and_not_falsely_closed() -> None:
     status_by_id = {item["id"]: item["status"] for item in gates}
     assert status_by_id == {
         "AER-01": "CLOSED_PASS",
-        "AER-02": "PROOF_PENDING_EXACT_MAIN",
+        "AER-02": "CLOSED_PASS",
         "AER-03": "NOT_DEFINED",
         "AER-04": "NOT_PROVEN",
         "AER-05": "NOT_PROVEN",
