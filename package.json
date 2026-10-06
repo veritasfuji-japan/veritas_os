@@ -18,7 +18,8 @@
       "brace-expansion@>=2.0.0 <2.0.3": ">=2.0.3",
       "next>sharp": ">=0.35.4",
       "next>postcss": ">=8.5.23",
-      "browserslist@<=4.28.6": "4.28.7"
+      "browserslist@<=4.28.6": "4.28.7",
+      "source-map-js@>=1.0.0 <1.2.2": ">=1.2.2"
     }
   }
 }
