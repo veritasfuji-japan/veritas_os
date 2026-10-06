@@ -21,7 +21,8 @@ def test_aer03_exact_named_target_and_caller_are_frozen() -> None:
     assert target["caller_component"] == consumer.CALLER_COMPONENT
     assert target["caller_identity"] == consumer.CALLER_IDENTITY
     assert target["resolver_profile"] == consumer.RESOLVER_PROFILE
-    assert target["namespace_scope"] == consumer.NAMESPACE_SCOPE
+    assert target["namespace_scope"] == consumer.NAMESPACE_SCOPE == "wat_observables"
+    assert target["locator_prefix"] == consumer.LOCATOR_PREFIX == "separate_store://wat_observables/"
     assert target["activation_configuration_id"] == consumer.ACTIVATION_CONFIGURATION_ID
     assert target["default_enabled"] is False
     assert consumer.DEFAULT_ENABLED is False
