@@ -32,10 +32,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install focused test dependency
+        run: python -m pip install pytest
       - name: Run AER-03 exact target/caller proof
         run: PYTHONPATH=. python scripts/quality/check_observable_digest_resolver_aer03_v1.py
       - name: Run focused AER-03 tests
-        run: PYTHONPATH=. pytest -q veritas_os/tests/test_observable_digest_resolver_aer03_named_target_caller.py
+        run: PYTHONPATH=. python -m pytest -q veritas_os/tests/test_observable_digest_resolver_aer03_named_target_caller.py
       - name: Bind artifact to exact tested SHA
         run: |
           python - <<'PY'
