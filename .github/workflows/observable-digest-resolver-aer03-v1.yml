@@ -32,8 +32,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install focused test dependency
-        run: python -m pip install pytest
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt pytest pytest-asyncio
       - name: Run AER-03 exact target/caller proof
         run: PYTHONPATH=. python scripts/quality/check_observable_digest_resolver_aer03_v1.py
       - name: Run focused AER-03 tests
