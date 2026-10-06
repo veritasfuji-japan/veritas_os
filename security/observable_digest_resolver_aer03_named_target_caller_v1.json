@@ -1,0 +1,37 @@
+{
+  "proof_round": "AER-03_NAMED_ACTIVATION_TARGET_CALLER_V1",
+  "version": "1.0",
+  "status": "DEFINED_NOT_AUTHORIZED_NOT_ACTIVATED",
+  "target": {
+    "target_id": "RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1",
+    "caller_module": "veritas_os.audit.observable_digest_evidence_consumer",
+    "caller_component": "ObservableDigestEvidenceConsumerV1",
+    "caller_role": "EVIDENCE_ONLY",
+    "caller_identity": "veritas_os.audit.observable_digest_evidence_consumer:ObservableDigestEvidenceConsumerV1",
+    "caller_id_hash_derivation": "sha256(UTF-8 exact caller_identity)",
+    "resolver_profile": "separate_store_readonly_v1",
+    "namespace_scope": "separate_store://wat_observables",
+    "activation_configuration_id": "observable_digest_evidence_only_activation_v1",
+    "default_enabled": false
+  },
+  "forbidden_semantics": {
+    "production_runtime_wiring": false,
+    "resolver_import_or_call_from_named_caller": false,
+    "direct_effect_path_use": false,
+    "direct_policy_allow_use": false,
+    "authority_creation": false,
+    "human_approval_creation": false,
+    "bind_authorization_creation": false,
+    "execution_permission_creation": false
+  },
+  "material_change_rule": "Any change to caller module/component/identity/hash derivation/profile/namespace/configuration/default state requires a new AER-03 evidence round. Any actual resolver import/call wiring reopens AER-02.",
+  "nonclaims": [
+    "This manifest does not authorize activation.",
+    "This manifest does not approve activation.",
+    "This manifest does not perform activation.",
+    "This manifest does not add a production runtime caller.",
+    "This manifest does not establish snapshot provenance or admissibility.",
+    "This manifest does not establish consumer non-amplification or failure propagation.",
+    "This manifest does not authorize an effect-bearing path."
+  ]
+}
