@@ -20,7 +20,8 @@ CALLER_ID_HASH: Final = "sha256:" + hashlib.sha256(
 ).hexdigest()
 TARGET_ID: Final = "RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1"
 RESOLVER_PROFILE: Final = "separate_store_readonly_v1"
-NAMESPACE_SCOPE: Final = "separate_store://wat_observables"
+NAMESPACE_SCOPE: Final = "wat_observables"
+LOCATOR_PREFIX: Final = "separate_store://wat_observables/"
 ACTIVATION_CONFIGURATION_ID: Final = "observable_digest_evidence_only_activation_v1"
 DEFAULT_ENABLED: Final = False
 RESULT_ROLE: Final = "EVIDENCE_ONLY"
@@ -34,6 +35,7 @@ class ObservableDigestEvidenceConsumerV1:
     target_id: Final = TARGET_ID
     resolver_profile: Final = RESOLVER_PROFILE
     namespace_scope: Final = NAMESPACE_SCOPE
+    locator_prefix: Final = LOCATOR_PREFIX
     activation_configuration_id: Final = ACTIVATION_CONFIGURATION_ID
     default_enabled: Final = DEFAULT_ENABLED
     result_role: Final = RESULT_ROLE
