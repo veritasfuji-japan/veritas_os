@@ -54,7 +54,7 @@ def test_all_activation_gates_are_present_and_not_falsely_closed() -> None:
     assert status_by_id == {
         "AER-01": "CLOSED_PASS",
         "AER-02": "CLOSED_PASS",
-        "AER-03": "NOT_DEFINED",
+        "AER-03": "PROOF_PENDING_EXACT_MAIN",
         "AER-04": "NOT_PROVEN",
         "AER-05": "NOT_PROVEN",
         "AER-06": "NOT_PROVEN",
