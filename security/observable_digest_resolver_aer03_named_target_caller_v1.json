@@ -10,9 +10,10 @@
     "caller_identity": "veritas_os.audit.observable_digest_evidence_consumer:ObservableDigestEvidenceConsumerV1",
     "caller_id_hash_derivation": "sha256(UTF-8 exact caller_identity)",
     "resolver_profile": "separate_store_readonly_v1",
-    "namespace_scope": "separate_store://wat_observables",
+    "namespace_scope": "wat_observables",
     "activation_configuration_id": "observable_digest_evidence_only_activation_v1",
-    "default_enabled": false
+    "default_enabled": false,
+    "locator_prefix": "separate_store://wat_observables/"
   },
   "forbidden_semantics": {
     "production_runtime_wiring": false,
