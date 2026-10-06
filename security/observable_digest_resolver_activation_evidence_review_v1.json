@@ -24,9 +24,9 @@
     "behavior_activated": false,
     "activation_gate": "BLOCKED",
     "production_runtime_callers_known": 0,
-    "production_runtime_reachability": "SOURCE_LEVEL_ISOLATED_PENDING_CI_ASSERTION",
-    "activation_target": "UNDEFINED",
-    "authorized_runtime_caller": "UNDEFINED",
+    "production_runtime_reachability": "SOURCE_LEVEL_ISOLATED_AER02_CLOSED",
+    "activation_target": "RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1",
+    "authorized_runtime_caller": "NAMED_NOT_WIRED",
     "snapshot_supplier": "UNDEFINED",
     "consumer_semantics": "NOT_PROVEN",
     "explicit_activation_authorization": "NOT_GRANTED",
@@ -173,15 +173,20 @@
     {
       "id": "AER-03",
       "name": "NAMED_ACTIVATION_TARGET_AND_CALLER",
-      "status": "NOT_DEFINED",
-      "current_evidence": [],
-      "missing_evidence": [
-        "exact production or controlled runtime caller module",
-        "caller identity / caller_id_hash provenance",
-        "exact namespace scope",
-        "exact activation configuration"
+      "status": "PROOF_PENDING_EXACT_MAIN",
+      "current_evidence": [
+        "target_id RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1 is frozen",
+        "named caller module veritas_os.audit.observable_digest_evidence_consumer and component ObservableDigestEvidenceConsumerV1 are frozen",
+        "caller_id_hash provenance is deterministic SHA-256 over the exact UTF-8 caller identity",
+        "resolver profile separate_store_readonly_v1 and namespace separate_store://wat_observables are frozen",
+        "activation configuration observable_digest_evidence_only_activation_v1 is default-disabled",
+        "named caller is identity-only and contains no resolver import/call; actual runtime wiring remains absent"
       ],
-      "closure_condition": "One exact evidence-only activation target and caller are named, scope-pinned, reviewable, and default-disabled."
+      "missing_evidence": [
+        "exact-main proof run and artifact",
+        "independent AER-03 closure determination"
+      ],
+      "closure_condition": "One exact evidence-only activation target and caller are named, scope-pinned, reviewable, default-disabled, and proven on exact merged main without adding resolver runtime wiring."
     },
     {
       "id": "AER-04",
