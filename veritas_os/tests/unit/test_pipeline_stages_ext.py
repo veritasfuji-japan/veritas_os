@@ -2953,17 +2953,12 @@ async def test_self_healing_keeps_query_and_moves_payload_to_context_and_extras(
     monkeypatch.setattr(p, "append_trust_log", lambda *_a, **_k: None)
     monkeypatch.setattr(p, "_check_required_modules", lambda: None)
 
-    original_import_module = importlib.import_module
+    # stage_core_execute receives the injected kernel via p.veritas_core.
+    # Patching importlib.import_module does not affect this injection boundary.
+    class _FakeKernel:
+        decide = object()
 
-    def _fake_import_module(name, package=None):
-        if name == "veritas_os.core.kernel":
-            class _KernelModule:
-                decide = object()
-
-            return _KernelModule()
-        return original_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+    monkeypatch.setattr(p, "veritas_core", _FakeKernel())
 
     req = DecideReqModelDump()
 
