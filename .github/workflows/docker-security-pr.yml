@@ -1,0 +1,43 @@
+name: Docker Security PR
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - veritas_os/requirements.txt
+      - .github/workflows/docker-security-pr.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build local image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          provenance: false
+          sbom: false
+          tags: veritas-os-pr:${{ github.sha }}
+
+      - name: Enforce Trivy gate (actionable criticals only)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: veritas-os-pr:${{ github.sha }}
+          format: table
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
