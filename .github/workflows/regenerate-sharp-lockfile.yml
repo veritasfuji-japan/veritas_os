@@ -1,0 +1,29 @@
+name: Regenerate pnpm lockfile for sharp security fix
+on:
+  pull_request:
+    paths:
+      - package.json
+      - .github/workflows/regenerate-sharp-lockfile.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --lockfile-only --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-pnpm-lock
+          path: pnpm-lock.yaml
+          retention-days: 7
