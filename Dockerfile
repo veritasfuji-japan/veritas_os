@@ -33,6 +33,7 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         libgnutls30=3.7.9-2+deb12u7 \
+        perl-base=5.36.0-7+deb12u4 \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir --upgrade "pip>=24.3" "setuptools>=78.1.1" "wheel>=0.46.2"
 
