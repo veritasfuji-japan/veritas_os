@@ -26,7 +26,7 @@
     "production_runtime_callers_known": 0,
     "production_runtime_reachability": "SOURCE_LEVEL_ISOLATED_AER02_CLOSED",
     "activation_target": "RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1",
-    "authorized_runtime_caller": "NAMED_NOT_WIRED",
+    "authorized_runtime_caller": "NOT_AUTHORIZED_NAMED_NOT_WIRED",
     "snapshot_supplier": "UNDEFINED",
     "consumer_semantics": "NOT_PROVEN",
     "explicit_activation_authorization": "NOT_GRANTED",
@@ -54,7 +54,7 @@
     "direct_bind_authorization_use": false,
     "direct_execution_permission_use": false,
     "default_state": "DISABLED",
-    "note": "The exact caller/consumer is intentionally not named yet; therefore activation is not currently justifiable."
+    "note": "The exact evidence-only caller is named by AER-03 but remains unauthorized, default-disabled, and unwired; activation is not currently justifiable."
   },
   "gates": [
     {
@@ -178,7 +178,7 @@
         "target_id RESOLVER_EVIDENCE_ONLY_ACTIVATION_V1 is frozen",
         "named caller module veritas_os.audit.observable_digest_evidence_consumer and component ObservableDigestEvidenceConsumerV1 are frozen",
         "caller_id_hash provenance is deterministic SHA-256 over the exact UTF-8 caller identity",
-        "resolver profile separate_store_readonly_v1 and namespace separate_store://wat_observables are frozen",
+        "resolver profile separate_store_readonly_v1, exact namespace wat_observables, and locator prefix separate_store://wat_observables/ are frozen",
         "activation configuration observable_digest_evidence_only_activation_v1 is default-disabled",
         "named caller is identity-only and contains no resolver import/call; actual runtime wiring remains absent"
       ],

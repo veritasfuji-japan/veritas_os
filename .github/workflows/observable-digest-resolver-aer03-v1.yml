@@ -1,0 +1,59 @@
+name: Observable Digest Resolver AER-03 Named Target Caller V1
+
+on:
+  pull_request:
+    paths:
+      - "security/observable_digest_resolver_aer03_named_target_caller_v1.json"
+      - "security/observable_digest_resolver_activation_evidence_review_v1.json"
+      - "veritas_os/audit/observable_digest_evidence_consumer.py"
+      - "veritas_os/tests/test_observable_digest_resolver_aer03_named_target_caller.py"
+      - "scripts/quality/check_observable_digest_resolver_aer03_v1.py"
+      - ".github/workflows/observable-digest-resolver-aer03-v1.yml"
+  push:
+    branches: [main]
+    paths:
+      - "security/observable_digest_resolver_aer03_named_target_caller_v1.json"
+      - "security/observable_digest_resolver_activation_evidence_review_v1.json"
+      - "veritas_os/audit/observable_digest_evidence_consumer.py"
+      - "veritas_os/tests/test_observable_digest_resolver_aer03_named_target_caller.py"
+      - "scripts/quality/check_observable_digest_resolver_aer03_v1.py"
+      - ".github/workflows/observable-digest-resolver-aer03-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aer03-named-target-caller:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt pytest pytest-asyncio
+      - name: Run AER-03 exact target/caller proof
+        run: PYTHONPATH=. python scripts/quality/check_observable_digest_resolver_aer03_v1.py
+      - name: Run focused AER-03 tests
+        run: PYTHONPATH=. python -m pytest -q veritas_os/tests/test_observable_digest_resolver_aer03_named_target_caller.py
+      - name: Bind artifact to exact tested SHA
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("artifacts/observable-digest-resolver-aer03-v1/proof-report.json").read_text())
+          assert report["tested_sha"] == "${{ github.sha }}"
+          assert report["result"] == "PASS"
+          assert report["proof_status"] == "PENDING_INDEPENDENT_CLOSURE"
+          assert all(report["invariants"].values())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: observable-digest-resolver-aer03-v1-${{ github.sha }}
+          path: artifacts/observable-digest-resolver-aer03-v1/*
+          retention-days: 90
