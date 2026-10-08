@@ -601,9 +601,16 @@ jobs:
       - name: Select duration-balanced test shard
         run: |
           set -euxo pipefail
+          # Keep the established Python 3.11 seed unchanged. Python 3.12
+          # uses its own exact-main, coverage-instrumented JUnit timings.
+          duration_seed="scripts/ci/pytest-file-durations.json"
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            duration_seed="scripts/ci/pytest-file-durations-py312.json"
+          fi
           python scripts/ci/select_pytest_shard.py \
             --shard-index "${{ matrix.shard }}" \
             --shard-count "${PYTEST_SHARD_COUNT}" \
+            --durations "${duration_seed}" \
             > pytest-files.txt
           test -s pytest-files.txt
           echo "Selected $(wc -l < pytest-files.txt) test files."
