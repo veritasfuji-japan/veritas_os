@@ -149,3 +149,24 @@ def test_real_human_approval_module_collision_is_separated() -> None:
         avoid_duplicate_test_basenames=True,
     )
     assert all(len(shard) == 1 for shard in shards)
+
+
+def test_current_py312_corpus_is_complete_and_import_collision_free() -> None:
+    """Exercise the actual multi-root corpus, not only synthetic fixtures."""
+    from scripts.ci.select_pytest_shard import DEFAULT_ROOTS, load_historical_durations
+
+    files = discover_test_files(DEFAULT_ROOTS)
+    durations = load_historical_durations(
+        Path("scripts/ci/pytest-file-durations-py312.json")
+    )
+    shards = partition_test_files(
+        files,
+        shard_count=8,
+        historical=durations,
+        avoid_duplicate_test_basenames=True,
+    )
+    flattened = [file for shard in shards for file in shard]
+    assert len(flattened) == len(set(flattened)) == len(files)
+    assert set(flattened) == set(files)
+    assert all(shards)
+    assert all(len({file.name for file in shard}) == len(shard) for shard in shards)
