@@ -63,6 +63,7 @@ def partition_test_files(
     *,
     shard_count: int,
     historical: Mapping[str, float],
+    avoid_duplicate_test_basenames: bool = False,
 ) -> list[list[Path]]:
     """Greedily balance files using deterministic longest-processing-time order."""
     if shard_count < 1:
@@ -72,6 +73,7 @@ def partition_test_files(
 
     shards: list[list[Path]] = [[] for _ in range(shard_count)]
     loads = [0.0] * shard_count
+    assigned_basenames: list[set[str]] = [set() for _ in range(shard_count)]
     ordered = sorted(
         files,
         key=lambda path: (
@@ -81,12 +83,24 @@ def partition_test_files(
     )
 
     for path in ordered:
-        shard_index = min(
-            range(shard_count),
-            key=lambda index: (loads[index], index),
-        )
+        # pytest's default import mode may import tests from different
+        # directories under the same unqualified module basename. A single
+        # shard must not collect both, or pytest raises an import mismatch.
+        eligible = [
+            index
+            for index in range(shard_count)
+            if not avoid_duplicate_test_basenames
+            or path.name not in assigned_basenames[index]
+        ]
+        if not eligible:
+            raise ValueError(
+                f"cannot distribute duplicate test filename {path.name!r} "
+                f"across {shard_count} shards without a collection collision"
+            )
+        shard_index = min(eligible, key=lambda index: (loads[index], index))
         shards[shard_index].append(path)
         loads[shard_index] += estimated_duration(path, historical)
+        assigned_basenames[shard_index].add(path.name)
 
     for shard in shards:
         shard.sort(key=lambda path: path.as_posix())
@@ -97,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--shard-index", type=int, required=True, help="1-based shard")
     parser.add_argument("--shard-count", type=int, required=True)
+    parser.add_argument(
+        "--avoid-duplicate-test-basenames",
+        action="store_true",
+        help="assign tests with the same filename to separate shards",
+    )
     parser.add_argument(
         "--durations",
         type=Path,
@@ -125,6 +144,7 @@ def main() -> int:
             files,
             shard_count=args.shard_count,
             historical=durations,
+            avoid_duplicate_test_basenames=args.avoid_duplicate_test_basenames,
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise SystemExit(str(exc)) from exc
