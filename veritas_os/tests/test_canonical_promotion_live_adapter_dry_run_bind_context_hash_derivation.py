@@ -6,6 +6,7 @@ import ast
 import inspect
 import json
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 import pytest
 
@@ -23,10 +24,25 @@ from veritas_os.policy.canonical_promotion_live_adapter_dry_run_bind_context_has
 )
 from veritas_os.tests.test_canonical_promotion_live_adapter_dry_run_fresh_verified_source_gate import (
     VERIFIED_AT as SOURCE_AT,
-    _packet as source_packet,
+    _packet as _build_source_packet,
 )
 
 DERIVED_AT = SOURCE_AT + timedelta(seconds=1)
+
+
+@lru_cache(maxsize=1)
+def _baseline_source_packet():
+    """Build the trusted *test fixture* once; never cache production verification."""
+    return _build_source_packet()
+
+
+def source_packet(*, source=None, verified_at=SOURCE_AT):
+    """Return an isolated fixture; altered source/timestamps still build afresh."""
+    if source is None and verified_at == SOURCE_AT:
+        # Deep copy prevents any test from mutating the cached Pydantic
+        # fixture's nested dictionaries or evidence lists across test cases.
+        return _baseline_source_packet().model_copy(deep=True)
+    return _build_source_packet(source=source, verified_at=verified_at)
 
 
 def _packet(*, source=None, derived_at=DERIVED_AT):
@@ -42,6 +58,23 @@ def _tamper_source(path: tuple[str, ...], value):
         target = target[key]
     target[path[-1]] = value
     return raw
+
+
+def test_cached_fixture_isolated_and_still_fails_closed_on_tamper():
+    """A shared setup must never turn into trusted execution evidence."""
+    first = source_packet()
+    second = source_packet()
+    assert first == second
+    assert first is not second
+    assert first.fresh_verified_source_gate_context is not second.fresh_verified_source_gate_context
+
+    modified = first.model_dump(mode="json")
+    modified["fresh_verified_source_gate_status"] = "tampered"
+    assert second.fresh_verified_source_gate_status != "tampered"
+    with pytest.raises(
+        CanonicalPromotionLiveAdapterDryRunBindContextHashDerivationError
+    ):
+        _packet(source=modified)
 
 
 def test_valid_source_round_trips_and_preserves_exact_typed_fields():

@@ -6,6 +6,7 @@ import base64
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -63,13 +64,28 @@ from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.tests.test_live_adapter_dry_run_bind_authorization_gate_review import (
     RECORDED_AT as SOURCE_RECORDED_AT,
     _decision as gate_decision,
-    _packet as source_packet,
+    _packet as _build_source_packet,
 )
 
 AUTHORIZED_AT = SOURCE_RECORDED_AT + timedelta(seconds=1)
 VERIFICATION_NOW = AUTHORIZED_AT + timedelta(seconds=1)
 VALID_FROM = AUTHORIZED_AT
 VALID_UNTIL = AUTHORIZED_AT + timedelta(minutes=5)
+
+
+@lru_cache(maxsize=1)
+def _baseline_gate_source_packet():
+    """Create only the unchanged synthetic gate fixture once per test process."""
+    return _build_source_packet()
+
+
+def source_packet(*, source=None, decision=None, semantic_match=False):
+    """Return an isolated fixture; mutations and alternate decisions stay fresh."""
+    if source is None and decision is None and semantic_match is False:
+        return _baseline_gate_source_packet().model_copy(deep=True)
+    return _build_source_packet(
+        source=source, decision=decision, semantic_match=semantic_match
+    )
 
 
 class _FreshRevocationChecker:
@@ -491,6 +507,39 @@ def _build(*, human_required: bool = False):
         authorization_issuer_signer=issuer_signer,
     )
     return artifact, governance, trust
+
+
+def test_cached_gate_fixture_is_isolated_and_rejects_failed_review(monkeypatch):
+    """Caching test setup must not weaken the production source trust boundary."""
+    monkeypatch.setenv("VERITAS_POSTURE", "secure")
+    first = source_packet()
+    second = source_packet()
+    assert first == second
+    assert first is not second
+    assert (
+        first.authority_evidence_reference_bundle
+        is not second.authority_evidence_reference_bundle
+    )
+
+    tampered = first.model_dump(mode="json")
+    tampered["execution_intent_hash"] = "0" * 64
+    assert second.execution_intent_hash != "0" * 64
+    governance = _governance_inputs()
+    private_key, trust, issuer_signer = _bind_signature_setup()
+    with pytest.raises(LiveAdapterBindAuthorizationError):
+        build_live_adapter_bind_authorization_artifact(
+            tampered,
+            _signed_decision(private_key),
+            VALID_FROM,
+            VALID_UNTIL,
+            governance_inputs=governance,
+            trust_inputs=trust,
+            authorization_issuer_signer=issuer_signer,
+        )
+
+    rejected = source_packet(decision=gate_decision(passed=False))
+    assert rejected.fail_closed
+    assert rejected.gate_review_state != second.gate_review_state
 
 
 def test_real_authorization_issues_without_bind_invocation(monkeypatch):
