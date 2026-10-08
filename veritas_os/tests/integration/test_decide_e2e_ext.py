@@ -798,7 +798,9 @@ async def test_run_decide_pipeline_kernel_decide_missing_contract(monkeypatch, p
 
     # kernel モジュールは存在するが decide が無い、という状態を作る
     m_kernel = types.ModuleType("veritas_os.core.kernel")
-    sys.modules["veritas_os.core.kernel"] = m_kernel
+    # Isolate the intentionally broken kernel stub to this test only.
+    # Otherwise later shard tests import the fake module from sys.modules.
+    monkeypatch.setitem(sys.modules, "veritas_os.core.kernel", m_kernel)
 
     body = {"query": "kernel missing decide", "context": {"user_id": "u-kernel"}}
     req = DummyReqModel(body=body)
