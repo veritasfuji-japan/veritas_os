@@ -9,7 +9,10 @@ from collections import Counter
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from validate_pytest_slow_junit import validate_junit
+if __package__:
+    from .validate_pytest_slow_junit import validate_junit
+else:
+    from validate_pytest_slow_junit import validate_junit
 
 
 def verify_shards(root: Path, *, shard_count: int, min_cases: int) -> tuple[int, int]:
