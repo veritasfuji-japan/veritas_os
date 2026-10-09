@@ -17,7 +17,7 @@
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Release Gate](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
+[![Coverage: historical March 2026 CI snapshot](https://img.shields.io/badge/coverage%20Mar%202026-87%25-lightgrey)](docs/ja/validation/coverage-report.md)
 ![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-blue)
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
@@ -29,6 +29,25 @@
 **[Execution Governance Paper](https://zenodo.org/records/22844531)**
 
 </div>
+
+---
+
+## Evidence snapshot and enterprise evaluation (2026-10-09)
+
+VERITAS separates **implemented components**, **reproducible bounded proofs**, **measured benchmark outcomes**, and **customer-specific production validation**. Each claim below is tied to its own source and scope; these are **not interchangeable proof levels**.
+
+| Evidence track | What the evidence supports | Verification and limits |
+| --- | --- | --- |
+| **Controlled Decision-to-Effect E2E** | Reproducible governed execution with real TLS transport, PostgreSQL-backed records, one-time authorization consumption, an explicit unknown-effect path, and read-only reconciliation. | [E2E proof guide](artifacts/real-decision-to-effect-e2e/README.md). Business actions, credentials and effects are **controlled synthetic fixtures**, not live bank/customer effects. |
+| **BCBR V1 bypass-resistance closure** | A **recorded Independent Auditor determination of PROVEN**, **only within the frozen bounded BCBR V1 domain and stated assumptions**, at VERITAS OS SHA `5f4da777c488c917b30fa556da54010a604f4154`. The reviewed effect boundaries were registered Webhook ACTION / COMPENSATION and native-v2 Sandbox ACTION. | [Auditor closure record](docs/en/architecture/bind-coverage-bypass-resistance-v1-closure-record.md). Retained Builder `proof_status=NOT_PROVEN` remains unchanged. **This is not an independent audit of current `main`, universal Bind coverage, or certification.** |
+| **AgentDojo banking — Final 128 / V13** | A completed, paired **real-provider benchmark**: Arm A (RCC/REVAS upstream) **93/128 legitimate tasks; 20/128 attacker objectives**. Arm B (+VERITAS) **64/128 legitimate tasks; 0/128 attacker objectives**. Lower attacker-objective success is safer. | [Frozen V13 result](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark/blob/e3996c9a086a00da7ae6b1036bf7fbf5ef12bcff/contracts/AGENTDOJO_FINAL_128_V13_TERMINAL_DISPOSITION_v1.json) · [Run 37585673492](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark/actions/runs/37585673492). Exact executed benchmark source SHA `2454ba69818d1a46b910f33fab9b57017cd7a83e`. This was a **previously exposed synthetic corpus**, not held-out or third-party validation. The **29-case net utility loss** must not be concealed. |
+| **Enterprise pilot readiness** | [One-Day PoC evidence pack](docs/en/poc/one-day-poc-evidence-pack.md), [reviewer entry point](docs/REVIEWER_ENTRYPOINT.md), and [implementation matrix](docs/en/validation/current-implementation-matrix.md) support a bounded technical evaluation. | These are **evaluation materials**, not proof of a completed customer deployment, paid pilot, SLA, external authority-root integration, or regulatory certification. |
+
+**Choose your next step:** [Technical review](docs/REVIEWER_ENTRYPOINT.md) · [Architecture and current limits](docs/en/validation/current-implementation-matrix.md) · [Repeatable E2E](artifacts/real-decision-to-effect-e2e/README.md) · [AgentDojo benchmark](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark) · [Pilot evaluation criteria](docs/en/poc/one-day-poc-evidence-pack.md) · [Enterprise value brief](docs/en/positioning/enterprise-value-brief.md).
+
+For a customer-specific evaluation or potential paid PoC, propose a **narrow effect boundary** (such as a particular API mutation or approval-gated action), relevant identity/credential sources, a fail-closed bypass test, reviewer-visible receipts, and a reconciliation plan. **Scope, fees, access and safety conditions require separate agreement**; a PoC is not a production deployment. [Contact](#contact) · [Commercial-use license](#license).
+
+**Evidence discipline:** A successful test run is evidence for its **exact SHA, case population and assumptions**. It is not evidence that every later commit, effect path, model, environment or customer deployment has been audited. The displayed **87% coverage** is a **2026-03-24 CI snapshot**, **not current-head coverage** ([historical measurement](docs/ja/validation/coverage-report.md)).
 
 ---
 
