@@ -944,13 +944,25 @@ jobs:
       - name: Run slow tests (if any)
         run: |
           set -euxo pipefail
+          mkdir -p test-reports
           status=0
-          pytest -q veritas_os/tests -m slow --durations=20 --tb=short || status=$?
+          pytest -q veritas_os/tests -m slow --durations=20 --tb=short --junitxml=test-reports/pytest-slow.xml || status=$?
           if [ "$status" -eq 5 ]; then
             echo "No slow tests were selected."
             exit 0
           fi
           exit "$status"
+
+      - name: Validate slow JUnit evidence
+        run: python scripts/ci/validate_pytest_slow_junit.py test-reports/pytest-slow.xml
+
+      - name: Upload slow JUnit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-slow-py312
+          path: test-reports/pytest-slow.xml
+          if-no-files-found: error
 
   # ============================================================
   # [Tier 1] Frontend quality gates: lint/test/e2e を Python 側同様に matrix 化
