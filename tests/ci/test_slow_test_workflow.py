@@ -31,7 +31,7 @@ def test_slow_suite_preserves_marked_collection_and_failure_propagation() -> Non
     assert not run.get("continue-on-error", False)
     cmd = run["run"]
     assert "set -euxo pipefail" in cmd
-    assert "pytest -q veritas_os/tests -m slow" in cmd
+    assert "python -m pytest -q veritas_os/tests -m slow" in cmd
     assert "-p scripts.ci.slow_pytest_shard" in cmd
     assert "--slow-shard-index=\"${{ matrix.shard }}\"" in cmd
     assert "--slow-shard-count=4" in cmd
