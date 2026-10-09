@@ -17,7 +17,7 @@
 [![Release Gate](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](docs/ja/validation/coverage-report.md)
+[![Coverage：2026年3月の過去のCI測定](https://img.shields.io/badge/coverage%20Mar%202026-87%25-lightgrey)](docs/ja/validation/coverage-report.md)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README EN](https://img.shields.io/badge/README-English-1d4ed8.svg)](README.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
@@ -33,6 +33,25 @@
 **Version**: 2.0.0  
 **Release Status**: ベータ版  
 **Author**: Takeshi Fujishita
+
+---
+
+## 証拠の要約と企業向け評価（2026-10-09時点）
+
+VERITASは、**実装済み機能**、**条件・範囲を固定した証明**、**ベンチマークの実測**、**顧客本番環境での検証**を分けて扱います。以下は各資料に記載された範囲に限定した結果であり、相互に同一の「証明済み」状態ではありません。
+
+| 証拠の系列 | 確認された内容 | 参照先と限界 |
+| --- | --- | --- |
+| **Controlled Decision-to-Effect E2E** | 実TLS通信、PostgreSQLへの保存、一回限りの認可消費、結果不明（unknown-effect）時の扱い、読み取り専用の結果照合を含む、再現可能な制御下E2E。 | [E2E証拠ガイド](artifacts/real-decision-to-effect-e2e/README.md)。業務アクション・認証情報・外部作用は**制御された模擬データ**であり、顧客の実銀行操作ではありません。 |
+| **BCBR V1迂回耐性** | VERITAS OSの固定SHA `5f4da777c488c917b30fa556da54010a604f4154` において、**明示された限定範囲と前提条件に限ってPROVENとするIndependent Auditorの判断が記録されています**。対象は登録済みWebhook ACTION・COMPENSATION、native-v2 Sandbox ACTIONです。 | [監査後の確定記録](docs/en/architecture/bind-coverage-bypass-resistance-v1-closure-record.md)。元のBuilderの`proof_status=NOT_PROVEN`は維持。**現在のmain全体の独立監査、全Bind経路の保証、第三者認証ではありません。** |
+| **AgentDojo Banking — Final 128 / V13** | 実プロバイダーを用いた128ペアの比較：Arm A（RCC/REVAS上流処理）は**正当タスク93/128、攻撃目的達成20/128**。Arm B（＋VERITAS）は**正当タスク64/128、攻撃目的達成0/128**。攻撃目的達成は低いほど安全です。 | [V13凍結結果](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark/blob/e3996c9a086a00da7ae6b1036bf7fbf5ef12bcff/contracts/AGENTDOJO_FINAL_128_V13_TERMINAL_DISPOSITION_v1.json) · [Run 37585673492](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark/actions/runs/37585673492)。実行元SHA `2454ba69818d1a46b910f33fab9b57017cd7a83e`。**開発で既知の模擬コーパス**であり、未使用データでの汎化や第三者検証ではありません。**正当タスク成功の差（純減29件）も隠しません。** |
+| **企業向けPoC評価準備** | [One-Day PoC証拠パック](docs/en/poc/one-day-poc-evidence-pack.md)、[レビュアー向け入口](docs/REVIEWER_ENTRYPOINT.md)、[実装状態マトリクス](docs/en/validation/current-implementation-matrix.md)を使い、限定した技術評価を設計できます。 | **評価用の資料**であり、実顧客での本番展開、有償PoCの成約、SLA、実際の外部権限源との接続、認証取得を示しません。 |
+
+**用途から選ぶ：** [技術レビュー](docs/REVIEWER_ENTRYPOINT.md) · [実装範囲と制約](docs/en/validation/current-implementation-matrix.md) · [E2E実証](artifacts/real-decision-to-effect-e2e/README.md) · [AgentDojoベンチマーク](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark) · [PoCの評価基準](docs/en/poc/one-day-poc-evidence-pack.md) · [企業向け価値説明](docs/en/positioning/enterprise-value-brief.md)。
+
+企業向けの技術評価や有償PoCの検討では、特定のAPI操作などの**限定した実行境界**を選び、本人性・権限源・認証情報、迂回時のFail-Closed、証拠となるReceipt、外部作用の結果照合を明確にします。**対象範囲・費用・アクセス権・安全条件は別途合意が必要**です。PoCは本番稼働の証明ではありません。[連絡先](#連絡先) · [商用ライセンス](#license)。
+
+**証明範囲の原則：** テスト成功は**固定SHA・対象ケース・前提条件の範囲**でのみ解釈します。以降の全コミットやすべての実行経路、未知モデル・顧客環境を証明するものではありません。掲載する**Coverage 87%**は**2026-03-24時点のCI測定**であり、現在のmainの実測値ではありません（[過去の測定資料](docs/ja/validation/coverage-report.md)）。
 
 ---
 
