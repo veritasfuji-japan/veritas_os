@@ -890,7 +890,7 @@ jobs:
 
 
   test-slow:
-    name: test-slow (py3.12)
+    name: test-slow shard (py3.12, shard ${{ matrix.shard }}/4)
     needs: [lint, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     # test-slow installs the full requirements.txt which includes heavy optional
@@ -900,6 +900,12 @@ jobs:
     # Allow 60 minutes for installation and the full suite, retaining a bounded
     # timeout and normal failure propagation. Revisit using completed durations.
     timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [1, 2, 3, 4]
 
     env:
       PYTHONUNBUFFERED: "1"
@@ -945,13 +951,12 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p test-reports
-          status=0
-          pytest -q veritas_os/tests -m slow --durations=20 --tb=short --junitxml=test-reports/pytest-slow.xml || status=$?
-          if [ "$status" -eq 5 ]; then
-            echo "No slow tests were selected."
-            exit 0
-          fi
-          exit "$status"
+          python -m pytest -q veritas_os/tests -m slow \
+            -p scripts.ci.slow_pytest_shard \
+            --slow-shard-index="${{ matrix.shard }}" \
+            --slow-shard-count=4 \
+            --durations=20 --tb=short \
+            --junitxml=test-reports/pytest-slow.xml
 
       - name: Validate slow JUnit evidence
         run: python scripts/ci/validate_pytest_slow_junit.py test-reports/pytest-slow.xml
@@ -960,9 +965,39 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-slow-py312
-          path: test-reports/pytest-slow.xml
+          name: pytest-slow-py312-shard-${{ matrix.shard }}
+          path: |
+            test-reports/pytest-slow.xml
+            test-reports/slow-shard-manifest.json
           if-no-files-found: error
+
+  # Preserve the previous required check context while independently proving
+  # every collected slow-marked test was run exactly once across four shards.
+  test-slow-verify:
+    name: test-slow (py3.12)
+    needs: [test-slow]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all slow shard evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pytest-slow-py312-shard-*
+          path: test-reports/slow-shards
+
+      - name: Verify complete, disjoint slow suite
+        env:
+          SHARD_RESULT: ${{ needs.test-slow.result }}
+        run: |
+          set -euo pipefail
+          test "$SHARD_RESULT" = "success"
+          python scripts/ci/validate_pytest_slow_shards.py \
+            test-reports/slow-shards --shard-count 4 --min-cases 948
 
   # ============================================================
   # [Tier 1] Frontend quality gates: lint/test/e2e を Python 側同様に matrix 化
