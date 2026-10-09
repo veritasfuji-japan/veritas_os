@@ -951,7 +951,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p test-reports
-          pytest -q veritas_os/tests -m slow \
+          python -m pytest -q veritas_os/tests -m slow \
             -p scripts.ci.slow_pytest_shard \
             --slow-shard-index="${{ matrix.shard }}" \
             --slow-shard-count=4 \
