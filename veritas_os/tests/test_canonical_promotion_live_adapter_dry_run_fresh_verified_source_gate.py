@@ -6,6 +6,7 @@ import ast
 import inspect
 import json
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 import pytest
 
@@ -21,10 +22,25 @@ from veritas_os.policy.canonical_promotion_live_adapter_dry_run_fresh_verified_s
 )
 from veritas_os.tests.test_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_review import (
     RECORDED_AT as SOURCE_AT,
-    _packet as source_packet,
+    _packet as _build_source_packet,
 )
 
 VERIFIED_AT = SOURCE_AT + timedelta(seconds=1)
+
+
+@lru_cache(maxsize=1)
+def _baseline_gate_review_packet():
+    """Build an unchanged synthetic source fixture once, never a verifier result."""
+    return _build_source_packet()
+
+
+def source_packet(*, passed=True, decision=None, recorded_at=SOURCE_AT):
+    """Isolate default fixtures; altered decisions and timestamps rebuild afresh."""
+    if passed is True and decision is None and recorded_at == SOURCE_AT:
+        return _baseline_gate_review_packet().model_copy(deep=True)
+    return _build_source_packet(
+        passed=passed, decision=decision, recorded_at=recorded_at
+    )
 
 
 def _packet(*, source=None, verified_at=VERIFIED_AT):
@@ -40,6 +56,28 @@ def _tamper_source(path: tuple[str, ...], value):
         target = target[key]
     target[path[-1]] = value
     return raw
+
+
+def test_cached_gate_fixture_isolated_and_negative_paths_stay_fail_closed():
+    first = source_packet()
+    second = source_packet()
+    assert first == second
+    assert first is not second
+    assert (
+        first.bind_authorization_gate_review_context
+        is not second.bind_authorization_gate_review_context
+    )
+
+    tampered = first.model_dump(mode="json")
+    tampered["gate_review_state"] = "tampered"
+    assert second.gate_review_state != "tampered"
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunFreshVerifiedSourceGateError):
+        _packet(source=tampered)
+
+    rejected = source_packet(passed=False)
+    assert rejected.fail_closed
+    with pytest.raises(CanonicalPromotionLiveAdapterDryRunFreshVerifiedSourceGateError):
+        _packet(source=rejected)
 
 
 def test_valid_pass_source_round_trips_and_preserves_exact_typed_fields():
