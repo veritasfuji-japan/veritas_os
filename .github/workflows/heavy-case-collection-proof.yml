@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euxo pipefail
           checkout_sha="$(git rev-parse HEAD)"
-          python scripts/ci/validate_heavy_case_collection.py \
+          python -m scripts.ci.validate_heavy_case_collection \
             test-reports/heavy-case-collection.json \
             --expected-sha="${checkout_sha}"
 
