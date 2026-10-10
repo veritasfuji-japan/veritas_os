@@ -40,6 +40,16 @@ def test_complete_disjoint_deterministic_for_pinned_two_modules() -> None:
     ) <= 2
 
 
+def test_each_manifest_owns_an_independent_full_universe_snapshot() -> None:
+    """Mutating one manifest must never rewrite the other shard baselines."""
+    plans = make_case_shard_manifests(_baseline_cases())
+    original_peer = list(plans[1]["full_nodeids"])
+    plans[0]["full_nodeids"].pop()
+    assert plans[1]["full_nodeids"] == original_peer
+    with pytest.raises(ValueError, match="different full collections"):
+        verify_case_shard_manifests(plans)
+
+
 def test_accepts_new_cases_without_silently_dropping_them() -> None:
     cases = _baseline_cases(first=93, second=79)
     assert verify_case_shard_manifests(make_case_shard_manifests(cases)) == 172
