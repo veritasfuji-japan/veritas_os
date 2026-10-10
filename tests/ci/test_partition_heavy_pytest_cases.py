@@ -44,7 +44,7 @@ def test_each_manifest_owns_an_independent_full_universe_snapshot() -> None:
     """Mutating one manifest must never rewrite the other shard baselines."""
     plans = make_case_shard_manifests(_baseline_cases())
     original_peer = list(plans[1]["full_nodeids"])
-    plans[0]["full_nodeids"].pop()
+    plans[2]["full_nodeids"].pop()
     assert plans[1]["full_nodeids"] == original_peer
     with pytest.raises(ValueError, match="different full collections"):
         verify_case_shard_manifests(plans)
@@ -103,6 +103,46 @@ def test_rejects_inconsistent_collection_fingerprint_and_index() -> None:
     altered[1]["shard_index"] = 1
     with pytest.raises(ValueError, match="indices are not distinct"):
         verify_case_shard_manifests(altered)
+
+
+def test_rejects_colluding_manifests_with_shared_shrunk_universe() -> None:
+    """Even internally consistent fabricated manifests must meet pinned floors."""
+    import hashlib
+    import json
+
+    plans = deepcopy(make_case_shard_manifests(_baseline_cases()))
+    removed = f"{HEAVY_MODULES[0]}::test_case_000"
+    for plan in plans:
+        plan["full_nodeids"].remove(removed)
+        if removed in plan["selected_nodeids"]:
+            plan["selected_nodeids"].remove(removed)
+        plan["universe_sha256"] = hashlib.sha256(
+            json.dumps(
+                sorted(plan["full_nodeids"]),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+    with pytest.raises(ValueError, match="case universe below pinned floor"):
+        verify_case_shard_manifests(plans)
+
+
+def test_rejects_consistent_foreign_case_universe() -> None:
+    """A consistent manifest cannot widen the audited two-module domain."""
+    import hashlib
+    import json
+
+    plans = deepcopy(make_case_shard_manifests(_baseline_cases()))
+    added = "tests/foreign.py::test_unaudited"
+    for plan in plans:
+        plan["full_nodeids"].append(added)
+        plan["full_nodeids"].sort()
+        plan["universe_sha256"] = hashlib.sha256(
+            json.dumps(plan["full_nodeids"], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    plans[0]["selected_nodeids"].append(added)
+    with pytest.raises(ValueError, match="out-of-scope"):
+        verify_case_shard_manifests(plans)
 
 
 def test_rejects_invalid_configuration() -> None:
