@@ -1,0 +1,71 @@
+# Additive proof lane only. Does NOT modify the existing test or coverage matrix.
+name: Heavy Case Collection Proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: heavy-case-collection-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  collection-proof:
+    name: heavy-case collection-only proof (py3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout exact workflow commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install existing CI requirements
+        run: |
+          set -euxo pipefail
+          python -m pip install -r veritas_os/requirements-ci.txt
+
+      - name: Collect heavy tests without executing them
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          checkout_sha="$(git rev-parse HEAD)"
+          python -m pytest -q --collect-only -m "not slow" \
+            -p scripts.ci.collect_heavy_cases \
+            --heavy-case-proof-output=test-reports/heavy-case-collection.json \
+            --heavy-case-source-sha="${checkout_sha}" \
+            veritas_os/tests/test_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_review.py \
+            veritas_os/tests/test_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness.py
+
+      - name: Verify complete, disjoint case-ownership proof
+        run: |
+          set -euxo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          python scripts/ci/validate_heavy_case_collection.py \
+            test-reports/heavy-case-collection.json \
+            --expected-sha="${checkout_sha}"
+
+      - name: Publish exact-checkout collection proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heavy-case-collection-py312
+          path: test-reports/heavy-case-collection.json
+          if-no-files-found: warn
