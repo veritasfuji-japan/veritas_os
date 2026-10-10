@@ -123,6 +123,17 @@ def verify_case_shard_manifests(manifests: Iterable[Mapping]) -> int:
         raise ValueError("case universe missing or malformed")
     if len(set(full)) != len(full):
         raise ValueError("case universe contains duplicates")
+    if anchor.get("modules") != list(HEAVY_MODULES):
+        raise ValueError("unrecognized heavy-module proof domain")
+    for module in HEAVY_MODULES:
+        matching = [case for case in full if case.startswith(module + "::")]
+        if len(matching) < BASELINE_MINIMUM[module]:
+            raise ValueError(f"case universe below pinned floor for {module}")
+    if any(
+        not any(case.startswith(module + "::") for module in HEAVY_MODULES)
+        for case in full
+    ):
+        raise ValueError("case universe contains out-of-scope node IDs")
     fingerprint = hashlib.sha256(
         json.dumps(sorted(full), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
