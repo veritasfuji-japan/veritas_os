@@ -89,7 +89,8 @@ def make_case_shard_manifests(
             "shard_index": index + 1,
             "shard_count": shard_count,
             "modules": list(modules),
-            "full_nodeids": universe,
+            # Copy the universe so mutation of one manifest cannot affect peers.
+            "full_nodeids": list(universe),
             "selected_nodeids": sorted(cases),
             "universe_sha256": fingerprint,
         }
