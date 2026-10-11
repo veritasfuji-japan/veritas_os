@@ -105,6 +105,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exact pinned pytest for the independent verifier
+        run: python -m pip install pytest==9.0.3
       - name: Reject any failed prerequisite
         env:
           COLLECT_RESULT: ${{ needs.collect.result }}
