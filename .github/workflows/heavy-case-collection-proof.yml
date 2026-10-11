@@ -62,6 +62,23 @@ jobs:
             test-reports/heavy-case-collection.json \
             --expected-sha="${checkout_sha}"
 
+      - name: Verify prospective Python 3.12 file-to-case ownership
+        run: |
+          set -euxo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          python -m scripts.ci.plan_heavy_case_cutover \
+            test-reports/heavy-case-collection.json \
+            --expected-sha="${checkout_sha}" \
+            --output=test-reports/heavy-case-cutover-preflight.json
+
+      - name: Publish fail-closed cutover preflight plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heavy-case-file-cutover-preflight-py312
+          path: test-reports/heavy-case-cutover-preflight.json
+          if-no-files-found: warn
+
       - name: Publish exact-checkout collection proof
         if: always()
         uses: actions/upload-artifact@v4
