@@ -1,0 +1,135 @@
+# Additive heavy-case real execution proof; original CI matrix remains unchanged.
+name: Heavy Case Execution Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/ci/execute_heavy_cases.py"
+      - "scripts/ci/validate_heavy_case_junit.py"
+      - "tests/ci/test_execute_heavy_cases.py"
+      - ".github/workflows/heavy-case-execution-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heavy-case-execution-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  OPENAI_API_KEY: "DUMMY_FOR_CI"
+  VERITAS_API_KEY: "DUMMY_FOR_CI"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  collect:
+    name: exact-checkout heavy-case collection
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r veritas_os/requirements-ci.txt
+      - name: Collect complete selected universe
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          checkout_sha="$(git rev-parse HEAD)"
+          python -m pytest -q --collect-only -m "not slow" \
+            -p scripts.ci.collect_heavy_cases \
+            --heavy-case-proof-output=test-reports/heavy-case-collection.json \
+            --heavy-case-source-sha="${checkout_sha}" \
+            veritas_os/tests/test_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_review.py \
+            veritas_os/tests/test_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness.py
+          python -m scripts.ci.validate_heavy_case_collection \
+            test-reports/heavy-case-collection.json --expected-sha="${checkout_sha}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heavy-case-collection-py312
+          path: test-reports/heavy-case-collection.json
+          if-no-files-found: warn
+
+  execute:
+    name: actual heavy-case execution (shard ${{ matrix.shard }}/8)
+    needs: collect
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r veritas_os/requirements-ci.txt
+      - name: Execute only owned tests and capture JUnit
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          checkout_sha="$(git rev-parse HEAD)"
+          python -m pytest -q -m "not slow" \
+            -p scripts.ci.execute_heavy_cases \
+            --heavy-exec-shard-index="${{ matrix.shard }}" \
+            --heavy-exec-shard-count=8 \
+            --heavy-exec-source-sha="${checkout_sha}" \
+            --heavy-exec-manifest=test-reports/execution-manifest.json \
+            --junitxml=test-reports/pytest.xml --tb=short \
+            veritas_os/tests/test_canonical_promotion_live_adapter_dry_run_bind_authorization_gate_review.py \
+            veritas_os/tests/test_canonical_promotion_live_adapter_dry_run_final_bind_authorization_readiness.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heavy-case-execution-shard-${{ matrix.shard }}
+          path: |
+            test-reports/execution-manifest.json
+            test-reports/pytest.xml
+          if-no-files-found: warn
+
+  reconcile:
+    name: exact-JUnit heavy-case reconciliation (8/8)
+    needs: [collect, execute]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exact pinned pytest for the independent verifier
+        run: python -m pip install pytest==9.0.3
+      - name: Reject any failed prerequisite
+        env:
+          COLLECT_RESULT: ${{ needs.collect.result }}
+          EXECUTE_RESULT: ${{ needs.execute.result }}
+        run: |
+          set -euxo pipefail
+          test "${COLLECT_RESULT}" = success
+          test "${EXECUTE_RESULT}" = success
+      - uses: actions/download-artifact@v4
+        with:
+          name: heavy-case-collection-py312
+          path: test-reports/collection
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: heavy-case-execution-shard-*
+          path: test-reports/execution
+      - name: Reconcile against exact-JUnit evidence
+        run: |
+          set -euxo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          python -m scripts.ci.validate_heavy_case_junit \
+            test-reports/collection/heavy-case-collection.json \
+            test-reports/execution --expected-sha="${checkout_sha}"
