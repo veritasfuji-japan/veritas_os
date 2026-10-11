@@ -146,7 +146,9 @@ def verify_heavy_execution(
             raise ValueError(f"JUnit testcase ID/outcome mismatch on shard {index}")
 
         seen_ids.update(planned)
-        all_junit.update(actual_junit)
+        # Counter.update(mapping) adds mapping VALUES (e.g. "passed"), not keys.
+        # Count each distinct JUnit identity exactly once instead.
+        all_junit.update(actual_junit.keys())
         passed += sum(outcome == "passed" for outcome in actual_junit.values())
         skipped += sum(outcome == "skipped" for outcome in actual_junit.values())
 
