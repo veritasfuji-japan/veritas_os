@@ -1091,6 +1091,84 @@ def _write_promotion_bundle(bundles_root: Path) -> Path:
     return bundle_dir
 
 
+@pytest.mark.parametrize("operation", ["policy", "promotion"])
+@pytest.mark.parametrize("api_key", ["test-governance-key", "second-governance-key"])
+@pytest.mark.parametrize("role_label", ["admin", "compliance_owner"])
+def test_governance_bind_actor_uses_authenticated_principal(
+    monkeypatch, tmp_path: Path, operation: str, api_key: str, role_label: str,
+) -> None:
+    """Caller labels cannot impersonate the actor recorded by real Bind execution."""
+    from veritas_os.api import auth
+    from veritas_os.policy.bind_core import core as bind_core
+
+    monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([
+        {"key": key, "role": "admin"}
+        for key in ("test-governance-key", "second-governance-key")
+    ]))
+    monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOWED_ROLES", "admin,compliance_owner")
+    intents = []
+    monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", intents.append)
+    monkeypatch.setattr(bind_core, "append_bind_receipt_trustlog", lambda receipt: receipt)
+    headers = {"X-API-Key": api_key, "X-Role": role_label}
+    if operation == "policy":
+        response = client.put(
+            "/v1/governance/policy", headers=headers,
+            json=_approved({"updated_by": "claimed-other-person", "risk_thresholds": {"allow_upper": 0.45}}),
+        )
+    else:
+        bundles_root = tmp_path / "bundles"
+        _write_promotion_bundle(bundles_root)
+        monkeypatch.setenv("VERITAS_POLICY_BUNDLES_ROOT", str(bundles_root))
+        monkeypatch.setenv("VERITAS_POLICY_ACTIVE_POINTER_PATH", str(tmp_path / "active.json"))
+        response = client.post(
+            "/v1/governance/policy-bundles/promote", headers=headers,
+            json={
+                "bundle_id": "bundle-v2", "decision_id": "actor-regression",
+                "request_id": "actor-regression", "policy_snapshot_id": "fixture-policy",
+                "decision_hash": "a" * 64,
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()["bind_outcome"] == "COMMITTED"
+    expected = auth._derive_api_user_id(api_key)
+    assert response.json()["bind_receipt"]["actor_identity"] == expected
+    assert len(intents) == 1
+    assert intents[0].actor_identity == expected
+
+
+@pytest.mark.parametrize("operation", ["policy", "promotion"])
+def test_governance_mutation_refuses_missing_authenticated_principal(
+    monkeypatch, _temp_policy: Path, tmp_path: Path, operation: str,
+) -> None:
+    """Valid key/role alone cannot supply a fabricated fallback actor."""
+    from veritas_os.api import auth
+
+    monkeypatch.setattr(auth, "_bind_authenticated_principal", lambda request, key: None)
+    before = _temp_policy.read_bytes()
+    pointer = tmp_path / "active.json"
+    monkeypatch.setenv("VERITAS_POLICY_ACTIVE_POINTER_PATH", str(pointer))
+    if operation == "policy":
+        response = client.put(
+            "/v1/governance/policy", headers=HEADERS,
+            json=_approved({"risk_thresholds": {"allow_upper": 0.45}}),
+        )
+    else:
+        bundles_root = tmp_path / "bundles"
+        _write_promotion_bundle(bundles_root)
+        monkeypatch.setenv("VERITAS_POLICY_BUNDLES_ROOT", str(bundles_root))
+        response = client.post(
+            "/v1/governance/policy-bundles/promote", headers=HEADERS,
+            json={
+                "bundle_id": "bundle-v2", "decision_id": "missing-actor",
+                "request_id": "missing-actor", "policy_snapshot_id": "fixture-policy",
+                "decision_hash": "a" * 64,
+            },
+        )
+    assert response.status_code == 403
+    assert _temp_policy.read_bytes() == before
+    assert not pointer.exists()
+
+
 def test_governance_policy_bundle_promote_success(monkeypatch, tmp_path: Path) -> None:
     bundles_root = tmp_path / "bundles"
     _write_promotion_bundle(bundles_root)

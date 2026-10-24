@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from veritas_os.api.auth import require_permission
@@ -52,6 +52,14 @@ def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
+
+
+def _authenticated_governance_actor(request: Request) -> str:
+    """Use only the principal attached by successful API authentication."""
+    principal = getattr(request.state, "authenticated_principal_id", None)
+    if not isinstance(principal, str) or not principal.strip() or principal == "anon":
+        raise HTTPException(status_code=403, detail="Authenticated principal required")
+    return principal
 
 
 class BindReceiptListSort(str):
@@ -461,7 +469,7 @@ def governance_get():
     target_type="governance_policy",
     target_path_type="governance_policy_update",
 )
-def governance_put(body: dict):
+def governance_put(body: dict, request: Request):
     """Update the governance policy (partial merge)."""
     # HTTP lineage is evidence metadata, never a trusted Bind-policy override.
     lineage = body.get("policy_lineage")
@@ -470,6 +478,7 @@ def governance_put(body: dict):
             status_code=400,
             content={"ok": False, "error": "policy_lineage_policy_override_forbidden"},
         )
+    actor_identity = _authenticated_governance_actor(request)
     srv = _get_server()
     with trace_step(
         "governance.policy_update.request",
@@ -485,7 +494,6 @@ def governance_put(body: dict):
             previous = srv.get_policy()
             decision_id = str(body.get("decision_id") or uuid4().hex)
             request_id = str(body.get("request_id") or decision_id)
-            actor_identity = str(body.get("updated_by") or "api")
             approval_count = len(body.get("approvals")) if isinstance(body.get("approvals"), list) else 0
             policy_snapshot_id = str(previous.get("updated_at") or previous.get("version") or "governance_policy")
             set_span_attribute("decision_id", decision_id)
@@ -863,7 +871,7 @@ def governance_bind_receipt(bind_receipt_id: str):
 )
 def governance_promote_policy_bundle(
     body: GovernancePolicyBundlePromoteRequest,
-    x_role: Optional[str] = Header(default=None, alias="X-Role"),
+    request: Request,
 ):
     """Promote policy bundle pointer via existing bind-boundary adapter path."""
     # Approval metadata supplied over HTTP cannot configure Bind policy.
@@ -874,7 +882,7 @@ def governance_promote_policy_bundle(
             content={"ok": False, "error": "approval_context_policy_override_forbidden"},
         )
     bundle_name = (body.bundle_id or body.bundle_dir_name or "").strip()
-    actor_identity = (x_role or "").strip() or "governance_api"
+    actor_identity = _authenticated_governance_actor(request)
     try:
         target_bundle_dir, pointer_path, bundles_root = _resolve_policy_bundle_paths(bundle_name)
     except ValueError:

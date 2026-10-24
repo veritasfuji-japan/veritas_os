@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from veritas_os.api import auth
 from veritas_os.api import routes_governance
@@ -232,7 +233,8 @@ def test_governance_put_span_chain_happy_path(monkeypatch):
     monkeypatch.setattr(routes_governance, "_get_server", lambda: _Srv())
     monkeypatch.setattr(routes_governance, "_emit_governance_change_alert", lambda **k: None)
 
-    resp = routes_governance.governance_put({"updated_by": "alice", "approvals": [{}, {}]})
+    request = SimpleNamespace(state=SimpleNamespace(authenticated_principal_id="key_trace_fixture"))
+    resp = routes_governance.governance_put({"updated_by": "alice", "approvals": [{}, {}]}, request)
     assert resp["ok"] is True
     assert "governance.policy_update.request" in steps
     assert "governance.approval.validate" in steps
@@ -262,7 +264,8 @@ def test_governance_put_approval_failure_adds_event(monkeypatch):
             raise PermissionError("approval missing")
 
     monkeypatch.setattr(routes_governance, "_get_server", lambda: _Srv())
-    resp = routes_governance.governance_put({})
+    request = SimpleNamespace(state=SimpleNamespace(authenticated_principal_id="key_trace_fixture"))
+    resp = routes_governance.governance_put({}, request)
     assert resp.status_code == 403
     assert any(name == "governance.approval.failed" for name, _ in events)
 
@@ -277,8 +280,9 @@ def test_rbac_denial_adds_span_event(monkeypatch):
     checker = auth.require_permission(Permission.decide)
     request = SimpleNamespace(url=SimpleNamespace(path="/v1/decide"), method="POST", state=SimpleNamespace(trace_id="trace-1"))
 
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException) as denied:
         checker(request=request, x_api_key="valid-key")
+    assert denied.value.status_code == 403
 
     assert captured
     assert captured[0][0] == "rbac.denied"
