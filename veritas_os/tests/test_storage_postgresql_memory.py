@@ -905,6 +905,77 @@ class TestPostgresMemoryStoreFailure:
         assert cleanup_events[0] == ("transaction_exit", asyncio.CancelledError)
         assert cleanup_events[1] == ("connection_exit", asyncio.CancelledError)
 
+    def test_put_propagates_transaction_entry_failure(self) -> None:
+        """put() propagates exception raised during conn.transaction() __aenter__.
+
+        Verifies that:
+        1. pool.connection() is checked out once and its __aexit__ is awaited exactly once,
+           receiving the transaction-entry exception without suppressing it.
+        2. conn.transaction() is invoked once and its __aenter__ is awaited once.
+        3. conn.transaction() __aexit__ is never called because transaction entry failed.
+        4. SQL execute() is neither called nor awaited.
+        5. The identical exception instance reaches the caller.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from veritas_os.storage.postgresql import PostgresMemoryStore
+
+        store = PostgresMemoryStore()
+        tx_entry_error = RuntimeError("Simulated transaction entry failure")
+
+        mock_tx_aenter = AsyncMock(side_effect=tx_entry_error)
+        mock_tx_aexit = AsyncMock(return_value=False)
+        mock_tx_ctx = MagicMock()
+        mock_tx_ctx.__aenter__ = mock_tx_aenter
+        mock_tx_ctx.__aexit__ = mock_tx_aexit
+
+        mock_execute = AsyncMock()
+        mock_conn = MagicMock()
+        mock_conn.execute = mock_execute
+        mock_transaction_factory = MagicMock(return_value=mock_tx_ctx)
+        mock_conn.transaction = mock_transaction_factory
+
+        conn_aexit_calls = []
+
+        class MockConnectionContext:
+            async def __aenter__(self):
+                return mock_conn
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                conn_aexit_calls.append((exc_type, exc_val, exc_tb))
+                return False
+
+        mock_pool = MagicMock()
+        mock_pool.connection = MagicMock(return_value=MockConnectionContext())
+
+        async def _get_pool():
+            return mock_pool
+
+        store._get_pool = _get_pool  # type: ignore[assignment]
+
+        with pytest.raises(RuntimeError) as exc_info:
+            asyncio.run(
+                store.put("test_key", {"data": 123}, user_id="test_user")
+            )
+
+        # 1. Exactly the same exception instance reaches the caller
+        assert exc_info.value is tx_entry_error
+
+        # 2. execute() was neither called nor awaited
+        mock_execute.assert_not_called()
+        mock_execute.assert_not_awaited()
+
+        # 3. Connection checkout and cleanup
+        mock_pool.connection.assert_called_once()
+        assert len(conn_aexit_calls) == 1
+        assert conn_aexit_calls[0][0] is RuntimeError
+        assert conn_aexit_calls[0][1] is tx_entry_error
+
+        # 4. Transaction entered once, but __aexit__ never called
+        mock_transaction_factory.assert_called_once_with()
+        mock_tx_aenter.assert_awaited_once()
+        mock_tx_aexit.assert_not_called()
+        mock_tx_aexit.assert_not_awaited()
+
 
 # ===================================================================
 # Backend switch integration test
