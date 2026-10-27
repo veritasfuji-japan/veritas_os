@@ -709,7 +709,24 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
                         status_code=503, content={"detail": "Event stream capacity reached"},
                     )(scope, receive, _bounded_send)
                     return
-                await super().__call__(scope, receive, _bounded_send)
+                spec_version = tuple(map(int, scope.get("asgi", {}).get("spec_version", "2.0").split(".")))
+                if spec_version >= (2, 4):
+                    # ASGI 2.4 send errors may be hidden behind HTTP intermediaries.
+                    # Watch disconnects explicitly even while no event is being sent.
+                    tasks = [
+                        asyncio.create_task(super().__call__(scope, receive, _bounded_send)),
+                        asyncio.create_task(self.listen_for_disconnect(receive)),
+                    ]
+                    try:
+                        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                        for task in done:
+                            task.result()
+                    finally:
+                        for task in tasks:
+                            task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                else:
+                    await super().__call__(scope, receive, _bounded_send)
             finally:
                 try:
                     await stream.aclose()
