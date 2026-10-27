@@ -17,6 +17,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.types import Receive, Scope, Send
 
 from veritas_os.api.auth import (
     require_api_key_header_or_query,
@@ -652,9 +653,10 @@ async def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
 async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, le=60)):
     """Server-Sent Events stream for near-real-time UI updates."""
     srv = _get_server()
-    subscriber = srv._event_hub.register()
+    event_hub = srv._event_hub
 
     async def _stream():
+        subscriber = event_hub.register()
         try:
             yield ": connected\n\n"
             heartbeat_at = time.monotonic() + heartbeat_sec
@@ -673,14 +675,25 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
                 yield srv._format_sse_message(item)
                 heartbeat_at = time.monotonic() + heartbeat_sec
         finally:
-            srv._event_hub.unregister(subscriber)
+            event_hub.unregister(subscriber)
+
+    stream = _stream()
+
+    class _ClosingEventResponse(StreamingResponse):
+        """Own the generator even when headers or a body send fail."""
+
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            try:
+                await super().__call__(scope, receive, send)
+            finally:
+                await stream.aclose()
 
     headers = {
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
     }
-    return StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
+    return _ClosingEventResponse(stream, media_type="text/event-stream", headers=headers)
 
 
 @events_router.websocket("/v1/ws/trustlog")
