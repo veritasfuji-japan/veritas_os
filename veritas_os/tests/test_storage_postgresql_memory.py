@@ -976,6 +976,110 @@ class TestPostgresMemoryStoreFailure:
         mock_tx_aexit.assert_not_called()
         mock_tx_aexit.assert_not_awaited()
 
+    def test_put_propagates_connection_exit_failure_after_successful_transaction(self) -> None:
+        """put() propagates exception raised during pool.connection() __aexit__
+
+        following a successful transaction-context exit.
+
+        Verifies that:
+        1. pool.connection() and conn.transaction() are each invoked once with no SQL retry.
+        2. SQL execute() is called and awaited exactly once.
+        3. Transaction-context exit completes successfully before connection __aexit__ raises.
+        4. Both aexit handlers receive (None, None, None) since no exception occurred
+           within their respective context blocks.
+        5. Both aexit handlers are awaited exactly once.
+        6. The identical connection-exit exception instance reaches the caller.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from veritas_os.storage.postgresql import PostgresMemoryStore
+
+        store = PostgresMemoryStore()
+        conn_exit_error = RuntimeError("Simulated connection cleanup failure")
+
+        lifecycle_events = []
+        tx_aexit_args = []
+        conn_aexit_args = []
+
+        # 1. SQL execute mock
+        async def fake_execute(*args, **kwargs):
+            lifecycle_events.append("execute_done")
+
+        mock_execute = AsyncMock(side_effect=fake_execute)
+
+        # 2. Transaction context manager mock
+        async def fake_tx_aenter():
+            return None
+
+        async def fake_tx_aexit(exc_type, exc_val, exc_tb):
+            tx_aexit_args.append((exc_type, exc_val, exc_tb))
+            lifecycle_events.append("tx_exit_done")
+            return False
+
+        mock_tx_aenter = AsyncMock(side_effect=fake_tx_aenter)
+        mock_tx_aexit = AsyncMock(side_effect=fake_tx_aexit)
+        mock_tx_ctx = MagicMock()
+        mock_tx_ctx.__aenter__ = mock_tx_aenter
+        mock_tx_ctx.__aexit__ = mock_tx_aexit
+
+        mock_conn = MagicMock()
+        mock_conn.execute = mock_execute
+        mock_transaction_factory = MagicMock(return_value=mock_tx_ctx)
+        mock_conn.transaction = mock_transaction_factory
+
+        # 3. Connection context manager mock
+        async def fake_conn_aenter():
+            return mock_conn
+
+        async def fake_conn_aexit(exc_type, exc_val, exc_tb):
+            conn_aexit_args.append((exc_type, exc_val, exc_tb))
+            lifecycle_events.append("conn_exit_invoked")
+            raise conn_exit_error
+
+        mock_conn_aenter = AsyncMock(side_effect=fake_conn_aenter)
+        mock_conn_aexit = AsyncMock(side_effect=fake_conn_aexit)
+        mock_conn_ctx = MagicMock()
+        mock_conn_ctx.__aenter__ = mock_conn_aenter
+        mock_conn_ctx.__aexit__ = mock_conn_aexit
+
+        mock_pool = MagicMock()
+        mock_pool.connection = MagicMock(return_value=mock_conn_ctx)
+
+        async def _get_pool():
+            return mock_pool
+
+        store._get_pool = _get_pool  # type: ignore[assignment]
+
+        with pytest.raises(RuntimeError) as exc_info:
+            asyncio.run(
+                store.put("test_key", {"data": 456}, user_id="test_user")
+            )
+
+        # 1. The identical connection-exit exception instance reaches the caller
+        assert exc_info.value is conn_exit_error
+
+        # 2. execute() was called and awaited exactly once (no retry)
+        mock_execute.assert_called_once()
+        mock_execute.assert_awaited_once()
+
+        # 3. Single checkout and single transaction creation
+        mock_pool.connection.assert_called_once_with()
+        mock_transaction_factory.assert_called_once_with()
+
+        # 4. Strict lifecycle ordering: execute completes, transaction-context exits,
+        #    then connection __aexit__ is invoked and raises
+        assert lifecycle_events == ["execute_done", "tx_exit_done", "conn_exit_invoked"]
+
+        # 5. Both aexit handlers are awaited exactly once
+        mock_tx_aexit.assert_awaited_once()
+        mock_conn_aexit.assert_awaited_once()
+
+        # 6. Both exit handlers received (None, None, None) as no exception occurred in their blocks
+        assert len(tx_aexit_args) == 1
+        assert tx_aexit_args[0] == (None, None, None)
+
+        assert len(conn_aexit_args) == 1
+        assert conn_aexit_args[0] == (None, None, None)
+
 
 # ===================================================================
 # Backend switch integration test
