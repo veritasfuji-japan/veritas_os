@@ -23,6 +23,7 @@ from veritas_os.api.auth import (
     require_api_key_header_or_query,
     require_authenticated_principal,
     require_permission,
+    stream_api_key_is_current,
 )
 from veritas_os.api.bind_summary import build_bind_response_payload
 from veritas_os.api.rbac import Permission
@@ -658,10 +659,14 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
     async def _stream():
         subscriber = event_hub.register()
         try:
+            if not stream_api_key_is_current(request):
+                return
             yield ": connected\n\n"
             heartbeat_at = time.monotonic() + heartbeat_sec
             while True:
                 if await request.is_disconnected():
+                    break
+                if not stream_api_key_is_current(request):
                     break
                 try:
                     item = subscriber.get_nowait()
@@ -721,6 +726,9 @@ async def trustlog_ws(websocket: WebSocket):
     async def _send_events() -> None:
         heartbeat_at = time.monotonic() + 15
         while True:
+            if not stream_api_key_is_current(websocket):
+                await websocket.close(code=1008, reason="api_key_no_longer_valid")
+                return
             try:
                 item = subscriber.get_nowait()
             except queue.Empty:
