@@ -1050,6 +1050,21 @@ def _allow_sse_query_api_key() -> bool:
     return True
 
 
+def stream_api_key_is_current(connection: Request | WebSocket) -> bool:
+    """Recheck stream credentials against this process's current key configuration.
+
+    This does not add TTL, role authorization, or an external revocation source.
+    Query credentials must remain opted in for the relevant transport.
+    """
+    candidate = (connection.headers.get("X-API-Key") or "").strip()
+    if not candidate:
+        candidate = (connection.query_params.get("api_key") or "").strip()
+        allow_query = _allow_ws_query_api_key if isinstance(connection, WebSocket) else _allow_sse_query_api_key
+        if not candidate or not allow_query():
+            return False
+    return _is_valid_api_key(candidate)
+
+
 def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
     """Authenticate WebSocket API key with header-first policy."""
     if not _has_configured_api_key():

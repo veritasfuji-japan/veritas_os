@@ -153,6 +153,26 @@ instead of relying on later generator finalization. Transport errors retain
 Starlette's existing exception behavior; this does not retry failed sends or
 prove delivery of a frame that encountered an error.
 
+### Current stream credential checks
+
+SSE and TrustLog WebSocket delivery revalidate their header-first credentials
+against the process's current API-key configuration on each delivery loop,
+including idle polling. If the key is no longer accepted, SSE ends the response
+and unregisters its subscriber; WebSocket closes with code 1008 and reason
+`api_key_no_longer_valid`, then releases its tasks and subscription. Query-key
+streams must also retain the existing transport-specific dual opt-in; production
+query-key refusal is unchanged.
+
+This uses the existing multi-key and legacy fallback matching rules. Removing a
+key from one source does not revoke it if another accepted source still matches.
+API keys do not gain a TTL or external revocation feed. Configuration changes
+must reach the running process: changing a parent shell environment or an
+external secret does not itself update that process. Other processes and hosts
+are not synchronized by this check. Idle detection normally follows the 100 ms
+poll, but is not a wall-clock deadline and cannot cancel a send already in
+progress. Already sent data cannot be recalled. This does not recheck role
+permissions or startup readiness throughout an accepted stream.
+
 Startup rejects declared multi-worker API deployments in production/strict
 profiles while this controller remains process-local. Either `WEB_CONCURRENCY`
 or `UVICORN_WORKERS` greater than one triggers refusal, including when Redis
