@@ -33,7 +33,7 @@ jobs:
       - name: Verify real loopback HTTP and WebSocket transport
         run: |
           mkdir -p test-reports
-          python -m pytest -q veritas_os/tests/test_stream_real_uvicorn.py --junitxml=test-reports/stream-real-uvicorn.xml
+          python -m pytest -q veritas_os/tests/test_stream_real_uvicorn.py -o junit_family=xunit1 --junitxml=test-reports/stream-real-uvicorn.xml
       - name: Reject skips and record tested source
         env:
           EXPECTED_SHA: ${{ github.sha }}
@@ -49,21 +49,39 @@ jobs:
           import websockets
 
           cases = list(ET.parse("test-reports/stream-real-uvicorn.xml").getroot().iter("testcase"))
-          assert len(cases) == 8
+          assert len(cases) == 16
           assert not any(c.find(tag) is not None for c in cases for tag in ("failure", "error", "skipped"))
           sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           assert sha == os.environ["EXPECTED_SHA"]
+          process_cases = []
+          thread_cases = []
+          for case in cases:
+              props = {p.attrib["name"]: p.attrib["value"] for p in case.findall("properties/property")}
+              if props.get("server_mode") == "process":
+                  assert int(props["server_pid"]) != int(props["client_pid"])
+                  assert props["child_tested_sha"] == sha
+                  process_cases.append(case)
+              elif props.get("server_mode") == "thread":
+                  thread_cases.append(case)
+              else:
+                  raise AssertionError("missing transport server mode")
+          assert len(process_cases) == len(thread_cases) == 8
           report = {
               "tested_sha": sha,
               "tests": len(cases),
               "uvicorn": uvicorn.__version__,
               "starlette": starlette.__version__,
               "websockets": websockets.__version__,
-              "scope": "loopback TCP HTTP/WebSocket; actual API app; same-process server thread",
+              "scope": "loopback TCP HTTP/WebSocket; actual API app; thread and separate interpreter",
+              "thread_tests": len(thread_cases),
+              "separate_process_tests": len(process_cases),
+              "distinct_client_server_pids_verified": True,
+              "child_source_sha_verified": True,
+              "child_control": "test-only stdin pipe; no HTTP control endpoint",
               "synthetic_startup_readiness": True,
               "security_startup_dependencies_validated": False,
               "fixture_subscriber_limit": 2,
-              "key_rotation_scope": "running process configuration only",
+              "key_rotation_scope": "server process configuration only; parent environment unchanged",
               "tls_or_independent_hosts_validated": False,
               "slow_network_or_production_load_validated": False,
           }

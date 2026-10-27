@@ -1,6 +1,7 @@
 """Real loopback HTTP/WebSocket transport checks after synthetic startup readiness.
 
-The fixture does not validate strict startup dependencies, TLS, or other hosts.
+Thread and independent-interpreter fixtures do not validate strict startup
+dependencies, TLS, or other hosts.
 A dedicated CI job requires the optional WebSocket transport and forbids skips.
 """
 
@@ -8,6 +9,10 @@ from contextlib import contextmanager
 import importlib.util
 import json
 import os
+from pathlib import Path
+import selectors
+import subprocess
+import sys
 import socket
 import threading
 import time
@@ -26,12 +31,90 @@ REPLACEMENT = "real-stream-replacement-test"
 def _wait_subscribers(hub, expected):
     deadline = time.monotonic() + 3
     while time.monotonic() < deadline:
-        with hub._lock:
-            count = len(hub._subscribers)
+        if isinstance(hub, _ProcessHub):
+            count = hub.command("status")["subscribers"]
+        else:
+            with hub._lock:
+                count = len(hub._subscribers)
         if count == expected:
             return
         time.sleep(0.01)
     pytest.fail(f"subscriber count remained {count}, expected {expected}")
+
+
+class _ProcessHub:
+    """Parent-side fixture controls; no control route is mounted in the API."""
+
+    def __init__(self, process):
+        self.process = process
+        self.buffer = b""
+        self.sequence = 0
+
+    def read_reply(self, timeout=10):
+        deadline = time.monotonic() + timeout
+        with selectors.DefaultSelector() as selector:
+            selector.register(self.process.stdout, selectors.EVENT_READ)
+            while time.monotonic() < deadline:
+                while b"\n" in self.buffer:
+                    line, self.buffer = self.buffer.split(b"\n", 1)
+                    if line.startswith(b"STREAM_FIXTURE "):
+                        return json.loads(line.removeprefix(b"STREAM_FIXTURE "))
+                if not selector.select(timeout=0.1):
+                    continue
+                chunk = os.read(self.process.stdout.fileno(), 65536)
+                if not chunk:
+                    raise RuntimeError("fixture child exited before replying")
+                self.buffer += chunk
+        raise TimeoutError("fixture child did not reply")
+
+    def command(self, action, **fields):
+        self.sequence += 1
+        self.process.stdin.write((json.dumps({"id": self.sequence, "action": action, **fields}) + "\n").encode())
+        self.process.stdin.flush()
+        reply = self.read_reply()
+        assert reply["id"] == self.sequence
+        assert reply["pid"] == self.process.pid
+        return reply
+
+    def publish(self, event_type, payload):
+        assert event_type == "trustlog.appended"
+        return self.command("publish", label=payload["test"])["event"]
+
+
+@contextmanager
+def _process_server(tmp_path, record_property):
+    env = dict(os.environ)
+    root = Path(__file__).resolve().parents[2]
+    env["PYTHONPATH"] = str(root)
+    with (tmp_path / "uvicorn-child.log").open("wb") as log:
+        process = subprocess.Popen(
+            [sys.executable, "-u", "-m", "veritas_os.tests.helpers.stream_process_fixture"],
+            cwd=root, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
+        )
+        hub = _ProcessHub(process)
+        try:
+            ready = hub.read_reply()
+            assert ready["id"] == 0 and ready["ready"] is True
+            assert ready["pid"] == process.pid and process.pid != os.getpid()
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            assert ready["tested_sha"] == sha
+            record_property("server_pid", process.pid)
+            record_property("client_pid", os.getpid())
+            record_property("child_tested_sha", ready["tested_sha"])
+            yield f"http://127.0.0.1:{ready['port']}", hub
+            _wait_subscribers(hub, 0)
+            hub.command("shutdown")
+            assert process.wait(timeout=5) == 0
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
+            process.stdin.close()
+            process.stdout.close()
 
 
 def _ws_connect(base, key=KEY):
@@ -65,8 +148,8 @@ def _stream(base, transport, key=KEY):
                 yield response, receive
 
 
-@pytest.fixture
-def live_stream_server(monkeypatch):
+@pytest.fixture(params=["thread", "process"])
+def live_stream_server(monkeypatch, request, tmp_path, record_property):
     if importlib.util.find_spec("websockets") is None:
         if os.getenv("VERITAS_REQUIRE_STREAM_SOCKET_TESTS") == "1":
             pytest.fail("dedicated transport checks require websockets")
@@ -75,6 +158,13 @@ def live_stream_server(monkeypatch):
     monkeypatch.delenv("VERITAS_POSTURE", raising=False)
     monkeypatch.setenv("VERITAS_API_KEY", KEY)
     monkeypatch.delenv("VERITAS_API_KEYS", raising=False)
+    record_property("server_mode", request.param)
+    if request.param == "process":
+        if os.name != "posix":
+            pytest.skip("child stdout selectors require POSIX; dedicated CI uses Linux")
+        with _process_server(tmp_path, record_property) as live:
+            yield live
+        return
     # This is a post-startup transport fixture, not proof of security initialization.
     monkeypatch.setattr(server.app.state, "security_startup_complete", True, raising=False)
     monkeypatch.setattr(server.app.state, "security_startup_pid", os.getpid(), raising=False)
@@ -126,7 +216,11 @@ def test_real_socket_key_rotation(live_stream_server, monkeypatch, transport):
     with _stream(base, transport) as (connection, receive):
         event = hub.publish("trustlog.appended", {"test": "before-rotation"})
         assert receive() == event
-        monkeypatch.setenv("VERITAS_API_KEY", REPLACEMENT)
+        if isinstance(hub, _ProcessHub):
+            hub.command("rotate")
+            assert os.environ["VERITAS_API_KEY"] == KEY
+        else:
+            monkeypatch.setenv("VERITAS_API_KEY", REPLACEMENT)
         _wait_subscribers(hub, 0)
         hub.publish("trustlog.appended", {"test": "after-rotation"})
         if transport == "websocket":
@@ -181,7 +275,10 @@ def test_real_socket_incomplete_startup_refused(live_stream_server, monkeypatch)
     from websockets.exceptions import InvalidStatus
 
     base, hub = live_stream_server
-    monkeypatch.setattr(server.app.state, "security_startup_complete", False)
+    if isinstance(hub, _ProcessHub):
+        hub.command("unready")
+    else:
+        monkeypatch.setattr(server.app.state, "security_startup_complete", False)
     with httpx.Client(timeout=3, trust_env=False) as client:
         assert client.get(base + "/v1/events", headers={"X-API-Key": KEY}).status_code == 503
     with pytest.raises(InvalidStatus) as caught:
