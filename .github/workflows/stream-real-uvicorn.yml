@@ -1,0 +1,78 @@
+name: Event Stream Real Uvicorn Transport
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stream-real-uvicorn-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stream-real-uvicorn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERITAS_REQUIRE_STREAM_SOCKET_TESTS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install transport test dependencies
+        run: python -m pip install ".[dev,system,signing]" "websockets==15.0.1"
+      - name: Verify real loopback HTTP and WebSocket transport
+        run: |
+          mkdir -p test-reports
+          python -m pytest -q veritas_os/tests/test_stream_real_uvicorn.py --junitxml=test-reports/stream-real-uvicorn.xml
+      - name: Reject skips and record tested source
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import xml.etree.ElementTree as ET
+          import starlette
+          import uvicorn
+          import websockets
+
+          cases = list(ET.parse("test-reports/stream-real-uvicorn.xml").getroot().iter("testcase"))
+          assert len(cases) == 8
+          assert not any(c.find(tag) is not None for c in cases for tag in ("failure", "error", "skipped"))
+          sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          assert sha == os.environ["EXPECTED_SHA"]
+          report = {
+              "tested_sha": sha,
+              "tests": len(cases),
+              "uvicorn": uvicorn.__version__,
+              "starlette": starlette.__version__,
+              "websockets": websockets.__version__,
+              "scope": "loopback TCP HTTP/WebSocket; actual API app; same-process server thread",
+              "synthetic_startup_readiness": True,
+              "security_startup_dependencies_validated": False,
+              "fixture_subscriber_limit": 2,
+              "key_rotation_scope": "running process configuration only",
+              "tls_or_independent_hosts_validated": False,
+              "slow_network_or_production_load_validated": False,
+          }
+          Path("test-reports/stream-real-uvicorn-identity.json").write_text(json.dumps(report, indent=2) + "\n")
+          PY
+      - name: Upload transport results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stream-real-uvicorn
+          path: test-reports/
+          if-no-files-found: error

@@ -53,9 +53,10 @@ async def test_sse_cancellation_leaves_no_blocked_reader(monkeypatch):
         await stream.aclose()
 
 
+@pytest.mark.parametrize("spec_version", ["2.0", "2.4"])
 @pytest.mark.parametrize("publish_event", [False, True])
 @pytest.mark.parametrize("termination", ["disconnect", "cancel"])
-async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, termination):
+async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, termination, spec_version):
     import os
 
     monkeypatch.setenv("VERITAS_ENV", "production")
@@ -78,7 +79,7 @@ async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, ter
             delivered.set()
 
     scope = {
-        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.0"},
+        "type": "http", "asgi": {"version": "3.0", "spec_version": spec_version},
         "scheme": "http", "method": "GET", "http_version": "1.1", "root_path": "",
         "path": "/v1/events", "raw_path": b"/v1/events",
         "query_string": b"heartbeat_sec=5", "headers": [(b"x-api-key", b"sse-disconnect-test")],

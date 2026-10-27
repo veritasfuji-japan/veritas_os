@@ -139,6 +139,12 @@ nonblocking, with a 100 ms idle poll and the existing 15 second heartbeat; no
 blocking queue reader is left in the thread pool. This covers observable ASGI
 disconnects, not independent detection of a silent network partition.
 
+For ASGI 2.4+, the SSE response explicitly watches disconnect notifications
+alongside streaming, rather than relying solely on a later failed send through
+HTTP intermediaries. Either completion cancels and awaits both tasks before
+closing the generator and releasing its subscription. Older ASGI versions retain
+Starlette's existing disconnect watcher.
+
 SSE event reads also use nonblocking queue polling (100 ms while idle), so
 cancelling a stream does not leave a thread-pool reader waiting for the
 configured heartbeat timeout. The existing disconnect check and subscription
@@ -180,7 +186,9 @@ TrustLog WebSocket within that process. Admission is checked under the hub lock;
 existing subscribers are not evicted. Authenticated excess SSE requests receive
 HTTP 503 before event-stream headers; excess WebSocket requests close with code
 1013 and reason `stream_capacity_reached` before acceptance. Releasing a
-subscription makes its slot reusable. The hub constructor accepts a positive
+subscription makes its slot reusable. With the tested Uvicorn backend, a
+pre-accept WebSocket refusal is HTTP 403 on the wire, rather than a WebSocket
+close frame; the close code/reason above describe the ASGI refusal. The hub constructor accepts a positive
 `max_subscribers` for embedded callers; the API uses the default.
 
 Each SSE ASGI send has a 15 second deadline, including the actual transport send
@@ -198,6 +206,19 @@ connection quota or a byte-size limit. Each subscriber queue remains bounded at
 live streams remain best-effort notifications rather than durable delivery
 proofs. A silent network stall is noticed only when a transport send blocks or a
 disconnect is reported; this does not establish production load capacity.
+
+The `stream-real-uvicorn` CI job runs eight loopback TCP tests against the actual
+API application and rejects skipped, failed, or missing cases. These check SSE
+and WebSocket delivery/disconnect cleanup, in-process key rotation, a shared
+two-slot fixture limit and slot reuse, invalid credentials, and incomplete
+readiness refusal. The fixture runs Uvicorn in a server thread with lifespan
+disabled and an explicitly synthetic process-bound startup completion marker.
+It validates post-startup transport, not the real startup dependency checks. The
+job records the exact checkout SHA and transport versions. Ordinary test lanes
+may skip this optional transport module when `websockets` is absent; the dedicated
+job installs its pinned test dependency and requires every case. This does not
+validate TLS, separate hosts, slow real networks, production load, or external
+secret/revocation distribution. No external provider or business API is called.
 
 Startup rejects declared multi-worker API deployments in production/strict
 profiles while this controller remains process-local. Either `WEB_CONCURRENCY`
