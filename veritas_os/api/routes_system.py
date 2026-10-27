@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisc
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.types import Receive, Scope, Send
+from starlette.websockets import WebSocketState
 
 from veritas_os.api.auth import (
     require_api_key_header_or_query,
@@ -26,6 +27,7 @@ from veritas_os.api.auth import (
     stream_api_key_is_current,
 )
 from veritas_os.api.bind_summary import build_bind_response_payload
+from veritas_os.api import sse_hub
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import (
     ComplianceConfigResponse,
@@ -54,6 +56,7 @@ from veritas_os.storage.factory import get_backend_info
 # test monkeypatching on the server module.
 
 logger = logging.getLogger(__name__)
+
 
 # Public router: health/status endpoints (no auth required)
 public_router = APIRouter()
@@ -655,9 +658,16 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
     """Server-Sent Events stream for near-real-time UI updates."""
     srv = _get_server()
     event_hub = srv._event_hub
+    subscriber = None
+
+    def _ensure_subscriber():
+        nonlocal subscriber
+        if subscriber is None:
+            subscriber = event_hub.register()
+        return subscriber
 
     async def _stream():
-        subscriber = event_hub.register()
+        subscriber = _ensure_subscriber()
         try:
             if not stream_api_key_is_current(request):
                 return
@@ -688,10 +698,24 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
         """Own the generator even when headers or a body send fail."""
 
         async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            async def _bounded_send(message):
+                await asyncio.wait_for(send(message), timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC)
+
             try:
-                await super().__call__(scope, receive, send)
+                try:
+                    _ensure_subscriber()
+                except sse_hub.SubscriberLimitReached:
+                    await JSONResponse(
+                        status_code=503, content={"detail": "Event stream capacity reached"},
+                    )(scope, receive, _bounded_send)
+                    return
+                await super().__call__(scope, receive, _bounded_send)
             finally:
-                await stream.aclose()
+                try:
+                    await stream.aclose()
+                finally:
+                    if subscriber is not None:
+                        event_hub.unregister(subscriber)
 
     headers = {
         "Cache-Control": "no-cache",
@@ -715,8 +739,15 @@ async def trustlog_ws(websocket: WebSocket):
         await websocket.close(code=1013, reason="security_startup_incomplete")
         return
 
-    await websocket.accept()
-    subscriber = srv._event_hub.register()
+    event_hub = srv._event_hub
+    try:
+        subscriber = event_hub.register()
+    except sse_hub.SubscriberLimitReached:
+        await asyncio.wait_for(
+            websocket.close(code=1013, reason="stream_capacity_reached"),
+            timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC,
+        )
+        return
     allowed_types = {
         "trustlog.debate",
         "trustlog.critique",
@@ -727,19 +758,25 @@ async def trustlog_ws(websocket: WebSocket):
         heartbeat_at = time.monotonic() + 15
         while True:
             if not stream_api_key_is_current(websocket):
-                await websocket.close(code=1008, reason="api_key_no_longer_valid")
+                await asyncio.wait_for(
+                    websocket.close(code=1008, reason="api_key_no_longer_valid"),
+                    timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC,
+                )
                 return
             try:
                 item = subscriber.get_nowait()
             except queue.Empty:
                 if time.monotonic() >= heartbeat_at:
-                    await websocket.send_json({"type": "heartbeat", "ts": srv.utc_now_iso_z()})
+                    await asyncio.wait_for(
+                        websocket.send_json({"type": "heartbeat", "ts": srv.utc_now_iso_z()}),
+                        timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC,
+                    )
                     heartbeat_at = time.monotonic() + 15
                 # Do not leave a blocking queue reader in the thread pool on cancellation.
                 await asyncio.sleep(0.1)
                 continue
             if item.get("type") in allowed_types:
-                await websocket.send_json(item)
+                await asyncio.wait_for(websocket.send_json(item), timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC)
                 heartbeat_at = time.monotonic() + 15
 
     async def _receive_disconnect() -> None:
@@ -748,18 +785,30 @@ async def trustlog_ws(websocket: WebSocket):
             if message["type"] == "websocket.disconnect":
                 return
 
-    tasks = [asyncio.create_task(_send_events()), asyncio.create_task(_receive_disconnect())]
+    tasks = []
     try:
+        await asyncio.wait_for(websocket.accept(), timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC)
+        tasks = [asyncio.create_task(_send_events()), asyncio.create_task(_receive_disconnect())]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             task.result()
     except WebSocketDisconnect:
         logger.debug("trustlog ws disconnected")
+    except TimeoutError:
+        logger.debug("trustlog ws send timed out")
+        if websocket.application_state is not WebSocketState.DISCONNECTED:
+            try:
+                await asyncio.wait_for(
+                    websocket.close(code=1013, reason="stream_send_timeout"),
+                    timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC,
+                )
+            except (TimeoutError, OSError, WebSocketDisconnect):
+                logger.debug("trustlog ws timeout close could not be sent")
     finally:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        srv._event_hub.unregister(subscriber)
+        event_hub.unregister(subscriber)
 
 
 # ------------------------------------------------------------------

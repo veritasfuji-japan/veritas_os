@@ -609,6 +609,7 @@ import veritas_os.api.rate_limiting as _rate_mod  # noqa: E402
 # ==============================
 
 from veritas_os.api.middleware import (  # noqa: E402,F401
+    EventStreamSendTimeoutMiddleware,
     DEFAULT_MAX_REQUEST_BODY_SIZE,
     PROFILE_MAX_REQUEST_BODY_SIZE,
     _resolve_max_request_body_size,
@@ -718,6 +719,9 @@ app.middleware("http")(limit_body_size)
 app.middleware("http")(add_security_headers)
 if observe_request_metrics is not None:
     app.middleware("http")(observe_request_metrics)
+
+# This pure ASGI wrapper must remain outside the HTTP response intermediaries.
+app.add_middleware(EventStreamSendTimeoutMiddleware)
 
 configure_metrics_exporter(app, auth_dependency=require_api_key)
 

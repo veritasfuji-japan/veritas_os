@@ -16,6 +16,12 @@ from typing import Any, Callable, Dict
 
 logger = logging.getLogger(__name__)
 
+STREAM_SEND_TIMEOUT_SEC = 15.0
+
+
+class SubscriberLimitReached(RuntimeError):
+    """The event hub cannot admit another subscriber."""
+
 
 class SSEEventHub:
     """In-memory SSE event hub with bounded history and subscriber queues."""
@@ -25,7 +31,11 @@ class SSEEventHub:
         timestamp_factory: Callable[[], str],
         history_size: int = 128,
         queue_size: int = 64,
+        max_subscribers: int = 128,
     ) -> None:
+        if isinstance(max_subscribers, bool) or not isinstance(max_subscribers, int) or max_subscribers < 1:
+            raise ValueError("max_subscribers must be a positive integer")
+        self._max_subscribers = max_subscribers
         self._timestamp_factory = timestamp_factory
         self._queue_size = queue_size
         self._lock = threading.Lock()
@@ -57,8 +67,10 @@ class SSEEventHub:
 
     def register(self) -> queue.Queue:
         """Register a subscriber queue and pre-fill it with recent history."""
-        subscriber: queue.Queue = queue.Queue(maxsize=self._queue_size)
         with self._lock:
+            if len(self._subscribers) >= self._max_subscribers:
+                raise SubscriberLimitReached("event subscriber limit reached")
+            subscriber: queue.Queue = queue.Queue(maxsize=self._queue_size)
             history = list(self._history)
             self._subscribers.add(subscriber)
 
