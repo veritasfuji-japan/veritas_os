@@ -146,9 +146,9 @@ cleanup remain in place; event frames, response headers and the configurable
 heartbeat interval are preserved. Idle event delivery may incur the poll delay.
 
 The SSE response owns and closes its event generator in a `finally` block,
-including when response headers or a body frame cannot be sent. Subscription
-registration occurs only when the generator starts, and cleanup uses the same
-captured event hub. This releases subscribers synchronously at response exit
+including when response headers or a body frame cannot be sent. The response
+reserves its subscription before sending headers, and cleanup uses the same
+captured event hub even if the generator has not started. This releases subscribers synchronously at response exit
 instead of relying on later generator finalization. Transport errors retain
 Starlette's existing exception behavior; this does not retry failed sends or
 prove delivery of a frame that encountered an error.
@@ -172,6 +172,32 @@ are not synchronized by this check. Idle detection normally follows the 100 ms
 poll, but is not a wall-clock deadline and cannot cancel a send already in
 progress. Already sent data cannot be recalled. This does not recheck role
 permissions or startup readiness throughout an accepted stream.
+
+### Stream resource limits
+
+The API event hub admits at most 128 subscribers by default, shared by SSE and
+TrustLog WebSocket within that process. Admission is checked under the hub lock;
+existing subscribers are not evicted. Authenticated excess SSE requests receive
+HTTP 503 before event-stream headers; excess WebSocket requests close with code
+1013 and reason `stream_capacity_reached` before acceptance. Releasing a
+subscription makes its slot reusable. The hub constructor accepts a positive
+`max_subscribers` for embedded callers; the API uses the default.
+
+Each SSE ASGI send has a 15 second deadline, including the actual transport send
+outside the HTTP response intermediaries. Other JSON endpoints are not subject to this
+stream deadline (the new stream-capacity refusal itself is bounded). WebSocket acceptance, event/heartbeat sends and post-admission
+close attempts also have a 15 second deadline. A timed-out WebSocket attempts a
+bounded close with code 1013 and reason `stream_send_timeout`, then releases its
+connection tasks and subscriber even if the close cannot be delivered. SSE
+response ownership also releases its subscription after send timeout. Deadlines
+rely on cooperative async cancellation and do not cancel bytes already sent.
+
+These are per-process subscriber and send-wait bounds, not a deployment-wide
+connection quota or a byte-size limit. Each subscriber queue remains bounded at
+64 entries by default; its existing drop-on-full behavior is unchanged, so these
+live streams remain best-effort notifications rather than durable delivery
+proofs. A silent network stall is noticed only when a transport send blocks or a
+disconnect is reported; this does not establish production load capacity.
 
 Startup rejects declared multi-worker API deployments in production/strict
 profiles while this controller remains process-local. Either `WEB_CONCURRENCY`
