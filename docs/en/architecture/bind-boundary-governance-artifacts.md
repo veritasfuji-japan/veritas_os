@@ -145,6 +145,14 @@ configured heartbeat timeout. The existing disconnect check and subscription
 cleanup remain in place; event frames, response headers and the configurable
 heartbeat interval are preserved. Idle event delivery may incur the poll delay.
 
+The SSE response owns and closes its event generator in a `finally` block,
+including when response headers or a body frame cannot be sent. Subscription
+registration occurs only when the generator starts, and cleanup uses the same
+captured event hub. This releases subscribers synchronously at response exit
+instead of relying on later generator finalization. Transport errors retain
+Starlette's existing exception behavior; this does not retry failed sends or
+prove delivery of a frame that encountered an error.
+
 Startup rejects declared multi-worker API deployments in production/strict
 profiles while this controller remains process-local. Either `WEB_CONCURRENCY`
 or `UVICORN_WORKERS` greater than one triggers refusal, including when Redis
