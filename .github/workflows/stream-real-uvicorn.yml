@@ -49,12 +49,13 @@ jobs:
           import websockets
 
           cases = list(ET.parse("test-reports/stream-real-uvicorn.xml").getroot().iter("testcase"))
-          assert len(cases) == 16
+          assert len(cases) == 20
           assert not any(c.find(tag) is not None for c in cases for tag in ("failure", "error", "skipped"))
           sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           assert sha == os.environ["EXPECTED_SHA"]
           process_cases = []
           thread_cases = []
+          restart_cases = []
           for case in cases:
               props = {p.attrib["name"]: p.attrib["value"] for p in case.findall("properties/property")}
               if props.get("server_mode") == "process":
@@ -63,18 +64,31 @@ jobs:
                   process_cases.append(case)
               elif props.get("server_mode") == "thread":
                   thread_cases.append(case)
+              elif props.get("server_mode") == "restart":
+                  assert len({props["old_server_pid"], props["new_server_pid"], props["client_pid"]}) == 3
+                  assert props["old_tested_sha"] == props["new_tested_sha"] == sha
+                  assert props["old_connection_terminated"] == "True"
+                  assert props["replacement_verified"] == "True"
+                  restart_cases.append(props)
               else:
                   raise AssertionError("missing transport server mode")
           assert len(process_cases) == len(thread_cases) == 8
+          assert len(restart_cases) == 4
+          assert sorted(p["stop_mode"] for p in restart_cases) == ["crash", "crash", "graceful", "graceful"]
           report = {
               "tested_sha": sha,
               "tests": len(cases),
               "uvicorn": uvicorn.__version__,
               "starlette": starlette.__version__,
               "websockets": websockets.__version__,
-              "scope": "loopback TCP HTTP/WebSocket; actual API app; thread and separate interpreter",
+              "scope": "loopback TCP HTTP/WebSocket; thread, separate interpreter and same-port replacement",
               "thread_tests": len(thread_cases),
               "separate_process_tests": len(process_cases),
+              "restart_tests": len(restart_cases),
+              "restart_modes": ["graceful", "forced kill"],
+              "same_port_replacement_verified": True,
+              "restart_key_source": "explicit replacement fixture configuration",
+              "durable_runtime_state_recovery_validated": False,
               "distinct_client_server_pids_verified": True,
               "child_source_sha_verified": True,
               "child_control": "test-only stdin pipe; no HTTP control endpoint",
