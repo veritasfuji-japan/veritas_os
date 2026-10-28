@@ -207,17 +207,25 @@ live streams remain best-effort notifications rather than durable delivery
 proofs. A silent network stall is noticed only when a transport send blocks or a
 disconnect is reported; this does not establish production load capacity.
 
-The `stream-real-uvicorn` CI job runs eight loopback TCP tests against the actual
-API application and rejects skipped, failed, or missing cases. These check SSE
-and WebSocket delivery/disconnect cleanup, in-process key rotation, a shared
-two-slot fixture limit and slot reuse, invalid credentials, and incomplete
-readiness refusal. The fixture runs Uvicorn in a server thread with lifespan
-disabled and an explicitly synthetic process-bound startup completion marker.
-It validates post-startup transport, not the real startup dependency checks. The
-job records the exact checkout SHA and transport versions. Ordinary test lanes
-may skip this optional transport module when `websockets` is absent; the dedicated
-job installs its pinned test dependency and requires every case. This does not
-validate TLS, separate hosts, slow real networks, production load, or external
+The `stream-real-uvicorn` CI job runs sixteen loopback TCP tests against the
+actual API application: eight with a server thread and the same eight with a
+separate Python interpreter. It rejects skipped, failed, or missing cases and
+checks the child source SHA plus distinct client/server PIDs from each child
+case's JUnit properties. These check delivery/disconnect cleanup, server-process
+key rotation, a shared two-slot fixture limit and reuse, invalid credentials,
+and incomplete-readiness refusal. Child configuration and event fixtures are
+controlled only through a test-only stdin pipe; no control endpoint is added to
+the API. Child key rotation must leave the parent environment unchanged, and
+teardown checks empty subscriptions and reaps the server process.
+
+Both fixtures disable lifespan and supply an explicitly synthetic process-bound
+startup completion marker in the server process. They validate post-startup
+transport, not real security initialization. The job records the checkout SHA
+and transport versions. Ordinary lanes may skip this optional transport module
+when `websockets` is absent; the dedicated Linux job installs the pinned test
+dependency and requires every case. These are processes on the same host, not
+independently administered hosts or OS-user isolation. This does not validate
+TLS, process-restart recovery, slow real networks, production load, or external
 secret/revocation distribution. No external provider or business API is called.
 
 Startup rejects declared multi-worker API deployments in production/strict
