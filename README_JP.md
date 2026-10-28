@@ -36,6 +36,52 @@
 
 ---
 
+## 10秒で分かる問題
+
+AIエージェントは、指示によっても、プロンプトインジェクションによる誘導によっても、管理者権限の付与・送金・権限変更を実行しようとすることがあります。多くのガードレールは要求の*テキスト*を検査します。VERITASが検査するのは*行為そのもの*です：
+
+> **この正確なアクションは、現在の権限・ポリシー・承認・証拠のもとで、今、commitしてよいか？**
+
+AIの出力は **Decision Candidate（意思決定候補）** であり、実行権限ではありません。現実世界への作用になる前に Bind Boundary を越える必要があり、そこで認可は再検証され、ちょうど一度だけ消費され、結果は検証可能な証拠として記録されます。
+
+![VERITASデモ: 4件はブロック、1件はcommit可能](docs/veritas-demo.gif)
+
+## 5分で試す — APIキー不要、外部への作用なし
+
+```bash
+git clone https://github.com/veritasfuji-japan/veritas_os.git
+cd veritas_os
+python3 scripts/demo/validate_reviewer_evidence_packet.py
+```
+
+ローカルフィクスチャで5ケースが実行されます：
+
+| ケース | 結果 |
+|---|---|
+| 権限（authority）なし | **BLOCKED** |
+| 人間承認なし | **BLOCKED** |
+| 承認の期限切れ | **BLOCKED** |
+| スコープ不一致 | **BLOCKED** |
+| 正当な権限＋承認あり | commit可能（検証済み証拠チェーンつき） |
+
+期待される要約： `blocked_cases: 4, committed_cases: 1, verified_chains: 5`。
+
+ここでは実際の権限変更は行われません。要点は境界とその証拠です。フルセットアップ（Docker／API／Mission Control）は下記のクイックスタート節を参照してください。
+
+## 主張ではなく、実測結果
+
+凍結済みの実プロバイダー AgentDojo banking ベンチマーク（128ペア）では、VERITAS Bind の追加で **インジェクション成功が 20/128 → 0/128** になり、正当な有用性は **93/128 → 64/128** という実測コストを伴いました。契約・pin・限界の全文： [RCC/REVAS × VERITAS Benchmark](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark) — 有用性のコストも隠さず報告します。
+
+## 次のステップ
+
+- **エンジニアとして評価する（10–15分）：** [Engineering Evaluation Quickstart](docs/en/guides/engineering-evaluation-quickstart.md)
+- **証拠をレビューする：** [Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md) · [Implementation Matrix](docs/en/validation/current-implementation-matrix.md) · [Technical Proof Pack](docs/ja/validation/technical-proof-pack.md)
+- **企業向け評価／有償PoC：** 限定した実行境界を1つ提案してください（[連絡先](#連絡先)）。範囲と費用は別途合意が必要です。
+
+⭐ **この問題が重要だと思う方は Star をお願いします** — 実行境界のガバナンスを公開で証明し続ける価値があるか、私たちが判断する材料になります。
+
+---
+
 ## 証拠の要約と企業向け評価（2026-10-09時点）
 
 VERITASは、**実装済み機能**、**条件・範囲を固定した証明**、**ベンチマークの実測**、**顧客本番環境での検証**を分けて扱います。以下は各資料に記載された範囲に限定した結果であり、相互に同一の「証明済み」状態ではありません。
