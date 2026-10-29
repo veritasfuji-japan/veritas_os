@@ -8,9 +8,9 @@ from datetime import datetime, timezone
 from json import JSONDecodeError
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Request, Response
 
-from veritas_os.api.auth import require_permission
+from veritas_os.api.auth import require_authenticated_principal, require_permission
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import (
     MemoryEraseRequest,
@@ -438,8 +438,14 @@ def memory_get(body: MemoryGetRequest, response: Response = None, x_api_key: Opt
 
 
 @router.post("/v1/memory/erase", dependencies=[Depends(require_permission(Permission.memory_write))])
-def memory_erase(body: MemoryEraseRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
-    """Erase a tenant's memories with legal-hold protection and audit log."""
+def memory_erase(
+    body: MemoryEraseRequest,
+    request: Request,
+    response: Response = None,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+) -> Dict[str, Any]:
+    """Erase owned memories and attribute the audit to the authenticated actor."""
+    actor = require_authenticated_principal(request)
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
@@ -454,7 +460,6 @@ def memory_erase(body: MemoryEraseRequest, response: Response = None, x_api_key:
     try:
         user_id = srv._resolve_memory_user_id(body.user_id, x_api_key)
         reason = body.reason.strip()
-        actor = body.actor.strip()
 
         if hasattr(store, "erase_user"):
             report = store.erase_user(user_id=user_id, reason=reason, actor=actor)

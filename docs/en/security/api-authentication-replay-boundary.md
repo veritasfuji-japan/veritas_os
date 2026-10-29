@@ -43,6 +43,33 @@ non-strict behavior; this route check does not establish global outbound-network
 isolation or permission parity with the other replay handler. Replay execution
 safety and stream authorization remain separate review surfaces.
 
+## Memory erasure attribution
+
+`POST /v1/memory/erase` requires `memory_write` and keeps deriving its target
+user from the API key; a body `user_id` cannot select another principal. The
+erasure actor now comes from the authenticated request principal, before loading
+or mutating the store. Missing principal context returns HTTP 403. The body
+`actor` field remains accepted for compatibility but does not select the actor
+written into the backend erasure report or audit record. Previously a caller
+could supply another person's label, an empty value, or the generic default.
+
+Mounted HTTP regressions use two configured operator keys and the real JSON
+MemoryStore on temporary files. Reopening the file verifies authenticated actor
+attribution. Separate controls verify that a forged target cannot erase the
+other principal's records, legal-hold records remain, unprotected source and
+derived records are removed, and missing/invalid keys, read-only roles or
+missing principal context cannot mutate the file. The pre-fix selection had
+eight failures and five passing controls.
+
+This fixes audit attribution, not an observed cross-principal deletion bypass.
+The missing-principal test deliberately suppresses normal context binding; it
+does not demonstrate an unauthenticated route bypass. These tests do not prove
+PostgreSQL erasure, concurrency/rollback resistance, immutable audit storage,
+external IdP identity, all lifecycle metadata shapes or production legal-hold
+compliance. The BFF's shared backend key remains a backend identity, not a
+trusted per-end-user identity. Low-level internal erasure helpers retain their
+explicit actor argument for trusted callers.
+
 ## Event-stream read authorization
 
 Previously, SSE delivered every event in its shared history/queue to any valid
