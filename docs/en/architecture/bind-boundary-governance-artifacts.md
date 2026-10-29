@@ -207,9 +207,9 @@ live streams remain best-effort notifications rather than durable delivery
 proofs. A silent network stall is noticed only when a transport send blocks or a
 disconnect is reported; this does not establish production load capacity.
 
-The `stream-real-uvicorn` CI job runs sixteen loopback TCP tests against the
-actual API application: eight with a server thread and the same eight with a
-separate Python interpreter. It rejects skipped, failed, or missing cases and
+The `stream-real-uvicorn` CI job runs twenty loopback TCP tests against the
+actual API application: eight with a server thread, the same eight with a
+separate Python interpreter, and four subprocess replacement cases. It rejects skipped, failed, or missing cases and
 checks the child source SHA plus distinct client/server PIDs from each child
 case's JUnit properties. These check delivery/disconnect cleanup, server-process
 key rotation, a shared two-slot fixture limit and reuse, invalid credentials,
@@ -225,8 +225,18 @@ and transport versions. Ordinary lanes may skip this optional transport module
 when `websockets` is absent; the dedicated Linux job installs the pinned test
 dependency and requires every case. These are processes on the same host, not
 independently administered hosts or OS-user isolation. This does not validate
-TLS, process-restart recovery, slow real networks, production load, or external
-secret/revocation distribution. No external provider or business API is called.
+TLS, durable runtime-state recovery, slow real networks, production load, or
+external secret/revocation distribution. No external provider or business API is called.
+
+The four replacement cases cover graceful termination and forced process kill,
+for both SSE and WebSocket. They require the old socket to terminate, reap the
+old process, then bind a new interpreter to the same loopback port. The new
+process starts with an explicitly supplied replacement synthetic key: the old
+key must be refused and the replacement key must receive a newly published
+event. Both process PIDs and source SHAs are recorded and checked in CI. This
+is transport replacement after process exit, not automatic key-rotation
+persistence, durable subscription/event history, database recovery, replay
+resistance across a rollback, or restoration of authorization/Bind state.
 
 Startup rejects declared multi-worker API deployments in production/strict
 profiles while this controller remains process-local. Either `WEB_CONCURRENCY`

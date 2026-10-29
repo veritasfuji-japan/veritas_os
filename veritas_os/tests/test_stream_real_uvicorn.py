@@ -49,6 +49,7 @@ class _ProcessHub:
         self.process = process
         self.buffer = b""
         self.sequence = 0
+        self.expected_exit_code = None
 
     def read_reply(self, timeout=10):
         deadline = time.monotonic() + timeout
@@ -76,19 +77,31 @@ class _ProcessHub:
         assert reply["pid"] == self.process.pid
         return reply
 
+    def stop(self, mode):
+        if mode == "graceful":
+            self.command("shutdown")
+            assert self.process.wait(timeout=5) == 0
+        else:
+            assert mode == "crash"
+            self.process.kill()
+            assert self.process.wait(timeout=3) < 0
+        self.expected_exit_code = self.process.returncode
+
     def publish(self, event_type, payload):
         assert event_type == "trustlog.appended"
         return self.command("publish", label=payload["test"])["event"]
 
 
 @contextmanager
-def _process_server(tmp_path, record_property):
+def _process_server(tmp_path, record_property, *, port=0, key_generation="original"):
     env = dict(os.environ)
     root = Path(__file__).resolve().parents[2]
     env["PYTHONPATH"] = str(root)
+    tmp_path.mkdir(parents=True, exist_ok=True)
     with (tmp_path / "uvicorn-child.log").open("wb") as log:
         process = subprocess.Popen(
-            [sys.executable, "-u", "-m", "veritas_os.tests.helpers.stream_process_fixture"],
+            [sys.executable, "-u", "-m", "veritas_os.tests.helpers.stream_process_fixture",
+             "--port", str(port), "--key-generation", key_generation],
             cwd=root, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
         )
         hub = _ProcessHub(process)
@@ -98,13 +111,17 @@ def _process_server(tmp_path, record_property):
             assert ready["pid"] == process.pid and process.pid != os.getpid()
             sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
             assert ready["tested_sha"] == sha
+            hub.tested_sha = ready["tested_sha"]
             record_property("server_pid", process.pid)
             record_property("client_pid", os.getpid())
             record_property("child_tested_sha", ready["tested_sha"])
             yield f"http://127.0.0.1:{ready['port']}", hub
-            _wait_subscribers(hub, 0)
-            hub.command("shutdown")
-            assert process.wait(timeout=5) == 0
+            if hub.expected_exit_code is None:
+                _wait_subscribers(hub, 0)
+                hub.command("shutdown")
+                assert process.wait(timeout=5) == 0
+            else:
+                assert process.poll() == hub.expected_exit_code
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -148,12 +165,16 @@ def _stream(base, transport, key=KEY):
                 yield response, receive
 
 
-@pytest.fixture(params=["thread", "process"])
-def live_stream_server(monkeypatch, request, tmp_path, record_property):
+def _require_socket_transport():
     if importlib.util.find_spec("websockets") is None:
         if os.getenv("VERITAS_REQUIRE_STREAM_SOCKET_TESTS") == "1":
             pytest.fail("dedicated transport checks require websockets")
         pytest.skip("optional WebSocket transport; required by dedicated CI")
+
+
+@pytest.fixture(params=["thread", "process"])
+def live_stream_server(monkeypatch, request, tmp_path, record_property):
+    _require_socket_transport()
     monkeypatch.setenv("VERITAS_ENV", "production")
     monkeypatch.delenv("VERITAS_POSTURE", raising=False)
     monkeypatch.setenv("VERITAS_API_KEY", KEY)
@@ -285,3 +306,60 @@ def test_real_socket_incomplete_startup_refused(live_stream_server, monkeypatch)
         _ws_connect(base)
     assert caught.value.response.status_code == 403
     _wait_subscribers(hub, 0)
+
+
+@pytest.mark.parametrize("transport", ["sse", "websocket"])
+@pytest.mark.parametrize("stop_mode", ["graceful", "crash"])
+def test_real_socket_process_restart(tmp_path, record_property, transport, stop_mode):
+    _require_socket_transport()
+    if os.name != "posix":
+        pytest.skip("subprocess restart transport checks require POSIX")
+    from websockets.exceptions import ConnectionClosed, InvalidStatus
+
+    record_property("server_mode", "restart")
+    record_property("client_pid", os.getpid())
+    record_property("stop_mode", stop_mode)
+    with _process_server(tmp_path / "old", lambda *_: None) as (base, old):
+        old_pid = old.process.pid
+        record_property("old_server_pid", old_pid)
+        record_property("old_tested_sha", old.tested_sha)
+        port = int(base.rsplit(":", 1)[1])
+        record_property("port", port)
+        with _stream(base, transport) as (connection, receive):
+            event = old.publish("trustlog.appended", {"test": "before-restart"})
+            assert receive() == event
+            _wait_subscribers(old, 1)
+            old.stop(stop_mode)
+            assert old.process.poll() is not None
+            if transport == "websocket":
+                with pytest.raises(ConnectionClosed):
+                    connection.recv(timeout=3)
+            else:
+                try:
+                    assert receive() is None
+                except (httpx.RemoteProtocolError, httpx.ReadError):
+                    # A killed HTTP stream may end without its final chunk.
+                    pass
+        record_property("old_connection_terminated", True)
+
+    with _process_server(
+        tmp_path / "new", lambda *_: None, port=port, key_generation="replacement",
+    ) as (new_base, new):
+        assert new_base == base
+        assert new.process.pid != old_pid
+        record_property("new_server_pid", new.process.pid)
+        record_property("new_tested_sha", new.tested_sha)
+        _wait_subscribers(new, 0)
+        if transport == "websocket":
+            with pytest.raises(InvalidStatus) as caught:
+                _ws_connect(new_base, KEY)
+            assert caught.value.response.status_code == 403
+        else:
+            with httpx.Client(timeout=3, trust_env=False) as client:
+                assert client.get(new_base + "/v1/events", headers={"X-API-Key": KEY}).status_code == 401
+        with _stream(new_base, transport, REPLACEMENT) as (_, receive):
+            event = new.publish("trustlog.appended", {"test": "after-restart"})
+            assert receive() == event
+            _wait_subscribers(new, 1)
+        _wait_subscribers(new, 0)
+    record_property("replacement_verified", True)

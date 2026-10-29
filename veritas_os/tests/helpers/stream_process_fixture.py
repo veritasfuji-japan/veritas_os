@@ -4,6 +4,7 @@ This intentionally supplies synthetic post-startup readiness. It is not a
 production launcher or proof of security startup dependencies.
 """
 
+import argparse
 import json
 import os
 import socket
@@ -22,8 +23,14 @@ PREFIX = "STREAM_FIXTURE "
 
 def main() -> None:
     """Serve loopback requests and accept bounded synthetic controls on stdin."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--key-generation", choices=("original", "replacement"), default="original")
+    args = parser.parse_args()
+    if not 0 <= args.port <= 65535:
+        parser.error("invalid loopback port")
     os.environ["VERITAS_ENV"] = "production"
-    os.environ["VERITAS_API_KEY"] = KEY
+    os.environ["VERITAS_API_KEY"] = KEY if args.key_generation == "original" else REPLACEMENT
     os.environ.pop("VERITAS_POSTURE", None)
     os.environ.pop("VERITAS_API_KEYS", None)
     from veritas_os.api import server
@@ -34,7 +41,8 @@ def main() -> None:
     server.app.state.security_startup_complete = True
     server.app.state.security_startup_pid = os.getpid()
     listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", args.port))
     listener.listen(16)
     port = listener.getsockname()[1]
     instance = uvicorn.Server(uvicorn.Config(
@@ -68,7 +76,7 @@ def main() -> None:
                         result["subscribers"] = len(hub._subscribers)
                 elif action == "publish":
                     label = message["label"]
-                    if label not in {"before-disconnect", "before-rotation", "after-rotation"}:
+                    if label not in {"before-disconnect", "before-rotation", "after-rotation", "before-restart", "after-restart"}:
                         raise ValueError("unknown synthetic event")
                     result["event"] = hub.publish("trustlog.appended", {"test": label})
                 elif action == "rotate":
