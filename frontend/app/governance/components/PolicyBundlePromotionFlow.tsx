@@ -342,7 +342,7 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
     setReceiptError(null);
 
     if (!canOperate) {
-      setError("RBAC: promotion は operator 以上のみ実行可能です。");
+      setError("promotion には認証済み admin セッションが必要です。");
       return;
     }
     if (selectorError) {
@@ -505,7 +505,7 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
         ) : null}
         {!canOperate ? (
           <p className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-warning-foreground">
-            RBAC: promotion は operator または admin ロールが必要です。
+            promotion には認証済み admin セッションが必要です。
           </p>
         ) : null}
 
