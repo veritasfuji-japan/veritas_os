@@ -28,9 +28,11 @@ async def mounted_stream(
     monkeypatch.setenv("VERITAS_ENV", "production" if credential_mode == "header" else "local")
     monkeypatch.delenv("VERITAS_POSTURE", raising=False)
     monkeypatch.setenv("VERITAS_API_KEY", "unrelated-legacy-test-only")
-    monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([{"key": KEY, "role": role}]))
+    monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([
+        {"key": KEY, "role": role, "tenant_id": "synthetic-tenant"},
+    ]))
     monkeypatch.setenv("VERITAS_GOVERNANCE_ENFORCE_RBAC", "1")
-    monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOWED_ROLES", "admin,compliance_owner")
+    monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOWED_ROLES", "admin,auditor,compliance_owner")
     monkeypatch.setenv("VERITAS_GOVERNANCE_TENANT_ID", "synthetic-tenant")
     for flag in ("SSE", "WS"):
         monkeypatch.setenv(f"VERITAS_ALLOW_{flag}_QUERY_API_KEY", "1")
@@ -156,7 +158,10 @@ def test_stream_permission_uses_header_before_privileged_query(monkeypatch, tran
     assert not stream_has_permission(connection, Permission.compliance_read)
 
 
-@pytest.mark.parametrize("change", ["missing-role", "wrong-role", "wrong-tenant", "disabled-unacknowledged"])
+@pytest.mark.parametrize("change", [
+    "missing-role", "wrong-role", "wrong-tenant", "disabled-unacknowledged",
+    "unallowed-key-role", "wrong-key-tenant", "unbound-key-tenant",
+])
 async def test_sse_governance_events_respect_existing_access_guard(monkeypatch, change):
     headers = [(b"x-tenant-id", b"synthetic-tenant")] if change == "missing-role" else None
     async with mounted_stream(monkeypatch, "sse", "admin", governance_headers=headers) as fixture:
@@ -168,6 +173,16 @@ async def test_sse_governance_events_respect_existing_access_guard(monkeypatch, 
             monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOWED_ROLES", "compliance_owner")
         elif change == "wrong-tenant":
             monkeypatch.setenv("VERITAS_GOVERNANCE_TENANT_ID", "another-tenant")
+        elif change == "unallowed-key-role":
+            monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOWED_ROLES", "admin,compliance_owner")
+            monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([
+                {"key": KEY, "role": "auditor", "tenant_id": "synthetic-tenant"},
+            ]))
+        elif change in {"wrong-key-tenant", "unbound-key-tenant"}:
+            entry = {"key": KEY, "role": "admin"}
+            if change == "wrong-key-tenant":
+                entry["tenant_id"] = "another-tenant"
+            monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([entry]))
         publish_batch()
         assert await asyncio.wait_for(markers.get(), timeout=2) == "final-barrier"
         assert "payload-trustlog.appended" in repr(sent)

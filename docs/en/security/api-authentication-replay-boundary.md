@@ -75,9 +75,46 @@ keys/readiness: all three API roles, both transports, header and opted-in local
 query credentials, history/live delivery, queued events after role downgrade,
 and governance access constraints. These are process-local role checks, not
 customer/tenant isolation, object-level authorization, external IdP revocation,
-cross-process secret distribution, or production validation. The existing
-governance guard's header and configured-tenant semantics are preserved; this
-change does not establish a trusted identity source for those headers.
+cross-process secret distribution, or production validation. Governance events
+also use the authenticated-scope guard below, including current key tenant
+membership. Stream role tests explicitly grant auditors governance access in
+their fixture; the default governance allowlist does not grant that access.
+
+## Authenticated governance scope
+
+The additional governance access guard previously trusted the caller's
+`X-Role` and checked only whether `X-Tenant-Id` matched a deployment-wide string.
+An auditor could claim an allowed role to read governance resources, and a key
+could claim the configured tenant without evidence of membership. Ordinary
+write permissions still prevented auditors from acquiring `governance_write`;
+that existing protection must not be confused with enforcement of the
+additional governance role/tenant constraints.
+
+The guard now requires the principal established by API authentication and
+verifies that the request's key matches that context. It resolves the current
+key role from server configuration and applies the governance allowlist to that
+role as well as the existing header assertion. A configured tenant additionally
+requires a matching server-side `tenant_id` in the key's `VERITAS_API_KEYS`
+entry. Missing, invalid or mismatched membership fails closed. The tenant header
+remains an additional scope assertion; it cannot create membership. This same
+guard runs before governance SSE delivery, so queued events respect current
+role and tenant changes.
+
+`tenant_id` is an optional nonempty string. Existing unbound multi-key entries
+and legacy single keys still work when tenant scope is unset, but cannot access
+tenant-scoped governance APIs until a multi-key entry explicitly binds them.
+See the environment reference and `.env.example` for migration. The existing
+explicitly acknowledged RBAC bypass still disables these additional role/tenant
+constraints; authenticated principal context and ordinary route permissions
+remain required.
+
+Mounted read/write regressions require rejection before handler callbacks;
+authorized read controls, parser roundtrip/invalid-value cases, and existing
+real Bind write tests cover compatibility. No external provider is called.
+This is a configured governance-scope boundary, not per-tenant policy storage,
+object-level authorization, organizational identity federation, or full
+multi-tenant isolation. A BFF using a shared backend key still presents that
+key's backend identity; end-user identity propagation is a separate boundary.
 
 ## Nonce expiry defect and correction
 

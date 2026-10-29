@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional, Protocol, Tuple
 
 from fastapi import Header, HTTPException, Query, Request, Security, WebSocket
 from fastapi.security.api_key import APIKeyHeader
+from starlette.requests import HTTPConnection
 
 from veritas_os.api.utils import _errstr, redact
 from veritas_os.api.rbac import Permission, Role, ROLE_PERMISSIONS
@@ -525,7 +526,7 @@ from typing import List
 
 
 def _parse_api_keys_config() -> List[dict]:
-    """Parse VERITAS_API_KEYS JSON env var into a list of {key, role} dicts.
+    """Parse VERITAS_API_KEYS key/role entries with optional trusted tenant_id.
 
     Returns an empty list when the env var is unset or empty.
     Raises ValueError on malformed JSON or invalid role values.
@@ -550,7 +551,13 @@ def _parse_api_keys_config() -> List[dict]:
         key_str = str(entry["key"]).strip()
         if not key_str:
             raise ValueError("Empty key in VERITAS_API_KEYS entry")
-        result.append({"key": key_str, "role": role_str})
+        parsed = {"key": key_str, "role": role_str}
+        if "tenant_id" in entry:
+            tenant = entry["tenant_id"]
+            if not isinstance(tenant, str) or not tenant.strip():
+                raise ValueError("VERITAS_API_KEYS tenant_id must be a nonempty string")
+            parsed["tenant_id"] = tenant.strip()
+        result.append(parsed)
     return result
 
 
@@ -582,6 +589,18 @@ def resolve_role_for_key(api_key: str) -> Role:
         return Role.admin
 
     raise ValueError("api key does not match any configured key")
+
+
+def resolve_tenant_for_key(api_key: str) -> str | None:
+    """Return a key's server-configured tenant; legacy/unbound keys have none.
+
+    Malformed multi-key configuration raises ValueError rather than trusting a
+    caller's tenant header or assigning a deployment-wide tenant to every key.
+    """
+    for entry in _parse_api_keys_config():
+        if secrets.compare_digest(api_key, entry["key"]):
+            return entry.get("tenant_id")
+    return None
 
 
 def _resolve_role_from_request(
@@ -946,7 +965,7 @@ def _bind_authenticated_principal(
     return principal_id
 
 
-def require_authenticated_principal(request: Request) -> str:
+def require_authenticated_principal(request: HTTPConnection) -> str:
     """Read the principal attached by successful API authentication, or refuse."""
     principal = getattr(request.state, "authenticated_principal_id", None)
     if not isinstance(principal, str) or not principal.strip() or principal == "anon":
