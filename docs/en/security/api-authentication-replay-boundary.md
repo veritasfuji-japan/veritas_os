@@ -27,8 +27,8 @@ permission. Read the current route modules for exact paths.
 | System reports | API key | `governance_read`; no HMAC |
 | System configuration / halt controls | API key | `config_write`; no HMAC |
 | Observability | API key | `governance_read`; no HMAC |
-| SSE `/v1/events` | Header-first API key; query credential opt-in only | No HMAC or route-specific RBAC permission |
-| WebSocket `/v1/ws/trustlog` | Explicit WebSocket API-key authentication in handler | No HMAC or route-specific RBAC permission |
+| SSE `/v1/events` | Header-first API key; query credential opt-in only | Current per-event read permissions; governance events also use the governance access guard; no HMAC |
+| WebSocket `/v1/ws/trustlog` | Explicit WebSocket API-key authentication in handler | Current per-event read permissions within the existing four-type filter; no HMAC |
 
 HMAC is not a global middleware. An imported `verify_signature` symbol alone
 would not establish enforcement; the legacy replay handler explicitly calls it.
@@ -42,6 +42,42 @@ default or signed request body. Other callers of the engine can still choose
 non-strict behavior; this route check does not establish global outbound-network
 isolation or permission parity with the other replay handler. Replay execution
 safety and stream authorization remain separate review surfaces.
+
+## Event-stream read authorization
+
+Previously, SSE delivered every event in its shared history/queue to any valid
+API key. This exposed compliance configuration and governance notifications to
+an `operator` key even though that role cannot read those resources through the
+ordinary APIs. WebSocket's type filter also admitted `compliance.pending_review`
+without checking `compliance_read`.
+
+Both streams now check the current configured API-key role before sending each
+event, including history prefilled at subscription and events already queued
+when the role changes. The header remains authoritative over a query key;
+`X-Role` cannot grant the API-key role's read permissions. Removed keys retain
+the existing stream termination behavior.
+
+| Event types | Required permission |
+| --- | --- |
+| `trustlog.appended`, `trustlog.debate`, `trustlog.critique`, `decide.completed`, `fuji.rejected`, `wat.shadow.validation` | `trust_log_read` |
+| `compliance.config.updated`, `compliance.pending_review` | `compliance_read` |
+| `governance.updated`, `governance.alert` | `governance_read`, plus the existing governance role/tenant/bypass guard |
+| Unclassified event types | Suppressed for every role until explicitly classified |
+
+WebSocket retains its narrower existing set: the three `trustlog.*` types and
+`compliance.pending_review`. SSE filters the classified inventory. Suppression
+does not close an otherwise valid connection; allowed events can still arrive.
+Sequence IDs may consequently have gaps. Synthetic SSE lifecycle tests use a
+classified event so send-failure and disconnect checks still exercise delivery.
+
+`test_stream_authorization.py` verifies the mounted application with synthetic
+keys/readiness: all three API roles, both transports, header and opted-in local
+query credentials, history/live delivery, queued events after role downgrade,
+and governance access constraints. These are process-local role checks, not
+customer/tenant isolation, object-level authorization, external IdP revocation,
+cross-process secret distribution, or production validation. The existing
+governance guard's header and configured-tenant semantics are preserved; this
+change does not establish a trusted identity source for those headers.
 
 ## Nonce expiry defect and correction
 

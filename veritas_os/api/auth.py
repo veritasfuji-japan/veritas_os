@@ -1065,6 +1065,24 @@ def stream_api_key_is_current(connection: Request | WebSocket) -> bool:
     return _is_valid_api_key(candidate)
 
 
+def stream_has_permission(connection: Request | WebSocket, permission: Permission) -> bool:
+    """Check a stream's current key and trusted configured role before delivery.
+
+    Caller-supplied role headers never grant these permissions. Re-resolve on
+    every event so an open stream does not retain a previous role's privileges.
+    """
+    if not stream_api_key_is_current(connection):
+        return False
+    candidate = (connection.headers.get("X-API-Key") or "").strip()
+    if not candidate:
+        candidate = (connection.query_params.get("api_key") or "").strip()
+    try:
+        role = resolve_role_for_key(candidate)
+    except ValueError:
+        return False
+    return permission in ROLE_PERMISSIONS.get(role, frozenset())
+
+
 def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
     """Authenticate WebSocket API key with header-first policy."""
     if not _has_configured_api_key():

@@ -75,7 +75,7 @@ async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, ter
         body = message.get("body", b"")
         if b": connected" in body:
             connected.set()
-        if b"event: test.event" in body:
+        if b"event: trustlog.appended" in body:
             delivered.set()
 
     scope = {
@@ -90,7 +90,7 @@ async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, ter
     try:
         await asyncio.wait_for(connected.wait(), timeout=2)
         if publish_event:
-            hub.publish("test.event", {"test": True})
+            hub.publish("trustlog.appended", {"test": True})
             await asyncio.wait_for(delivered.wait(), timeout=2)
         if termination == "cancel":
             task.cancel()
@@ -123,7 +123,7 @@ async def test_sse_event_heartbeat_and_observed_disconnect(monkeypatch):
         assert response.media_type == "text/event-stream"
         assert response.headers["X-Accel-Buffering"] == "no"
         assert await anext(stream) == ": connected\n\n"
-        event = hub.publish("test.event", {"test": True})
+        event = hub.publish("trustlog.appended", {"test": True})
         assert await anext(stream) == server._format_sse_message(event)
         assert (await asyncio.wait_for(anext(stream), timeout=1)).startswith(": heartbeat ")
         disconnected = True

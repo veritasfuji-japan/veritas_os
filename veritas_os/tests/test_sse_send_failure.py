@@ -30,7 +30,7 @@ async def test_sse_send_failure_releases_subscription(
     # Short direct-call heartbeat isolates response cleanup; HTTP bounds are unchanged.
     response = await routes_system.events(request, heartbeat_sec=0.01)
     if boundary == "event":
-        hub.publish("test.event", {"test": True})
+        hub.publish("trustlog.appended", {"test": True})
     failure = error_type("synthetic SSE send failure")
     failed = False
 
@@ -40,7 +40,7 @@ async def test_sse_send_failure_releases_subscription(
         if (
             (boundary == "headers" and message["type"] == "http.response.start")
             or (boundary == "connected" and b": connected" in body)
-            or (boundary == "event" and b"event: test.event" in body)
+            or (boundary == "event" and b"event: trustlog.appended" in body)
             or (boundary == "heartbeat" and b": heartbeat" in body)
         ):
             failed = True
@@ -77,7 +77,7 @@ async def test_mounted_sse_send_failure_releases_subscription(monkeypatch, bound
     monkeypatch.setattr(server.app.state, "security_startup_pid", os.getpid(), raising=False)
     hub = SSEEventHub(timestamp_factory=lambda: "test")
     monkeypatch.setattr(server, "_event_hub", hub)
-    hub.publish("test.event", {"test": True})
+    hub.publish("trustlog.appended", {"test": True})
     incoming = asyncio.Queue()
     failed = False
     failure = RuntimeError("synthetic mounted SSE send failure")
@@ -85,7 +85,7 @@ async def test_mounted_sse_send_failure_releases_subscription(monkeypatch, bound
     async def send(message):
         nonlocal failed
         body = message.get("body", b"")
-        target = b": connected" if boundary == "connected" else b"event: test.event"
+        target = b": connected" if boundary == "connected" else b"event: trustlog.appended"
         if target in body:
             failed = True
             raise failure

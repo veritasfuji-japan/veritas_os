@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.types import Receive, Scope, Send
@@ -25,6 +25,7 @@ from veritas_os.api.auth import (
     require_authenticated_principal,
     require_permission,
     stream_api_key_is_current,
+    stream_has_permission,
 )
 from veritas_os.api.bind_summary import build_bind_response_payload
 from veritas_os.api import sse_hub
@@ -653,9 +654,44 @@ async def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
 # SSE events
 # ------------------------------------------------------------------
 
+# Explicit inventory: new event types must be assigned a read permission before
+# becoming visible. Filtering here covers both queued history and live events.
+_EVENT_READ_PERMISSIONS = {
+    "trustlog.appended": Permission.trust_log_read,
+    "trustlog.debate": Permission.trust_log_read,
+    "trustlog.critique": Permission.trust_log_read,
+    "decide.completed": Permission.trust_log_read,
+    "fuji.rejected": Permission.trust_log_read,
+    "wat.shadow.validation": Permission.trust_log_read,
+    "compliance.config.updated": Permission.compliance_read,
+    "compliance.pending_review": Permission.compliance_read,
+    "governance.updated": Permission.governance_read,
+    "governance.alert": Permission.governance_read,
+}
+
+
+def _stream_event_is_authorized(connection: Request | WebSocket, event: Dict[str, Any]) -> bool:
+    """Apply current read permissions and the existing governance access guard."""
+    event_type = event.get("type")
+    if not isinstance(event_type, str):
+        return False
+    permission = _EVENT_READ_PERMISSIONS.get(event_type)
+    if permission is None or not stream_has_permission(connection, permission):
+        return False
+    if permission == Permission.governance_read:
+        try:
+            _get_server().require_governance_access(
+                x_role=connection.headers.get("X-Role"),
+                x_tenant_id=connection.headers.get("X-Tenant-Id"),
+            )
+        except HTTPException:
+            return False
+    return True
+
+
 @events_router.get("/v1/events", dependencies=[Depends(require_api_key_header_or_query)])
 async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, le=60)):
-    """Server-Sent Events stream for near-real-time UI updates."""
+    """Stream near-real-time UI events allowed by the key's current read permissions."""
     srv = _get_server()
     event_hub = srv._event_hub
     subscriber = None
@@ -686,6 +722,8 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
                         heartbeat_at = time.monotonic() + heartbeat_sec
                     # Cancellation must not leave a blocking reader in the thread pool.
                     await asyncio.sleep(0.1)
+                    continue
+                if not _stream_event_is_authorized(request, item):
                     continue
                 yield srv._format_sse_message(item)
                 heartbeat_at = time.monotonic() + heartbeat_sec
@@ -792,7 +830,7 @@ async def trustlog_ws(websocket: WebSocket):
                 # Do not leave a blocking queue reader in the thread pool on cancellation.
                 await asyncio.sleep(0.1)
                 continue
-            if item.get("type") in allowed_types:
+            if item.get("type") in allowed_types and _stream_event_is_authorized(websocket, item):
                 await asyncio.wait_for(websocket.send_json(item), timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC)
                 heartbeat_at = time.monotonic() + 15
 
