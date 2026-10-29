@@ -116,6 +116,31 @@ object-level authorization, organizational identity federation, or full
 multi-tenant isolation. A BFF using a shared backend key still presents that
 key's backend identity; end-user identity propagation is a separate boundary.
 
+## BFF Authorization and Cookie credential selection
+
+The BFF proxy and `/api/auth/session` share the same credential resolver. A
+present `Authorization` header now owns credential selection: it must contain a
+complete Bearer credential (case-insensitive scheme, one or more separating
+spaces). Empty, unsupported or malformed values return HTTP 401 without using
+a session cookie. A well-formed but unconfigured token retains HTTP 403.
+Cookie authentication is considered only when Authorization is absent; missing
+server token-role configuration retains HTTP 503.
+
+Previously the resolver split on a single space and could fall back to an
+ambient admin cookie for an unsupported scheme, an incomplete Bearer value or
+multiple separating spaces. It could also accept a valid token prefix while
+ignoring extra credential text. In particular, a multi-space viewer Bearer
+credential could be replaced by the admin cookie, resulting in a different
+authenticated role from the one explicitly selected by the caller.
+
+The regression calls the actual session and privileged proxy handlers with
+synthetic credentials and mocked upstream fetch. It checks refusal before
+forwarding, exact viewer-role selection despite an admin cookie, unknown-token
+refusal, and valid Bearer/cookie-only controls. Production session-issuance
+guards and the explicit global-session escape hatch are unchanged and retain
+their existing tests. This fix does not add session expiry, external IdP
+revocation, trusted per-user backend identity, or browser/deployment validation.
+
 ## Nonce expiry defect and correction
 
 The verifier accepts `abs(int(now) - signed_timestamp) <= 300`. Previously it

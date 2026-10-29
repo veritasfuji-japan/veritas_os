@@ -253,7 +253,10 @@ export const BFF_SESSION_COOKIE = "__veritas_bff";
  *
  * Lookup order:
  * 1. `Authorization: Bearer <token>` header  (programmatic / external clients)
- * 2. `__veritas_bff` httpOnly cookie          (browser same-origin requests)
+ * 2. `__veritas_bff` httpOnly cookie, only when Authorization is absent
+ *
+ * An explicit malformed or invalid Authorization is terminal; an ambient
+ * cookie must not silently replace the caller's selected credential.
  */
 export function authenticateRoleFromHeaders(
   headers: Headers,
@@ -272,11 +275,15 @@ export function authenticateRoleFromHeaders(
     };
   }
 
-  // 1. Try Authorization header first
-  const authorization = headers.get("authorization") ?? "";
-  const [scheme, headerToken] = authorization.split(" ");
-  if (scheme?.toLowerCase() === "bearer" && headerToken) {
-    const role = tokenRoleMap.get(headerToken);
+  // 1. A present Authorization header owns credential selection.
+  if (headers.has("authorization")) {
+    const bearer = /^Bearer +(\S+)$/i.exec(headers.get("authorization") ?? "");
+    if (!bearer) {
+      return {
+        errorResponse: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
+      };
+    }
+    const role = tokenRoleMap.get(bearer[1]);
     if (role) {
       return { role };
     }
