@@ -1193,7 +1193,10 @@ def _apply_bind_target_metadata_from_lineage(
         "relevant_ui_href",
     ):
         current_value = getattr(receipt, metadata_field, "")
-        if isinstance(current_value, str) and current_value.strip():
+        # "other" is the schema default, not a concrete target classification.
+        if isinstance(current_value, str) and current_value.strip() and not (
+            metadata_field == "target_path_type" and current_value == "other"
+        ):
             continue
         value = metadata.get(metadata_field)
         if isinstance(value, str) and value.strip():

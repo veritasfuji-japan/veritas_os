@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 from uuid import uuid4
 
 from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent
@@ -58,6 +58,7 @@ def halt_system_with_bind_boundary(
         expected_state_fingerprint=expected_fingerprint,
         approval_context=merged_approval_context,
         policy_lineage=_with_bind_policy_lineage(
+            operation="halt",
             lineage=policy_lineage,
             governance_policy=governance_policy,
         ),
@@ -119,6 +120,7 @@ def resume_system_with_bind_boundary(
         expected_state_fingerprint=expected_fingerprint,
         approval_context=merged_approval_context,
         policy_lineage=_with_bind_policy_lineage(
+            operation="resume",
             lineage=policy_lineage,
             governance_policy=governance_policy,
         ),
@@ -140,11 +142,20 @@ def _utc_now_iso8601() -> str:
 
 def _with_bind_policy_lineage(
     *,
+    operation: Literal["halt", "resume"],
     lineage: dict[str, Any] | None,
     governance_policy: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Merge governance bind policy surface into execution intent lineage."""
     merged: dict[str, Any] = dict(lineage or {})
+    merged.setdefault("bind_target_metadata", {
+        "target_path": f"/v1/system/{operation}",
+        "target_type": f"system_{operation}",
+        "target_path_type": f"system_{operation}",
+        "target_label": "system emergency halt" if operation == "halt" else "system resume",
+        "operator_surface": "compliance",
+        "relevant_ui_href": "/system",
+    })
     if not isinstance(governance_policy, dict):
         return merged
     bind_policy = governance_policy.get("bind_adjudication")
