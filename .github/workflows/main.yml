@@ -1151,7 +1151,8 @@ jobs:
   frontend-quality-gate:
     name: frontend-${{ matrix.gate }}
     needs: [lint, governance-smoke, governance-backend-fast]
-    runs-on: ubuntu-latest
+    # The pinned Playwright release does not support Ubuntu 26.04 yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     strategy:

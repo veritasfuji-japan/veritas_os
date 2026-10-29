@@ -113,7 +113,14 @@ jobs:
       - name: Start independent sandbox HTTPS service
         run: |
           set -euo pipefail
-          sudo -E env PYTHONPATH="$GITHUB_WORKSPACE" "$(which python)" \
+          # sudo implementations may ignore -E; pass only service inputs.
+          sudo env \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+            VERITAS_SANDBOX_DATABASE_URL="$VERITAS_SANDBOX_DATABASE_URL" \
+            VERITAS_SANDBOX_WRITER_TOKEN="$VERITAS_SANDBOX_WRITER_TOKEN" \
+            VERITAS_SANDBOX_READER_TOKEN="$VERITAS_SANDBOX_READER_TOKEN" \
+            VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG="$VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG" \
+            "$(which python)" \
             scripts/run_native_v2_sandbox_service.py \
             --host 0.0.0.0 \
             --port 443 \
