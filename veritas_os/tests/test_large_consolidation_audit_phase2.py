@@ -5,7 +5,11 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "audit_large_consolidation_phase2.py"
@@ -203,3 +207,133 @@ def test_phase2_report_preserves_separate_human_review_for_deletion() -> None:
     assert "separate Human CEO review point" in report
     assert "TrustLog verifier unification" in report
     assert "dry-run family collapse" in report
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(root), *args], text=True,
+    ).strip()
+
+
+@pytest.fixture
+def audit_checkout(tmp_path, monkeypatch):
+    """Use real Git metadata and a minimal, independently editable audit input."""
+    root = tmp_path / "checkout"
+    root.mkdir()
+    _git(root, "init", "-q")
+    freeze = root / "freeze.json"
+    freeze.write_text('{"required_files": []}\n', encoding="utf-8")
+    (root / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
+    _git(root, "add", ".")
+    _git(root, "-c", "user.name=Audit Test", "-c", "user.email=audit@example.invalid",
+         "-c", "commit.gpgsign=false", "commit", "-qm", "initial")
+    module = _load_module()
+    monkeypatch.setattr(module, "ROOT", root)
+    monkeypatch.setattr(module, "FREEZE", freeze)
+    # Neither process CWD nor CI metadata is the authority for the checkout.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_SHA", "0" * 40)
+    return module, root
+
+
+def test_generated_provenance_identifies_actual_detached_checkout(audit_checkout) -> None:
+    module, root = audit_checkout
+    _git(root, "checkout", "--detach", "-q")
+    data = module.build_phase2()
+    observed = data["observed_checkout"]
+    assert observed == {
+        "tested_sha": _git(root, "rev-parse", "HEAD"),
+        "head_tree_sha": _git(root, "rev-parse", "HEAD^{tree}"),
+        "worktree_dirty": False,
+    }
+    assert data["source_main"] == _baseline()["source_main"]
+    assert observed["tested_sha"] != data["source_main"]
+
+
+@pytest.mark.parametrize("state", ["unstaged", "staged", "deleted", "untracked"])
+def test_generated_provenance_marks_local_changes(audit_checkout, state) -> None:
+    module, root = audit_checkout
+    head, tree = _git(root, "rev-parse", "HEAD"), _git(root, "rev-parse", "HEAD^{tree}")
+    if state == "untracked":
+        (root / "new.py").write_text("# local input\n", encoding="utf-8")
+    elif state == "deleted":
+        (root / ".gitignore").unlink()
+    else:
+        (root / ".gitignore").write_text("ignored.txt\nother.txt\n", encoding="utf-8")
+        if state == "staged":
+            _git(root, "add", ".gitignore")
+    assert module.build_phase2()["observed_checkout"] == {
+        "tested_sha": head, "head_tree_sha": tree, "worktree_dirty": True,
+    }
+
+
+def test_provenance_updates_after_real_commit(audit_checkout) -> None:
+    module, root = audit_checkout
+    before = module.build_phase2()["observed_checkout"]
+    (root / "new.py").write_text("# committed input\n", encoding="utf-8")
+    _git(root, "add", "new.py")
+    _git(root, "-c", "user.name=Audit Test", "-c", "user.email=audit@example.invalid",
+         "-c", "commit.gpgsign=false", "commit", "-qm", "next")
+    after = module.build_phase2()["observed_checkout"]
+    assert after["tested_sha"] == _git(root, "rev-parse", "HEAD")
+    assert after["head_tree_sha"] == _git(root, "rev-parse", "HEAD^{tree}")
+    assert after["tested_sha"] != before["tested_sha"]
+    assert after["head_tree_sha"] != before["head_tree_sha"]
+    assert after["worktree_dirty"] is False
+
+
+def test_ignored_files_are_not_claimed_as_git_dirtiness(audit_checkout) -> None:
+    module, root = audit_checkout
+    (root / "ignored.txt").write_text("ignored audit input\n", encoding="utf-8")
+    assert module.build_phase2()["observed_checkout"]["worktree_dirty"] is False
+
+
+@pytest.mark.parametrize("state", ["no_repository", "nested_directory", "no_commit", "no_git"])
+def test_missing_checkout_identity_cannot_generate_report(audit_checkout, tmp_path, monkeypatch, state) -> None:
+    module, root = audit_checkout
+    if state == "no_git":
+        monkeypatch.setenv("PATH", "")
+    else:
+        root = root / "nested" if state == "nested_directory" else tmp_path / "unidentified"
+        root.mkdir()
+        if state == "no_commit":
+            _git(root, "init", "-q")
+        monkeypatch.setattr(module, "ROOT", root)
+    with pytest.raises(RuntimeError, match="checkout provenance"):
+        module.build_phase2()
+
+
+def test_checkout_change_during_scan_cannot_generate_report(audit_checkout, monkeypatch) -> None:
+    module, root = audit_checkout
+    original = module._build_python_graph
+
+    def changed_graph():
+        (root / "new.py").write_text("# created during scan\n", encoding="utf-8")
+        return original()
+
+    monkeypatch.setattr(module, "_build_python_graph", changed_graph)
+    with pytest.raises(RuntimeError, match="checkout provenance changed"):
+        module.build_phase2()
+
+
+def test_cli_records_pre_output_checkout_state(audit_checkout) -> None:
+    _, root = audit_checkout
+    script = root / "scripts" / SCRIPT.name
+    script.parent.mkdir()
+    shutil.copyfile(SCRIPT, script)
+    freeze = root / "docs/architecture/controlled-execution-proof-freeze-v1.json"
+    freeze.parent.mkdir(parents=True)
+    freeze.write_text('{"required_files": []}\n', encoding="utf-8")
+    _git(root, "add", ".")
+    _git(root, "-c", "user.name=Audit Test", "-c", "user.email=audit@example.invalid",
+         "-c", "commit.gpgsign=false", "commit", "-qm", "generator")
+    output = root / "report.json"
+    subprocess.run([sys.executable, str(script), "--output", str(output)],
+                   check=True, capture_output=True, text=True, timeout=30)
+    first = json.loads(output.read_text(encoding="utf-8"))
+    assert first["observed_checkout"]["worktree_dirty"] is False
+    assert _git(root, "status", "--porcelain", "--untracked-files=all")
+    subprocess.run([sys.executable, str(script), "--output", str(output)],
+                   check=True, capture_output=True, text=True, timeout=30)
+    second = json.loads(output.read_text(encoding="utf-8"))
+    assert second["observed_checkout"]["worktree_dirty"] is True
