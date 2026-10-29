@@ -46,6 +46,46 @@ Not guaranteed by this document alone:
 - environment-specific production hardening and operational controls
 - universal production-readiness claims across every deployment context
 
+## Management target alignment and receipt evidence
+
+The bounded management set is policy update, policy-bundle promotion, compliance
+configuration update, halt and resume. `test_bind_target_catalog_consistency.py`
+checks exact method/path membership and multiplicity against the operator
+catalog, the API classification registry (`policy/bind_coverage.py`), and
+effective mounted routes using FastAPI's route-tree API. Marker/type metadata
+is checked separately from execution. Copied-input mutations exercise missing,
+extra, duplicate and mismatched entries and missing/wrong markers.
+
+The effect-boundary registry (`policy/bind_coverage_registry.py`) answers a
+different question, including the frozen BCBR transport boundaries. This
+management check does not add rows to that registry or expand its proof scope.
+
+Mounted HTTP tests exercise each management route with real helpers, Bind core
+and adapters, local temporary policy/bundle/config/controller state, and an
+encrypted temporary TrustLog. Wrapping spies require the expected helper/core
+and adapter/action. Successful controls apply once. Current policy requiring
+missing TTL evidence produces BLOCKED or ESCALATED outcomes with no apply and
+unchanged effect state. Missing-key and auditor-key controls cannot reach Bind;
+an asserted admin role does not elevate the auditor key. TestClient does not
+run the production startup lifecycle; these are in-process HTTP tests.
+
+Each helper supplies default target metadata in existing intent lineage, so
+the Receipt written by Bind carries the same target as its API response.
+Backfill replaces the schema's `other` classification with supplied metadata,
+while retaining concrete existing Receipt fields and trusted internal lineage
+overrides. Reloaded TrustLog Receipts are checked for target and outcome.
+Before the correction, four helpers omitted this metadata and all five paths
+could retain `other` in persisted classification; the valid HTTP regression
+matrix had 15 metadata failures and 26 passing controls. This was an evidence
+alignment bug, not a reproduced execution bypass.
+
+Promotion retains its existing HTTP 200 response with an explicit non-COMMITTED
+Bind outcome; callers must inspect that outcome. Approval booleans/fixture
+reviewer labels do not establish independent human approval. The compiled test
+bundle uses the existing development integrity mode, not independently trusted
+production signing. No enterprise IAM, independent-host enforcement, complete
+effect inventory or universal bypass resistance is established by these tests.
+
 ## Authenticated actor for governance mutations
 
 `PUT /v1/governance/policy`, `POST /v1/governance/policy-bundles/promote`,
