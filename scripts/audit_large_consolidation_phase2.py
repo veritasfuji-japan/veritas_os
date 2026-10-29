@@ -20,6 +20,7 @@ import ast
 from collections import defaultdict, deque
 import json
 from pathlib import Path
+import subprocess
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,26 @@ _TEXT_SUFFIXES = {
     ".py", ".md", ".txt", ".toml", ".yml", ".yaml", ".json",
     ".ini", ".cfg", ".sh",
 }
+
+
+def _checkout_provenance() -> dict[str, Any]:
+    """Observe Git identity/dirtiness, without attesting to dirty file contents."""
+    def git(*args: str) -> str:
+        try:
+            return subprocess.check_output(
+                ["git", "-C", str(ROOT), *args],
+                text=True, stderr=subprocess.PIPE, timeout=30,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError("Cannot establish checkout provenance") from exc
+
+    if Path(git("rev-parse", "--show-toplevel")).resolve() != ROOT.resolve():
+        raise RuntimeError("Cannot establish checkout provenance: repository root mismatch")
+    return {
+        "tested_sha": git("rev-parse", "--verify", "HEAD"),
+        "head_tree_sha": git("rev-parse", "--verify", "HEAD^{tree}"),
+        "worktree_dirty": bool(git("status", "--porcelain=v1", "-z", "--untracked-files=all")),
+    }
 
 
 def _iter_files() -> Iterable[Path]:
@@ -384,6 +405,7 @@ def _trustlog_matrix() -> list[dict[str, Any]]:
 
 
 def build_phase2() -> dict[str, Any]:
+    observed_checkout = _checkout_provenance()
     all_paths = list(_iter_files())
     _, edges, inbound = _build_python_graph()
     runtime_seeds, proof_seeds = _freeze_seed_paths()
@@ -413,10 +435,11 @@ def build_phase2() -> dict[str, Any]:
         for path in runtime_closure
     ]
 
-    return {
+    result = {
         "format_version": "large-consolidation-audit-phase2/v1",
         "mode": "NON_DESTRUCTIVE",
         "source_main": "52752dbf766d9994f2f3267af47e904748d347a6",
+        "observed_checkout": observed_checkout,
         "frozen_proof_anchor": "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc",
         "frozen_dependency_closure": {
             "runtime_seed_count": len(runtime_seeds),
@@ -514,6 +537,9 @@ def build_phase2() -> dict[str, Any]:
             },
         ],
     }
+    if _checkout_provenance() != observed_checkout:
+        raise RuntimeError("checkout provenance changed during audit")
+    return result
 
 
 def main() -> int:
