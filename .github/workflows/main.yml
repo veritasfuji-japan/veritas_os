@@ -746,12 +746,11 @@ jobs:
           # Keep the established Python 3.11 seed unchanged. Python 3.12
           # uses its own exact-main, coverage-instrumented JUnit timings.
           duration_seed="scripts/ci/pytest-file-durations.json"
-          shard_flags=()
+          # Separate same-basename modules for both Python versions: source
+          # size changes can otherwise move an existing collision into a shard.
+          shard_flags=(--avoid-duplicate-test-basenames)
           if [ "${{ matrix.python-version }}" = "3.12" ]; then
             duration_seed="scripts/ci/pytest-file-durations-py312.json"
-            # Different test roots contain duplicate module filenames.
-            # Keep same-basename modules on separate Python 3.12 shards.
-            shard_flags+=(--avoid-duplicate-test-basenames)
             # Two heavy modules now have exactly-once case owners elsewhere.
             shard_flags+=(--exclude-pinned-heavy-modules)
           fi
