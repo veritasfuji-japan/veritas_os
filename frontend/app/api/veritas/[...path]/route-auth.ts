@@ -49,7 +49,7 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
   {
     pathPattern: /^v1\/governance\/policy-bundles\/promote$/,
     method: "POST",
-    roles: ["operator", "admin"],
+    roles: ["admin"],
   },
 
   // Trust logs

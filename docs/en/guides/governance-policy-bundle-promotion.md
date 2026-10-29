@@ -20,6 +20,28 @@ the API response.
 
 The endpoint requires governance write permission.
 
+### Browser/BFF authorization
+
+The browser proxy `/api/veritas/v1/governance/policy-bundles/promote` requires an
+authenticated **admin** BFF session, for both bearer-token and session-cookie
+authentication. Viewer/operator requests are refused before the proxy calls the
+backend. The governance page enables promotion only for an authenticated admin;
+selecting an admin UI preview role cannot grant that authority.
+
+Previously the BFF and promotion form also allowed the operator role, despite
+the backend requiring `governance_write` (granted only to its admin role).
+Because the BFF supplies a shared backend key, the proxy must enforce this
+restriction itself: the forwarded `X-Role` does not reduce that key's backend
+permissions. Backend governance access, tenant, approval and Bind checks still
+apply independently. The prior forwarding mismatch does not prove that those
+additional checks could be bypassed or that a real promotion occurred.
+
+The regression uses the actual BFF route handlers with mocked upstream fetch
+and tests viewer/operator refusal, admin forwarding, forged role/key headers,
+and both credential modes. UI tests cover the authenticated role versus the
+preview selector. This does not establish per-user backend identities, tenant
+isolation, or production deployment safety.
+
 ---
 
 ## When to use it
@@ -71,6 +93,7 @@ the configured policy bundles root before bind execution proceeds.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
   -H "X-API-Key: ${VERITAS_API_KEY}" \
+  -H "X-Role: admin" \
   -H "Content-Type: application/json" \
   -d '{
     "bundle_id": "bundle-v2",

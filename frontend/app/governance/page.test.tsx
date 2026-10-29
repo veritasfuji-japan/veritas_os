@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import GovernanceControlPage from "./page";
+import * as governanceState from "./hooks/useGovernanceState";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -436,6 +437,27 @@ describe("GovernanceControlPage", () => {
     });
     fireEvent.change(screen.getByLabelText("role"), { target: { value: "admin" } });
     expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeDisabled();
+  });
+
+  it.each(["viewer", "operator"] as const)("blocks a loaded promotion form after rendered role becomes %s", async (role) => {
+    const originalHook = governanceState.useGovernanceState;
+    let downgraded = false;
+    vi.spyOn(governanceState, "useGovernanceState").mockImplementation(() => {
+      const state = originalHook();
+      return { ...state, authenticatedRole: downgraded ? role : state.authenticatedRole };
+    });
+    const fetchSpy = mockPolicyFetch("admin");
+    const { rerender } = render(<GovernanceControlPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+    expect(await screen.findByRole("button", { name: "promote bundle" })).toBeEnabled();
+    downgraded = true;
+    rerender(<GovernanceControlPage />);
+    fireEvent.change(screen.getByLabelText("role"), { target: { value: "admin" } });
+    const promote = screen.getByRole("button", { name: "promote bundle" });
+    expect(promote).toBeDisabled();
+    fireEvent.click(promote);
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/policy-bundles/promote"))).toBe(false);
   });
 
   it("enables load policy only for authenticated admin", async () => {
