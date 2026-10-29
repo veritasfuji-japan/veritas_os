@@ -681,6 +681,7 @@ def _stream_event_is_authorized(connection: Request | WebSocket, event: Dict[str
     if permission == Permission.governance_read:
         try:
             _get_server().require_governance_access(
+                connection=connection,
                 x_role=connection.headers.get("X-Role"),
                 x_tenant_id=connection.headers.get("X-Tenant-Id"),
             )
