@@ -1,0 +1,2069 @@
+{
+  "source_main": "cdfffc1681820dcf9c599f3725e7252fb4364f22",
+  "status": "STATIC_DISCOVERY_NOT_ENFORCEMENT_PROOF",
+  "method": "Git-tracked source bytes; AST literal route decorators, registration calls, main guards, selected background-call names; YAML job keys; no runtime imports",
+  "limits": [
+    "No arbitrary reflection, dynamic/plugin route enumeration, alias resolution, complete call graph, object ownership, effect classification or deployment discovery.",
+    "Route methods and marker presence do not establish side effects, active mounting, authorization correctness or bypass resistance.",
+    "Script, HTTP-handler and background matches are candidates; no match is not proof of absence.",
+    "Workflow definitions are not CI results; historical proof scopes remain separate."
+  ],
+  "counts": {
+    "repository_python_files": 1332,
+    "package_python_files": 1014,
+    "package_test_python_files": 550,
+    "root_test_python_files": 158
+  },
+  "route_declarations": [
+    {
+      "file": "veritas_os/api/dashboard_server.py",
+      "line": 608,
+      "method": "GET",
+      "path": "/",
+      "handler": "get_dashboard",
+      "declaration": "app.get('/', response_class=HTMLResponse)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/dashboard_server.py",
+      "line": 608,
+      "method": "GET",
+      "path": "/dashboard",
+      "handler": "get_dashboard",
+      "declaration": "app.get('/dashboard', response_class=HTMLResponse)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/dashboard_server.py",
+      "line": 799,
+      "method": "GET",
+      "path": "/api/status",
+      "handler": "get_status",
+      "declaration": "app.get('/api/status', response_class=JSONResponse)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/dashboard_server.py",
+      "line": 832,
+      "method": "GET",
+      "path": "/download/report",
+      "handler": "download_report",
+      "declaration": "app.get('/download/report', response_class=FileResponse)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/dashboard_server.py",
+      "line": 852,
+      "method": "GET",
+      "path": "/health",
+      "handler": "health_check",
+      "declaration": "app.get('/health')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_decide.py",
+      "line": 515,
+      "method": "POST",
+      "path": "/v1/decide",
+      "handler": "decide",
+      "declaration": "router.post('/v1/decide', response_model=DecideResponse, dependencies=[Depends(require_permission(Permission.decide))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_decide.py",
+      "line": 642,
+      "method": "POST",
+      "path": "/v1/replay/{decision_id}",
+      "handler": "replay_endpoint",
+      "declaration": "router.post('/v1/replay/{decision_id}')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_decide.py",
+      "line": 728,
+      "method": "POST",
+      "path": "/v1/decision/replay/{decision_id}",
+      "handler": "replay_decision_endpoint",
+      "declaration": "router.post('/v1/decision/replay/{decision_id}', dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_decide.py",
+      "line": 807,
+      "method": "POST",
+      "path": "/v1/fuji/validate",
+      "handler": "fuji_validate",
+      "declaration": "router.post('/v1/fuji/validate', response_model=FujiDecision, dependencies=[Depends(require_permission(Permission.decide))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 446,
+      "method": "GET",
+      "path": "/v1/governance/value-drift",
+      "handler": "governance_value_drift",
+      "declaration": "router.get('/v1/governance/value-drift', dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 465,
+      "method": "GET",
+      "path": "/v1/governance/policy",
+      "handler": "governance_get",
+      "declaration": "router.get('/v1/governance/policy', response_model=GovernancePolicyResponse, dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 489,
+      "method": "PUT",
+      "path": "/v1/governance/policy",
+      "handler": "governance_put",
+      "declaration": "router.put('/v1/governance/policy', response_model=GovernancePolicyResponse, dependencies=[Depends(require_permission(Permission.governance_write))])",
+      "bind_markers": [
+        "requires_bind_boundary(target_path='/v1/governance/policy', target_type='governance_policy', target_path_type='governance_policy_update')"
+      ]
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 594,
+      "method": "GET",
+      "path": "/v1/governance/policy/history",
+      "handler": "governance_policy_history",
+      "declaration": "router.get('/v1/governance/policy/history', response_model=GovernancePolicyHistoryResponse, dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 613,
+      "method": "GET",
+      "path": "/v1/governance/decisions/export",
+      "handler": "governance_decision_export",
+      "declaration": "router.get('/v1/governance/decisions/export', response_model=GovernanceDecisionExportResponse, dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 676,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts",
+      "handler": "governance_bind_receipts",
+      "declaration": "router.get('/v1/governance/bind-receipts', response_model=GovernanceBindReceiptListResponse, dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 785,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts/export",
+      "handler": "governance_bind_receipts_export",
+      "declaration": "router.get('/v1/governance/bind-receipts/export', response_model=GovernanceBindReceiptExportResponse, dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 860,
+      "method": "GET",
+      "path": "/v1/governance/bind-receipts/{bind_receipt_id}",
+      "handler": "governance_bind_receipt",
+      "declaration": "router.get('/v1/governance/bind-receipts/{bind_receipt_id}', response_model=GovernanceBindReceiptResponse, dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 889,
+      "method": "POST",
+      "path": "/v1/governance/policy-bundles/promote",
+      "handler": "governance_promote_policy_bundle",
+      "declaration": "router.post('/v1/governance/policy-bundles/promote', response_model=GovernancePolicyBundlePromoteResponse, dependencies=[Depends(require_permission(Permission.governance_write))])",
+      "bind_markers": [
+        "requires_bind_boundary(target_path='/v1/governance/policy-bundles/promote', target_type='policy_bundle', target_path_type='policy_bundle_promotion')"
+      ]
+    },
+    {
+      "file": "veritas_os/api/routes_governance.py",
+      "line": 935,
+      "method": "GET",
+      "path": "/v1/governance/live-snapshot",
+      "handler": "governance_live_snapshot",
+      "declaration": "router.get('/v1/governance/live-snapshot', dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_memory.py",
+      "line": 195,
+      "method": "POST",
+      "path": "/v1/memory/put",
+      "handler": "memory_put",
+      "declaration": "router.post('/v1/memory/put', dependencies=[Depends(require_permission(Permission.memory_write))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_memory.py",
+      "line": 331,
+      "method": "POST",
+      "path": "/v1/memory/search",
+      "handler": "memory_search",
+      "declaration": "router.post('/v1/memory/search', dependencies=[Depends(require_permission(Permission.memory_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_memory.py",
+      "line": 410,
+      "method": "POST",
+      "path": "/v1/memory/get",
+      "handler": "memory_get",
+      "declaration": "router.post('/v1/memory/get', dependencies=[Depends(require_permission(Permission.memory_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_memory.py",
+      "line": 441,
+      "method": "POST",
+      "path": "/v1/memory/erase",
+      "handler": "memory_erase",
+      "declaration": "router.post('/v1/memory/erase', dependencies=[Depends(require_permission(Permission.memory_write))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_observability.py",
+      "line": 38,
+      "method": "GET",
+      "path": "/v1/observability/capabilities",
+      "handler": "observability_capabilities",
+      "declaration": "router.get('/v1/observability/capabilities', dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 348,
+      "method": "GET",
+      "path": "/",
+      "handler": "root",
+      "declaration": "public_router.get('/')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 377,
+      "method": "GET",
+      "path": "/health",
+      "handler": "health",
+      "declaration": "public_router.get('/health')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 377,
+      "method": "GET",
+      "path": "/v1/health",
+      "handler": "health",
+      "declaration": "public_router.get('/v1/health')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 498,
+      "method": "GET",
+      "path": "/status",
+      "handler": "status",
+      "declaration": "public_router.get('/status')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 498,
+      "method": "GET",
+      "path": "/v1/status",
+      "handler": "status",
+      "declaration": "public_router.get('/v1/status')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 498,
+      "method": "GET",
+      "path": "/api/status",
+      "handler": "status",
+      "declaration": "public_router.get('/api/status')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 532,
+      "method": "GET",
+      "path": "/v1/metrics",
+      "handler": "metrics",
+      "declaration": "router.get('/v1/metrics', dependencies=[Depends(require_permission(Permission.compliance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 694,
+      "method": "GET",
+      "path": "/v1/events",
+      "handler": "events",
+      "declaration": "events_router.get('/v1/events', dependencies=[Depends(require_api_key_header_or_query)])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 785,
+      "method": "WEBSOCKET",
+      "path": "/v1/ws/trustlog",
+      "handler": "trustlog_ws",
+      "declaration": "events_router.websocket('/v1/ws/trustlog')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 879,
+      "method": "GET",
+      "path": "/v1/compliance/config",
+      "handler": "compliance_get_config",
+      "declaration": "router.get('/v1/compliance/config', response_model=ComplianceConfigResponse, dependencies=[Depends(require_permission(Permission.compliance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 894,
+      "method": "PUT",
+      "path": "/v1/compliance/config",
+      "handler": "compliance_put_config",
+      "declaration": "router.put('/v1/compliance/config', response_model=ComplianceConfigResponse, dependencies=[Depends(require_permission(Permission.config_write))])",
+      "bind_markers": [
+        "requires_bind_boundary(target_path='/v1/compliance/config', target_type='compliance_config', target_path_type='compliance_config_update')"
+      ]
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 943,
+      "method": "GET",
+      "path": "/v1/report/eu_ai_act/{decision_id}",
+      "handler": "report_eu_ai_act",
+      "declaration": "router.get('/v1/report/eu_ai_act/{decision_id}', dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 960,
+      "method": "GET",
+      "path": "/v1/report/governance",
+      "handler": "report_governance",
+      "declaration": "router.get('/v1/report/governance', dependencies=[Depends(require_permission(Permission.governance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 996,
+      "method": "POST",
+      "path": "/v1/system/halt",
+      "handler": "system_halt",
+      "declaration": "router.post('/v1/system/halt', response_model=SystemHaltResponse, dependencies=[Depends(require_permission(Permission.config_write))])",
+      "bind_markers": [
+        "requires_bind_boundary(target_path='/v1/system/halt', target_type='system_halt', target_path_type='system_halt')"
+      ]
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 1054,
+      "method": "POST",
+      "path": "/v1/system/resume",
+      "handler": "system_resume",
+      "declaration": "router.post('/v1/system/resume', response_model=SystemResumeResponse, dependencies=[Depends(require_permission(Permission.config_write))])",
+      "bind_markers": [
+        "requires_bind_boundary(target_path='/v1/system/resume', target_type='system_resume', target_path_type='system_resume')"
+      ]
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 1103,
+      "method": "GET",
+      "path": "/v1/system/halt-status",
+      "handler": "system_halt_status",
+      "declaration": "router.get('/v1/system/halt-status', dependencies=[Depends(require_permission(Permission.compliance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 1118,
+      "method": "GET",
+      "path": "/v1/compliance/deployment-readiness",
+      "handler": "compliance_deployment_readiness",
+      "declaration": "router.get('/v1/compliance/deployment-readiness', dependencies=[Depends(require_permission(Permission.compliance_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_trust.py",
+      "line": 74,
+      "method": "GET",
+      "path": "/v1/trust/logs",
+      "handler": "trust_logs",
+      "declaration": "router.get('/v1/trust/logs', response_model=TrustLogsResponse, dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_trust.py",
+      "line": 81,
+      "method": "GET",
+      "path": "/v1/trust/stats",
+      "handler": "trust_log_stats",
+      "declaration": "router.get('/v1/trust/stats', dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_trust.py",
+      "line": 96,
+      "method": "GET",
+      "path": "/v1/trust/{request_id}/prov",
+      "handler": "trust_prov_export",
+      "declaration": "router.get('/v1/trust/{request_id}/prov', dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_trust.py",
+      "line": 128,
+      "method": "GET",
+      "path": "/v1/trust/{request_id}",
+      "handler": "trust_log_by_request",
+      "declaration": "router.get('/v1/trust/{request_id}', response_model=RequestLogResponse, dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_trust.py",
+      "line": 143,
+      "method": "POST",
+      "path": "/v1/trust/feedback",
+      "handler": "trust_feedback",
+      "declaration": "router.post('/v1/trust/feedback', response_model=TrustFeedbackResponse, dependencies=[Depends(require_permission(Permission.trust_feedback_write))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_trust.py",
+      "line": 205,
+      "method": "GET",
+      "path": "/v1/trustlog/verify",
+      "handler": "trustlog_verify",
+      "declaration": "router.get('/v1/trustlog/verify', dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_trust.py",
+      "line": 219,
+      "method": "GET",
+      "path": "/v1/trustlog/export",
+      "handler": "trustlog_export",
+      "declaration": "router.get('/v1/trustlog/export', dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_wat.py",
+      "line": 114,
+      "method": "POST",
+      "path": "/v1/wat/issue-shadow",
+      "handler": "issue_shadow_wat",
+      "declaration": "router.post('/v1/wat/issue-shadow', dependencies=[Depends(require_permission(Permission.decide))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_wat.py",
+      "line": 136,
+      "method": "POST",
+      "path": "/v1/wat/validate-shadow",
+      "handler": "validate_shadow_wat",
+      "declaration": "router.post('/v1/wat/validate-shadow', dependencies=[Depends(require_permission(Permission.decide))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_wat.py",
+      "line": 179,
+      "method": "GET",
+      "path": "/v1/wat/events",
+      "handler": "get_wat_events",
+      "declaration": "router.get('/v1/wat/events', dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_wat.py",
+      "line": 193,
+      "method": "GET",
+      "path": "/v1/wat/{wat_id}",
+      "handler": "get_wat_by_id",
+      "declaration": "router.get('/v1/wat/{wat_id}', dependencies=[Depends(require_permission(Permission.trust_log_read))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/api/routes_wat.py",
+      "line": 212,
+      "method": "POST",
+      "path": "/v1/wat/revocation/{wat_id}",
+      "handler": "revoke_wat",
+      "declaration": "router.post('/v1/wat/revocation/{wat_id}', dependencies=[Depends(require_permission(Permission.decide))])",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/governance/cage_provider03_phase5a_runtime.py",
+      "line": 190,
+      "method": "GET",
+      "path": "/baseline/{region}",
+      "handler": "fetch_baseline",
+      "declaration": "app.get('/baseline/{region}', dependencies=auth)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/governance/cage_provider03_phase5a_runtime.py",
+      "line": 205,
+      "method": "POST",
+      "path": "/validate",
+      "handler": "validate",
+      "declaration": "app.post('/validate', dependencies=auth)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/governance/cage_provider03_phase5a_runtime.py",
+      "line": 242,
+      "method": "POST",
+      "path": "/evidence/{thread_id}",
+      "handler": "submit_evidence",
+      "declaration": "app.post('/evidence/{thread_id}', dependencies=auth)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/governance/cage_provider03_phase5a_runtime.py",
+      "line": 260,
+      "method": "GET",
+      "path": "/phase5a/manifest",
+      "handler": "runtime_manifest",
+      "declaration": "app.get('/phase5a/manifest', dependencies=auth)",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/policy/sandbox_event_service.py",
+      "line": 81,
+      "method": "POST",
+      "path": "/v1/events",
+      "handler": "register",
+      "declaration": "app.post('/v1/events')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/policy/sandbox_event_service.py",
+      "line": 132,
+      "method": "GET",
+      "path": "/v1/operations",
+      "handler": "lookup_by_key",
+      "declaration": "app.get('/v1/operations')",
+      "bind_markers": []
+    },
+    {
+      "file": "veritas_os/policy/sandbox_event_service.py",
+      "line": 136,
+      "method": "GET",
+      "path": "/v1/operations/{operation_id}",
+      "handler": "lookup_by_id",
+      "declaration": "app.get('/v1/operations/{operation_id}')",
+      "bind_markers": []
+    }
+  ],
+  "registration_calls": [
+    {
+      "file": "veritas_os/observability/exporters.py",
+      "line": 74,
+      "call": "app.add_api_route('/metrics', endpoint, methods=['GET'], include_in_schema=False, dependencies=dependencies)"
+    }
+  ],
+  "project_scripts": {
+    "veritas-trustlog-verify": "veritas_os.cli.verify_trustlog:main",
+    "veritas-migrate": "veritas_os.cli.migrate:main",
+    "veritas-evidence-bundle": "veritas_os.cli.evidence_bundle:main"
+  },
+  "python_main_guard_files": [
+    "examples/aml_kyc_regulated_action_path.py",
+    "examples/sandbox/rsa_veritas_e2e_harness.py",
+    "scripts/architecture/check_core_complexity_budget.py",
+    "scripts/architecture/check_responsibility_boundaries.py",
+    "scripts/audit_large_consolidation.py",
+    "scripts/audit_large_consolidation_phase2.py",
+    "scripts/benchmarks/run_performance_metrics.py",
+    "scripts/check_bilingual_docs.py",
+    "scripts/check_governance_observation.py",
+    "scripts/ci/measure_ci_wallclock.py",
+    "scripts/ci/plan_heavy_case_cutover.py",
+    "scripts/ci/pnpm_audit_gate.py",
+    "scripts/ci/select_pytest_shard.py",
+    "scripts/ci/validate_heavy_case_collection.py",
+    "scripts/ci/validate_heavy_case_junit.py",
+    "scripts/ci/validate_pytest_slow_junit.py",
+    "scripts/ci/validate_pytest_slow_shards.py",
+    "scripts/demo/build_reviewer_evidence_artifact_manifest.py",
+    "scripts/demo/build_reviewer_evidence_bundle.py",
+    "scripts/demo/build_reviewer_evidence_step_summary.py",
+    "scripts/demo/build_runtime_proof_evidence_manifest.py",
+    "scripts/demo/build_runtime_proof_summary.py",
+    "scripts/demo/check_reviewer_evidence_packet_fixture.py",
+    "scripts/demo/export_context_bound_approval_replay_packet.py",
+    "scripts/demo/export_human_approval_alternatives_evidence.py",
+    "scripts/demo/export_human_approval_engagement_timing_evidence.py",
+    "scripts/demo/export_reviewer_evidence_packet.py",
+    "scripts/demo/generate_evaluation_drift_detection.py",
+    "scripts/demo/generate_evaluation_governance_reviewer_demo_report.py",
+    "scripts/demo/generate_legitimacy_impact_review.py",
+    "scripts/demo/generate_outcome_delta_attribution.py",
+    "scripts/demo/generate_reviewer_evidence_packet_from_evaluation_governance_chain.py",
+    "scripts/demo/generate_reviewer_failure_reason_catalog.py",
+    "scripts/demo/generate_trajectory_admissibility_monitor.py",
+    "scripts/demo/one_day_poc_benchmark.py",
+    "scripts/demo/one_day_poc_smoke.py",
+    "scripts/demo/run_evaluation_governance_offline_chain.py",
+    "scripts/demo/run_evaluation_governance_reviewer_demo.py",
+    "scripts/demo/run_evaluation_governance_reviewer_demo_suite.py",
+    "scripts/demo/run_external_bind_poc.py",
+    "scripts/demo/saas_permission_change_governed_demo.py",
+    "scripts/demo/validate_evaluation_governance_reviewer_demo.py",
+    "scripts/demo/validate_evaluation_governance_sample_bundle.py",
+    "scripts/demo/validate_reviewer_evidence_packet.py",
+    "scripts/demo/validate_reviewer_failure_reason_catalog.py",
+    "scripts/demo/verify_reviewer_evidence_artifact_manifest.py",
+    "scripts/demo/verify_runtime_proof_evidence.py",
+    "scripts/demo/verify_runtime_proof_evidence_manifest.py",
+    "scripts/enterprise_iam_lab/durable_challenge_registry.py",
+    "scripts/enterprise_iam_lab/external_rcc_source_import.py",
+    "scripts/enterprise_iam_lab/native_docker_issuer.py",
+    "scripts/enterprise_iam_lab/native_process_restart_probe.py",
+    "scripts/enterprise_iam_lab/probe.py",
+    "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+    "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+    "scripts/enterprise_iam_lab/reconcile_signed_target_ack.py",
+    "scripts/enterprise_iam_lab/source_bound_iam_origin.py",
+    "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+    "scripts/enterprise_iam_lab/target_service.py",
+    "scripts/enterprise_iam_lab/transport_fixture.py",
+    "scripts/enterprise_iam_lab/transport_probe.py",
+    "scripts/enterprise_iam_lab/verify_infra.py",
+    "scripts/enterprise_iam_lab/verify_native_docker.py",
+    "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+    "scripts/enterprise_iam_lab/verify_transport.py",
+    "scripts/generate_observe_mode_demo_snapshot.py",
+    "scripts/generate_release_readiness_report.py",
+    "scripts/generate_staged_readiness_report.py",
+    "scripts/governance/check_bind_coverage_evidence_freshness.py",
+    "scripts/governance/export_bind_coverage_evidence.py",
+    "scripts/governance/export_sandbox_pre_dispatch_arbitration_evidence.py",
+    "scripts/performance/check_performance_evidence_freshness.py",
+    "scripts/performance/export_performance_evidence.py",
+    "scripts/quality/check_bilingual_docs.py",
+    "scripts/quality/check_bind_coverage_bypass_resistance_v1.py",
+    "scripts/quality/check_capability_profile_doc.py",
+    "scripts/quality/check_deployment_env_defaults.py",
+    "scripts/quality/check_evidence_bundle_reviewer_docs.py",
+    "scripts/quality/check_frontend_api_contract_consistency.py",
+    "scripts/quality/check_frontend_docs_consistency.py",
+    "scripts/quality/check_governance_policy_schema_sync.py",
+    "scripts/quality/check_key_provenance_review_samples.py",
+    "scripts/quality/check_observable_digest_resolver_aer01_v1.py",
+    "scripts/quality/check_observable_digest_resolver_aer02_v1.py",
+    "scripts/quality/check_observable_digest_resolver_aer03_v1.py",
+    "scripts/quality/check_operational_docs_consistency.py",
+    "scripts/quality/check_replay_pipeline_version_unknown_rate.py",
+    "scripts/quality/check_requirements_sync.py",
+    "scripts/quality/check_review_improvements_consistency.py",
+    "scripts/quality/check_reviewer_handoff_quickstart_command.py",
+    "scripts/quality/check_reviewer_handoff_sample_regeneration.py",
+    "scripts/quality/check_type_baseline.py",
+    "scripts/quality/check_warning_allowlist.py",
+    "scripts/quality/generate_safety_calibration_report.py",
+    "scripts/release/write_release_evidence_checksums.py",
+    "scripts/reset_repo_runtime.py",
+    "scripts/run_aml_kyc_poc_fixture.py",
+    "scripts/run_aml_kyc_regulated_action_path.py",
+    "scripts/run_bind_authorization_consumption_poc.py",
+    "scripts/run_decide_pipeline_poc.py",
+    "scripts/run_decision_to_external_bind_poc.py",
+    "scripts/run_external_clock_fixture_proof.py",
+    "scripts/run_financial_poc.py",
+    "scripts/run_native_v2_sandbox_service.py",
+    "scripts/run_neomundi_real_observation_poc.py",
+    "scripts/run_neomundi_rgc_v01_complete_intake.py",
+    "scripts/run_secure_real_bind_runtime_poc.py",
+    "scripts/run_task031_trust_continuity_proof.py",
+    "scripts/run_veritas_cage_phase3_fixture.py",
+    "scripts/run_veritas_cage_phase5a_runtime.py",
+    "scripts/run_veritas_cage_phase5b_runtime.py",
+    "scripts/run_veritas_cage_phase5c_runtime.py",
+    "scripts/run_veritas_cage_phase5d_runtime.py",
+    "scripts/secure_e2e_https_fixture.py",
+    "scripts/security/check_bare_except_usage.py",
+    "scripts/security/check_danger_presets_production_flag.py",
+    "scripts/security/check_httpx_raw_upload_usage.py",
+    "scripts/security/check_memory_dir_allowlist.py",
+    "scripts/security/check_next_public_key_exposure.py",
+    "scripts/security/check_query_api_key_compat_flags.py",
+    "scripts/security/check_runtime_pickle_artifacts.py",
+    "scripts/security/check_subprocess_shell_usage.py",
+    "scripts/security/check_trustlog_production_posture.py",
+    "scripts/security/check_unsafe_dynamic_execution_usage.py",
+    "scripts/security/report_security_flag_posture.py",
+    "scripts/security/run_integrated_security_closure.py",
+    "sdk/python/examples/aml_kyc_webhook_bind.py",
+    "sdk/python/examples/decide.py",
+    "sdk/python/examples/webhook_bind.py",
+    "tools/evolve_m1_oct19b_strict_proof.py",
+    "veritas_os/api/dashboard_server.py",
+    "veritas_os/cli/evidence_bundle.py",
+    "veritas_os/cli/migrate.py",
+    "veritas_os/cli/verify_trustlog.py",
+    "veritas_os/core/code_planner.py",
+    "veritas_os/core/critique.py",
+    "veritas_os/governance/evolve_trustledger_m1.py",
+    "veritas_os/scripts/agi_papers_scan.py",
+    "veritas_os/scripts/alert_doctor.py",
+    "veritas_os/scripts/aml_kyc_poc_fixture_runner.py",
+    "veritas_os/scripts/aml_kyc_regulated_action_path_runner.py",
+    "veritas_os/scripts/analyze_logs.py",
+    "veritas_os/scripts/bench.py",
+    "veritas_os/scripts/bench_plan.py",
+    "veritas_os/scripts/bench_summary.py",
+    "veritas_os/scripts/cage_provider03_phase3_runner.py",
+    "veritas_os/scripts/cage_provider03_phase5a_runner.py",
+    "veritas_os/scripts/cage_provider03_phase5b_runner.py",
+    "veritas_os/scripts/cage_provider03_phase5c_runner.py",
+    "veritas_os/scripts/cage_provider03_phase5d_runner.py",
+    "veritas_os/scripts/compile_policy.py",
+    "veritas_os/scripts/decide.py",
+    "veritas_os/scripts/decide_plan.py",
+    "veritas_os/scripts/distill_memory.py",
+    "veritas_os/scripts/doctor.py",
+    "veritas_os/scripts/evidence_benchmark.py",
+    "veritas_os/scripts/financial_poc_runner.py",
+    "veritas_os/scripts/gen_step1_world_model_md.py",
+    "veritas_os/scripts/generate_consistency_certificate.py",
+    "veritas_os/scripts/generate_report.py",
+    "veritas_os/scripts/health_check.py",
+    "veritas_os/scripts/import_pdf_to_memory.py",
+    "veritas_os/scripts/memory_sync.py",
+    "veritas_os/scripts/memory_train.py",
+    "veritas_os/scripts/merge_trust_logs.py",
+    "veritas_os/scripts/migrate_pickle.py",
+    "veritas_os/scripts/notify_slack.py",
+    "veritas_os/scripts/pr_impact_summary.py",
+    "veritas_os/scripts/run_benchmarks_enhanced.py",
+    "veritas_os/scripts/search_memory.py",
+    "veritas_os/scripts/self_heal_tasks.py",
+    "veritas_os/scripts/verify_trust_log.py",
+    "veritas_os/tools/coverage_map_pipeline.py"
+  ],
+  "shell_candidate_files": [
+    "scripts/backup_postgres.sh",
+    "scripts/ci/publish_scanned_oci.sh",
+    "scripts/compose_validation.sh",
+    "scripts/demo_mission_audit_workflow.sh",
+    "scripts/drill_postgres_recovery.sh",
+    "scripts/enterprise_iam_lab/run_infra.sh",
+    "scripts/enterprise_iam_lab/run_native_docker.sh",
+    "scripts/enterprise_iam_lab/run_permit_transport.sh",
+    "scripts/live_provider_validation.sh",
+    "scripts/production_validation.sh",
+    "scripts/restore_postgres.sh",
+    "scripts/take_frontend_snapshot.sh",
+    "scripts/validate_governance_observation_fixture.sh",
+    "scripts/validate_reviewer_entrypoint.sh",
+    "setup.sh",
+    "veritas_os/scripts/auto_heal.sh",
+    "veritas_os/scripts/backup_logs.sh",
+    "veritas_os/scripts/doctor.sh",
+    "veritas_os/scripts/heal.sh",
+    "veritas_os/scripts/start_server.sh",
+    "veritas_os/scripts/sync_to_drive.sh",
+    "veritas_os/scripts/veritas.sh",
+    "veritas_os/scripts/veritas_monitor.sh",
+    "veritas_os/scripts/weekly_maintenance.sh"
+  ],
+  "http_handler_candidates": [
+    {
+      "file": "examples/external_bind_poc/poc.py",
+      "line": 60,
+      "handler": "do_GET"
+    },
+    {
+      "file": "examples/external_bind_poc/poc.py",
+      "line": 76,
+      "handler": "do_POST"
+    },
+    {
+      "file": "scripts/enterprise_iam_lab/target_service.py",
+      "line": 154,
+      "handler": "do_GET"
+    },
+    {
+      "file": "scripts/enterprise_iam_lab/target_service.py",
+      "line": 221,
+      "handler": "do_POST"
+    },
+    {
+      "file": "scripts/secure_e2e_https_fixture.py",
+      "line": 41,
+      "handler": "do_POST"
+    },
+    {
+      "file": "scripts/secure_e2e_https_fixture.py",
+      "line": 75,
+      "handler": "do_GET"
+    },
+    {
+      "file": "veritas_os/scripts/cage_provider03_phase5a_runner.py",
+      "line": 75,
+      "handler": "do_POST"
+    },
+    {
+      "file": "veritas_os/scripts/cage_provider03_phase5b_runner.py",
+      "line": 208,
+      "handler": "do_POST"
+    }
+  ],
+  "background_call_candidates": [
+    {
+      "file": "examples/external_bind_poc/poc.py",
+      "line": 120,
+      "callee": "Thread"
+    },
+    {
+      "file": "veritas_os/api/rate_limiting.py",
+      "line": 136,
+      "callee": "threading.Timer"
+    },
+    {
+      "file": "veritas_os/api/rate_limiting.py",
+      "line": 148,
+      "callee": "threading.Timer"
+    },
+    {
+      "file": "veritas_os/api/rate_limiting.py",
+      "line": 179,
+      "callee": "threading.Timer"
+    },
+    {
+      "file": "veritas_os/api/rate_limiting.py",
+      "line": 191,
+      "callee": "threading.Timer"
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 847,
+      "callee": "asyncio.create_task"
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 847,
+      "callee": "asyncio.create_task"
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 756,
+      "callee": "asyncio.create_task"
+    },
+    {
+      "file": "veritas_os/api/routes_system.py",
+      "line": 757,
+      "callee": "asyncio.create_task"
+    },
+    {
+      "file": "veritas_os/scripts/cage_provider03_phase5a_runner.py",
+      "line": 90,
+      "callee": "threading.Thread"
+    },
+    {
+      "file": "veritas_os/scripts/cage_provider03_phase5b_runner.py",
+      "line": 259,
+      "callee": "threading.Thread"
+    }
+  ],
+  "frontend_route_files": [
+    "frontend/app/api/auth/dev-login/route.ts",
+    "frontend/app/api/auth/session/route.ts",
+    "frontend/app/api/veritas/[...path]/route.ts",
+    "frontend/app/api/veritas/csp-report/route.ts",
+    "frontend/app/api/veritas/session/route.ts",
+    "frontend/app/api/veritas/v1/report/governance/route.ts"
+  ],
+  "workflows": [
+    {
+      "file": ".github/workflows/auth-real-redis.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "auth-real-redis"
+      ]
+    },
+    {
+      "file": ".github/workflows/benchmark-rebaseline-phase-b.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "current-head-local"
+      ]
+    },
+    {
+      "file": ".github/workflows/benchmark-rebaseline-phase-c.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "evidence-current-head"
+      ]
+    },
+    {
+      "file": ".github/workflows/bind-authorization-consumption-postgresql.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "consumption-contention"
+      ]
+    },
+    {
+      "file": ".github/workflows/bind-coverage-bypass-resistance-v1.yml",
+      "events": {
+        "pull_request": "",
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "bind-coverage-bypass-resistance-v1"
+      ]
+    },
+    {
+      "file": ".github/workflows/bind-effect-state-postgresql.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "effect-state-contention"
+      ]
+    },
+    {
+      "file": ".github/workflows/ci-wallclock-measurement.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "scripts/ci/measure_ci_wallclock.py",
+            "tests/ci/test_measure_ci_wallclock.py",
+            ".github/workflows/ci-wallclock-measurement.yml"
+          ]
+        }
+      },
+      "jobs": [
+        "measure"
+      ]
+    },
+    {
+      "file": ".github/workflows/codeql.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main",
+            "master"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main",
+            "master"
+          ]
+        },
+        "schedule": [
+          {
+            "cron": "20 3 * * 1"
+          }
+        ]
+      },
+      "jobs": [
+        "analyze"
+      ]
+    },
+    {
+      "file": ".github/workflows/docker-security-pr.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "Dockerfile",
+            "veritas_os/requirements.txt",
+            ".github/workflows/docker-security-pr.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "build-and-scan"
+      ]
+    },
+    {
+      "file": ".github/workflows/external-clock-fixture-proof.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "deterministic-source-bound-proof"
+      ]
+    },
+    {
+      "file": ".github/workflows/heavy-case-collection-proof.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        }
+      },
+      "jobs": [
+        "collection-proof"
+      ]
+    },
+    {
+      "file": ".github/workflows/heavy-case-execution-proof.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "scripts/ci/execute_heavy_cases.py",
+            "scripts/ci/validate_heavy_case_junit.py",
+            "tests/ci/test_execute_heavy_cases.py",
+            ".github/workflows/heavy-case-execution-proof.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "collect",
+        "execute",
+        "reconcile"
+      ]
+    },
+    {
+      "file": ".github/workflows/image-publication-pr.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/publish-ghcr.yml",
+            ".github/workflows/image-publication-pr.yml",
+            "scripts/ci/publish_scanned_oci.sh",
+            "tests/ci/test_image_publication_gate.py"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "scan-and-copy-without-publication"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-challenge-bound-reconciliation-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-challenge-bound-reconciliation-v1.yml",
+            ".github/workflows/isolated-iam-signed-mtls-reconciliation-v1.yml",
+            "scripts/enterprise_iam_lab/reconcile_signed_target_ack.py",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+            "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+            "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_signed_target_ack_reconciliation_v1.py",
+            "tests/quality/test_iam_target_ack_challenge_freshness_v1.py",
+            "compose.enterprise-iam-readonly-ack-2379.override.yml",
+            "compose.enterprise-iam-permit-transport.yml",
+            "docs/ISOLATED_IAM_SIGNED_ACK_RECONCILIATION_CAS_V1.md",
+            "docs/ISOLATED_IAM_CHALLENGE_BOUND_ACK_FRESHNESS_V1.md",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-challenge-bound-reconciliation"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-durable-challenge-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-durable-challenge-v1.yml",
+            "alembic/versions/0011_iam_reconciliation_challenge.py",
+            "scripts/enterprise_iam_lab/durable_challenge_registry.py",
+            "tests/quality/test_iam_durable_challenge_v1.py",
+            ".github/workflows/isolated-iam-signed-mtls-reconciliation-v1.yml",
+            "scripts/enterprise_iam_lab/reconcile_signed_target_ack.py",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+            "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+            "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_signed_target_ack_reconciliation_v1.py",
+            "tests/quality/test_iam_target_ack_challenge_freshness_v1.py",
+            "compose.enterprise-iam-readonly-ack-2379.override.yml",
+            "compose.enterprise-iam-permit-transport.yml",
+            "docs/ISOLATED_IAM_SIGNED_ACK_RECONCILIATION_CAS_V1.md",
+            "docs/ISOLATED_IAM_CHALLENGE_BOUND_ACK_FRESHNESS_V1.md",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-durable-challenge-reconciliation"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-external-denials-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "compose.enterprise-iam-lab.yml",
+            "scripts/enterprise_iam_lab/**",
+            "tests/quality/test_isolated_iam_external_denials_v1.py",
+            ".github/workflows/isolated-iam-external-denials-v1.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "isolated-iam-external-denials"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-external-rcc-e2e-2385.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-external-rcc-e2e-2385.yml",
+            "tests/fixtures/iam_2385_external_signed_input.py",
+            "scripts/enterprise_iam_lab/external_rcc_source_import.py",
+            "scripts/enterprise_iam_lab/source_bound_target_policy.py",
+            "scripts/enterprise_iam_lab/signed_permit.py",
+            "scripts/enterprise_iam_lab/target_service.py",
+            "scripts/enterprise_iam_lab/transport_probe.py",
+            "compose.enterprise-iam-source-bound-target-2384.override.yml",
+            "tests/quality/test_iam_source_bound_target_permit_v2.py",
+            "scripts/enterprise_iam_lab/source_bound_iam_origin.py",
+            "scripts/enterprise_iam_lab/native_docker_issuer.py",
+            "tests/quality/test_iam_source_bound_admission_v1.py",
+            "alembic/versions/0011_iam_reconciliation_challenge.py",
+            "scripts/enterprise_iam_lab/durable_challenge_registry.py",
+            "tests/quality/test_iam_durable_challenge_v1.py",
+            ".github/workflows/isolated-iam-signed-mtls-reconciliation-v1.yml",
+            "scripts/enterprise_iam_lab/reconcile_signed_target_ack.py",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+            "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+            "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_signed_target_ack_reconciliation_v1.py",
+            "tests/quality/test_iam_target_ack_challenge_freshness_v1.py",
+            "compose.enterprise-iam-readonly-ack-2379.override.yml",
+            "compose.enterprise-iam-permit-transport.yml",
+            "docs/ISOLATED_IAM_SIGNED_ACK_RECONCILIATION_CAS_V1.md",
+            "docs/ISOLATED_IAM_CHALLENGE_BOUND_ACK_FRESHNESS_V1.md",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-external-input-native-target-bound-cas"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-external-rcc-pin-2385.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-external-rcc-pin-2385.yml",
+            "scripts/enterprise_iam_lab/external_rcc_source_import.py",
+            "scripts/enterprise_iam_lab/source_bound_target_policy.py",
+            "scripts/enterprise_iam_lab/target_service.py",
+            "scripts/enterprise_iam_lab/native_docker_issuer.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/source_bound_iam_origin.py",
+            "compose.enterprise-iam-source-bound-target-2384.override.yml",
+            "tests/quality/test_iam_external_rcc_source_import_v1.py",
+            "docs/ISOLATED_IAM_EXTERNAL_RCC_SOURCE_PIN_2385.md"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "offline-source-pin-negatives"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-native-approved-docker-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "scripts/enterprise_iam_lab/native_docker_issuer.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "veritas_os/tests/test_native_bind_authorization.py",
+            "veritas_os/tests/test_iam_native_approved_target_e2e_v1.py",
+            "tests/quality/test_iam_native_docker_verifier_v1.py",
+            "compose.enterprise-iam-permit-transport.yml",
+            "scripts/enterprise_iam_lab/transport_probe.py",
+            ".github/workflows/isolated-iam-native-approved-docker-v1.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "native-approved-synthetic-docker-mtls"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-native-lost-ack-reconciliation-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-native-lost-ack-reconciliation-v1.yml",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/transport_probe.py",
+            "scripts/enterprise_iam_lab/native_docker_issuer.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_native_lost_ack_reconciliation_v1.py",
+            "tests/quality/test_iam_native_postgres_docker_v1.py",
+            "docs/ISOLATED_IAM_NATIVE_LOST_ACK_RECONCILIATION_V1.md",
+            "veritas_os/policy/bind_effect_runtime.py",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
+            "compose.enterprise-iam-permit-transport.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-lost-ack"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-native-postgres-docker-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-native-postgres-docker-v1.yml",
+            "scripts/enterprise_iam_lab/native_docker_issuer.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_native_postgres_docker_v1.py",
+            "tests/quality/test_iam_native_docker_verifier_v1.py",
+            "veritas_os/policy/native_bind_authorization_consumption.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
+            "veritas_os/tests/test_pg_bind_authorization_consumption_contention.py",
+            "compose.enterprise-iam-permit-transport.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "native-postgres-mtls"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-native-process-restart-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-native-process-restart-v1.yml",
+            "scripts/enterprise_iam_lab/native_process_restart_probe.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/target_service.py",
+            "tests/quality/test_iam_native_process_restart_v1.py",
+            "docs/ISOLATED_IAM_NATIVE_PROCESS_RESTART_RECONCILIATION_V1.md",
+            "veritas_os/policy/bind_effect_runtime.py",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
+            "compose.enterprise-iam-permit-transport.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-sigkill-restart"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-signed-mtls-reconciliation-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-signed-mtls-reconciliation-v1.yml",
+            "scripts/enterprise_iam_lab/reconcile_signed_target_ack.py",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+            "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+            "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_signed_target_ack_reconciliation_v1.py",
+            "compose.enterprise-iam-readonly-ack-2379.override.yml",
+            "compose.enterprise-iam-permit-transport.yml",
+            "docs/ISOLATED_IAM_SIGNED_ACK_RECONCILIATION_CAS_V1.md",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-signed-mtls-reconciliation"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-signed-permit-transport-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "compose.enterprise-iam-permit-transport.yml",
+            "scripts/enterprise_iam_lab/**",
+            "tests/quality/test_iam_permit_transport_verifier_v1.py",
+            ".github/workflows/isolated-iam-signed-permit-transport-v1.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-iam-mtls-permit-transport"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-source-bound-issuer-2383.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-source-bound-issuer-2383.yml",
+            "scripts/enterprise_iam_lab/source_bound_iam_origin.py",
+            "scripts/enterprise_iam_lab/native_docker_issuer.py",
+            "tests/quality/test_iam_source_bound_admission_v1.py",
+            "alembic/versions/0011_iam_reconciliation_challenge.py",
+            "scripts/enterprise_iam_lab/durable_challenge_registry.py",
+            "tests/quality/test_iam_durable_challenge_v1.py",
+            ".github/workflows/isolated-iam-signed-mtls-reconciliation-v1.yml",
+            "scripts/enterprise_iam_lab/reconcile_signed_target_ack.py",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+            "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+            "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_signed_target_ack_reconciliation_v1.py",
+            "tests/quality/test_iam_target_ack_challenge_freshness_v1.py",
+            "compose.enterprise-iam-readonly-ack-2379.override.yml",
+            "compose.enterprise-iam-permit-transport.yml",
+            "docs/ISOLATED_IAM_SIGNED_ACK_RECONCILIATION_CAS_V1.md",
+            "docs/ISOLATED_IAM_CHALLENGE_BOUND_ACK_FRESHNESS_V1.md",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-source-bound-iam-reconciliation"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-source-bound-target-2384.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-source-bound-target-2384.yml",
+            "scripts/enterprise_iam_lab/source_bound_target_policy.py",
+            "scripts/enterprise_iam_lab/signed_permit.py",
+            "scripts/enterprise_iam_lab/target_service.py",
+            "scripts/enterprise_iam_lab/transport_probe.py",
+            "compose.enterprise-iam-source-bound-target-2384.override.yml",
+            "tests/quality/test_iam_source_bound_target_permit_v2.py",
+            "scripts/enterprise_iam_lab/source_bound_iam_origin.py",
+            "scripts/enterprise_iam_lab/native_docker_issuer.py",
+            "tests/quality/test_iam_source_bound_admission_v1.py",
+            "alembic/versions/0011_iam_reconciliation_challenge.py",
+            "scripts/enterprise_iam_lab/durable_challenge_registry.py",
+            "tests/quality/test_iam_durable_challenge_v1.py",
+            ".github/workflows/isolated-iam-signed-mtls-reconciliation-v1.yml",
+            "scripts/enterprise_iam_lab/reconcile_signed_target_ack.py",
+            "scripts/enterprise_iam_lab/reconcile_native_lost_ack.py",
+            "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+            "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+            "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "scripts/enterprise_iam_lab/verify_native_docker.py",
+            "tests/quality/test_iam_signed_target_ack_reconciliation_v1.py",
+            "tests/quality/test_iam_target_ack_challenge_freshness_v1.py",
+            "compose.enterprise-iam-readonly-ack-2379.override.yml",
+            "compose.enterprise-iam-permit-transport.yml",
+            "docs/ISOLATED_IAM_SIGNED_ACK_RECONCILIATION_CAS_V1.md",
+            "docs/ISOLATED_IAM_CHALLENGE_BOUND_ACK_FRESHNESS_V1.md",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "target-enforced-source-bound-iam-reconciliation"
+      ]
+    },
+    {
+      "file": ".github/workflows/isolated-iam-target-readonly-ack-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/isolated-iam-target-readonly-ack-v1.yml",
+            "compose.enterprise-iam-readonly-ack-2379.override.yml",
+            "compose.enterprise-iam-permit-transport.yml",
+            "scripts/enterprise_iam_lab/target_service.py",
+            "scripts/enterprise_iam_lab/target_readonly_receipt.py",
+            "scripts/enterprise_iam_lab/readonly_ack_probe.py",
+            "scripts/enterprise_iam_lab/verify_readonly_ack.py",
+            "scripts/enterprise_iam_lab/run_native_docker.sh",
+            "tests/quality/test_iam_target_readonly_ack_v1.py",
+            "docs/ISOLATED_IAM_TARGET_SIGNED_READONLY_ACK_V1.md"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "synthetic-target-readonly-ack"
+      ]
+    },
+    {
+      "file": ".github/workflows/large-consolidation-audit-phase2.yml",
+      "events": {
+        "pull_request": "",
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "large-consolidation-audit-phase2"
+      ]
+    },
+    {
+      "file": ".github/workflows/main.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        }
+      },
+      "jobs": [
+        "coverage",
+        "dependency-audit",
+        "frontend-quality-gate",
+        "future-dependency-compat",
+        "governance-backend-fast",
+        "governance-smoke",
+        "heavy-case-reconcile",
+        "heavy-case-test",
+        "heavy-cutover-preflight",
+        "lint",
+        "test",
+        "test-postgresql",
+        "test-result",
+        "test-slow",
+        "test-slow-verify"
+      ]
+    },
+    {
+      "file": ".github/workflows/native-v2-sandbox-controlled-composition.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "scripts/run_native_v2_sandbox_service.py",
+            "veritas_os/tests/test_sandbox_controlled_composition.py",
+            "veritas_os/policy/sandbox_*.py",
+            "veritas_os/policy/bind_effect_reconciliation.py",
+            "veritas_os/policy/native_bind_authorization_consumption.py",
+            "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
+            "alembic/versions/0005_bind_effect_states.py",
+            "alembic/versions/0006_sandbox_reconciliation_archive.py",
+            "alembic/versions/0007_sandbox_receipt_bundle.py",
+            "alembic/versions/0008_sandbox_business_event_claim.py",
+            "docs/en/architecture/native-v2-sandbox-event-spec-v1.md",
+            "docs/ja/architecture/native-v2-sandbox-event-spec-v1.md",
+            ".github/workflows/native-v2-sandbox-controlled-composition.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "native-v2-sandbox-controlled-composition"
+      ]
+    },
+    {
+      "file": ".github/workflows/observable-digest-resolver-aer01-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "veritas_os/audit/observable_digest_resolver.py",
+            "veritas_os/tests/test_observable_digest_resolver_behavior.py",
+            "veritas_os/tests/test_observable_digest_resolver_activation_evidence_review.py",
+            "security/observable_digest_resolver_minimal_behavior_implementation_v1.json",
+            "security/observable_digest_resolver_activation_evidence_review_v1.json",
+            "scripts/quality/check_observable_digest_resolver_aer01_v1.py",
+            ".github/workflows/observable-digest-resolver-aer01-v1.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "veritas_os/audit/observable_digest_resolver.py",
+            "veritas_os/tests/test_observable_digest_resolver_behavior.py",
+            "veritas_os/tests/test_observable_digest_resolver_activation_evidence_review.py",
+            "security/observable_digest_resolver_minimal_behavior_implementation_v1.json",
+            "security/observable_digest_resolver_activation_evidence_review_v1.json",
+            "scripts/quality/check_observable_digest_resolver_aer01_v1.py",
+            ".github/workflows/observable-digest-resolver-aer01-v1.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "aer01-exact-implementation-identity"
+      ]
+    },
+    {
+      "file": ".github/workflows/observable-digest-resolver-aer02-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "**/*.py",
+            "security/observable_digest_resolver_activation_evidence_review_v1.json",
+            "scripts/quality/check_observable_digest_resolver_aer02_v1.py",
+            ".github/workflows/observable-digest-resolver-aer02-v1.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "**/*.py",
+            "security/observable_digest_resolver_activation_evidence_review_v1.json",
+            "scripts/quality/check_observable_digest_resolver_aer02_v1.py",
+            ".github/workflows/observable-digest-resolver-aer02-v1.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "aer02-runtime-reachability"
+      ]
+    },
+    {
+      "file": ".github/workflows/observable-digest-resolver-aer03-v1.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "security/observable_digest_resolver_aer03_named_target_caller_v1.json",
+            "security/observable_digest_resolver_activation_evidence_review_v1.json",
+            "veritas_os/audit/observable_digest_evidence_consumer.py",
+            "veritas_os/tests/test_observable_digest_resolver_aer03_named_target_caller.py",
+            "scripts/quality/check_observable_digest_resolver_aer03_v1.py",
+            ".github/workflows/observable-digest-resolver-aer03-v1.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "security/observable_digest_resolver_aer03_named_target_caller_v1.json",
+            "security/observable_digest_resolver_activation_evidence_review_v1.json",
+            "veritas_os/audit/observable_digest_evidence_consumer.py",
+            "veritas_os/tests/test_observable_digest_resolver_aer03_named_target_caller.py",
+            "scripts/quality/check_observable_digest_resolver_aer03_v1.py",
+            ".github/workflows/observable-digest-resolver-aer03-v1.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "aer03-named-target-caller"
+      ]
+    },
+    {
+      "file": ".github/workflows/production-validation.yml",
+      "events": {
+        "workflow_dispatch": {
+          "inputs": {
+            "include_docker": {
+              "description": "Run Docker Compose smoke test",
+              "type": "boolean",
+              "default": "false"
+            },
+            "include_external": {
+              "description": "Run external API tests (requires secrets)",
+              "type": "boolean",
+              "default": "false"
+            }
+          }
+        },
+        "schedule": [
+          {
+            "cron": "0 4 * * 0"
+          }
+        ]
+      },
+      "jobs": [
+        "docker-smoke",
+        "external-tests",
+        "governance-backend-longrun",
+        "load-validation",
+        "postgresql-smoke",
+        "production-tests",
+        "tls-validation"
+      ]
+    },
+    {
+      "file": ".github/workflows/publish-ghcr.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "build-and-push"
+      ]
+    },
+    {
+      "file": ".github/workflows/release-gate.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "release/**",
+            "rc/**"
+          ],
+          "tags": [
+            "v*",
+            "v*-rc.*"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "release/**",
+            "rc/**"
+          ]
+        },
+        "workflow_dispatch": {
+          "inputs": {
+            "tier3_external": {
+              "description": "Include Tier 3 external/live tests (requires VERITAS_WEBSEARCH_KEY secret)",
+              "type": "boolean",
+              "default": "false"
+            }
+          }
+        }
+      },
+      "jobs": [
+        "docker-smoke",
+        "external-tests",
+        "governance-backend-validation",
+        "governance-report",
+        "governance-smoke",
+        "production-tests",
+        "release-readiness",
+        "security-checks",
+        "trustlog-production-matrix"
+      ]
+    },
+    {
+      "file": ".github/workflows/reproducible-decision-to-effect-e2e.yml",
+      "events": {
+        "pull_request": "",
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "reproducible-decision-to-effect-e2e"
+      ]
+    },
+    {
+      "file": ".github/workflows/reproducible-reconciliation-capable-execution-profile.yml",
+      "events": {
+        "pull_request": "",
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "reproducible-reconciliation-capable-execution-profile"
+      ]
+    },
+    {
+      "file": ".github/workflows/reviewer-evidence-packet-validation.yml",
+      "events": {
+        "pull_request": "",
+        "push": ""
+      },
+      "jobs": [
+        "reviewer-evidence-packet-validation"
+      ]
+    },
+    {
+      "file": ".github/workflows/runtime-pickle-guard.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ]
+        }
+      },
+      "jobs": [
+        "runtime-pickle-guard"
+      ]
+    },
+    {
+      "file": ".github/workflows/runtime-proof-evidence.yml",
+      "events": {
+        "pull_request": "",
+        "push": "",
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "runtime-proof-evidence"
+      ]
+    },
+    {
+      "file": ".github/workflows/sbom-nightly.yml",
+      "events": {
+        "schedule": [
+          {
+            "cron": "0 2 * * *"
+          }
+        ],
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "generate-sbom"
+      ]
+    },
+    {
+      "file": ".github/workflows/secure-real-bind-runtime-poc.yml",
+      "events": {
+        "pull_request": {
+          "paths": [
+            "scripts/run_secure_real_bind_runtime_poc.py",
+            "scripts/secure_e2e_https_fixture.py",
+            "veritas_os/policy/**",
+            "alembic/**",
+            ".github/workflows/secure-real-bind-runtime-poc.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "secure-real-bind-runtime"
+      ]
+    },
+    {
+      "file": ".github/workflows/security-gates.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "dependency-audit",
+        "integrated-security-closure",
+        "next-public-secret-guard",
+        "runtime-guards",
+        "secret-scan"
+      ]
+    },
+    {
+      "file": ".github/workflows/stream-real-uvicorn.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "stream-real-uvicorn"
+      ]
+    },
+    {
+      "file": ".github/workflows/task031-trust-continuity-proof.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "source-bound-proof"
+      ]
+    },
+    {
+      "file": ".github/workflows/trustlog-primary-publication-postgresql.yml",
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "primary-publication-proof"
+      ]
+    },
+    {
+      "file": ".github/workflows/veritas-cage-phase3.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "deterministic-fixture-proof"
+      ]
+    },
+    {
+      "file": ".github/workflows/veritas-cage-phase5a.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "runtime-wire-proof"
+      ]
+    },
+    {
+      "file": ".github/workflows/veritas-cage-phase5b.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "fail-closed-matrix"
+      ]
+    },
+    {
+      "file": ".github/workflows/veritas-cage-phase5c.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "bind-evidence-flow"
+      ]
+    },
+    {
+      "file": ".github/workflows/veritas-cage-phase5d.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "human-review-flow"
+      ]
+    },
+    {
+      "file": ".github/workflows/veritas-cage-phase5e.yml",
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "jobs": [
+        "review-packet"
+      ]
+    }
+  ]
+}
