@@ -66,7 +66,7 @@ describe("Governance control plane", () => {
       vi.fn(async (input: string | URL | Request) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 
-        if (url.includes("/api/auth/session")) {
+        if (url.includes("/api/veritas/session")) {
           return {
             ok: true,
             status: 200,

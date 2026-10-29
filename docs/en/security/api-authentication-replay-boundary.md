@@ -118,7 +118,8 @@ key's backend identity; end-user identity propagation is a separate boundary.
 
 ## BFF Authorization and Cookie credential selection
 
-The BFF proxy and `/api/auth/session` share the same credential resolver. A
+The BFF proxy, browser `/api/veritas/session` and legacy `/api/auth/session`
+share the same credential resolver. A
 present `Authorization` header now owns credential selection: it must contain a
 complete Bearer credential (case-insensitive scheme, one or more separating
 spaces). Empty, unsupported or malformed values return HTTP 401 without using
@@ -140,6 +141,30 @@ refusal, and valid Bearer/cookie-only controls. Production session-issuance
 guards and the explicit global-session escape hatch are unchanged and retain
 their existing tests. This fix does not add session expiry, external IdP
 revocation, trusted per-user backend identity, or browser/deployment validation.
+
+### Browser Cookie delivery to session lookup
+
+The middleware and development login issue `__veritas_bff` with
+`Path=/api/veritas`. The governance page previously called `/api/auth/session`,
+which is outside that path. A browser therefore omitted the Cookie and could
+report an authenticated session as unauthenticated. Direct handler tests that
+manually supplied a Cookie header did not exercise this browser path rule.
+
+The page now calls `/api/veritas/session`, a static route that reuses the legacy
+session handler. The existing Cookie scope, HttpOnly/SameSite flags and issuance
+rules remain unchanged; no cookie migration or broader scope is required. The
+legacy endpoint is retained for programmatic Bearer clients. Its existence does
+not cause a scoped Cookie to be sent outside `/api/veritas`.
+
+The frontend E2E gate additionally runs `playwright.cookie-session.config.ts`:
+a separate loopback Next.js production server with synthetic configured roles
+and explicitly enabled fixture-only global Cookie issuance. It verifies browser
+delivery, governance-page role recognition, the legacy path exclusion, and the
+shared resolver's malformed-header and explicit-viewer precedence rules. The
+fixture disables backend configuration, so it cannot call business APIs. This
+is not proof of production login/IdP integration, HTTPS deployment, strict CSP,
+external revocation or backend tenant isolation. Existing production issuance
+defaults are tested separately and are not relaxed by this fixture.
 
 ## Nonce expiry defect and correction
 
