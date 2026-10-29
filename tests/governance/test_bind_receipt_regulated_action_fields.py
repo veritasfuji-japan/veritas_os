@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from unittest.mock import Mock
+
 import pytest
 
 from veritas_os.api.bind_summary import build_bind_response_payload, build_bind_summary_from_receipt
 from veritas_os.governance.authority_evidence import VerificationResult
 from veritas_os.governance.commit_boundary import CommitBoundaryResult
+from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
 from veritas_os.policy.bind_core.core import (
     ReferenceBindAdapter,
     execute_bind_adjudication,
@@ -132,6 +136,42 @@ def test_evaluator_execution_includes_action_contract_id() -> None:
 def test_evaluator_execution_includes_authority_evidence_hash() -> None:
     receipt = _run_bind(_intent_with_regulated_context())
     assert receipt.authority_evidence_hash == "hash-001"
+
+
+@pytest.mark.parametrize("fault", [None, "unknown", "missing", "contradictory"])
+def test_validator_contract_fault_cannot_reach_adapter_apply(monkeypatch, fault) -> None:
+    """Run real Bind/evaluator/validator and fault only the validator output."""
+    validate = RuntimeAuthorityValidator.validate
+
+    def faulted_validate(self, **kwargs):
+        result = validate(self, **kwargs)
+        assert result.status == "pass"
+        assert result.recommended_outcome == "commit"
+        if fault == "unknown":
+            return replace(result, recommended_outcome="allow")
+        if fault == "missing":
+            return replace(result, recommended_outcome=None)
+        if fault == "contradictory":
+            return replace(result, failed_predicates=[
+                replace(result.passed_predicates[0], status="fail"),
+            ])
+        return result
+
+    monkeypatch.setattr(RuntimeAuthorityValidator, "validate", faulted_validate)
+    adapter = ReferenceBindAdapter(state={"mode": "safe"}, pending_changes={"mode": "strict"})
+    apply = Mock(wraps=adapter.apply)
+    monkeypatch.setattr(adapter, "apply", apply)
+    receipt = _run_bind(_intent_with_regulated_context(), adapter)
+    if fault is None:
+        assert receipt.final_outcome.value == "COMMITTED"
+        assert receipt.commit_boundary_result == "commit"
+        apply.assert_called_once()
+        assert adapter.state == {"mode": "strict"}
+    else:
+        assert receipt.final_outcome.value == "BLOCKED"
+        assert receipt.commit_boundary_result == "refuse"
+        apply.assert_not_called()
+        assert adapter.state == {"mode": "safe"}
 
 
 def test_bind_summary_includes_compact_commit_boundary_result() -> None:

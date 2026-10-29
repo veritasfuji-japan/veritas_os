@@ -95,6 +95,48 @@ The commit boundary evaluator finalizes the crossing decision at bind time:
 
 This boundary is designed to be irreversible in the sense that real-world effect should not proceed unless the bind-time result permits commit.
 
+### Explicit commit-result and intent checks
+
+The final evaluator does not treat an unrecognized validator recommendation as
+permission. Recognized `block`, `refuse` and `escalate` recommendations retain
+their meanings; none authorizes an adapter effect. A `commit` recommendation
+must also have an explicit `pass` aggregate status, a nonempty passing predicate
+set containing only `pass` statuses, empty failed/stale/missing/indeterminate
+sets, and no refusal/escalation basis. Unknown or absent recommendations and
+inconsistent commit results return `refuse`. Original predicate evidence remains
+in the result for inspection; the validator's own aggregate status is not
+rewritten to conceal a contradiction.
+
+For dictionary intents, a present `admissible` field must be the actual boolean
+`True`. Strings (including `"false"` and `"true"`), numbers (including `0` and
+`1`), nulls and containers refuse. Non-string/non-dictionary intent shapes also
+refuse. Existing matching/mismatching action-class behavior, nonempty legacy
+string intents and legacy dictionary omission of `admissible` are preserved.
+Omission is compatibility behavior, not evidence of independently issued
+execution authority. Other Authority, approval, Bind and single-use controls
+remain necessary; this check does not replace them.
+
+Before this correction, direct regressions had 40 failures and 32 passing
+controls: 34 malformed/inconsistent cases incorrectly returned `commit`; an
+absent recommendation and five unsupported intent shapes raised AttributeError
+instead of returning a refusal. Separately, faulting only the real validator's
+output in the actual Bind evaluator path produced three unintended COMMITTED
+reference-adapter outcomes (unknown/null recommendation or contradictory failed
+predicate), while the normal positive control committed as expected. The fixed
+Bind tests require BLOCKED receipts, zero `apply` calls and unchanged local
+adapter state in those three cases, and one successful apply in the control.
+
+These are internal evaluator/validator-contract regressions, using synthetic
+inputs and an in-memory reference adapter, not a demonstrated remote HTTP
+exploit or production IAM effect. Invalid validator recommendations are
+injected after normal validation; the built-in validator has a constrained
+recommendation set. Malformed nested result structures or raised validator
+exceptions can still stop evaluation by exception: this change does not add a
+blanket exception fallback, validate arbitrary plugin code or authenticate a
+validator. Built-in mixed stale/failed/missing conditions retain their existing
+escalation precedence without granting commit. Evidence-metadata merge rules
+are also unchanged and have explicit precedence controls.
+
 ## BindReceipt enrichment
 
 Bind receipts and summaries are enriched with regulated-action fields, including:
