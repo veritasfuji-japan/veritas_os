@@ -115,7 +115,7 @@ beforeEach(() => {
   vi.stubGlobal("confirm", vi.fn(() => true));
   vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes("/api/auth/session")) {
+    if (url.includes("/api/veritas/session")) {
       return {
         ok: true,
         status: 200,
@@ -133,7 +133,7 @@ beforeEach(() => {
 function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "admin"): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes("/api/auth/session")) {
+    if (url.includes("/api/veritas/session")) {
       return {
         ok: true,
         status: 200,
@@ -151,7 +151,7 @@ function mockPolicyFetch(authenticatedRole: "admin" | "operator" | "viewer" = "a
 function mockSessionOnly(status: number, payload: Record<string, unknown>): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes("/api/auth/session")) {
+    if (url.includes("/api/veritas/session")) {
       return { ok: status >= 200 && status < 300, status, json: async () => payload } as Response;
     }
     return { ok: true, status: 200, json: async () => MOCK_POLICY } as Response;
@@ -341,7 +341,7 @@ describe("GovernanceControlPage", () => {
   it("shows validation error for malformed policy responses", async () => {
     vi.spyOn(global, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/api/auth/session")) {
+      if (url.includes("/api/veritas/session")) {
         return { ok: true, status: 200, json: async () => ({ ok: true, role: "admin" }) } as Response;
       }
       if (url.includes("/api/veritas/v1/governance/policy")) {

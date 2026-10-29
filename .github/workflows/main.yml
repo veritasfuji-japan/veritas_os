@@ -1222,6 +1222,7 @@ jobs:
               ;;
             e2e)
               pnpm e2e
+              pnpm exec playwright test --config playwright.cookie-session.config.ts
               ;;
             *)
               echo "Unknown gate: ${{ matrix.gate }}" >&2
