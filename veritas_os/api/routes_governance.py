@@ -488,12 +488,17 @@ def governance_get():
 )
 def governance_put(body: dict, request: Request):
     """Update the governance policy (partial merge)."""
-    # HTTP lineage is evidence metadata, never a trusted Bind-policy override.
+    # HTTP lineage cannot configure Bind policy or label the executed target.
     lineage = body.get("policy_lineage")
     if isinstance(lineage, dict) and "bind_adjudication" in lineage:
         return JSONResponse(
             status_code=400,
             content={"ok": False, "error": "policy_lineage_policy_override_forbidden"},
+        )
+    if isinstance(lineage, dict) and "bind_target_metadata" in lineage:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": "policy_lineage_target_override_forbidden"},
         )
     actor_identity = require_authenticated_principal(request)
     srv = _get_server()
