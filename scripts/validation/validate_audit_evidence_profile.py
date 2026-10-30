@@ -31,7 +31,7 @@ def verify(obj, profile_path):
         errors.append("DUPLICATE_CASE_ID")
     if len(set(control_ids)) != len(control_ids):
         errors.append("DUPLICATE_CONTROL_ID")
-    base = profile_path.absolute().parent
+    base = profile_path.resolve().parent
     for e in evidence:
         p = Path(e["relative_path"])
         if p.is_absolute() or ".." in p.parts:
@@ -53,6 +53,10 @@ def verify(obj, profile_path):
                 errors.append(f'UNRESOLVED_CASE_EVIDENCE:{c["case_id"]}:{x}')
         if c["observed"] == "NOT_TESTED" and c["actual_effect"] not in ("NOT_EXECUTED", "UNKNOWN"):
             errors.append(f'NOT_TESTED_HAS_EFFECT:{c["case_id"]}')
+        if c["observed"] in ("PASS", "FAIL") and c["actual_effect"] in ("NOT_EXECUTED", "UNKNOWN"):
+            errors.append(f'OBSERVED_WITHOUT_EFFECT:{c["case_id"]}')
+        if c["observed"] in ("NOT_TESTED", "NOT_APPLICABLE") and c["actual_effect"] not in ("NOT_EXECUTED", "UNKNOWN"):
+            errors.append(f'UNOBSERVED_WITH_EFFECT:{c["case_id"]}')
         if not obj["scope"]["execution_performed"] and c["observed"] not in ("NOT_TESTED", "NOT_APPLICABLE"):
             errors.append(f'UNEXECUTED_CASE_VERDICT:{c["case_id"]}')
     for ctrl in controls:
@@ -81,6 +85,12 @@ def verify(obj, profile_path):
         rev["handoff_status"] == "REVIEWABLE" or rev["reviewer_verdict"] == "ACCEPT"
     ):
         errors.append("SYNTHETIC_EXAMPLE_PROMOTED")
+    # This format contains only assertions, not authenticated external review evidence.
+    # Reject elevated reviewer/handoff claims until an independent verifier is wired in.
+    if rev["handoff_status"] == "REVIEWABLE":
+        errors.append("UNVERIFIED_REVIEWABLE_HANDOFF")
+    if rev["reviewer_verdict"] == "ACCEPT":
+        errors.append("UNVERIFIED_REVIEWER_ACCEPTANCE")
     if rev["handoff_status"] == "REVIEWABLE" and (
         not obj["scope"]["execution_performed"] or
         any(c["verdict"] not in ("PASS", "FAIL", "NOT_APPLICABLE") for c in controls) or
