@@ -17,6 +17,10 @@ v = copy.deepcopy(base); v["controls"][0]["verdict"] = "PASS"; variants["false p
 v = copy.deepcopy(base); v["review"]["handoff_status"] = "REVIEWABLE"; variants["fake handoff"] = v
 v = copy.deepcopy(base); v["metrics"][0]["measurement_status"] = "MEASURED"; v["metrics"][0]["numerator"] = 0; v["metrics"][0]["denominator"] = 1; v["metrics"][0]["source_run_id"] = "run"; variants["fake measurement"] = v
 v = copy.deepcopy(base); v["review"]["reviewer_verdict"] = "ACCEPT"; variants["fake acceptance"] = v
+v = copy.deepcopy(base); v["synthetic_example"] = False; v["scope"]["execution_performed"] = True; v["review"]["handoff_status"] = "REVIEWABLE"; v["review"]["reviewer_verdict"] = "REJECT"; variants["self asserted handoff"] = v
+v = copy.deepcopy(base); v["synthetic_example"] = False; v["review"]["reviewer_verdict"] = "ACCEPT"; v["review"]["reviewer_independence"] = "EXTERNAL"; v["review"]["trusted_key_provenance"] = "ESTABLISHED"; variants["self asserted external acceptance"] = v
+v = copy.deepcopy(base); v["scope"]["execution_performed"] = True; v["cases"][0]["observed"] = "PASS"; variants["observed without effect"] = v
+v = copy.deepcopy(base); v["cases"][0]["actual_effect"] = "ALLOWED"; variants["unobserved with effect"] = v
 for name, v in variants.items():
     issues = verify(v, p)
     assert issues, f"negative test falsely accepted: {name}"
