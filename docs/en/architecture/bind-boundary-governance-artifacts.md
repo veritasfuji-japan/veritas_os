@@ -79,6 +79,26 @@ could retain `other` in persisted classification; the valid HTTP regression
 matrix had 15 metadata failures and 26 passing controls. This was an evidence
 alignment bug, not a reproduced execution bypass.
 
+The policy-update HTTP endpoint reserves the top-level
+`policy_lineage.bind_target_metadata` key for server-controlled operation
+identity. Any client-supplied value, including null, empty or matching metadata,
+returns HTTP 400 with `policy_lineage_target_override_forbidden` before approval
+validation, the Bind helper, policy mutation or intent/Receipt publication.
+The existing `bind_adjudication` override rejection retains its precedence and
+error code. Ordinary lineage and nested descriptive metadata remain accepted;
+they do not replace the helper's canonical top-level target.
+
+Before this HTTP restriction, an authenticated fixture policy update could
+record `/v1/system/resume` / `system_resume` in both its response and reloaded
+TrustLog Receipt, despite the actual action being policy update. The same
+mislabeling occurred for BLOCKED and ESCALATED policy updates; those attempts
+did not mutate policy. Regression controls cover all three outcomes, reserved
+key shapes, ordinary lineage, and trusted internal helper overrides. This is an
+HTTP evidence-integrity correction, not proof of privilege escalation or of
+complete validation of every caller-supplied evidence field. The internal helper
+still accepts explicit trusted target lineage; callers must not expose that
+internal override contract directly to untrusted inputs.
+
 Promotion retains its existing HTTP 200 response with an explicit non-COMMITTED
 Bind outcome; callers must inspect that outcome. Approval booleans/fixture
 reviewer labels do not establish independent human approval. The compiled test

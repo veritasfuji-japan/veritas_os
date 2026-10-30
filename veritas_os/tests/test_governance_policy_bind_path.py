@@ -189,3 +189,27 @@ def test_governance_policy_update_bind_ignores_legacy_approval_metadata() -> Non
     )
     assert receipt.final_outcome is FinalOutcome.COMMITTED
     assert state["fuji_rules"]["pii_check"] is False
+
+
+@pytest.mark.parametrize("mode, expected", [
+    ("commit", FinalOutcome.COMMITTED),
+    ("block", FinalOutcome.BLOCKED),
+    ("escalate", FinalOutcome.ESCALATED),
+])
+def test_trusted_internal_target_lineage_override_is_preserved(mode, expected) -> None:
+    """HTTP restrictions do not alter the trusted internal helper contract."""
+    policy = {} if mode == "commit" else {
+        "bind_adjudication": {"ttl_required": True, "missing_signal_default": mode},
+    }
+    receipt, state, _ = _execute(
+        governance_policy=policy,
+        policy_lineage={"bind_target_metadata": {
+            "target_path": "/internal/fixture", "target_type": "internal_fixture",
+            "target_path_type": "internal_fixture_update",
+        }},
+    )
+    assert receipt.final_outcome is expected
+    assert receipt.target_path == "/internal/fixture"
+    assert receipt.target_type == "internal_fixture"
+    assert receipt.target_path_type == "internal_fixture_update"
+    assert state["fuji_rules"]["pii_check"] is (mode != "commit")

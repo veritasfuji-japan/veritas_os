@@ -17,7 +17,7 @@ import json
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -93,6 +93,115 @@ def test_policy_update_http_accepts_non_policy_lineage(_temp_policy: Path) -> No
     assert response.json()["bind_outcome"] == "COMMITTED"
     persisted = json.loads(_temp_policy.read_text(encoding="utf-8"))
     assert persisted["risk_thresholds"]["allow_upper"] == 0.45
+
+
+@pytest.fixture()
+def target_lineage_evidence(monkeypatch, tmp_path):
+    """Keep real HTTP/Bind and encrypted evidence, with isolated local writes."""
+    from veritas_os.api import routes_governance
+    from veritas_os.logging import trust_log
+    from veritas_os.policy.bind_core import core as bind_core
+
+    monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([
+        {"key": HEADERS["X-API-Key"], "role": "admin"},
+    ]))
+    for name, value in {
+        "LOG_DIR": tmp_path, "LOG_JSON": tmp_path / "trust_log.json",
+        "LOG_JSONL": tmp_path / "trust_log.jsonl",
+        "_append_stats": {"success": 0, "failure": 0},
+    }.items():
+        monkeypatch.setattr(trust_log, name, value)
+    monkeypatch.setattr(trust_log, "open_trust_log_for_append", lambda: open(
+        trust_log.LOG_JSONL, "a", encoding="utf-8",
+    ))
+    monkeypatch.setattr(srv, "_publish_event", lambda *a, **k: None)
+    monkeypatch.setattr(routes_governance, "_emit_governance_change_alert", lambda **k: None)
+    spies = {}
+    for module, name in (
+        (srv, "update_policy"), (srv, "enforce_four_eyes_approval"),
+        (routes_governance, "update_governance_policy_with_bind_boundary"),
+        (bind_core, "append_execution_intent_trustlog"),
+        (bind_core, "append_bind_receipt_trustlog"),
+    ):
+        spies[name] = Mock(wraps=getattr(module, name))
+        monkeypatch.setattr(module, name, spies[name])
+    return spies
+
+
+def _target_lineage_policy(path: Path, mode: str) -> bytes:
+    if mode != "commit":
+        policy = json.loads(path.read_text(encoding="utf-8"))
+        policy["bind_adjudication"].update(ttl_required=True, missing_signal_default=mode)
+        path.write_text(json.dumps(policy), encoding="utf-8")
+    return path.read_bytes()
+
+
+@pytest.mark.parametrize("mode", ["commit", "block", "escalate"])
+@pytest.mark.parametrize("metadata", [
+    {"target_path": "/v1/system/resume", "target_type": "system_resume",
+     "target_path_type": "system_resume", "target_label": "forged resume",
+     "operator_surface": "compliance", "relevant_ui_href": "/system"},
+    {"target_path": "/v1/system/resume"},
+    {}, None, [], "system_resume",
+    {"target_path": "/v1/governance/policy", "target_type": "governance_policy",
+     "target_path_type": "governance_policy_update"},
+])
+def test_policy_http_rejects_target_metadata_lineage(
+    _temp_policy, target_lineage_evidence, mode, metadata,
+) -> None:
+    """Reserved target metadata cannot relabel commits or refusal evidence."""
+    from veritas_os.policy.bind_artifacts import find_bind_receipts
+
+    before = _target_lineage_policy(_temp_policy, mode)
+    response = client.put("/v1/governance/policy", headers=HEADERS, json=_approved({
+        "risk_thresholds": {"allow_upper": 0.45},
+        "policy_lineage": {"source": "untrusted-http", "bind_target_metadata": metadata},
+    }))
+    assert response.status_code == 400, response.json()
+    assert response.json()["error"] == "policy_lineage_target_override_forbidden"
+    for spy in target_lineage_evidence.values():
+        spy.assert_not_called()
+    assert _temp_policy.read_bytes() == before
+    assert find_bind_receipts() == []
+
+
+@pytest.mark.parametrize("mode", ["commit", "block", "escalate"])
+@pytest.mark.parametrize("lineage", [
+    None, {}, {"source": "ordinary-http-lineage"},
+    {"source": {"bind_target_metadata": {"target_path": "/v1/system/resume"}}},
+])
+def test_policy_http_lineage_target_evidence_remains_canonical(
+    _temp_policy, target_lineage_evidence, mode, lineage,
+) -> None:
+    """Ordinary lineage preserves real outcomes and canonical persisted targets."""
+    from veritas_os.policy.bind_artifacts import find_bind_receipts
+
+    before = _target_lineage_policy(_temp_policy, mode)
+    response = client.put("/v1/governance/policy", headers=HEADERS, json=_approved({
+        "risk_thresholds": {"allow_upper": 0.45}, "policy_lineage": lineage,
+    }))
+    payload = response.json()
+    assert response.status_code == (200 if mode == "commit" else 403), payload
+    outcome = {"commit": "COMMITTED", "block": "BLOCKED", "escalate": "ESCALATED"}[mode]
+    assert payload["bind_outcome"] == outcome
+    for name, spy in target_lineage_evidence.items():
+        assert spy.call_count == (int(mode == "commit") if name == "update_policy" else 1)
+    intent = target_lineage_evidence["append_execution_intent_trustlog"].call_args.args[0]
+    assert intent.intended_action == "update_governance_policy"
+    if lineage:
+        assert intent.policy_lineage["source"] == lineage["source"]
+    receipts = find_bind_receipts(bind_receipt_id=payload["bind_receipt_id"])
+    assert len(receipts) == 1
+    assert receipts[0].final_outcome.value == outcome
+    assert receipts[0].execution_intent_id == payload["execution_intent_id"]
+    for evidence in (payload["bind_receipt"], receipts[0].to_dict()):
+        assert evidence["target_path"] == "/v1/governance/policy"
+        assert evidence["target_type"] == "governance_policy"
+        assert evidence["target_path_type"] == "governance_policy_update"
+    if mode == "commit":
+        assert json.loads(_temp_policy.read_text())["risk_thresholds"]["allow_upper"] == 0.45
+    else:
+        assert _temp_policy.read_bytes() == before
 
 
 @pytest.fixture(autouse=True)
