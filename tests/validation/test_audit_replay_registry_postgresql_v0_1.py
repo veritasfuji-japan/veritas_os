@@ -159,3 +159,45 @@ async def test_real_postgres_fail_closed_for_invalid_scan_and_missing_packet(tmp
         assert (await store.readback("not-present-" + uuid4().hex))[0] == "NOT_FOUND"
     finally:
         await close_pool()
+
+
+@pytest.mark.asyncio
+async def test_real_postgres_reused_packet_id_with_distinct_contents_is_replay(tmp_path):
+    _require_pg()
+    shared_id = "reused-" + uuid4().hex
+    a = write_packet(
+        tmp_path, label="first", packet_id=shared_id,
+        operation_id="op-a-" + uuid4().hex, repository="Example/Audit",
+    )
+    b = write_packet(
+        tmp_path, label="second", packet_id=shared_id,
+        operation_id="op-b-" + uuid4().hex, repository="Example/Audit",
+    )
+    try:
+        store = PostgresAuditReplayRegistry()
+        assert (await store.ingest(packet_root=tmp_path, profile_paths=[a])).status == "NEW_OBSERVATION"
+        assert (await store.ingest(packet_root=tmp_path, profile_paths=[b])).status == "REPLAY_DETECTED"
+        status, records = await store.readback(shared_id)
+        assert status == "FOUND_UNAUTHENTICATED"
+        assert records[0]["operation_id"].startswith("op-a-")
+    finally:
+        await close_pool()
+
+
+@pytest.mark.asyncio
+async def test_storage_outage_fail_closed_without_claiming_rollback(tmp_path, monkeypatch):
+    path = _packet(tmp_path, label="outage", operation="op-" + uuid4().hex)
+
+    async def unavailable():
+        raise OSError("synthetic storage outage")
+
+    monkeypatch.setattr(
+        "scripts.validation.audit_replay_registry_postgresql_v0_1.get_pool",
+        unavailable,
+    )
+    result = await PostgresAuditReplayRegistry().ingest(
+        packet_root=tmp_path, profile_paths=[path],
+    )
+    assert result.status == "REGISTRY_UNAVAILABLE"
+    assert result.packet_count == result.case_count == 0
+    assert (await PostgresAuditReplayRegistry().readback("unknown"))[0] == "REGISTRY_UNAVAILABLE"
