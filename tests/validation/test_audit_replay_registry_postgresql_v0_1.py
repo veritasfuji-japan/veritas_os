@@ -201,3 +201,15 @@ async def test_storage_outage_fail_closed_without_claiming_rollback(tmp_path, mo
     assert result.status == "REGISTRY_UNAVAILABLE"
     assert result.packet_count == result.case_count == 0
     assert (await PostgresAuditReplayRegistry().readback("unknown"))[0] == "REGISTRY_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_local_batch_replay_is_classified_without_writing(tmp_path):
+    operation = "duplicate-in-batch-" + uuid4().hex
+    a = _packet(tmp_path, label="dupe-a", operation=operation)
+    b = _packet(tmp_path, label="dupe-b", operation=operation)
+    result = await PostgresAuditReplayRegistry().ingest(
+        packet_root=tmp_path, profile_paths=[a, b],
+    )
+    assert result.status == "REPLAY_DETECTED"
+    assert result.packet_count == result.case_count == 0
