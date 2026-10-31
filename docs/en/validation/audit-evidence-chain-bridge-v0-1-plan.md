@@ -47,6 +47,8 @@ Status: **implementation in Draft review**. The bridge module and offline test w
 ## Implemented in this PR
 
 - `scripts/validation/audit_evidence_chain_bridge.py`: `verify_audit_evidence_chain_bridge(...)` and deterministic `serialize_bridge_report(...)`.
+- The in-memory Audit Evidence Profile must match the on-disk JSON file supplied as `profile_path`. The Bridge opens a regular profile file with `O_NOFOLLOW`, bounds reads at 16 MiB, and checks file metadata before and after reading. This is a local-input consistency guard, **not** a cryptographic attestation or atomic snapshot.
+- The existing Evidence Chain Verifier receives `approval_required=True` whenever the Manifest declares human approval required, regardless of a false caller flag. A declared complete chain with a non-commit final outcome is rejected before status elevation.
 - Explicit `manifest_evidence_id` is required and must be listed in the target case's `evidence_ids`. Its profile SHA-256 must equal SHA-256 of **canonical JSON bytes** of `EvidenceChainManifest.to_dict()`. The pre-existing profile validator also verifies those bytes against the local regular file under the profile directory. The canonical format is UTF-8 JSON, sorted keys, compact separators `(',', ':')`, and `ensure_ascii=False`.
 - Required ID binding is decision + intent; supplied optional authority, human approval, bind and effect receipt IDs are also compared. Named IDs without their corresponding manifest hash evidence do not produce `LINK_VERIFIED`.
 - A shared decision/intent pair in two distinct profile cases is rejected as ambiguous. `LINK_VERIFIED` additionally requires a complete chain with no missing links, a case with local evidence, and an execution-performed scope with a declared observed outcome. **Those declarations are not independently authenticated by the bridge.**
@@ -59,6 +61,6 @@ Status: **implementation in Draft review**. The bridge module and offline test w
 - A synthetic `LINK_VERIFIED` shows the local **hash and identity link** only. It is **not** proof of authentic source, valid authority or human approval, actual effects, third-party review, provider execution or compliance.
 - Profile v0.1 has no operation ID or native manifest ID reference, so it cannot ensure full operation-level binding without a versioned schema change. Its explicit `manifest_evidence_id` sidecar binding is scoped to this function call.
 - The existing Evidence Chain Verifier accepts supplied local artifact hash surfaces; it is not a signature/trust-root verifier. The bridge cannot upgrade that trust boundary.
-- The profile validator's local evidence reader and file metadata checks do not ensure an atomic snapshot under all concurrent in-place writes; validate stable isolated evidence directories.
+- The profile validator and Bridge use bounded local reads and metadata checks, but cannot guarantee an atomic snapshot under all concurrent in-place writes or malicious concurrent parent-path replacement; validate stable isolated evidence directories.
 - The implementation does not create a service endpoint or accept serialized status JSON as proof. Integration into runtime authorization must be a separate reviewed change.
 - **Do not merge until final-head CI is green and these boundaries are reviewed.**
