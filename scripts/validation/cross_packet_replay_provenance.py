@@ -166,6 +166,18 @@ def _read_manifest(
         ):
             if not isinstance(getattr(manifest, name), str):
                 raise ValueError("wrong manifest field type")
+        # A dataclass does not validate Optional[str] annotations. Check
+        # *all* named identities, including optional receipt/verifier IDs.
+        # All fields with a *_hash suffix in this manifest are canonical
+        # lowercase SHA-256 hexdigests when present, never arbitrary objects.
+        for field in fields(EvidenceChainManifest):
+            value = getattr(manifest, field.name)
+            if field.name.endswith("_id") and value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError("invalid manifest identity type or value")
+            if field.name.endswith("_hash") and value is not None:
+                if not isinstance(value, str) or not HEX_256.fullmatch(value):
+                    raise ValueError("invalid manifest SHA-256 digest type or format")
         if (
             not isinstance(manifest.human_approval_required, bool)
             or not isinstance(manifest.metadata, dict)
