@@ -43,6 +43,8 @@ def _prepare_packets(
     report = verify_cross_packet_replay_provenance(
         packet_root=packet_root, profile_paths=profile_paths,
     )
+    if report["status"] == "REPLAY_DETECTED":
+        raise _ReplayConflict
     if report["status"] != "PASS":
         raise ValueError("LOCAL_SCAN_NOT_PASS")
     packets = report["packet_records"]
@@ -130,6 +132,8 @@ class PostgresAuditReplayRegistry:
     ) -> AuditArchiveResult:
         try:
             batch = _prepare_packets(packet_root, profile_paths)
+        except _ReplayConflict:
+            return AuditArchiveResult("REPLAY_DETECTED")
         except (TypeError, ValueError, KeyError, OSError, RecursionError, OverflowError):
             return AuditArchiveResult("INPUT_INVALID")
 
