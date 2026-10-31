@@ -395,3 +395,36 @@ def test_complete_chain_cannot_claim_non_commit_final_outcome(outcome):
     result = bridge(manifest=manifest)
     assert result["status"] == "FAILED", result
     assert "CHAIN_OUTCOME_STATUS_CONTRADICTION" in result["failure_reasons"]
+
+
+def test_in_memory_profile_must_equal_on_disk_profile():
+    # The original on-disk fixture has no declared execution or linked IDs.
+    result = bridge(profile_path=PROFILE_PATH)
+    assert result["status"] == "FAILED", result
+    assert "PROFILE_FILE_CONTENT_MISMATCH" in result["failure_reasons"]
+
+
+def test_missing_profile_file_rejected():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        result = bridge(profile_path=Path(temp_dir) / "missing-profile.json")
+    assert result["status"] == "FAILED", result
+    assert "PROFILE_FILE_UNREADABLE_OR_UNSAFE" in result["failure_reasons"]
+
+
+def test_symlinked_profile_file_rejected():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        link = Path(temp_dir) / "linked-profile.json"
+        link.symlink_to(PROFILE_PATH)
+        result = bridge(profile_path=link)
+    assert result["status"] == "FAILED", result
+    assert "PROFILE_FILE_UNREADABLE_OR_UNSAFE" in result["failure_reasons"]
+
+
+def test_oversized_profile_file_rejected_without_loading():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        oversized = Path(temp_dir) / "oversized-profile.json"
+        with oversized.open("wb") as stream:
+            stream.truncate(16 * 1024 * 1024 + 1)
+        result = bridge(profile_path=oversized)
+    assert result["status"] == "FAILED", result
+    assert "PROFILE_FILE_UNREADABLE_OR_UNSAFE" in result["failure_reasons"]
