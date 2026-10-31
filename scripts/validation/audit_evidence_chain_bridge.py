@@ -125,6 +125,8 @@ def verify_audit_evidence_chain_bridge(
     if len(matching) != 1:
         return _finish(report, "FAILED", "PROFILE_CASE_NOT_UNIQUE_OR_MISSING")
     case = matching[0]
+    if not case["evidence_ids"]:
+        return _finish(report, "INCOMPLETE", "CASE_HAS_NO_LOCAL_EVIDENCE")
 
     # Two distinct profile cases cannot claim the same decision+intent pair.
     if case.get("decision_id") and case.get("intent_id") and any(
@@ -183,7 +185,7 @@ def verify_audit_evidence_chain_bridge(
     # A caller must bind the supplied manifest to a concrete local file that
     # was hashed by verify_profile. Requiring canonical JSON *bytes* prevents
     # substituting an unrelated in-memory manifest for the cited evidence.
-    report["manifest_evidence_id"] = manifest_evidence_id
+    report["manifest_evidence_id"] = manifest_evidence_id if isinstance(manifest_evidence_id, str) else None
     if not isinstance(manifest_evidence_id, str) or not manifest_evidence_id:
         return _finish(report, "INCOMPLETE", "MANIFEST_EVIDENCE_ID_REQUIRED")
     evidence_by_id = {item["id"]: item for item in profile["evidence"]}
