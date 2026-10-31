@@ -13,6 +13,7 @@ import pytest
 from scripts.validation.audit_evidence_chain_bridge import (
     serialize_bridge_report,
     verify_audit_evidence_chain_bridge,
+    verify_audit_evidence_chain_bridge_v02,
 )
 from veritas_os.governance.evidence_chain_manifest import (
     build_evidence_chain_manifest,
@@ -75,7 +76,7 @@ def make_manifest():
     )
 
 
-def bridge(*, profile=None, manifest=None, binding_manifest=None, **kwargs):
+def bridge(*, profile=None, manifest=None, binding_manifest=None, entrypoint=None, **kwargs):
     # The test uses a fresh isolated local evidence directory. A positive
     # link requires canonical on-disk manifest bytes in the cited profile item.
     supplied_profile = deepcopy(make_profile() if profile is None else profile)
@@ -110,7 +111,7 @@ def bridge(*, profile=None, manifest=None, binding_manifest=None, **kwargs):
             "verified_at": AT,
         }
         options.update(kwargs)
-        return verify_audit_evidence_chain_bridge(**options)
+        return (entrypoint or verify_audit_evidence_chain_bridge)(**options)
 
 
 def test_link_verified_is_local_only_and_does_not_mutate_profile():
@@ -550,3 +551,25 @@ def test_v02_bridge_deterministic_after_reordered_source_keys():
     assert serialize_bridge_report(bridge(profile=original)) == serialize_bridge_report(
         bridge(profile=reordered)
     )
+
+
+
+def test_version_pinned_v02_entrypoint_rejects_legacy_downgrade():
+    legacy = bridge(profile=make_profile(), entrypoint=verify_audit_evidence_chain_bridge_v02)
+    assert legacy["status"] == "FAILED", legacy
+    assert "V02_PROFILE_REQUIRED" in legacy["failure_reasons"]
+    assert legacy["bridge_version"] == "veritas.audit-evidence-chain-bridge/0.2"
+
+
+def test_version_pinned_v02_entrypoint_verifies_valid_operation_binding():
+    report = bridge(profile=make_v02_profile(), entrypoint=verify_audit_evidence_chain_bridge_v02)
+    assert report["status"] == "LINK_VERIFIED", report
+    assert report["bridge_version"] == "veritas.audit-evidence-chain-bridge/0.2"
+
+
+def test_version_pinned_v02_entrypoint_rejects_spoofed_future_version():
+    profile = make_v02_profile()
+    profile["profile_version"] = "veritas.audit-evidence-profile/0.3"
+    result = bridge(profile=profile, entrypoint=verify_audit_evidence_chain_bridge_v02)
+    assert result["status"] == "FAILED"
+    assert "V02_PROFILE_REQUIRED" in result["failure_reasons"]
