@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import replace
 import json
 from pathlib import Path
+import tempfile
 
 import pytest
 
@@ -18,6 +19,7 @@ from veritas_os.governance.evidence_chain_manifest import (
     with_manifest_hash,
 )
 from veritas_os.governance.evidence_chain_verifier import verify_evidence_chain_manifest
+from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE_PATH = ROOT / "tests/validation/fixtures/synthetic_example.json"
@@ -41,6 +43,12 @@ def make_profile() -> dict:
         "bind_receipt_id": "bind-1",
         "effect_receipt_id": "outcome-1",
     })
+    manifest_evidence = deepcopy(profile["evidence"][0])
+    manifest_evidence["id"] = "EV-CHAIN"
+    manifest_evidence["relative_path"] = "chain_manifest.json"
+    manifest_evidence["notes"] = "Canonical local manifest bytes; synthetic only."
+    profile["evidence"].append(manifest_evidence)
+    case["evidence_ids"].append("EV-CHAIN")
     return profile
 
 
@@ -67,20 +75,42 @@ def make_manifest():
     )
 
 
-def bridge(*, profile=None, manifest=None, **kwargs):
-    options = {
-        "profile": make_profile() if profile is None else profile,
-        "profile_path": PROFILE_PATH,
-        "case_id": "CASE-EXAMPLE",
-        "manifest": make_manifest() if manifest is None else manifest,
-        "authority_evidence": {"evidence_hash": AUTH},
-        "outcome_receipt": {"outcome_hash": OUTCOME},
-        "bind_receipt": {"receipt_hash": BIND},
-        "bind_coverage_operation_id": "operation-1",
-        "verified_at": AT,
-    }
-    options.update(kwargs)
-    return verify_audit_evidence_chain_bridge(**options)
+def bridge(*, profile=None, manifest=None, binding_manifest=None, **kwargs):
+    # The test uses a fresh isolated local evidence directory. A positive
+    # link requires canonical on-disk manifest bytes in the cited profile item.
+    supplied_profile = deepcopy(make_profile() if profile is None else profile)
+    supplied_manifest = make_manifest() if manifest is None else manifest
+    bound = (
+        binding_manifest if binding_manifest is not None
+        else supplied_manifest if hasattr(supplied_manifest, "to_dict")
+        else make_manifest()
+    )
+    raw = canonical_json_dumps(bound.to_dict()).encode("utf-8")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp = Path(temp_dir)
+        (temp / "sample_trace.txt").write_bytes(
+            (ROOT / "tests/validation/fixtures/sample_trace.txt").read_bytes()
+        )
+        (temp / "chain_manifest.json").write_bytes(raw)
+        for evidence in supplied_profile["evidence"]:
+            if evidence["id"] == "EV-CHAIN":
+                evidence["sha256"] = sha256_hex(raw)
+        path = temp / "synthetic_example.json"
+        path.write_text(json.dumps(supplied_profile))
+        options = {
+            "profile": supplied_profile,
+            "profile_path": path,
+            "case_id": "CASE-EXAMPLE",
+            "manifest_evidence_id": "EV-CHAIN",
+            "manifest": supplied_manifest,
+            "authority_evidence": {"evidence_hash": AUTH},
+            "outcome_receipt": {"outcome_hash": OUTCOME},
+            "bind_receipt": {"receipt_hash": BIND},
+            "bind_coverage_operation_id": "operation-1",
+            "verified_at": AT,
+        }
+        options.update(kwargs)
+        return verify_audit_evidence_chain_bridge(**options)
 
 
 def test_link_verified_is_local_only_and_does_not_mutate_profile():
@@ -271,3 +301,49 @@ def test_case_and_manifest_cannot_be_cross_bound():
     profile["cases"][0]["decision_id"] = "decision-other"
     result = bridge(profile=profile)
     assert result["status"] == "FAILED"
+
+
+def test_profile_local_manifest_sha_is_required():
+    manifest = with_manifest_hash(replace(make_manifest(), operation_id="another-operation"))
+    # The profile remains bound to the original manifest bytes.
+    result = bridge(manifest=manifest, binding_manifest=make_manifest())
+    assert result["status"] == "FAILED"
+    assert "MANIFEST_EVIDENCE_DIGEST_MISMATCH" in result["failure_reasons"]
+
+
+def test_manifest_evidence_is_explicit_and_case_local():
+    assert bridge(manifest_evidence_id="")["status"] == "INCOMPLETE"
+    result = bridge(manifest_evidence_id="EV-1")
+    assert result["status"] == "FAILED"
+    assert "MANIFEST_EVIDENCE_DIGEST_MISMATCH" in result["failure_reasons"]
+    profile = make_profile()
+    profile["cases"][0]["evidence_ids"].remove("EV-CHAIN")
+    result = bridge(profile=profile)
+    assert result["status"] == "FAILED"
+    assert "MANIFEST_EVIDENCE_NOT_REFERENCED_BY_CASE" in result["failure_reasons"]
+
+
+def test_named_bind_link_requires_hash_not_only_matching_id():
+    manifest = with_manifest_hash(replace(make_manifest(), bind_receipt_hash=None))
+    result = bridge(manifest=manifest)
+    assert result["status"] == "INCOMPLETE"
+    assert "NAMED_LINK_HASH_MISSING" in result["failure_reasons"]
+
+
+def test_case_identity_tuple_must_be_unambiguous():
+    profile = make_profile()
+    other = deepcopy(profile["cases"][0])
+    other["case_id"] = "CASE-OTHER"
+    profile["cases"].append(other)
+    result = bridge(profile=profile)
+    assert result["status"] == "FAILED"
+    assert "AMBIGUOUS_CASE_CHAIN_BINDING" in result["failure_reasons"]
+
+
+def test_declared_commit_cannot_correspond_to_denied_effect():
+    profile = make_profile()
+    profile["cases"][0]["expectation"] = "DENY"
+    profile["cases"][0]["actual_effect"] = "DENIED"
+    result = bridge(profile=profile)
+    assert result["status"] == "FAILED"
+    assert "DECLARED_OUTCOME_CONTRADICTION" in result["failure_reasons"]
