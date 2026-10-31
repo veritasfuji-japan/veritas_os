@@ -30,7 +30,7 @@ No code in this PR writes an observation to disk or PostgreSQL. A candidate reco
 | `local_manifest_binding` | Fixed `MATCHED`, a claimed local binding context |
 | `declared_provenance_binding` | Fixed `CLAIMED_CONTEXT_MATCHES_LOCAL_MANIFEST`, **not authenticated origin** |
 | `origin_authentication`, `independent_review` | Fixed `NOT_PERFORMED`; elevated values are rejected |
-| `record_hash` | SHA-256 over `sha256_of_canonical_json` of all fields **except** `record_hash` |
+| `record_hash` | The `sha256_of_canonical_json` digest of all fields **except** `record_hash` |
 
 The hash uses VERITAS's existing sorted-key, compact UTF-8 JSON canonicalization helper. It catches accidental or uncoordinated changes to a record, but an attacker who edits the record may recompute it. An unsigned hash is **not** a signature, a secure clock, a trusted database transaction or a tamper-proof history.
 
