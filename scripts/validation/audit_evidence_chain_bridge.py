@@ -20,6 +20,7 @@ from veritas_os.governance.evidence_chain_manifest import (
 from veritas_os.governance.evidence_chain_verifier import (
     verify_evidence_chain_manifest,
 )
+from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 
 BRIDGE_VERSION = "veritas.audit-evidence-chain-bridge/0.1"
 SOURCE_VERIFIER = (
@@ -30,6 +31,7 @@ CLAIM_LIMITATIONS = [
     "A locally verified chain is not proof of an actual effect or valid authority.",
     "The profile's case outcomes and reviewer/trust claims are not independently attested.",
     "Profile v0.1 does not include an operation_id or manifest_id binding field.",
+    "The manifest is bound to a local evidence file by canonical JSON bytes, not by an external signature.",
     "This bridge does not modify runtime authorization, review or certification.",
 ]
 _SOURCE_STATUSES = {
@@ -37,6 +39,12 @@ _SOURCE_STATUSES = {
     "failed": "FAILED",
     "incomplete": "INCOMPLETE",
     "indeterminate": "INDETERMINATE",
+}
+_REQUIRED_HASH_FOR_ID = {
+    "authority_id": "authority_evidence_hash",
+    "approval_id": "human_approval_receipt_hash",
+    "bind_receipt_id": "bind_receipt_hash",
+    "effect_receipt_id": "outcome_receipt_hash",
 }
 _IDENTITY_FIELDS = (
     ("decision_id", "decision_id", True),
@@ -60,6 +68,8 @@ def _blank_report(profile: Any, case_id: str) -> dict[str, Any]:
         "chain_status": None,
         "manifest_id": None,
         "manifest_digest": None,
+        "manifest_evidence_id": None,
+        "manifest_evidence_sha256": None,
         "manifest_hash_matches": False,
         "identity_matches": {},
         "verified_links": [],
@@ -83,6 +93,7 @@ def verify_audit_evidence_chain_bridge(
     profile: dict[str, Any],
     profile_path: Path,
     case_id: str,
+    manifest_evidence_id: str,
     manifest: EvidenceChainManifest | None,
     verified_at: str,
     authority_evidence: Any | None = None,
@@ -105,7 +116,7 @@ def verify_audit_evidence_chain_bridge(
         return _finish(report, "FAILED", "INVALID_BRIDGE_INPUT")
     try:
         errors = verify_profile(profile, Path(profile_path))
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+    except (OSError, ValueError, TypeError, KeyError):
         return _finish(report, "FAILED", "PROFILE_VALIDATION_EXCEPTION")
     if errors:
         return _finish(report, "FAILED", "PROFILE_VALIDATION_FAILED", *sorted(errors))
@@ -114,6 +125,15 @@ def verify_audit_evidence_chain_bridge(
     if len(matching) != 1:
         return _finish(report, "FAILED", "PROFILE_CASE_NOT_UNIQUE_OR_MISSING")
     case = matching[0]
+
+    # Two distinct profile cases cannot claim the same decision+intent pair.
+    if case.get("decision_id") and case.get("intent_id") and any(
+        other["case_id"] != case_id
+        and other.get("decision_id") == case["decision_id"]
+        and other.get("intent_id") == case["intent_id"]
+        for other in profile["cases"]
+    ):
+        return _finish(report, "FAILED", "AMBIGUOUS_CASE_CHAIN_BINDING")
 
     if manifest is None:
         return _finish(report, "FAILED", "CHAIN_MANIFEST_MISSING")
@@ -160,6 +180,36 @@ def verify_audit_evidence_chain_bridge(
             *(f"MISSING_{key.upper()}" for key in missing_ids)
         )
 
+    # A caller must bind the supplied manifest to a concrete local file that
+    # was hashed by verify_profile. Requiring canonical JSON *bytes* prevents
+    # substituting an unrelated in-memory manifest for the cited evidence.
+    report["manifest_evidence_id"] = manifest_evidence_id
+    if not isinstance(manifest_evidence_id, str) or not manifest_evidence_id:
+        return _finish(report, "INCOMPLETE", "MANIFEST_EVIDENCE_ID_REQUIRED")
+    evidence_by_id = {item["id"]: item for item in profile["evidence"]}
+    if manifest_evidence_id not in case["evidence_ids"]:
+        return _finish(report, "FAILED", "MANIFEST_EVIDENCE_NOT_REFERENCED_BY_CASE")
+    if manifest_evidence_id not in evidence_by_id:
+        return _finish(report, "FAILED", "MANIFEST_EVIDENCE_ID_NOT_FOUND")
+    try:
+        canonical_bytes = canonical_json_dumps(manifest.to_dict()).encode("utf-8")
+        expected_sha256 = sha256_hex(canonical_bytes)
+    except (AttributeError, TypeError, ValueError):
+        return _finish(report, "FAILED", "MANIFEST_CANONICALIZATION_FAILED")
+    report["manifest_evidence_sha256"] = expected_sha256
+    if evidence_by_id[manifest_evidence_id]["sha256"] != expected_sha256:
+        return _finish(report, "FAILED", "MANIFEST_EVIDENCE_DIGEST_MISMATCH")
+
+    # A case naming a particular authority/approval/bind/outcome artifact
+    # also requires a manifest hash field for that named link.
+    absent_hashes = [
+        field for field, hash_field in _REQUIRED_HASH_FOR_ID.items()
+        if case.get(field) and not getattr(manifest, hash_field)
+    ]
+    if absent_hashes:
+        return _finish(report, "INCOMPLETE", "NAMED_LINK_HASH_MISSING",
+                       *(f"MISSING_{field.upper()}_HASH" for field in absent_hashes))
+
     try:
         source = verify_evidence_chain_manifest(
             manifest=manifest,
@@ -201,6 +251,11 @@ def verify_audit_evidence_chain_bridge(
         "NOT_EXECUTED", "UNKNOWN"
     ):
         return _finish(report, "INCOMPLETE", "CASE_OUTCOME_UNOBSERVED")
+    # This consistency check is *not* an independent effect attestation.
+    if manifest.final_outcome.strip().lower() in (
+        "commit", "committed", "commit_eligible"
+    ) and case["actual_effect"] == "DENIED":
+        return _finish(report, "FAILED", "DECLARED_OUTCOME_CONTRADICTION")
     return _finish(report, "LINK_VERIFIED")
 
 
