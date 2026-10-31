@@ -9,7 +9,9 @@ origin, independently established authority, external review or certification.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import stat
 from typing import Any
 
 from scripts.validation.validate_audit_evidence_profile import verify as verify_profile
@@ -80,6 +82,37 @@ def _blank_report(profile: Any, case_id: str) -> dict[str, Any]:
     }
 
 
+MAX_PROFILE_BYTES = 16 * 1024 * 1024
+
+
+def _read_local_profile(profile_path: Path) -> Any:
+    """Read a bounded regular JSON profile, refusing a final symlink."""
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise OSError("platform cannot safely open an untrusted profile file")
+    fd = os.open(profile_path, flags | os.O_NOFOLLOW)
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_PROFILE_BYTES:
+            raise ValueError("profile is not a bounded regular file")
+        raw = bytearray()
+        while len(raw) <= MAX_PROFILE_BYTES:
+            chunk = os.read(fd, min(65536, MAX_PROFILE_BYTES + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+        if len(raw) > MAX_PROFILE_BYTES:
+            raise ValueError("profile exceeds size limit")
+        after = os.fstat(fd)
+        if (len(raw) != before.st_size or before.st_size != after.st_size
+                or before.st_mtime_ns != after.st_mtime_ns
+                or before.st_ctime_ns != after.st_ctime_ns):
+            raise ValueError("profile changed during read")
+        return json.loads(raw)
+    finally:
+        os.close(fd)
+
+
 def _finish(report: dict[str, Any], status: str, *reasons: str) -> dict[str, Any]:
     report["status"] = status
     report["failure_reasons"] = sorted(
@@ -114,6 +147,14 @@ def verify_audit_evidence_chain_bridge(
 
     if not isinstance(profile, dict) or not isinstance(case_id, str) or not case_id:
         return _finish(report, "FAILED", "INVALID_BRIDGE_INPUT")
+    # Bind the caller's in-memory profile to the actual local profile file;
+    # profile_path must not be merely a convenient evidence-directory hint.
+    try:
+        on_disk_profile = _read_local_profile(Path(profile_path))
+    except (OSError, ValueError, TypeError):
+        return _finish(report, "FAILED", "PROFILE_FILE_UNREADABLE_OR_UNSAFE")
+    if on_disk_profile != profile:
+        return _finish(report, "FAILED", "PROFILE_FILE_CONTENT_MISMATCH")
     try:
         errors = verify_profile(profile, Path(profile_path))
     except (OSError, ValueError, TypeError, KeyError):
