@@ -12,7 +12,6 @@ from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
-import shutil
 
 import pytest
 
@@ -95,8 +94,9 @@ def write_packet(
         operation_id=operation_id,
         repository=repository,
         source_commit=source_commit,
-        **(manifest_overrides or {}),
     )
+    if manifest_overrides:
+        manifest = with_manifest_hash(replace(manifest, **manifest_overrides))
     case.update({
         "expectation": "ALLOW",
         "observed": "PASS",
