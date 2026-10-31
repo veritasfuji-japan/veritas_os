@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+import scripts.validation.cross_packet_replay_provenance as scanner_module
+from scripts.validation.validate_audit_evidence_profile import verify as verify_profile
 from scripts.validation.cross_packet_replay_provenance import (
     MAX_FILE_BYTES,
     MAX_PACKETS,
@@ -491,3 +493,52 @@ def test_input_set_with_nonstring_path_fails(tmp_path):
     report = verify_cross_packet_replay_provenance(packet_root=tmp_path, profile_paths=[123])
     assert report["status"] == "FAIL"
     assert "INVALID_PACKET_PATHS" in codes(report)
+
+
+
+def test_profile_validator_accepts_anchored_hash_resolver_without_path_lookup():
+    # The optional callback must not dereference the supplied profile path.
+    # This proves the legacy validator can operate on scanner-rooted bytes.
+    profile = json.loads(PROFILE_FIXTURE.read_text())
+    observed_paths = []
+
+    def resolver(relative_path):
+        observed_paths.append(relative_path)
+        if relative_path != "sample_trace.txt":
+            return None, "UNEXPECTED_LOCAL_PATH"
+        return hashlib.sha256(SAMPLE_TRACE.read_bytes()).hexdigest(), None
+
+    issues = verify_profile(
+        profile, Path("/this/path/must/not/exist/profile.json"),
+        evidence_hash_resolver=resolver,
+    )
+    assert issues == [], issues
+    assert observed_paths == ["sample_trace.txt"]
+
+
+def test_profile_validator_propagates_anchored_resolver_rejection():
+    profile = json.loads(PROFILE_FIXTURE.read_text())
+    issues = verify_profile(
+        profile, Path("/untrusted/nonexistent/profile.json"),
+        evidence_hash_resolver=lambda relative_path: (None, "UNSAFE_ANCHORED_PATH"),
+    )
+    assert "UNSAFE_ANCHORED_PATH:EV-1" in issues
+
+
+def test_cross_packet_scan_limits_total_evidence_bytes(tmp_path, monkeypatch):
+    a = write_packet(tmp_path, label="a", packet_id="packet-a", operation_id="op-a")
+    monkeypatch.setattr(scanner_module, "MAX_TOTAL_EVIDENCE_BYTES_PER_PACKET", 1)
+    report = scan(tmp_path, a)
+    assert report["status"] == "FAIL", report
+    assert "PROFILE_VALIDATION_FAILED" in codes(report)
+
+
+def test_symlinked_packet_root_is_rejected(tmp_path):
+    folder = tmp_path / "real-root"
+    folder.mkdir()
+    name = write_packet(folder, label="a", packet_id="packet-a", operation_id="op-a")
+    alias = tmp_path / "linked-root"
+    alias.symlink_to(folder, target_is_directory=True)
+    report = scan(alias, name)
+    assert report["status"] == "FAIL", report
+    assert "UNREADABLE_OR_UNSUPPORTED_PROFILE" in codes(report)
