@@ -406,3 +406,88 @@ def test_cli_reports_json_and_nonzero_for_replay(tmp_path, capsys):
     assert main([str(tmp_path), a, b]) == 1
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "REPLAY_DETECTED"
+
+
+
+def test_repository_namespace_case_differences_do_not_bypass_replay(tmp_path):
+    a = write_packet(
+        tmp_path, label="a", packet_id="packet-a", operation_id="op-shared",
+        repository="Example/Synthetic-Auditor",
+    )
+    b = write_packet(
+        tmp_path, label="b", packet_id="packet-b", operation_id="op-shared",
+        repository="example/synthetic-auditor",
+    )
+    report = scan(tmp_path, a, b)
+    assert report["status"] == "REPLAY_DETECTED", report
+    assert "OPERATION_ID_REUSED" in codes(report)
+
+
+def test_declared_allowed_effect_with_blocked_manifest_fails(tmp_path):
+    a = write_packet(
+        tmp_path, label="a", packet_id="packet-a", operation_id="op-a",
+        manifest_overrides={
+            "final_outcome": "block",
+            "chain_status": "blocked",
+            "refusal_basis": ["synthetic-refusal"],
+        },
+    )
+    report = scan(tmp_path, a)
+    assert report["status"] == "FAIL"
+    assert "DECLARED_OUTCOME_CONTRADICTION" in codes(report)
+
+
+def test_claimed_observed_effect_with_indeterminate_manifest_is_incomplete(tmp_path):
+    a = write_packet(
+        tmp_path, label="a", packet_id="packet-a", operation_id="op-a",
+        manifest_overrides={"final_outcome": "unknown", "chain_status": "indeterminate"},
+    )
+    report = scan(tmp_path, a)
+    assert report["status"] == "INCOMPLETE", report
+    assert "OBSERVED_CASE_CHAIN_INCOMPLETE" in codes(report)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("final_outcome", ["commit"]),
+    ("manifest_id", 17),
+    ("metadata", ["not", "a", "mapping"]),
+    ("human_approval_required", "false"),
+])
+def test_wrongly_typed_manifest_fields_fail_closed(tmp_path, field, value):
+    a = write_packet(tmp_path, label="a", packet_id="packet-a", operation_id="op-a")
+    manifest_file = tmp_path / "a/manifest.json"
+    raw = json.loads(manifest_file.read_text())
+    raw[field] = value
+    content = canonical_json_dumps(raw).encode("utf-8")
+    manifest_file.write_bytes(content)
+    profile_file = tmp_path / a
+    profile = json.loads(profile_file.read_text())
+    profile["evidence"][1]["sha256"] = hashlib.sha256(content).hexdigest()
+    profile_file.write_text(json.dumps(profile))
+    report = scan(tmp_path, a)
+    assert report["status"] == "FAIL", report
+    assert "MANIFEST_EVIDENCE_INVALID" in codes(report)
+
+
+def test_invalid_caller_supplied_snapshot_digest_fails_closed(tmp_path):
+    a = write_packet(tmp_path, label="a", packet_id="packet-a", operation_id="op-a")
+    report = scan(tmp_path, a, expected_snapshot_digest="unanchored")
+    assert report["status"] == "FAIL"
+    assert "INVALID_EXPECTED_DIGEST" in codes(report)
+    assert report["external_snapshot_anchor_verified"] is False
+
+
+def test_single_file_symlink_rejected(tmp_path):
+    a = write_packet(tmp_path, label="a", packet_id="packet-a", operation_id="op-a")
+    p = tmp_path / a
+    p.rename(tmp_path / "a/real-profile.json")
+    p.symlink_to(tmp_path / "a/real-profile.json")
+    report = scan(tmp_path, a)
+    assert report["status"] == "FAIL"
+    assert "UNREADABLE_OR_UNSUPPORTED_PROFILE" in codes(report)
+
+
+def test_input_set_with_nonstring_path_fails(tmp_path):
+    report = verify_cross_packet_replay_provenance(packet_root=tmp_path, profile_paths=[123])
+    assert report["status"] == "FAIL"
+    assert "INVALID_PACKET_PATHS" in codes(report)
