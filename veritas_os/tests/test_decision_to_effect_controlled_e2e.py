@@ -12,6 +12,8 @@ payloads, credentials, keys and external effects are synthetic.
 from __future__ import annotations
 
 from dataclasses import asdict
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from datetime import UTC, datetime, timedelta
 import hashlib
 import json
@@ -275,6 +277,21 @@ async def _sandbox_row_count() -> int:
         return int((await cur.fetchone())[0])
     finally:
         await conn.close()
+
+
+def _configured_alembic_head() -> str:
+    """Resolve the actual checkout's migration head, not a frozen revision."""
+    config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    scripts = ScriptDirectory.from_config(config)
+    head = scripts.get_current_head()
+    if head is None:
+        raise RuntimeError("no Alembic migration head")
+    # The IAM challenge registry must remain on the active migration lineage.
+    if scripts.get_revision("0011") is None:
+        raise RuntimeError("required IAM challenge migration is missing")
+    if head != "0011":
+        list(scripts.iterate_revisions(head, "0011"))
+    return head
 
 
 async def _migration_head() -> str:
@@ -595,9 +612,9 @@ async def test_current_head_decision_to_effect_normal_and_fault_e2e(tmp_path):
     assert rows_after_fault == rows_before + 2
 
     migration = await _migration_head()
-    # Alembic 0011 extends 0010 with the opt-in, non-authorizing
-    # durable IAM reconciliation challenge registry.
-    assert migration == "0011"
+    # Prove the database matches this exact checkout's Alembic head.
+    # New, unrelated migrations must not invalidate the controlled proof.
+    assert migration == _configured_alembic_head()
 
     evidence = {
         "format_version": "controlled-decision-to-effect-evidence/v1",
