@@ -30,7 +30,7 @@ python -m scripts.validation.cross_packet_replay_provenance \
   packet-a/profile.json packet-b/profile.json
 ```
 
-All listed paths are relative to one supplied root. Maximum 64 profiles per call and 16 MiB per file. Profile and evidence files are read without following symbolic links through directory-relative descriptors on supported POSIX operating systems. Reading is bounded and metadata-checked before and after. The existing v0.2 profile schema and local hashing validator must pass. The caller must provide a stable, isolated evidence directory; concurrent changes remain outside the atomicity guarantees.
+All listed paths are relative to one supplied root. Maximum 64 profiles per call, 16 MiB per file, 64 MiB cumulative evidence bytes per profile, and bounded case/evidence item counts. Profile and evidence files are read without following symbolic links through directory-relative descriptors on supported POSIX operating systems. Reading is bounded and metadata-checked before and after. The existing v0.2 profile schema and local hashing validator must pass. This PR adds a **backward-compatible optional evidence hash resolver** to the existing validator; the scanner always supplies its own descriptor-rooted resolver so a resolved profile-parent path cannot redirect evidence reads outside the selected packet root. The caller must provide a stable, isolated evidence directory; concurrent changes remain outside the atomicity guarantees.
 
 Only **v0.2 profiles** are accepted. A legacy v0.1 packet cannot silently skip operation-level identity checks.
 
@@ -60,7 +60,7 @@ Across distinct supplied packet files:
 - A repeated manifest **canonical SHA-256** is flagged, including across repositories.
 - Repeating a local profile path within the same request is an input failure.
 
-Repository scoping avoids treating unrelated tenants' identical local operation identifiers as replay. The caller must still ensure repository names themselves are authoritative; this local check does not.
+Repository scoping uses case-insensitive names for repeated operation and manifest identifiers, avoiding trivial casing bypasses while allowing distinct repository namespaces. It avoids treating unrelated tenants' identical local operation identifiers as replay. The caller must still ensure repository names themselves are authoritative; this local check does not.
 
 Status precedence: `FAIL` (invalid/malformed/contradictory) over `REPLAY_DETECTED` over `INCOMPLETE` over `PASS`. All findings are returned deterministically; an invalid packet is **not** skipped and then treated as a complete successful audit.
 
@@ -79,7 +79,7 @@ The report contains a canonical `snapshot_digest` over the accepted packet/link 
 
 - Two distinct synthetic v0.2 packets pass with clearly labeled, unauthenticated provenance.
 - Repeated packet, operation, manifest ID, and bytes across packets are rejected.
-- Changed operation or decision IDs, forged/missing provenance metadata, tampered manifest bytes/hash, symlinked paths, invalid versions, oversized inputs, and duplicate paths fail closed.
+- Changed operation or decision IDs, forged/missing provenance metadata, contradictory declared effects, malformed manifest field types, tampered manifest bytes/hash, symlinked paths, invalid versions, oversized inputs, cumulative evidence-limit violations, and duplicate paths fail closed.
 - Reports remain deterministic under input order changes.
 - A caller-supplied digest mismatch is rejected; a matching digest never counts as external authentication.
 - v0.1 and v0.2 Profile/Bridge regression tests remain green.
