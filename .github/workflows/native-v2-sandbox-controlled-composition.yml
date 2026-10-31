@@ -103,7 +103,19 @@ jobs:
       - name: Start independent native v2 sandbox HTTPS service
         run: |
           set -euo pipefail
-          sudo -E env PYTHONPATH="$GITHUB_WORKSPACE" "$(which python)"             scripts/run_native_v2_sandbox_service.py             --host 0.0.0.0             --port 443             --cert /tmp/veritas-native-v2-sandbox/server.crt             --key /tmp/veritas-native-v2-sandbox/server.key             >/tmp/veritas-native-v2-sandbox/service.log 2>&1 &
+          # sudo -E can be ignored by hardened runners. Pass only the
+          # synthetic service inputs explicitly into the privileged process.
+          sudo env \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+            VERITAS_SANDBOX_DATABASE_URL="$VERITAS_SANDBOX_DATABASE_URL" \
+            VERITAS_SANDBOX_WRITER_TOKEN="$VERITAS_SANDBOX_WRITER_TOKEN" \
+            VERITAS_SANDBOX_READER_TOKEN="$VERITAS_SANDBOX_READER_TOKEN" \
+            VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG="$VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG" \
+            "$(which python)" scripts/run_native_v2_sandbox_service.py \
+            --host 0.0.0.0 --port 443 \
+            --cert /tmp/veritas-native-v2-sandbox/server.crt \
+            --key /tmp/veritas-native-v2-sandbox/server.key \
+            >/tmp/veritas-native-v2-sandbox/service.log 2>&1 &
           echo $! >/tmp/veritas-native-v2-sandbox/service.pid
 
           for i in $(seq 1 30); do
