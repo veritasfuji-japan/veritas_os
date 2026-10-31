@@ -347,3 +347,51 @@ def test_declared_commit_cannot_correspond_to_denied_effect():
     result = bridge(profile=profile)
     assert result["status"] == "FAILED"
     assert "DECLARED_OUTCOME_CONTRADICTION" in result["failure_reasons"]
+
+
+def test_manifest_required_approval_cannot_be_downgraded_by_default_bridge_flag():
+    approval_hash = "d" * 64
+    manifest = with_manifest_hash(replace(
+        make_manifest(), human_approval_required=True,
+        human_approval_receipt_hash=approval_hash,
+        human_approval_receipt_id="approval-1",
+    ))
+    profile = make_profile()
+    profile["cases"][0]["approval_id"] = "approval-1"
+    supplied_receipt = {"receipt_hash": approval_hash}
+    # Source verifier without the required approval flag would previously
+    # accept these present hashes even without any verified approval proof.
+    source_without_flag = verify_evidence_chain_manifest(
+        manifest=manifest,
+        authority_evidence={"evidence_hash": AUTH},
+        human_approval_receipt=supplied_receipt,
+        outcome_receipt={"outcome_hash": OUTCOME},
+        bind_receipt={"receipt_hash": BIND},
+        bind_coverage_operation_id="operation-1",
+        approval_required=False,
+        verified_at=AT,
+    )
+    assert source_without_flag.verification_status == "verified"
+    result = bridge(
+        profile=profile,
+        manifest=manifest,
+        human_approval_receipt=supplied_receipt,
+        approval_required=False,
+    )
+    assert result["status"] == "INCOMPLETE", result
+    assert result["source_verification_status"] == "incomplete"
+    assert "human_approval_proof_hash_missing" in result["failure_reasons"]
+
+
+def test_caller_required_approval_remains_fail_closed_when_manifest_does_not_require_it():
+    result = bridge(approval_required=True)
+    assert result["status"] == "INCOMPLETE", result
+    assert "human_approval_proof_hash_missing" in result["failure_reasons"]
+
+
+@pytest.mark.parametrize("outcome", ["blocked", "refused", "unknown"])
+def test_complete_chain_cannot_claim_non_commit_final_outcome(outcome):
+    manifest = with_manifest_hash(replace(make_manifest(), final_outcome=outcome))
+    result = bridge(manifest=manifest)
+    assert result["status"] == "FAILED", result
+    assert "CHAIN_OUTCOME_STATUS_CONTRADICTION" in result["failure_reasons"]
