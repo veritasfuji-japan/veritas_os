@@ -34,7 +34,7 @@ All listed paths are relative to one supplied root. Maximum 64 profiles per call
 
 Only **v0.2 profiles** are accepted. A legacy v0.1 packet cannot silently skip operation-level identity checks.
 
-Each bound case must refer to a local canonical JSON `EvidenceChainManifest` file already included in the v0.2 evidence inventory. The evidence SHA-256, canonical manifest bytes, internal manifest hash, case-level `decision_id`, `intent_id`, `operation_id`, `manifest_id`, other declared receipt IDs and available hash fields are checked. This **does not invoke the live chain verifier** or establish actual effect/authority validity.
+Each bound case must refer to a local canonical JSON `EvidenceChainManifest` file already included in the v0.2 evidence inventory. The evidence SHA-256, canonical manifest bytes, internal manifest hash, case-level `decision_id`, `intent_id`, `operation_id`, `manifest_id`, other declared receipt IDs and available hash fields are checked. This **does not invoke the live chain verifier** or establish actual effect/authority validity. When present, Manifest identity fields ending in `_id` must be nonempty strings, while all Manifest `*_hash` fields (including `manifest_hash`) must be exactly 64 lowercase hexadecimal SHA-256 characters. Optional identities and hashes may remain `null`; malformed values are rejected even if both the Manifest digest and Profile evidence hash have been recomputed.
 
 ## Declared provenance binding
 
