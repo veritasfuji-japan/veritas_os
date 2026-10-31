@@ -27,7 +27,7 @@ from veritas_os.governance.evidence_chain_manifest import (
     build_evidence_chain_manifest,
     with_manifest_hash,
 )
-from veritas_os.security.hash import canonical_json_dumps
+from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE_FIXTURE = ROOT / "tests/validation/fixtures/synthetic_v0_2_example.json"
@@ -138,6 +138,24 @@ def scan(root: Path, *paths: str, **kwargs):
 
 def codes(report: dict) -> set[str]:
     return {f["code"] for f in report["findings"]}
+
+
+def rewrite_manifest_and_rehash_profile(root: Path, profile_path: str, changes: dict) -> None:
+    """Keep both integrity digests valid so only field validation can reject."""
+    folder = root / profile_path.rpartition("/")[0]
+    manifest_path = folder / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.update(changes)
+    manifest["manifest_hash"] = sha256_of_canonical_json({
+        key: value for key, value in manifest.items() if key != "manifest_hash"
+    })
+    raw = canonical_json_dumps(manifest).encode("utf-8")
+    manifest_path.write_bytes(raw)
+    profile_file = root / profile_path
+    profile = json.loads(profile_file.read_text(encoding="utf-8"))
+    evidence = next(item for item in profile["evidence"] if item["relative_path"] == "manifest.json")
+    evidence["sha256"] = hashlib.sha256(raw).hexdigest()
+    profile_file.write_text(json.dumps(profile, indent=2), encoding="utf-8")
 
 
 def test_two_distinct_packets_are_locally_consistent_not_authenticated(tmp_path):
@@ -466,6 +484,61 @@ def test_wrongly_typed_manifest_fields_fail_closed(tmp_path, field, value):
     profile = json.loads(profile_file.read_text())
     profile["evidence"][1]["sha256"] = hashlib.sha256(content).hexdigest()
     profile_file.write_text(json.dumps(profile))
+    report = scan(tmp_path, a)
+    assert report["status"] == "FAIL", report
+    assert "MANIFEST_EVIDENCE_INVALID" in codes(report)
+
+
+def test_well_formed_optional_manifest_identifiers_and_digests_pass(tmp_path):
+    a = write_packet(tmp_path, label="a", packet_id="packet-a", operation_id="op-a")
+    rewrite_manifest_and_rehash_profile(tmp_path, a, {
+        "human_approval_verifier_id": "verifier-1",
+        "human_approval_verifier_key_id": "key-1",
+        "human_approval_verifier_policy_hash": "c" * 64,
+        "verified_human_approval_proof_hash": "d" * 64,
+        "bind_receipt_hash": "e" * 64,
+    })
+    assert scan(tmp_path, a)["status"] == "PASS"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("authority_evidence_hash", 42),
+    ("outcome_receipt_hash", True),
+    ("bind_receipt_hash", {"sha256": "c" * 64}),
+    ("verified_human_approval_proof_hash", ["d" * 64]),
+    ("human_approval_verifier_policy_hash", 10),
+    ("human_approval_verifier_lifecycle_snapshot_hash", False),
+    ("human_approval_receipt_id", 123),
+    ("human_approval_verifier_id", 42),
+    ("human_approval_verifier_key_id", ["key"]),
+    ("human_approval_verifier_policy_id", {"id": "policy"}),
+    ("bind_coverage_operation_id", 9),
+])
+def test_optional_manifest_fields_reject_wrong_types_even_when_rehashed(
+    tmp_path, field, value
+):
+    a = write_packet(tmp_path, label="a", packet_id="packet-a", operation_id="op-a")
+    rewrite_manifest_and_rehash_profile(tmp_path, a, {field: value})
+    report = scan(tmp_path, a)
+    assert report["status"] == "FAIL", report
+    assert "MANIFEST_EVIDENCE_INVALID" in codes(report)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("authority_evidence_hash", "a" * 63),
+    ("outcome_receipt_hash", "G" * 64),
+    ("bind_receipt_hash", "c" * 65),
+    ("verified_human_approval_proof_hash", "sha256:" + "d" * 64),
+    ("human_approval_verifier_policy_hash", ""),
+    ("human_approval_verifier_lifecycle_snapshot_hash", "not-a-digest"),
+    ("human_approval_verifier_id", "  "),
+    ("bind_coverage_operation_id", ""),
+])
+def test_optional_manifest_fields_reject_bad_formats_even_when_rehashed(
+    tmp_path, field, value
+):
+    a = write_packet(tmp_path, label="a", packet_id="packet-a", operation_id="op-a")
+    rewrite_manifest_and_rehash_profile(tmp_path, a, {field: value})
     report = scan(tmp_path, a)
     assert report["status"] == "FAIL", report
     assert "MANIFEST_EVIDENCE_INVALID" in codes(report)
