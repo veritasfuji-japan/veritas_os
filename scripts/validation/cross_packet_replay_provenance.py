@@ -155,6 +155,25 @@ def _read_manifest(
         if set(payload) != {field.name for field in fields(EvidenceChainManifest)}:
             raise ValueError("manifest has missing or unknown fields")
         manifest = EvidenceChainManifest(**payload)
+        # Dataclasses do not enforce runtime annotation types. Refuse malformed
+        # JSON values before asking canonicalization or existing validators to
+        # interpret them as strings, iterables or collection metadata.
+        for name in (
+            "manifest_id", "decision_id", "execution_intent_id", "operation_id",
+            "final_outcome", "chain_status", "action_class", "target_system",
+            "target_resource", "generated_at", "manifest_hash",
+        ):
+            if not isinstance(getattr(manifest, name), str):
+                raise ValueError("wrong manifest field type")
+        if (
+            not isinstance(manifest.human_approval_required, bool)
+            or not isinstance(manifest.metadata, dict)
+            or not isinstance(manifest.requested_scope, list)
+            or not isinstance(manifest.missing_links, list)
+            or not isinstance(manifest.refusal_basis, list)
+            or not isinstance(manifest.observed_effects_summary, list)
+        ):
+            raise ValueError("wrong manifest collection type")
         if raw != canonical_json_dumps(manifest.to_dict()).encode("utf-8"):
             raise ValueError("noncanonical manifest bytes")
         validated = validate_evidence_chain_manifest(manifest)
@@ -162,7 +181,7 @@ def _read_manifest(
             raise ValueError("invalid manifest structure")
         if manifest.manifest_hash != manifest.deterministic_digest():
             raise ValueError("manifest digest mismatch")
-    except (TypeError, KeyError, AttributeError, ValueError) as exc:
+    except (TypeError, KeyError, AttributeError, ValueError, RecursionError, OverflowError) as exc:
         raise ValueError("INVALID_CANONICAL_MANIFEST") from exc
     return manifest, digest
 
@@ -194,7 +213,7 @@ def _analyze_case(
         manifest, sha = _read_manifest(
             root=root, profile_relative=relative, evidence=evidence[manifest_eid]
         )
-    except (OSError, ValueError, UnicodeError):
+    except (OSError, ValueError, UnicodeError, RecursionError, OverflowError):
         _finding(findings, kind="FAIL", code="MANIFEST_EVIDENCE_INVALID", path=relative, case_id=case_id)
         return None
     assert manifest is not None
@@ -294,12 +313,12 @@ def verify_cross_packet_replay_provenance(
                 or len(profile["evidence"]) > MAX_EVIDENCE_PER_PACKET
             ):
                 raise ValueError("invalid or excessive case/evidence count")
-        except (OSError, ValueError, TypeError, UnicodeError):
+        except (OSError, ValueError, TypeError, UnicodeError, RecursionError, OverflowError):
             _finding(findings, kind="FAIL", code="UNREADABLE_OR_UNSUPPORTED_PROFILE", path=relative)
             continue
         try:
             errors = verify_profile(profile, root / relative)
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError, RecursionError, OverflowError):
             errors = ["validator exception"]
         if errors:
             _finding(findings, kind="FAIL", code="PROFILE_VALIDATION_FAILED", path=relative)
@@ -348,7 +367,7 @@ def verify_cross_packet_replay_provenance(
         {canonical_json_dumps(item): item for item in findings}.values(),
         key=lambda item: (item["path"], item["case_id"], item["kind"], item["code"]),
     )
-    snapshot = {"packets": packets, "links": links}
+    snapshot = {"requested_paths": names, "packets": packets, "links": links, "findings": findings}
     snapshot_digest = sha256_of_canonical_json(snapshot)
     digest_comparison = "NOT_REQUESTED"
     if expected_snapshot_digest is not None:
