@@ -4,15 +4,80 @@
 NOT a trust chain check, a signature verifier, an execution test or an auditor.
 """
 import argparse
+import errno
 import hashlib
 import json
+import os
 from pathlib import Path
-import sys
 import stat
+import sys
 from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = ROOT / "schemas/veritas_audit_evidence_profile_v0_1.schema.json"
+
+
+# Limit disk I/O and memory use when processing untrusted local evidence.
+MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
+
+
+def _hash_evidence_file(base, relative_path):
+    """Hash a regular file beneath base using no-follow, directory-relative fds.
+
+    Each directory component is opened relative to an already-open directory.
+    This prevents symlink traversal and parent-directory replacement from
+    redirecting reads outside the evidence root on supported POSIX platforms.
+    The final descriptor is checked before and after bounded streaming.
+    """
+    components = relative_path.split("/")
+    if (not components or any(part in ("", ".", "..") for part in components)
+            or "\\\\" in relative_path or Path(relative_path).is_absolute()):
+        return None, "UNSAFE_EVIDENCE_PATH"
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+        return None, "UNSUPPORTED_SAFE_FILE_OPEN"
+    dir_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    file_flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
+    dir_fd = None
+    file_fd = None
+    try:
+        dir_fd = os.open(base, dir_flags)
+        for component in components[:-1]:
+            next_fd = os.open(component, dir_flags, dir_fd=dir_fd)
+            os.close(dir_fd)
+            dir_fd = next_fd
+        file_fd = os.open(components[-1], file_flags, dir_fd=dir_fd)
+        before = os.fstat(file_fd)
+        if not stat.S_ISREG(before.st_mode):
+            return None, "NONREGULAR_EVIDENCE_FILE"
+        if before.st_size > MAX_EVIDENCE_BYTES:
+            return None, "EVIDENCE_FILE_TOO_LARGE"
+        digest = hashlib.sha256()
+        size = 0
+        while True:
+            block = os.read(file_fd, 65536)
+            if not block:
+                break
+            size += len(block)
+            if size > MAX_EVIDENCE_BYTES:
+                return None, "EVIDENCE_FILE_TOO_LARGE"
+            digest.update(block)
+        after = os.fstat(file_fd)
+        if (size != before.st_size or before.st_size != after.st_size
+                or before.st_mtime_ns != after.st_mtime_ns
+                or before.st_ctime_ns != after.st_ctime_ns):
+            return None, "EVIDENCE_CHANGED_DURING_READ"
+        return digest.hexdigest(), None
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            return None, "SYMLINK_EVIDENCE_PATH"
+        if exc.errno == errno.ENOENT:
+            return None, "MISSING_EVIDENCE_BYTES"
+        return None, "UNREADABLE_EVIDENCE_BYTES"
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if dir_fd is not None:
+            os.close(dir_fd)
 
 
 def verify(obj, profile_path):
@@ -34,19 +99,10 @@ def verify(obj, profile_path):
         errors.append("DUPLICATE_CONTROL_ID")
     base = profile_path.resolve().parent
     for e in evidence:
-        p = Path(e["relative_path"])
-        if p.is_absolute() or ".." in p.parts or not p.parts or p.parts[0] == ".":
-            errors.append(f'UNSAFE_EVIDENCE_PATH:{e["id"]}')
-            continue
-        file = (base / p).resolve()
-        parts = [base / p, *(base.joinpath(*p.parts[:i]) for i in range(1, len(p.parts)))]
-        if any(part.is_symlink() for part in parts):
-            errors.append(f'SYMLINK_EVIDENCE_PATH:{e["id"]}')
-        elif not file.is_relative_to(base):
-            errors.append(f'EVIDENCE_PATH_ESCAPE:{e["id"]}')
-        elif not file.is_file() or not stat.S_ISREG(file.stat().st_mode):
-            errors.append(f'MISSING_EVIDENCE_BYTES:{e["id"]}')
-        elif hashlib.sha256(file.read_bytes()).hexdigest() != e["sha256"]:
+        digest, issue = _hash_evidence_file(base, e["relative_path"])
+        if issue:
+            errors.append(f'{issue}:{e["id"]}')
+        elif digest != e["sha256"]:
             errors.append(f'EVIDENCE_HASH_MISMATCH:{e["id"]}')
     # Local hashing cannot authenticate origin or independent trust. Do not
     # accept self-asserted VERIFIED statuses as independent verification.
@@ -57,6 +113,13 @@ def verify(obj, profile_path):
         for x in c["evidence_ids"]:
             if x not in eids:
                 errors.append(f'UNRESOLVED_CASE_EVIDENCE:{c["case_id"]}:{x}')
+        if c["observed"] == "PASS" and not (
+            (c["expectation"] == "ALLOW" and c["actual_effect"] == "ALLOWED")
+            or (c["expectation"] == "DENY" and c["actual_effect"] == "DENIED")
+        ):
+            errors.append(f'INCONSISTENT_CASE_PASS:{c["case_id"]}')
+        if c["observed"] == "UNKNOWN" and c["actual_effect"] not in ("NOT_EXECUTED", "UNKNOWN"):
+            errors.append(f'UNKNOWN_OBSERVATION_HAS_EFFECT:{c["case_id"]}')
         if c["observed"] == "NOT_TESTED" and c["actual_effect"] not in ("NOT_EXECUTED", "UNKNOWN"):
             errors.append(f'NOT_TESTED_HAS_EFFECT:{c["case_id"]}')
         if c["observed"] in ("PASS", "FAIL") and c["actual_effect"] in ("NOT_EXECUTED", "UNKNOWN"):
