@@ -21,3 +21,9 @@ No modifications to authority issuance, Bind, Custody, trust roots, runtime exec
 
 ## Review gate
 Do not merge until the separately prepared local design package is reconciled with existing validators, code is committed, tests execute in CI, and reviewer-facing claims are checked for provenance inflation.
+
+## Compatibility boundary
+The Audit Evidence Profile validator checks local schema, references and file hashes only. It does not call the Evidence Chain Verifier or the Reviewer Evidence Artifact Manifest Verifier. Their outputs and statuses are not interchangeable. The earlier case-level proposal includes fields not implemented in this v0.1 schema. Any integration or provenance mapping needs a separate change and dedicated tests.
+
+## Merge criteria
+The final head must pass dedicated CI; the path and file-reading threat model must be reviewed; schema omissions must be disclosed; and no external attestation, effect verification, or certification may be claimed from local structural validation.
