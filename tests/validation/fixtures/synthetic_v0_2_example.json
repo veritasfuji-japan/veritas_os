@@ -1,0 +1,87 @@
+{
+  "profile_version": "veritas.audit-evidence-profile/0.2",
+  "packet_id": "EXAMPLE-NOT-A-REAL-ASSESSMENT",
+  "created_at_utc": "2026-10-30T00:00:00Z",
+  "synthetic_example": true,
+  "scope": {
+    "system": "VERITAS OS - illustrative only",
+    "repository": "veritasfuji-japan/veritas_os",
+    "source_commit": "0000000000000000000000000000000000000000",
+    "environment": "fixture",
+    "effect_boundary": "example/no-effect",
+    "case_population": "1 structurally illustrative case, not executed",
+    "acquisition_method": "DETERMINISTIC_FIXTURE",
+    "execution_performed": false,
+    "period_start_utc": null,
+    "period_end_utc": null
+  },
+  "evidence": [
+    {
+      "id": "EV-1",
+      "class": "PROVENANCE",
+      "relative_path": "sample_trace.txt",
+      "sha256": "14fa0a89dce1590db03003fdfba006425e2a5ebc0c1a8b1bfd1b7668c05ea7ff",
+      "collected_by": "example authoring helper",
+      "acquisition_method": "DETERMINISTIC_FIXTURE",
+      "integrity_status": "NOT_VERIFIED",
+      "authenticity_status": "NOT_VERIFIED",
+      "independent_trust_status": "NOT_VERIFIED",
+      "notes": "An integrity hash is present; no independent assurance claim."
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "CASE-EXAMPLE",
+      "expectation": "DENY",
+      "observed": "NOT_TESTED",
+      "actual_effect": "NOT_EXECUTED",
+      "decision_id": null,
+      "authority_id": null,
+      "approval_id": null,
+      "intent_id": null,
+      "bind_receipt_id": null,
+      "effect_receipt_id": null,
+      "evidence_ids": [
+        "EV-1"
+      ],
+      "notes": "Demonstrates missing linkages; none is construed as verified. Operation/manifest linkage is deliberately null for an unexecuted synthetic case.",
+      "operation_id": null,
+      "manifest_id": null,
+      "manifest_evidence_id": null
+    }
+  ],
+  "controls": [
+    {
+      "control_id": "C2_BIND_ENFORCEMENT",
+      "test_case_ids": [
+        "CASE-EXAMPLE"
+      ],
+      "verdict": "NOT_TESTED",
+      "supporting_evidence_ids": [
+        "EV-1"
+      ],
+      "rationale": "No enforcement behavior was exercised."
+    }
+  ],
+  "metrics": [
+    {
+      "metric_id": "UNAUTHORIZED_EFFECT_RATE",
+      "numerator": null,
+      "denominator": null,
+      "measurement_status": "NOT_MEASURED",
+      "source_run_id": null,
+      "source_arm": null
+    }
+  ],
+  "limitations": [
+    "Synthetic fixture only: no observed effects, runtime enforcement, independent trust, provider calls, auditor acceptance or certification.",
+    "Profile v0.2 operation/manifest IDs are synthetic declarations until locally bound to a manifest; no independent provenance or observed effect."
+  ],
+  "review": {
+    "handoff_status": "DRAFT",
+    "reviewer_independence": "NONE",
+    "trusted_key_provenance": "NOT_ESTABLISHED",
+    "reviewer_verdict": "NOT_REVIEWED",
+    "notes": "Not presented as reviewable evidence."
+  }
+}
