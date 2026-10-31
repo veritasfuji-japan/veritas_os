@@ -31,7 +31,7 @@ def _hash_evidence_file(base, relative_path):
     """
     components = relative_path.split("/")
     if (not components or any(part in ("", ".", "..") for part in components)
-            or "\\\\" in relative_path or Path(relative_path).is_absolute()):
+            or "\\" in relative_path or Path(relative_path).is_absolute()):
         return None, "UNSAFE_EVIDENCE_PATH"
     if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
         return None, "UNSUPPORTED_SAFE_FILE_OPEN"
