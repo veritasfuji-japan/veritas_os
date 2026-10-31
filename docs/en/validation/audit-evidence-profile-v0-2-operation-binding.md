@@ -18,6 +18,8 @@ The v0.2 schema is **separate** from the existing strict v0.1 schema. The valida
 | `manifest_id` | `EvidenceChainManifest.manifest_id` | **Required and exact-match** for v0.2 positive Bridge |
 | `manifest_evidence_id` | profile evidence item's `id` and Bridge's `manifest_evidence_id` | **Required and exact-match**; evidence ID must exist in inventory and target case's `evidence_ids` |
 
+When **v0.2 is mandatory**, integrations must call `verify_audit_evidence_chain_bridge_v02(...)` rather than the generic backward-compatible `verify_audit_evidence_chain_bridge(...)`. The version-pinned entrypoint rejects a legacy v0.1 profile or unknown future version with `V02_PROFILE_REQUIRED`. This blocks a profile-version downgrade at that call boundary; simply enabling v0.2 validation globally does **not** prevent an application from intentionally selecting the legacy API.
+
 Existing v0.1 link checks remain: the bound file's SHA-256 must match the canonical JSON serialization of the supplied manifest, and the local Profile object must equal the bounded on-disk JSON file. Existing source `EvidenceChainVerificationResult` statuses and completeness checks are preserved without promotion.
 
 v0.2 emits `bridge_version=veritas.audit-evidence-chain-bridge/0.2` with explicit case-level IDs and `identity_matches`. v0.1 still emits `veritas.audit-evidence-chain-bridge/0.1`. `LINK_VERIFIED` signifies local, internal hash-and-ID continuity **only**; a matching claimant-provided operation ID does not independently prove that the stated operation executed.
@@ -26,6 +28,7 @@ v0.2 emits `bridge_version=veritas.audit-evidence-chain-bridge/0.2` with explici
 
 - Profiles v0.1 and v0.2 are versioned separately; v0.1 cannot silently carry the new fields because `additionalProperties=false`.
 - No migration is performed in place; no hardcoded ID inference from filenames or user-supplied status JSON.
+- No global cross-packet replay registry or issuance-time provenance service is added. Reusing identifiers across separate Profile packets remains outside the scope of this local validator; applications must enforce their own cross-packet identity, version-selection and replay policy.
 - Multiple cases for one operation are intentionally not supported in v0.2. A future schema could represent multiple observations under one explicitly scoped operation, but must be separately reviewed and versioned.
 - Local file hashes, manifest content and identifier matches are **not signatures, chain-of-custody attestations, issuance-validity checks, independent reviewer verdicts, or observed real-world effect verification**.
 - The preexisting local file validators have bounded file reads and symlink protections but are not a transactional snapshot under arbitrary concurrent mutation.
@@ -37,5 +40,6 @@ v0.2 emits `bridge_version=veritas.audit-evidence-chain-bridge/0.2` with explici
 - Missing required v0.2 fields, partial triples, duplicate IDs, unreferenced/unlisted manifest evidence, unsupported versions, and self-asserted review claims are rejected.
 - A synthetic fully bound v0.2 Bridge case succeeds locally; mismatched operation/manifest/evidence IDs, alternate manifests with equal decision+intent but different operations, and case-reuse substitutions are rejected.
 - Unexecuted and unbound cases cannot become `LINK_VERIFIED`.
+- The v0.2-only Bridge entrypoint rejects legacy version downgrade and accepts valid v0.2 fixtures, while the generic v0.1 Bridge remains compatible.
 - Previous v0.1 Bridge and profile negative suites continue to pass.
 - All GitHub Actions CI on the final commit must pass before moving out of Draft; reviewers must validate the stated **limited claim** and the one-operation-per-case modeling decision.
