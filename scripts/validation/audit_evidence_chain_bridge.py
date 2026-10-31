@@ -354,6 +354,22 @@ def verify_audit_evidence_chain_bridge(
     return _finish(report, "LINK_VERIFIED")
 
 
+def verify_audit_evidence_chain_bridge_v02(
+    *, profile: dict[str, Any], **kwargs: Any
+) -> dict[str, Any]:
+    """Version-pinned operation-binding entrypoint.
+
+    Use this entrypoint when operation-level binding is mandatory. A caller
+    cannot submit a legacy v0.1 profile to bypass v0.2's required IDs.
+    """
+    if not isinstance(profile, dict) or profile.get("profile_version") != V02_PROFILE_VERSION:
+        report = _blank_report(profile, kwargs.get("case_id"))
+        report["bridge_version"] = BRIDGE_VERSION_V02
+        report["profile_version"] = V02_PROFILE_VERSION
+        return _finish(report, "FAILED", "V02_PROFILE_REQUIRED")
+    return verify_audit_evidence_chain_bridge(profile=profile, **kwargs)
+
+
 def serialize_bridge_report(report: dict[str, Any]) -> str:
     """Canonical, stable JSON report bytes (no timestamp or external calls)."""
     return json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
