@@ -34,6 +34,7 @@ from veritas_os.security.hash import (
 REPORT_VERSION = "veritas.audit-cross-packet-replay-provenance/0.1"
 MAX_PACKETS = 64
 MAX_FILE_BYTES = 16 * 1024 * 1024
+MAX_TOTAL_EVIDENCE_BYTES_PER_PACKET = 64 * 1024 * 1024
 MAX_CASES_PER_PACKET = 512
 MAX_EVIDENCE_PER_PACKET = 1024
 HEX_256 = re.compile(r"^[0-9a-f]{64}$")
@@ -326,8 +327,32 @@ def verify_cross_packet_replay_provenance(
         except (OSError, ValueError, TypeError, UnicodeError, RecursionError, OverflowError):
             _finding(findings, kind="FAIL", code="UNREADABLE_OR_UNSUPPORTED_PROFILE", path=relative)
             continue
+        # Use the trusted packet root for *every* hash read rather than
+        # resolving the parent of the profile path again. This avoids a
+        # symlinked parent-path escape between the profile and evidence reads.
+        packet_prefix = relative.rpartition("/")[0]
+        total_evidence_bytes = 0
+
+        def anchored_hash_evidence(evidence_path: str) -> tuple[str | None, str | None]:
+            nonlocal total_evidence_bytes
+            try:
+                _parts(evidence_path)
+                anchored_path = "/".join(
+                    part for part in (packet_prefix, evidence_path) if part
+                )
+                raw = _read_under_root(root, anchored_path)
+                total_evidence_bytes += len(raw)
+                if total_evidence_bytes > MAX_TOTAL_EVIDENCE_BYTES_PER_PACKET:
+                    return None, "EVIDENCE_TOTAL_LIMIT_EXCEEDED"
+                return hashlib.sha256(raw).hexdigest(), None
+            except (OSError, ValueError, UnicodeError, RecursionError, OverflowError):
+                return None, "UNSAFE_OR_UNREADABLE_EVIDENCE_BYTES"
+
         try:
-            errors = verify_profile(profile, root / relative)
+            errors = verify_profile(
+                profile, root / relative,
+                evidence_hash_resolver=anchored_hash_evidence,
+            )
         except (OSError, ValueError, KeyError, TypeError, RecursionError, OverflowError):
             errors = ["validator exception"]
         if errors:
