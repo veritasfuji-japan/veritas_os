@@ -1,0 +1,56 @@
+name: Audit Replay Registry PostgreSQL v0.1
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  durable-audit-replay-registry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PostgreSQL and offline validation dependencies
+        run: |
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio "jsonschema>=4.20,<5" "PyYAML>=6,<7"
+      - name: Upgrade Alembic to new replay registry revision
+        run: alembic upgrade head
+      - name: Exercise real PostgreSQL replay, rollback, restart, and contention
+        run: |
+          mkdir -p test-reports
+          python -m pytest -q tests/validation/test_audit_replay_registry_postgresql_v0_1.py -m "postgresql and contention" -v --tb=short --junitxml=test-reports/audit-replay-registry-pg.xml
+      - name: Recheck scanner, record schema, and existing bridge regressions
+        run: |
+          python -m pytest -q tests/validation/test_audit_replay_observation_v0_1.py tests/validation/test_cross_packet_replay_provenance.py tests/validation/test_audit_evidence_profile_v0_2.py tests/validation/test_audit_evidence_chain_bridge.py
+      - name: Upload PostgreSQL replay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-replay-registry-postgresql-${{ github.run_id }}
+          path: test-reports/audit-replay-registry-pg.xml
+          if-no-files-found: warn
