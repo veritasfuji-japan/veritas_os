@@ -1,0 +1,20 @@
+name: Audit Evidence Chain Bridge v0.1 (offline)
+on:
+  pull_request:
+  push:
+permissions:
+  contents: read
+jobs:
+  bridge-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local test dependencies
+        run: python -m pip install 'pytest>=8,<9' 'jsonschema>=4.20,<5'
+      - name: Verify offline bridge positive and negative cases
+        run: python -m pytest -q tests/validation/test_audit_evidence_chain_bridge.py
+      - name: Validate Audit Evidence Profile regression cases
+        run: python tests/validation/test_audit_evidence_profile_negative_cases.py
