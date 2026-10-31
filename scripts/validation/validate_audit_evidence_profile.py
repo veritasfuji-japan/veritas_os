@@ -84,7 +84,14 @@ def _hash_evidence_file(base, relative_path):
             os.close(dir_fd)
 
 
-def verify(obj, profile_path):
+def verify(obj, profile_path, *, evidence_hash_resolver=None):
+    """Validate a Profile against schema and bounded local evidence hashes.
+
+    With no resolver, preserve the existing v0.1/v0.2 behavior. An explicitly
+    provided resolver lets a trusted caller keep file reads anchored to an
+    already-selected descriptor-relative root without re-resolving the parent.
+    The resolver returns (sha256_or_none, deterministic_issue_or_none).
+    """
     errors = []
     version = obj.get("profile_version") if isinstance(obj, dict) else None
     schema_path = SCHEMAS.get(version)
@@ -105,9 +112,13 @@ def verify(obj, profile_path):
         errors.append("DUPLICATE_CASE_ID")
     if len(set(control_ids)) != len(control_ids):
         errors.append("DUPLICATE_CONTROL_ID")
-    base = profile_path.resolve().parent
+    base = profile_path.resolve().parent if evidence_hash_resolver is None else None
     for e in evidence:
-        digest, issue = _hash_evidence_file(base, e["relative_path"])
+        digest, issue = (
+            _hash_evidence_file(base, e["relative_path"])
+            if evidence_hash_resolver is None
+            else evidence_hash_resolver(e["relative_path"])
+        )
         if issue:
             errors.append(f'{issue}:{e["id"]}')
         elif digest != e["sha256"]:
