@@ -14,7 +14,10 @@ from pathlib import Path
 import stat
 from typing import Any
 
-from scripts.validation.validate_audit_evidence_profile import verify as verify_profile
+from scripts.validation.validate_audit_evidence_profile import (
+    V02_PROFILE_VERSION,
+    verify as verify_profile,
+)
 from veritas_os.governance.evidence_chain_manifest import (
     EvidenceChainManifest,
     validate_evidence_chain_manifest,
@@ -25,6 +28,7 @@ from veritas_os.governance.evidence_chain_verifier import (
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 
 BRIDGE_VERSION = "veritas.audit-evidence-chain-bridge/0.1"
+BRIDGE_VERSION_V02 = "veritas.audit-evidence-chain-bridge/0.2"
 SOURCE_VERIFIER = (
     "veritas_os.governance.evidence_chain_verifier.verify_evidence_chain_manifest"
 )
@@ -144,6 +148,19 @@ def verify_audit_evidence_chain_bridge(
     a new report and does not change the profile, artifacts or manifest.
     """
     report = _blank_report(profile, case_id)
+    is_v02 = isinstance(profile, dict) and profile.get("profile_version") == V02_PROFILE_VERSION
+    if is_v02:
+        report["bridge_version"] = BRIDGE_VERSION_V02
+        report["profile_version"] = V02_PROFILE_VERSION
+        report["case_operation_id"] = None
+        report["case_manifest_id"] = None
+        report["case_manifest_evidence_id"] = None
+        report["claim_limitations"] = [
+            limitation for limitation in CLAIM_LIMITATIONS
+            if not limitation.startswith("Profile v0.1 does not include")
+        ] + [
+            "Operation, manifest and local evidence IDs are not independently attested."
+        ]
 
     if not isinstance(profile, dict) or not isinstance(case_id, str) or not case_id:
         return _finish(report, "FAILED", "INVALID_BRIDGE_INPUT")
@@ -202,6 +219,33 @@ def verify_audit_evidence_chain_bridge(
         "commit", "committed", "commit_eligible"
     ):
         return _finish(report, "FAILED", "CHAIN_OUTCOME_STATUS_CONTRADICTION")
+
+    if is_v02:
+        # v0.2 operation-level binding MUST be taken from the on-disk
+        # profile case, never inferred from a caller's chosen manifest.
+        operation_id = case["operation_id"]
+        declared_manifest_id = case["manifest_id"]
+        declared_evidence_id = case["manifest_evidence_id"]
+        report["case_operation_id"] = operation_id
+        report["case_manifest_id"] = declared_manifest_id
+        report["case_manifest_evidence_id"] = declared_evidence_id
+        if not operation_id or not declared_manifest_id or not declared_evidence_id:
+            return _finish(report, "INCOMPLETE", "CASE_OPERATION_BINDING_INCOMPLETE")
+        report["identity_matches"]["operation_id"] = (
+            operation_id == manifest.operation_id
+        )
+        report["identity_matches"]["manifest_id"] = (
+            declared_manifest_id == manifest.manifest_id
+        )
+        report["identity_matches"]["manifest_evidence_id"] = (
+            declared_evidence_id == manifest_evidence_id
+        )
+        if operation_id != manifest.operation_id:
+            return _finish(report, "FAILED", "CASE_OPERATION_ID_MISMATCH")
+        if declared_manifest_id != manifest.manifest_id:
+            return _finish(report, "FAILED", "CASE_MANIFEST_ID_MISMATCH")
+        if declared_evidence_id != manifest_evidence_id:
+            return _finish(report, "FAILED", "CASE_MANIFEST_EVIDENCE_ID_MISMATCH")
 
     missing_ids: list[str] = []
     mismatched_ids: list[str] = []
