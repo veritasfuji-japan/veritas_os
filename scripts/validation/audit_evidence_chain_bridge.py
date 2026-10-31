@@ -154,6 +154,13 @@ def verify_audit_evidence_chain_bridge(
             report, "FAILED", "INVALID_CHAIN_MANIFEST",
             *manifest_validation.failure_reasons
         )
+    # The source manifest validator does not enforce that every declared
+    # complete chain has a commit-family final_outcome. Never attach a
+    # positive local-link verdict to a blocked/refused/unknown outcome.
+    if manifest.chain_status == "complete" and manifest.final_outcome.strip().lower() not in (
+        "commit", "committed", "commit_eligible"
+    ):
+        return _finish(report, "FAILED", "CHAIN_OUTCOME_STATUS_CONTRADICTION")
 
     missing_ids: list[str] = []
     mismatched_ids: list[str] = []
@@ -219,7 +226,8 @@ def verify_audit_evidence_chain_bridge(
             human_approval_receipt=human_approval_receipt,
             outcome_receipt=outcome_receipt,
             verified_human_approval=verified_human_approval,
-            approval_required=approval_required,
+            # A caller cannot suppress manifest-declared required approval.
+            approval_required=bool(approval_required or manifest.human_approval_required),
             bind_coverage_operation_id=bind_coverage_operation_id,
             bind_receipt=bind_receipt,
             verified_at=verified_at,
