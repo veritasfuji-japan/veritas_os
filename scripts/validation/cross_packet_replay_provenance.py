@@ -232,9 +232,19 @@ def _analyze_case(
         if declared and profile_key in NAMED_HASH_FIELDS and not getattr(manifest, NAMED_HASH_FIELDS[profile_key]):
             _finding(findings, kind="INCOMPLETE", code="NAMED_LINK_HASH_MISSING", path=relative, case_id=case_id)
             return None
-    if manifest.chain_status == "complete" and manifest.final_outcome.lower().strip() not in COMMIT_OUTCOMES:
+    normalized_outcome = manifest.final_outcome.lower().strip()
+    if manifest.chain_status == "complete" and normalized_outcome not in COMMIT_OUTCOMES:
         _finding(findings, kind="FAIL", code="CHAIN_OUTCOME_STATUS_CONTRADICTION", path=relative, case_id=case_id)
         return None
+    if (
+        (normalized_outcome in COMMIT_OUTCOMES and case["actual_effect"] == "DENIED")
+        or (normalized_outcome in {"block", "blocked", "refuse", "refused"}
+            and case["actual_effect"] == "ALLOWED")
+    ):
+        _finding(findings, kind="FAIL", code="DECLARED_OUTCOME_CONTRADICTION", path=relative, case_id=case_id)
+        return None
+    if case["observed"] in ("PASS", "FAIL") and manifest.chain_status not in ("complete", "blocked"):
+        _finding(findings, kind="INCOMPLETE", code="OBSERVED_CASE_CHAIN_INCOMPLETE", path=relative, case_id=case_id)
 
     scope = profile["scope"]
     claimed = {
@@ -354,7 +364,7 @@ def verify_cross_packet_replay_provenance(
         rows = packets if key == "packet_id" else links
         for row in rows:
             value = row[key]
-            scoped = (row["repository"], value) if namespace else (value,)
+            scoped = (row["repository"].casefold(), value) if namespace else (value,)
             prior = seen.get(scoped)
             if prior is not None and prior != row["path"]:
                 _finding(findings, kind="REPLAY", code=name, path=row["path"], case_id=row.get("case_id", ""))
