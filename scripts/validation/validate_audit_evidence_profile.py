@@ -15,6 +15,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = ROOT / "schemas/veritas_audit_evidence_profile_v0_1.schema.json"
+SCHEMA_V02 = ROOT / "schemas/veritas_audit_evidence_profile_v0_2.schema.json"
+V01_PROFILE_VERSION = "veritas.audit-evidence-profile/0.1"
+V02_PROFILE_VERSION = "veritas.audit-evidence-profile/0.2"
+SCHEMAS = {V01_PROFILE_VERSION: SCHEMA, V02_PROFILE_VERSION: SCHEMA_V02}
 
 
 # Limit disk I/O and memory use when processing untrusted local evidence.
@@ -82,7 +86,11 @@ def _hash_evidence_file(base, relative_path):
 
 def verify(obj, profile_path):
     errors = []
-    schema = json.loads(SCHEMA.read_text())
+    version = obj.get("profile_version") if isinstance(obj, dict) else None
+    schema_path = SCHEMAS.get(version)
+    if schema_path is None:
+        return ["UNSUPPORTED_PROFILE_VERSION"]
+    schema = json.loads(schema_path.read_text())
     for e in Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(obj):
         errors.append(f"SCHEMA {list(e.absolute_path)}: {e.message}")
     if errors:
@@ -109,6 +117,26 @@ def verify(obj, profile_path):
     for e in evidence:
         if e["authenticity_status"] == "VERIFIED" or e["independent_trust_status"] == "VERIFIED":
             errors.append(f'UNSUPPORTED_TRUST_CLAIM:{e["id"]}')
+    if version == V02_PROFILE_VERSION:
+        # One operation and manifest per case. Allow all-null identities for
+        # unobserved cases; reject partial identities and cross-case reuse.
+        for field in ("operation_id", "manifest_id", "manifest_evidence_id"):
+            present = [case[field] for case in cases if case[field] is not None]
+            if len(present) != len(set(present)):
+                errors.append(f"DUPLICATE_{field.upper()}")
+        for case in cases:
+            identifiers = [case[key] for key in (
+                "operation_id", "manifest_id", "manifest_evidence_id"
+            )]
+            if any(value is not None for value in identifiers) and any(
+                value is None for value in identifiers
+            ):
+                errors.append(f"PARTIAL_CASE_OPERATION_BINDING:{case['case_id']}")
+            manifest_ref = case["manifest_evidence_id"]
+            if manifest_ref is not None and manifest_ref not in case["evidence_ids"]:
+                errors.append(f"MANIFEST_NOT_LINKED_TO_CASE:{case['case_id']}")
+            if manifest_ref is not None and manifest_ref not in eids:
+                errors.append(f"UNRESOLVED_CASE_MANIFEST_EVIDENCE:{case['case_id']}")
     for c in cases:
         for x in c["evidence_ids"]:
             if x not in eids:
