@@ -13,6 +13,7 @@ import pytest
 from scripts.validation.audit_evidence_chain_bridge import (
     serialize_bridge_report,
     verify_audit_evidence_chain_bridge,
+    verify_audit_evidence_chain_bridge_v02,
 )
 from veritas_os.governance.evidence_chain_manifest import (
     build_evidence_chain_manifest,
@@ -75,7 +76,7 @@ def make_manifest():
     )
 
 
-def bridge(*, profile=None, manifest=None, binding_manifest=None, **kwargs):
+def bridge(*, profile=None, manifest=None, binding_manifest=None, entrypoint=None, **kwargs):
     # The test uses a fresh isolated local evidence directory. A positive
     # link requires canonical on-disk manifest bytes in the cited profile item.
     supplied_profile = deepcopy(make_profile() if profile is None else profile)
@@ -110,7 +111,7 @@ def bridge(*, profile=None, manifest=None, binding_manifest=None, **kwargs):
             "verified_at": AT,
         }
         options.update(kwargs)
-        return verify_audit_evidence_chain_bridge(**options)
+        return (entrypoint or verify_audit_evidence_chain_bridge)(**options)
 
 
 def test_link_verified_is_local_only_and_does_not_mutate_profile():
@@ -428,3 +429,147 @@ def test_oversized_profile_file_rejected_without_loading():
         result = bridge(profile_path=oversized)
     assert result["status"] == "FAILED", result
     assert "PROFILE_FILE_UNREADABLE_OR_UNSAFE" in result["failure_reasons"]
+
+
+
+# v0.2 introduces explicit operation/manifest binding without changing
+# legacy v0.1 reports or loosening v0.1 schema interpretation.
+
+def make_v02_profile():
+    profile = make_profile()
+    profile["profile_version"] = "veritas.audit-evidence-profile/0.2"
+    profile["cases"][0].update({
+        "operation_id": "operation-1",
+        "manifest_id": "ecm-operation-1",
+        "manifest_evidence_id": "EV-CHAIN",
+    })
+    return profile
+
+
+def test_v02_operation_and_manifest_bound_positive_synthetic():
+    report = bridge(profile=make_v02_profile())
+    assert report["status"] == "LINK_VERIFIED", report
+    assert report["bridge_version"] == "veritas.audit-evidence-chain-bridge/0.2"
+    assert report["case_operation_id"] == "operation-1"
+    assert report["case_manifest_id"] == "ecm-operation-1"
+    assert report["case_manifest_evidence_id"] == "EV-CHAIN"
+    assert all(
+        report["identity_matches"][key] is True
+        for key in ("operation_id", "manifest_id", "manifest_evidence_id")
+    )
+    assert "not independently attested" in " ".join(report["claim_limitations"])
+    assert report["synthetic_example"] is True
+
+
+@pytest.mark.parametrize("key,value,expected", [
+    ("operation_id", "operation-other", "CASE_OPERATION_ID_MISMATCH"),
+    ("manifest_id", "ecm-operation-other", "CASE_MANIFEST_ID_MISMATCH"),
+    ("manifest_evidence_id", "EV-1", "CASE_MANIFEST_EVIDENCE_ID_MISMATCH"),
+])
+def test_v02_case_binding_mismatch_rejected(key, value, expected):
+    profile = make_v02_profile()
+    profile["cases"][0][key] = value
+    result = bridge(profile=profile)
+    assert result["status"] == "FAILED", result
+    assert expected in result["failure_reasons"]
+
+
+def test_v02_rejects_swapping_manifest_with_same_decision_and_intent():
+    # Both manifests have identical decision/intent, but different operations.
+    original = make_manifest()
+    substituted = with_manifest_hash(replace(
+        original, operation_id="operation-other", manifest_id="ecm-operation-other"
+    ))
+    result = bridge(profile=make_v02_profile(), manifest=substituted)
+    assert result["status"] == "FAILED", result
+    assert "CASE_OPERATION_ID_MISMATCH" in result["failure_reasons"]
+
+
+def test_v02_rejects_case_manifest_id_mismatch_even_with_matched_operation():
+    substituted = with_manifest_hash(replace(make_manifest(), manifest_id="ecm-renamed"))
+    result = bridge(profile=make_v02_profile(), manifest=substituted)
+    assert result["status"] == "FAILED", result
+    assert "CASE_MANIFEST_ID_MISMATCH" in result["failure_reasons"]
+
+
+def test_v02_caller_cannot_override_manifest_evidence_id():
+    result = bridge(profile=make_v02_profile(), manifest_evidence_id="EV-1")
+    assert result["status"] == "FAILED", result
+    assert "CASE_MANIFEST_EVIDENCE_ID_MISMATCH" in result["failure_reasons"]
+
+
+@pytest.mark.parametrize("key", [
+    "operation_id", "manifest_id", "manifest_evidence_id",
+])
+def test_v02_missing_binding_is_never_link_verified(key):
+    profile = make_v02_profile()
+    profile["cases"][0][key] = None
+    result = bridge(profile=profile)
+    assert result["status"] == "FAILED", result
+    assert "PROFILE_VALIDATION_FAILED" in result["failure_reasons"]
+
+
+def test_v02_nonexecuted_unbound_case_remains_incomplete():
+    profile = make_v02_profile()
+    profile["cases"][0].update({
+        "observed": "NOT_TESTED",
+        "actual_effect": "NOT_EXECUTED",
+        "operation_id": None,
+        "manifest_id": None,
+        "manifest_evidence_id": None,
+    })
+    result = bridge(profile=profile)
+    assert result["status"] == "INCOMPLETE", result
+    assert "CASE_OPERATION_BINDING_INCOMPLETE" in result["failure_reasons"]
+
+
+def test_v02_operation_reuse_across_cases_is_rejected():
+    profile = make_v02_profile()
+    other = deepcopy(profile["cases"][0])
+    other["case_id"] = "CASE-OTHER"
+    other["manifest_id"] = "ecm-other"
+    other["manifest_evidence_id"] = "EV-1"
+    profile["cases"].append(other)
+    result = bridge(profile=profile)
+    assert result["status"] == "FAILED", result
+    assert "DUPLICATE_OPERATION_ID" in result["failure_reasons"]
+
+
+def test_legacy_v01_bridge_version_and_local_link_remain_unchanged():
+    report = bridge(profile=make_profile())
+    assert report["status"] == "LINK_VERIFIED"
+    assert report["bridge_version"] == "veritas.audit-evidence-chain-bridge/0.1"
+    assert "case_operation_id" not in report
+
+
+def test_v02_bridge_deterministic_after_reordered_source_keys():
+    original = make_v02_profile()
+    reordered = {key: original[key] for key in reversed(list(original))}
+    reordered["cases"] = [
+        {key: value for key, value in reversed(list(original["cases"][0].items()))}
+    ]
+    assert serialize_bridge_report(bridge(profile=original)) == serialize_bridge_report(
+        bridge(profile=reordered)
+    )
+
+
+
+def test_version_pinned_v02_entrypoint_rejects_legacy_downgrade():
+    legacy = bridge(profile=make_profile(), entrypoint=verify_audit_evidence_chain_bridge_v02)
+    assert legacy["status"] == "FAILED", legacy
+    assert "V02_PROFILE_REQUIRED" in legacy["failure_reasons"]
+    assert legacy["bridge_version"] == "veritas.audit-evidence-chain-bridge/0.2"
+
+
+def test_version_pinned_v02_entrypoint_verifies_valid_operation_binding():
+    report = bridge(profile=make_v02_profile(), entrypoint=verify_audit_evidence_chain_bridge_v02)
+    assert report["status"] == "LINK_VERIFIED", report
+    assert report["bridge_version"] == "veritas.audit-evidence-chain-bridge/0.2"
+
+
+def test_version_pinned_v02_entrypoint_rejects_spoofed_future_version():
+    profile = make_v02_profile()
+    profile["profile_version"] = "veritas.audit-evidence-profile/0.3"
+    result = bridge(profile=profile, entrypoint=verify_audit_evidence_chain_bridge_v02)
+    assert result["status"] == "FAILED"
+    assert "V02_PROFILE_REQUIRED" in result["failure_reasons"]
