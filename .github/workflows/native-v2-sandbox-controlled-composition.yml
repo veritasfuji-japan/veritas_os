@@ -137,7 +137,14 @@ jobs:
           assert report["decision_lineage_source"] == "SIGNED_SYNTHETIC_NATIVE_FIXTURE"
           assert report["main_postgresql"] is True
           assert report["sandbox_postgresql"] is True
-          assert report["alembic_head"] == "0011"
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+
+          expected_head = ScriptDirectory.from_config(
+              Config("alembic.ini")
+          ).get_current_head()
+          assert expected_head is not None
+          assert report["alembic_head"] == expected_head
           assert report["real_tls_transport"] is True
           assert report["writer_reader_credentials_distinct"] is True
           assert report["dispatch_intent_state"] == "EFFECT_UNKNOWN"
