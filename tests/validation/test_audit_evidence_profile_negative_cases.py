@@ -21,6 +21,10 @@ v = copy.deepcopy(base); v["synthetic_example"] = False; v["scope"]["execution_p
 v = copy.deepcopy(base); v["synthetic_example"] = False; v["review"]["reviewer_verdict"] = "ACCEPT"; v["review"]["reviewer_independence"] = "EXTERNAL"; v["review"]["trusted_key_provenance"] = "ESTABLISHED"; variants["self asserted external acceptance"] = v
 v = copy.deepcopy(base); v["scope"]["execution_performed"] = True; v["cases"][0]["observed"] = "PASS"; variants["observed without effect"] = v
 v = copy.deepcopy(base); v["cases"][0]["actual_effect"] = "ALLOWED"; variants["unobserved with effect"] = v
+v = copy.deepcopy(base); v["evidence"][0]["authenticity_status"] = "VERIFIED"; variants["self asserted authenticity"] = v
+v = copy.deepcopy(base); v["evidence"][0]["independent_trust_status"] = "VERIFIED"; variants["self asserted independent trust"] = v
+v = copy.deepcopy(base); v["cases"][0]["actual_effect"] = "DENIED"; variants["unexecuted scope effect"] = v
+v = copy.deepcopy(base); v["evidence"][0]["relative_path"] = "../sample_trace.txt"; variants["path traversal"] = v
 for name, v in variants.items():
     issues = verify(v, p)
     assert issues, f"negative test falsely accepted: {name}"
