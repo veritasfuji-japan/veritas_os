@@ -166,7 +166,14 @@ jobs:
               == "CONTROLLED_RECONCILIATION_CAPABLE_EXECUTION_PROFILE_V1"
           )
           assert report["production_claim"] is False
-          assert report["alembic_head"] == "0011"
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+
+          expected_head = ScriptDirectory.from_config(
+              Config("alembic.ini")
+          ).get_current_head()
+          assert expected_head is not None
+          assert report["alembic_head"] == expected_head
           assert (
               report["controlled_policy_gated_reconciliation_profile_proven"]
               is True
