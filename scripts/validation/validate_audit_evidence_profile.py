@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import stat
 from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,7 +35,7 @@ def verify(obj, profile_path):
     base = profile_path.resolve().parent
     for e in evidence:
         p = Path(e["relative_path"])
-        if p.is_absolute() or ".." in p.parts:
+        if p.is_absolute() or ".." in p.parts or not p.parts or p.parts[0] == ".":
             errors.append(f'UNSAFE_EVIDENCE_PATH:{e["id"]}')
             continue
         file = (base / p).resolve()
@@ -43,10 +44,15 @@ def verify(obj, profile_path):
             errors.append(f'SYMLINK_EVIDENCE_PATH:{e["id"]}')
         elif not file.is_relative_to(base):
             errors.append(f'EVIDENCE_PATH_ESCAPE:{e["id"]}')
-        elif not file.is_file():
+        elif not file.is_file() or not stat.S_ISREG(file.stat().st_mode):
             errors.append(f'MISSING_EVIDENCE_BYTES:{e["id"]}')
         elif hashlib.sha256(file.read_bytes()).hexdigest() != e["sha256"]:
             errors.append(f'EVIDENCE_HASH_MISMATCH:{e["id"]}')
+    # Local hashing cannot authenticate origin or independent trust. Do not
+    # accept self-asserted VERIFIED statuses as independent verification.
+    for e in evidence:
+        if e["authenticity_status"] == "VERIFIED" or e["independent_trust_status"] == "VERIFIED":
+            errors.append(f'UNSUPPORTED_TRUST_CLAIM:{e["id"]}')
     for c in cases:
         for x in c["evidence_ids"]:
             if x not in eids:
@@ -57,6 +63,8 @@ def verify(obj, profile_path):
             errors.append(f'OBSERVED_WITHOUT_EFFECT:{c["case_id"]}')
         if c["observed"] in ("NOT_TESTED", "NOT_APPLICABLE") and c["actual_effect"] not in ("NOT_EXECUTED", "UNKNOWN"):
             errors.append(f'UNOBSERVED_WITH_EFFECT:{c["case_id"]}')
+        if not obj["scope"]["execution_performed"] and c["actual_effect"] not in ("NOT_EXECUTED", "UNKNOWN"):
+            errors.append(f'UNEXECUTED_SCOPE_HAS_EFFECT:{c["case_id"]}')
         if not obj["scope"]["execution_performed"] and c["observed"] not in ("NOT_TESTED", "NOT_APPLICABLE"):
             errors.append(f'UNEXECUTED_CASE_VERDICT:{c["case_id"]}')
     for ctrl in controls:
