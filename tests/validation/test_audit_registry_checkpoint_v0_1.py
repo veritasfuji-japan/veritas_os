@@ -86,11 +86,12 @@ def test_rollback_or_changed_committed_bytes_detected():
 def test_malformed_or_false_authority_is_rejected_even_if_rehashed(change):
     baseline = checkpoint()
     change(baseline)
-    baseline["snapshot_root"] = _digest({
-        k: baseline[k] for k in (
-            "format_version", "packet_count", "case_count", "packets",
-        )
-    })
+    if baseline["snapshot_root"] != "0" * 64:
+        baseline["snapshot_root"] = _digest({
+            k: baseline[k] for k in (
+                "format_version", "packet_count", "case_count", "packets",
+            )
+        })
     baseline["checkpoint_hash"] = _digest({
         k: v for k, v in baseline.items() if k != "checkpoint_hash"
     })
