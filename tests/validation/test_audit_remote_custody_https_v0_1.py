@@ -1,7 +1,6 @@
 """Negative tests for opt-in HTTPS remote audit custody head retrieval."""
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
