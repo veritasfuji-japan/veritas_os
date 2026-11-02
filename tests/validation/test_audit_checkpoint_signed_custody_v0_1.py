@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
@@ -18,7 +17,6 @@ from scripts.validation.audit_checkpoint_signed_custody_cli_v0_1 import (
     _write_exclusive_json,
 )
 from scripts.validation.audit_registry_checkpoint_v0_1 import _digest
-from veritas_os.security.hash import sha256_of_canonical_json
 
 ZERO = "0" * 64
 
@@ -129,7 +127,7 @@ def test_missing_or_invalid_predecessor_rejected(sequence, previous):
 
 
 def test_restricted_signing_key_rejects_symlink_and_world_readable(tmp_path):
-    ref, private, _, receipt = fixture()
+    _, private, _, _ = fixture()
     key = tmp_path / "restricted.key"
     key.write_bytes(private)
     key.chmod(0o600)
