@@ -185,3 +185,120 @@ async def test_invalid_remote_head_fails_closed(monkeypatch):
         endpoint=URL, expected_hostname=HOST, ca_bundle=Path("anchor-ca.pem"),
     )
     assert status == "REMOTE_ANCHOR_INVALID" and anchor is None
+
+
+# These tests exercise actual TLS socket handshakes, not a mocked fetch.
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import ssl
+import subprocess
+import threading
+
+
+def _make_tls_certs(tmp_path):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    ca = tmp_path / "ca.pem"
+    ca_key = tmp_path / "ca.key"
+    key = tmp_path / "server.key"
+    csr = tmp_path / "server.csr"
+    cert = tmp_path / "server.pem"
+    ext = tmp_path / "ext.cnf"
+    ext.write_text("subjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n")
+    subprocess.run([
+        "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+        "-days", "1", "-keyout", str(ca_key), "-out", str(ca),
+        "-subj", "/CN=VERITAS Remote Custody Synthetic CA",
+    ], check=True, capture_output=True)
+    subprocess.run([
+        "openssl", "req", "-newkey", "rsa:2048", "-nodes",
+        "-keyout", str(key), "-out", str(csr),
+        "-subj", "/CN=localhost",
+    ], check=True, capture_output=True)
+    subprocess.run([
+        "openssl", "x509", "-req", "-days", "1", "-in", str(csr),
+        "-CA", str(ca), "-CAkey", str(ca_key), "-CAcreateserial",
+        "-out", str(cert), "-extfile", str(ext),
+    ], check=True, capture_output=True)
+    return ca, cert, key
+
+
+@contextmanager
+def synthetic_https_anchor(tmp_path, anchor, *, status_code=200, content_type="application/json"):
+    ca, cert, key = _make_tls_certs(tmp_path)
+    body = (
+        json.dumps(anchor, separators=(",", ":")).encode("utf-8")
+        if not isinstance(anchor, bytes) else anchor
+    )
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != remote._PATH:
+                self.send_error(404)
+                return
+            self.send_response(status_code)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(str(cert), str(key))
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield (
+            "https://localhost:" + str(server.server_port) + remote._PATH,
+            ca,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+@pytest.mark.asyncio
+async def test_real_https_ca_and_hostname_authentication(tmp_path):
+    _, _, _, anchor = fixture()
+    with synthetic_https_anchor(tmp_path / "first", anchor) as (url, ca):
+        state, observed = await remote.fetch_https_anchor(
+            endpoint=url, expected_hostname="localhost", ca_bundle=ca,
+        )
+        assert state == "REMOTE_ANCHOR_OBSERVED"
+        assert observed == anchor
+        assert (await remote.fetch_https_anchor(
+            endpoint=url, expected_hostname="wronghost", ca_bundle=ca,
+        ))[0] == "REMOTE_ENDPOINT_INVALID"
+        wrong_ca, _, _ = _make_tls_certs(tmp_path / "independent")
+        assert (await remote.fetch_https_anchor(
+            endpoint=url, expected_hostname="localhost",
+            ca_bundle=wrong_ca,
+        ))[0] == "REMOTE_ANCHOR_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_real_https_refuses_redirect_oversized_body_and_invalid_json(tmp_path):
+    _, _, _, anchor = fixture()
+    conditions = [
+        (anchor, 302, "application/json"),
+        (b"x" * 5000, 200, "application/json"),
+        (b'{"sequence":1,"sequence":2}', 200, "application/json"),
+        (anchor, 200, "text/html"),
+    ]
+    for n, (body, status_code, content_type) in enumerate(conditions):
+        folder = tmp_path / str(n)
+        folder.mkdir()
+        with synthetic_https_anchor(
+            folder, body, status_code=status_code, content_type=content_type,
+        ) as (url, ca):
+            state, observed = await remote.fetch_https_anchor(
+                endpoint=url, expected_hostname="localhost", ca_bundle=ca,
+            )
+            assert state != "REMOTE_ANCHOR_OBSERVED"
+            assert observed is None
