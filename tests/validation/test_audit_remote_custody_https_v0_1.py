@@ -2,6 +2,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import ssl
+import subprocess
+import threading
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
@@ -187,12 +193,6 @@ async def test_invalid_remote_head_fails_closed(monkeypatch):
 
 
 # These tests exercise actual TLS socket handshakes, not a mocked fetch.
-from contextlib import contextmanager
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-import json
-import ssl
-import subprocess
-import threading
 
 
 def _make_tls_certs(tmp_path):
