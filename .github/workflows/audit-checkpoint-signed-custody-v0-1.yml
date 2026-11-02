@@ -75,6 +75,16 @@ jobs:
           print(priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex())
           PY
           sudo -u nobody test ! -r /tmp/veritas-audit-custody-v01/signing-key.raw
+          # Hosted GitHub runners can hide their home/workspace ancestors.
+          # Grant traverse-only to public checked-out source directories;
+          # do NOT change the 0700 custodian directory or 0600 private key.
+          source_ancestor="$GITHUB_WORKSPACE"
+          while [ "$source_ancestor" != "/" ]; do
+            sudo chmod o+x "$source_ancestor"
+            source_ancestor="$(dirname "$source_ancestor")"
+          done
+          sudo -u veritas-audit-custodian env PYTHONPATH="$GITHUB_WORKSPACE" "$(command -v python)" \
+            -c 'import scripts.validation.audit_checkpoint_signed_custody_cli_v0_1; print("CUSTODIAN_IMPORT_READY")'
           sudo -u veritas-audit-custodian env PYTHONPATH="$GITHUB_WORKSPACE" "$(command -v python)" \
             -m scripts.validation.audit_checkpoint_signed_custody_cli_v0_1 attest \
             --reference /tmp/veritas-audit-custody-v01/reference.json \
