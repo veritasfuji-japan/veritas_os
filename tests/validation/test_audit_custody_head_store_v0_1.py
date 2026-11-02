@@ -7,7 +7,7 @@ import sqlite3
 
 from scripts.validation.audit_checkpoint_signed_custody_v0_1 import sign_checkpoint
 from scripts.validation.audit_custody_head_store_v0_1 import (
-    create_store, publish, read_head, MAX_ENTRIES,
+    create_store, publish, read_head,
 )
 from scripts.validation.audit_registry_checkpoint_v0_1 import _digest
 from test_audit_checkpoint_signed_custody_v0_1 import fixture
