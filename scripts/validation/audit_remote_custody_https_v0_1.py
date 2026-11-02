@@ -57,7 +57,9 @@ def _parse_url(endpoint: str, expected_hostname: str) -> tuple[str, int] | None:
     if (
         not isinstance(endpoint, str)
         or not isinstance(expected_hostname, str)
-        or len(expected_hostname) > 253\n        or not expected_hostname\n        or any(not _LABEL.fullmatch(part) for part in expected_hostname.split("."))
+        or len(expected_hostname) > 253
+        or not expected_hostname
+        or any(not _LABEL.fullmatch(part) for part in expected_hostname.split("."))
         or any(ord(c) <= 32 or ord(c) == 127 or c == "\\" for c in endpoint)
     ):
         return None
