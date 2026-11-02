@@ -64,7 +64,7 @@ jobs:
             --output /tmp/veritas-audit-capture.json
           sudo install -m 0400 -o veritas-audit-custodian -g veritas-audit-custodian \
             /tmp/veritas-audit-capture.json /tmp/veritas-audit-custody-v01/reference.json
-          sudo -u veritas-audit-custodian python - <<'PY' > /tmp/veritas-audit-trusted-pub.txt
+          sudo -u veritas-audit-custodian "$(command -v python)" - <<'PY' > /tmp/veritas-audit-trusted-pub.txt
           from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
           from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
           from pathlib import Path
@@ -75,7 +75,7 @@ jobs:
           print(priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex())
           PY
           sudo -u nobody test ! -r /tmp/veritas-audit-custody-v01/signing-key.raw
-          sudo -u veritas-audit-custodian env PYTHONPATH="$GITHUB_WORKSPACE" python \
+          sudo -u veritas-audit-custodian env PYTHONPATH="$GITHUB_WORKSPACE" "$(command -v python)" \
             -m scripts.validation.audit_checkpoint_signed_custody_cli_v0_1 attest \
             --reference /tmp/veritas-audit-custody-v01/reference.json \
             --private-key /tmp/veritas-audit-custody-v01/signing-key.raw \
