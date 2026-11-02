@@ -30,7 +30,7 @@ _SCOPE = "LOCAL_AUDIT_OBSERVATION_ONLY"
 _PATH = "/v1/audit/checkpoints/latest"
 _MAX_BYTES = 2048
 _SHA = re.compile(r"^[0-9a-f]{64}$")
-_HOST = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
+_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _KEYS = {
     "format_version", "scope", "signer_public_key_hex",
     "latest_receipt_sha256", "sequence",
@@ -57,7 +57,7 @@ def _parse_url(endpoint: str, expected_hostname: str) -> tuple[str, int] | None:
     if (
         not isinstance(endpoint, str)
         or not isinstance(expected_hostname, str)
-        or not _HOST.fullmatch(expected_hostname)
+        or len(expected_hostname) > 253\n        or not expected_hostname\n        or any(not _LABEL.fullmatch(part) for part in expected_hostname.split("."))
         or any(ord(c) <= 32 or ord(c) == 127 or c == "\\" for c in endpoint)
     ):
         return None
