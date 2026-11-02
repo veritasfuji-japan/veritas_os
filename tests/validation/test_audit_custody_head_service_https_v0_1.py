@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import http.client
-import json
 import os
 from pathlib import Path
 import ssl
