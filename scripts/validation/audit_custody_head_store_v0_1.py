@@ -150,7 +150,7 @@ def _state(conn: sqlite3.Connection) -> tuple[str, int, str]:
                 or not isinstance(parent, str) or not hmac.compare_digest(parent, previous)
                 or not _format_receipt(receipt)
                 or receipt["sequence"] != sequence
-                or not hmac.compare_digest(receipt["receipt_hash"], digest)
+                or not hmac.compare_digest(_digest(receipt), digest)
                 or not hmac.compare_digest(receipt["previous_receipt_sha256"], parent)
                 or not hmac.compare_digest(
                     receipt["signer_key_id"], sha256_hex(bytes.fromhex(pub))
@@ -183,7 +183,7 @@ def publish(db: Path, *, reference: Any, receipt: Any) -> str:
                 conn.rollback()
                 return "UNTRUSTED_CUSTODY_RECEIPT"
             if receipt["sequence"] == sequence and hmac.compare_digest(
-                receipt["receipt_hash"], previous,
+                _digest(receipt), previous,
             ):
                 conn.rollback()
                 return "ALREADY_PUBLISHED"
@@ -198,7 +198,7 @@ def publish(db: Path, *, reference: Any, receipt: Any) -> str:
                 "INSERT INTO receipts (sequence, receipt_hash, previous_hash, receipt_json) "
                 "VALUES (?, ?, ?, ?)",
                 (
-                    receipt["sequence"], receipt["receipt_hash"],
+                    receipt["sequence"], _digest(receipt),
                     receipt["previous_receipt_sha256"],
                     canonical_json_dumps(receipt),
                 ),
