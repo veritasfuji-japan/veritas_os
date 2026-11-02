@@ -6,7 +6,6 @@ key is exposed here. Keys and protected head floor live outside audit DB.
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
 
