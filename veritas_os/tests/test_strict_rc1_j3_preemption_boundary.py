@@ -22,8 +22,10 @@ from veritas_os.tests.test_sandbox_bind_execution import (
     run,
 )
 from veritas_os.tests.test_sandbox_https_transport import Writer, TOKEN as HTTP_TOKEN
+from veritas_os.tests.test_sandbox_pre_effect import issued as issued_fixture
 
 pytestmark = pytest.mark.slow
+issued = issued_fixture
 prepared_inputs = prepared_inputs_fixture
 
 
