@@ -141,6 +141,22 @@ def test_x05_x06_clock_faults_fail_closed(mode):
     assert enter(model).status == "DENY_NO_ENTRY"
 
 
+
+@pytest.mark.parametrize("fault", ["health", "rollback", "uncertainty"])
+def test_clock_fault_cannot_be_cleared_to_rearm_attempt(fault):
+    model = gate()
+    if fault == "health":
+        model.set_clock_health(False)
+        model.set_clock_health(True)
+    elif fault == "rollback":
+        model.advance(-1)
+        model.set_clock_health(True)
+    else:
+        model.set_uncertainty(-1)
+        model.set_uncertainty(0)
+    assert enter(model).status == "DENY_NO_ENTRY"
+    assert model.snapshot()[0] == ()
+
 def test_s01_stop_precedes_entry():
     model = gate()
     model.stop()
