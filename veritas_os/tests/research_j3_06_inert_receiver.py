@@ -8,6 +8,8 @@ sampling and physical commit are atomic. No production import or external I/O.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager
+from collections.abc import Iterator
 import hashlib
 import hmac
 import json
@@ -117,11 +119,15 @@ class InertReceiverAdmission:
                 stop_epoch INTEGER, admitted_utc_ms INTEGER
             )""")
 
-    def _db(self) -> sqlite3.Connection:
+    @contextmanager
+    def _db(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.path, timeout=15, isolation_level=None)
-        db.execute("PRAGMA busy_timeout=15000")
-        db.execute("PRAGMA synchronous=FULL")
-        return db
+        try:
+            db.execute("PRAGMA busy_timeout=15000")
+            db.execute("PRAGMA synchronous=FULL")
+            yield db
+        finally:
+            db.close()
 
     def register(self, op: Operation) -> bool:
         if not all(type(v) is str and v for v in (
@@ -182,7 +188,7 @@ class InertReceiverAdmission:
             expected = hmac.new(
                 self._keys[e.issuer], _signed_payload(e), hashlib.sha256
             ).hexdigest()
-            if not hmac.compare_digest(expected, e.signature):
+            if type(e.signature) is not str or not hmac.compare_digest(expected, e.signature):
                 return "SIGNATURE_INVALID"
             if (
                 e.attempt_id != op.attempt_id
@@ -264,7 +270,9 @@ class InertReceiverAdmission:
             db.execute("""UPDATE attempts SET state='ADMITTED',
                 reason='E3_MODEL_ONLY',stop_epoch=?,admitted_utc_ms=?
                 WHERE attempt_id=?""", (gate[1], clock.utc_ms, op.attempt_id))
-            sequence = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+            sequence = db.execute(
+                "SELECT rowid FROM attempts WHERE attempt_id=?", (op.attempt_id,)
+            ).fetchone()[0]
             db.commit()
             if lose_receipt:
                 return AdmissionResult("UNKNOWN_NO_RETRY", "RECEIPT_LOST")
