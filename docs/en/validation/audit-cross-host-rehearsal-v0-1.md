@@ -1,4 +1,6 @@
-# Independent cross-host custody rehearsal v0.1 (NOT yet executed)
+# Independent cross-host custody rehearsal v0.1 (protocol; independent run pending)
+
+> **Local rehearsal executed, independent custody not demonstrated.** On 2026-11-06 JST, the operator completed a two-VM Ubuntu/UTM rehearsal on one Mac, with seven recorded verifier cases passing and separate HTTPS outage/recovery observations. This does **not** satisfy the independent-host, independent-administrator, or WORM evidence gates below. See the [local results report](audit-cross-vm-custody-rehearsal-v0-1-results.md) and its [Japanese summary](../../ja/validation/audit-cross-vm-custody-rehearsal-v0-1-summary.md).
 
 ## Objective and claims
 
@@ -59,4 +61,4 @@ For each test, retain sanitized: test ID, command/arguments with secrets removed
 
 **NO-GO:** any unverified admin separation, unpinned trust root, missing proof of rollback rejection, unexplained results, or failed CI.
 
-The repository CI tests only local verifier input validation and existing #2451/#2452 synthetic rehearsals. The real cross-host experiment requires user-provisioned Host B and operator participation and cannot be claimed from GitHub Actions.
+Repository CI alone does not establish independently administered hosts. The 2026-11-06 local two-VM rehearsal is documented separately; the independent-trust-domain experiment described by this protocol still requires externally separated host administration and evidence, and cannot be claimed from GitHub Actions or the same-host rehearsal.
