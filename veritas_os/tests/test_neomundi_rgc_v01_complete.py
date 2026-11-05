@@ -37,13 +37,15 @@ def _material() -> tuple[Ed25519PrivateKey, dict[str, Any]]:
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     return private, {
-        "keys": [{
-            "kty": "OKP",
-            "crv": "Ed25519",
-            "kid": "synthetic-only-key",
-            "alg": "EdDSA",
-            "x": _b64(public),
-        }]
+        "keys": [
+            {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "kid": "synthetic-only-key",
+                "alg": "EdDSA",
+                "x": _b64(public),
+            }
+        ]
     }
 
 
@@ -92,13 +94,18 @@ def _artifact() -> dict[str, Any]:
             },
             "temporal_boundary": {
                 "record_scope": "single_record",
+                "inference_requires": "Any property listed in `does_not_establish` requires a series of records correlated over time; it can never be inferred from this record alone.",
                 "establishes": [],
                 "does_not_establish": [
-                    "frequency", "persistence", "recurrence", "drift"
+                    "frequency",
+                    "persistence",
+                    "recurrence",
+                    "drift",
                 ],
             },
             "limitations": ["One observation; not a factuality guarantee."],
-            "measurement_boundary": "Synthetic single-request measured signals.",
+            "epistemic_principle": "Absence of evidence is only meaningful over the measured domain.",
+            "measurement_boundary": "This contract measures a single observed runtime signal. It does not evaluate ground truth, does not certify third-party data, and carries no execution authority. Every statement it makes is bounded by the measured domain declared in observed_signals.signal_status: absence of evidence is only meaningful over that domain, and this record establishes no temporal property on its own.",
         },
         "governance": {
             "governance_boundary": {
@@ -122,6 +129,8 @@ def _artifact() -> dict[str, Any]:
             "signature": "",
             "signer_identity": "synthetic-signer",
             "key_id": "synthetic-only-key",
+            "confidentiality_class": "controlled",
+            "retention_reference": None,
         },
     }
 
@@ -133,9 +142,7 @@ def _sign(
     claim_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     sections = {
-        k: artifact[k] for k in (
-            "identity", "provenance", "observation", "governance"
-        )
+        k: artifact[k] for k in ("identity", "provenance", "observation", "governance")
     }
     canonical = json.dumps(
         sections, sort_keys=True, separators=(",", ":"), ensure_ascii=True
@@ -151,14 +158,16 @@ def _sign(
         "timestamp": artifact["identity"]["timestamp"],
     }
     claims.update(claim_overrides or {})
-    header = _b64(json.dumps(
-        {"alg": "EdDSA", "kid": "synthetic-only-key"},
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8"))
-    payload = _b64(json.dumps(
-        claims, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8"))
+    header = _b64(
+        json.dumps(
+            {"alg": "EdDSA", "kid": "synthetic-only-key"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    payload = _b64(
+        json.dumps(claims, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
     digest = _b64(private.sign(f"{header}.{payload}".encode("ascii")))
     artifact["integrity"]["signature"] = f"{header}.{payload}.{digest}"
     return artifact
@@ -297,9 +306,7 @@ def test_explicit_signed_legacy_complete_is_measurement_only() -> None:
             "neomundi_v01_authority_boundary_invalid",
         ),
         (
-            lambda a: a["integrity"].__setitem__(
-                "canonicalization", "JCS"
-            ),
+            lambda a: a["integrity"].__setitem__("canonicalization", "JCS"),
             "neomundi_v01_hash_profile_invalid",
         ),
     ],
@@ -319,16 +326,13 @@ def test_mutating_signed_observation_fails_payload_hash() -> None:
     artifact = _sign(_artifact(), private)
     artifact["observation"]["observed_signals"]["coherence_score"] = 0.2
     assert (
-        _verifier(jwks).verify(artifact).reason
-        == "neomundi_v01_payload_hash_mismatch"
+        _verifier(jwks).verify(artifact).reason == "neomundi_v01_payload_hash_mismatch"
     )
 
 
 def test_signed_claim_version_must_match_document() -> None:
     private, jwks = _material()
-    artifact = _sign(
-        _artifact(), private, claim_overrides={"schema_version": "0.2.0"}
-    )
+    artifact = _sign(_artifact(), private, claim_overrides={"schema_version": "0.2.0"})
     assert (
         _verifier(jwks).verify(artifact).reason
         == "neomundi_rgc_signed_claim_schema_version_mismatch"
@@ -408,3 +412,123 @@ def test_generic_boundary_rejects_old_observation_and_wrong_policy() -> None:
             replay_guard=_Replay(),
             now=NOW,
         )
+
+
+def test_s1_rejects_flagged_without_review() -> None:
+    private, jwks = _material()
+    artifact = _artifact()
+
+    artifact["observation"]["observed_signals"]["observation_class"] = "flagged"
+
+    # Re-sign to isolate S1 semantics from signature validity.
+    _sign(artifact, private)
+
+    result = _verifier(jwks).verify(artifact)
+
+    assert not result.verified
+    assert not result.semantic_consistent
+    assert result.evidence is None
+    assert result.reason == "neomundi_v01_s1_contract_violation"
+
+
+@pytest.mark.parametrize(
+    ("content", "missing", "expected"),
+    [
+        (
+            b'{"type":"object"}',
+            False,
+            "neomundi_v01_s1_schema_hash_mismatch",
+        ),
+        (
+            None,
+            True,
+            "neomundi_v01_s1_schema_unavailable",
+        ),
+    ],
+)
+def test_s1_schema_resource_failure_is_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    content: bytes | None,
+    missing: bool,
+    expected: str,
+) -> None:
+    from veritas_os.governance import neomundi_rgc_v01_s1_schema as s1
+
+    private, jwks = _material()
+    artifact = _sign(_artifact(), private)
+    verifier = _verifier(jwks)
+
+    assert verifier.verify(artifact).verified
+
+    class FakeResource:
+        def joinpath(self, name: str) -> "FakeResource":
+            return self
+
+        def read_bytes(self) -> bytes:
+            if missing:
+                raise FileNotFoundError("simulated missing schema")
+            assert content is not None
+            return content
+
+    monkeypatch.setattr(
+        s1,
+        "files",
+        lambda package: FakeResource(),
+    )
+
+    result = verifier.verify(artifact)
+
+    assert not result.verified
+    assert not result.semantic_consistent
+    assert result.evidence is None
+    assert result.reason == expected
+
+
+def test_s1_rejection_does_not_consume_replay() -> None:
+    private, jwks = _material()
+    artifact = _artifact()
+
+    artifact["observation"]["observed_signals"]["observation_class"] = "flagged"
+
+    _sign(artifact, private)
+
+    verifier = _verifier(jwks)
+    policy = _policy(verifier)
+
+    class TrackingReplay(_Replay):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def consume_once(
+            self,
+            replay_key: str,
+            *,
+            observed_at: datetime,
+        ) -> bool:
+            self.calls += 1
+            return super().consume_once(
+                replay_key,
+                observed_at=observed_at,
+            )
+
+    replay = TrackingReplay()
+
+    result = verifier.verify(artifact)
+    assert not result.verified
+    assert result.reason == "neomundi_v01_s1_contract_violation"
+
+    with pytest.raises(
+        ValueError,
+        match="^external_measurement_provider_verification_failed$",
+    ):
+        verify_external_measurement_artifact_to_evidence(
+            artifact,
+            provider_verifier=verifier,
+            trust_policy=policy,
+            replay_guard=replay,
+            now=NOW,
+        )
+
+    assert replay.calls == 0
+    assert replay.seen == set()
