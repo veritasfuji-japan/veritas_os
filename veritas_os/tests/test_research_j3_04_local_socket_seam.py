@@ -1,7 +1,7 @@
 """J3-04: AF_UNIX socketpair counterexamples, NO external network or effects."""
 
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
+from contextlib import contextmanager
 import socket
 from threading import Event
 from time import monotonic_ns, sleep
@@ -21,6 +21,16 @@ pytestmark = pytest.mark.skipif(
 
 INTENT = FrozenIntent("j3-04-attempt", "local-only", "fixture-digest", "owner-1")
 PAYLOAD = b"INERT-J3-04-ONLY"
+
+
+@contextmanager
+def local_pair():
+    left, right = socket.socketpair()
+    try:
+        yield left, right
+    finally:
+        left.close()
+        right.close()
 
 
 def gate():
@@ -47,7 +57,7 @@ def start(pool, model, sender, payload=PAYLOAD, *, timeout=10.0):
 
 def test_j3_04_local_socket_positive_call_return_is_not_e1_proof():
     model = gate()
-    with closing(socket.socketpair()) as pair:
+    with local_pair() as pair:
         sender, receiver = pair
         with ThreadPoolExecutor(max_workers=1) as pool:
             future, resume = start(pool, model, sender)
@@ -65,7 +75,7 @@ def test_j3_04_local_socket_positive_call_return_is_not_e1_proof():
 
 def test_j3_04_stop_after_e_sim_before_local_send_does_not_cancel_bytes():
     model = gate()
-    with closing(socket.socketpair()) as pair:
+    with local_pair() as pair:
         sender, receiver = pair
         with ThreadPoolExecutor(max_workers=1) as pool:
             future, resume = start(pool, model, sender)
@@ -86,7 +96,7 @@ def test_j3_04_stop_after_e_sim_before_local_send_does_not_cancel_bytes():
 def test_j3_04_real_monotonic_pause_over_two_seconds_after_e_sim():
     """Real elapsed time crosses 2000ms, despite unchanged synthetic clock."""
     model = gate()
-    with closing(socket.socketpair()) as pair:
+    with local_pair() as pair:
         sender, receiver = pair
         with ThreadPoolExecutor(max_workers=1) as pool:
             future, resume = start(pool, model, sender)
@@ -106,7 +116,7 @@ def test_j3_04_real_monotonic_pause_over_two_seconds_after_e_sim():
 def test_j3_04_stop_before_e_sim_blocks_local_send():
     model = gate()
     model.stop()
-    with closing(socket.socketpair()) as pair:
+    with local_pair() as pair:
         sender, receiver = pair
         with ThreadPoolExecutor(max_workers=1) as pool:
             future, _resume = start(pool, model, sender)
@@ -121,7 +131,7 @@ def test_j3_04_stop_before_e_sim_blocks_local_send():
 
 def test_j3_04_pause_timeout_spends_attempt_without_local_send():
     model = gate()
-    with closing(socket.socketpair()) as pair:
+    with local_pair() as pair:
         sender, receiver = pair
         with ThreadPoolExecutor(max_workers=1) as pool:
             future, _resume = start(pool, model, sender, timeout=0.1)
@@ -139,7 +149,7 @@ def test_j3_04_pause_timeout_spends_attempt_without_local_send():
 
 def test_j3_04_receiver_closed_after_e_sim_local_send_failure_no_retry():
     model = gate()
-    with closing(socket.socketpair()) as pair:
+    with local_pair() as pair:
         sender, receiver = pair
         with ThreadPoolExecutor(max_workers=1) as pool:
             future, resume = start(pool, model, sender)
@@ -158,7 +168,7 @@ def test_j3_04_opaque_digest_does_not_authenticate_sent_bytes():
     """Explicit nonconformance: gate never verifies bytes against digest."""
     model = gate()
     altered = b"INERT-ALTERED"
-    with closing(socket.socketpair()) as pair:
+    with local_pair() as pair:
         sender, receiver = pair
         with ThreadPoolExecutor(max_workers=1) as pool:
             future, resume = start(pool, model, sender, altered)
