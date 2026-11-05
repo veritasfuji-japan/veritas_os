@@ -105,11 +105,15 @@ class SyntheticEntryGate:
 
     def set_clock_health(self, healthy: bool) -> None:
         with self._lock:
-            self._healthy = healthy is True
+            # A failed health observation poisons this one-shot attempt;
+            # a later healthy report must not silently re-arm it.
+            self._healthy = self._healthy and healthy is True
             self._history.append("HEALTH")
 
     def set_uncertainty(self, uncertainty_ms: int) -> None:
         with self._lock:
+            if type(uncertainty_ms) is not int or uncertainty_ms < 0:
+                self._healthy = False
             self._uncertainty_ms = uncertainty_ms
             self._history.append("UNCERTAINTY")
 
