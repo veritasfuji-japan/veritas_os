@@ -144,6 +144,16 @@ class InertReceiverAdmission:
             db.commit()
             return cur.rowcount == 1
 
+    def simulate_crash_after_claim(self, attempt_id: str) -> bool:
+        """Test-only crash point: persist claim, do not perform E3_MODEL."""
+        with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            cur = db.execute("""UPDATE attempts SET state='IN_PROGRESS',
+                reason='CLAIMED_NO_RETRY'
+                WHERE attempt_id=? AND state='PENDING'""", (attempt_id,))
+            db.commit()
+            return cur.rowcount == 1
+
     def stop(self) -> int:
         with self._db() as db:
             db.execute("BEGIN IMMEDIATE")
