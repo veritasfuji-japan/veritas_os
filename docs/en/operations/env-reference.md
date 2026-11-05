@@ -31,6 +31,7 @@ Variables prefixed with `VERITAS_` are project-specific.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VERITAS_API_KEY` | `""` | Primary authentication key for protected endpoints |
+| `VERITAS_API_KEYS` | `""` | JSON array of `key` / `role` entries; optional nonempty string `tenant_id` binds the key to a governance tenant. Roles: `admin`, `operator`, `auditor` |
 | `VERITAS_API_SECRET` | `""` | HMAC signature verification secret — **required** in production |
 | `VERITAS_API_SECRET_REF` | `""` | External secret reference name/path |
 | `VERITAS_SECRET_PROVIDER` | `""` | Secret manager provider (`vault`, `aws_secrets_manager`, `gcp_secret_manager`, `azure_key_vault`, `kms`) |
@@ -204,13 +205,21 @@ Variables prefixed with `VERITAS_` are project-specific.
 |----------|---------|-------------|
 | `VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES` | `1` | Require dual-approval for policy changes |
 | `VERITAS_GOVERNANCE_ENFORCE_RBAC` | `1` | Enforce role-based access control |
-| `VERITAS_GOVERNANCE_ALLOWED_ROLES` | `admin,compliance_owner` | Comma-separated roles for governance operations |
-| `VERITAS_GOVERNANCE_TENANT_ID` | `""` | Tenant ID for multi-tenant isolation |
+| `VERITAS_GOVERNANCE_ALLOWED_ROLES` | `admin,compliance_owner` | Allowlist applied to both the authenticated API-key role and the additional `X-Role` assertion; a header label alone cannot grant access |
+| `VERITAS_GOVERNANCE_TENANT_ID` | `""` | Optional governance scope: both the key entry's trusted `tenant_id` and `X-Tenant-Id` must match. Unbound/legacy keys are refused when set; this is not complete multi-tenant data isolation |
 | `VERITAS_GOVERNANCE_BACKEND` | `file` | Governance repository backend (`file` or `postgresql`) |
 | `VERITAS_EU_AI_ACT_MODE` | `false` | Enable EU AI Act compliance features |
 | `VERITAS_HUMAN_REVIEW_WEBHOOK_URL` | — | Webhook URL for human review escalation notifications |
 | `VERITAS_HUMAN_REVIEW_SLA_SECONDS` | *(module default)* | SLA timeout for human review completion |
 | `VERITAS_CONTEST_CONTACT` | — | Contact info for EU AI Act appeal/contest process |
+
+When enabling governance tenant scope, first add the matching `tenant_id` to each
+authorized `VERITAS_API_KEYS` entry (see `.env.example`), then deploy the key
+configuration and scope consistently. Existing single-key deployments remain
+usable without tenant scope; `VERITAS_API_KEY` alone never establishes tenant
+membership. Merely sending the configured tenant string is insufficient. The
+legacy `compliance_owner` header label is retained, but it is not a supported
+API-key role and cannot substitute for an allowed authenticated key role.
 
 ---
 

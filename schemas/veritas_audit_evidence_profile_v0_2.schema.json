@@ -1,0 +1,537 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VERITAS Audit Evidence Profile v0.2 — operation-level binding",
+  "description": "Offline structural format for one-case-per-operation evidence binding. Local consistency is not independent effect or authority verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_version",
+    "packet_id",
+    "created_at_utc",
+    "synthetic_example",
+    "scope",
+    "evidence",
+    "cases",
+    "controls",
+    "metrics",
+    "limitations",
+    "review"
+  ],
+  "properties": {
+    "profile_version": {
+      "const": "veritas.audit-evidence-profile/0.2"
+    },
+    "packet_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "synthetic_example": {
+      "type": "boolean"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effect_boundary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_population": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acquisition_method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_performed": {
+          "type": "boolean"
+        },
+        "period_start_utc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "period_end_utc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "system",
+        "repository",
+        "source_commit",
+        "environment",
+        "effect_boundary",
+        "case_population",
+        "acquisition_method",
+        "execution_performed",
+        "period_start_utc",
+        "period_end_utc"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "class": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relative_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "collected_by": {
+            "type": "string",
+            "minLength": 1
+          },
+          "acquisition_method": {
+            "type": "string",
+            "minLength": 1
+          },
+          "integrity_status": {
+            "enum": [
+              "NOT_VERIFIED",
+              "VERIFIED",
+              "FAILED",
+              "UNKNOWN"
+            ]
+          },
+          "authenticity_status": {
+            "enum": [
+              "NOT_VERIFIED",
+              "VERIFIED",
+              "FAILED",
+              "UNKNOWN"
+            ]
+          },
+          "independent_trust_status": {
+            "enum": [
+              "NOT_VERIFIED",
+              "VERIFIED",
+              "FAILED",
+              "UNKNOWN"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "class",
+          "relative_path",
+          "sha256",
+          "collected_by",
+          "acquisition_method",
+          "integrity_status",
+          "authenticity_status",
+          "independent_trust_status",
+          "notes"
+        ]
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expectation": {
+            "enum": [
+              "ALLOW",
+              "DENY",
+              "NOT_APPLICABLE"
+            ]
+          },
+          "observed": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NOT_TESTED",
+              "NOT_APPLICABLE",
+              "UNKNOWN"
+            ]
+          },
+          "actual_effect": {
+            "enum": [
+              "NOT_EXECUTED",
+              "UNKNOWN",
+              "ALLOWED",
+              "DENIED",
+              "ERROR"
+            ]
+          },
+          "decision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authority_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approval_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "intent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bind_receipt_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effect_receipt_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "notes": {
+            "type": "string"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "manifest_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "manifest_evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "case_id",
+          "expectation",
+          "observed",
+          "actual_effect",
+          "decision_id",
+          "authority_id",
+          "approval_id",
+          "intent_id",
+          "bind_receipt_id",
+          "effect_receipt_id",
+          "evidence_ids",
+          "notes",
+          "operation_id",
+          "manifest_id",
+          "manifest_evidence_id"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "observed": {
+                  "enum": [
+                    "PASS",
+                    "FAIL"
+                  ]
+                }
+              },
+              "required": [
+                "observed"
+              ]
+            },
+            "then": {
+              "properties": {
+                "operation_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "manifest_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "manifest_evidence_id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "control_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "test_case_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "verdict": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NOT_TESTED",
+              "NOT_APPLICABLE",
+              "UNKNOWN"
+            ]
+          },
+          "supporting_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "control_id",
+          "test_case_ids",
+          "verdict",
+          "supporting_evidence_ids",
+          "rationale"
+        ]
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "numerator": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "denominator": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "measurement_status": {
+            "enum": [
+              "MEASURED",
+              "NOT_MEASURED"
+            ]
+          },
+          "source_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_arm": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "metric_id",
+          "numerator",
+          "denominator",
+          "measurement_status",
+          "source_run_id",
+          "source_arm"
+        ]
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "handoff_status": {
+          "enum": [
+            "DRAFT",
+            "REVIEWABLE",
+            "INCOMPLETE"
+          ]
+        },
+        "reviewer_independence": {
+          "enum": [
+            "NONE",
+            "INTERNAL",
+            "EXTERNAL"
+          ]
+        },
+        "trusted_key_provenance": {
+          "enum": [
+            "NOT_ESTABLISHED",
+            "ESTABLISHED"
+          ]
+        },
+        "reviewer_verdict": {
+          "enum": [
+            "NOT_REVIEWED",
+            "ACCEPT",
+            "REJECT",
+            "INDETERMINATE"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "handoff_status",
+        "reviewer_independence",
+        "trusted_key_provenance",
+        "reviewer_verdict",
+        "notes"
+      ]
+    }
+  }
+}

@@ -2,6 +2,7 @@
 """HTTP middleware: trace ID, response time, security headers, body size limit."""
 from __future__ import annotations
 
+import asyncio
 import math
 import os
 import re
@@ -12,6 +13,9 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from veritas_os.api import sse_hub
 
 from veritas_os.api.rate_limiting import _rate_lock, _rate_bucket, _RATE_LIMIT, _RATE_WINDOW
 from veritas_os.logging.structured import reset_trace_id, set_trace_id
@@ -19,6 +23,34 @@ from veritas_os.observability.tracing import set_span_attribute, start_span
 
 import logging
 logger = logging.getLogger(__name__)
+
+class EventStreamSendTimeoutMiddleware:
+    """Bound actual SSE transport sends outside HTTP response intermediaries."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        is_event_stream = False
+
+        async def bounded_send(message: Message) -> None:
+            nonlocal is_event_stream
+            if message["type"] == "http.response.start":
+                is_event_stream = any(
+                    name.lower() == b"content-type"
+                    and value.lower().split(b";", 1)[0].strip() == b"text/event-stream"
+                    for name, value in message.get("headers", [])
+                )
+            if is_event_stream:
+                await asyncio.wait_for(send(message), timeout=sse_hub.STREAM_SEND_TIMEOUT_SEC)
+            else:
+                await send(message)
+
+        await self.app(scope, receive, bounded_send)
+
 
 # When rate limiting is handled by Redis, the in-process _rate_bucket is never
 # updated so X-RateLimit-* headers would be stale/misleading.  Detect once at

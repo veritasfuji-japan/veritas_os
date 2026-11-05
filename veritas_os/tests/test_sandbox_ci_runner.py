@@ -1,10 +1,60 @@
 """CI sandbox startup must work with the repository's pinned FastAPI."""
 
 from unittest.mock import AsyncMock, MagicMock
+from pathlib import Path
+import shlex
+from string import Template
+import subprocess
+import sys
 
 import pytest
+import yaml
 
 from scripts import run_native_v2_sandbox_service as runner
+
+
+@pytest.mark.parametrize("workflow_name", [
+    "reproducible-decision-to-effect-e2e.yml",
+    "reproducible-reconciliation-capable-execution-profile.yml",
+])
+def test_service_launch_explicit_environment_survives_clean_parent(workflow_name):
+    """Exercise actual workflow assignments without sudo, DB or socket effects."""
+    root = Path(__file__).resolve().parents[2]
+    workflow = yaml.load(
+        (root / ".github/workflows" / workflow_name).read_text(), Loader=yaml.BaseLoader,
+    )
+    job = next(iter(workflow["jobs"].values()))
+    step = next(s for s in job["steps"] if s.get("name") == "Start independent sandbox HTTPS service")
+    # Extract only the env/interpreter prefix, never execute the service command.
+    lines = step["run"].splitlines()
+    start = next(i for i, line in enumerate(lines) if line.lstrip().startswith("sudo "))
+    command = "\n".join(lines[start:])
+    prefix = command.split("sudo ", 1)[1].split("scripts/run_native_v2_sandbox_service.py", 1)[0]
+    tokens = shlex.split(prefix.replace("\\\n", " "))
+    assert tokens[0] == "env"
+    assert tokens[-1] == "$(which python)"
+    inputs = {
+        "GITHUB_WORKSPACE": str(root),
+        "VERITAS_SANDBOX_DATABASE_URL": "postgresql://localhost/synthetic_only",
+        "VERITAS_SANDBOX_WRITER_TOKEN": "w" * 40,
+        "VERITAS_SANDBOX_READER_TOKEN": "r" * 40,
+        "VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG": "/synthetic/lookup-outage",
+    }
+    assignments = [Template(token).substitute(inputs) for token in tokens[1:-1]]
+    code = """
+import os
+from scripts import run_native_v2_sandbox_service as runner
+assert runner._dsn() == 'postgresql://localhost/synthetic_only'
+assert runner._token('VERITAS_SANDBOX_WRITER_TOKEN') == 'w' * 40
+assert runner._token('VERITAS_SANDBOX_READER_TOKEN') == 'r' * 40
+assert os.environ['VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG'] == '/synthetic/lookup-outage'
+assert 'UNRELATED_PARENT_VALUE' not in os.environ
+"""
+    subprocess.run(
+        ["env", "-i", *assignments, sys.executable, "-c", code],
+        cwd=root, env={"UNRELATED_PARENT_VALUE": "must-not-be-forwarded"},
+        check=True, capture_output=True, text=True, timeout=15,
+    )
 
 
 @pytest.fixture

@@ -33,6 +33,7 @@ VERITAS OS の日本語ハブです。まず本ページと README_JP から全�
 
 ## TrustLog
 - [外部監査準備性](validation/external-audit-readiness.md)
+- [クロスVM監査カストディ・リハーサル v0.1（ローカル実測・独立監査ではない）](validation/audit-cross-vm-custody-rehearsal-v0-1-summary.md)
 - [本番検証](validation/production-validation.md)
 
 ## Mission Control

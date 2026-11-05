@@ -16,7 +16,7 @@ from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome
 
 _TEST_KEY = "gov-live-snapshot-test-key"
 os.environ["VERITAS_API_KEY"] = _TEST_KEY
-_AUTH = {"X-API-Key": _TEST_KEY, "X-Role": "admin"}
+_AUTH = {"X-API-Key": _TEST_KEY, "X-Role": "auditor"}
 
 client = TestClient(server.app)
 
@@ -25,6 +25,8 @@ client = TestClient(server.app)
 def _reset_auth(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_KEY)
     monkeypatch.setenv("VERITAS_API_KEYS", "[{\"key\":\"gov-live-snapshot-test-key\",\"role\":\"auditor\"}]")
+    # Snapshot controls intentionally grant this read-only key governance access.
+    monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOWED_ROLES", "admin,auditor")
 
 
 def test_governance_live_snapshot_returns_200(monkeypatch):

@@ -10,6 +10,8 @@ real inside the isolated runner environment.
 from __future__ import annotations
 
 from dataclasses import asdict
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from datetime import UTC, datetime, timedelta
 import hashlib
 import json
@@ -305,7 +307,11 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
     archive = await effect_store.get_reconciliation(consumption.consumption_id)
     assert archive is not None
     migration = await _migration_head()
-    assert migration == "0011"
+    expected_head = ScriptDirectory.from_config(
+        Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    ).get_current_head()
+    assert expected_head is not None
+    assert migration == expected_head
 
     report = {
         "format_version": "native-v2-sandbox-controlled-composition/v1",
