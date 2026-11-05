@@ -80,9 +80,8 @@ def test_j3_06_registered_operation_substitution_denied(receiver, field):
     })
     result = receiver.attempt_admit(altered, evidence(), CLOCK)
     assert result.status == "DENY_NO_ENTRY"
-    assert receiver.snapshot(OP.attempt_id)[0] == "PENDING" if field == "attempt_id" else (
-        receiver.snapshot(OP.attempt_id)[0] == "DENIED"
-    )
+    expected = "PENDING" if field == "attempt_id" else "DENIED"
+    assert receiver.snapshot(OP.attempt_id)[0] == expected
 
 
 def test_j3_06_signed_evidence_target_mismatch_denied(receiver):
