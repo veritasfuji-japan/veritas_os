@@ -207,8 +207,15 @@ def test_s05_owner_incarnation_mismatch():
 
 def test_f01_32_concurrent_attempts_at_most_one():
     model = gate()
+    # Synchronize all 32 workers at the entry attempt, not merely pool creation.
+    barrier = Barrier(32)
+
+    def contender(_):
+        barrier.wait(timeout=15)
+        return enter(model)
+
     with ThreadPoolExecutor(max_workers=32) as pool:
-        decisions = list(pool.map(lambda _: enter(model), range(32)))
+        decisions = list(pool.map(contender, range(32)))
     assert sum(d.status == "ENTRY_COMMITTED_ONCE" for d in decisions) == 1
     assert sum(d.status == "DENY_NO_ENTRY" for d in decisions) == 31
     assert len(model.snapshot()[0]) == 1
