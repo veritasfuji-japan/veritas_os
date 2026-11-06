@@ -22,6 +22,10 @@ from veritas_os.governance.neomundi_rgc_v02 import (
     NeoMundiRgcV02Verifier,
     _canonical_payload_hash,
 )
+from veritas_os.governance.neomundi_rgc_v01_s1_schema import (
+    SCHEMA_SHA256,
+    validate_neomundi_rgc_v01_s1,
+)
 from veritas_os.security.hash import sha256_of_canonical_json
 
 NEOMUNDI_RGC_V01_COMPLETE_VERIFIER_ID = "neomundi_rgc_v01_complete"
@@ -39,18 +43,14 @@ class _LegacyRgcInvalid(ValueError):
     """A v0.1.0 historical profile constraint was not met."""
 
 
-def _require_object(
-    parent: dict[str, Any], key: str, reason: str
-) -> dict[str, Any]:
+def _require_object(parent: dict[str, Any], key: str, reason: str) -> dict[str, Any]:
     value = parent.get(key)
     if not isinstance(value, dict):
         raise _LegacyRgcInvalid(reason)
     return value
 
 
-def _require_text(
-    parent: dict[str, Any], key: str, reason: str
-) -> str:
+def _require_text(parent: dict[str, Any], key: str, reason: str) -> str:
     value = parent.get(key)
     if not isinstance(value, str) or not value.strip():
         raise _LegacyRgcInvalid(reason)
@@ -90,9 +90,7 @@ def _historical_complete_sections(
     governance = _require_object(
         artifact, "governance", "neomundi_v01_governance_missing"
     )
-    integrity = _require_object(
-        artifact, "integrity", "neomundi_v01_integrity_missing"
-    )
+    integrity = _require_object(artifact, "integrity", "neomundi_v01_integrity_missing")
 
     if identity.get("schema_version") != NEOMUNDI_RGC_V01_SCHEMA_VERSION:
         raise _LegacyRgcInvalid("neomundi_v01_schema_version_unsupported")
@@ -100,9 +98,7 @@ def _historical_complete_sections(
         _require_text(identity, field, "neomundi_v01_identity_invalid")
     if re.fullmatch(r"(local|model-[0-9a-f]{12})", identity["model"]) is None:
         raise _LegacyRgcInvalid("neomundi_v01_model_identifier_invalid")
-    timestamp = _require_text(
-        identity, "timestamp", "neomundi_v01_timestamp_invalid"
-    )
+    timestamp = _require_text(identity, "timestamp", "neomundi_v01_timestamp_invalid")
     try:
         parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     except ValueError as exc:
@@ -152,9 +148,7 @@ def _historical_complete_sections(
     for name in _SIGNAL_NAMES:
         if states[name] != "measured":
             raise _LegacyRgcInvalid("neomundi_v01_unmeasured_forbidden")
-        _require_score(
-            signals.get(name), "neomundi_v01_measured_signal_invalid"
-        )
+        _require_score(signals.get(name), "neomundi_v01_measured_signal_invalid")
     if signals.get("observation_class") not in {"within_bounds", "flagged"}:
         raise _LegacyRgcInvalid("neomundi_v01_observation_class_invalid")
     if signals.get("observation_class_scope") != "measured_domain":
@@ -168,9 +162,7 @@ def _historical_complete_sections(
         or any(not isinstance(x, str) or not x.strip() for x in limitations)
     ):
         raise _LegacyRgcInvalid("neomundi_v01_limitations_missing")
-    _require_text(
-        observation, "measurement_boundary", "neomundi_v01_boundary_missing"
-    )
+    _require_text(observation, "measurement_boundary", "neomundi_v01_boundary_missing")
 
     boundary = _require_object(
         governance, "governance_boundary", "neomundi_v01_governance_boundary_missing"
@@ -180,9 +172,7 @@ def _historical_complete_sections(
         or boundary.get("execution_permission_changed") is not False
     ):
         raise _LegacyRgcInvalid("neomundi_v01_authority_boundary_invalid")
-    advisory = _require_object(
-        governance, "advisory", "neomundi_v01_advisory_missing"
-    )
+    advisory = _require_object(governance, "advisory", "neomundi_v01_advisory_missing")
     if advisory.get("review_recommendation") not in {
         "not_indicated",
         "recommended",
@@ -254,10 +244,10 @@ class NeoMundiRgcV01CompleteVerifier(NeoMundiRgcV02Verifier):
                 "verifier_policy_id": verifier_policy_id,
                 "verifier_trust_level": verifier_trust_level,
                 "profile": "rgc-v01-historical-complete-only",
+                "contract_schema_profile": "production-S1",
+                "contract_schema_sha256": SCHEMA_SHA256,
                 "schema_version": NEOMUNDI_RGC_V01_SCHEMA_VERSION,
-                "accepted_measurement_versions": sorted(
-                    accepted_measurement_versions
-                ),
+                "accepted_measurement_versions": sorted(accepted_measurement_versions),
                 "trusted_jwks": sorted(
                     (copy.deepcopy(k) for k in self._keys_by_id.values()),
                     key=lambda k: k["kid"],
@@ -285,6 +275,7 @@ class NeoMundiRgcV01CompleteVerifier(NeoMundiRgcV02Verifier):
                 artifact,
                 accepted_measurement_versions=self.accepted_measurement_versions,
             )
+            validate_neomundi_rgc_v01_s1(artifact)
             key_id = integrity["key_id"]
             recomputed = _canonical_payload_hash(artifact)
             if recomputed != integrity["payload_hash"]:
@@ -359,9 +350,7 @@ class NeoMundiRgcV01CompleteVerifier(NeoMundiRgcV02Verifier):
                     "system_id": identity["system_id"],
                     "model": identity["model"],
                     "mode": identity["mode"],
-                    "signer_identity_unverified_metadata": integrity[
-                        "signer_identity"
-                    ],
+                    "signer_identity_unverified_metadata": integrity["signer_identity"],
                     "key_id": key_id,
                 },
                 metadata={
