@@ -54,11 +54,17 @@ def test_json_loader_rejects_ambiguous_artifacts(tmp_path, raw):
 
 @pytest.fixture
 def real_e2e():
-    """Only run artifact mutation checks once the existing E2E has generated it."""
+    """Required controlled artifacts: fail, never skip, when evidence is absent."""
     report_path = PROOF_DIR / "report.json"
     evidence_path = PROOF_DIR / "evidence.json"
-    if not report_path.is_file() or not evidence_path.is_file():
-        pytest.skip("controlled E2E artifacts not generated in this environment")
+    missing = [
+        path.name for path in (report_path, evidence_path) if not path.is_file()
+    ]
+    if missing:
+        pytest.fail(
+            "REQUIRED_CONTROLLED_E2E_EVIDENCE_MISSING: " + ", ".join(missing),
+            pytrace=False,
+        )
     return load_json(report_path), load_json(evidence_path)
 
 
