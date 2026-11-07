@@ -170,7 +170,9 @@ def test_runner_compose_has_no_public_ports_or_docker_socket():
     proof = config["services"]["proof"]
     db = config["services"]["db"]
     assert proof["read_only"] is True
-    assert set(proof["cap_add"]) == {"NET_BIND_SERVICE"}
+    assert proof["user"] == "${REVIEWER_HOST_UID:?required}:${REVIEWER_HOST_GID:?required}"
+    assert proof["sysctls"]["net.ipv4.ip_unprivileged_port_start"] == "0"
+    assert "cap_add" not in proof
     assert "ALL" in proof["cap_drop"]
     assert proof["depends_on"]["db"]["condition"] == "service_healthy"
     assert "ports" not in db and "ports" not in proof
