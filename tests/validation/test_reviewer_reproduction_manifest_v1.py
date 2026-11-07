@@ -170,6 +170,10 @@ def test_runner_compose_has_no_public_ports_or_docker_socket():
     proof = config["services"]["proof"]
     db = config["services"]["db"]
     assert proof["read_only"] is True
+    assert proof["build"]["context"] == (
+        "${REVIEWER_BUILD_CONTEXT:?required minimal sanitized build context}"
+    )
+    assert proof["build"]["dockerfile"] == "Dockerfile"
     assert proof["environment"]["VERITAS_RUNTIME_ROOT"].startswith("/tmp/")
     assert proof["environment"]["VERITAS_RUNTIME_NAMESPACE"] == "test"
     assert proof["user"] == "${REVIEWER_HOST_UID:?required}:${REVIEWER_HOST_GID:?required}"
@@ -183,6 +187,76 @@ def test_runner_compose_has_no_public_ports_or_docker_socket():
         mount["target"] == "/workspace" and mount["read_only"] is True
         for mount in proof["volumes"]
     )
+
+
+def test_reproduction_workflow_covers_all_pr_and_main_changes():
+    import yaml
+
+    path = ROOT / ".github/workflows/reviewer-controlled-reproduction-v1.yml"
+    workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+    # PyYAML 1.1 interprets the YAML key "on" as Boolean True.
+    events = workflow.get("on", workflow.get(True))
+    assert "pull_request" in events
+    assert "paths" not in (events["pull_request"] or {})
+    assert events["push"]["branches"] == ["main"]
+    assert "workflow_dispatch" in events
+    job = workflow["jobs"]["reviewer-controlled-reproduction"]
+    assert job["env"]["PYTHONDONTWRITEBYTECODE"] == "1"
+    checkout = next(step for step in job["steps"]
+                    if step.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["persist-credentials"] is False
+
+
+def test_ignored_file_is_refused_before_docker_execution(tmp_path):
+    import os
+
+    fake_root = tmp_path / "fresh-reviewer-checkout"
+    (fake_root / "scripts/validation").mkdir(parents=True)
+    source = ROOT / "scripts/validation/run_reviewer_reproduction_v1.sh"
+    local_script = fake_root / "scripts/validation" / source.name
+    local_script.write_bytes(source.read_bytes())
+    (fake_root / ".gitignore").write_text("ignored-secret.txt\n", encoding="utf-8")
+
+    def git(*args: str):
+        subprocess.run(["git", "-C", str(fake_root), *args],
+                       check=True, capture_output=True, text=True)
+
+    git("init", "-q")
+    git("config", "user.name", "Verifier Test")
+    git("config", "user.email", "reviewer-test@example.invalid")
+    git("add", ".gitignore", "scripts/validation/run_reviewer_reproduction_v1.sh")
+    git("commit", "-q", "-m", "Synthetic fixture")
+    sha = subprocess.check_output(
+        ["git", "-C", str(fake_root), "rev-parse", "HEAD"], text=True
+    ).strip()
+    (fake_root / "ignored-secret.txt").write_text(
+        "do-not-import", encoding="utf-8"
+    )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker = fake_bin / "docker"
+    docker.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    docker.chmod(0o755)
+    proc = subprocess.run(
+        ["bash", str(local_script), sha, str(tmp_path / "unused-output")],
+        cwd=fake_root, capture_output=True, text=True, timeout=10,
+        env={**os.environ, "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"]},
+    )
+    assert proc.returncode == 2
+    assert "NO_GO_IGNORED_FILES_PRESENT_USE_FRESH_CLONE" in proc.stderr
+    assert not (tmp_path / "unused-output").exists()
+
+
+def test_minimal_build_context_and_disposable_git_checkout_guard():
+    entry = (ROOT / "scripts/validation/run_reviewer_reproduction_v1.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'git clone --quiet --local --no-hardlinks --no-checkout' in entry
+    assert 'checkout --quiet --detach "$SHA"' in entry
+    assert 'export REVIEWER_SOURCE_DIR="$STAGING/source"' in entry
+    assert 'export REVIEWER_BUILD_CONTEXT="$STAGING/build"' in entry
+    assert 'cp -- "$ROOT/docker/reviewer-proof-v1/Dockerfile"' in entry
+    assert 'cp -- "$ROOT/veritas_os/requirements.txt"' in entry
 
 
 def test_host_entrypoint_shell_syntax_is_valid():
