@@ -207,6 +207,24 @@ jobs:
           )
           PY
 
+      - name: Test contract weakening and adversarial evidence mutations
+        run: |
+          PYTHONPATH=. pytest \
+            tests/validation/test_reviewer_proof_contract_v1.py \
+            tests/validation/reviewer_proof_contract_e2e_checks.py \
+            -q --tb=short
+
+      - name: Validate bounded Reviewer Proof Contract v1
+        run: |
+          python -m scripts.validation.verify_reviewer_proof_contract_v1 \
+            --contract contracts/reviewer-proof-contract-v1.json \
+            --report "$VERITAS_DECISION_TO_EFFECT_REPORT" \
+            --evidence "$VERITAS_DECISION_TO_EFFECT_EVIDENCE" \
+            --tested-sha "$VERITAS_E2E_TESTED_SHA" \
+            --source-sha "$VERITAS_E2E_SOURCE_SHA" \
+            --base-sha "$VERITAS_E2E_BASE_SHA" \
+            --output artifacts/real-decision-to-effect-e2e/reviewer-proof-validation.json
+
       - name: Upload Decision-to-Effect proof artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -215,6 +233,7 @@ jobs:
           path: |
             artifacts/real-decision-to-effect-e2e/report.json
             artifacts/real-decision-to-effect-e2e/evidence.json
+            artifacts/real-decision-to-effect-e2e/reviewer-proof-validation.json
             /tmp/veritas-decision-e2e/service.log
           if-no-files-found: warn
 
