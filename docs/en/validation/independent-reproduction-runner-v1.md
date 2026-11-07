@@ -43,9 +43,19 @@ From a fresh detached checkout, run:
       APPROVED_COMMIT_SHA /path/outside/checkout/new-evidence-directory
 
 The target directory **must not already exist**, and its parent must exist.
-The script rejects a dirty checkout, mismatched/malformed SHA, a target inside
-the repository, or unavailable Docker. It creates an owner-only output
-directory and does not alter Git source files or host DNS/port bindings.
+The script rejects a dirty checkout, **all ignored/untracked local files**
+(including developer secrets, generated caches and runtime data),
+mismatched/malformed SHA, a target inside the repository, or unavailable Docker.
+Use a fresh checkout with no ignored files; the script does not silently delete
+them. It then creates a **second disposable local Git clone at the exact
+approved commit** outside the source checkout. Only that clone, not the host
+working tree, is mounted in the proof container. The Docker build context
+is separately staged with **only the reviewed Dockerfile and tracked
+veritas_os/requirements.txt**; the whole repository is never sent to the
+builder. The script creates an owner-only output directory, cleans the
+disposable clone and build directory on exit and does not change host DNS or
+host ports. This is repository-file hygiene, not a guarantee about historical
+objects inside the cloned Git metadata or about untrusted tracked source code.
 
 Inside Docker:
 
@@ -123,3 +133,8 @@ public-key pin authenticated out of band and cross-host denial evidence.
   milestone. The independent-reproduction milestone requires an external
   operator to run from their own trusted checkout and provide their own
   signed, authenticated evidence with independent custody checks.
+- The dedicated reproduction workflow runs for **all pull requests and main
+  pushes**, because changes to the execution engine, dependencies, migration
+  chain or E2E proof might silently affect the reviewer reproduction.
+  As with any CI result, an individual synthetic PR merge commit is not proof
+  for a later merged-main commit.
