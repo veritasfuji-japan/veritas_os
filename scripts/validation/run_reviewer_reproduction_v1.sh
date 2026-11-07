@@ -59,7 +59,7 @@ mkdir -m 700 -- "$OUTPUT"
 # The Docker daemon must never receive the entire host checkout as
 # build context. Clone only Git-tracked content into a fresh isolated source,
 # and stage exactly two nonsecret files as the build context.
-PROJECT="veritas-reviewer-$(date +%s)-$"
+PROJECT="veritas-reviewer-$(date +%s)-${BASHPID}"
 COMPOSE="$ROOT/docker/reviewer-proof-v1/compose.yml"
 STAGING="$(mktemp -d "${TMPDIR:-/tmp}/veritas-reviewer-v1.XXXXXXXX")"
 cleanup() {
