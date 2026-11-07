@@ -26,13 +26,17 @@ services:
       db:
         condition: service_healthy
     init: true
+    # Match the reviewer's host UID/GID so owner-only evidence stays private.
+    user: "${REVIEWER_HOST_UID:?required}:${REVIEWER_HOST_GID:?required}"
     read_only: true
     tmpfs:
       - /tmp:rw,exec,nosuid,size=2g
     security_opt:
       - no-new-privileges:true
+    # Bind 443 inside the isolated container without running as root.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
     cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
     extra_hosts:
       - "sandbox.example.invalid:127.0.0.1"
     environment:
