@@ -1,56 +1,56 @@
-# Reviewer Proof Contract v1: Controlled Decision-to-Effect
+# Reviewer Proof Contract v1 — controlled Decision-to-Effect
 
-This is an offline, fail-closed consistency and checkout-provenance gate for
-the existing controlled Decision-to-Effect E2E. It is NOT an independently
-executed test, real customer effect, certification or deployment assurance.
+**Purpose:** add narrowly scoped, fail-closed *evidence consistency* checks
+to the existing controlled E2E, not reimplement its enforcement logic.
 
-## Files
+## What is reused
+
+- Existing real TLS/PostgreSQL controlled E2E test.
+- Existing checkout-bound proof provenance helper.
+- VERITAS canonical JSON digest helper.
+- Native authorization-consumption, reconciliation-archive and receipt-bundle
+  Pydantic models (not redefined in this validator).
+- Existing CI proof assertions and migration-head comparison.
+
+## What is added
 
 - Contract: contracts/reviewer-proof-contract-v1.json
-- Validator: scripts/validation/verify_reviewer_proof_contract_v1.py
-- Negative tests: tests/validation/test_reviewer_proof_contract_v1.py
-- Existing producer: .github/workflows/reproducible-decision-to-effect-e2e.yml
-- Generated evidence: artifacts/real-decision-to-effect-e2e/report.json and evidence.json
+- Reviewer gate: scripts/validation/verify_reviewer_proof_contract_v1.py
+- Mutation tests: tests/validation/test_reviewer_proof_contract_v1.py
 
-The existing E2E uses real TLS and PostgreSQL but synthetic controlled
-business effects and credentials. The new gate validates full frozen
-predicate coverage (18 keys), two specific normal and lost-response cases,
-the exact negative production claims, report/evidence case identities,
-canonical SHA-256 digests and actual checked-out commit provenance.
+The contract is pinned by a canonical JSON digest in the verifier. A change
+to ANY contract field (including scenario expectations, exclusions or required
+predicates) fails until explicitly reviewed and updated. **An in-repository
+digest is not an independent trust root:** external reviewers must obtain an
+approved commit/contract digest through an independent channel.
 
-A SHA-256 value establishes consistency of files, not independent authorship
-or authenticity. The report's own PASS booleans are self-produced: this gate
-does not independently reconstruct execution events. An independent reviewer
-should retain the exact Git checkout, workflow run, original artifacts, and
-operational evidence before accepting any stronger claim.
+The validator checks the existing normal and fault cases:
 
-## Scope
+1. All 18 mandatory proof predicates, required nonproduction claims and exact
+   scenario expectations.
+2. Existing canonical evidence/report hashes and actual Git checkout
+   provenance.
+3. IDs linking decision, promotion, authorization, consumption, reconciliation
+   operation, BindReceipt and OutcomeReceipt.
+4. Native consumption hash/ID, receipt-bundle hash and reconciliation digest.
 
-Normal: HTTP 201 matching ACK, confirmed synthetic effect and at least three
-governance rechecks.
+The negative tests deliberately rehash altered artifacts to show that simple
+file self-hash agreement alone cannot bypass these structural assertions.
 
-Fault: lost response, lookup outage remains EFFECT_UNKNOWN, retry prohibited,
-exactly one transport call, eventual confirmed synthetic effect and at least
-three governance rechecks.
+The success label is PASS_BOUNDED_CONSISTENCY_ONLY. The self-produced
+controlled E2E is internally consistent under the pinned contract. Some
+producer proof predicates are asserted rather than independently recomputed.
+This validator does not turn those assertions into external verification.
 
-NOT covered by this contract: missing approval, attacker target mutation,
-32-way concurrency, universal bypass resistance, independent custody, real
-customer effect, physical time/STOP/Strict RC1 closure, real external UTC
-trust, production SLA, independent security audit, regulatory certification.
+## Reviewer procedure
 
-For other scenarios consult their separate proof/test contracts. Never
-describe the combined evidence as one universal security guarantee.
+1. Run the dedicated controlled E2E workflow.
+2. Keep original report.json/evidence.json, CI event metadata and the exact
+   *tested* checkout SHA. On PRs this is ordinarily a synthetic merge SHA, not
+   the PR head SHA.
+3. From that exact checkout, with artifacts restored, invoke:
 
-## Run
-
-1. Run the existing dedicated controlled Decision-to-Effect E2E workflow.
-2. Obtain the original run artifacts and event metadata, including tested SHA,
-   source/head SHA and base SHA. On pull requests the tested SHA is normally a
-   synthetic merge commit; do not replace it with the PR head SHA.
-3. Check out the exact tested commit and restore report.json and evidence.json.
-4. Invoke the verifier from repository root:
-
-    python scripts/validation/verify_reviewer_proof_contract_v1.py \
+    python -m scripts.validation.verify_reviewer_proof_contract_v1 \
       --contract contracts/reviewer-proof-contract-v1.json \
       --report artifacts/real-decision-to-effect-e2e/report.json \
       --evidence artifacts/real-decision-to-effect-e2e/evidence.json \
@@ -59,12 +59,16 @@ describe the combined evidence as one universal security guarantee.
       --base-sha "$BASE_SHA" \
       --output reviewer-proof-validation.json
 
-5. A PASS_BOUNDED_CONSISTENCY_ONLY result does not imply independent effects,
-   production readiness or third-party certification.
+In CI, run mutation tests AFTER the E2E generates authentic controlled test
+artifacts:
 
-Unit regression tests (no database/network):
+    PYTHONPATH=. pytest tests/validation/test_reviewer_proof_contract_v1.py -q
 
-    PYTHONPATH=. pytest -q tests/validation/test_reviewer_proof_contract_v1.py
+## Explicit nonclaims
 
-No paid provider calls, real external mutations, changes to authorization
-semantics or live policy activation are performed by this contract.
+This does not prove unauthorized-action refusal, full Bind bypass coverage,
+independent administration/custody, real customer or financial effects,
+Strict RC1 physical timing/STOP closure, external UTC trust, production
+availability or regulatory/third-party certification. Hashes alone cannot
+prove origin authenticity if the producer controls every input. No provider
+dispatch, credential change or production policy activation is added.
