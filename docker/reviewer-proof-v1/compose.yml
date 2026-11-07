@@ -56,6 +56,9 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       HOME: /tmp
+      # All runtime data are disposable. Never mutate the read-only checkout.
+      VERITAS_RUNTIME_ROOT: /tmp/veritas-reviewer-runtime
+      VERITAS_RUNTIME_NAMESPACE: test
       PYTHONPATH: /workspace
     volumes:
       - type: bind
