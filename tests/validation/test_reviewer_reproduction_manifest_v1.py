@@ -259,6 +259,24 @@ def test_minimal_build_context_and_disposable_git_checkout_guard():
     assert 'cp -- "$ROOT/veritas_os/requirements.txt"' in entry
 
 
+def test_docker_compose_project_name_expands_to_valid_identifier():
+    import re
+
+    entry = (ROOT / "scripts/validation/run_reviewer_reproduction_v1.sh").read_text(
+        encoding="utf-8"
+    )
+    declaration = next(
+        line for line in entry.splitlines() if line.startswith("PROJECT=")
+    )
+    completed = subprocess.run(
+        ["bash", "-c", declaration + '\n' + 'printf "%s" "$PROJECT"'],
+        capture_output=True, text=True, check=True,
+    )
+    assert re.fullmatch(r"[a-z0-9][a-z0-9_-]*", completed.stdout)
+    assert completed.stdout.startswith("veritas-reviewer-")
+    assert completed.stdout.rsplit("-", 1)[-1].isdigit()
+
+
 def test_host_entrypoint_shell_syntax_is_valid():
     path = ROOT / "scripts/validation/run_reviewer_reproduction_v1.sh"
     completed = subprocess.run(
