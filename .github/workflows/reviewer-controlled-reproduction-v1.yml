@@ -23,6 +23,10 @@ jobs:
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The read-only source tree is mounted into an isolated container.
+          # Never mount a persisted GitHub Actions credential into that tree.
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
