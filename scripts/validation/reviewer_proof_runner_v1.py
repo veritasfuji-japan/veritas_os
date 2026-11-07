@@ -36,7 +36,28 @@ def _run(command: list[str], *, timeout: int = 180) -> None:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError("REPRODUCTION_STAGE_FAILED: " + command[0]
+        # Only whitelisted, truncated error summaries leave this container.
+        # Raw stderr/stdout could include credential material; never upload it.
+        markers = (
+            "ERROR collecting", "ERROR at setup", "ModuleNotFoundError:",
+            "ImportError:", "PermissionError:", "FileNotFoundError:",
+            "SyntaxError:", "pytest: error:", "INTERNALERROR>",
+            "E   ", "usage: pytest",
+        )
+        for line in (result.stdout + "\n" + result.stderr).splitlines():
+            if not any(marker in line for marker in markers):
+                continue
+            if any(secret in line for secret in (
+                os.environ.get("VERITAS_SANDBOX_WRITER_TOKEN", "<no-writer>"),
+                os.environ.get("VERITAS_SANDBOX_READER_TOKEN", "<no-reader>"),
+            )):
+                continue
+            if any(s in line.lower() for s in ("bearer ", "private key", "password")):
+                continue
+            print("REPRODUCTION_STAGE_DIAGNOSTIC: " + line[:240],
+                  file=sys.stderr)
+        stage = " ".join(command[:4])
+        raise RuntimeError("REPRODUCTION_STAGE_FAILED: " + stage
                            + " (exit " + str(result.returncode) + ")")
 
 
