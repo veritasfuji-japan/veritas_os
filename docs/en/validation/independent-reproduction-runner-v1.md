@@ -52,7 +52,10 @@ approved commit** outside the source checkout. Only that clone, not the host
 working tree, is mounted in the proof container. The Docker build context
 is separately staged with **only the reviewed Dockerfile and tracked
 veritas_os/requirements.txt**; the whole repository is never sent to the
-builder. The script creates an owner-only output directory, cleans the
+builder. The Dockerfile, requirements, Compose configuration and host-side
+verifier all come from the pinned disposable clone. Compose receives an
+explicit empty env file instead of auto-loading a local `.env`. The script
+creates an owner-only output directory, cleans the
 disposable clone and build directory on exit and does not change host DNS or
 host ports. This is repository-file hygiene, not a guarantee about historical
 objects inside the cloned Git metadata or about untrusted tracked source code.

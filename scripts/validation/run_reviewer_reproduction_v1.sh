@@ -60,10 +60,12 @@ mkdir -m 700 -- "$OUTPUT"
 # build context. Clone only Git-tracked content into a fresh isolated source,
 # and stage exactly two nonsecret files as the build context.
 PROJECT="veritas-reviewer-$(date +%s)-${BASHPID}"
-COMPOSE="$ROOT/docker/reviewer-proof-v1/compose.yml"
 STAGING="$(mktemp -d "${TMPDIR:-/tmp}/veritas-reviewer-v1.XXXXXXXX")"
+COMPOSE="$STAGING/source/docker/reviewer-proof-v1/compose.yml"
 cleanup() {
-  docker compose -f "$COMPOSE" -p "$PROJECT" down -v --remove-orphans >/dev/null 2>&1 || true
+  if [[ -f "$COMPOSE" ]]; then
+    docker compose --env-file /dev/null -f "$COMPOSE" -p "$PROJECT" down -v --remove-orphans >/dev/null 2>&1 || true
+  fi
   rm -rf -- "$STAGING"
 }
 trap cleanup EXIT
@@ -77,8 +79,8 @@ if [[ "$(git -C "$STAGING/source" rev-parse HEAD)" != "$SHA" ]] ||
 fi
 mkdir -m 700 -- "$STAGING/build"
 mkdir -m 700 -- "$STAGING/build/veritas_os"
-cp -- "$ROOT/docker/reviewer-proof-v1/Dockerfile" "$STAGING/build/Dockerfile"
-cp -- "$ROOT/veritas_os/requirements.txt" "$STAGING/build/veritas_os/requirements.txt"
+cp -- "$STAGING/source/docker/reviewer-proof-v1/Dockerfile" "$STAGING/build/Dockerfile"
+cp -- "$STAGING/source/veritas_os/requirements.txt" "$STAGING/build/veritas_os/requirements.txt"
 chmod 600 -- "$STAGING/build/Dockerfile" "$STAGING/build/veritas_os/requirements.txt"
 
 export REVIEWER_SOURCE_DIR="$STAGING/source"
@@ -91,11 +93,11 @@ export REVIEWER_HOST_UID REVIEWER_HOST_GID
 
 # Build can fetch pinned public dependencies. Proof and database attach only
 # to an INTERNAL network with no host ports or mounted Docker socket.
-docker compose -f "$COMPOSE" -p "$PROJECT" up \
+docker compose --env-file /dev/null -f "$COMPOSE" -p "$PROJECT" up \
   --build --abort-on-container-exit --exit-code-from proof proof
 
 # Host-side verifier needs Python stdlib only; pin supplied by the reviewer.
-cd "$ROOT"
+cd "$STAGING/source"
 python3 -m scripts.validation.reviewer_reproduction_manifest_v1 verify \
   --bundle "$OUTPUT" --expected-checkout-sha "$SHA"
 echo "PASS_BOUNDED_REVIEWER_OPERATED_REPRODUCTION_CONSISTENCY_ONLY"
