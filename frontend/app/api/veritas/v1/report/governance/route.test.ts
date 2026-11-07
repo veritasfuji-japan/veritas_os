@@ -600,3 +600,17 @@ describe("/api/veritas/v1/report/governance", () => {
   });
 
 });
+
+it("blocks credentialed snapshot redirects", async () => {
+  vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+  vi.stubEnv("VERITAS_API_KEY", "synthetic-key");
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(null, { status: 307, headers: { location: "https://other-origin.invalid/" } }),
+  );
+  const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+  expect(fetchSpy).toHaveBeenCalledOnce();
+  expect(fetchSpy).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ redirect: "manual" }));
+  expect(response.status).toBe(502);
+  expect(response.headers.get("location")).toBeNull();
+  expect(await response.json()).toEqual({ error: "upstream_redirect_blocked" });
+});

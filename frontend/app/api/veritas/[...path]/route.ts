@@ -134,7 +134,16 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
     headers: upstreamHeaders,
     body,
     cache: "no-store",
+    redirect: "manual",
   });
+
+  if (upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
+    await upstreamResponse.body?.cancel();
+    return NextResponse.json(
+      { error: "upstream_redirect_blocked", trace_id: traceId },
+      { status: 502, headers: { [TRACE_ID_HEADER_NAME]: traceId } },
+    );
+  }
 
   const responseHeaders = new Headers();
   const upstreamContentType = upstreamResponse.headers.get("content-type");
