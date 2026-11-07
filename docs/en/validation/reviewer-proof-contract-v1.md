@@ -38,8 +38,11 @@ The negative tests deliberately rehash altered artifacts to show that simple
 file self-hash agreement alone cannot bypass these structural assertions.
 
 The success label is PASS_BOUNDED_CONSISTENCY_ONLY. The self-produced
-controlled E2E is internally consistent under the pinned contract. Some
-producer proof predicates are asserted rather than independently recomputed.
+controlled E2E is internally consistent under the pinned contract. The output
+field `producer_reported_pass_predicate_count` counts the 18 PASS predicates
+**as reported by the producer**, not independent confirmations. The separate
+flag `all_producer_predicates_independently_recomputed=false` makes this explicit.
+Some producer predicates are asserted rather than independently recomputed.
 This validator does not turn those assertions into external verification.
 
 ## Reviewer procedure
@@ -59,10 +62,17 @@ This validator does not turn those assertions into external verification.
       --base-sha "$BASE_SHA" \
       --output reviewer-proof-validation.json
 
-In CI, run mutation tests AFTER the E2E generates authentic controlled test
-artifacts:
+In CI, run mutation tests AFTER the E2E generates controlled test
+artifacts (produced by this system; their provenance is not independently
+authenticated):
 
     PYTHONPATH=. pytest tests/validation/test_reviewer_proof_contract_v1.py -q
+
+The mutation-test fixture **fails the test run** with
+`REQUIRED_CONTROLLED_E2E_EVIDENCE_MISSING` if either report.json or
+evidence.json is absent. It never silently SKIPs required evidence tests.
+Therefore the command is intentionally not a stand-alone no-artifact unit test;
+run the existing controlled E2E first.
 
 ## Explicit nonclaims
 
