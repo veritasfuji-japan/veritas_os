@@ -1,0 +1,81 @@
+# Entire runtime is synthetic and local to one disposable Docker network.
+# This is operator-portable reproducibility, NOT separated administrative custody.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: veritas
+      POSTGRES_PASSWORD: reviewer-synthetic-only
+      POSTGRES_DB: veritas_decision_e2e
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veritas -d veritas_decision_e2e"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [proof_net]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+
+  proof:
+    # This context is staged by the reviewer script and contains ONLY
+    # the Dockerfile and the pinned tracked requirements file.
+    build:
+      context: ${REVIEWER_BUILD_CONTEXT:?required minimal sanitized build context}
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    # Match the reviewer's host UID/GID so owner-only evidence stays private.
+    user: "${REVIEWER_HOST_UID:?required}:${REVIEWER_HOST_GID:?required}"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=2g
+    security_opt:
+      - no-new-privileges:true
+    # Bind 443 inside the isolated container without running as root.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    cap_drop: [ALL]
+    extra_hosts:
+      - "sandbox.example.invalid:127.0.0.1"
+    environment:
+      REVIEWER_EXPECTED_SHA: ${REVIEWER_EXPECTED_SHA:?required pinned checkout}
+      REVIEWER_HOST_UID: ${REVIEWER_HOST_UID:?required}
+      REVIEWER_HOST_GID: ${REVIEWER_HOST_GID:?required}
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:reviewer-synthetic-only@db:5432/veritas_decision_e2e
+      VERITAS_SANDBOX_DATABASE_URL: postgresql://veritas:reviewer-synthetic-only@db:5432/veritas_decision_e2e_sandbox
+      VERITAS_SANDBOX_CA_FILE: /tmp/veritas-reviewer-proof-v1/ca.crt
+      VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG: /tmp/veritas-reviewer-proof-v1/lookup-outage
+      VERITAS_DECISION_TO_EFFECT_REPORT: /workspace/artifacts/real-decision-to-effect-e2e/report.json
+      VERITAS_DECISION_TO_EFFECT_EVIDENCE: /workspace/artifacts/real-decision-to-effect-e2e/evidence.json
+      VERITAS_DECISION_TO_EFFECT_E2E: "1"
+      VERITAS_E2E_TESTED_SHA: ${REVIEWER_EXPECTED_SHA:?required pinned checkout}
+      VERITAS_E2E_SOURCE_SHA: ${REVIEWER_EXPECTED_SHA:?required pinned checkout}
+      VERITAS_E2E_BASE_SHA: ${REVIEWER_EXPECTED_SHA:?required pinned checkout}
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HOME: /tmp
+      # All runtime data are disposable. Never mutate the read-only checkout.
+      VERITAS_RUNTIME_ROOT: /tmp/veritas-reviewer-runtime
+      VERITAS_RUNTIME_NAMESPACE: test
+      PYTHONPATH: /workspace
+    volumes:
+      - type: bind
+        source: ${REVIEWER_SOURCE_DIR:?required checkout}
+        target: /workspace
+        read_only: true
+      - type: bind
+        source: ${REVIEWER_OUTPUT_DIR:?required fresh evidence directory}
+        target: /workspace/artifacts/real-decision-to-effect-e2e
+        read_only: false
+    networks: [proof_net]
+
+networks:
+  proof_net:
+    internal: true
+
+volumes:
+  db_data:
