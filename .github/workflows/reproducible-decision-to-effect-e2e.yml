@@ -63,7 +63,7 @@ jobs:
             "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio httpx cryptography
 
       - name: Check proof provenance and workflow regressions
-        run: PYTHONPATH=. pytest veritas_os/tests/test_proof_provenance.py veritas_os/tests/test_sandbox_ci_runner.py veritas_os/tests/test_fixture_clock.py tests/validation/test_reviewer_proof_contract_v1.py -q --tb=short
+        run: PYTHONPATH=. pytest veritas_os/tests/test_proof_provenance.py veritas_os/tests/test_sandbox_ci_runner.py veritas_os/tests/test_fixture_clock.py -q --tb=short
 
       - name: Create dedicated sandbox database
         run: |
@@ -207,9 +207,12 @@ jobs:
           )
           PY
 
+      - name: Test contract weakening and adversarial evidence mutations
+        run: PYTHONPATH=. pytest tests/validation/test_reviewer_proof_contract_v1.py -q --tb=short
+
       - name: Validate bounded Reviewer Proof Contract v1
         run: |
-          python scripts/validation/verify_reviewer_proof_contract_v1.py \
+          python -m scripts.validation.verify_reviewer_proof_contract_v1 \
             --contract contracts/reviewer-proof-contract-v1.json \
             --report "$VERITAS_DECISION_TO_EFFECT_REPORT" \
             --evidence "$VERITAS_DECISION_TO_EFFECT_EVIDENCE" \
