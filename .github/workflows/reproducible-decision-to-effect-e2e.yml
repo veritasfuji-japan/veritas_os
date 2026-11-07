@@ -208,7 +208,11 @@ jobs:
           PY
 
       - name: Test contract weakening and adversarial evidence mutations
-        run: PYTHONPATH=. pytest tests/validation/test_reviewer_proof_contract_v1.py -q --tb=short
+        run: |
+          PYTHONPATH=. pytest \
+            tests/validation/test_reviewer_proof_contract_v1.py \
+            tests/validation/reviewer_proof_contract_e2e_checks.py \
+            -q --tb=short
 
       - name: Validate bounded Reviewer Proof Contract v1
         run: |
