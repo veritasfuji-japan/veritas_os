@@ -524,6 +524,7 @@ def governance_put(body: dict, request: Request):
             set_span_attribute("policy_snapshot_id", policy_snapshot_id)
             set_span_attribute("approval_count", approval_count)
 
+            # Evidence IDs are issued by the helper, never selected by HTTP callers.
             with trace_step("governance.bind_boundary.evaluate"):
                 bind_receipt = update_governance_policy_with_bind_boundary(
                     decision_id=decision_id,
@@ -541,8 +542,6 @@ def governance_put(body: dict, request: Request):
                     if isinstance(body.get("policy_lineage"), dict)
                     else None,
                     governance_policy=previous if isinstance(previous, dict) else None,
-                    execution_intent_id=str(body.get("execution_intent_id") or "") or None,
-                    bind_receipt_id=str(body.get("bind_receipt_id") or "") or None,
                 ).to_dict()
 
             set_span_attribute("bind_receipt_id", bind_receipt.get("bind_receipt_id"))
@@ -868,7 +867,12 @@ def governance_bind_receipt(bind_receipt_id: str):
         receipts = find_bind_receipts(bind_receipt_id=bind_receipt_id)
         if not receipts:
             return JSONResponse(status_code=404, content={"ok": False, "error": "bind_receipt_not_found"})
-        enriched_receipt = enrich_bind_receipt_payload(receipts[-1].to_dict())
+        if len(receipts) != 1:
+            return JSONResponse(
+                status_code=409,
+                content={"ok": False, "error": "bind_receipt_id_ambiguous"},
+            )
+        enriched_receipt = enrich_bind_receipt_payload(receipts[0].to_dict())
         return {
             "ok": True,
             **build_bind_response_payload(enriched_receipt),
