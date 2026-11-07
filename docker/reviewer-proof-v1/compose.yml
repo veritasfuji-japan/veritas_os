@@ -19,9 +19,11 @@ services:
       - no-new-privileges:true
 
   proof:
+    # This context is staged by the reviewer script and contains ONLY
+    # the Dockerfile and the pinned tracked requirements file.
     build:
-      context: ../..
-      dockerfile: docker/reviewer-proof-v1/Dockerfile
+      context: ${REVIEWER_BUILD_CONTEXT:?required minimal sanitized build context}
+      dockerfile: Dockerfile
     depends_on:
       db:
         condition: service_healthy
