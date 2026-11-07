@@ -219,7 +219,10 @@ def verify(
         "source_sha": source_sha, "base_sha": base_sha,
         "contract_digest": CONTRACT_DIGEST,
         "verified_scenarios": contract["scenario_keys"],
-        "verified_predicate_count": len(contract["required_conjunction"]),
+        # The producer supplies these PASS flags. Presence and truthiness are
+        # checked, but all predicates are NOT independently reconstructed.
+        "producer_reported_pass_predicate_count": len(contract["required_conjunction"]),
+        "all_producer_predicates_independently_recomputed": False,
         "independent_effect_observed": False,
         "independent_custody_proven": False,
         "production_proven": False, "third_party_certified": False,
