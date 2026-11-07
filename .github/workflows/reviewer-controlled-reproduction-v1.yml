@@ -1,0 +1,43 @@
+name: Reviewer-Controlled Reproduction Runner v1
+
+# Validates that a separate disposable Docker environment can reuse the frozen
+# controlled proof. CI is one administrator; not third-party certification.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/reviewer-controlled-reproduction-v1.yml"
+      - "docker/reviewer-proof-v1/**"
+      - "scripts/validation/reviewer_proof_runner_v1.py"
+      - "scripts/validation/reviewer_reproduction_manifest_v1.py"
+      - "scripts/validation/run_reviewer_reproduction_v1.sh"
+      - "tests/validation/test_reviewer_reproduction_manifest_v1.py"
+      - "docs/en/validation/independent-reproduction-runner-v1.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reviewer-controlled-reproduction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate offline manifest refusal cases
+        run: |
+          python -m pip install --disable-pip-version-check pytest==9.0.3 PyYAML==6.0.3
+          python -m pytest tests/validation/test_reviewer_reproduction_manifest_v1.py -q
+      - name: Run Docker proof at exact checked-out SHA
+        run: |
+          bash scripts/validation/run_reviewer_reproduction_v1.sh \
+            "$GITHUB_SHA" "$RUNNER_TEMP/reviewer-controlled-proof-v1"
+      - name: Retain bounded reviewer artifacts (no credentials or private keys)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewer-controlled-reproduction-v1
+          path: ${{ runner.temp }}/reviewer-controlled-proof-v1/
+          if-no-files-found: ignore
