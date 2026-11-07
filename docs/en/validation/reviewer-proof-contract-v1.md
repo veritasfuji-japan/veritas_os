@@ -16,7 +16,9 @@ to the existing controlled E2E, not reimplement its enforcement logic.
 
 - Contract: contracts/reviewer-proof-contract-v1.json
 - Reviewer gate: scripts/validation/verify_reviewer_proof_contract_v1.py
-- Mutation tests: tests/validation/test_reviewer_proof_contract_v1.py
+- Fixture-free contract tests: tests/validation/test_reviewer_proof_contract_v1.py
+- Artifact-dependent mutation tests: tests/validation/reviewer_proof_contract_e2e_checks.py
+  (intentionally not auto-discovered by generic pytest shard collection)
 
 The contract is pinned by a canonical JSON digest in the verifier. A change
 to ANY contract field (including scenario expectations, exclusions or required
@@ -62,17 +64,24 @@ This validator does not turn those assertions into external verification.
       --base-sha "$BASE_SHA" \
       --output reviewer-proof-validation.json
 
-In CI, run mutation tests AFTER the E2E generates controlled test
-artifacts (produced by this system; their provenance is not independently
-authenticated):
+The normal repo-wide CI shards automatically collect only the **fixture-free**
+contract checks:
 
     PYTHONPATH=. pytest tests/validation/test_reviewer_proof_contract_v1.py -q
 
-The mutation-test fixture **fails the test run** with
-`REQUIRED_CONTROLLED_E2E_EVIDENCE_MISSING` if either report.json or
-evidence.json is absent. It never silently SKIPs required evidence tests.
-Therefore the command is intentionally not a stand-alone no-artifact unit test;
-run the existing controlled E2E first.
+The dedicated controlled E2E workflow explicitly collects BOTH files **after**
+the E2E generates report.json and evidence.json:
+
+    PYTHONPATH=. pytest \
+      tests/validation/test_reviewer_proof_contract_v1.py \
+      tests/validation/reviewer_proof_contract_e2e_checks.py -q
+
+The artifact-dependent file is deliberately named without the `test_` prefix
+so ordinary broad CI, which does NOT generate these proof artifacts, will not
+collect it accidentally. In the dedicated proof workflow, either missing
+artifact makes the evidence tests **FAIL** with
+`REQUIRED_CONTROLLED_E2E_EVIDENCE_MISSING`, never SKIP. This separates test
+environment requirements without weakening the bounded proof gate.
 
 ## Explicit nonclaims
 
