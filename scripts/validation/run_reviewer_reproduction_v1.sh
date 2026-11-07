@@ -28,10 +28,15 @@ if [[ "$(git -C "$ROOT" rev-parse HEAD)" != "$SHA" ]]; then
   echo "NO_GO_CHECKOUT_NOT_PINNED" >&2
   exit 2
 fi
-# A reviewer should use a fresh checkout. Refuse both tracked modifications
-# and untracked files, which could shadow Python imports.
+# Never mount a tree with changed/untracked/ignored files, including
+# .env, key files, local runtime data, caches or tool-created Python files.
+# A disposable reviewer clone is still created below as a second boundary.
 if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=all)" ]]; then
   echo "NO_GO_DIRTY_CHECKOUT_USE_FRESH_CLONE" >&2
+  exit 2
+fi
+if [[ -n "$(git -C "$ROOT" ls-files --others --ignored --exclude-standard)" ]]; then
+  echo "NO_GO_IGNORED_FILES_PRESENT_USE_FRESH_CLONE" >&2
   exit 2
 fi
 
@@ -51,22 +56,41 @@ print(resolved)
 PY
 )"
 mkdir -m 700 -- "$OUTPUT"
-export REVIEWER_SOURCE_DIR="$ROOT"
+# The Docker daemon must never receive the entire host checkout as
+# build context. Clone only Git-tracked content into a fresh isolated source,
+# and stage exactly two nonsecret files as the build context.
+PROJECT="veritas-reviewer-$(date +%s)-$"
+COMPOSE="$ROOT/docker/reviewer-proof-v1/compose.yml"
+STAGING="$(mktemp -d "${TMPDIR:-/tmp}/veritas-reviewer-v1.XXXXXXXX")"
+cleanup() {
+  docker compose -f "$COMPOSE" -p "$PROJECT" down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf -- "$STAGING"
+}
+trap cleanup EXIT
+
+git clone --quiet --local --no-hardlinks --no-checkout "$ROOT" "$STAGING/source"
+git -C "$STAGING/source" -c advice.detachedHead=false checkout --quiet --detach "$SHA"
+if [[ "$(git -C "$STAGING/source" rev-parse HEAD)" != "$SHA" ]] ||
+   [[ -n "$(git -C "$STAGING/source" status --porcelain --untracked-files=all)" ]]; then
+  echo "NO_GO_STAGED_CHECKOUT_MISMATCH" >&2
+  exit 2
+fi
+mkdir -m 700 -- "$STAGING/build"
+mkdir -m 700 -- "$STAGING/build/veritas_os"
+cp -- "$ROOT/docker/reviewer-proof-v1/Dockerfile" "$STAGING/build/Dockerfile"
+cp -- "$ROOT/veritas_os/requirements.txt" "$STAGING/build/veritas_os/requirements.txt"
+chmod 600 -- "$STAGING/build/Dockerfile" "$STAGING/build/veritas_os/requirements.txt"
+
+export REVIEWER_SOURCE_DIR="$STAGING/source"
+export REVIEWER_BUILD_CONTEXT="$STAGING/build"
 export REVIEWER_OUTPUT_DIR="$OUTPUT"
 export REVIEWER_EXPECTED_SHA="$SHA"
 REVIEWER_HOST_UID="$(id -u)"
 REVIEWER_HOST_GID="$(id -g)"
 export REVIEWER_HOST_UID REVIEWER_HOST_GID
 
-PROJECT="veritas-reviewer-$(date +%s)-$$"
-COMPOSE="$ROOT/docker/reviewer-proof-v1/compose.yml"
-cleanup() {
-  docker compose -f "$COMPOSE" -p "$PROJECT" down -v --remove-orphans >/dev/null 2>&1 || true
-}
-trap cleanup EXIT
-
-# Build can fetch public pinned dependencies. Runtime has an INTERNAL network,
-# no published host ports and no Docker socket mounted into the proof container.
+# Build can fetch pinned public dependencies. Proof and database attach only
+# to an INTERNAL network with no host ports or mounted Docker socket.
 docker compose -f "$COMPOSE" -p "$PROJECT" up \
   --build --abort-on-container-exit --exit-code-from proof proof
 
