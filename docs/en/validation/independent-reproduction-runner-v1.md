@@ -63,8 +63,10 @@ Inside Docker:
 The internal network has **no host-published ports**, no Docker socket mount,
 and the checkout is bind-mounted read-only. The proof container runs under the
 reviewer's own host UID/GID, drops all Linux capabilities, and uses a
-container-local unprivileged-port setting to bind TLS port 443. A separate
-owner-only writable output mount contains only the evidence bundle. Container
+container-local unprivileged-port setting to bind TLS port 443. VERITAS runtime
+data is redirected with VERITAS_RUNTIME_ROOT into disposable container tmpfs;
+it never writes into the source checkout. A separate owner-only writable output
+mount contains only the evidence bundle. Container
 services and project-scoped DB
 volume are removed on exit; generated private keys live only in container
 temporary storage and are never part of the output bundle.
