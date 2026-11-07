@@ -84,11 +84,26 @@ def test_rehashed_tampering_of_real_e2e_is_rejected(real_e2e, tampering):
     elif tampering == "overclaim":
         report["production_validation_proven"] = True
     elif tampering == "wrong_consumption":
-        evidence["normal"]["consumption"]["live_adapter_bind_authorization_id"] = "wrong"
+        record = evidence["normal"]["consumption"]
+        record["live_adapter_bind_authorization_id"] = "wrong"
+        payload = {key: value for key, value in record.items()
+                   if key not in {"consumption_id", "consumption_hash"}}
+        record["consumption_hash"] = sha256_of_canonical_json(payload)
+        record["consumption_id"] = "labac:v1:sha256:" + record["consumption_hash"]
+        report["normal"]["consumption_id"] = record["consumption_id"]
     elif tampering == "wrong_receipt":
-        evidence["normal"]["receipt_bundle"]["bind_receipt"]["decision_id"] = "wrong"
+        bundle = evidence["normal"]["receipt_bundle"]
+        bundle["bind_receipt"]["decision_id"] = "wrong"
+        bundle["bundle_hash"] = sha256_of_canonical_json({
+            key: bundle[key] for key in (
+                "format_version", "bind_receipt", "outcome_receipt"
+            )
+        })
+        report["normal"]["receipt_bundle_hash"] = bundle["bundle_hash"]
     elif tampering == "wrong_reconciliation":
-        evidence["fault"]["reconciliation_archive"]["operation"]["operation_id"] = "wrong"
+        operation = evidence["fault"]["reconciliation_archive"]["operation"]
+        operation["operation_id"] = "00000000-0000-4000-8000-000000000001"
+        report["fault"]["external_operation_reference"] = operation["operation_id"]
     else:
         report["sandbox_rows_added"] = 3
     rehash(report, evidence)
