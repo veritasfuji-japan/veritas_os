@@ -255,8 +255,8 @@ def test_minimal_build_context_and_disposable_git_checkout_guard():
     assert 'checkout --quiet --detach "$SHA"' in entry
     assert 'export REVIEWER_SOURCE_DIR="$STAGING/source"' in entry
     assert 'export REVIEWER_BUILD_CONTEXT="$STAGING/build"' in entry
-    assert 'cp -- "$ROOT/docker/reviewer-proof-v1/Dockerfile"' in entry
-    assert 'cp -- "$ROOT/veritas_os/requirements.txt"' in entry
+    assert 'cp -- "$STAGING/source/docker/reviewer-proof-v1/Dockerfile"' in entry
+    assert 'cp -- "$STAGING/source/veritas_os/requirements.txt"' in entry
 
 
 def test_docker_compose_project_name_expands_to_valid_identifier():
@@ -284,3 +284,69 @@ def test_host_entrypoint_shell_syntax_is_valid():
         capture_output=True, text=True, check=False,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_runner_uses_pinned_inputs_after_host_checkout_changes(tmp_path, monkeypatch):
+    """Change original files after clone; intercept Docker before any build."""
+    import os
+    import shutil
+
+    repo = tmp_path / "repo"
+    paths = {
+        "scripts/validation/run_reviewer_reproduction_v1.sh": (
+            ROOT / "scripts/validation/run_reviewer_reproduction_v1.sh"
+        ).read_bytes(),
+        "docker/reviewer-proof-v1/Dockerfile": b"FROM pinned\n",
+        "docker/reviewer-proof-v1/compose.yml": b"# pinned\n",
+        "veritas_os/requirements.txt": b"# pinned\n",
+    }
+    for name, data in paths.items():
+        destination = repo / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(data)
+    git = shutil.which("git")
+    assert git
+    subprocess.run([git, "init", "-q", str(repo)], check=True)
+    subprocess.run([git, "-C", str(repo), "add", "."], check=True)
+    subprocess.run([
+        git, "-C", str(repo), "-c", "user.name=Test",
+        "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false",
+        "commit", "-qm", "Pinned fixture",
+    ], check=True)
+    sha = subprocess.check_output([git, "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    scripts = {
+        "git": """#!/bin/bash
+set -e
+"$TEST_REAL_GIT" "$@"
+if [[ "$1" == clone ]]; then
+  for path in docker/reviewer-proof-v1/{Dockerfile,compose.yml} veritas_os/requirements.txt; do
+    printf 'changed\n' > "$TEST_CHECKOUT/$path"
+  done
+fi
+""",
+        "docker": """#!/bin/bash
+set -e
+if [[ " $* " == *" up "* ]]; then
+  [[ "$2" == --env-file && "$3" == /dev/null && "$4" == -f ]]
+  grep -qx 'FROM pinned' "$REVIEWER_BUILD_CONTEXT/Dockerfile"
+  grep -qx '# pinned' "$REVIEWER_BUILD_CONTEXT/veritas_os/requirements.txt"
+  grep -qx '# pinned' "$5"
+  echo PINNED_DOCKER_INPUTS
+  exit 42
+fi
+""",
+    }
+    for name, source in scripts.items():
+        path = fake_bin / name
+        path.write_text(source, encoding="utf-8")
+        path.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setenv("TEST_REAL_GIT", git)
+    monkeypatch.setenv("TEST_CHECKOUT", str(repo))
+    result = subprocess.run([
+        "bash", str(repo / next(iter(paths))), sha, str(tmp_path / "evidence"),
+    ], cwd=repo, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 42, result.stderr
+    assert "PINNED_DOCKER_INPUTS" in result.stdout

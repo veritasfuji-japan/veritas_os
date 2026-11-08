@@ -2294,3 +2294,39 @@ def test_bind_receipt_list_and_detail_use_rollback_cause_for_top_level_reason(mo
     assert "postcondition failed" in body["bind_failure_reason"].lower()
     assert body["bind_receipt"]["bind_reason_code"] == "BIND_POSTCONDITION_FAILED"
     assert body["bind_receipt"]["authority_check_result"]["reason_code"] == "BIND_AUTHORITY_VALID"
+
+
+def test_policy_http_cannot_reuse_server_issued_evidence_ids(target_lineage_evidence) -> None:
+    """Resubmitting both IDs cannot redirect an existing audit URL."""
+    path = "/v1/governance/policy"
+    first = client.put(path, headers=HEADERS, json=_approved({
+        "risk_thresholds": {"allow_upper": 0.45},
+    }))
+    assert first.status_code == 200
+    original = first.json()["bind_receipt"]
+    detail = f"/v1/governance/bind-receipts/{original['bind_receipt_id']}"
+    second = client.put(path, headers=HEADERS, json=_approved({
+        "risk_thresholds": {"allow_upper": 0.46},
+        "bind_receipt_id": original["bind_receipt_id"],
+        "execution_intent_id": original["execution_intent_id"],
+    }))
+    assert second.status_code == 200
+    for key in ("bind_receipt_id", "execution_intent_id"):
+        assert second.json()[key] != original[key]
+    fetched = client.get(detail, headers=HEADERS)
+    assert fetched.status_code == 200
+    assert fetched.json()["bind_receipt"]["bind_receipt_hash"] == original["bind_receipt_hash"]
+
+
+def test_receipt_detail_refuses_ambiguous_historical_id(target_lineage_evidence) -> None:
+    """Real historical duplicate rows must never resolve to an arbitrary receipt."""
+    from veritas_os.policy.bind_artifacts import append_bind_receipt_trustlog
+
+    for decision in ("old-decision", "new-decision"):
+        append_bind_receipt_trustlog(BindReceipt(
+            bind_receipt_id="historical-duplicate", decision_id=decision,
+            execution_intent_id=f"intent-{decision}", final_outcome=FinalOutcome.COMMITTED,
+        ))
+    response = client.get("/v1/governance/bind-receipts/historical-duplicate", headers=HEADERS)
+    assert response.status_code == 409
+    assert response.json() == {"ok": False, "error": "bind_receipt_id_ambiguous"}
