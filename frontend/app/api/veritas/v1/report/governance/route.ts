@@ -1118,8 +1118,13 @@ export async function GET(request: Request): Promise<Response> {
         "X-API-Key": apiKey,
       },
       cache: "no-store",
+      redirect: "manual",
     });
 
+    if (upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
+      await upstreamResponse.body?.cancel();
+      return NextResponse.json({ error: "upstream_redirect_blocked" }, { status: 502 });
+    }
     if (!upstreamResponse.ok) {
       return NextResponse.json({ error: "governance_feed_unavailable" }, { status: upstreamResponse.status });
     }
