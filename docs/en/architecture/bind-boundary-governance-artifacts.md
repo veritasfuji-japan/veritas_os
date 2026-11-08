@@ -99,6 +99,14 @@ complete validation of every caller-supplied evidence field. The internal helper
 still accepts explicit trusted target lineage; callers must not expose that
 internal override contract directly to untrusted inputs.
 
+For HTTP policy updates the server issues the execution intent and Bind Receipt
+IDs. Legacy request fields of the same names are accepted but ignored for ID
+assignment; clients should use the response IDs. Trusted internal helper
+arguments and caller-supplied request/decision correlation fields are unchanged.
+If historical evidence contains more than one Receipt with the requested ID,
+the detail endpoint returns HTTP 409 (`bind_receipt_id_ambiguous`). Existing
+records are retained and can be inspected through the audit list/export.
+
 Promotion retains its existing HTTP 200 response with an explicit non-COMMITTED
 Bind outcome; callers must inspect that outcome. Approval booleans/fixture
 reviewer labels do not establish independent human approval. The compiled test
