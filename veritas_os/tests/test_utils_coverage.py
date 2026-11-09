@@ -194,9 +194,9 @@ def test_redact_payload_tuple() -> None:
 
 
 def test_redact_payload_depth_limit() -> None:
-    # At depth > 50, value is returned as-is
+    # Values beyond the depth limit must not be returned unchanged.
     result = redact_payload("user@example.com", _depth=51)
-    assert result == "user@example.com"
+    assert result == "[redacted:depth-limit]"
 
 
 def test_redact_payload_non_string() -> None:
