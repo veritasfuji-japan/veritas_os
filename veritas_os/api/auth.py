@@ -965,6 +965,22 @@ def _bind_authenticated_principal(
     return principal_id
 
 
+def require_deployment_tenant(request: Request) -> None:
+    """Require the authenticated key to belong to the configured deployment tenant."""
+    expected_tenant = (os.getenv("VERITAS_GOVERNANCE_TENANT_ID") or "").strip()
+    if not expected_tenant:
+        return
+
+    require_authenticated_principal(request)
+    key = (request.headers.get("X-API-Key") or "").strip()
+    try:
+        trusted_tenant = resolve_tenant_for_key(key)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Tenant scope unavailable") from None
+    if trusted_tenant != expected_tenant:
+        raise HTTPException(status_code=403, detail="Tenant scope mismatch")
+
+
 def require_authenticated_principal(request: HTTPConnection) -> str:
     """Read the principal attached by successful API authentication, or refuse."""
     principal = getattr(request.state, "authenticated_principal_id", None)

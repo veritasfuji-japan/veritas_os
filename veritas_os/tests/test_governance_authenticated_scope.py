@@ -173,3 +173,39 @@ def test_reports_enforce_configured_tenant(
     response = client.get(path, headers={"X-API-Key": KEY, "X-Tenant-Id": "tenant-b"})
     assert response.status_code == expected_status
     assert calls == (["report"] if expected_status == 200 else [])
+
+
+@pytest.mark.parametrize("path", [
+    "/v1/trust/logs",
+    "/v1/trust/stats",
+    "/v1/trust/test-decision",
+    "/v1/trust/test-decision/prov",
+    "/v1/trustlog/verify",
+    "/v1/trustlog/export",
+])
+@pytest.mark.parametrize("key_tenant", ["tenant-a", None])
+def test_trustlog_rejects_keys_outside_deployment_tenant(
+    monkeypatch, scope_api, path, key_tenant,
+):
+    client, _ = scope_api
+    monkeypatch.setenv("VERITAS_GOVERNANCE_TENANT_ID", "tenant-b")
+    entry = {"key": KEY, "role": "auditor"}
+    if key_tenant is not None:
+        entry["tenant_id"] = key_tenant
+    monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([entry]))
+
+    response = client.get(path, headers={"X-API-Key": KEY, "X-Tenant-Id": "tenant-b"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Tenant scope mismatch"
+
+
+def test_trustlog_export_accepts_key_in_deployment_tenant(monkeypatch, scope_api):
+    client, _ = scope_api
+    monkeypatch.setenv("VERITAS_GOVERNANCE_TENANT_ID", "tenant-b")
+    monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([
+        {"key": KEY, "role": "auditor", "tenant_id": "tenant-b"},
+    ]))
+    monkeypatch.setattr(server, "export_signed_trustlog", lambda: {"ok": True})
+    response = client.get("/v1/trustlog/export", headers={"X-API-Key": KEY})
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
