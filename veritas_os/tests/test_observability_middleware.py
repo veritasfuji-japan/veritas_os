@@ -61,3 +61,21 @@ def test_observe_request_metrics_handles_exceptions(monkeypatch):
     assert captured
     assert captured[0]["path"] == "/boom"
     assert captured[0]["status_code"] == 500
+
+
+def test_unmatched_requests_use_bounded_metric_labels(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "veritas_os.observability.middleware.record_http_request",
+        lambda **labels: captured.append(labels),
+    )
+    app = FastAPI()
+    app.middleware("http")(observe_request_metrics)
+    client = TestClient(app)
+
+    for index in range(32):
+        assert client.request(f"CUSTOM{index}", f"/missing/{index}").status_code == 404
+
+    assert len(captured) == 32
+    assert {item["path"] for item in captured} == {"unmatched"}
+    assert {item["method"] for item in captured} == {"OTHER"}
