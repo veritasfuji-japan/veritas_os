@@ -36,6 +36,7 @@ from veritas_os.logging.encryption import (
 )
 from veritas_os.logging.redact import redact_entry as _redact_entry
 from veritas_os.logging.trust_log_core import prepare_entry as _prepare_entry
+from veritas_os.core.utils import redact_payload
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 from veritas_os.audit.trustlog_signed import (
     SignedTrustLogWriteError,
@@ -495,14 +496,14 @@ def write_shadow_decide(
         or ""
     )
     # ★ セキュリティ: シャドウログに書き出す前にPIIをマスク
-    query = _mask_pii(raw_query) if _mask_pii and raw_query else raw_query
+    query = _mask_pii(raw_query) if _mask_pii and isinstance(raw_query, str) else redact_payload(raw_query)
 
     rec = {
         "request_id": request_id,
         # ISO8601 + "Z"（UTC）に正規化
         "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "query": query,
-        "chosen": chosen,
+        "chosen": redact_payload(chosen),
         "telos_score": float(telos_score or 0.0),
         "fuji": fuji_safe.get("status"),
     }
