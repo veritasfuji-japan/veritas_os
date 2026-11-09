@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Dict, Optional
+from uuid import uuid4
 
 from veritas_os.core.utils import redact_payload
 
@@ -202,7 +203,8 @@ def write_shadow_decide_snapshot(
 
     now_utc = datetime.now(timezone.utc)
     ts = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    output_path = shadow_dir / f"decide_{ts}.json"
+    # Keep the timestamp prefix and numeric suffix compatible with log readers.
+    output_path = shadow_dir / f"decide_{ts}{uuid4().int:039d}.json"
     rec = {
         "request_id": request_id,
         "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),

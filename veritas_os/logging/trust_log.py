@@ -24,6 +24,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from uuid import uuid4
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
@@ -486,7 +487,8 @@ def write_shadow_decide(
 
     # ファイル名用タイムスタンプ（ミリ秒まで）
     ts_str = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    out = shadow_dir / f"decide_{ts_str}.json"
+    # Keep the timestamp prefix and numeric suffix compatible with log readers.
+    out = shadow_dir / f"decide_{ts_str}{uuid4().int:039d}.json"
 
     fuji_safe = fuji if isinstance(fuji, dict) else {}
 
