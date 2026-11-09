@@ -18,6 +18,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { readBoundedRequestText } from "../request-body";
 
 /** Maximum CSP report payload size (64 KB). */
 const MAX_REPORT_BODY_BYTES = 64 * 1024;
@@ -178,8 +179,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   let body: unknown;
   try {
-    const rawText = await request.text();
-    if (rawText.length > MAX_REPORT_BODY_BYTES) {
+    const rawText = await readBoundedRequestText(request, MAX_REPORT_BODY_BYTES);
+    if (rawText === null) {
       return new Response(null, { status: 413 });
     }
     body = rawText ? JSON.parse(rawText) : null;
