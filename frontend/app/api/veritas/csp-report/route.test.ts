@@ -140,6 +140,12 @@ describe("CSP report endpoint", () => {
       expect(res.status).toBe(204);
     });
 
+    it("rejects oversized UTF-8 bodies without content-length", async () => {
+      const body = JSON.stringify({ "csp-report": { "blocked-uri": "あ".repeat(22000) } });
+      const res = await POST(makeRequest(body, "application/csp-report"));
+      expect(res.status).toBe(413);
+    });
+
     it("returns 413 for oversized content-length", async () => {
       const req = new NextRequest(
         "http://localhost:3000/api/veritas/csp-report",

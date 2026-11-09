@@ -7,7 +7,6 @@ import {
   matchPolicy,
   parseAuthTokensConfig,
 } from "./route-auth";
-import { getBodySizeBytes } from "./body-size";
 import { GET } from "./route";
 import { resolveTraceId } from "./trace-id";
 import {
@@ -149,17 +148,6 @@ describe("veritas bff route auth and authorization", () => {
   it("blocks unsafe path segments", () => {
     expect(hasUnsafeSegment(["v1", "..", "policy"])).toBe(true);
     expect(matchPolicy(["v1", "..", "policy"], "GET")).toBeNull();
-  });
-});
-
-describe("getBodySizeBytes", () => {
-  it("returns ASCII length as bytes", () => {
-    expect(getBodySizeBytes("abcd")).toBe(4);
-  });
-
-  it("counts multibyte UTF-8 characters correctly", () => {
-    expect(getBodySizeBytes("あ")).toBe(3);
-    expect(getBodySizeBytes("😀")).toBe(4);
   });
 });
 
