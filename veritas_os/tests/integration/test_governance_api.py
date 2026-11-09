@@ -306,7 +306,7 @@ class TestPutPolicy:
         )
         body = resp.json()
         assert body["policy"]["updated_at"] != ""
-        assert body["policy"]["updated_by"] == "api"
+        assert body["policy"]["updated_by"] == body["bind_receipt"]["actor_identity"]
 
 
 

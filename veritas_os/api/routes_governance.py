@@ -501,6 +501,8 @@ def governance_put(body: dict, request: Request):
             content={"ok": False, "error": "policy_lineage_target_override_forbidden"},
         )
     actor_identity = require_authenticated_principal(request)
+    # History provenance is assigned by the authenticated operation.
+    policy_patch = {**body, "updated_by": actor_identity, "_event_type": "update"}
     srv = _get_server()
     with trace_step(
         "governance.policy_update.request",
@@ -531,8 +533,8 @@ def governance_put(body: dict, request: Request):
                     request_id=request_id,
                     actor_identity=actor_identity,
                     policy_snapshot_id=policy_snapshot_id,
-                    decision_hash=sha256_of_canonical_json(_governance_decision_hash_payload(body)),
-                    policy_patch=body,
+                    decision_hash=sha256_of_canonical_json(_governance_decision_hash_payload(policy_patch)),
+                    policy_patch=policy_patch,
                     policy_reader=srv.get_policy,
                     policy_updater=srv.update_policy,
                     policy_rollback=getattr(srv, "rollback_policy", None),
