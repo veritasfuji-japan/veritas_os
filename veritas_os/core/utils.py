@@ -350,9 +350,9 @@ MAX_REDACTION_DEPTH = 50
 
 
 def redact_payload(value: Any, *, _depth: int = 0) -> Any:
-    """文字列中の PII を再帰的にマスクする（最大再帰深度: 50）"""
+    """Mask PII in values and replace subtrees beyond the depth limit."""
     if _depth > MAX_REDACTION_DEPTH:
-        return value
+        return "[redacted:depth-limit]"
     if isinstance(value, str):
         return _redact_text(value)
     if isinstance(value, dict):

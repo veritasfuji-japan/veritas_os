@@ -2009,3 +2009,20 @@ def test_jsonl_process_lock_does_not_unlock_when_lock_acquire_fails(monkeypatch,
             pass
 
     assert fake_fcntl.calls == [fake_fcntl.LOCK_EX]
+
+
+def test_shadow_snapshot_redacts_nested_answer_and_drops_deep_subtrees(temp_log_env):
+    deep = {"secret": "deep-sensitive-value"}
+    for _ in range(52):
+        deep = {"nested": deep}
+    trust_log.write_shadow_decide(
+        "req-redact", {"query": "hello"},
+        {"answer": {"contact": "alice@example.invalid"}, "deep": deep},
+        0.5, {"status": "allow"},
+    )
+    snapshot = next((trust_log.LOG_DIR / "DASH").glob("decide_*.json"))
+    raw = snapshot.read_text(encoding="utf-8")
+    assert "alice@example.invalid" not in raw
+    assert "deep-sensitive-value" not in raw
+    assert "[redacted:depth-limit]" in raw
+    assert json.loads(raw)["query"] == "hello"

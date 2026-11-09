@@ -8,6 +8,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Dict, Optional
 
+from veritas_os.core.utils import redact_payload
+
 
 @dataclass(frozen=True)
 class TrustLogLoadResult:
@@ -204,8 +206,8 @@ def write_shadow_decide_snapshot(
     rec = {
         "request_id": request_id,
         "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "query": (body.get("query") or (body.get("context") or {}).get("query") or ""),
-        "chosen": chosen,
+        "query": redact_payload(body.get("query") or (body.get("context") or {}).get("query") or ""),
+        "chosen": redact_payload(chosen),
         "telos_score": float(telos_score or 0.0),
         "fuji": (fuji or {}).get("status"),
     }
