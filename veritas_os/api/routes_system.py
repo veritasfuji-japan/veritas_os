@@ -24,6 +24,7 @@ from veritas_os.api.auth import (
     require_api_key_header_or_query,
     require_authenticated_principal,
     require_permission,
+    resolve_tenant_for_key,
     stream_api_key_is_current,
     stream_has_permission,
 )
@@ -939,7 +940,23 @@ def compliance_put_config(body: ComplianceConfigBody, request: Request) -> Dict[
 # Reports
 # ------------------------------------------------------------------
 
-@router.get("/v1/report/eu_ai_act/{decision_id}", dependencies=[Depends(require_permission(Permission.governance_read))])
+def _require_report_tenant_scope(request: Request) -> None:
+    """Restrict reports over this deployment's data to its configured tenant."""
+    expected_tenant = (os.getenv("VERITAS_GOVERNANCE_TENANT_ID") or "").strip()
+    if not expected_tenant:
+        return
+
+    require_authenticated_principal(request)
+    key = (request.headers.get("X-API-Key") or "").strip()
+    try:
+        trusted_tenant = resolve_tenant_for_key(key)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Tenant scope unavailable") from None
+    if trusted_tenant != expected_tenant:
+        raise HTTPException(status_code=403, detail="Tenant scope mismatch")
+
+
+@router.get("/v1/report/eu_ai_act/{decision_id}", dependencies=[Depends(require_permission(Permission.governance_read)), Depends(_require_report_tenant_scope)])
 def report_eu_ai_act(decision_id: str):
     """Generate an enterprise-ready EU AI Act compliance report."""
     srv = _get_server()
@@ -956,7 +973,7 @@ def report_eu_ai_act(decision_id: str):
         )
 
 
-@router.get("/v1/report/governance", dependencies=[Depends(require_permission(Permission.governance_read))])
+@router.get("/v1/report/governance", dependencies=[Depends(require_permission(Permission.governance_read)), Depends(_require_report_tenant_scope)])
 def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="to")):
     """Generate internal governance report for the requested date range."""
     srv = _get_server()

@@ -145,3 +145,31 @@ def test_governance_guard_requires_authenticated_context_even_with_bypass(monkey
     with pytest.raises(HTTPException) as caught:
         require_governance_access(request, x_role="admin", x_tenant_id=None)
     assert caught.value.status_code == 403
+
+
+@pytest.mark.parametrize(("path", "generator"), [
+    ("/v1/report/governance?from=2026-01-01&to=2026-02-01",
+     "generate_internal_governance_report"),
+    ("/v1/report/eu_ai_act/test-decision", "generate_eu_ai_act_report"),
+])
+@pytest.mark.parametrize(("key_tenant", "expected_status"), [
+    ("tenant-a", 403), (None, 403), ("tenant-b", 200),
+])
+def test_reports_enforce_configured_tenant(
+    monkeypatch, scope_api, path, generator, key_tenant, expected_status,
+):
+    client, calls = scope_api
+    monkeypatch.setenv("VERITAS_GOVERNANCE_TENANT_ID", "tenant-b")
+    entry = {"key": KEY, "role": "auditor"}
+    if key_tenant:
+        entry["tenant_id"] = key_tenant
+    monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([entry]))
+
+    def generate(_argument):
+        calls.append("report")
+        return {"ok": True}
+
+    monkeypatch.setattr(server, generator, generate)
+    response = client.get(path, headers={"X-API-Key": KEY, "X-Tenant-Id": "tenant-b"})
+    assert response.status_code == expected_status
+    assert calls == (["report"] if expected_status == 200 else [])
