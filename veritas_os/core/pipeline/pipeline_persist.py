@@ -23,6 +23,7 @@ import platform
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from .pipeline_types import PipelineContext
 from ..utils import utc_now, utc_now_iso_z, redact_payload
@@ -548,7 +549,7 @@ def persist_decision_to_disk(
         )
 
         stamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        fname = f"decide_{stamp}.json"
+        fname = f"decide_{stamp}{uuid4().int:039d}.json"
         log_path = Path(LOG_DIR) / fname
         dataset_path = Path(DATASET_DIR) / fname
         if _HAS_ATOMIC_IO and _atomic_write_json is not None:
