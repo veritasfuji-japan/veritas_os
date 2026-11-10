@@ -1082,7 +1082,7 @@ class TestDeterministicFilenames:
         assert "20260615_083000" in artifact.json_path.name
         assert "20260615_083000" in artifact.pdf_path.name
 
-    def test_two_calls_same_timestamp_same_filenames(self, monkeypatch, tmp_path):
+    def test_same_content_and_timestamp_keep_same_filenames(self, monkeypatch, tmp_path):
         _patch_report_environment(monkeypatch, tmp_path)
 
         fixed_ts = "2026-03-01T00:00:00Z"
@@ -1094,6 +1094,23 @@ class TestDeterministicFilenames:
         )
 
         assert a1.json_path.name == a2.json_path.name
+
+
+    def test_different_content_same_timestamp_keeps_both_reports(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+        fixed_ts = "2026-03-01T00:00:00Z"
+
+        first = report_engine._finalize_report("test", {"scope": "first"}, generated_at=fixed_ts)
+        first_pdf = first.pdf_path.read_bytes()
+        second = report_engine._finalize_report("test", {"scope": "second"}, generated_at=fixed_ts)
+
+        assert first.json_path != second.json_path
+        assert first.pdf_path != second.pdf_path
+        for artifact, scope in ((first, "first"), (second, "second")):
+            assert artifact.json_path.stem == artifact.pdf_path.stem
+            assert json.loads(artifact.json_path.read_text(encoding="utf-8"))["scope"] == scope
+            assert artifact.pdf_path.read_bytes().startswith(b"%PDF")
+        assert first.pdf_path.read_bytes() == first_pdf
 
 
 class TestEvidenceCompleteness:
