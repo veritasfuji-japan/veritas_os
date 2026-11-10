@@ -169,10 +169,13 @@ def _validate_replay_payload(payload: Any) -> Dict[str, Any]:
             "reason": f"missing_required_fields:{','.join(missing)}",
         }
 
+    if not isinstance(payload["match"], bool):
+        return {"available": True, "valid": False, "reason": "invalid_match_type"}
+
     result: Dict[str, Any] = {
         "available": True,
         "valid": True,
-        "match": bool(payload.get("match")),
+        "match": payload["match"],
         "diff": payload.get("diff", {}),
         "replay_time_ms": payload.get("replay_time_ms"),
     }
@@ -511,11 +514,24 @@ def generate_eu_ai_act_report(decision_id: str) -> Dict[str, Any]:
     )
     evidence = _compute_evidence_completeness(rec, integrity_section, gov_ctx)
 
-    compliance_status = (
-        "pass" if rec.get("decision_status") != "rejected" else "review_required"
+    signature = integrity_section["signature_verification"]
+    chain = integrity_section["hash_chain_integrity"]
+    replay = integrity_section["replay_verification"]
+    verified = (
+        signature["ok"]
+        and signature["entries_checked"] > 0
+        and chain["ok"]
+        and not chain["broken"]
+        and chain["checked"] > 0
+        and replay.get("available") is True
+        and replay.get("valid") is True
+        and replay.get("match") is True
     )
-    if validation_issues:
-        compliance_status = "review_required"
+    compliance_status = (
+        "pass"
+        if rec.get("decision_status") == "allow" and not validation_issues and verified
+        else "review_required"
+    )
 
     payload = {
         "scope": "eu_ai_act",

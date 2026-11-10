@@ -1371,3 +1371,38 @@ class TestEndToEndReportReproducibility:
         assert r1["signed_report_hash"]["report_hash"] == r2["signed_report_hash"]["report_hash"]
         assert r1["summary"]["narrative"] == r2["summary"]["narrative"]
         assert r1["evidence_completeness"] == r2["evidence_completeness"]
+
+
+@pytest.mark.parametrize("case", [
+    "verified", "signature_failed", "empty_signature", "chain_failed",
+    "empty_chain", "missing_replay", "replay_mismatch", "malformed_match",
+    "decision_requires_review",
+])
+def test_compliance_summary_requires_verified_evidence(monkeypatch, tmp_path, case):
+    log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+    decision = log_dir / "decide_summary.json"
+    _write_decision(decision, "dec-summary")
+    if case == "decision_requires_review":
+        record = json.loads(decision.read_text(encoding="utf-8"))
+        record["decision_status"] = "review"
+        decision.write_text(json.dumps(record), encoding="utf-8")
+    if case != "missing_replay":
+        match = "false" if case == "malformed_match" else case != "replay_mismatch"
+        (replay_dir / "replay_dec-summary_001.json").write_text(
+            json.dumps({"match": match, "diff": {}}), encoding="utf-8",
+        )
+    monkeypatch.setattr(report_engine, "verify_trustlog_chain", lambda: {
+        "ok": case != "signature_failed",
+        "entries_checked": 0 if case == "empty_signature" else 2,
+    })
+    monkeypatch.setattr(report_engine, "verify_trust_log", lambda: {
+        "ok": case != "chain_failed",
+        "checked": 0 if case == "empty_chain" else 2,
+        "broken": case == "chain_failed",
+    })
+
+    result = report_engine.generate_eu_ai_act_report("dec-summary")
+
+    assert result["ok"] is True
+    expected = "pass" if case == "verified" else "review_required"
+    assert result["summary"]["compliance_status"] == expected
