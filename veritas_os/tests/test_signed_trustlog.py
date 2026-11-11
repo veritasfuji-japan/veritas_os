@@ -41,6 +41,20 @@ def test_append_and_verify_signed_trustlog(monkeypatch, tmp_path):
     assert verify_result["ok"] is True
     assert verify_result["entries_checked"] == 1
 
+    verified = trustlog_signed.verify_trustlog_chain(
+        path=log_path, target_payload_hash=entry["payload_hash"],
+    )
+    assert verified["target_payload_verified"] is True
+
+    changed = {**entry["decision_payload"], "decision": "reject"}
+    from veritas_os.security.hash import sha256_of_canonical_json
+
+    unrelated = trustlog_signed.verify_trustlog_chain(
+        path=log_path, target_payload_hash=sha256_of_canonical_json(changed),
+    )
+    assert unrelated["ok"] is True
+    assert unrelated["target_payload_verified"] is False
+
 
 def test_detect_tampering(monkeypatch, tmp_path):
     log_path = tmp_path / "trustlog.jsonl"

@@ -999,7 +999,9 @@ def verify_signature(entry: Dict[str, Any]) -> bool:
         return False
 
 
-def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
+def verify_trustlog_chain(
+    path: Optional[Path] = None, *, target_payload_hash: Optional[str] = None,
+) -> Dict[str, Any]:
     """Verify the full signed TrustLog chain and per-entry signatures.
 
     The response includes optional WORM mirror status and key metadata when
@@ -1054,7 +1056,7 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
         for err in witness_result["detailed_errors"]
     ]
 
-    return {
+    result = {
         "ok": witness_result["ok"],
         "entries_checked": witness_result["total_entries"],
         "issues": issues,
@@ -1073,6 +1075,11 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
             "detailed_errors": witness_result["detailed_errors"],
         },
     }
+    if target_payload_hash is not None:
+        result["target_payload_verified"] = witness_result["ok"] and any(
+            entry.get("payload_hash") == target_payload_hash for entry in entries
+        )
+    return result
 
 
 def detect_tampering(path: Optional[Path] = None) -> Dict[str, Any]:

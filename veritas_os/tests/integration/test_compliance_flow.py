@@ -75,7 +75,7 @@ def test_generate_eu_ai_act_report_outputs_json_pdf_and_signature(
     monkeypatch.setattr(
         report_engine,
         "verify_trustlog_chain",
-        lambda: {"ok": True, "entries_checked": 1, "issues": []},
+        lambda **_kwargs: {"ok": True, "entries_checked": 1, "issues": []},
     )
     monkeypatch.setattr(
         report_engine,
@@ -197,7 +197,7 @@ def _patch_report_environment(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         report_engine,
         "verify_trustlog_chain",
-        lambda: {"ok": True, "entries_checked": 2, "issues": []},
+        lambda **_kwargs: {"ok": True, "entries_checked": 2, "issues": []},
     )
     monkeypatch.setattr(
         report_engine,
@@ -227,7 +227,7 @@ def test_generate_eu_ai_act_report_handles_partial_trust_log(monkeypatch, tmp_pa
     monkeypatch.setattr(
         report_engine,
         "verify_trustlog_chain",
-        lambda: {
+        lambda **_kwargs: {
             "ok": False,
             "entries_checked": 10,
             "issues": ["missing_signature_entry"],
@@ -836,7 +836,7 @@ class TestExplainability:
         monkeypatch.setattr(
             report_engine,
             "verify_trustlog_chain",
-            lambda: {"ok": False, "entries_checked": 5, "issues": ["sig_err"]},
+            lambda **_kwargs: {"ok": False, "entries_checked": 5, "issues": ["sig_err"]},
         )
         monkeypatch.setattr(
             report_engine,
@@ -1124,8 +1124,8 @@ class TestEvidenceCompleteness:
         }
         integrity = {
             "replay_verification": {"available": True, "valid": True, "match": True},
-            "signature_verification": {"ok": True},
-            "hash_chain_integrity": {"ok": True},
+            "signature_verification": {"ok": True, "entries_checked": 1},
+            "hash_chain_integrity": {"ok": True, "checked": 1},
         }
         gov_ctx = {"policy_available": True}
 
@@ -1152,8 +1152,8 @@ class TestEvidenceCompleteness:
         }
         integrity = {
             "replay_verification": {"available": False},
-            "signature_verification": {"ok": True},
-            "hash_chain_integrity": {"ok": True},
+            "signature_verification": {"ok": True, "entries_checked": 1},
+            "hash_chain_integrity": {"ok": True, "checked": 1},
         }
         gov_ctx = {"policy_available": False}
 
@@ -1166,8 +1166,8 @@ class TestEvidenceCompleteness:
         rec = {"gate": {}, "fuji": {}, "ts": "2026-01-01T12:00:00Z"}
         integrity = {
             "replay_verification": {"available": True, "valid": False},
-            "signature_verification": {"ok": True},
-            "hash_chain_integrity": {"ok": True},
+            "signature_verification": {"ok": True, "entries_checked": 1},
+            "hash_chain_integrity": {"ok": True, "checked": 1},
         }
         gov_ctx = {"policy_available": True}
 
@@ -1376,7 +1376,7 @@ class TestEndToEndReportReproducibility:
 @pytest.mark.parametrize("case", [
     "verified", "signature_failed", "empty_signature", "chain_failed",
     "empty_chain", "missing_replay", "replay_mismatch", "malformed_match",
-    "decision_requires_review",
+    "decision_requires_review", "target_unverified",
 ])
 def test_compliance_summary_requires_verified_evidence(monkeypatch, tmp_path, case):
     log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
@@ -1391,9 +1391,10 @@ def test_compliance_summary_requires_verified_evidence(monkeypatch, tmp_path, ca
         (replay_dir / "replay_dec-summary_001.json").write_text(
             json.dumps({"match": match, "diff": {}}), encoding="utf-8",
         )
-    monkeypatch.setattr(report_engine, "verify_trustlog_chain", lambda: {
+    monkeypatch.setattr(report_engine, "verify_trustlog_chain", lambda **_kwargs: {
         "ok": case != "signature_failed",
         "entries_checked": 0 if case == "empty_signature" else 2,
+        "target_payload_verified": case != "target_unverified",
     })
     monkeypatch.setattr(report_engine, "verify_trust_log", lambda: {
         "ok": case != "chain_failed",
@@ -1406,3 +1407,15 @@ def test_compliance_summary_requires_verified_evidence(monkeypatch, tmp_path, ca
     assert result["ok"] is True
     expected = "pass" if case == "verified" else "review_required"
     assert result["summary"]["compliance_status"] == expected
+    narrative = result["summary"]["narrative"]
+    components = result["evidence_completeness"]["components"]
+    if case == "target_unverified":
+        assert result["target_payload_verified"] is False
+        assert "No verified signature covers the target decision record" in narrative
+        assert components["target_payload"] == 0.0
+    if case == "empty_signature":
+        assert "no signature entries checked" in narrative
+        assert components["trustlog_signature"] == 0.0
+    if case == "empty_chain":
+        assert "no hash chain entries checked" in narrative
+        assert components["hash_chain"] == 0.0

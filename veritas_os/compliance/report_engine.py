@@ -316,12 +316,16 @@ def _build_decision_section(
     }
 
 
-def _build_integrity_section(decision_id: str) -> Dict[str, Any]:
-    signed = verify_trustlog_chain()
+def _build_integrity_section(
+    decision_id: str, *, target_payload_hash: Optional[str] = None,
+) -> Dict[str, Any]:
+    signed = verify_trustlog_chain(target_payload_hash=target_payload_hash)
     legacy = verify_trust_log()
     replay = _latest_replay_result(decision_id)
 
     return {
+        **({"target_payload_verified": signed.get("target_payload_verified") is True}
+           if target_payload_hash is not None else {}),
         "signature_verification": {
             "ok": bool(signed.get("ok")),
             "entries_checked": signed.get("entries_checked", 0),
@@ -382,6 +386,16 @@ def _finalize_report(
     return ReportArtifact(report=body, json_path=json_path, pdf_path=pdf_path)
 
 
+def _ledger_verification(integrity: Dict[str, Any]) -> tuple[bool, bool]:
+    """Require positive verification coverage for each ledger."""
+    signature = integrity.get("signature_verification", {})
+    chain = integrity.get("hash_chain_integrity", {})
+    return (
+        bool(signature.get("ok") and signature.get("entries_checked", 0) > 0),
+        bool(chain.get("ok") and not chain.get("broken") and chain.get("checked", 0) > 0),
+    )
+
+
 def _compute_evidence_completeness(
     rec: Dict[str, Any],
     integrity: Dict[str, Any],
@@ -403,7 +417,7 @@ def _compute_evidence_completeness(
 
     # Replay
     replay = integrity.get("replay_verification", {})
-    if replay.get("available") and replay.get("valid", True):
+    if replay.get("available") and replay.get("valid") is True and replay.get("match") is True:
         components["replay"] = 1.0
     elif replay.get("available"):
         components["replay"] = 0.5
@@ -411,10 +425,11 @@ def _compute_evidence_completeness(
         components["replay"] = 0.0
 
     # Trustlog
-    sig_ok = integrity.get("signature_verification", {}).get("ok", False)
-    chain_ok = integrity.get("hash_chain_integrity", {}).get("ok", False)
+    sig_ok, chain_ok = _ledger_verification(integrity)
     components["trustlog_signature"] = 1.0 if sig_ok else 0.0
     components["hash_chain"] = 1.0 if chain_ok else 0.0
+    if "target_payload_verified" in integrity:
+        components["target_payload"] = float(integrity["target_payload_verified"])
 
     # Governance
     components["governance_policy"] = 1.0 if gov_ctx.get("policy_available") else 0.0
@@ -472,17 +487,26 @@ def _build_compliance_narrative(
     else:
         parts.append("Replay verification detected divergence from original decision.")
 
-    sig_ok = integrity.get("signature_verification", {}).get("ok")
-    chain_ok = integrity.get("hash_chain_integrity", {}).get("ok")
+    sig_ok, chain_ok = _ledger_verification(integrity)
     if sig_ok and chain_ok:
         parts.append("Trustlog signature and hash chain integrity verified.")
     else:
         issues = []
         if not sig_ok:
-            issues.append("signature verification failed")
+            signature = integrity.get("signature_verification", {})
+            issues.append(
+                "no signature entries checked" if signature.get("ok")
+                else "signature verification failed"
+            )
         if not chain_ok:
-            issues.append("hash chain integrity broken")
+            chain = integrity.get("hash_chain_integrity", {})
+            issues.append(
+                "no hash chain entries checked" if chain.get("ok") and not chain.get("broken")
+                else "hash chain integrity broken"
+            )
         parts.append(f"Integrity issues detected: {', '.join(issues)}.")
+    if integrity.get("target_payload_verified") is False:
+        parts.append("No verified signature covers the target decision record.")
 
     # Validation issues
     if validation_issues:
@@ -507,6 +531,9 @@ def generate_eu_ai_act_report(decision_id: str) -> Dict[str, Any]:
     decision_section = _build_decision_section(rec, gov_ctx)
     integrity_section = _build_integrity_section(
         str(rec.get("request_id") or decision_id),
+        target_payload_hash=sha256_of_canonical_json(
+            {key: value for key, value in rec.items() if key != "_source_path"}
+        ),
     )
     validation_issues = decision_section.get("validation_issues", [])
     narrative = _build_compliance_narrative(
@@ -514,15 +541,12 @@ def generate_eu_ai_act_report(decision_id: str) -> Dict[str, Any]:
     )
     evidence = _compute_evidence_completeness(rec, integrity_section, gov_ctx)
 
-    signature = integrity_section["signature_verification"]
-    chain = integrity_section["hash_chain_integrity"]
+    sig_ok, chain_ok = _ledger_verification(integrity_section)
     replay = integrity_section["replay_verification"]
     verified = (
-        signature["ok"]
-        and signature["entries_checked"] > 0
-        and chain["ok"]
-        and not chain["broken"]
-        and chain["checked"] > 0
+        sig_ok
+        and chain_ok
+        and integrity_section["target_payload_verified"]
         and replay.get("available") is True
         and replay.get("valid") is True
         and replay.get("match") is True
