@@ -348,22 +348,22 @@ class TestBackwardCompat:
 # ==============================
 
 class TestErrorHandling:
-    def test_malformed_json_env_gracefully_handled_in_role_resolution(self):
-        """When VERITAS_API_KEYS is malformed, resolve_role_for_key falls back to single key."""
-        env = dict(os.environ)
-        env["VERITAS_API_KEYS"] = "{bad json"
-        env["VERITAS_API_KEY"] = "fallback-key"
-        with mock.patch.dict(os.environ, env, clear=True):
-            # Should fall back to single-key match
-            assert resolve_role_for_key("fallback-key") == Role.admin
+    @pytest.mark.parametrize("config", ["{bad json", "{}", '[{"key":"test-key"}]'])
+    def test_invalid_multi_key_config_rejects_legacy_auth(self, monkeypatch, config):
+        from fastapi import HTTPException
+        from veritas_os.api.auth import require_api_key, require_api_key_header_or_query
 
-    def test_malformed_json_env_still_rejects_wrong_key(self):
-        env = dict(os.environ)
-        env["VERITAS_API_KEYS"] = "{bad json"
-        env["VERITAS_API_KEY"] = "fallback-key"
-        with mock.patch.dict(os.environ, env, clear=True):
-            with pytest.raises(ValueError, match="does not match"):
-                resolve_role_for_key("wrong-key")
+        monkeypatch.setenv("VERITAS_API_KEY", "test-key")
+        monkeypatch.setenv("VERITAS_API_KEYS", config)
+
+        with pytest.raises(ValueError, match="VERITAS_API_KEYS"):
+            resolve_role_for_key("test-key")
+        with pytest.raises(HTTPException) as http_error:
+            require_api_key(x_api_key="test-key")
+        assert http_error.value.status_code == 500
+        with pytest.raises(HTTPException) as sse_error:
+            require_api_key_header_or_query(x_api_key="test-key")
+        assert sse_error.value.status_code == 500
 
     def test_parse_api_keys_non_dict_entry_raises(self):
         keys_json = json.dumps(["not-a-dict"])

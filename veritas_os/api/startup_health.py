@@ -98,7 +98,10 @@ def run_startup_config_validation(
     should_fail_fast: Callable[[Optional[str]], bool] = should_fail_fast_startup,
     validator: Optional[Callable[[], None]] = None,
 ) -> None:
-    """Validate startup configuration with environment-specific strictness."""
+    """Validate API keys in all profiles and other config according to profile."""
+    from veritas_os.api.auth import _parse_api_keys_config
+
+    _parse_api_keys_config()
     try:
         validate_startup_security_flags(logger=logger)
         effective_validator = validator

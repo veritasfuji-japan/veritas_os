@@ -31,7 +31,7 @@ Variables prefixed with `VERITAS_` are project-specific.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VERITAS_API_KEY` | `""` | Primary authentication key for protected endpoints |
-| `VERITAS_API_KEYS` | `""` | JSON array of `key` / `role` entries; optional nonempty string `tenant_id` binds the key to a governance tenant. Roles: `admin`, `operator`, `auditor` |
+| `VERITAS_API_KEYS` | `""` | JSON array of `key` / `role` entries; optional nonempty string `tenant_id` binds the key to a governance tenant. Roles: `admin`, `operator`, `auditor`. Invalid configuration blocks API startup and authentication. |
 | `VERITAS_API_SECRET` | `""` | HMAC signature verification secret — **required** in production |
 | `VERITAS_API_SECRET_REF` | `""` | External secret reference name/path |
 | `VERITAS_SECRET_PROVIDER` | `""` | Secret manager provider (`vault`, `aws_secrets_manager`, `gcp_secret_manager`, `azure_key_vault`, `kms`) |
