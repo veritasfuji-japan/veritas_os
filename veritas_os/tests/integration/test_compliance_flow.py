@@ -75,7 +75,7 @@ def test_generate_eu_ai_act_report_outputs_json_pdf_and_signature(
     monkeypatch.setattr(
         report_engine,
         "verify_trustlog_chain",
-        lambda: {"ok": True, "entries_checked": 1, "issues": []},
+        lambda **_kwargs: {"ok": True, "entries_checked": 1, "issues": []},
     )
     monkeypatch.setattr(
         report_engine,
@@ -197,7 +197,7 @@ def _patch_report_environment(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         report_engine,
         "verify_trustlog_chain",
-        lambda: {"ok": True, "entries_checked": 2, "issues": []},
+        lambda **_kwargs: {"ok": True, "entries_checked": 2, "issues": []},
     )
     monkeypatch.setattr(
         report_engine,
@@ -227,7 +227,7 @@ def test_generate_eu_ai_act_report_handles_partial_trust_log(monkeypatch, tmp_pa
     monkeypatch.setattr(
         report_engine,
         "verify_trustlog_chain",
-        lambda: {
+        lambda **_kwargs: {
             "ok": False,
             "entries_checked": 10,
             "issues": ["missing_signature_entry"],
@@ -836,7 +836,7 @@ class TestExplainability:
         monkeypatch.setattr(
             report_engine,
             "verify_trustlog_chain",
-            lambda: {"ok": False, "entries_checked": 5, "issues": ["sig_err"]},
+            lambda **_kwargs: {"ok": False, "entries_checked": 5, "issues": ["sig_err"]},
         )
         monkeypatch.setattr(
             report_engine,
@@ -1124,8 +1124,8 @@ class TestEvidenceCompleteness:
         }
         integrity = {
             "replay_verification": {"available": True, "valid": True, "match": True},
-            "signature_verification": {"ok": True},
-            "hash_chain_integrity": {"ok": True},
+            "signature_verification": {"ok": True, "entries_checked": 1},
+            "hash_chain_integrity": {"ok": True, "checked": 1},
         }
         gov_ctx = {"policy_available": True}
 
@@ -1152,8 +1152,8 @@ class TestEvidenceCompleteness:
         }
         integrity = {
             "replay_verification": {"available": False},
-            "signature_verification": {"ok": True},
-            "hash_chain_integrity": {"ok": True},
+            "signature_verification": {"ok": True, "entries_checked": 1},
+            "hash_chain_integrity": {"ok": True, "checked": 1},
         }
         gov_ctx = {"policy_available": False}
 
@@ -1166,8 +1166,8 @@ class TestEvidenceCompleteness:
         rec = {"gate": {}, "fuji": {}, "ts": "2026-01-01T12:00:00Z"}
         integrity = {
             "replay_verification": {"available": True, "valid": False},
-            "signature_verification": {"ok": True},
-            "hash_chain_integrity": {"ok": True},
+            "signature_verification": {"ok": True, "entries_checked": 1},
+            "hash_chain_integrity": {"ok": True, "checked": 1},
         }
         gov_ctx = {"policy_available": True}
 
@@ -1371,3 +1371,110 @@ class TestEndToEndReportReproducibility:
         assert r1["signed_report_hash"]["report_hash"] == r2["signed_report_hash"]["report_hash"]
         assert r1["summary"]["narrative"] == r2["summary"]["narrative"]
         assert r1["evidence_completeness"] == r2["evidence_completeness"]
+
+
+@pytest.mark.parametrize("case", [
+    "verified", "signature_failed", "empty_signature", "chain_failed",
+    "empty_chain", "missing_replay", "replay_mismatch", "malformed_match",
+    "decision_requires_review", "target_unverified",
+])
+def test_compliance_summary_requires_verified_evidence(monkeypatch, tmp_path, case):
+    log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+    decision = log_dir / "decide_summary.json"
+    _write_decision(decision, "dec-summary")
+    if case == "decision_requires_review":
+        record = json.loads(decision.read_text(encoding="utf-8"))
+        record["decision_status"] = "review"
+        decision.write_text(json.dumps(record), encoding="utf-8")
+    if case != "missing_replay":
+        match = "false" if case == "malformed_match" else case != "replay_mismatch"
+        (replay_dir / "replay_dec-summary_001.json").write_text(
+            json.dumps({"match": match, "diff": {}}), encoding="utf-8",
+        )
+    monkeypatch.setattr(report_engine, "verify_trustlog_chain", lambda **_kwargs: {
+        "ok": case != "signature_failed",
+        "entries_checked": 0 if case == "empty_signature" else 2,
+        "target_payload_verified": case != "target_unverified",
+    })
+    monkeypatch.setattr(report_engine, "verify_trust_log", lambda: {
+        "ok": case != "chain_failed",
+        "checked": 0 if case == "empty_chain" else 2,
+        "broken": case == "chain_failed",
+    })
+
+    result = report_engine.generate_eu_ai_act_report("dec-summary")
+
+    assert result["ok"] is True
+    expected = "pass" if case == "verified" else "review_required"
+    assert result["summary"]["compliance_status"] == expected
+    narrative = result["summary"]["narrative"]
+    components = result["evidence_completeness"]["components"]
+    if case == "target_unverified":
+        assert result["target_payload_verified"] is False
+        assert "No verified signature covers the target decision record" in narrative
+        assert components["target_payload"] == 0.0
+    if case == "empty_signature":
+        assert "no signature entries checked" in narrative
+        assert components["trustlog_signature"] == 0.0
+    if case == "empty_chain":
+        assert "no hash chain entries checked" in narrative
+        assert components["hash_chain"] == 0.0
+
+
+def test_report_verifies_snapshot_from_pipeline_persistence(monkeypatch, tmp_path):
+    from veritas_os.audit import artifact_linkage, trustlog_signed
+    from veritas_os.core import pipeline
+    from veritas_os.core.pipeline.pipeline_types import PipelineContext
+    from veritas_os.logging import trust_log
+    from veritas_os.logging.encryption import generate_key
+
+    log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    monkeypatch.setattr(pipeline, "LOG_DIR", log_dir)
+    monkeypatch.setattr(pipeline, "DATASET_DIR", tmp_path / "dataset")
+    for name in (
+        "persist_to_memory", "persist_reason_and_reflection",
+        "persist_world_state", "persist_dataset_record", "build_replay_snapshot",
+    ):
+        monkeypatch.setattr(pipeline, name, lambda *args, **kwargs: None)
+    monkeypatch.setattr(pipeline, "append_trust_log", trust_log.append_trust_log)
+    monkeypatch.setattr(pipeline, "write_shadow_decide", trust_log.write_shadow_decide)
+    monkeypatch.setattr(trust_log, "LOG_DIR", log_dir)
+    monkeypatch.setattr(trust_log, "LOG_JSON", log_dir / "trust_log.json")
+    monkeypatch.setattr(trust_log, "LOG_JSONL", log_dir / "trust_log.jsonl")
+    monkeypatch.setattr(
+        trust_log, "open_trust_log_for_append",
+        lambda: trust_log.LOG_JSONL.open("a", encoding="utf-8"),
+    )
+    monkeypatch.setattr(artifact_linkage, "LOG_DIR", log_dir)
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_dir / "signed.jsonl")
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", report_engine.PRIVATE_KEY_PATH)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", report_engine.PUBLIC_KEY_PATH)
+    monkeypatch.setattr(report_engine, "verify_trustlog_chain", trustlog_signed.verify_trustlog_chain)
+    monkeypatch.setattr(report_engine, "verify_trust_log", trust_log.verify_trust_log)
+
+    failures = []
+    pipeline._run_post_decision_persistence_phase(
+        PipelineContext(request_id="signed-snapshot", query="test query"),
+        {"decision_status": "allow", "chosen": {"answer": "original"}},
+        effective_get_memory_store=lambda: None,
+        stage_failures=failures,
+    )
+    assert failures == []
+    (replay_dir / "replay_signed-snapshot_001.json").write_text(
+        json.dumps({"match": True, "diff": {}}), encoding="utf-8",
+    )
+
+    verified = report_engine.generate_eu_ai_act_report("signed-snapshot")
+    assert verified["target_payload_verified"] is True, verified
+    assert verified["summary"]["compliance_status"] == "pass"
+
+    snapshot = next(log_dir.glob("decide_*.json"))
+    record = json.loads(snapshot.read_text(encoding="utf-8"))
+    record["chosen"]["answer"] = "changed"
+    snapshot.write_text(json.dumps(record), encoding="utf-8")
+
+    changed = report_engine.generate_eu_ai_act_report("signed-snapshot")
+    assert changed["signature_verification"]["ok"] is True
+    assert changed["target_payload_verified"] is False
+    assert changed["summary"]["compliance_status"] == "review_required"

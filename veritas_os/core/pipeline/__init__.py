@@ -633,18 +633,7 @@ def _run_post_decision_persistence_phase(
     finalize_evidence(payload, web_evidence=ctx.web_evidence, evidence_max=EVIDENCE_MAX)
     duration_ms = max(1, int((time.time() - ctx.started_at) * 1000))
 
-    # 1) Audit log persistence
-    try:
-        persist_audit_log(
-            ctx,
-            append_trust_log_fn=append_trust_log,
-            write_shadow_decide_fn=write_shadow_decide,
-        )
-    except Exception as e:
-        stage_failures.append(f"audit_log:{type(e).__name__}")
-        logger.warning("[pipeline] audit_log persist failed (best-effort): %s", e)
-
-    # 2) Memory persistence
+    # 1) Memory persistence
     try:
         persist_to_memory(
             ctx,
@@ -656,7 +645,7 @@ def _run_post_decision_persistence_phase(
         stage_failures.append(f"memory_persist:{type(e).__name__}")
         logger.warning("[pipeline] memory persist failed (best-effort): %s", e)
 
-    # 3) Reason / reflection persistence
+    # 2) Reason / reflection persistence
     try:
         persist_reason_and_reflection(
             ctx, payload,
@@ -667,9 +656,10 @@ def _run_post_decision_persistence_phase(
         stage_failures.append(f"reason_reflection:{type(e).__name__}")
         logger.warning("[pipeline] reason/reflection persist failed (best-effort): %s", e)
 
-    # 4) Disk persistence
+    # 3) Disk persistence
+    decision_snapshot_sha256 = None
     try:
-        persist_decision_to_disk(
+        decision_snapshot_sha256 = persist_decision_to_disk(
             ctx, payload, duration_ms=duration_ms,
             LOG_DIR=LOG_DIR, DATASET_DIR=DATASET_DIR,
             _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json,
@@ -677,6 +667,18 @@ def _run_post_decision_persistence_phase(
     except Exception as e:
         stage_failures.append(f"disk_persist:{type(e).__name__}")
         logger.warning("[pipeline] disk persist failed (best-effort): %s", e)
+
+    # 4) Audit log persistence
+    try:
+        persist_audit_log(
+            ctx,
+            append_trust_log_fn=append_trust_log,
+            write_shadow_decide_fn=write_shadow_decide,
+            decision_snapshot_sha256=decision_snapshot_sha256,
+        )
+    except Exception as e:
+        stage_failures.append(f"audit_log:{type(e).__name__}")
+        logger.warning("[pipeline] audit_log persist failed (best-effort): %s", e)
 
     # 5) World state persistence
     try:

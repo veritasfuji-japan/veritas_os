@@ -239,7 +239,11 @@ def redact_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     classification = _build_data_classification(entry)
     result: Dict[str, Any] = {}
     for key, value in entry.items():
-        if key in _STRUCTURAL_FIELDS:
+        if key in _STRUCTURAL_FIELDS or (
+            key == "decision_snapshot_sha256"
+            and isinstance(value, str)
+            and re.fullmatch(r"[0-9a-f]{64}", value)
+        ):
             result[key] = value
         else:
             result[key] = _redact_value(value)
