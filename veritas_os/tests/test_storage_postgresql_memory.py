@@ -286,6 +286,65 @@ class TestPostgresMemoryStoreCRUD:
         assert u1_records[0]["value"]["v"] == "u1"
         assert u2_records[0]["value"]["v"] == "u2"
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "string_value",
+            ["item1", "item2"],
+            12345,
+            True,
+            None,
+        ],
+        ids=["string", "list", "int", "bool", "none"],
+    )
+    def test_get_non_dict_payload_returns_none_under_mock(
+        self, payload: Any
+    ) -> None:
+        """get() returns None when a mock cursor row carries a non-dict payload.
+
+        Covers str, list, int, bool, and a Python ``None`` returned by the mock
+        cursor (this tests how ``get()`` handles a Python ``None`` value and does
+        not verify how PostgreSQL or the driver handles SQL NULL vs JSON null).
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from veritas_os.storage.postgresql import PostgresMemoryStore
+
+        store = PostgresMemoryStore()
+
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall = AsyncMock(return_value=[("user1", payload)])
+
+        mock_conn = MagicMock()
+        mock_conn.execute = AsyncMock(return_value=mock_cursor)
+
+        mock_conn_aenter = AsyncMock(return_value=mock_conn)
+        mock_conn_aexit = AsyncMock(return_value=False)
+        mock_conn_ctx = MagicMock()
+        mock_conn_ctx.__aenter__ = mock_conn_aenter
+        mock_conn_ctx.__aexit__ = mock_conn_aexit
+
+        mock_pool = MagicMock()
+        mock_pool.connection = MagicMock(return_value=mock_conn_ctx)
+
+        async def _get_pool():
+            return mock_pool
+
+        store._get_pool = _get_pool  # type: ignore[assignment]
+
+        result = asyncio.run(store.get("key"))
+
+        assert result is None
+        expected_sql = (
+            "SELECT user_id, value FROM memory_records"
+            " WHERE key = %s ORDER BY id"
+        )
+        mock_conn.execute.assert_called_once_with(expected_sql, ("key",))
+        mock_conn.execute.assert_awaited_once_with(expected_sql, ("key",))
+        mock_cursor.fetchall.assert_awaited_once_with()
+        mock_pool.connection.assert_called_once_with()
+        mock_conn_aenter.assert_awaited_once_with()
+        mock_conn_aexit.assert_awaited_once_with(None, None, None)
+
 
 class TestPostgresMemoryStoreUserIsolation:
     """User-scoped operations must never leak data across users."""
