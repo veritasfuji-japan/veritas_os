@@ -130,6 +130,53 @@ class TestHumanReviewTimeout:
         expired = HumanReviewQueue.check_expired_entries()
         assert expired == []
 
+    @pytest.mark.parametrize("approved", [True, False])
+    def test_review_at_deadline_before_expiry_sweep(
+        self, monkeypatch: pytest.MonkeyPatch, approved: bool
+    ) -> None:
+        from veritas_os.core import eu_ai_act_oversight
+
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        class FixedClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now.astimezone(tz)
+
+        monkeypatch.setattr(eu_ai_act_oversight, "datetime", FixedClock)
+        entry_id = HumanReviewQueue.enqueue(
+            decision_payload={"request_id": "at-deadline"},
+            reason="test",
+        )["entry_id"]
+        with HumanReviewQueue._lock:
+            HumanReviewQueue._queue[0]["sla_deadline"] = now.isoformat()
+        pending = HumanReviewQueue.get_entry(entry_id)
+
+        assert HumanReviewQueue.review(
+            entry_id, approved=approved, reviewer="human"
+        ) is None
+        assert HumanReviewQueue.get_entry(entry_id) == pending
+        assert [entry["entry_id"] for entry in HumanReviewQueue.check_expired_entries()] == [
+            entry_id
+        ]
+
+    @pytest.mark.parametrize("deadline", [None, "invalid", "2027-01-01T00:00:00"])
+    def test_review_requires_a_valid_sla_deadline(self, deadline: str | None) -> None:
+        entry_id = HumanReviewQueue.enqueue(
+            decision_payload={"request_id": "invalid-deadline"},
+            reason="test",
+        )["entry_id"]
+        with HumanReviewQueue._lock:
+            if deadline is None:
+                del HumanReviewQueue._queue[0]["sla_deadline"]
+            else:
+                HumanReviewQueue._queue[0]["sla_deadline"] = deadline
+        pending = HumanReviewQueue.get_entry(entry_id)
+
+        assert HumanReviewQueue.review(entry_id, approved=True, reviewer="human") is None
+        assert HumanReviewQueue.get_entry(entry_id) == pending
+        assert HumanReviewQueue.check_expired_entries() == []
+
     def test_expired_entry_cannot_be_reviewed(self) -> None:
         entry = HumanReviewQueue.enqueue(
             decision_payload={"request_id": "late"},
