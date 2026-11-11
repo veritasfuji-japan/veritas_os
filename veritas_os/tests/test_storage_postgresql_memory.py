@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import time
 from contextlib import asynccontextmanager
@@ -1186,3 +1187,86 @@ class TestMigrationStartup:
         assert store is not None
         # database_url defaults to empty when env var is not set
         assert isinstance(store.database_url, str)
+
+
+# ===================================================================
+# Live PostgreSQL driver integration test
+# ===================================================================
+
+_REAL_PG_DSN: str = os.getenv("VERITAS_DATABASE_URL", "")
+
+_SKIP_NO_REAL_PG = pytest.mark.skipif(
+    not _REAL_PG_DSN.startswith("postgresql"),
+    reason="VERITAS_DATABASE_URL not set — real PostgreSQL driver test skipped",
+)
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+class TestPostgresMemoryStoreRealDriverIntegration:
+    """Live PostgreSQL driver integration tests for ``PostgresMemoryStore``.
+
+    Exercises JSONB array deserialization and ensures that non-dict payloads
+    yield ``None`` when fetched through the real psycopg driver.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_jsonb_array_payload_returns_none_under_real_driver(
+        self,
+    ) -> None:
+        """Verify PostgresMemoryStore.get() returns None when reading a JSONB array.
+
+        Under a live PostgreSQL database with psycopg3, JSONB array values
+        are deserialized into Python ``list`` instances.  PostgresMemoryStore.get()
+        requires the root payload to be a dictionary, so a list payload evaluates
+        to None rather than returning a non-dict value.
+        """
+        import uuid
+        from psycopg.types.json import Jsonb
+        from veritas_os.storage.db import close_pool, get_pool
+        from veritas_os.storage.postgresql import PostgresMemoryStore
+
+        key = f"test-real-driver-array-{uuid.uuid4().hex}"
+        user_id = f"test-user-{uuid.uuid4().hex[:8]}"
+        array_payload = ["item1", "item2", 42, {"nested": "value"}]
+
+        pool = await get_pool()
+        try:
+            # 1. Insert record directly into PostgreSQL with JSONB array payload
+            async with pool.connection() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        """
+                        INSERT INTO memory_records (key, user_id, value, created_at, updated_at)
+                        VALUES (%s, %s, %s, now(), now())
+                        """,
+                        (key, user_id, Jsonb(array_payload)),
+                    )
+
+            # 2. Verify driver deserializes JSONB array as Python list
+            async with pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT value FROM memory_records WHERE key = %s",
+                    (key,),
+                )
+                raw_row = await cur.fetchone()
+                assert raw_row is not None
+                assert isinstance(raw_row[0], list)
+                assert raw_row[0] == array_payload
+
+            # 3. Verify PostgresMemoryStore.get() returns None for non-dict
+            store = PostgresMemoryStore()
+            result = await store.get(key)
+            assert result is None
+        finally:
+            # Clean up the test record
+            try:
+                async with pool.connection() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            "DELETE FROM memory_records WHERE key = %s",
+                            (key,),
+                        )
+            finally:
+                await close_pool()
+
