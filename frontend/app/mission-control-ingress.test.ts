@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const headersGetMock = vi.fn(() => null);
+const headersGetMock = vi.fn<(name: string) => string | null>(() => null);
+const readGovernanceFeed = vi.hoisted(() => vi.fn<(request: Request) => Promise<Response>>());
+
+vi.mock("./api/veritas/v1/report/governance/route", () => ({ GET: readGovernanceFeed }));
 
 vi.mock("next/headers", () => ({
   headers: async () => ({
@@ -77,145 +80,56 @@ describe("loadMissionControlIngressPayload", () => {
   beforeEach(() => {
     headersGetMock.mockReset();
     headersGetMock.mockReturnValue(null);
+    readGovernanceFeed.mockReset();
+    readGovernanceFeed.mockImplementation(async () => Response.json({}));
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "");
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
 
-  it("returns mapped payload when backend feed is available", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        governance_layer_snapshot: {
-          participation_state: "decision_shaping",
-          preservation_state: "degrading",
-        },
-      }),
-    } as Response);
+  it("passes request credentials to the shared handler and maps its payload", async () => {
+    const inbound = new Headers({
+      cookie: "__veritas_bff=session",
+      authorization: "Bearer viewer",
+      "x-forwarded-host": "external.invalid",
+    });
+    headersGetMock.mockImplementation((name) => inbound.get(name));
+    const snapshot = { participation_state: "decision_shaping" };
+    readGovernanceFeed.mockResolvedValue(Response.json({ governance_layer_snapshot: snapshot }));
 
     await expect(loadMissionControlIngressPayload()).resolves.toEqual({
-      governance_layer_snapshot: {
-        participation_state: "decision_shaping",
-        preservation_state: "degrading",
-      },
+      governance_layer_snapshot: snapshot,
     });
-
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
-      method: "GET",
-      cache: "no-store",
-      headers: undefined,
-    });
+    const request = readGovernanceFeed.mock.calls[0]![0];
+    expect(request.url).toBe("http://localhost/api/veritas/v1/report/governance");
+    expect(request.headers.get("cookie")).toBe("__veritas_bff=session");
+    expect(request.headers.get("authorization")).toBe("Bearer viewer");
+    expect(request.headers.has("x-forwarded-host")).toBe(false);
   });
 
-  it("does not forward scenario override when e2e scenarios are disabled", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
-
+  it("ignores E2E scenarios when disabled", async () => {
+    headersGetMock.mockImplementation((name) =>
+      name === "x-veritas-e2e-governance-scenario" ? "main" : null);
     await loadMissionControlIngressPayload("main");
-
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
-      method: "GET",
-      cache: "no-store",
-      headers: undefined,
-    });
-  });
-
-  it("does not forward request header scenario when e2e scenarios are disabled", async () => {
-    headersGetMock.mockImplementation((name: string) =>
-      (name === "x-veritas-e2e-governance-scenario" ? "main" : null));
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
-
     await loadMissionControlIngressPayload();
-
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/veritas/v1/report/governance", {
-      method: "GET",
-      cache: "no-store",
-      headers: undefined,
-    });
+    for (const [request] of readGovernanceFeed.mock.calls) {
+      expect(new URL(request.url).search).toBe("");
+    }
   });
 
-  it("forwards scenario override when e2e scenarios are enabled", async () => {
+  it("passes enabled E2E and demo overrides to the shared handler", async () => {
     vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "1");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
-
-    await loadMissionControlIngressPayload("main");
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "/api/veritas/v1/report/governance?e2e_governance_scenario=main",
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: { "x-veritas-e2e-governance-scenario": "main" },
-      },
-    );
+    await loadMissionControlIngressPayload("main", "pre_boundary_collapse");
+    const query = new URL(readGovernanceFeed.mock.calls[0]![0].url).searchParams;
+    expect(query.get("e2e_governance_scenario")).toBe("main");
+    expect(query.get("demo_scenario")).toBe("pre_boundary_collapse");
   });
 
-  it("forwards demo scenario override independently from e2e scenarios", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
-
-    await loadMissionControlIngressPayload(null, "pre_boundary_collapse");
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: { "x-veritas-demo-scenario": "pre_boundary_collapse" },
-      },
-    );
+  it("returns no ingress when the shared handler rejects the request", async () => {
+    readGovernanceFeed.mockResolvedValue(new Response(null, { status: 401 }));
+    await expect(loadMissionControlIngressPayload()).resolves.toBeNull();
   });
-
-
-
-
-
-  it("builds absolute endpoint from forwarded host/proto for server-side fetch", async () => {
-    headersGetMock.mockImplementation((name: string) => {
-      if (name === "x-forwarded-host") {
-        return "ci.veritas.example";
-      }
-      if (name === "x-forwarded-proto") {
-        return "https";
-      }
-      return null;
-    });
-
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
-
-    await loadMissionControlIngressPayload(null, "pre_boundary_collapse");
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "https://ci.veritas.example/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: { "x-veritas-demo-scenario": "pre_boundary_collapse" },
-      },
-    );
-  });
-
-  it("falls back to http for localhost host when proto header is absent", async () => {
-    headersGetMock.mockImplementation((name: string) => {
-      if (name === "host") {
-        return "localhost:3000";
-      }
-      return null;
-    });
-
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
-
-    await loadMissionControlIngressPayload(null, "pre_boundary_collapse");
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://localhost:3000/api/veritas/v1/report/governance?demo_scenario=pre_boundary_collapse",
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: { "x-veritas-demo-scenario": "pre_boundary_collapse" },
-      },
-    );
-  });
-
 });

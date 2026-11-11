@@ -1,6 +1,23 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET } from "./route";
+
+const FEED_URL = "http://localhost/api/veritas/v1/report/governance";
+const AUTH = { Authorization: "Bearer feed-viewer" };
+
+beforeEach(() => {
+  vi.stubEnv("VERITAS_BFF_AUTH_TOKENS_JSON", '{"feed-viewer":"viewer"}');
+});
+
+it.each([
+  [{ "X-Role": "admin" }, 401],
+  [{ Authorization: "Bearer unknown", Cookie: "__veritas_bff=feed-viewer" }, 403],
+] satisfies [HeadersInit, number][])("rejects unauthorized live feed requests", async (headers, status) => {
+  const fetchSpy = vi.spyOn(globalThis, "fetch");
+  const response = await GET(new Request(FEED_URL, { headers }));
+  expect(response.status).toBe(status);
+  expect(fetchSpy).not.toHaveBeenCalled();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -14,7 +31,7 @@ describe("/api/veritas/v1/report/governance", () => {
     vi.stubEnv("VERITAS_API_KEY", "test-key");
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
 
-    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?e2e_governance_scenario=main"));
+    const response = await GET(new Request(FEED_URL + "?e2e_governance_scenario=main", { headers: AUTH }));
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
@@ -27,7 +44,7 @@ describe("/api/veritas/v1/report/governance", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
 
     const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance", {
-      headers: { "x-veritas-e2e-governance-scenario": "main" },
+      headers: { ...AUTH, "x-veritas-e2e-governance-scenario": "main" },
     }));
 
     expect(response.status).toBe(503);
@@ -85,7 +102,7 @@ describe("/api/veritas/v1/report/governance", () => {
       ),
     );
 
-    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+    const response = await GET(new Request(FEED_URL, { headers: AUTH }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -135,7 +152,7 @@ describe("/api/veritas/v1/report/governance", () => {
       ),
     );
 
-    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+    const response = await GET(new Request(FEED_URL, { headers: AUTH }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -183,7 +200,7 @@ describe("/api/veritas/v1/report/governance", () => {
       ),
     );
 
-    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+    const response = await GET(new Request(FEED_URL, { headers: AUTH }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -194,7 +211,8 @@ describe("/api/veritas/v1/report/governance", () => {
     });
   });
 
-  it("calls /v1/governance/live-snapshot when scenarios are not used", async () => {
+  it("calls the live snapshot with trusted role and tenant headers", async () => {
+    vi.stubEnv("VERITAS_GOVERNANCE_TENANT_ID", "deployment-tenant");
     vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
     vi.stubEnv("VERITAS_API_KEY", "test-key");
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -204,9 +222,22 @@ describe("/api/veritas/v1/report/governance", () => {
       }),
     );
 
-    await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+    const response = await GET(new Request(FEED_URL, {
+      headers: { Cookie: "__veritas_bff=feed-viewer", "X-Tenant-Id": "caller-tenant" },
+    }));
 
-    expect(fetchSpy).toHaveBeenCalledWith("http://internal-api:8000/v1/governance/live-snapshot", expect.any(Object));
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://internal-api:8000/v1/governance/live-snapshot",
+      expect.objectContaining({
+        headers: {
+          "X-API-Key": "test-key",
+          "X-Role": "auditor",
+          "X-Tenant-Id": "deployment-tenant",
+        },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it("returns unavailable when upstream live snapshot is unavailable", async () => {
@@ -214,7 +245,7 @@ describe("/api/veritas/v1/report/governance", () => {
     vi.stubEnv("VERITAS_API_KEY", "test-key");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 503 }));
 
-    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+    const response = await GET(new Request(FEED_URL, { headers: AUTH }));
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
@@ -593,7 +624,7 @@ describe("/api/veritas/v1/report/governance", () => {
       }),
     );
 
-    const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance?demo_scenario=unknown"));
+    const response = await GET(new Request(FEED_URL + "?demo_scenario=unknown", { headers: AUTH }));
 
     expect(response.status).toBe(200);
     expect(fetchSpy).toHaveBeenCalledOnce();
@@ -607,7 +638,7 @@ it("blocks credentialed snapshot redirects", async () => {
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(null, { status: 307, headers: { location: "https://other-origin.invalid/" } }),
   );
-  const response = await GET(new Request("http://localhost/api/veritas/v1/report/governance"));
+  const response = await GET(new Request(FEED_URL, { headers: AUTH }));
   expect(fetchSpy).toHaveBeenCalledOnce();
   expect(fetchSpy).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ redirect: "manual" }));
   expect(response.status).toBe(502);

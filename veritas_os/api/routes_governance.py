@@ -18,6 +18,7 @@ from starlette.requests import HTTPConnection
 from veritas_os.api.auth import (
     _derive_api_user_id,
     require_authenticated_principal,
+    require_deployment_tenant,
     require_permission,
     resolve_role_for_key,
     resolve_tenant_for_key,
@@ -942,7 +943,13 @@ def governance_promote_policy_bundle(
         )
 
 
-@router.get("/v1/governance/live-snapshot", dependencies=[Depends(require_permission(Permission.governance_read))])
+@router.get(
+    "/v1/governance/live-snapshot",
+    dependencies=[
+        Depends(require_permission(Permission.governance_read)),
+        Depends(require_deployment_tenant),
+    ],
+)
 def governance_live_snapshot() -> dict[str, Any]:
     """Return Mission Control governance live snapshot from backend artifacts."""
     return build_governance_live_snapshot()

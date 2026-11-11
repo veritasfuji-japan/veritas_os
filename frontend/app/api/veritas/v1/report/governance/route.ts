@@ -14,10 +14,12 @@ import {
   type IrreversibilityHorizon,
   type TrajectoryShapingLineage,
 } from "../../../../../../components/dashboard-types";
+import { authenticateRoleFromHeaders, parseAuthTokensConfig } from "../../../[...path]/route-auth";
 import { resolveApiBaseUrl } from "../../../[...path]/route-config";
 import { buildAmlKycReviewerWalkthroughPayload } from "../../../../../../lib/aml-kyc-reviewer-walkthrough";
 import { areE2EScenariosEnabled } from "../../../../../e2e-scenarios";
 
+const GOVERNANCE_LIVE_SNAPSHOT_TIMEOUT_MS = 10_000;
 const GOVERNANCE_LIVE_SNAPSHOT_PATH = "/v1/governance/live-snapshot";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
 const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
@@ -1101,6 +1103,15 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json(demoScenarioPayload, { status: 200 });
   }
 
+  const tokenRoles = parseAuthTokensConfig(process.env.VERITAS_BFF_AUTH_TOKENS_JSON);
+  const auth = authenticateRoleFromHeaders(request.headers, tokenRoles);
+  if (auth.errorResponse) {
+    return auth.errorResponse;
+  }
+  if (!auth.role) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const apiBaseUrl = resolveApiBaseUrl();
   if (!apiBaseUrl) {
     return NextResponse.json({ error: "governance_feed_unavailable" }, { status: 503 });
@@ -1111,14 +1122,25 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json({ error: "governance_feed_unavailable" }, { status: 503 });
   }
 
+  const upstreamHeaders: Record<string, string> = {
+    "X-API-Key": apiKey,
+    "X-Role": auth.role === "viewer" ? "auditor" : auth.role,
+  };
+  const tenant = process.env.VERITAS_GOVERNANCE_TENANT_ID?.trim();
+  if (tenant) {
+    upstreamHeaders["X-Tenant-Id"] = tenant;
+  }
+
   try {
     const upstreamResponse = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${GOVERNANCE_LIVE_SNAPSHOT_PATH}`, {
       method: "GET",
-      headers: {
-        "X-API-Key": apiKey,
-      },
+      headers: upstreamHeaders,
       cache: "no-store",
       redirect: "manual",
+      signal: AbortSignal.any([
+        request.signal,
+        AbortSignal.timeout(GOVERNANCE_LIVE_SNAPSHOT_TIMEOUT_MS),
+      ]),
     });
 
     if (upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
