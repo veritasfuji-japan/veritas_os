@@ -1419,3 +1419,62 @@ def test_compliance_summary_requires_verified_evidence(monkeypatch, tmp_path, ca
     if case == "empty_chain":
         assert "no hash chain entries checked" in narrative
         assert components["hash_chain"] == 0.0
+
+
+def test_report_verifies_snapshot_from_pipeline_persistence(monkeypatch, tmp_path):
+    from veritas_os.audit import artifact_linkage, trustlog_signed
+    from veritas_os.core import pipeline
+    from veritas_os.core.pipeline.pipeline_types import PipelineContext
+    from veritas_os.logging import trust_log
+    from veritas_os.logging.encryption import generate_key
+
+    log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    monkeypatch.setattr(pipeline, "LOG_DIR", log_dir)
+    monkeypatch.setattr(pipeline, "DATASET_DIR", tmp_path / "dataset")
+    for name in (
+        "persist_to_memory", "persist_reason_and_reflection",
+        "persist_world_state", "persist_dataset_record", "build_replay_snapshot",
+    ):
+        monkeypatch.setattr(pipeline, name, lambda *args, **kwargs: None)
+    monkeypatch.setattr(pipeline, "append_trust_log", trust_log.append_trust_log)
+    monkeypatch.setattr(pipeline, "write_shadow_decide", trust_log.write_shadow_decide)
+    monkeypatch.setattr(trust_log, "LOG_DIR", log_dir)
+    monkeypatch.setattr(trust_log, "LOG_JSON", log_dir / "trust_log.json")
+    monkeypatch.setattr(trust_log, "LOG_JSONL", log_dir / "trust_log.jsonl")
+    monkeypatch.setattr(
+        trust_log, "open_trust_log_for_append",
+        lambda: trust_log.LOG_JSONL.open("a", encoding="utf-8"),
+    )
+    monkeypatch.setattr(artifact_linkage, "LOG_DIR", log_dir)
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_dir / "signed.jsonl")
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", report_engine.PRIVATE_KEY_PATH)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", report_engine.PUBLIC_KEY_PATH)
+    monkeypatch.setattr(report_engine, "verify_trustlog_chain", trustlog_signed.verify_trustlog_chain)
+    monkeypatch.setattr(report_engine, "verify_trust_log", trust_log.verify_trust_log)
+
+    failures = []
+    pipeline._run_post_decision_persistence_phase(
+        PipelineContext(request_id="signed-snapshot", query="test query"),
+        {"decision_status": "allow", "chosen": {"answer": "original"}},
+        effective_get_memory_store=lambda: None,
+        stage_failures=failures,
+    )
+    assert failures == []
+    (replay_dir / "replay_signed-snapshot_001.json").write_text(
+        json.dumps({"match": True, "diff": {}}), encoding="utf-8",
+    )
+
+    verified = report_engine.generate_eu_ai_act_report("signed-snapshot")
+    assert verified["target_payload_verified"] is True, verified
+    assert verified["summary"]["compliance_status"] == "pass"
+
+    snapshot = next(log_dir.glob("decide_*.json"))
+    record = json.loads(snapshot.read_text(encoding="utf-8"))
+    record["chosen"]["answer"] = "changed"
+    snapshot.write_text(json.dumps(record), encoding="utf-8")
+
+    changed = report_engine.generate_eu_ai_act_report("signed-snapshot")
+    assert changed["signature_verification"]["ok"] is True
+    assert changed["target_payload_verified"] is False
+    assert changed["summary"]["compliance_status"] == "review_required"

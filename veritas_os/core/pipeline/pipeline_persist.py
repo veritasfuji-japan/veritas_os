@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from veritas_os.security.hash import sha256_of_canonical_json
+
 from .pipeline_types import PipelineContext
 from ..utils import utc_now, utc_now_iso_z, redact_payload
 from .pipeline_helpers import _warn
@@ -120,6 +122,7 @@ def persist_audit_log(
     *,
     append_trust_log_fn: Any,
     write_shadow_decide_fn: Any,
+    decision_snapshot_sha256: Optional[str] = None,
 ) -> None:
     """Write audit / trust log entry (best‑effort).
 
@@ -230,6 +233,8 @@ def persist_audit_log(
             audit_entry["continuation_enforcement_halt"] = ctx.continuation_enforcement_halt
 
         audit_entry = redact_payload(audit_entry)
+        if decision_snapshot_sha256 is not None:
+            audit_entry["decision_snapshot_sha256"] = decision_snapshot_sha256
         append_trust_log_fn(audit_entry)
         write_shadow_decide_fn(
             ctx.request_id,
@@ -458,8 +463,8 @@ def persist_decision_to_disk(
     DATASET_DIR: Any,
     _HAS_ATOMIC_IO: bool,
     _atomic_write_json: Any,
-) -> None:
-    """Write decision record to disk (best‑effort)."""
+) -> Optional[str]:
+    """Write the decision snapshot and return its digest after successful persistence."""
     persist_stage_started_at = time.time()
     try:
         Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
@@ -548,6 +553,7 @@ def persist_decision_to_disk(
             }
         )
 
+        snapshot_sha256 = sha256_of_canonical_json(persist)
         stamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         fname = f"decide_{stamp}{uuid4().int:039d}.json"
         log_path = Path(LOG_DIR) / fname
@@ -562,8 +568,10 @@ def persist_decision_to_disk(
             dataset_path.write_text(
                 json.dumps(persist, ensure_ascii=False), encoding="utf-8"
             )
+        return snapshot_sha256
     except OSError as e:
         _warn(f"[persist] decide record skipped: {e}")
+        return None
     finally:
         extras_for_persist = payload.setdefault("extras", {})
         if isinstance(extras_for_persist, dict):

@@ -714,6 +714,7 @@ _OVERSIZED_MARKER = "__trustlog_oversized__"
 _SUMMARY_ALLOWLIST: frozenset[str] = frozenset({
     # Identity & linkage
     "request_id",
+    "decision_snapshot_sha256",
     "created_at",
     "decision_id",
     "context_user_id",
@@ -1077,7 +1078,12 @@ def verify_trustlog_chain(
     }
     if target_payload_hash is not None:
         result["target_payload_verified"] = witness_result["ok"] and any(
-            entry.get("payload_hash") == target_payload_hash for entry in entries
+            entry.get("payload_hash") == target_payload_hash
+            or (
+                isinstance(entry.get("decision_payload"), dict)
+                and entry["decision_payload"].get("decision_snapshot_sha256") == target_payload_hash
+            )
+            for entry in entries
         )
     return result
 
