@@ -134,6 +134,17 @@ class HumanReviewQueue:
         )
         return entry
 
+    @staticmethod
+    def _parse_sla_deadline(value: object) -> datetime | None:
+        """Parse a stored SLA deadline with an explicit timezone."""
+        if not isinstance(value, str):
+            return None
+        try:
+            deadline = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        return deadline if deadline.tzinfo is not None else None
+
     @classmethod
     def review(
         cls,
@@ -143,14 +154,20 @@ class HumanReviewQueue:
         reviewer: str,
         comment: str = "",
     ) -> Dict[str, Any] | None:
-        """Record a human review decision.  Returns the updated entry or None."""
+        """Record a pending review before its SLA deadline, or return None."""
         with cls._lock:
             for entry in cls._queue:
                 if entry["entry_id"] == entry_id and entry["status"] == "pending":
-                    entry["status"] = "approved" if approved else "rejected"
+                    deadline = cls._parse_sla_deadline(entry.get("sla_deadline"))
+                    now = datetime.now(timezone.utc)
+                    if deadline is None or now >= deadline:
+                        # The expiry sweep records and notifies SLA breaches.
+                        return None
+                    decision = "approved" if approved else "rejected"
+                    entry["status"] = decision
                     entry["reviewer"] = reviewer
-                    entry["reviewed_at"] = datetime.now(timezone.utc).isoformat()
-                    entry["decision"] = "approved" if approved else "rejected"
+                    entry["reviewed_at"] = now.isoformat()
+                    entry["decision"] = decision
                     entry["comment"] = comment
                     return dict(entry)
         return None
@@ -209,14 +226,8 @@ class HumanReviewQueue:
             for entry in cls._queue:
                 if entry["status"] != "pending":
                     continue
-                deadline_str = entry.get("sla_deadline", "")
-                if not deadline_str:
-                    continue
-                try:
-                    deadline = datetime.fromisoformat(deadline_str)
-                except (TypeError, ValueError):
-                    continue
-                if now >= deadline:
+                deadline = cls._parse_sla_deadline(entry.get("sla_deadline"))
+                if deadline is not None and now >= deadline:
                     entry["status"] = "expired"
                     entry["expired_at"] = now.isoformat()
                     expired.append(dict(entry))
