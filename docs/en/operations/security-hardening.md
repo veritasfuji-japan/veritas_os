@@ -103,8 +103,8 @@ Redis or prove persistent mounts, rollback resistance or later config stability.
 |------|--------|----------|
 | Enable RBAC | Set `VERITAS_GOVERNANCE_ENFORCE_RBAC=1` (default). | HIGH |
 | Four-eyes principle | Set `VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES=1` (default) for policy change dual-approval. | HIGH |
-| Restrict governance roles | Set `VERITAS_GOVERNANCE_ALLOWED_ROLES` to only authorized personnel. | HIGH |
-| Set tenant ID | Set `VERITAS_GOVERNANCE_TENANT_ID` for multi-tenant deployments. | MEDIUM |
+| Restrict governance roles | Set `VERITAS_GOVERNANCE_ALLOWED_ROLES` to allowed API-key roles; `X-Role` is only an additional assertion. | HIGH |
+| Bind governance tenant | Set `tenant_id` on authorized `VERITAS_API_KEYS` entries and the same `VERITAS_GOVERNANCE_TENANT_ID`; headers alone do not establish tenant membership. This does not provide full multi-tenant data isolation. | MEDIUM |
 | EU AI Act mode | Set `VERITAS_EU_AI_ACT_MODE=1` if subject to EU AI Act requirements. | Situational |
 | Human review webhook | Set `VERITAS_HUMAN_REVIEW_WEBHOOK_URL` for escalation notifications. | HIGH |
 

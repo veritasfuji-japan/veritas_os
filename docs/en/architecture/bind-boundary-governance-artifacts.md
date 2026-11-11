@@ -46,6 +46,74 @@ Not guaranteed by this document alone:
 - environment-specific production hardening and operational controls
 - universal production-readiness claims across every deployment context
 
+## Management target alignment and receipt evidence
+
+The bounded management set is policy update, policy-bundle promotion, compliance
+configuration update, halt and resume. `test_bind_target_catalog_consistency.py`
+checks exact method/path membership and multiplicity against the operator
+catalog, the API classification registry (`policy/bind_coverage.py`), and
+effective mounted routes using FastAPI's route-tree API. Marker/type metadata
+is checked separately from execution. Copied-input mutations exercise missing,
+extra, duplicate and mismatched entries and missing/wrong markers.
+
+The effect-boundary registry (`policy/bind_coverage_registry.py`) answers a
+different question, including the frozen BCBR transport boundaries. This
+management check does not add rows to that registry or expand its proof scope.
+
+Mounted HTTP tests exercise each management route with real helpers, Bind core
+and adapters, local temporary policy/bundle/config/controller state, and an
+encrypted temporary TrustLog. Wrapping spies require the expected helper/core
+and adapter/action. Successful controls apply once. Current policy requiring
+missing TTL evidence produces BLOCKED or ESCALATED outcomes with no apply and
+unchanged effect state. Missing-key and auditor-key controls cannot reach Bind;
+an asserted admin role does not elevate the auditor key. TestClient does not
+run the production startup lifecycle; these are in-process HTTP tests.
+
+Each helper supplies default target metadata in existing intent lineage, so
+the Receipt written by Bind carries the same target as its API response.
+Backfill replaces the schema's `other` classification with supplied metadata,
+while retaining concrete existing Receipt fields and trusted internal lineage
+overrides. Reloaded TrustLog Receipts are checked for target and outcome.
+Before the correction, four helpers omitted this metadata and all five paths
+could retain `other` in persisted classification; the valid HTTP regression
+matrix had 15 metadata failures and 26 passing controls. This was an evidence
+alignment bug, not a reproduced execution bypass.
+
+The policy-update HTTP endpoint reserves the top-level
+`policy_lineage.bind_target_metadata` key for server-controlled operation
+identity. Any client-supplied value, including null, empty or matching metadata,
+returns HTTP 400 with `policy_lineage_target_override_forbidden` before approval
+validation, the Bind helper, policy mutation or intent/Receipt publication.
+The existing `bind_adjudication` override rejection retains its precedence and
+error code. Ordinary lineage and nested descriptive metadata remain accepted;
+they do not replace the helper's canonical top-level target.
+
+Before this HTTP restriction, an authenticated fixture policy update could
+record `/v1/system/resume` / `system_resume` in both its response and reloaded
+TrustLog Receipt, despite the actual action being policy update. The same
+mislabeling occurred for BLOCKED and ESCALATED policy updates; those attempts
+did not mutate policy. Regression controls cover all three outcomes, reserved
+key shapes, ordinary lineage, and trusted internal helper overrides. This is an
+HTTP evidence-integrity correction, not proof of privilege escalation or of
+complete validation of every caller-supplied evidence field. The internal helper
+still accepts explicit trusted target lineage; callers must not expose that
+internal override contract directly to untrusted inputs.
+
+For HTTP policy updates the server issues the execution intent and Bind Receipt
+IDs. Legacy request fields of the same names are accepted but ignored for ID
+assignment; clients should use the response IDs. Trusted internal helper
+arguments and caller-supplied request/decision correlation fields are unchanged.
+If historical evidence contains more than one Receipt with the requested ID,
+the detail endpoint returns HTTP 409 (`bind_receipt_id_ambiguous`). Existing
+records are retained and can be inspected through the audit list/export.
+
+Promotion retains its existing HTTP 200 response with an explicit non-COMMITTED
+Bind outcome; callers must inspect that outcome. Approval booleans/fixture
+reviewer labels do not establish independent human approval. The compiled test
+bundle uses the existing development integrity mode, not independently trusted
+production signing. No enterprise IAM, independent-host enforcement, complete
+effect inventory or universal bypass resistance is established by these tests.
+
 ## Authenticated actor for governance mutations
 
 `PUT /v1/governance/policy`, `POST /v1/governance/policy-bundles/promote`,
@@ -139,6 +207,12 @@ nonblocking, with a 100 ms idle poll and the existing 15 second heartbeat; no
 blocking queue reader is left in the thread pool. This covers observable ASGI
 disconnects, not independent detection of a silent network partition.
 
+For ASGI 2.4+, the SSE response explicitly watches disconnect notifications
+alongside streaming, rather than relying solely on a later failed send through
+HTTP intermediaries. Either completion cancels and awaits both tasks before
+closing the generator and releasing its subscription. Older ASGI versions retain
+Starlette's existing disconnect watcher.
+
 SSE event reads also use nonblocking queue polling (100 ms while idle), so
 cancelling a stream does not leave a thread-pool reader waiting for the
 configured heartbeat timeout. The existing disconnect check and subscription
@@ -146,12 +220,91 @@ cleanup remain in place; event frames, response headers and the configurable
 heartbeat interval are preserved. Idle event delivery may incur the poll delay.
 
 The SSE response owns and closes its event generator in a `finally` block,
-including when response headers or a body frame cannot be sent. Subscription
-registration occurs only when the generator starts, and cleanup uses the same
-captured event hub. This releases subscribers synchronously at response exit
+including when response headers or a body frame cannot be sent. The response
+reserves its subscription before sending headers, and cleanup uses the same
+captured event hub even if the generator has not started. This releases subscribers synchronously at response exit
 instead of relying on later generator finalization. Transport errors retain
 Starlette's existing exception behavior; this does not retry failed sends or
 prove delivery of a frame that encountered an error.
+
+### Current stream credential checks
+
+SSE and TrustLog WebSocket delivery revalidate their header-first credentials
+against the process's current API-key configuration on each delivery loop,
+including idle polling. If the key is no longer accepted, SSE ends the response
+and unregisters its subscriber; WebSocket closes with code 1008 and reason
+`api_key_no_longer_valid`, then releases its tasks and subscription. Query-key
+streams must also retain the existing transport-specific dual opt-in; production
+query-key refusal is unchanged.
+
+This uses the existing multi-key and legacy fallback matching rules. Removing a
+key from one source does not revoke it if another accepted source still matches.
+API keys do not gain a TTL or external revocation feed. Configuration changes
+must reach the running process: changing a parent shell environment or an
+external secret does not itself update that process. Other processes and hosts
+are not synchronized by this check. Idle detection normally follows the 100 ms
+poll, but is not a wall-clock deadline and cannot cancel a send already in
+progress. Already sent data cannot be recalled. This does not recheck role
+permissions or startup readiness throughout an accepted stream.
+
+### Stream resource limits
+
+The API event hub admits at most 128 subscribers by default, shared by SSE and
+TrustLog WebSocket within that process. Admission is checked under the hub lock;
+existing subscribers are not evicted. Authenticated excess SSE requests receive
+HTTP 503 before event-stream headers; excess WebSocket requests close with code
+1013 and reason `stream_capacity_reached` before acceptance. Releasing a
+subscription makes its slot reusable. With the tested Uvicorn backend, a
+pre-accept WebSocket refusal is HTTP 403 on the wire, rather than a WebSocket
+close frame; the close code/reason above describe the ASGI refusal. The hub constructor accepts a positive
+`max_subscribers` for embedded callers; the API uses the default.
+
+Each SSE ASGI send has a 15 second deadline, including the actual transport send
+outside the HTTP response intermediaries. Other JSON endpoints are not subject to this
+stream deadline (the new stream-capacity refusal itself is bounded). WebSocket acceptance, event/heartbeat sends and post-admission
+close attempts also have a 15 second deadline. A timed-out WebSocket attempts a
+bounded close with code 1013 and reason `stream_send_timeout`, then releases its
+connection tasks and subscriber even if the close cannot be delivered. SSE
+response ownership also releases its subscription after send timeout. Deadlines
+rely on cooperative async cancellation and do not cancel bytes already sent.
+
+These are per-process subscriber and send-wait bounds, not a deployment-wide
+connection quota or a byte-size limit. Each subscriber queue remains bounded at
+64 entries by default; its existing drop-on-full behavior is unchanged, so these
+live streams remain best-effort notifications rather than durable delivery
+proofs. A silent network stall is noticed only when a transport send blocks or a
+disconnect is reported; this does not establish production load capacity.
+
+The `stream-real-uvicorn` CI job runs twenty loopback TCP tests against the
+actual API application: eight with a server thread, the same eight with a
+separate Python interpreter, and four subprocess replacement cases. It rejects skipped, failed, or missing cases and
+checks the child source SHA plus distinct client/server PIDs from each child
+case's JUnit properties. These check delivery/disconnect cleanup, server-process
+key rotation, a shared two-slot fixture limit and reuse, invalid credentials,
+and incomplete-readiness refusal. Child configuration and event fixtures are
+controlled only through a test-only stdin pipe; no control endpoint is added to
+the API. Child key rotation must leave the parent environment unchanged, and
+teardown checks empty subscriptions and reaps the server process.
+
+Both fixtures disable lifespan and supply an explicitly synthetic process-bound
+startup completion marker in the server process. They validate post-startup
+transport, not real security initialization. The job records the checkout SHA
+and transport versions. Ordinary lanes may skip this optional transport module
+when `websockets` is absent; the dedicated Linux job installs the pinned test
+dependency and requires every case. These are processes on the same host, not
+independently administered hosts or OS-user isolation. This does not validate
+TLS, durable runtime-state recovery, slow real networks, production load, or
+external secret/revocation distribution. No external provider or business API is called.
+
+The four replacement cases cover graceful termination and forced process kill,
+for both SSE and WebSocket. They require the old socket to terminate, reap the
+old process, then bind a new interpreter to the same loopback port. The new
+process starts with an explicitly supplied replacement synthetic key: the old
+key must be refused and the replacement key must receive a newly published
+event. Both process PIDs and source SHAs are recorded and checked in CI. This
+is transport replacement after process exit, not automatic key-rotation
+persistence, durable subscription/event history, database recovery, replay
+resistance across a rollback, or restoration of authorization/Bind state.
 
 Startup rejects declared multi-worker API deployments in production/strict
 profiles while this controller remains process-local. Either `WEB_CONCURRENCY`

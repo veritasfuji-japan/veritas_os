@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional, Protocol, Tuple
 
 from fastapi import Header, HTTPException, Query, Request, Security, WebSocket
 from fastapi.security.api_key import APIKeyHeader
+from starlette.requests import HTTPConnection
 
 from veritas_os.api.utils import _errstr, redact
 from veritas_os.api.rbac import Permission, Role, ROLE_PERMISSIONS
@@ -525,7 +526,7 @@ from typing import List
 
 
 def _parse_api_keys_config() -> List[dict]:
-    """Parse VERITAS_API_KEYS JSON env var into a list of {key, role} dicts.
+    """Parse VERITAS_API_KEYS key/role entries with optional trusted tenant_id.
 
     Returns an empty list when the env var is unset or empty.
     Raises ValueError on malformed JSON or invalid role values.
@@ -550,7 +551,13 @@ def _parse_api_keys_config() -> List[dict]:
         key_str = str(entry["key"]).strip()
         if not key_str:
             raise ValueError("Empty key in VERITAS_API_KEYS entry")
-        result.append({"key": key_str, "role": role_str})
+        parsed = {"key": key_str, "role": role_str}
+        if "tenant_id" in entry:
+            tenant = entry["tenant_id"]
+            if not isinstance(tenant, str) or not tenant.strip():
+                raise ValueError("VERITAS_API_KEYS tenant_id must be a nonempty string")
+            parsed["tenant_id"] = tenant.strip()
+        result.append(parsed)
     return result
 
 
@@ -582,6 +589,18 @@ def resolve_role_for_key(api_key: str) -> Role:
         return Role.admin
 
     raise ValueError("api key does not match any configured key")
+
+
+def resolve_tenant_for_key(api_key: str) -> str | None:
+    """Return a key's server-configured tenant; legacy/unbound keys have none.
+
+    Malformed multi-key configuration raises ValueError rather than trusting a
+    caller's tenant header or assigning a deployment-wide tenant to every key.
+    """
+    for entry in _parse_api_keys_config():
+        if secrets.compare_digest(api_key, entry["key"]):
+            return entry.get("tenant_id")
+    return None
 
 
 def _resolve_role_from_request(
@@ -946,7 +965,23 @@ def _bind_authenticated_principal(
     return principal_id
 
 
-def require_authenticated_principal(request: Request) -> str:
+def require_deployment_tenant(request: Request) -> None:
+    """Require the authenticated key to belong to the configured deployment tenant."""
+    expected_tenant = (os.getenv("VERITAS_GOVERNANCE_TENANT_ID") or "").strip()
+    if not expected_tenant:
+        return
+
+    require_authenticated_principal(request)
+    key = (request.headers.get("X-API-Key") or "").strip()
+    try:
+        trusted_tenant = resolve_tenant_for_key(key)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Tenant scope unavailable") from None
+    if trusted_tenant != expected_tenant:
+        raise HTTPException(status_code=403, detail="Tenant scope mismatch")
+
+
+def require_authenticated_principal(request: HTTPConnection) -> str:
     """Read the principal attached by successful API authentication, or refuse."""
     principal = getattr(request.state, "authenticated_principal_id", None)
     if not isinstance(principal, str) or not principal.strip() or principal == "anon":
@@ -1048,6 +1083,39 @@ def _allow_sse_query_api_key() -> bool:
         return False
 
     return True
+
+
+def stream_api_key_is_current(connection: Request | WebSocket) -> bool:
+    """Recheck stream credentials against this process's current key configuration.
+
+    This does not add TTL, role authorization, or an external revocation source.
+    Query credentials must remain opted in for the relevant transport.
+    """
+    candidate = (connection.headers.get("X-API-Key") or "").strip()
+    if not candidate:
+        candidate = (connection.query_params.get("api_key") or "").strip()
+        allow_query = _allow_ws_query_api_key if isinstance(connection, WebSocket) else _allow_sse_query_api_key
+        if not candidate or not allow_query():
+            return False
+    return _is_valid_api_key(candidate)
+
+
+def stream_has_permission(connection: Request | WebSocket, permission: Permission) -> bool:
+    """Check a stream's current key and trusted configured role before delivery.
+
+    Caller-supplied role headers never grant these permissions. Re-resolve on
+    every event so an open stream does not retain a previous role's privileges.
+    """
+    if not stream_api_key_is_current(connection):
+        return False
+    candidate = (connection.headers.get("X-API-Key") or "").strip()
+    if not candidate:
+        candidate = (connection.query_params.get("api_key") or "").strip()
+    try:
+        role = resolve_role_for_key(candidate)
+    except ValueError:
+        return False
+    return permission in ROLE_PERMISSIONS.get(role, frozenset())
 
 
 def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:

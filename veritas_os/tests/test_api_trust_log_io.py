@@ -194,8 +194,8 @@ def test_write_shadow_decide_snapshot_creates_snapshot(tmp_path: Path) -> None:
 
     trust_log_io.write_shadow_decide_snapshot(
         request_id="req-2",
-        body={"context": {"query": "fallback query"}},
-        chosen={"answer": "ok"},
+        body={"context": {"query": "contact alice@example.invalid"}},
+        chosen={"answer": {"contact": "bob@example.invalid"}},
         telos_score=0.75,
         fuji={"status": "allow"},
         effective_shadow_dir=lambda: shadow_dir,
@@ -209,5 +209,41 @@ def test_write_shadow_decide_snapshot_creates_snapshot(tmp_path: Path) -> None:
     files = list(shadow_dir.glob("decide_*.json"))
     assert len(files) == 1
     payload = json.loads(files[0].read_text(encoding="utf-8"))
-    assert payload["query"] == "fallback query"
+    assert payload["query"].startswith("contact ")
+    assert "alice@example.invalid" not in payload["query"]
+    assert "bob@example.invalid" not in payload["chosen"]["answer"]["contact"]
     assert payload["fuji"] == "allow"
+
+
+def test_shadow_writers_keep_distinct_records_with_frozen_clock(monkeypatch, tmp_path):
+    from datetime import datetime, timezone
+
+    from veritas_os.logging import trust_log
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 9, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(trust_log, "datetime", FrozenDatetime)
+    monkeypatch.setattr(trust_log_io, "datetime", FrozenDatetime)
+    monkeypatch.setattr(trust_log, "LOG_DIR", tmp_path)
+    shadow_dir = tmp_path / "DASH"
+    for request_id in ("primary-a", "primary-b"):
+        trust_log.write_shadow_decide(request_id, {}, {}, 0, {})
+    for request_id in ("fallback-a", "fallback-b"):
+        trust_log_io.write_shadow_decide_snapshot(
+            request_id, {}, {}, 0, {},
+            effective_shadow_dir=lambda: shadow_dir,
+            has_atomic_io=False,
+            atomic_write_json=None,
+            secure_chmod_fn=lambda _path: None,
+            logger=_LoggerStub(),
+            errstr=str,
+        )
+
+    files = list(shadow_dir.glob("decide_*.json"))
+    assert len(files) == 4
+    assert {json.loads(path.read_text())["request_id"] for path in files} == {
+        "primary-a", "primary-b", "fallback-a", "fallback-b",
+    }

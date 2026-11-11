@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VERITAS proposed persistent replay audit observation record v0.1",
+  "description": "Offline, unauthenticated candidate observation format only. Does not persist state, check historical completeness, grant authority or enforce atomic consumption.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "record_type",
+    "packet_id",
+    "case_id",
+    "repository_claim",
+    "repository_key",
+    "source_commit",
+    "operation_id",
+    "manifest_id",
+    "profile_sha256",
+    "manifest_sha256",
+    "snapshot_digest",
+    "local_manifest_binding",
+    "declared_provenance_binding",
+    "origin_authentication",
+    "independent_review",
+    "record_hash"
+  ],
+  "properties": {
+    "format_version": {
+      "const": "veritas.audit-replay-observation/0.1"
+    },
+    "record_type": {
+      "const": "LOCAL_AUDIT_OBSERVATION"
+    },
+    "packet_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "repository_claim": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "minLength": 3,
+      "maxLength": 201
+    },
+    "repository_key": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.-]+/[a-z0-9_.-]+$",
+      "minLength": 3,
+      "maxLength": 201
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "operation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "manifest_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "profile_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "snapshot_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "local_manifest_binding": {
+      "const": "MATCHED"
+    },
+    "declared_provenance_binding": {
+      "const": "CLAIMED_CONTEXT_MATCHES_LOCAL_MANIFEST"
+    },
+    "origin_authentication": {
+      "const": "NOT_PERFORMED"
+    },
+    "independent_review": {
+      "const": "NOT_PERFORMED"
+    },
+    "record_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

@@ -517,7 +517,7 @@ export default function GovernanceControlPage(): JSX.Element {
             onRollback={state.rollback}
           />
 
-          <PolicyBundlePromotionFlow canOperate={state.canOperate} />
+          <PolicyBundlePromotionFlow canOperate={state.authenticatedRole === "admin" && state.canApply} />
 
           <BindCockpit />
 

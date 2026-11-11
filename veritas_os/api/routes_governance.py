@@ -13,8 +13,15 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from starlette.requests import HTTPConnection
 
-from veritas_os.api.auth import require_authenticated_principal, require_permission
+from veritas_os.api.auth import (
+    _derive_api_user_id,
+    require_authenticated_principal,
+    require_permission,
+    resolve_role_for_key,
+    resolve_tenant_for_key,
+)
 from veritas_os.api.bind_summary import (
     build_bind_response_payload,
     build_bind_summary_from_receipt,
@@ -364,10 +371,22 @@ def _governance_rbac_bypass_acknowledged() -> bool:
 
 
 def require_governance_access(
+    connection: HTTPConnection,
     x_role: Optional[str] = Header(default=None, alias="X-Role"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-Id"),
 ) -> bool:
-    """Enforce governance RBAC/ABAC constraints for admin endpoints."""
+    """Require key-backed role/tenant authority in addition to caller assertions."""
+    principal = require_authenticated_principal(connection)
+    key = (connection.headers.get("X-API-Key") or "").strip()
+    if not key:
+        # SSE query auth has already bound the principal through its own opt-in guard.
+        key = (connection.query_params.get("api_key") or "").strip()
+    if not key or _derive_api_user_id(key) != principal:
+        raise HTTPException(status_code=403, detail="Authenticated key context required")
+    try:
+        trusted_role = resolve_role_for_key(key).value
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Authenticated key role unavailable") from None
     if not _governance_rbac_enabled():
         if not _governance_rbac_bypass_acknowledged():
             logger.error(
@@ -386,12 +405,18 @@ def require_governance_access(
         return True
 
     role = (x_role or "").strip().lower()
-    if role not in _resolve_governance_allowed_roles():
+    allowed_roles = _resolve_governance_allowed_roles()
+    if trusted_role not in allowed_roles or role not in allowed_roles:
         raise HTTPException(status_code=403, detail="Insufficient governance role")
 
     expected_tenant = (os.getenv("VERITAS_GOVERNANCE_TENANT_ID") or "").strip()
-    if expected_tenant and (x_tenant_id or "").strip() != expected_tenant:
-        raise HTTPException(status_code=403, detail="Tenant scope mismatch")
+    if expected_tenant:
+        try:
+            trusted_tenant = resolve_tenant_for_key(key)
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Tenant scope unavailable") from None
+        if trusted_tenant != expected_tenant or (x_tenant_id or "").strip() != expected_tenant:
+            raise HTTPException(status_code=403, detail="Tenant scope mismatch")
 
     return True
 
@@ -463,14 +488,21 @@ def governance_get():
 )
 def governance_put(body: dict, request: Request):
     """Update the governance policy (partial merge)."""
-    # HTTP lineage is evidence metadata, never a trusted Bind-policy override.
+    # HTTP lineage cannot configure Bind policy or label the executed target.
     lineage = body.get("policy_lineage")
     if isinstance(lineage, dict) and "bind_adjudication" in lineage:
         return JSONResponse(
             status_code=400,
             content={"ok": False, "error": "policy_lineage_policy_override_forbidden"},
         )
+    if isinstance(lineage, dict) and "bind_target_metadata" in lineage:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": "policy_lineage_target_override_forbidden"},
+        )
     actor_identity = require_authenticated_principal(request)
+    # History provenance is assigned by the authenticated operation.
+    policy_patch = {**body, "updated_by": actor_identity, "_event_type": "update"}
     srv = _get_server()
     with trace_step(
         "governance.policy_update.request",
@@ -494,14 +526,15 @@ def governance_put(body: dict, request: Request):
             set_span_attribute("policy_snapshot_id", policy_snapshot_id)
             set_span_attribute("approval_count", approval_count)
 
+            # Evidence IDs are issued by the helper, never selected by HTTP callers.
             with trace_step("governance.bind_boundary.evaluate"):
                 bind_receipt = update_governance_policy_with_bind_boundary(
                     decision_id=decision_id,
                     request_id=request_id,
                     actor_identity=actor_identity,
                     policy_snapshot_id=policy_snapshot_id,
-                    decision_hash=sha256_of_canonical_json(_governance_decision_hash_payload(body)),
-                    policy_patch=body,
+                    decision_hash=sha256_of_canonical_json(_governance_decision_hash_payload(policy_patch)),
+                    policy_patch=policy_patch,
                     policy_reader=srv.get_policy,
                     policy_updater=srv.update_policy,
                     policy_rollback=getattr(srv, "rollback_policy", None),
@@ -511,8 +544,6 @@ def governance_put(body: dict, request: Request):
                     if isinstance(body.get("policy_lineage"), dict)
                     else None,
                     governance_policy=previous if isinstance(previous, dict) else None,
-                    execution_intent_id=str(body.get("execution_intent_id") or "") or None,
-                    bind_receipt_id=str(body.get("bind_receipt_id") or "") or None,
                 ).to_dict()
 
             set_span_attribute("bind_receipt_id", bind_receipt.get("bind_receipt_id"))
@@ -838,7 +869,12 @@ def governance_bind_receipt(bind_receipt_id: str):
         receipts = find_bind_receipts(bind_receipt_id=bind_receipt_id)
         if not receipts:
             return JSONResponse(status_code=404, content={"ok": False, "error": "bind_receipt_not_found"})
-        enriched_receipt = enrich_bind_receipt_payload(receipts[-1].to_dict())
+        if len(receipts) != 1:
+            return JSONResponse(
+                status_code=409,
+                content={"ok": False, "error": "bind_receipt_id_ambiguous"},
+            )
+        enriched_receipt = enrich_bind_receipt_payload(receipts[0].to_dict())
         return {
             "ok": True,
             **build_bind_response_payload(enriched_receipt),

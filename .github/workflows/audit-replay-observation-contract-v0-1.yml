@@ -1,0 +1,22 @@
+name: Audit Replay Observation Contract v0.1 (offline)
+on:
+  pull_request:
+  push:
+permissions:
+  contents: read
+jobs:
+  offline-audit-observation-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install bounded offline contract test dependencies
+        run: python -m pip install 'pytest>=8,<9' 'jsonschema>=4.20,<5'
+      - name: Test candidate record schema, integrity and fail-closed claims
+        run: python -m pytest -q tests/validation/test_audit_replay_observation_v0_1.py
+      - name: Preserve existing cross-packet replay regression
+        run: python -m pip install 'PyYAML>=6,<7' && python -m pytest -q tests/validation/test_cross_packet_replay_provenance.py
+      - name: Preserve Profile and Bridge regressions
+        run: python -m pytest -q tests/validation/test_audit_evidence_profile_v0_2.py tests/validation/test_audit_evidence_chain_bridge.py

@@ -1,0 +1,172 @@
+name: Audit Custody Append-only Service v0.1
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  isolated-custody-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas -d veritas_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real PostgreSQL, TLS and offline audit dependencies
+        run: |
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio "jsonschema>=4.20,<5" "PyYAML>=6,<7"
+      - name: Apply existing audit archive migration
+        run: alembic upgrade head
+      - name: Atomic append, history attacks, real TLS and PostgreSQL rollback
+        run: |
+          mkdir -p test-reports
+          python -m pytest -q \
+            tests/validation/test_audit_custody_head_store_v0_1.py \
+            tests/validation/test_audit_custody_head_service_https_v0_1.py \
+            -v --tb=short --junitxml=test-reports/audit-custody-service.xml
+      - name: Preserve existing remote-head and signed-custody regressions
+        run: |
+          python -m pytest -q \
+            tests/validation/test_audit_remote_custody_https_v0_1.py \
+            tests/validation/test_audit_remote_custody_postgresql_v0_1.py \
+            tests/validation/test_audit_checkpoint_signed_custody_v0_1.py \
+            tests/validation/test_audit_checkpoint_signed_custody_postgresql_v0_1.py \
+            tests/validation/test_audit_registry_checkpoint_v0_1.py \
+            tests/validation/test_audit_registry_checkpoint_postgresql_v0_1.py
+      - name: Rehearse separate Linux database, publisher and read-only identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo groupadd --system custody-readers
+          sudo useradd --system --no-create-home --shell /usr/sbin/nologin custody-owner
+          sudo useradd --system --no-create-home --shell /usr/sbin/nologin --gid custody-readers custody-reader
+          sudo useradd --system --no-create-home --shell /usr/sbin/nologin audit-db-admin
+          sudo install -d -m 0750 -o custody-owner -g custody-readers /tmp/veritas-custody-owned
+          sudo install -d -m 0700 -o custody-reader -g custody-readers /tmp/veritas-custody-tls
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "tests/validation")
+          from test_audit_checkpoint_signed_custody_v0_1 import fixture
+          from veritas_os.security.hash import canonical_json_dumps
+          reference, unused_key, public_key, receipt = fixture()
+          Path("/tmp/veritas-custody-reference.json").write_text(canonical_json_dumps(reference))
+          Path("/tmp/veritas-custody-receipt.json").write_text(canonical_json_dumps(receipt))
+          Path("/tmp/veritas-custody-public.txt").write_text(public_key)
+          for name in ("reference.json", "receipt.json", "public.txt"):
+              Path("/tmp/veritas-custody-" + name).chmod(0o644)
+          PY
+          # Runner checkout ancestors may restrict traverse, even for public source.
+          path="$GITHUB_WORKSPACE"
+          while [ "$path" != "/" ]; do
+            sudo chmod o+x "$path"
+            path="$(dirname "$path")"
+          done
+          py="$(command -v python)"
+          pub="$(cat /tmp/veritas-custody-public.txt)"
+          sudo -u custody-owner env PYTHONPATH="$GITHUB_WORKSPACE" "$py" \
+            -m scripts.validation.audit_custody_head_store_cli_v0_1 init \
+            --db /tmp/veritas-custody-owned/head.sqlite --signer-public-key-hex "$pub"
+          sudo -u custody-owner env PYTHONPATH="$GITHUB_WORKSPACE" "$py" \
+            -m scripts.validation.audit_custody_head_store_cli_v0_1 publish \
+            --db /tmp/veritas-custody-owned/head.sqlite \
+            --reference /tmp/veritas-custody-reference.json \
+            --receipt /tmp/veritas-custody-receipt.json
+          sudo chgrp custody-readers /tmp/veritas-custody-owned/head.sqlite
+          sudo chmod 0640 /tmp/veritas-custody-owned/head.sqlite
+          sudo -u custody-reader test -r /tmp/veritas-custody-owned/head.sqlite
+          sudo -u custody-reader test ! -w /tmp/veritas-custody-owned/head.sqlite
+          sudo -u audit-db-admin test ! -r /tmp/veritas-custody-owned/head.sqlite
+          sudo -u audit-db-admin test ! -w /tmp/veritas-custody-owned/head.sqlite
+          sudo -u custody-reader env PYTHONPATH="$GITHUB_WORKSPACE" "$py" \
+            -m scripts.validation.audit_custody_head_store_cli_v0_1 head \
+            --db /tmp/veritas-custody-owned/head.sqlite > /tmp/veritas-custody-head-readback.json
+          if sudo -u custody-reader env PYTHONPATH="$GITHUB_WORKSPACE" "$py" \
+            -m scripts.validation.audit_custody_head_store_cli_v0_1 publish \
+            --db /tmp/veritas-custody-owned/head.sqlite \
+            --reference /tmp/veritas-custody-reference.json \
+            --receipt /tmp/veritas-custody-receipt.json; then
+            echo "FAIL: read-only user published" >&2
+            exit 1
+          fi
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout /tmp/veritas-custody-https.key -out /tmp/veritas-custody-https.pem \
+            -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost" 2>/dev/null
+          sudo install -o custody-reader -g custody-readers -m 0400 \
+            /tmp/veritas-custody-https.key /tmp/veritas-custody-tls/server.key
+          sudo install -o custody-reader -g custody-readers -m 0444 \
+            /tmp/veritas-custody-https.pem /tmp/veritas-custody-tls/server.pem
+          sudo -u custody-reader env -u VERITAS_DATABASE_URL -u VERITAS_API_KEY \
+            PYTHONPATH="$GITHUB_WORKSPACE" "$py" \
+            -m scripts.validation.audit_custody_head_store_cli_v0_1 serve \
+            --db /tmp/veritas-custody-owned/head.sqlite \
+            --certificate /tmp/veritas-custody-tls/server.pem \
+            --private-key /tmp/veritas-custody-tls/server.key \
+            --listen-host 127.0.0.1 --port 18443 &
+          server_pid="$!"
+          trap 'sudo kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --noproxy "*" --silent --fail \
+              --cacert /tmp/veritas-custody-https.pem \
+              --resolve localhost:18443:127.0.0.1 \
+              https://localhost:18443/v1/audit/checkpoints/latest \
+              > /tmp/veritas-custody-head-https.json; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+          test "$ready" = 1
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from veritas_os.security.hash import sha256_of_canonical_json
+          a = json.loads(Path("/tmp/veritas-custody-head-https.json").read_text())
+          b = json.loads(Path("/tmp/veritas-custody-head-readback.json").read_text())
+          receipt = json.loads(Path("/tmp/veritas-custody-receipt.json").read_text())
+          assert a == b and a["sequence"] == 1
+          assert a["latest_receipt_sha256"] == sha256_of_canonical_json(receipt)
+          print("OS_ROLE_SEPARATION_AND_HTTPS_HEAD_MATCH")
+          PY
+          status="$(curl --noproxy "*" --silent -o /dev/null -w '%{http_code}' \
+            --cacert /tmp/veritas-custody-https.pem \
+            --resolve localhost:18443:127.0.0.1 \
+            --request POST --data '{}' https://localhost:18443/v1/audit/checkpoints/latest)"
+          test "$status" = 405
+          if sudo -u audit-db-admin env PYTHONPATH="$GITHUB_WORKSPACE" "$py" \
+            -m scripts.validation.audit_custody_head_store_cli_v0_1 head \
+            --db /tmp/veritas-custody-owned/head.sqlite; then
+            echo "FAIL: audited DB administrator accessed custody database" >&2
+            exit 1
+          fi
+      - name: Upload synthetic custody report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-custody-head-service-${{ github.run_id }}
+          path: test-reports/audit-custody-service.xml
+          if-no-files-found: warn

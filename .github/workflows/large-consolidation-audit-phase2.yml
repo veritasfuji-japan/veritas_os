@@ -66,7 +66,9 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
+          import subprocess
 
           path = Path("artifacts/consolidation-audit/phase2-generated.json")
           data = json.loads(path.read_text(encoding="utf-8"))
@@ -75,6 +77,19 @@ jobs:
           assert data["mode"] == "NON_DESTRUCTIVE"
           assert data["source_main"] == "52752dbf766d9994f2f3267af47e904748d347a6"
           assert data["frozen_proof_anchor"] == "ada46f2fe324dd3cbcff6be59d56c4f75c4a6bdc"
+
+          # Historical source_main is not the identity of this generated audit.
+          observed = data["observed_checkout"]
+          tested_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True,
+          ).strip()
+          tree_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD^{tree}"], text=True,
+          ).strip()
+          assert observed["tested_sha"] == tested_sha == os.environ["GITHUB_SHA"]
+          assert observed["head_tree_sha"] == tree_sha
+          # Recorded before the generator creates its output artifact.
+          assert observed["worktree_dirty"] is False
 
           closure = data["frozen_dependency_closure"]
           assert closure["runtime_closure_count"] >= closure["runtime_seed_count"]

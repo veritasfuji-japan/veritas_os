@@ -10,6 +10,13 @@ from veritas_os.api import routes_system, server
 from veritas_os.api.sse_hub import SSEEventHub
 
 
+@pytest.fixture(autouse=True)
+def _direct_sse_credentials(monkeypatch):
+    """Direct generator/response cases also carry a currently valid stream key."""
+    monkeypatch.setenv("VERITAS_API_KEY", "direct-sse-stream-test")
+    monkeypatch.delenv("VERITAS_API_KEYS", raising=False)
+
+
 @pytest.mark.parametrize("error_type", [RuntimeError, OSError])
 @pytest.mark.parametrize("spec_version", ["2.0", "2.4"])
 @pytest.mark.parametrize("boundary", ["headers", "connected", "event", "heartbeat"])
@@ -18,12 +25,12 @@ async def test_sse_send_failure_releases_subscription(
 ):
     hub = SSEEventHub(timestamp_factory=lambda: "test")
     monkeypatch.setattr(server, "_event_hub", hub)
-    request = Request({"type": "http"})
+    request = Request({"type": "http", "headers": [(b"x-api-key", b"direct-sse-stream-test")]})
     monkeypatch.setattr(request, "is_disconnected", lambda: asyncio.sleep(0, result=False))
     # Short direct-call heartbeat isolates response cleanup; HTTP bounds are unchanged.
     response = await routes_system.events(request, heartbeat_sec=0.01)
     if boundary == "event":
-        hub.publish("test.event", {"test": True})
+        hub.publish("trustlog.appended", {"test": True})
     failure = error_type("synthetic SSE send failure")
     failed = False
 
@@ -33,7 +40,7 @@ async def test_sse_send_failure_releases_subscription(
         if (
             (boundary == "headers" and message["type"] == "http.response.start")
             or (boundary == "connected" and b": connected" in body)
-            or (boundary == "event" and b"event: test.event" in body)
+            or (boundary == "event" and b"event: trustlog.appended" in body)
             or (boundary == "heartbeat" and b": heartbeat" in body)
         ):
             failed = True
@@ -70,7 +77,7 @@ async def test_mounted_sse_send_failure_releases_subscription(monkeypatch, bound
     monkeypatch.setattr(server.app.state, "security_startup_pid", os.getpid(), raising=False)
     hub = SSEEventHub(timestamp_factory=lambda: "test")
     monkeypatch.setattr(server, "_event_hub", hub)
-    hub.publish("test.event", {"test": True})
+    hub.publish("trustlog.appended", {"test": True})
     incoming = asyncio.Queue()
     failed = False
     failure = RuntimeError("synthetic mounted SSE send failure")
@@ -78,7 +85,7 @@ async def test_mounted_sse_send_failure_releases_subscription(monkeypatch, bound
     async def send(message):
         nonlocal failed
         body = message.get("body", b"")
-        target = b": connected" if boundary == "connected" else b"event: test.event"
+        target = b": connected" if boundary == "connected" else b"event: trustlog.appended"
         if target in body:
             failed = True
             raise failure

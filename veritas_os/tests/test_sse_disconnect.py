@@ -10,6 +10,13 @@ from veritas_os.api import routes_system, server
 from veritas_os.api.sse_hub import SSEEventHub
 
 
+@pytest.fixture(autouse=True)
+def _direct_sse_credentials(monkeypatch):
+    """Direct generator/response cases also carry a currently valid stream key."""
+    monkeypatch.setenv("VERITAS_API_KEY", "direct-sse-stream-test")
+    monkeypatch.delenv("VERITAS_API_KEYS", raising=False)
+
+
 async def test_sse_cancellation_leaves_no_blocked_reader(monkeypatch):
     hub = SSEEventHub(timestamp_factory=lambda: "test")
     subscriber = hub.register()
@@ -26,7 +33,7 @@ async def test_sse_cancellation_leaves_no_blocked_reader(monkeypatch):
             active.clear()
 
     monkeypatch.setattr(subscriber, "get", tracked_get)
-    request = Request({"type": "http"})
+    request = Request({"type": "http", "headers": [(b"x-api-key", b"direct-sse-stream-test")]})
     monkeypatch.setattr(request, "is_disconnected", lambda: asyncio.sleep(0, result=False))
     response = await routes_system.events(request, heartbeat_sec=5)
     stream = response.body_iterator
@@ -46,9 +53,10 @@ async def test_sse_cancellation_leaves_no_blocked_reader(monkeypatch):
         await stream.aclose()
 
 
+@pytest.mark.parametrize("spec_version", ["2.0", "2.4"])
 @pytest.mark.parametrize("publish_event", [False, True])
 @pytest.mark.parametrize("termination", ["disconnect", "cancel"])
-async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, termination):
+async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, termination, spec_version):
     import os
 
     monkeypatch.setenv("VERITAS_ENV", "production")
@@ -67,11 +75,11 @@ async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, ter
         body = message.get("body", b"")
         if b": connected" in body:
             connected.set()
-        if b"event: test.event" in body:
+        if b"event: trustlog.appended" in body:
             delivered.set()
 
     scope = {
-        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.0"},
+        "type": "http", "asgi": {"version": "3.0", "spec_version": spec_version},
         "scheme": "http", "method": "GET", "http_version": "1.1", "root_path": "",
         "path": "/v1/events", "raw_path": b"/v1/events",
         "query_string": b"heartbeat_sec=5", "headers": [(b"x-api-key", b"sse-disconnect-test")],
@@ -82,7 +90,7 @@ async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, ter
     try:
         await asyncio.wait_for(connected.wait(), timeout=2)
         if publish_event:
-            hub.publish("test.event", {"test": True})
+            hub.publish("trustlog.appended", {"test": True})
             await asyncio.wait_for(delivered.wait(), timeout=2)
         if termination == "cancel":
             task.cancel()
@@ -101,7 +109,7 @@ async def test_mounted_sse_releases_subscription(monkeypatch, publish_event, ter
 async def test_sse_event_heartbeat_and_observed_disconnect(monkeypatch):
     hub = SSEEventHub(timestamp_factory=lambda: "test")
     monkeypatch.setattr(server, "_event_hub", hub)
-    request = Request({"type": "http"})
+    request = Request({"type": "http", "headers": [(b"x-api-key", b"direct-sse-stream-test")]})
     disconnected = False
 
     async def is_disconnected():
@@ -115,7 +123,7 @@ async def test_sse_event_heartbeat_and_observed_disconnect(monkeypatch):
         assert response.media_type == "text/event-stream"
         assert response.headers["X-Accel-Buffering"] == "no"
         assert await anext(stream) == ": connected\n\n"
-        event = hub.publish("test.event", {"test": True})
+        event = hub.publish("trustlog.appended", {"test": True})
         assert await anext(stream) == server._format_sse_message(event)
         assert (await asyncio.wait_for(anext(stream), timeout=1)).startswith(": heartbeat ")
         disconnected = True

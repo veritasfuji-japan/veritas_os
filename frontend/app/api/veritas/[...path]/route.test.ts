@@ -7,7 +7,6 @@ import {
   matchPolicy,
   parseAuthTokensConfig,
 } from "./route-auth";
-import { getBodySizeBytes } from "./body-size";
 import { GET } from "./route";
 import { resolveTraceId } from "./trace-id";
 import {
@@ -17,6 +16,7 @@ import {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   resetApiBaseUrlWarningStateForTest();
 });
@@ -148,17 +148,6 @@ describe("veritas bff route auth and authorization", () => {
   it("blocks unsafe path segments", () => {
     expect(hasUnsafeSegment(["v1", "..", "policy"])).toBe(true);
     expect(matchPolicy(["v1", "..", "policy"], "GET")).toBeNull();
-  });
-});
-
-describe("getBodySizeBytes", () => {
-  it("returns ASCII length as bytes", () => {
-    expect(getBodySizeBytes("abcd")).toBe(4);
-  });
-
-  it("counts multibyte UTF-8 characters correctly", () => {
-    expect(getBodySizeBytes("あ")).toBe(3);
-    expect(getBodySizeBytes("😀")).toBe(4);
   });
 });
 
@@ -489,4 +478,26 @@ describe("veritas bff route runtime api key resolution", () => {
     expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get("X-API-Key")).toBe("first-key");
     expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get("X-API-Key")).toBe("rotated-key");
   });
+});
+
+it.each([301, 302, 303, 307, 308])("blocks upstream redirect %i without returning Location", async (status) => {
+  vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+  vi.stubEnv("VERITAS_API_KEY", "synthetic-key");
+  vi.stubEnv("VERITAS_BFF_AUTH_TOKENS_JSON", '{"token-admin":"admin"}');
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response("private redirect body", {
+      status, headers: { location: "https://other-origin.invalid/receive" },
+    }),
+  );
+  const response = await GET(
+    new NextRequest("http://localhost/api/veritas/v1/governance/policy", {
+      headers: { authorization: "Bearer token-admin" },
+    }),
+    { params: Promise.resolve({ path: ["v1", "governance", "policy"] }) },
+  );
+  expect(fetchSpy).toHaveBeenCalledOnce();
+  expect(fetchSpy).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ redirect: "manual" }));
+  expect(response.status).toBe(502);
+  expect(response.headers.get("location")).toBeNull();
+  expect(await response.json()).toMatchObject({ error: "upstream_redirect_blocked" });
 });

@@ -1,0 +1,78 @@
+{
+  "format_version": "veritas-reviewer-proof-contract/v1",
+  "proof": "CONTROLLED_CURRENT_HEAD_DECISION_TO_EFFECT_E2E",
+  "report_format": "controlled-decision-to-effect-e2e/v1",
+  "evidence_format": "controlled-decision-to-effect-evidence/v1",
+  "scope": "CONTROLLED_SYNTHETIC_TLS_POSTGRESQL_E2E_ONLY",
+  "decision_capture_mode": "REAL_POST_V1_DECIDE_WITH_CONTROLLED_MODEL_OUTPUT",
+  "external_effect_scope": "SYNTHETIC_SANDBOX_EVENT_PERSISTENCE",
+  "scenario_keys": [
+    "normal",
+    "fault"
+  ],
+  "required_conjunction": [
+    "current_head_source_recorded",
+    "tested_checkout_sha_verified",
+    "real_decide_route_exercised",
+    "canonical_decisions_verified",
+    "selected_action_bindings_verified",
+    "decision_lineage_proven",
+    "execution_intent_lineage_proven",
+    "native_v2_authorizations_verified",
+    "real_postgresql_consumption",
+    "current_governance_rechecks_exercised",
+    "real_certificate_validated_tls_post",
+    "dedicated_postgresql_effect_persistence",
+    "read_only_reconciliation_confirmed",
+    "bind_receipt_decision_lineage_verified",
+    "outcome_decision_lineage_verified",
+    "fault_unknown_preserved",
+    "no_blind_redispatch",
+    "repeat_recovery_avoids_lookup"
+  ],
+  "required_true_claims": [
+    "controlled_decision_to_effect_e2e_proven"
+  ],
+  "required_false_claims": [
+    "production_claim",
+    "production_decision_to_effect_e2e_proven",
+    "trustlog_exactly_once_proven",
+    "production_validation_proven"
+  ],
+  "required_non_claims": [
+    "production readiness",
+    "real customer credentials",
+    "real customer endpoint",
+    "independent production infrastructure",
+    "external UTC clock trust",
+    "TrustLog exactly-once publication",
+    "regulatory approval or certification"
+  ],
+  "expected_sandbox_rows_added": 2,
+  "scenarios": {
+    "normal": {
+      "dispatch_reason": "HTTP_201_MATCHING_ACK",
+      "terminal_effect_state": "CONFIRMED_EFFECT",
+      "min_governance_rechecks": 3
+    },
+    "fault": {
+      "dispatch_reason": "TRANSPORT_FAILED_OR_UNKNOWN",
+      "transport_delegate_observation": "HTTP_201_MATCHING_ACK",
+      "lookup_outage_state": "EFFECT_UNKNOWN",
+      "lookup_outage_retry_permitted": false,
+      "terminal_effect_state": "CONFIRMED_EFFECT",
+      "transport_calls": 1,
+      "min_governance_rechecks": 3
+    }
+  },
+  "out_of_scope": [
+    "denial-case coverage",
+    "universal bypass resistance",
+    "independent administrative custody",
+    "real customer effects",
+    "Strict RC1 physical-time/STOP closure",
+    "external UTC trust",
+    "production SLA",
+    "third-party certification"
+  ]
+}

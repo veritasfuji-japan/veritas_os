@@ -33,6 +33,53 @@
 
 ---
 
+---
+## The problem, in 10 seconds
+
+An AI agent can be instructed — or tricked by prompt injection — to grant admin access, send money, or change a permission. Most guardrails inspect the *text* of the request. VERITAS inspects the *act*:
+
+> **May this exact action commit, right now — under current authority, policy, approval, and evidence?**
+
+AI output is a **Decision Candidate**, not execution authority. Before it can become a real-world effect, it must cross the Bind Boundary, where the authorization is re-checked and consumed exactly once, and the outcome is recorded as verifiable evidence.
+
+![VERITAS demo: four actions blocked, one commit-eligible](docs/veritas-demo.gif)
+
+## Try it in 5 minutes — no API key, no external effect
+
+```bash
+git clone https://github.com/veritasfuji-japan/veritas_os.git
+cd veritas_os
+python3 scripts/demo/validate_reviewer_evidence_packet.py
+```
+
+Five cases run against local fixtures:
+
+| Case | Outcome |
+|---|---|
+| Missing authority | **BLOCKED** |
+| Missing human approval | **BLOCKED** |
+| Expired approval | **BLOCKED** |
+| Scope mismatch | **BLOCKED** |
+| Valid authority + approval | commit-eligible, with a verified evidence chain |
+
+Expected summary: `blocked_cases: 4, committed_cases: 1, verified_chains: 5`.
+
+Nothing here performs a real permission change — the point is the boundary and its evidence. For the full local setup (Docker / API / Mission Control), see [Quick start](#quick-start) below.
+
+## A measured result, not a claim
+
+On a frozen real-provider AgentDojo banking benchmark (128 paired cases), adding VERITAS Bind governance moved **injection success from 20/128 to 0/128**, at a measured cost in legitimate utility (**93/128 → 64/128**). Full contracts, pins, and limitations: [RCC/REVAS × VERITAS Benchmark](https://github.com/veritasfuji-japan/rcc-revas-veritas-benchmark) — the utility cost is reported, not hidden.
+
+## Where to go next
+
+- **Evaluate as an engineer (10–15 min):** [Engineering Evaluation Quickstart](docs/en/guides/engineering-evaluation-quickstart.md)
+- **Review the evidence:** [Reviewer Entry Point](docs/REVIEWER_ENTRYPOINT.md) · [Implementation Matrix](docs/en/validation/current-implementation-matrix.md) · [Technical Proof Pack](docs/en/validation/technical-proof-pack.md)
+- **Enterprise / paid PoC:** propose one narrow effect boundary — see [Contact](#contact). Scope and fees require a separate agreement.
+
+⭐ **If this problem matters to you, star this repo** — stars are how we can tell that execution-boundary governance is worth continuing to prove in public.
+
+---
+
 ## Evidence snapshot and enterprise evaluation (2026-10-09)
 
 VERITAS separates **implemented components**, **reproducible bounded proofs**, **measured benchmark outcomes**, and **customer-specific production validation**. Each claim below is tied to its own source and scope; these are **not interchangeable proof levels**.

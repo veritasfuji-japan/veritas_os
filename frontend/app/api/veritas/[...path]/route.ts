@@ -5,7 +5,7 @@ import {
   matchPolicy,
   parseAuthTokensConfig,
 } from "./route-auth";
-import { getBodySizeBytes } from "./body-size";
+import { readBoundedRequestText } from "../request-body";
 import { resolveTraceId, TRACE_ID_HEADER_NAME } from "./trace-id";
 
 import { resolveApiBaseUrl } from "./route-config";
@@ -115,8 +115,8 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   const hasBody = !["GET", "HEAD"].includes(request.method);
   let body: string | undefined;
   if (hasBody) {
-    body = await request.text();
-    if (getBodySizeBytes(body) > MAX_PROXY_BODY_BYTES) {
+    const text = await readBoundedRequestText(request, MAX_PROXY_BODY_BYTES);
+    if (text === null) {
       return NextResponse.json(
         { error: "payload_too_large", trace_id: traceId },
         {
@@ -127,6 +127,7 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
         },
       );
     }
+    body = text;
   }
 
   const upstreamResponse = await fetch(targetUrl, {
@@ -134,7 +135,16 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
     headers: upstreamHeaders,
     body,
     cache: "no-store",
+    redirect: "manual",
   });
+
+  if (upstreamResponse.status >= 300 && upstreamResponse.status < 400) {
+    await upstreamResponse.body?.cancel();
+    return NextResponse.json(
+      { error: "upstream_redirect_blocked", trace_id: traceId },
+      { status: 502, headers: { [TRACE_ID_HEADER_NAME]: traceId } },
+    );
+  }
 
   const responseHeaders = new Headers();
   const upstreamContentType = upstreamResponse.headers.get("content-type");

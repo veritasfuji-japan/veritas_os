@@ -20,7 +20,10 @@ from veritas_os.governance.authority_evidence import (
     VerifiedAuthorityEvidence,
 )
 from veritas_os.governance.predicates import PredicateResult
-from veritas_os.governance.runtime_authority import RuntimeAuthorityValidator
+from veritas_os.governance.runtime_authority import (
+    RuntimeAuthorityValidationResult,
+    RuntimeAuthorityValidator,
+)
 
 CommitBoundaryOutcome = Literal["commit", "block", "escalate", "refuse"]
 
@@ -150,14 +153,33 @@ class CommitBoundaryEvaluator:
         *,
         execution_intent: str | dict[str, Any],
         action_contract: ActionClassContract | None,
-        authority_result: Any,
+        authority_result: RuntimeAuthorityValidationResult,
     ) -> CommitBoundaryOutcome:
-        if authority_result.recommended_outcome == "escalate":
+        recommendation = getattr(authority_result, "recommended_outcome", None)
+        if recommendation == "escalate":
             return "escalate"
-        if authority_result.recommended_outcome == "refuse":
+        if recommendation == "refuse":
             return "refuse"
-        if authority_result.recommended_outcome == "block":
+        if recommendation == "block":
             return "block"
+
+        # A recommendation is not enough: only an explicit, internally
+        # consistent passing result may reach the intent admissibility check.
+        if (
+            recommendation != "commit"
+            or authority_result.status != "pass"
+            or not authority_result.passed_predicates
+            or any((
+                authority_result.failed_predicates,
+                authority_result.stale_predicates,
+                authority_result.missing_predicates,
+                authority_result.indeterminate_predicates,
+                authority_result.refusal_basis,
+                authority_result.escalation_basis,
+            ))
+            or any(item.status != "pass" for item in authority_result.passed_predicates)
+        ):
+            return "refuse"
 
         if not self._is_action_admissible(execution_intent, action_contract):
             return "refuse"
@@ -174,12 +196,16 @@ class CommitBoundaryEvaluator:
         if isinstance(execution_intent, str):
             return bool(execution_intent.strip())
 
+        if not isinstance(execution_intent, dict):
+            return False
+
         intent_action_class = str(execution_intent.get("action_class", "")).strip()
         if intent_action_class and intent_action_class != action_contract.action_class:
             return False
 
-        admissible_flag = execution_intent.get("admissible")
-        if admissible_flag is False:
+        # Omission retains the legacy contract; a present flag must be the
+        # actual boolean True, never a string, numeric value or null.
+        if "admissible" in execution_intent and execution_intent["admissible"] is not True:
             return False
 
         return True

@@ -113,7 +113,14 @@ jobs:
       - name: Start independent sandbox HTTPS service
         run: |
           set -euo pipefail
-          sudo -E env PYTHONPATH="$GITHUB_WORKSPACE" "$(which python)" \
+          # sudo implementations may ignore -E; pass only service inputs.
+          sudo env \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+            VERITAS_SANDBOX_DATABASE_URL="$VERITAS_SANDBOX_DATABASE_URL" \
+            VERITAS_SANDBOX_WRITER_TOKEN="$VERITAS_SANDBOX_WRITER_TOKEN" \
+            VERITAS_SANDBOX_READER_TOKEN="$VERITAS_SANDBOX_READER_TOKEN" \
+            VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG="$VERITAS_SANDBOX_LOOKUP_OUTAGE_FLAG" \
+            "$(which python)" \
             scripts/run_native_v2_sandbox_service.py \
             --host 0.0.0.0 \
             --port 443 \
@@ -173,7 +180,14 @@ jobs:
           assert report["production_decision_to_effect_e2e_proven"] is False
           assert report["trustlog_exactly_once_proven"] is False
           assert report["production_validation_proven"] is False
-          assert report["alembic_head"] == "0011"
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+
+          expected_head = ScriptDirectory.from_config(
+              Config("alembic.ini")
+          ).get_current_head()
+          assert expected_head is not None
+          assert report["alembic_head"] == expected_head
           assert report["normal"]["dispatch_reason"] == "HTTP_201_MATCHING_ACK"
           assert report["normal"]["terminal_effect_state"] == "CONFIRMED_EFFECT"
           assert report["fault"]["dispatch_reason"] == "TRANSPORT_FAILED_OR_UNKNOWN"
@@ -193,6 +207,24 @@ jobs:
           )
           PY
 
+      - name: Test contract weakening and adversarial evidence mutations
+        run: |
+          PYTHONPATH=. pytest \
+            tests/validation/test_reviewer_proof_contract_v1.py \
+            tests/validation/reviewer_proof_contract_e2e_checks.py \
+            -q --tb=short
+
+      - name: Validate bounded Reviewer Proof Contract v1
+        run: |
+          python -m scripts.validation.verify_reviewer_proof_contract_v1 \
+            --contract contracts/reviewer-proof-contract-v1.json \
+            --report "$VERITAS_DECISION_TO_EFFECT_REPORT" \
+            --evidence "$VERITAS_DECISION_TO_EFFECT_EVIDENCE" \
+            --tested-sha "$VERITAS_E2E_TESTED_SHA" \
+            --source-sha "$VERITAS_E2E_SOURCE_SHA" \
+            --base-sha "$VERITAS_E2E_BASE_SHA" \
+            --output artifacts/real-decision-to-effect-e2e/reviewer-proof-validation.json
+
       - name: Upload Decision-to-Effect proof artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -201,6 +233,7 @@ jobs:
           path: |
             artifacts/real-decision-to-effect-e2e/report.json
             artifacts/real-decision-to-effect-e2e/evidence.json
+            artifacts/real-decision-to-effect-e2e/reviewer-proof-validation.json
             /tmp/veritas-decision-e2e/service.log
           if-no-files-found: warn
 

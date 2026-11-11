@@ -24,6 +24,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from uuid import uuid4
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
@@ -36,6 +37,7 @@ from veritas_os.logging.encryption import (
 )
 from veritas_os.logging.redact import redact_entry as _redact_entry
 from veritas_os.logging.trust_log_core import prepare_entry as _prepare_entry
+from veritas_os.core.utils import redact_payload
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 from veritas_os.audit.trustlog_signed import (
     SignedTrustLogWriteError,
@@ -485,7 +487,8 @@ def write_shadow_decide(
 
     # ファイル名用タイムスタンプ（ミリ秒まで）
     ts_str = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    out = shadow_dir / f"decide_{ts_str}.json"
+    # Keep the timestamp prefix and numeric suffix compatible with log readers.
+    out = shadow_dir / f"decide_{ts_str}{uuid4().int:039d}.json"
 
     fuji_safe = fuji if isinstance(fuji, dict) else {}
 
@@ -495,14 +498,14 @@ def write_shadow_decide(
         or ""
     )
     # ★ セキュリティ: シャドウログに書き出す前にPIIをマスク
-    query = _mask_pii(raw_query) if _mask_pii and raw_query else raw_query
+    query = _mask_pii(raw_query) if _mask_pii and isinstance(raw_query, str) else redact_payload(raw_query)
 
     rec = {
         "request_id": request_id,
         # ISO8601 + "Z"（UTC）に正規化
         "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "query": query,
-        "chosen": chosen,
+        "chosen": redact_payload(chosen),
         "telos_score": float(telos_score or 0.0),
         "fuji": fuji_safe.get("status"),
     }

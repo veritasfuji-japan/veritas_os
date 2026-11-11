@@ -1,0 +1,20 @@
+name: Audit Evidence Profile v0.1 (offline)
+on:
+  pull_request:
+  push:
+permissions:
+  contents: read
+jobs:
+  offline-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install schema validator
+        run: python -m pip install 'jsonschema>=4.20,<5'
+      - name: Validate synthetic fixture
+        run: python scripts/validation/validate_audit_evidence_profile.py tests/validation/fixtures/synthetic_example.json
+      - name: Reject negative cases
+        run: python tests/validation/test_audit_evidence_profile_negative_cases.py

@@ -41,6 +41,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Backend Parity Coverage](validation/backend-parity-coverage.md)
 - [PostgreSQL Production Proof Map (compact)](validation/postgresql-production-proof-map.md)
 - [External Audit Readiness](validation/external-audit-readiness.md)
+- [Cross-VM Audit Custody Rehearsal v0.1 — Local Results (not independent audit)](validation/audit-cross-vm-custody-rehearsal-v0-1-results.md)
 - [Technical Proof Pack (external review)](validation/technical-proof-pack.md)
 - [Regulated Action Governance Proof Pack](validation/regulated-action-governance-proof-pack.md)
 - [Regulated Action Governance Quality Gate](validation/regulated-action-governance-quality-gate.md)

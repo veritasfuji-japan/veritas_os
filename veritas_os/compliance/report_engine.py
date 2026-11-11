@@ -361,13 +361,12 @@ def _finalize_report(
         "public_key_path": str(PUBLIC_KEY_PATH),
     }
 
-    # Derive report_id from the (possibly injected) timestamp so that file
-    # names are deterministic when generated_at is supplied.
+    # Keep filenames deterministic while separating different signed reports.
     try:
         ts_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except (ValueError, TypeError):
         ts_dt = datetime.now(timezone.utc)
-    report_id = f"{report_type}_{ts_dt.strftime('%Y%m%d_%H%M%S')}"
+    report_id = f"{report_type}_{ts_dt.strftime('%Y%m%d_%H%M%S')}_{report_hash}"
     json_path = REPORT_DIR / f"{report_id}.json"
     pdf_path = REPORT_DIR / f"{report_id}.pdf"
     persist_report_json(json_path, body)

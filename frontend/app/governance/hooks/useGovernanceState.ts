@@ -334,7 +334,7 @@ export function useGovernanceState() {
 
     const fetchSessionRole = async (): Promise<void> => {
       try {
-        const res = await veritasFetch("/api/auth/session");
+        const res = await veritasFetch("/api/veritas/session");
         if (!active) return;
         if (res.ok) {
           const payload = await res.json() as { role?: UserRole };
