@@ -2258,6 +2258,22 @@ paths:
       responses:
         '200':
           description: OK
+  /livez:
+    get:
+      security: []
+      summary: Check API liveness
+      responses:
+        '200':
+          description: API process is responding
+  /readyz:
+    get:
+      security: []
+      summary: Check API readiness
+      responses:
+        '200':
+          description: API can accept traffic, including in a degraded state
+        '503':
+          description: Required startup or health checks did not pass
   /v1/decide:
     post:
       summary: Run full VERITAS decision loop

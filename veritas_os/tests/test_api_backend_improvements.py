@@ -97,6 +97,31 @@ class TestRateLimitHeaders:
 # -------------------------------------------------
 
 
+class TestHealthProbes:
+    @pytest.mark.parametrize("dependency", ["get_decision_pipeline", "get_memory_store"])
+    def test_unavailable_dependency_refuses_readiness_but_keeps_liveness(
+        self, monkeypatch, dependency
+    ):
+        monkeypatch.setattr(server, dependency, lambda: None)
+        ready = client.get("/readyz")
+        assert ready.status_code == 503
+        assert ready.json() == {"ok": False}
+        assert client.get("/livez").json() == {"ok": True}
+
+    def test_degraded_health_can_remain_ready(self, monkeypatch):
+        monkeypatch.setattr(server, "_HAS_SANITIZE", False)
+        assert client.get("/health").json()["status"] == "degraded"
+        ready = client.get("/readyz")
+        assert ready.status_code == 200
+        assert ready.json() == {"ok": True}
+
+    def test_strict_security_startup_must_complete_before_readiness(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_ENV", "production")
+        monkeypatch.setattr(server.app.state, "security_startup_complete", False, raising=False)
+        assert client.get("/readyz").status_code == 503
+        assert client.get("/livez").status_code == 200
+
+
 class TestEnhancedHealth:
     def test_health_includes_checks(self):
         """Health endpoint should include dependency checks."""

@@ -435,6 +435,28 @@ def health() -> Dict[str, Any]:
         )
 
 
+@public_router.get("/livez")
+def liveness() -> dict[str, bool]:
+    """Report that the API process can serve HTTP requests."""
+    return {"ok": True}
+
+
+@public_router.get(
+    "/readyz",
+    responses={503: {"description": "API is not ready"}},
+)
+def readiness(request: Request) -> JSONResponse:
+    """Report whether startup and required health checks allow traffic."""
+    from veritas_os.api.startup_health import security_startup_is_complete
+
+    if security_startup_is_complete(request.app):
+        snapshot = health()
+        if isinstance(snapshot, dict) and snapshot["status"] in {"ok", "degraded"}:
+            return JSONResponse(content={"ok": True})
+
+    return JSONResponse(status_code=503, content={"ok": False})
+
+
 def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
     """Build a shared status snapshot with explicit degraded-state visibility."""
     expected = (srv._get_expected_api_key() or "").strip()
