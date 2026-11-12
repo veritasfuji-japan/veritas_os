@@ -6,7 +6,7 @@ This artifact summarizes FastAPI runtime route classification against the canoni
 ## Summary table
 | Metric | Value |
 | --- | --- |
-| total_runtime_routes | 47 |
+| total_runtime_routes | 49 |
 | total_effect_bearing_routes | 17 |
 | bind_governed_routes | 5 |
 | audited_exemptions | 12 |
