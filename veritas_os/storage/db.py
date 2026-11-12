@@ -16,6 +16,7 @@ VERITAS_DB_SSLMODE            libpq sslmode parameter  (default "prefer")
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Optional
@@ -137,6 +138,20 @@ def build_conninfo() -> str:
         sep = "&" if "?" in dsn else "?"
         dsn = dsn + sep + "&".join(params)
     return dsn
+
+
+async def probe_postgresql(*, timeout_seconds: float = 2.0) -> None:
+    """Verify the configured database with a bounded, read-only query.
+
+    Use a short-lived connection so probes cannot initialize or occupy the
+    shared application pool.
+    """
+    from psycopg import AsyncConnection
+
+    async with asyncio.timeout(timeout_seconds):
+        conn = await AsyncConnection.connect(build_conninfo(), autocommit=True)
+        async with conn:
+            await conn.execute("SELECT 1")
 
 
 # ---------------------------------------------------------------------------

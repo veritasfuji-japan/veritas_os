@@ -2269,6 +2269,7 @@ paths:
     get:
       security: []
       summary: Check API readiness
+      description: Includes a bounded connectivity check when PostgreSQL storage is configured.
       responses:
         '200':
           description: API can accept traffic, including in a degraded state
