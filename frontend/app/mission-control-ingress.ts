@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 
-import { type MissionGovernanceIngressPayload } from "../components/mission-governance-adapter";
+import { mapGovernanceFeedToIngressPayload, type MissionGovernanceIngressPayload } from "../components/mission-governance-adapter";
 
 import { GET as readGovernanceFeed } from "./api/veritas/v1/report/governance/route";
 import { areE2EScenariosEnabled } from "./e2e-scenarios";
@@ -9,37 +9,6 @@ const GOVERNANCE_REPORT_ENDPOINT = "/api/veritas/v1/report/governance";
 const E2E_SCENARIO_HEADER = "x-veritas-e2e-governance-scenario";
 const E2E_SCENARIO_QUERY = "e2e_governance_scenario";
 const DEMO_SCENARIO_QUERY = "demo_scenario";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-/**
- * Maps backend governance feed payload into Mission Control ingress contract.
- */
-export function mapGovernanceFeedToIngressPayload(
-  payload: unknown,
-): MissionGovernanceIngressPayload | null {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  const governanceLayerSnapshot = payload.governance_layer_snapshot;
-  if (isRecord(governanceLayerSnapshot)) {
-    return {
-      governance_layer_snapshot: governanceLayerSnapshot,
-    };
-  }
-
-  const preBindGovernanceSnapshot = payload.pre_bind_governance_snapshot;
-  if (isRecord(preBindGovernanceSnapshot)) {
-    return {
-      pre_bind_governance_snapshot: preBindGovernanceSnapshot,
-    };
-  }
-
-  return null;
-}
 
 export async function loadMissionControlIngressPayload(
   scenarioOverride?: string | null,

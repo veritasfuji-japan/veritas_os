@@ -11,10 +11,8 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-import {
-  loadMissionControlIngressPayload,
-  mapGovernanceFeedToIngressPayload,
-} from "./mission-control-ingress";
+import { mapGovernanceFeedToIngressPayload } from "../components/mission-governance-adapter";
+import { loadMissionControlIngressPayload } from "./mission-control-ingress";
 
 describe("mapGovernanceFeedToIngressPayload", () => {
   it("maps governance_layer_snapshot as main backend-fed path", () => {
