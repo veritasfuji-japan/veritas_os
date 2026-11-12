@@ -32,6 +32,23 @@ function isProduction(): boolean {
   );
 }
 
+/** Resolve a root-relative destination and enforce the parsed URL's origin. */
+function resolveRedirect(target: string | null, origin: string): URL {
+  const fallback = new URL("/console", origin);
+  if (!target?.startsWith("/") || target.startsWith("//")) {
+    return fallback;
+  }
+
+  try {
+    const destination = new URL(target, origin);
+    return destination.origin === origin && !destination.username && !destination.password
+      ? destination
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function GET(request: Request): Promise<Response> {
   // ── Guard: never run in production ──
   if (isProduction()) {
@@ -56,16 +73,9 @@ export async function GET(request: Request): Promise<Response> {
 
   // ── Resolve redirect target ──
   const url = new URL(request.url);
-  const redirectTarget = url.searchParams.get("redirect") ?? "/console";
-
-  // Validate redirect is a safe relative path (no open-redirect).
-  // Reject protocol-relative URLs (//evil.example) and non-relative paths.
-  const safeRedirect =
-    redirectTarget.startsWith("/") && !redirectTarget.startsWith("//")
-      ? redirectTarget
-      : "/console";
-
-  const response = NextResponse.redirect(new URL(safeRedirect, url.origin));
+  const response = NextResponse.redirect(
+    resolveRedirect(url.searchParams.get("redirect"), url.origin),
+  );
 
   // ── Set the BFF session cookie ──
   response.cookies.set(BFF_SESSION_COOKIE, sessionToken, {
