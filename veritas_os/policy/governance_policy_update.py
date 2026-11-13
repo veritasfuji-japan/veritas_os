@@ -25,7 +25,7 @@ def update_governance_policy_with_bind_boundary(
     decision_hash: str,
     policy_patch: dict[str, Any],
     policy_reader: Callable[[], dict[str, Any]],
-    policy_updater: Callable[[dict[str, Any]], dict[str, Any]],
+    policy_updater: Callable[..., dict[str, Any]],
     policy_rollback: Callable[..., dict[str, Any]] | None = None,
     approval_context: dict[str, Any] | None = None,
     policy_lineage: dict[str, Any] | None = None,

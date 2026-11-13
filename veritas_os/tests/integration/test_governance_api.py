@@ -42,6 +42,30 @@ def _approved(payload: dict | None = None) -> dict:
     return base
 
 
+def test_policy_update_rejects_change_after_bind_validation(monkeypatch, _temp_policy):
+    """Compare the write against the policy snapshot Bind validated."""
+    from veritas_os.policy.bind_core import core as bind_core
+
+    real_update = srv.update_policy
+
+    def update_after_concurrent_commit(patch, **kwargs):
+        real_update({"version": "concurrent-policy"})
+        return real_update(patch, **kwargs)
+
+    monkeypatch.setattr(srv, "update_policy", update_after_concurrent_commit)
+    monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", lambda intent: None)
+    monkeypatch.setattr(bind_core, "append_bind_receipt_trustlog", lambda receipt: receipt)
+    response = client.put(
+        "/v1/governance/policy",
+        headers=HEADERS,
+        json=_approved({"version": "requested-policy"}),
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["bind_outcome"] == "APPLY_FAILED"
+    assert json.loads(_temp_policy.read_text(encoding="utf-8"))["version"] == "concurrent-policy"
+
+
 @pytest.mark.parametrize("required", ["ttl_required", "approval_freshness_required"])
 @pytest.mark.parametrize("missing_signal, outcome", [("block", "BLOCKED"), ("escalate", "ESCALATED")])
 def test_policy_update_http_rejects_bind_policy_override_in_lineage(
@@ -58,9 +82,9 @@ def test_policy_update_http_rejects_bind_policy_override_in_lineage(
     updates = []
     real_update = srv.update_policy
 
-    def track_update(patch):
+    def track_update(patch, **kwargs):
         updates.append(patch)
-        return real_update(patch)
+        return real_update(patch, **kwargs)
 
     monkeypatch.setattr(srv, "update_policy", track_update)
     monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", lambda intent: None)
@@ -1533,7 +1557,7 @@ class TestGovernanceServerErrors:
 
     def test_put_policy_internal_error(self, monkeypatch):
         """PUT /v1/governance/policy returns 500 on internal error."""
-        def boom(body):
+        def boom(body, **_kwargs):
             raise RuntimeError("write fail")
         monkeypatch.setattr(srv, "update_policy", boom)
         resp = client.put(

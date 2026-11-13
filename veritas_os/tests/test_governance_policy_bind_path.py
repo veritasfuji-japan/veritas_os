@@ -45,7 +45,7 @@ def _reader_factory(state: dict[str, object]):
 
 
 def _updater_factory(state: dict[str, object], history: list[dict[str, object]]):
-    def _update(patch: dict[str, object]) -> dict[str, object]:
+    def _update(patch: dict[str, object], **_kwargs) -> dict[str, object]:
         for key, value in patch.items():
             if isinstance(value, dict) and isinstance(state.get(key), dict):
                 merged = dict(state[key])
@@ -94,7 +94,8 @@ def test_governance_write_conflict_does_not_restore_stale_snapshot() -> None:
 
     rollback_calls = []
 
-    def update(_patch):
+    def update(_patch, *, expected_policy):
+        assert expected_policy == _policy_store()[0]
         raise GovernanceWriteConflictError("policy already changed")
 
     def rollback(*args, **kwargs):
@@ -106,6 +107,8 @@ def test_governance_write_conflict_does_not_restore_stale_snapshot() -> None:
         governance_policy={"bind_adjudication": {"rollback_on_apply_failure": True}},
     )
 
+    assert receipt.final_outcome is FinalOutcome.APPLY_FAILED
+    assert not receipt.escalation_reason
     assert rollback_calls == []
     assert _bind_failure_status_and_error(receipt.to_dict())[0] == 409
 

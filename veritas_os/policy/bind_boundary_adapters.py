@@ -29,7 +29,7 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
     """
 
     policy_reader: Callable[[], dict[str, Any]]
-    policy_updater: Callable[[dict[str, Any]], dict[str, Any]]
+    policy_updater: Callable[..., dict[str, Any]]
     policy_patch: dict[str, Any]
     policy_rollback: Callable[..., dict[str, Any]] | None = None
     revert_actor: str = "bind_boundary"
@@ -38,7 +38,6 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
 
     def __post_init__(self) -> None:
         self._last_updated_policy: dict[str, Any] | None = None
-        self._write_conflicted = False
 
     def snapshot(self) -> dict[str, Any]:
         """Capture deterministic policy snapshot."""
@@ -84,11 +83,12 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
 
     def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         """Apply governed policy patch via existing update path."""
-        del intent, snapshot
+        del intent
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("policy"), dict):
+            raise ValueError("BIND_POLICY_SNAPSHOT_INVALID")
         try:
-            updated = self.policy_updater(self.policy_patch)
+            updated = self.policy_updater(self.policy_patch, expected_policy=snapshot["policy"])
         except GovernanceWriteConflictError as exc:
-            self._write_conflicted = True
             raise GovernanceWriteConflictError("GOVERNANCE_POLICY_WRITE_CONFLICT") from exc
         except (TypeError, ValueError) as exc:
             raise ValueError(f"GOVERNANCE_POLICY_VALIDATION_FAILED:{exc}") from exc
@@ -117,7 +117,7 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
     def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         """Revert failed apply by restoring pre-apply policy snapshot."""
         del intent
-        if self._write_conflicted or not isinstance(snapshot, dict):
+        if not isinstance(snapshot, dict):
             return False
         previous_policy = snapshot.get("policy")
         if not isinstance(previous_policy, dict):

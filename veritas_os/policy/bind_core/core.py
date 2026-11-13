@@ -22,6 +22,7 @@ from veritas_os.governance.action_contracts import (
 )
 from veritas_os.governance.authority_evidence import AuthorityEvidence, VerificationResult
 from veritas_os.governance.commit_boundary import CommitBoundaryResult, evaluate_commit_boundary
+from veritas_os.governance.repository import GovernanceWriteConflictError
 from veritas_os.policy.bind_artifacts import (
     BindReceipt,
     ExecutionIntent,
@@ -493,7 +494,10 @@ def execute_bind_adjudication(
             dispatch_token = authorize_dispatch(normalized_intent)
         adapter.apply(normalized_intent, pre_snapshot)
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
-        if bind_policy.rollback_on_apply_failure:
+        # Repository write conflicts are rejected before any state is changed.
+        if bind_policy.rollback_on_apply_failure and not isinstance(
+            exc, GovernanceWriteConflictError
+        ):
             return _finalize_receipt(
                 execution_intent=normalized_intent,
                 append_trustlog=append_trustlog,
