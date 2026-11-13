@@ -38,7 +38,7 @@
 
 ## 目次
 
-[VERITASが必要な理由](#なぜ-veritas-が必要なのか) · [アーキテクチャ](#アーキテクチャ概要) · [LLMプロバイダ](#llmプロバイダ対応状況) · [証拠と評価](#証拠の要約と企業向け評価2026-10-09時点) · [実装](#現在の実装) · [クイックスタート](#クイックスタート) · [Dockerリソース](#docker-composeのリソース設定) · [Guardrailsとの違い](#guardrailsとveritasの違い) · [ドキュメント](#ドキュメントマップ) · [License](#license) · [連絡先](#連絡先)
+[VERITASが必要な理由](#なぜ-veritas-が必要なのか) · [アーキテクチャ](#アーキテクチャ概要) · [LLMプロバイダ](#llmプロバイダ対応状況) · [証拠と評価](#証拠の要約と企業向け評価2026-10-09時点) · [実装](#現在の実装) · [クイックスタート](#クイックスタート) · [Dockerリソース](#docker-composeのリソース設定) · [Guardrailsとの違い](#guardrailsとveritasの違い) · [ドキュメント](#ドキュメント案内) · [License](#license) · [連絡先](#連絡先)
 
 ---
 
@@ -803,7 +803,7 @@ Docker のセキュリティ設定:
 | Backend | 2 CPU | 2 GB |
 | Frontend | 1 CPU | 1 GB |
 
-Composeのフロントエンドは開発用コマンドで起動します。本番展開には、別途レビューされた起動方式、永続ストレージ、秘密情報/TLS、マイグレーション、監視、環境別の負荷検証が必要です。**これらの上限値からスループット、p95遅延、同時処理数、SLAを保証することはできません。** [過去のローカル測定](docs/en/benchmarks/local-performance-metrics.latest.md)は現行HEADや本番性能の証拠ではありません。DBプール設定等は[PostgreSQL Production Guide](docs/en/operations/postgresql-production-guide.md)を参照してください。
+Composeのフロントエンドは開発用コマンドで起動します。本番展開には、別途レビューされた起動方式、永続ストレージ、秘密情報/TLS、マイグレーション、監視、環境別の負荷検証が必要です。**これらの上限値からスループット、p95遅延、同時処理数、SLAを保証することはできません。** [過去のローカル測定](docs/en/benchmarks/local-performance-metrics.latest.md)は現行HEADや本番性能の証拠ではありません。DBプール設定等は[PostgreSQL運用ガイド](docs/ja/operations/postgresql-production-guide.md)を参照してください。
 
 ---
 
