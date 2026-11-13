@@ -542,6 +542,13 @@ async def decide(req: DecideRequest, request: Request):
             blocked_by="Art.14(4)_system_halt",
             halt_status=halt_status,
         )
+    try:
+        policy = get_policy()
+    except RuntimeError as exc:
+        _log_decide_failure("governance policy unavailable", exc)
+        _record("unavailable")
+        return _svc.error_response(503, error=DECIDE_GENERIC_ERROR)
+
     p = srv.get_decision_pipeline()
     if p is None:
         _log_decide_failure("decision_pipeline unavailable", srv._pipeline_state.err)
@@ -583,7 +590,6 @@ async def decide(req: DecideRequest, request: Request):
             logger.debug("stage event publish failed (best-effort)", exc_info=True)
 
     coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
-    policy = get_policy()
     operator_role = _resolve_operator_role(request)
     _attach_bind_operator_surface(payload=coerced, policy=policy, role=operator_role)
 

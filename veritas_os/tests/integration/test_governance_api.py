@@ -215,6 +215,16 @@ def _temp_policy(tmp_path: Path, monkeypatch):
         yield policy_path
 
 
+def test_decide_refuses_unreadable_policy_before_loading_pipeline(_temp_policy):
+    _temp_policy.write_text("{", encoding="utf-8")
+    with patch.object(srv, "get_decision_pipeline") as pipeline:
+        response = client.post("/v1/decide", headers=HEADERS, json=srv._decide_example())
+
+    assert response.status_code == 503, response.text
+    assert response.json()["error"] == srv.DECIDE_GENERIC_ERROR
+    pipeline.assert_not_called()
+
+
 class TestGetPolicy:
     def test_get_returns_default_policy(self):
         resp = client.get("/v1/governance/policy", headers=HEADERS)
@@ -590,13 +600,13 @@ class TestGovernanceModule:
         assert policy["version"] == "governance_v1"
         assert policy["fuji_rules"]["pii_check"] is True
 
-    def test_load_handles_corrupt_json(self, tmp_path):
-        """When governance file has bad JSON, return defaults."""
+    def test_load_rejects_corrupt_json(self, tmp_path):
+        """Reject malformed saved JSON."""
         bad = tmp_path / "bad.json"
         bad.write_text("NOT-VALID-JSON!!!")
         with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", bad):
-            policy = gov_mod.get_policy()
-        assert policy["version"] == "governance_v1"
+            with pytest.raises(RuntimeError, match="Cannot read saved governance policy"):
+                gov_mod.get_policy()
 
     def test_update_creates_missing_nested_key(self, tmp_path):
         """When nested key is non-dict, update_policy creates it."""

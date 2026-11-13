@@ -46,15 +46,24 @@ class FileGovernanceRepository(GovernanceRepository):
         *,
         default_factory: Callable[[], dict[str, Any]],
     ) -> dict[str, Any]:
+        """Use defaults on first initialization and reject unreadable policy state."""
         with self._lock:
-            if not self._policy_path.exists():
-                return default_factory()
             try:
-                with open(self._policy_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError) as exc:
-                logger.warning("Failed to load governance policy: %s", exc)
+                self._policy_path.lstat()
+            except FileNotFoundError:
                 return default_factory()
+            except OSError:
+                raise RuntimeError("Cannot inspect saved governance policy") from None
+
+            try:
+                with self._policy_path.open("r", encoding="utf-8") as policy_file:
+                    policy = json.load(policy_file)
+            except (OSError, ValueError, RecursionError):
+                raise RuntimeError("Cannot read saved governance policy") from None
+
+            if not isinstance(policy, dict):
+                raise RuntimeError("Saved governance policy must be a JSON object")
+            return policy
 
     def save_policy(self, policy: dict[str, Any]) -> None:
         with self._lock:
