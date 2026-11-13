@@ -17,6 +17,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocketState
 
@@ -53,6 +54,7 @@ from veritas_os.policy.system_halt_update import (
     resume_system_with_bind_boundary,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
+from veritas_os.storage import db
 from veritas_os.storage.factory import get_backend_info
 # Note: report/compliance functions accessed via _get_server() to support
 # test monkeypatching on the server module.
@@ -445,16 +447,26 @@ def liveness() -> dict[str, bool]:
     "/readyz",
     responses={503: {"description": "API is not ready"}},
 )
-def readiness(request: Request) -> JSONResponse:
-    """Report whether startup and required health checks allow traffic."""
+async def readiness(request: Request) -> JSONResponse:
+    """Check startup, required health signals, and configured PostgreSQL."""
     from veritas_os.api.startup_health import security_startup_is_complete
 
-    if security_startup_is_complete(request.app):
-        snapshot = health()
-        if isinstance(snapshot, dict) and snapshot["status"] in {"ok", "degraded"}:
-            return JSONResponse(content={"ok": True})
+    if not security_startup_is_complete(request.app):
+        return JSONResponse(status_code=503, content={"ok": False})
 
-    return JSONResponse(status_code=503, content={"ok": False})
+    snapshot = await run_in_threadpool(health)
+    if not isinstance(snapshot, dict) or snapshot["status"] not in {"ok", "degraded"}:
+        return JSONResponse(status_code=503, content={"ok": False})
+
+    if "postgresql" in snapshot["storage_backends"].values():
+        try:
+            await db.probe_postgresql()
+        except Exception as exc:
+            # Connection errors can contain deployment details.
+            logger.warning("PostgreSQL readiness probe failed (%s)", type(exc).__name__)
+            return JSONResponse(status_code=503, content={"ok": False})
+
+    return JSONResponse(content={"ok": True})
 
 
 def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
