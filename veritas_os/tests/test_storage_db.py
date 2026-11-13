@@ -125,6 +125,42 @@ async def test_postgresql_probe_closes_connection_when_query_times_out(monkeypat
     connection.__aexit__.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_concurrent_postgresql_probes_share_one_connection(monkeypatch):
+    connection_type = pytest.importorskip("psycopg").AsyncConnection
+    connection = AsyncMock()
+    query_started = asyncio.Event()
+    finish_query = asyncio.Event()
+
+    async def wait_for_completion(_statement):
+        query_started.set()
+        await finish_query.wait()
+
+    connection.execute.side_effect = wait_for_completion
+    connect = AsyncMock(return_value=connection)
+    monkeypatch.setattr(connection_type, "connect", connect)
+    monkeypatch.setattr(db, "build_conninfo", lambda: "dbname=probe")
+
+    first = asyncio.create_task(db.probe_postgresql())
+    await query_started.wait()
+    waiters = [asyncio.create_task(db.probe_postgresql()) for _ in range(8)]
+    await asyncio.sleep(0)
+
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+    assert all(not waiter.done() for waiter in waiters)
+    connect.assert_awaited_once()
+
+    finish_query.set()
+    await asyncio.gather(*waiters)
+    connection.execute.assert_awaited_once_with("SELECT 1")
+    connection.__aexit__.assert_awaited_once()
+
+    await db.probe_postgresql()
+    assert connect.await_count == 2
+
+
 class TestPoolMinMax:
     """Tests for pool size env parsing."""
 
