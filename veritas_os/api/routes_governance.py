@@ -337,7 +337,11 @@ def _bind_failure_status_and_error(bind_receipt: Dict[str, Any]) -> tuple[int, s
     """Map bind outcomes to legacy governance API status/error semantics."""
     outcome = str(bind_receipt.get("final_outcome") or "")
     rollback_reason = str(bind_receipt.get("rollback_reason") or "")
-    if rollback_reason == "BIND_APPLY_FAILED:GOVERNANCE_POLICY_WRITE_CONFLICT":
+    drift = bind_receipt.get("drift_check_result") or {}
+    if (
+        rollback_reason == "BIND_APPLY_FAILED:GOVERNANCE_POLICY_WRITE_CONFLICT"
+        or drift.get("reason_code") == "BIND_DRIFT_DETECTED"
+    ):
         return 409, "Governance policy changed. Reload it and resubmit for approval."
     if outcome == FinalOutcome.PRECONDITION_FAILED.value:
         return 400, "Governance policy validation failed"
