@@ -100,7 +100,9 @@ class PostgresGovernanceRepository(GovernanceRepository):
                         return default_factory()
                     payload = _unwrap_jsonb(row[0])
                     conn.rollback()
-                    return payload if isinstance(payload, dict) else default_factory()
+                    if not isinstance(payload, dict):
+                        raise RuntimeError("Saved governance policy must be a JSON object")
+                    return payload
         except Exception:
             status = "error"
             set_db_health_status(False)
