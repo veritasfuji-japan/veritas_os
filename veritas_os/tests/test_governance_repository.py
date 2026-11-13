@@ -56,6 +56,28 @@ def test_file_repository_roundtrip(tmp_path):
     assert history[1]["event_type"] == "update"
 
 
+@pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])
+def test_file_repository_refuses_unreadable_saved_policy(tmp_path, content):
+    """Defaults apply to missing policy files only."""
+    policy_path = tmp_path / "governance.json"
+    repo = FileGovernanceRepository(
+        policy_path=policy_path,
+        history_path=tmp_path / "governance_history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    if content is None:
+        policy_path.mkdir()
+    else:
+        policy_path.write_bytes(content)
+
+    def unexpected_default():
+        pytest.fail("Unreadable saved policy was replaced by defaults")
+
+    with pytest.raises(RuntimeError, match="governance policy"):
+        repo.get_current_policy(default_factory=unexpected_default)
+
+
 class _InMemoryRepository:
     def __init__(self) -> None:
         self.policy = gov.GovernancePolicy().model_dump()
