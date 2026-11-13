@@ -125,6 +125,31 @@ def test_file_repository_serializes_independent_writers(tmp_path):
     assert len((tmp_path / "history.jsonl").read_text().splitlines()) == 1
 
 
+def test_governance_policy_write_holds_lock_until_history_append(tmp_path, monkeypatch):
+    """Other workers cannot start writing before the current event is recorded."""
+    fcntl = pytest.importorskip("fcntl", exc_type=ImportError)
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    original_append = repo._append_policy_event_locked
+
+    def check_lock(event):
+        with (tmp_path / "policy.json.lock").open("rb") as other_writer:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(other_writer.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        original_append(event)
+
+    monkeypatch.setattr(repo, "_append_policy_event_locked", check_lock)
+    repo.update_policy(
+        previous={}, updated={"version": "v1"}, proposer="operator",
+        approvers=[], event_type="update",
+    )
+    assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "v1"
+
+
 @pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])
 def test_file_repository_refuses_unreadable_saved_policy(tmp_path, content):
     """Defaults apply to missing policy files only."""

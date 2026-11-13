@@ -93,9 +93,13 @@ class FileGovernanceRepository(GovernanceRepository):
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
                 yield
 
-    def _save_if_current(
-        self, previous: dict[str, Any], updated: dict[str, Any]
+    def _save_with_event(
+        self,
+        previous: dict[str, Any],
+        updated: dict[str, Any],
+        event: GovernancePolicyEventRecord,
     ) -> None:
+        """Keep policy writes and their history appends in commit order."""
         from veritas_os.policy.governance_identity import compute_governance_digest
 
         with self._policy_write_lock():
@@ -105,6 +109,7 @@ class FileGovernanceRepository(GovernanceRepository):
             ):
                 raise GovernanceWriteConflictError("Current governance policy has changed")
             self._save_policy_locked(updated)
+            self._append_policy_event_locked(event)
 
     def save_policy(self, policy: dict[str, Any]) -> None:
         with self._policy_write_lock():
@@ -131,13 +136,16 @@ class FileGovernanceRepository(GovernanceRepository):
             raise
 
     def append_policy_event(self, event: GovernancePolicyEventRecord) -> None:
+        with self._policy_write_lock():
+            self._append_policy_event_locked(event)
+
+    def _append_policy_event_locked(self, event: GovernancePolicyEventRecord) -> None:
         line = json.dumps(event.to_dict(), ensure_ascii=False)
         try:
             self._history_path.parent.mkdir(parents=True, exist_ok=True)
-            with self._lock:
-                with open(self._history_path, "a", encoding="utf-8") as f:
-                    f.write(line + "\n")
-                self._trim_policy_history_locked()
+            with self._history_path.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+            self._trim_policy_history_locked()
         except Exception as exc:
             logger.warning("Failed to append governance policy history: %s", exc)
 
@@ -177,8 +185,9 @@ class FileGovernanceRepository(GovernanceRepository):
         reason: str = "",
     ) -> None:
         del approval_records, reason
-        self._save_if_current(previous, updated)
-        self.append_policy_event(
+        self._save_with_event(
+            previous,
+            updated,
             self._build_event(
                 previous=previous,
                 updated=updated,
@@ -199,8 +208,9 @@ class FileGovernanceRepository(GovernanceRepository):
         reason: str = "",
     ) -> None:
         del approval_records, reason
-        self._save_if_current(previous, restored)
-        self.append_policy_event(
+        self._save_with_event(
+            previous,
+            restored,
             self._build_event(
                 previous=previous,
                 updated=restored,
@@ -227,7 +237,7 @@ class FileGovernanceRepository(GovernanceRepository):
 
     def trim_policy_history(self) -> None:
         """Trim history file to policy_history_max records."""
-        with self._lock:
+        with self._policy_write_lock():
             self._trim_policy_history_locked()
 
     def _build_event(
