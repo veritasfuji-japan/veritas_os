@@ -120,3 +120,4 @@ build/
 
 # Governance runtime artifacts
 veritas_os/api/governance_history.jsonl
+veritas_os/api/governance.json.lock
