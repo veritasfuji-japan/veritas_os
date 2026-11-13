@@ -36,6 +36,12 @@
 
 ---
 
+## 目次
+
+[VERITASが必要な理由](#なぜ-veritas-が必要なのか) · [アーキテクチャ](#アーキテクチャ概要) · [LLMプロバイダ](#llmプロバイダ対応状況) · [証拠と評価](#証拠の要約と企業向け評価2026-10-09時点) · [実装](#現在の実装) · [クイックスタート](#クイックスタート) · [Dockerリソース](#docker-composeのリソース設定) · [Guardrailsとの違い](#guardrailsとveritasの違い) · [ドキュメント](#ドキュメントマップ) · [License](#license) · [連絡先](#連絡先)
+
+---
+
 ## 10秒で分かる問題
 
 AIエージェントは、指示によっても、プロンプトインジェクションによる誘導によっても、管理者権限の付与・送金・権限変更を実行しようとすることがあります。多くのガードレールは要求の*テキスト*を検査します。VERITASが検査するのは*行為そのもの*です：
@@ -79,6 +85,24 @@ python3 scripts/demo/validate_reviewer_evidence_packet.py
 - **企業向け評価／有償PoC：** 限定した実行境界を1つ提案してください（[連絡先](#連絡先)）。範囲と費用は別途合意が必要です。
 
 ⭐ **この問題が重要だと思う方は Star をお願いします** — 実行境界のガバナンスを公開で証明し続ける価値があるか、私たちが判断する材料になります。
+
+---
+
+## LLMプロバイダ対応状況
+
+VERITASには5つのLLMプロバイダ向けのリクエスト・レスポンス処理が存在します。ただし、**アダプタのコードがあることと、本番対応が検証済みであることは別**です。LLMの選択と、Authority／Bind Boundaryでの実行権限制御も区別されます。
+
+| プロバイダ | 現在のサポート区分 | 適用範囲・制約 |
+|---|---|---|
+| OpenAI | Production（デフォルト） | 現行ランタイムの対応経路。契約SLA・顧客本番の認証を意味しない |
+| Anthropic / Claude | Planned | アダプタとオフライン契約テスト。本番ライブ検証は未完了 |
+| Google / Gemini | Planned | アダプタはあるが、統制対象の本番フローでは未検証 |
+| Ollama / ローカルモデル | Experimental | ローカル評価向け。本番サポートの主張はしない |
+| OpenRouter | Experimental | ゲートウェイ評価向け。本番サポートの主張はしない |
+
+設定には `LLM_PROVIDER` と `LLM_MODEL` を使用し、デフォルトは `openai` と `gpt-4.1-mini` です。他のプロバイダへ切り替える際は、**対応するモデル名と、必要に応じた認証情報・エンドポイントの設定**も必要です。例えば `LLM_PROVIDER=anthropic` のみ変更し、モデル名をデフォルトのままにしても、有効なClaude設定にはなりません。
+
+正本: [Provider Support Matrix](docs/en/operations/provider-support-matrix.md) · [LLMクライアント](veritas_os/core/llm_client.py) · [環境変数テンプレート](.env.example)。
 
 ---
 
@@ -769,6 +793,20 @@ Docker のセキュリティ設定:
 
 ---
 
+### Docker Composeのリソース設定
+
+現行 `docker-compose.yml` に記載された値は、**コンテナのリソース上限**であり、ホストの必要最小スペックや本番推奨構成を実測で裏付けた値ではありません。
+
+| サービス | CPU上限 | メモリ上限 |
+|---|---:|---:|
+| PostgreSQL | 1 CPU | 512 MB |
+| Backend | 2 CPU | 2 GB |
+| Frontend | 1 CPU | 1 GB |
+
+Composeのフロントエンドは開発用コマンドで起動します。本番展開には、別途レビューされた起動方式、永続ストレージ、秘密情報/TLS、マイグレーション、監視、環境別の負荷検証が必要です。**これらの上限値からスループット、p95遅延、同時処理数、SLAを保証することはできません。** [過去のローカル測定](docs/en/benchmarks/local-performance-metrics.latest.md)は現行HEADや本番性能の証拠ではありません。DBプール設定等は[PostgreSQL Production Guide](docs/en/operations/postgresql-production-guide.md)を参照してください。
+
+---
+
 ## ローカル開発
 
 インストール:
@@ -947,6 +985,20 @@ VERITAS は次のものではありません。
 VERITAS の役割はより限定的で、具体的です。
 
 > **AIが提案したアクションを、実行時点の証拠とガバナンス状態に基づいて、実行境界を越えてよいか判定すること。**
+
+---
+
+# GuardrailsとVERITASの違い
+
+VERITASは、モデル出力やアプリケーション動作のガードレールを**置き換えるものではなく補完するもの**です。以下は主な検証対象の違いであり、競合製品に実行制御機能が一切ないと主張する比較ではありません。
+
+| 方式 | 主な検証対象 | VERITASとの関係 |
+|---|---|---|
+| モデル/出力ガードレール（NeMo Guardrails、Guardrails AIなど） | コンテンツやLLMのやり取りが許容されるか | 前段で有効だが、それだけでは外部作用の実行直前の権限を証明しない |
+| エージェントフレームワークの検査（LangChain系など） | アプリケーションルール上、ツール呼び出しを許すか | 統合可能。迂回耐性はチェックをどこで強制するかに依存する |
+| VERITASのBind Boundary | **その外部作用を今**、権限・承認・再利用防止・証拠に基づいて許可できるか | 構成された実行境界に限定して強制。あらゆる外部作用を網羅するという主張ではない |
+
+エージェントがVERITAS外から対象システムを直接操作できる場合、IAM・ネットワーク・認証情報の制御なしに迂回防止は保証できません。[実装マトリクス](docs/en/validation/current-implementation-matrix.md)と[External Bind Integration Path](docs/en/guides/external-bind-integration-path.md)も参照してください。
 
 ---
 
@@ -1180,6 +1232,12 @@ VERITAS はガバナンスと証拠の基盤を提供します。本READMEは**�
   url    = {https://github.com/veritasfuji-japan/veritas_os}
 }
 ```
+
+---
+
+# 開発・保守体制
+
+VERITAS OSは独立して開発され、**Takeshi Fujishitaが主な開発者・保守担当者**です。外部貢献や技術レビューはありますが、24時間の有人サポート、契約上のSLA、顧客本番環境への導入完了を意味しません。企業評価では、保守引継ぎ、脆弱性対応、運用責任を個別に確認してください。[Maintainer Handoff](docs/en/operations/maintainer-handoff.md)と[Security Policy](SECURITY.md)に関連事項を記載しています。
 
 ---
 
