@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from veritas_os.core.atomic_io import atomic_write_json
+from veritas_os.governance.repository import GovernanceWriteConflictError
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.policy.runtime_adapter import load_runtime_bundle
@@ -37,6 +38,7 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
 
     def __post_init__(self) -> None:
         self._last_updated_policy: dict[str, Any] | None = None
+        self._write_conflicted = False
 
     def snapshot(self) -> dict[str, Any]:
         """Capture deterministic policy snapshot."""
@@ -85,6 +87,9 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
         del intent, snapshot
         try:
             updated = self.policy_updater(self.policy_patch)
+        except GovernanceWriteConflictError as exc:
+            self._write_conflicted = True
+            raise GovernanceWriteConflictError("GOVERNANCE_POLICY_WRITE_CONFLICT") from exc
         except (TypeError, ValueError) as exc:
             raise ValueError(f"GOVERNANCE_POLICY_VALIDATION_FAILED:{exc}") from exc
         except Exception as exc:
@@ -112,7 +117,7 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
     def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         """Revert failed apply by restoring pre-apply policy snapshot."""
         del intent
-        if not isinstance(snapshot, dict):
+        if self._write_conflicted or not isinstance(snapshot, dict):
             return False
         previous_policy = snapshot.get("policy")
         if not isinstance(previous_policy, dict):
