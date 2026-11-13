@@ -51,6 +51,34 @@ describe("/api/veritas/v1/report/governance", () => {
     await expect(response.json()).resolves.toEqual({ error: "governance_feed_unavailable" });
   });
 
+  it.each([
+    ["pre_boundary_collapse", ""],
+    ["", "aml_kyc_reviewer_walkthrough"],
+  ])("requires auth when demo fixtures are disabled", async (query, header) => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "");
+    const url = new URL(FEED_URL);
+    if (query) {
+      url.searchParams.set("demo_scenario", query);
+    }
+    const response = await GET(new Request(url, {
+      headers: { "x-veritas-demo-scenario": header },
+    }));
+
+    expect(response.status).toBe(401);
+  });
+
+  it("returns the demo fixture when explicitly enabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "1");
+
+    const response = await GET(new Request(FEED_URL + "?demo_scenario=pre_boundary_collapse"));
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).governance_layer_snapshot.demo_scenario)
+      .toBe("pre_boundary_collapse");
+  });
+
   it("returns deterministic main scenario payload when e2e scenarios are explicitly enabled", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENABLE_E2E_SCENARIOS", "1");

@@ -1096,11 +1096,11 @@ export async function GET(request: Request): Promise<Response> {
     if (e2ePayload) {
       return NextResponse.json(e2ePayload, { status: 200 });
     }
-  }
 
-  const demoScenarioPayload = await resolveDemoScenarioPayload(request);
-  if (demoScenarioPayload) {
-    return NextResponse.json(demoScenarioPayload, { status: 200 });
+    const demoScenarioPayload = await resolveDemoScenarioPayload(request);
+    if (demoScenarioPayload) {
+      return NextResponse.json(demoScenarioPayload, { status: 200 });
+    }
   }
 
   const tokenRoles = parseAuthTokensConfig(process.env.VERITAS_BFF_AUTH_TOKENS_JSON);
