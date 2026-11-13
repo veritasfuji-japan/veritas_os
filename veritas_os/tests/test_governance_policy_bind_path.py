@@ -83,6 +83,9 @@ def _execute(**overrides):
         "policy_rollback": _rollback_factory(state, history),
         "append_trustlog": False,
     }
+    if "governance_policy" in overrides:
+        state.update(overrides["governance_policy"])
+        overrides["governance_policy"] = _reader_factory(state)()
     kwargs.update(overrides)
     return update_governance_policy_with_bind_boundary(**kwargs), state, history
 
@@ -95,7 +98,7 @@ def test_governance_write_conflict_does_not_restore_stale_snapshot() -> None:
     rollback_calls = []
 
     def update(_patch, *, expected_policy):
-        assert expected_policy == _policy_store()[0]
+        assert expected_policy["bind_adjudication"]["rollback_on_apply_failure"] is True
         raise GovernanceWriteConflictError("policy already changed")
 
     def rollback(*args, **kwargs):

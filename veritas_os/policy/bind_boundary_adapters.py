@@ -83,9 +83,8 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
 
     def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         """Apply governed policy patch via existing update path."""
-        del intent
-        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("policy"), dict):
-            raise ValueError("BIND_POLICY_SNAPSHOT_INVALID")
+        if self.fingerprint_state(snapshot) != intent.expected_state_fingerprint:
+            raise GovernanceWriteConflictError("GOVERNANCE_POLICY_WRITE_CONFLICT")
         try:
             updated = self.policy_updater(self.policy_patch, expected_policy=snapshot["policy"])
         except GovernanceWriteConflictError as exc:

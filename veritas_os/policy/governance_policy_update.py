@@ -47,7 +47,9 @@ def update_governance_policy_with_bind_boundary(
             approval_records=approval_records,
         )
 
-    pre_snapshot = adapter.snapshot()
+    pre_snapshot = (
+        {"policy": governance_policy} if governance_policy is not None else adapter.snapshot()
+    )
     expected_fingerprint = adapter.fingerprint_state(pre_snapshot)
 
     merged_approval_context: dict[str, Any] = dict(approval_context or {})
@@ -68,7 +70,7 @@ def update_governance_policy_with_bind_boundary(
         approval_context=merged_approval_context,
         policy_lineage=_with_bind_policy_lineage(
             lineage=policy_lineage,
-            governance_policy=governance_policy,
+            governance_policy=pre_snapshot["policy"],
         ),
     )
 
