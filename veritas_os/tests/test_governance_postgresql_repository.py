@@ -258,6 +258,18 @@ def test_get_current_policy_works(repository) -> None:
     assert current["version"] == "governance_v2"
 
 
+@pytest.mark.parametrize("payload", [None, [], "invalid", 42, True])
+def test_get_current_policy_refuses_non_object_payload(repository, payload) -> None:
+    repo, state = repository
+    state["policies"].append({"is_current": True, "policy_payload": payload})
+
+    def unexpected_default():
+        pytest.fail("Existing policy was replaced by defaults")
+
+    with pytest.raises(RuntimeError, match="Saved governance policy must be a JSON object"):
+        repo.get_current_policy(default_factory=unexpected_default)
+
+
 def test_update_creates_policy_event_and_approvals(repository) -> None:
     repo, state = repository
     updated = _policy("governance_v2", "alice")
