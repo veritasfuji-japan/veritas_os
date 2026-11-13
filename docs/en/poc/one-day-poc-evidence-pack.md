@@ -76,13 +76,16 @@ as the baseline for normal execution and lost-response recovery.
 | Path | Evidence to collect |
 |---|---|
 | Normal execution | The exact approved operation reaches the target once. Match the target operation record to the Bind receipt. |
-| Missing or revoked authorization | Confirm that the target receives no write and its state remains unchanged. |
+| Missing authorization | Attempt execution without an authorization. Confirm zero target-side writes and unchanged target state. |
+| Revoked authorization | Issue a valid authorization, revoke it before dispatch, and attempt execution with it. Confirm zero target-side writes and unchanged target state. |
+| Expired authorization | Issue a valid authorization, let it expire before dispatch, and attempt execution with it. Confirm zero target-side writes and unchanged target state. |
 | Reused authorization | Confirm that a repeated execution request produces no additional target write. |
 | Operator, worker, retry, and compensation paths | For each path capable of the scoped state change, identify the write boundary and confirm that it requires valid authorization. Record which paths are absent from the deployment. |
-| Lost response | Confirm that dispatch remains unresolved until read-only reconciliation establishes the outcome. Check target records for a single write and confirm that the reconciliation identity has read-only access. |
+| Lost response | Confirm that dispatch remains unresolved until read-only reconciliation establishes the outcome. Verify exactly one outbound write attempt in sender-side records and exactly one applied write in target-side records. Confirm that the reconciliation identity has read-only access. |
 
 Record the tested commit, staging configuration, observed target-side write
-count, and receipt or rejection evidence for each case. Mark coverage verified
+count, sender-side dispatch evidence where applicable, and receipt or rejection
+evidence for each case. Mark coverage verified
 only when each applicable write path meets its expected result. Record any
 unverified path as an open item for that operation.
 
