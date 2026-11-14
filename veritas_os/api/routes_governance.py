@@ -346,6 +346,8 @@ def _bind_failure_status_and_error(bind_receipt: Dict[str, Any]) -> tuple[int, s
     if outcome == FinalOutcome.PRECONDITION_FAILED.value:
         return 400, "Governance policy validation failed"
     if outcome == FinalOutcome.APPLY_FAILED.value:
+        if rollback_reason == "BIND_APPLY_FAILED:GOVERNANCE_POLICY_HISTORY_WRITE_FAILED":
+            return 500, "Policy saved but audit history write failed. Verify current policy before retrying."
         if "GOVERNANCE_POLICY_VALIDATION_FAILED" in rollback_reason:
             return 400, "Governance policy validation failed"
         return 500, "Failed to update governance policy"

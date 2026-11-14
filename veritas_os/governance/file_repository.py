@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterator
 
 from veritas_os.governance.models import GovernancePolicyEventRecord
 from veritas_os.governance.repository import (
+    GovernanceHistoryWriteError,
     GovernanceRepository,
     GovernanceWriteConflictError,
 )
@@ -109,7 +110,12 @@ class FileGovernanceRepository(GovernanceRepository):
             ):
                 raise GovernanceWriteConflictError("Current governance policy has changed")
             self._save_policy_locked(updated)
-            self._append_policy_event_locked(event)
+            try:
+                self._append_policy_event_locked(event)
+            except (OSError, ValueError, TypeError, RecursionError) as exc:
+                raise GovernanceHistoryWriteError(
+                    "GOVERNANCE_POLICY_HISTORY_WRITE_FAILED"
+                ) from exc
 
     def save_policy(self, policy: dict[str, Any]) -> None:
         with self._policy_write_lock():
@@ -136,18 +142,20 @@ class FileGovernanceRepository(GovernanceRepository):
             raise
 
     def append_policy_event(self, event: GovernancePolicyEventRecord) -> None:
-        with self._policy_write_lock():
-            self._append_policy_event_locked(event)
+        try:
+            with self._policy_write_lock():
+                self._append_policy_event_locked(event)
+        except (OSError, ValueError, TypeError, RecursionError) as exc:
+            logger.warning("Failed to append governance policy history: %s", exc)
 
     def _append_policy_event_locked(self, event: GovernancePolicyEventRecord) -> None:
         line = json.dumps(event.to_dict(), ensure_ascii=False)
-        try:
-            self._history_path.parent.mkdir(parents=True, exist_ok=True)
-            with self._history_path.open("a", encoding="utf-8") as f:
-                f.write(line + "\n")
-            self._trim_policy_history_locked()
-        except Exception as exc:
-            logger.warning("Failed to append governance policy history: %s", exc)
+        self._history_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._history_path.open("a", encoding="utf-8") as history:
+            history.write(line + "\n")
+            history.flush()
+            os.fsync(history.fileno())
+        self._trim_policy_history_locked()
 
     def list_policy_history(self, *, limit: int, max_records: int) -> list[dict[str, Any]]:
         bounded_limit = max(1, min(limit, max_records))
