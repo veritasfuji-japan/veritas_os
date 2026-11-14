@@ -162,6 +162,15 @@ class FileGovernanceRepository(GovernanceRepository):
             history.write(line)
             history.flush()
             os.fsync(history.fileno())
+        # A file fsync alone does not persist a newly created directory entry.
+        # Sync the directory on retries too, since a previously failed sync
+        # can leave the name visible in memory.
+        if hasattr(os, "O_DIRECTORY"):
+            directory_fd = os.open(self._history_path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
         self._trim_policy_history_locked()
 
     def list_policy_history(self, *, limit: int, max_records: int) -> list[dict[str, Any]]:

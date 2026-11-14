@@ -168,6 +168,40 @@ def test_governance_reports_history_failure_after_saving_policy(tmp_path):
     assert repo.get_current_policy(default_factory=dict) == updated
 
 
+def test_governance_reports_history_directory_sync_failure(tmp_path, monkeypatch):
+    """A directory sync failure must not report a durable history append."""
+    import os
+    import stat
+
+    if not hasattr(os, "O_DIRECTORY"):
+        pytest.skip("directory descriptors are unavailable")
+    history_dir = tmp_path / "history"
+    history_dir.mkdir()
+    history_path = history_dir / "events.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    history_inode = history_dir.stat().st_ino
+    fsync = os.fsync
+
+    def fail_history_directory_sync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and info.st_ino == history_inode:
+            raise OSError("directory sync failed")
+        fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fail_history_directory_sync)
+    with pytest.raises(GovernanceHistoryWriteError):
+        repo.update_policy(
+            previous={}, updated={"version": "saved"}, proposer="operator",
+            approvers=[], event_type="update",
+        )
+    assert repo.get_current_policy(default_factory=dict)["version"] == "saved"
+
+
 @pytest.mark.parametrize("has_atomic_io", [True, False])
 def test_history_trim_preserves_appended_events_on_replace_failure(
     tmp_path, monkeypatch, has_atomic_io
