@@ -205,6 +205,32 @@ def test_history_trim_preserves_appended_events_on_replace_failure(
     )] == ["second"]
 
 
+@pytest.mark.parametrize("history_max", [2, 10])
+@pytest.mark.parametrize("fragment", [b'{"new_version":', b'{"new_version":"\xe3\x81'])
+def test_history_append_isolates_incomplete_record(tmp_path, history_max, fragment):
+    """A torn record cannot hide complete events on either side of it."""
+    history_path = tmp_path / "history.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=history_max,
+    )
+    first = {"version": "first"}
+    second = {"version": "second"}
+    repo.update_policy(previous={}, updated=first, proposer="operator",
+                       approvers=[], event_type="update")
+    with history_path.open("ab") as history:
+        history.write(fragment)
+    repo.update_policy(previous=first, updated=second, proposer="operator",
+                       approvers=[], event_type="update")
+
+    records = repo.list_policy_history(limit=10, max_records=10)
+    assert [record["new_version"] for record in records] == ["second", "first"]
+    if history_max == 2:
+        assert len(history_path.read_bytes().splitlines()) == 2
+
+
 @pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])
 def test_file_repository_refuses_unreadable_saved_policy(tmp_path, content):
     """Defaults apply to missing policy files only."""
