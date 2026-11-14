@@ -150,10 +150,16 @@ class FileGovernanceRepository(GovernanceRepository):
             logger.warning("Failed to append governance policy history: %s", exc)
 
     def _append_policy_event_locked(self, event: GovernancePolicyEventRecord) -> None:
-        line = json.dumps(event.to_dict(), ensure_ascii=False)
+        line = (json.dumps(event.to_dict(), ensure_ascii=False) + "\n").encode("utf-8")
         self._history_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._history_path.open("a", encoding="utf-8") as history:
-            history.write(line + "\n")
+        with self._history_path.open("a+b") as history:
+            history.seek(0, os.SEEK_END)
+            if history.tell() > 0:
+                history.seek(-1, os.SEEK_END)
+                if history.read(1) != b"\n":
+                    # A previous write may have stopped before the line delimiter.
+                    line = b"\n" + line
+            history.write(line)
             history.flush()
             os.fsync(history.fileno())
         self._trim_policy_history_locked()
@@ -164,8 +170,8 @@ class FileGovernanceRepository(GovernanceRepository):
             if not self._history_path.exists():
                 return []
             try:
-                lines = self._history_path.read_text(encoding="utf-8").splitlines()
-            except (OSError, UnicodeDecodeError) as exc:
+                lines = self._history_path.read_bytes().split(b"\n")
+            except OSError as exc:
                 logger.warning("Failed to read governance policy history: %s", exc)
                 return []
 
@@ -175,9 +181,12 @@ class FileGovernanceRepository(GovernanceRepository):
             if not line:
                 continue
             try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
+                record = json.loads(line.decode("utf-8"))
+            except (ValueError, RecursionError):
                 continue
+            if not isinstance(record, dict):
+                continue
+            records.append(record)
             if len(records) >= bounded_limit:
                 break
         return records
@@ -233,11 +242,23 @@ class FileGovernanceRepository(GovernanceRepository):
         try:
             if not self._history_path.exists():
                 return
-            lines = self._history_path.read_text(encoding="utf-8").splitlines(keepends=True)
+            lines = self._history_path.read_bytes().split(b"\n")
+            if lines[-1] == b"":
+                lines.pop()
             if len(lines) <= self._policy_history_max:
                 return
 
-            trimmed = "".join(lines[-self._policy_history_max :])
+            # Count only complete JSON objects toward the retention limit.
+            retained = []
+            for line in lines:
+                try:
+                    decoded = line.decode("utf-8")
+                    record = json.loads(decoded)
+                except (ValueError, RecursionError):
+                    continue
+                if isinstance(record, dict):
+                    retained.append(decoded)
+            trimmed = "".join(line + "\n" for line in retained[-self._policy_history_max :])
             if self._has_atomic_io:
                 _atomic_write_text(self._history_path, trimmed)
                 return

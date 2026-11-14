@@ -1763,7 +1763,7 @@ class TestGovernanceHardeningBranches:
         def _boom(*_args, **_kwargs):
             raise OSError("disk error")
 
-        monkeypatch.setattr(Path, "read_text", _boom)
+        monkeypatch.setattr(Path, "read_bytes", _boom)
         with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path):
             assert gov_mod.get_policy_history(limit=5) == []
 
