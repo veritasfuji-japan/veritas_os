@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from veritas_os.api import governance as gov
 from veritas_os.governance.file_repository import FileGovernanceRepository
+from veritas_os.governance.repository import GovernanceWriteConflictError
 
 
 @pytest.fixture(autouse=True)
@@ -54,6 +56,98 @@ def test_file_repository_roundtrip(tmp_path):
     assert len(history) == 2
     assert history[0]["event_type"] == "rollback"
     assert history[1]["event_type"] == "update"
+
+
+@pytest.mark.parametrize("operation", ["update", "rollback"])
+def test_file_repository_rejects_stale_writes(tmp_path, operation):
+    """Keep the winning policy and history when another writer is stale."""
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    original = repo.get_current_policy(default_factory=dict)
+    winner = {"version": "winner"}
+    repo.update_policy(
+        previous=original, updated=winner, proposer="alice",
+        approvers=[], event_type="update",
+    )
+
+    with pytest.raises(GovernanceWriteConflictError):
+        if operation == "update":
+            repo.update_policy(
+                previous=original, updated={"version": "stale"}, proposer="bob",
+                approvers=[], event_type="update",
+            )
+        else:
+            repo.rollback_policy(
+                previous=original, restored={"version": "stale"}, proposer="bob",
+                approvers=[],
+            )
+
+    assert repo.get_current_policy(default_factory=dict) == winner
+    assert [record["new_policy"] for record in repo.list_policy_history(
+        limit=10, max_records=10
+    )] == [winner]
+
+
+def test_file_repository_serializes_independent_writers(tmp_path):
+    """Only one worker can initialize a policy from the same missing state."""
+    pytest.importorskip("fcntl", exc_type=ImportError)
+    start = threading.Barrier(2)
+
+    def update(version):
+        repo = FileGovernanceRepository(
+            policy_path=tmp_path / "policy.json",
+            history_path=tmp_path / "history.jsonl",
+            lock=threading.Lock(),
+            policy_history_max=10,
+        )
+        previous = repo.get_current_policy(default_factory=dict)
+        start.wait(timeout=5)
+        try:
+            repo.update_policy(
+                previous=previous,
+                updated={"version": version},
+                proposer=version,
+                approvers=[],
+                event_type="update",
+            )
+        except GovernanceWriteConflictError:
+            return None
+        return version
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        winners = [result for result in pool.map(update, ["alice", "bob"]) if result]
+    assert len(winners) == 1
+    assert json.loads((tmp_path / "policy.json").read_text()) == {"version": winners[0]}
+    assert len((tmp_path / "history.jsonl").read_text().splitlines()) == 1
+
+
+def test_governance_policy_write_holds_lock_until_history_append(tmp_path, monkeypatch):
+    """Other workers cannot start writing before the current event is recorded."""
+    fcntl = pytest.importorskip("fcntl", exc_type=ImportError)
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    original_append = repo._append_policy_event_locked
+
+    def check_lock(event):
+        with (tmp_path / "policy.json.lock").open("rb") as other_writer:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(other_writer.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        original_append(event)
+
+    monkeypatch.setattr(repo, "_append_policy_event_locked", check_lock)
+    repo.update_policy(
+        previous={}, updated={"version": "v1"}, proposer="operator",
+        approvers=[], event_type="update",
+    )
+    assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "v1"
 
 
 @pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])

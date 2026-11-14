@@ -462,12 +462,15 @@ def _sanitize_updated_by(raw: Any) -> str:
     return text[:200]
 
 
-def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
+def update_policy(
+    patch: Dict[str, Any], *, expected_policy: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
     """
     Merge *patch* into the current governance policy and persist.
 
     Changes are written atomically and appended to the audit history log.
     All registered callbacks (e.g. FUJI hot-reload) are notified after save.
+    A supplied expected_policy is the snapshot used for validation and persistence.
 
     Raises:
         TypeError: If *patch* is not a dict.
@@ -478,7 +481,7 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(patch, dict):
         raise TypeError("policy patch must be a dict")
 
-    previous = _load()
+    previous = _load() if expected_policy is None else expected_policy
     current = deepcopy(previous)
 
     previous_wat = current.get("wat") if isinstance(current.get("wat"), dict) else {}

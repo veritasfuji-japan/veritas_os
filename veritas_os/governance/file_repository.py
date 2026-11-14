@@ -6,12 +6,21 @@ import json
 import logging
 import os
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from veritas_os.governance.models import GovernancePolicyEventRecord
-from veritas_os.governance.repository import GovernanceRepository
+from veritas_os.governance.repository import (
+    GovernanceRepository,
+    GovernanceWriteConflictError,
+)
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
 
 try:
     from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
@@ -48,53 +57,95 @@ class FileGovernanceRepository(GovernanceRepository):
     ) -> dict[str, Any]:
         """Use defaults on first initialization and reject unreadable policy state."""
         with self._lock:
-            try:
-                self._policy_path.lstat()
-            except FileNotFoundError:
-                return default_factory()
-            except OSError:
-                raise RuntimeError("Cannot inspect saved governance policy") from None
+            policy = self._read_policy_locked()
+            return default_factory() if policy is None else policy
 
-            try:
-                with self._policy_path.open("r", encoding="utf-8") as policy_file:
-                    policy = json.load(policy_file)
-            except (OSError, ValueError, RecursionError):
-                raise RuntimeError("Cannot read saved governance policy") from None
+    def _read_policy_locked(self) -> dict[str, Any] | None:
+        try:
+            self._policy_path.lstat()
+        except FileNotFoundError:
+            return None
+        except OSError:
+            raise RuntimeError("Cannot inspect saved governance policy") from None
 
-            if not isinstance(policy, dict):
-                raise RuntimeError("Saved governance policy must be a JSON object")
-            return policy
+        try:
+            with self._policy_path.open("r", encoding="utf-8") as policy_file:
+                policy = json.load(policy_file)
+        except (OSError, ValueError, RecursionError):
+            raise RuntimeError("Cannot read saved governance policy") from None
 
-    def save_policy(self, policy: dict[str, Any]) -> None:
+        if not isinstance(policy, dict):
+            raise RuntimeError("Saved governance policy must be a JSON object")
+        return policy
+
+    @contextmanager
+    def _policy_write_lock(self) -> Iterator[None]:
+        """Serialize compare-and-write across workers where flock is available."""
         with self._lock:
             self._policy_path.parent.mkdir(parents=True, exist_ok=True)
-            if self._has_atomic_io:
-                _atomic_write_json(self._policy_path, policy, indent=2)
+            if fcntl is None:
+                yield
                 return
 
-            tmp = self._policy_path.with_suffix(".tmp")
+            # The policy file is replaced on write, so lock a stable sidecar.
+            lock_path = self._policy_path.with_name(self._policy_path.name + ".lock")
+            with lock_path.open("ab") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                yield
+
+    def _save_with_event(
+        self,
+        previous: dict[str, Any],
+        updated: dict[str, Any],
+        event: GovernancePolicyEventRecord,
+    ) -> None:
+        """Keep policy writes and their history appends in commit order."""
+        from veritas_os.policy.governance_identity import compute_governance_digest
+
+        with self._policy_write_lock():
+            current = self._read_policy_locked()
+            if current is not None and (
+                compute_governance_digest(current) != compute_governance_digest(previous)
+            ):
+                raise GovernanceWriteConflictError("Current governance policy has changed")
+            self._save_policy_locked(updated)
+            self._append_policy_event_locked(event)
+
+    def save_policy(self, policy: dict[str, Any]) -> None:
+        with self._policy_write_lock():
+            self._save_policy_locked(policy)
+
+    def _save_policy_locked(self, policy: dict[str, Any]) -> None:
+        if self._has_atomic_io:
+            _atomic_write_json(self._policy_path, policy, indent=2)
+            return
+
+        tmp = self._policy_path.with_suffix(".tmp")
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(policy, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            tmp.replace(self._policy_path)
+        except Exception:
             try:
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump(policy, f, ensure_ascii=False, indent=2)
-                    f.write("\n")
-                    f.flush()
-                    os.fsync(f.fileno())
-                tmp.replace(self._policy_path)
-            except Exception:
-                try:
-                    tmp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                raise
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
 
     def append_policy_event(self, event: GovernancePolicyEventRecord) -> None:
+        with self._policy_write_lock():
+            self._append_policy_event_locked(event)
+
+    def _append_policy_event_locked(self, event: GovernancePolicyEventRecord) -> None:
         line = json.dumps(event.to_dict(), ensure_ascii=False)
         try:
             self._history_path.parent.mkdir(parents=True, exist_ok=True)
-            with self._lock:
-                with open(self._history_path, "a", encoding="utf-8") as f:
-                    f.write(line + "\n")
-                self._trim_policy_history_locked()
+            with self._history_path.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+            self._trim_policy_history_locked()
         except Exception as exc:
             logger.warning("Failed to append governance policy history: %s", exc)
 
@@ -134,8 +185,9 @@ class FileGovernanceRepository(GovernanceRepository):
         reason: str = "",
     ) -> None:
         del approval_records, reason
-        self.save_policy(updated)
-        self.append_policy_event(
+        self._save_with_event(
+            previous,
+            updated,
             self._build_event(
                 previous=previous,
                 updated=updated,
@@ -156,8 +208,9 @@ class FileGovernanceRepository(GovernanceRepository):
         reason: str = "",
     ) -> None:
         del approval_records, reason
-        self.save_policy(restored)
-        self.append_policy_event(
+        self._save_with_event(
+            previous,
+            restored,
             self._build_event(
                 previous=previous,
                 updated=restored,
@@ -184,7 +237,7 @@ class FileGovernanceRepository(GovernanceRepository):
 
     def trim_policy_history(self) -> None:
         """Trim history file to policy_history_max records."""
-        with self._lock:
+        with self._policy_write_lock():
             self._trim_policy_history_locked()
 
     def _build_event(

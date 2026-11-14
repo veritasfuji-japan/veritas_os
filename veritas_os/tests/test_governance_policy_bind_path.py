@@ -45,7 +45,7 @@ def _reader_factory(state: dict[str, object]):
 
 
 def _updater_factory(state: dict[str, object], history: list[dict[str, object]]):
-    def _update(patch: dict[str, object]) -> dict[str, object]:
+    def _update(patch: dict[str, object], **_kwargs) -> dict[str, object]:
         for key, value in patch.items():
             if isinstance(value, dict) and isinstance(state.get(key), dict):
                 merged = dict(state[key])
@@ -83,8 +83,37 @@ def _execute(**overrides):
         "policy_rollback": _rollback_factory(state, history),
         "append_trustlog": False,
     }
+    if "governance_policy" in overrides:
+        state.update(overrides["governance_policy"])
+        overrides["governance_policy"] = _reader_factory(state)()
     kwargs.update(overrides)
     return update_governance_policy_with_bind_boundary(**kwargs), state, history
+
+
+def test_governance_write_conflict_does_not_restore_stale_snapshot() -> None:
+    """An update rejected before persistence has no changes to roll back."""
+    from veritas_os.api.routes_governance import _bind_failure_status_and_error
+    from veritas_os.governance.repository import GovernanceWriteConflictError
+
+    rollback_calls = []
+
+    def update(_patch, *, expected_policy):
+        assert expected_policy["bind_adjudication"]["rollback_on_apply_failure"] is True
+        raise GovernanceWriteConflictError("policy already changed")
+
+    def rollback(*args, **kwargs):
+        rollback_calls.append((args, kwargs))
+
+    receipt, _, _ = _execute(
+        policy_updater=update,
+        policy_rollback=rollback,
+        governance_policy={"bind_adjudication": {"rollback_on_apply_failure": True}},
+    )
+
+    assert receipt.final_outcome is FinalOutcome.APPLY_FAILED
+    assert not receipt.escalation_reason
+    assert rollback_calls == []
+    assert _bind_failure_status_and_error(receipt.to_dict())[0] == 409
 
 
 def test_governance_policy_update_bind_committed() -> None:
