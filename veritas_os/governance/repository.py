@@ -11,6 +11,10 @@ class GovernanceWriteConflictError(RuntimeError):
     """Raised when governance policy writes detect a stale caller state."""
 
 
+class GovernanceHistoryWriteError(RuntimeError):
+    """Raised when the policy was saved but its history write failed."""
+
+
 class GovernanceRepository(Protocol):
     """Persistence contract for governance policy and history operations."""
 
