@@ -25,6 +25,7 @@ except ImportError:  # pragma: no cover - Windows
 
 try:
     from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
+    from veritas_os.core.atomic_io import atomic_write_text as _atomic_write_text
 
     _HAS_ATOMIC_IO = True
 except ImportError:  # pragma: no cover
@@ -237,9 +238,23 @@ class FileGovernanceRepository(GovernanceRepository):
                 return
 
             trimmed = "".join(lines[-self._policy_history_max :])
-            tmp = self._history_path.with_suffix(".tmp")
-            tmp.write_text(trimmed, encoding="utf-8")
-            tmp.replace(self._history_path)
+            if self._has_atomic_io:
+                _atomic_write_text(self._history_path, trimmed)
+                return
+
+            tmp = self._history_path.with_name(self._history_path.name + ".tmp")
+            try:
+                with tmp.open("w", encoding="utf-8") as history:
+                    history.write(trimmed)
+                    history.flush()
+                    os.fsync(history.fileno())
+                tmp.replace(self._history_path)
+            except OSError:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
         except Exception as exc:
             logger.warning("Failed to trim governance policy history: %s", exc)
 
