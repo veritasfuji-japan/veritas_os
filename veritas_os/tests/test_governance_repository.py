@@ -10,7 +10,7 @@ import pytest
 
 from veritas_os.api import governance as gov
 from veritas_os.governance.file_repository import FileGovernanceRepository
-from veritas_os.governance.repository import GovernanceWriteConflictError
+from veritas_os.governance.repository import GovernanceHistoryWriteError, GovernanceWriteConflictError
 
 
 @pytest.fixture(autouse=True)
@@ -148,6 +148,24 @@ def test_governance_policy_write_holds_lock_until_history_append(tmp_path, monke
         approvers=[], event_type="update",
     )
     assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "v1"
+
+
+def test_governance_reports_history_failure_after_saving_policy(tmp_path):
+    history_path = tmp_path / "history.jsonl"
+    history_path.mkdir()
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    updated = {"version": "saved"}
+    with pytest.raises(GovernanceHistoryWriteError, match="GOVERNANCE_POLICY_HISTORY_WRITE_FAILED"):
+        repo.update_policy(
+            previous={}, updated=updated, proposer="operator",
+            approvers=[], event_type="update",
+        )
+    assert repo.get_current_policy(default_factory=dict) == updated
 
 
 @pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])

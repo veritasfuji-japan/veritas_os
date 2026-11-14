@@ -42,6 +42,30 @@ def _approved(payload: dict | None = None) -> dict:
     return base
 
 
+def test_policy_update_reports_partial_commit_on_history_failure(monkeypatch, _temp_policy):
+    from veritas_os.governance.file_repository import FileGovernanceRepository
+    from veritas_os.policy.bind_core import core as bind_core
+
+    policy = json.loads(_temp_policy.read_text(encoding="utf-8"))
+    policy["bind_adjudication"]["rollback_on_apply_failure"] = True
+    _temp_policy.write_text(json.dumps(policy), encoding="utf-8")
+
+    def fail_history(_repository, _event):
+        raise OSError("history unavailable")
+
+    monkeypatch.setattr(FileGovernanceRepository, "_append_policy_event_locked", fail_history)
+    monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", lambda intent: None)
+    monkeypatch.setattr(bind_core, "append_bind_receipt_trustlog", lambda receipt: receipt)
+    response = client.put(
+        "/v1/governance/policy", headers=HEADERS, json=_approved({"version": "saved"})
+    )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["bind_outcome"] == "APPLY_FAILED"
+    assert "Policy saved but audit history write failed" in response.json()["error"]
+    assert srv.get_policy()["version"] == "saved"
+
+
 @pytest.mark.parametrize("drift_required", [True, False])
 def test_policy_update_rejects_change_before_bind_validation(
     monkeypatch, _temp_policy, drift_required

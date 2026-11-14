@@ -34,6 +34,12 @@
 ---
 
 ---
+## Contents
+
+[Why VERITAS](#why-veritas-exists) · [Architecture](#architecture-at-a-glance) · [LLM provider support](#llm-provider-support) · [Evidence](#evidence-snapshot-and-enterprise-evaluation-2026-10-09) · [Implementation](#current-implementation) · [Quick start](#quick-start) · [Docker sizing](#docker-compose-sizing-reference) · [Guardrails comparison](#how-veritas-differs-from-model-guardrails) · [Operations](#documentation-map) · [License](#license) · [Contact](#contact)
+
+---
+
 ## The problem, in 10 seconds
 
 An AI agent can be instructed — or tricked by prompt injection — to grant admin access, send money, or change a permission. Most guardrails inspect the *text* of the request. VERITAS inspects the *act*:
@@ -77,6 +83,24 @@ On a frozen real-provider AgentDojo banking benchmark (128 paired cases), adding
 - **Enterprise / paid PoC:** propose one narrow effect boundary — see [Contact](#contact). Scope and fees require a separate agreement.
 
 ⭐ **If this problem matters to you, star this repo** — stars are how we can tell that execution-boundary governance is worth continuing to prove in public.
+
+---
+
+## LLM provider support
+
+VERITAS includes an LLM-client abstraction with request/response code paths for five providers. **An available adapter does not mean production-validated support**, and LLM selection is separate from the authority and Bind-boundary enforcement model.
+
+| Provider | Current support tier | Use boundary |
+|---|---|---|
+| OpenAI | Production tier (default) | Supported runtime path; this is **not** a contractual SLA or customer-production certification |
+| Anthropic / Claude | Planned | Adapter code and offline contract tests; no live production validation |
+| Google / Gemini | Planned | Adapter code; not validated for governed production flows |
+| Ollama / local models | Experimental | Local evaluation; no production support claim |
+| OpenRouter | Experimental | Gateway evaluation; no production support claim |
+
+The client reads `LLM_PROVIDER` and `LLM_MODEL` from its environment; the default is `openai` with `gpt-4.1-mini`. Switching providers **also requires a suitable model ID and credentials/endpoint configuration**, where applicable. For example, `LLM_PROVIDER=anthropic` with the unchanged default model name is not a valid Claude configuration. Never promote a planned or experimental tier into an enterprise production claim solely because a request adapter exists.
+
+Source of truth: [Provider Support Matrix](docs/en/operations/provider-support-matrix.md) · [LLM client](veritas_os/core/llm_client.py) · [Configuration template](.env.example).
 
 ---
 
@@ -745,6 +769,20 @@ For Docker security configuration, see:
 
 ---
 
+### Docker Compose sizing reference
+
+The checked-in `docker-compose.yml` declares these **container resource limits**, not verified minimum host requirements or production recommendations:
+
+| Service | CPU limit | Memory limit |
+|---|---:|---:|
+| PostgreSQL | 1 CPU | 512 MB |
+| Backend | 2 CPUs | 2 GB |
+| Frontend | 1 CPU | 1 GB |
+
+The Compose frontend runs a development command. Production deployment requires a separately reviewed runtime/build profile, managed PostgreSQL or equivalent durable storage, secret/TLS management, migrations, monitoring and environment-specific capacity testing. These limits **do not establish requests/sec, p95 latency, concurrency, or an SLA**. The [historical local benchmark](docs/en/benchmarks/local-performance-metrics.latest.md) is explicitly not current-head or production performance evidence. For database pool sizing and hardening, consult the [PostgreSQL Production Guide](docs/en/operations/postgresql-production-guide.md).
+
+---
+
 ## Local development
 
 Install:
@@ -923,6 +961,20 @@ VERITAS is not:
 Its role is narrower:
 
 > **Determine whether a proposed AI action is permitted to cross the execution boundary under the evidence and governance state available at that moment.**
+
+---
+
+# How VERITAS differs from model guardrails
+
+VERITAS is intended to **complement**, not replace, model- and application-layer controls. These categories can overlap; the distinction below is about the main control question, **not** a claim that every competing product lacks execution hooks.
+
+| Control approach | Primary question | How it relates to VERITAS |
+|---|---|---|
+| Model/output guardrails (e.g., NeMo Guardrails, Guardrails AI) | Is content or a model interaction acceptable? | Useful earlier in the flow; not by itself proof that a particular external effect is authorized at commit time |
+| Agent-framework checks (e.g., LangChain application guardrails) | May this tool call or agent step proceed under application rules? | Can integrate with governed execution; actual bypass resistance depends on where the check is enforced |
+| VERITAS Bind-boundary governance | Is this **exact effect** authorized **now**, with applicable authority, approval, replay state and evidence? | Enforces the configured integration boundary; does **not** assert universal coverage of all possible effect paths |
+
+Where an agent can call an external system directly outside the governed adapter, VERITAS cannot guarantee prevention without corresponding IAM/network/credential controls. See the [implementation matrix](docs/en/validation/current-implementation-matrix.md) and [external Bind integration path](docs/en/guides/external-bind-integration-path.md).
 
 ---
 
@@ -1153,6 +1205,12 @@ Security issues should be reported according to [SECURITY.md](SECURITY.md).
   url    = {https://github.com/veritasfuji-japan/veritas_os}
 }
 ```
+
+---
+
+# Development and support ownership
+
+VERITAS OS is independently developed, with **Takeshi Fujishita as the primary developer and maintainer**, alongside contributions and external technical review. This does not imply a staffed vendor support organization, 24/7 coverage, a contractual support SLA, or customer production readiness. Enterprise evaluators should assess maintainer continuity, security response and deployment responsibility as part of diligence. See the [Maintainer Handoff and Support Continuity Runbook](docs/en/operations/maintainer-handoff.md) and [Security Policy](SECURITY.md).
 
 ---
 
