@@ -168,6 +168,43 @@ def test_governance_reports_history_failure_after_saving_policy(tmp_path):
     assert repo.get_current_policy(default_factory=dict) == updated
 
 
+@pytest.mark.parametrize("has_atomic_io", [True, False])
+def test_history_trim_preserves_appended_events_on_replace_failure(
+    tmp_path, monkeypatch, has_atomic_io
+):
+    """A failed trim leaves the original history available for a later retry."""
+    import os
+
+    history_path = tmp_path / "history.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=1,
+        has_atomic_io=has_atomic_io,
+    )
+    first = {"version": "first"}
+    second = {"version": "second"}
+    repo.update_policy(previous={}, updated=first, proposer="operator", approvers=[], event_type="update")
+    real_replace = os.replace
+
+    def fail_history_replace(source, target):
+        if target == history_path:
+            raise OSError("history replacement failed")
+        return real_replace(source, target)
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(os, "replace", fail_history_replace)
+        repo.update_policy(previous=first, updated=second, proposer="operator", approvers=[], event_type="update")
+
+    assert len(history_path.read_text(encoding="utf-8").splitlines()) == 2
+    assert not list(tmp_path.glob("*history*.tmp"))
+    repo.trim_policy_history()
+    assert [record["new_version"] for record in repo.list_policy_history(
+        limit=10, max_records=10
+    )] == ["second"]
+
+
 @pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])
 def test_file_repository_refuses_unreadable_saved_policy(tmp_path, content):
     """Defaults apply to missing policy files only."""
