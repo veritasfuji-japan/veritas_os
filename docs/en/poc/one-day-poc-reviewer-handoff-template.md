@@ -59,6 +59,36 @@
 | HTTP PoC benchmark reviewed if run | | | | |
 | Non-claim boundaries explained | | | | |
 
+## Single-write Bind coverage
+
+Complete this section when the PoC includes the
+[single-write Bind coverage criteria](one-day-poc-evidence-pack.md#bind-coverage-for-one-external-write).
+
+- Staging resource and exact write operation:
+- Expected state change:
+- Bind execution service identity:
+- Read-only reconciliation identity:
+
+| Caller or entry point | Effective service identity | Can perform the scoped write? | Bind enforcement point | Evidence |
+|---|---|---|---|---|
+| Governed executor | | | | |
+| Agent or application | | | | |
+| Management or operator path | | | | |
+| Worker, retry, or compensation path | | | | |
+| Reconciliation | | | | |
+
+Add a row for each additional caller that can change the same state. Record
+absent paths and the evidence for their absence. Use deployment configuration
+and target-side access policies to identify effective write grants and which
+callers can use each write identity. Reference redacted evidence and omit
+credential values.
+
+Confirm that each applicable writer is bound at execution time and that the
+reconciliation identity has read-only access. If a caller can perform the
+scoped write without Bind, record the criterion as failed. If access or
+enforcement cannot be established from the available evidence, record it as
+inconclusive and add a follow-up below.
+
 ## Evidence provided
 
 | Evidence item | File/path | Required? | Notes |
