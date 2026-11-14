@@ -231,6 +231,35 @@ def test_history_append_isolates_incomplete_record(tmp_path, history_max, fragme
         assert len(history_path.read_bytes().splitlines()) == 2
 
 
+@pytest.mark.parametrize("history_max", [2, 10])
+def test_history_skips_json_conversion_errors(tmp_path, monkeypatch, history_max):
+    """One decoder failure must preserve the neighboring records."""
+    history_path = tmp_path / "history.jsonl"
+    history_path.write_text(
+        '{"new_version":"first"}\n{"new_version":"invalid"}\n{"new_version":"last"}\n',
+        encoding="utf-8",
+    )
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=history_max,
+    )
+    loads = json.loads
+
+    def decode(line, *args, **kwargs):
+        if line == '{"new_version":"invalid"}':
+            raise ValueError("JSON integer conversion limit exceeded")
+        return loads(line, *args, **kwargs)
+
+    monkeypatch.setattr(json, "loads", decode)
+    repo.trim_policy_history()
+    records = repo.list_policy_history(limit=10, max_records=10)
+
+    assert [record["new_version"] for record in records] == ["last", "first"]
+    assert len(history_path.read_bytes().splitlines()) == min(history_max, 3)
+
+
 @pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])
 def test_file_repository_refuses_unreadable_saved_policy(tmp_path, content):
     """Defaults apply to missing policy files only."""

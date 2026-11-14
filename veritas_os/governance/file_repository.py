@@ -182,7 +182,7 @@ class FileGovernanceRepository(GovernanceRepository):
                 continue
             try:
                 record = json.loads(line.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
+            except (ValueError, RecursionError):
                 continue
             if not isinstance(record, dict):
                 continue
@@ -254,7 +254,7 @@ class FileGovernanceRepository(GovernanceRepository):
                 try:
                     decoded = line.decode("utf-8")
                     record = json.loads(decoded)
-                except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+                except (ValueError, RecursionError):
                     continue
                 if isinstance(record, dict):
                     retained.append(decoded)
