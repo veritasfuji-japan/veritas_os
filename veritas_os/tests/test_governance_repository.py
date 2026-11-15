@@ -210,6 +210,26 @@ def test_governance_history_directory_sync_failure(tmp_path, monkeypatch, caplog
     assert repo.get_current_policy(default_factory=dict)["version"] == "saved"
 
 
+def test_fallback_policy_save_preserves_other_file_with_same_stem(tmp_path):
+    """A policy write uses its own temporary file and preserves sibling files."""
+    sibling = tmp_path / "policy.tmp"
+    sibling.write_bytes(b"existing data")
+    policy_path = tmp_path / "policy.json"
+    repo = FileGovernanceRepository(
+        policy_path=policy_path,
+        history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+        has_atomic_io=False,
+    )
+
+    repo.save_policy({"version": "saved"})
+
+    assert sibling.read_bytes() == b"existing data"
+    assert json.loads(policy_path.read_bytes()) == {"version": "saved"}
+    assert not list(tmp_path.glob(".policy.json.*.tmp"))
+
+
 def test_fallback_policy_syncs_directory_after_replace(tmp_path, monkeypatch, caplog):
     """A directory sync failure after replacement still allows audit history."""
     policy_path = tmp_path / "policies" / "policy.json"
