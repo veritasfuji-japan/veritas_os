@@ -129,29 +129,8 @@ class FileGovernanceRepository(GovernanceRepository):
             _atomic_write_json(self._policy_path, policy, indent=2)
             return
 
-        tmp = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=self._policy_path.parent,
-                prefix=f".{self._policy_path.name}.",
-                suffix=".tmp",
-                delete=False,
-            ) as policy_file:
-                tmp = Path(policy_file.name)
-                json.dump(policy, policy_file, ensure_ascii=False, indent=2)
-                policy_file.write("\n")
-                policy_file.flush()
-                os.fsync(policy_file.fileno())
-            tmp.replace(self._policy_path)
-        except Exception:
-            if tmp is not None:
-                try:
-                    tmp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-            raise
+        content = json.dumps(policy, ensure_ascii=False, indent=2) + "\n"
+        self._replace_text_fallback(self._policy_path, content)
 
         # Match the normal atomic writer's best-effort directory sync after
         # replacement. The updated policy is already visible at this point.
@@ -159,6 +138,31 @@ class FileGovernanceRepository(GovernanceRepository):
             self._sync_directory(self._policy_path.parent)
         except OSError as exc:
             logger.warning("Failed to sync governance policy directory: %s", exc)
+
+    @staticmethod
+    def _replace_text_fallback(path: Path, content: str) -> None:
+        tmp = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temp_file:
+                tmp = Path(temp_file.name)
+                temp_file.write(content)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+            tmp.replace(path)
+        except Exception:
+            if tmp is not None:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            raise
 
     def append_policy_event(self, event: GovernancePolicyEventRecord) -> None:
         try:
@@ -299,19 +303,7 @@ class FileGovernanceRepository(GovernanceRepository):
                 _atomic_write_text(self._history_path, trimmed)
                 return
 
-            tmp = self._history_path.with_name(self._history_path.name + ".tmp")
-            try:
-                with tmp.open("w", encoding="utf-8") as history:
-                    history.write(trimmed)
-                    history.flush()
-                    os.fsync(history.fileno())
-                tmp.replace(self._history_path)
-            except OSError:
-                try:
-                    tmp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                raise
+            self._replace_text_fallback(self._history_path, trimmed)
             self._sync_directory(self._history_path.parent)
         except Exception as exc:
             logger.warning("Failed to trim governance policy history: %s", exc)
