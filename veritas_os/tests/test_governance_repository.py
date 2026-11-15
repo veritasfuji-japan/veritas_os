@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -166,6 +167,47 @@ def test_governance_reports_history_failure_after_saving_policy(tmp_path):
             approvers=[], event_type="update",
         )
     assert repo.get_current_policy(default_factory=dict) == updated
+
+
+@pytest.mark.parametrize("sync_errno", [errno.EIO, errno.EINVAL, errno.ENOTSUP])
+def test_governance_history_directory_sync_failure(tmp_path, monkeypatch, caplog, sync_errno):
+    """Unsupported directory sync warns and actual I/O failure propagates."""
+    import os
+    import stat
+
+    if not hasattr(os, "O_DIRECTORY"):
+        pytest.skip("directory descriptors are unavailable")
+    history_dir = tmp_path / "history"
+    history_dir.mkdir()
+    history_path = history_dir / "events.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    history_inode = history_dir.stat().st_ino
+    fsync = os.fsync
+
+    def fail_history_directory_sync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and info.st_ino == history_inode:
+            raise OSError(sync_errno, "directory sync failed")
+        fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fail_history_directory_sync)
+    changes = {
+        "previous": {}, "updated": {"version": "saved"}, "proposer": "operator",
+        "approvers": [], "event_type": "update",
+    }
+    if sync_errno == errno.EIO:
+        with pytest.raises(GovernanceHistoryWriteError):
+            repo.update_policy(**changes)
+    else:
+        repo.update_policy(**changes)
+        assert "Governance history directory sync unsupported" in caplog.text
+    assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "saved"
+    assert repo.get_current_policy(default_factory=dict)["version"] == "saved"
 
 
 @pytest.mark.parametrize("has_atomic_io", [True, False])
