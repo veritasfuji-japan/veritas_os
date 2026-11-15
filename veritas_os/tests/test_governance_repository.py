@@ -283,6 +283,27 @@ def test_fallback_trim_syncs_directory_after_replace(tmp_path, monkeypatch):
     assert synced_contents == [b'{"new_version":"second"}\n']
 
 
+def test_fallback_history_trim_preserves_existing_temp_named_file(tmp_path):
+    """The history replacement owns its temporary file."""
+    history_path = tmp_path / "history.jsonl"
+    history_path.write_bytes(b'{"new_version":"first"}\n{"new_version":"second"}\n')
+    sibling = tmp_path / "history.jsonl.tmp"
+    sibling.write_bytes(b"existing data")
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=1,
+        has_atomic_io=False,
+    )
+
+    repo.trim_policy_history()
+
+    assert sibling.read_bytes() == b"existing data"
+    assert repo.list_policy_history(limit=10, max_records=10) == [{"new_version": "second"}]
+    assert not list(tmp_path.glob(".history.jsonl.*.tmp"))
+
+
 @pytest.mark.parametrize("has_atomic_io", [True, False])
 def test_history_trim_preserves_appended_events_on_replace_failure(
     tmp_path, monkeypatch, has_atomic_io
