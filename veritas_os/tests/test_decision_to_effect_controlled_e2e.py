@@ -19,11 +19,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import ssl
 import subprocess
 import sys
 import time
 from typing import Any
+from uuid import uuid4
 
+import httpx
 import psycopg
 import pytest
 from pydantic import SecretBytes
@@ -569,6 +572,30 @@ def _case_evidence(case, result) -> dict[str, Any]:
         "reconciliation_archive": result["archive"].model_dump(mode="json"),
         "receipt_bundle": result["recovered"].receipt_bundle.model_dump(mode="json"),
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_reader", [False, True], ids=["anonymous", "read-only"])
+async def test_sandbox_does_not_accept_writes_without_writer_credentials(use_reader):
+    tls_context = ssl.create_default_context(
+        cafile=os.environ["VERITAS_SANDBOX_CA_FILE"],
+    )
+    event_id = str(uuid4())
+    headers = {"Idempotency-Key": event_id}
+    if use_reader:
+        headers["Authorization"] = f"Bearer {os.environ['VERITAS_SANDBOX_READER_TOKEN']}"
+
+    rows_before = await _sandbox_row_count()
+    async with httpx.AsyncClient(verify=tls_context, trust_env=False) as client:
+        response = await client.post(
+            deployment().endpoint_url,
+            headers=headers,
+            json={"event_id": event_id, "message": "controlled credential separation"},
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "SSE_UNAUTHORIZED"}
+    assert await _sandbox_row_count() == rows_before
 
 
 @pytest.mark.asyncio
