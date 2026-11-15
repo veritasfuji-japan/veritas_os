@@ -210,6 +210,28 @@ def test_governance_history_directory_sync_failure(tmp_path, monkeypatch, caplog
     assert repo.get_current_policy(default_factory=dict)["version"] == "saved"
 
 
+def test_fallback_trim_syncs_directory_after_replace(tmp_path, monkeypatch):
+    """Sync the replacement directory entry after trimming in fallback mode."""
+    history_path = tmp_path / "history.jsonl"
+    history_path.write_bytes(b'{"new_version":"first"}\n{"new_version":"second"}\n')
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=1,
+        has_atomic_io=False,
+    )
+    synced_contents = []
+
+    def sync_directory():
+        synced_contents.append(history_path.read_bytes())
+
+    monkeypatch.setattr(repo, "_sync_history_directory", sync_directory)
+    repo.trim_policy_history()
+
+    assert synced_contents == [b'{"new_version":"second"}\n']
+
+
 @pytest.mark.parametrize("has_atomic_io", [True, False])
 def test_history_trim_preserves_appended_events_on_replace_failure(
     tmp_path, monkeypatch, has_atomic_io
