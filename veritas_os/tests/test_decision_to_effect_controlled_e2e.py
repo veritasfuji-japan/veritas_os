@@ -35,6 +35,8 @@ from veritas_os.governance.canonical_decision_artifact import (
     verify_canonical_decision_artifact,
 )
 from veritas_os.policy import sandbox_action_binding as binding
+from veritas_os.policy import sandbox_credential_resolution as resolution
+from veritas_os.policy import sandbox_pre_effect as pre_effect
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState,
     PostgresAtomicEffectStateStore,
@@ -603,7 +605,9 @@ async def test_sandbox_does_not_accept_writes_without_writer_credentials(use_rea
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["revoked", "expired", "already-dispatched"])
-async def test_sandbox_bind_rejects_inactive_permission_without_dispatch(tmp_path, mode):
+async def test_sandbox_bind_rejects_inactive_permission_without_dispatch(
+    tmp_path, mode, monkeypatch
+):
     event = {"event_id": str(uuid4()), "message": "controlled authorization rejection"}
     case = _build_decision_case(tmp_path, event)
     artifact, inputs, config = case["artifact"], case["inputs"], case["deployment"]
@@ -652,12 +656,42 @@ async def test_sandbox_bind_rejects_inactive_permission_without_dispatch(tmp_pat
             assert transport.send_calls == 1
             assert await _sandbox_row_count() == rows_before_first_dispatch + 1
 
+        expected_error = {
+            "revoked": "SPE_RECHECK_FAILED_ATTEMPT_RETAINED",
+            "expired": "SPE_AUTHORIZATION_OUTSIDE_TIME_WINDOW",
+            "already-dispatched": "SPE_ATTEMPT_ALREADY_EXISTS",
+        }[mode]
+        observed_errors = []
+        if mode == "expired":
+            original_window = pre_effect._window
+
+            def observe_window(*args, **kwargs):
+                try:
+                    return original_window(*args, **kwargs)
+                except pre_effect.SandboxPreEffectError as exc:
+                    observed_errors.append(str(exc))
+                    raise
+
+            monkeypatch.setattr(pre_effect, "_window", observe_window)
+        else:
+            original_prepare = resolution.prepare_sandbox_attempt
+
+            async def observe_prepare(*args, **kwargs):
+                try:
+                    return await original_prepare(*args, **kwargs)
+                except pre_effect.SandboxPreEffectError as exc:
+                    observed_errors.append(str(exc))
+                    raise
+
+            monkeypatch.setattr(resolution, "prepare_sandbox_attempt", observe_prepare)
+
         rows_before_rejection = await _sandbox_row_count()
         with pytest.raises(
             SandboxBindExecutionError, match="^SBE_FAILED_ATTEMPT_NOT_RELEASED$"
         ):
             await execute_sandbox_bind(artifact, payload, **args)
 
+        assert observed_errors == [expected_error]
         assert transport.send_calls == (1 if mode == "already-dispatched" else 0)
         assert await _sandbox_row_count() == rows_before_rejection
         if mode == "revoked":
