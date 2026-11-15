@@ -343,7 +343,7 @@ def test_history_trim_preserves_appended_events_on_replace_failure(
 
 @pytest.mark.parametrize("history_max", [2, 10])
 @pytest.mark.parametrize("fragment", [b'{"new_version":', b'{"new_version":"\xe3\x81'])
-def test_history_append_isolates_incomplete_record(tmp_path, history_max, fragment):
+def test_history_append_isolates_incomplete_record(tmp_path, history_max, fragment, caplog):
     """A torn record cannot hide complete events on either side of it."""
     history_path = tmp_path / "history.jsonl"
     repo = FileGovernanceRepository(
@@ -363,6 +363,12 @@ def test_history_append_isolates_incomplete_record(tmp_path, history_max, fragme
 
     records = repo.list_policy_history(limit=10, max_records=10)
     assert [record["new_version"] for record in records] == ["second", "first"]
+    operation = "trim" if history_max == 2 else "read"
+    assert [
+        record.getMessage()
+        for record in caplog.records
+        if "invalid governance policy history record" in record.getMessage()
+    ] == [f"Skipped 1 invalid governance policy history record(s) during {operation}"]
     if history_max == 2:
         assert len(history_path.read_bytes().splitlines()) == 2
 
