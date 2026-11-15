@@ -205,9 +205,39 @@ def test_governance_history_directory_sync_failure(tmp_path, monkeypatch, caplog
             repo.update_policy(**changes)
     else:
         repo.update_policy(**changes)
-        assert "Governance history directory sync unsupported" in caplog.text
+        assert "Governance directory sync unsupported" in caplog.text
     assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "saved"
     assert repo.get_current_policy(default_factory=dict)["version"] == "saved"
+
+
+def test_fallback_policy_syncs_directory_after_replace(tmp_path, monkeypatch, caplog):
+    """A directory sync failure after replacement still allows audit history."""
+    policy_path = tmp_path / "policies" / "policy.json"
+    history_path = tmp_path / "history" / "events.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=policy_path,
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+        has_atomic_io=False,
+    )
+    updated = {"version": "saved"}
+    synced = []
+
+    def sync_directory(directory):
+        synced.append(directory)
+        if directory == policy_path.parent:
+            assert json.loads(policy_path.read_text(encoding="utf-8")) == updated
+            raise OSError("directory sync failed")
+
+    monkeypatch.setattr(repo, "_sync_directory", sync_directory)
+    repo.update_policy(
+        previous={}, updated=updated, proposer="operator",
+        approvers=[], event_type="update",
+    )
+    assert synced == [policy_path.parent, history_path.parent]
+    assert "Failed to sync governance policy directory" in caplog.text
+    assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "saved"
 
 
 def test_fallback_trim_syncs_directory_after_replace(tmp_path, monkeypatch):
@@ -223,10 +253,11 @@ def test_fallback_trim_syncs_directory_after_replace(tmp_path, monkeypatch):
     )
     synced_contents = []
 
-    def sync_directory():
+    def sync_directory(directory):
+        assert directory == history_path.parent
         synced_contents.append(history_path.read_bytes())
 
-    monkeypatch.setattr(repo, "_sync_history_directory", sync_directory)
+    monkeypatch.setattr(repo, "_sync_directory", sync_directory)
     repo.trim_policy_history()
 
     assert synced_contents == [b'{"new_version":"second"}\n']

@@ -143,6 +143,13 @@ class FileGovernanceRepository(GovernanceRepository):
                 pass
             raise
 
+        # Match the normal atomic writer's best-effort directory sync after
+        # replacement. The updated policy is already visible at this point.
+        try:
+            self._sync_directory(self._policy_path.parent)
+        except OSError as exc:
+            logger.warning("Failed to sync governance policy directory: %s", exc)
+
     def append_policy_event(self, event: GovernancePolicyEventRecord) -> None:
         try:
             with self._policy_write_lock():
@@ -166,19 +173,20 @@ class FileGovernanceRepository(GovernanceRepository):
         # A file fsync alone does not persist a newly created directory entry.
         # Sync the directory on retries too, since a previously failed sync
         # can leave the name visible in memory.
-        self._sync_history_directory()
+        self._sync_directory(self._history_path.parent)
         self._trim_policy_history_locked()
 
-    def _sync_history_directory(self) -> None:
+    @staticmethod
+    def _sync_directory(directory: Path) -> None:
         if hasattr(os, "O_DIRECTORY"):
-            directory_fd = os.open(self._history_path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
             try:
                 try:
                     os.fsync(directory_fd)
                 except OSError as exc:
                     if exc.errno not in {errno.EINVAL, errno.ENOTSUP, errno.EOPNOTSUPP}:
                         raise
-                    logger.warning("Governance history directory sync unsupported: %s", exc)
+                    logger.warning("Governance directory sync unsupported for %s: %s", directory, exc)
             finally:
                 os.close(directory_fd)
 
@@ -294,7 +302,7 @@ class FileGovernanceRepository(GovernanceRepository):
                 except OSError:
                     pass
                 raise
-            self._sync_history_directory()
+            self._sync_directory(self._history_path.parent)
         except Exception as exc:
             logger.warning("Failed to trim governance policy history: %s", exc)
 
