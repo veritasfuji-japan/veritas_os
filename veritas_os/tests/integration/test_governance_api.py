@@ -2297,21 +2297,17 @@ class TestSaveFallbackPath:
         policy_path = tmp_path / "gov.json"
         data = gov_mod.GovernancePolicy().model_dump()
 
-        original_open = open
-
-        def failing_open(path, *args, **kwargs):
-            if str(path).endswith(".tmp"):
-                raise OSError("disk full")
-            return original_open(path, *args, **kwargs)
-
-        with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", policy_path), \
-             patch.object(gov_mod, "_HAS_ATOMIC_IO", False), \
-             patch("builtins.open", side_effect=failing_open):
+        with (
+            patch.object(gov_mod, "_DEFAULT_POLICY_PATH", policy_path),
+            patch.object(gov_mod, "_HAS_ATOMIC_IO", False),
+            patch("veritas_os.governance.file_repository.os.fsync", side_effect=OSError("disk full")),
+        ):
             with pytest.raises(OSError, match="disk full"):
                 gov_mod._save(data)
 
-        # tmp file should be cleaned up
-        assert not (policy_path.with_suffix(".tmp")).exists()
+        assert not policy_path.exists()
+        assert not list(tmp_path.glob(".gov.json.*.tmp"))
+
 
 
 class TestRouteValidationResponses:

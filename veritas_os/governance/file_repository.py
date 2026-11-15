@@ -6,6 +6,7 @@ import errno
 import json
 import logging
 import os
+import tempfile
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -128,19 +129,28 @@ class FileGovernanceRepository(GovernanceRepository):
             _atomic_write_json(self._policy_path, policy, indent=2)
             return
 
-        tmp = self._policy_path.with_suffix(".tmp")
+        tmp = None
         try:
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(policy, f, ensure_ascii=False, indent=2)
-                f.write("\n")
-                f.flush()
-                os.fsync(f.fileno())
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self._policy_path.parent,
+                prefix=f".{self._policy_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as policy_file:
+                tmp = Path(policy_file.name)
+                json.dump(policy, policy_file, ensure_ascii=False, indent=2)
+                policy_file.write("\n")
+                policy_file.flush()
+                os.fsync(policy_file.fileno())
             tmp.replace(self._policy_path)
         except Exception:
-            try:
-                tmp.unlink(missing_ok=True)
-            except OSError:
-                pass
+            if tmp is not None:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
             raise
 
         # Match the normal atomic writer's best-effort directory sync after
