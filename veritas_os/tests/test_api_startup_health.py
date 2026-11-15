@@ -101,6 +101,17 @@ def test_run_startup_config_validation_raises_when_fail_fast():
         )
 
 
+def test_startup_config_rejects_malformed_api_keys_in_local_mode(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", "legacy-test-key")
+    monkeypatch.setenv("VERITAS_API_KEYS", "{invalid")
+
+    with pytest.raises(ValueError, match="VERITAS_API_KEYS is not valid JSON"):
+        startup_health.run_startup_config_validation(
+            logger=logging.getLogger(__name__),
+            should_fail_fast=lambda _: False,
+        )
+
+
 def test_validate_startup_security_flags_warns_non_production_fail_open(
     monkeypatch,
     caplog,

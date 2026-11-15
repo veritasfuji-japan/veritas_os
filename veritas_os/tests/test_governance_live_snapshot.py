@@ -1,6 +1,7 @@
 """Tests for governance live snapshot endpoint and builder behavior."""
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
@@ -27,6 +28,22 @@ def _reset_auth(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEYS", "[{\"key\":\"gov-live-snapshot-test-key\",\"role\":\"auditor\"}]")
     # Snapshot controls intentionally grant this read-only key governance access.
     monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOWED_ROLES", "admin,auditor")
+
+
+@pytest.mark.parametrize("key_tenant, expected_status", [("tenant-a", 403), ("tenant-b", 200)])
+def test_governance_live_snapshot_requires_key_bound_tenant(
+    monkeypatch, key_tenant, expected_status
+):
+    monkeypatch.setenv("VERITAS_GOVERNANCE_TENANT_ID", "tenant-b")
+    monkeypatch.setenv(
+        "VERITAS_API_KEYS",
+        json.dumps([{"key": _TEST_KEY, "role": "auditor", "tenant_id": key_tenant}]),
+    )
+    response = client.get(
+        "/v1/governance/live-snapshot",
+        headers={**_AUTH, "X-Tenant-Id": "tenant-b"},
+    )
+    assert response.status_code == expected_status, response.text
 
 
 def test_governance_live_snapshot_returns_200(monkeypatch):

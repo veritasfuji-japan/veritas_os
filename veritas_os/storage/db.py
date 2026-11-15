@@ -16,6 +16,7 @@ VERITAS_DB_SSLMODE            libpq sslmode parameter  (default "prefer")
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Optional
@@ -137,6 +138,45 @@ def build_conninfo() -> str:
         sep = "&" if "?" in dsn else "?"
         dsn = dsn + sep + "&".join(params)
     return dsn
+
+
+_readiness_probe_task: asyncio.Task[None] | None = None
+
+
+async def probe_postgresql(*, timeout_seconds: float = 2.0) -> None:
+    """Share an in-flight database check on the API process's event loop.
+
+    The first caller sets the timeout for the shared check. A caller can
+    cancel its wait independently. Completed results are never cached.
+    """
+    global _readiness_probe_task
+
+    task = _readiness_probe_task
+    if task is None or task.done():
+        task = asyncio.create_task(_run_postgresql_probe(timeout_seconds))
+        task.add_done_callback(_finish_postgresql_probe)
+        _readiness_probe_task = task
+    await asyncio.shield(task)
+
+
+def _finish_postgresql_probe(task: asyncio.Task[None]) -> None:
+    """Release the probe and consume errors even if all waiters cancelled."""
+    global _readiness_probe_task
+
+    if _readiness_probe_task is task:
+        _readiness_probe_task = None
+    if not task.cancelled():
+        task.exception()
+
+
+async def _run_postgresql_probe(timeout_seconds: float) -> None:
+    """Run a bounded read-only query without occupying the application pool."""
+    from psycopg import AsyncConnection
+
+    async with asyncio.timeout(timeout_seconds):
+        conn = await AsyncConnection.connect(build_conninfo(), autocommit=True)
+        async with conn:
+            await conn.execute("SELECT 1")
 
 
 # ---------------------------------------------------------------------------

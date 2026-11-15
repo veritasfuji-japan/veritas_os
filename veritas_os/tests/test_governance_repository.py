@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from veritas_os.api import governance as gov
 from veritas_os.governance.file_repository import FileGovernanceRepository
+from veritas_os.governance.repository import GovernanceHistoryWriteError, GovernanceWriteConflictError
 
 
 @pytest.fixture(autouse=True)
@@ -54,6 +57,271 @@ def test_file_repository_roundtrip(tmp_path):
     assert len(history) == 2
     assert history[0]["event_type"] == "rollback"
     assert history[1]["event_type"] == "update"
+
+
+@pytest.mark.parametrize("operation", ["update", "rollback"])
+def test_file_repository_rejects_stale_writes(tmp_path, operation):
+    """Keep the winning policy and history when another writer is stale."""
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    original = repo.get_current_policy(default_factory=dict)
+    winner = {"version": "winner"}
+    repo.update_policy(
+        previous=original, updated=winner, proposer="alice",
+        approvers=[], event_type="update",
+    )
+
+    with pytest.raises(GovernanceWriteConflictError):
+        if operation == "update":
+            repo.update_policy(
+                previous=original, updated={"version": "stale"}, proposer="bob",
+                approvers=[], event_type="update",
+            )
+        else:
+            repo.rollback_policy(
+                previous=original, restored={"version": "stale"}, proposer="bob",
+                approvers=[],
+            )
+
+    assert repo.get_current_policy(default_factory=dict) == winner
+    assert [record["new_policy"] for record in repo.list_policy_history(
+        limit=10, max_records=10
+    )] == [winner]
+
+
+def test_file_repository_serializes_independent_writers(tmp_path):
+    """Only one worker can initialize a policy from the same missing state."""
+    pytest.importorskip("fcntl", exc_type=ImportError)
+    start = threading.Barrier(2)
+
+    def update(version):
+        repo = FileGovernanceRepository(
+            policy_path=tmp_path / "policy.json",
+            history_path=tmp_path / "history.jsonl",
+            lock=threading.Lock(),
+            policy_history_max=10,
+        )
+        previous = repo.get_current_policy(default_factory=dict)
+        start.wait(timeout=5)
+        try:
+            repo.update_policy(
+                previous=previous,
+                updated={"version": version},
+                proposer=version,
+                approvers=[],
+                event_type="update",
+            )
+        except GovernanceWriteConflictError:
+            return None
+        return version
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        winners = [result for result in pool.map(update, ["alice", "bob"]) if result]
+    assert len(winners) == 1
+    assert json.loads((tmp_path / "policy.json").read_text()) == {"version": winners[0]}
+    assert len((tmp_path / "history.jsonl").read_text().splitlines()) == 1
+
+
+def test_governance_policy_write_holds_lock_until_history_append(tmp_path, monkeypatch):
+    """Other workers cannot start writing before the current event is recorded."""
+    fcntl = pytest.importorskip("fcntl", exc_type=ImportError)
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    original_append = repo._append_policy_event_locked
+
+    def check_lock(event):
+        with (tmp_path / "policy.json.lock").open("rb") as other_writer:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(other_writer.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        original_append(event)
+
+    monkeypatch.setattr(repo, "_append_policy_event_locked", check_lock)
+    repo.update_policy(
+        previous={}, updated={"version": "v1"}, proposer="operator",
+        approvers=[], event_type="update",
+    )
+    assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "v1"
+
+
+def test_governance_reports_history_failure_after_saving_policy(tmp_path):
+    history_path = tmp_path / "history.jsonl"
+    history_path.mkdir()
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    updated = {"version": "saved"}
+    with pytest.raises(GovernanceHistoryWriteError, match="GOVERNANCE_POLICY_HISTORY_WRITE_FAILED"):
+        repo.update_policy(
+            previous={}, updated=updated, proposer="operator",
+            approvers=[], event_type="update",
+        )
+    assert repo.get_current_policy(default_factory=dict) == updated
+
+
+@pytest.mark.parametrize("sync_errno", [errno.EIO, errno.EINVAL, errno.ENOTSUP])
+def test_governance_history_directory_sync_failure(tmp_path, monkeypatch, caplog, sync_errno):
+    """Unsupported directory sync warns and actual I/O failure propagates."""
+    import os
+    import stat
+
+    if not hasattr(os, "O_DIRECTORY"):
+        pytest.skip("directory descriptors are unavailable")
+    history_dir = tmp_path / "history"
+    history_dir.mkdir()
+    history_path = history_dir / "events.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    history_inode = history_dir.stat().st_ino
+    fsync = os.fsync
+
+    def fail_history_directory_sync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and info.st_ino == history_inode:
+            raise OSError(sync_errno, "directory sync failed")
+        fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fail_history_directory_sync)
+    changes = {
+        "previous": {}, "updated": {"version": "saved"}, "proposer": "operator",
+        "approvers": [], "event_type": "update",
+    }
+    if sync_errno == errno.EIO:
+        with pytest.raises(GovernanceHistoryWriteError):
+            repo.update_policy(**changes)
+    else:
+        repo.update_policy(**changes)
+        assert "Governance history directory sync unsupported" in caplog.text
+    assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "saved"
+    assert repo.get_current_policy(default_factory=dict)["version"] == "saved"
+
+
+@pytest.mark.parametrize("has_atomic_io", [True, False])
+def test_history_trim_preserves_appended_events_on_replace_failure(
+    tmp_path, monkeypatch, has_atomic_io
+):
+    """A failed trim leaves the original history available for a later retry."""
+    import os
+
+    history_path = tmp_path / "history.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=1,
+        has_atomic_io=has_atomic_io,
+    )
+    first = {"version": "first"}
+    second = {"version": "second"}
+    repo.update_policy(previous={}, updated=first, proposer="operator", approvers=[], event_type="update")
+    real_replace = os.replace
+
+    def fail_history_replace(source, target):
+        if target == history_path:
+            raise OSError("history replacement failed")
+        return real_replace(source, target)
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(os, "replace", fail_history_replace)
+        repo.update_policy(previous=first, updated=second, proposer="operator", approvers=[], event_type="update")
+
+    assert len(history_path.read_text(encoding="utf-8").splitlines()) == 2
+    assert not list(tmp_path.glob("*history*.tmp"))
+    repo.trim_policy_history()
+    assert [record["new_version"] for record in repo.list_policy_history(
+        limit=10, max_records=10
+    )] == ["second"]
+
+
+@pytest.mark.parametrize("history_max", [2, 10])
+@pytest.mark.parametrize("fragment", [b'{"new_version":', b'{"new_version":"\xe3\x81'])
+def test_history_append_isolates_incomplete_record(tmp_path, history_max, fragment):
+    """A torn record cannot hide complete events on either side of it."""
+    history_path = tmp_path / "history.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=history_max,
+    )
+    first = {"version": "first"}
+    second = {"version": "second"}
+    repo.update_policy(previous={}, updated=first, proposer="operator",
+                       approvers=[], event_type="update")
+    with history_path.open("ab") as history:
+        history.write(fragment)
+    repo.update_policy(previous=first, updated=second, proposer="operator",
+                       approvers=[], event_type="update")
+
+    records = repo.list_policy_history(limit=10, max_records=10)
+    assert [record["new_version"] for record in records] == ["second", "first"]
+    if history_max == 2:
+        assert len(history_path.read_bytes().splitlines()) == 2
+
+
+@pytest.mark.parametrize("history_max", [2, 10])
+def test_history_skips_json_conversion_errors(tmp_path, monkeypatch, history_max):
+    """One decoder failure must preserve the neighboring records."""
+    history_path = tmp_path / "history.jsonl"
+    history_path.write_text(
+        '{"new_version":"first"}\n{"new_version":"invalid"}\n{"new_version":"last"}\n',
+        encoding="utf-8",
+    )
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=history_max,
+    )
+    loads = json.loads
+
+    def decode(line, *args, **kwargs):
+        if line == '{"new_version":"invalid"}':
+            raise ValueError("JSON integer conversion limit exceeded")
+        return loads(line, *args, **kwargs)
+
+    monkeypatch.setattr(json, "loads", decode)
+    repo.trim_policy_history()
+    records = repo.list_policy_history(limit=10, max_records=10)
+
+    assert [record["new_version"] for record in records] == ["last", "first"]
+    assert len(history_path.read_bytes().splitlines()) == min(history_max, 3)
+
+
+@pytest.mark.parametrize("content", [b"{", b"null", b"[]", b"\xff", None])
+def test_file_repository_refuses_unreadable_saved_policy(tmp_path, content):
+    """Defaults apply to missing policy files only."""
+    policy_path = tmp_path / "governance.json"
+    repo = FileGovernanceRepository(
+        policy_path=policy_path,
+        history_path=tmp_path / "governance_history.jsonl",
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+    if content is None:
+        policy_path.mkdir()
+    else:
+        policy_path.write_bytes(content)
+
+    def unexpected_default():
+        pytest.fail("Unreadable saved policy was replaced by defaults")
+
+    with pytest.raises(RuntimeError, match="governance policy"):
+        repo.get_current_policy(default_factory=unexpected_default)
 
 
 class _InMemoryRepository:

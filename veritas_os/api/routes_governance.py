@@ -18,6 +18,7 @@ from starlette.requests import HTTPConnection
 from veritas_os.api.auth import (
     _derive_api_user_id,
     require_authenticated_principal,
+    require_deployment_tenant,
     require_permission,
     resolve_role_for_key,
     resolve_tenant_for_key,
@@ -336,9 +337,17 @@ def _bind_failure_status_and_error(bind_receipt: Dict[str, Any]) -> tuple[int, s
     """Map bind outcomes to legacy governance API status/error semantics."""
     outcome = str(bind_receipt.get("final_outcome") or "")
     rollback_reason = str(bind_receipt.get("rollback_reason") or "")
+    drift = bind_receipt.get("drift_check_result") or {}
+    if (
+        rollback_reason == "BIND_APPLY_FAILED:GOVERNANCE_POLICY_WRITE_CONFLICT"
+        or drift.get("reason_code") == "BIND_DRIFT_DETECTED"
+    ):
+        return 409, "Governance policy changed. Reload it and resubmit for approval."
     if outcome == FinalOutcome.PRECONDITION_FAILED.value:
         return 400, "Governance policy validation failed"
     if outcome == FinalOutcome.APPLY_FAILED.value:
+        if rollback_reason == "BIND_APPLY_FAILED:GOVERNANCE_POLICY_HISTORY_WRITE_FAILED":
+            return 500, "Policy saved but audit history write failed. Verify current policy before retrying."
         if "GOVERNANCE_POLICY_VALIDATION_FAILED" in rollback_reason:
             return 400, "Governance policy validation failed"
         return 500, "Failed to update governance policy"
@@ -942,7 +951,13 @@ def governance_promote_policy_bundle(
         )
 
 
-@router.get("/v1/governance/live-snapshot", dependencies=[Depends(require_permission(Permission.governance_read))])
+@router.get(
+    "/v1/governance/live-snapshot",
+    dependencies=[
+        Depends(require_permission(Permission.governance_read)),
+        Depends(require_deployment_tenant),
+    ],
+)
 def governance_live_snapshot() -> dict[str, Any]:
     """Return Mission Control governance live snapshot from backend artifacts."""
     return build_governance_live_snapshot()

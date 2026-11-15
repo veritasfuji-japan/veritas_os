@@ -19,7 +19,7 @@ from veritas_os.governance.config import get_governance_backend
 from veritas_os.governance.factory import create_governance_repository
 from veritas_os.governance.file_repository import FileGovernanceRepository
 from veritas_os.governance.models import GovernancePolicyEventRecord
-from veritas_os.governance.repository import GovernanceRepository
+from veritas_os.governance.repository import GovernanceHistoryWriteError, GovernanceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -462,12 +462,15 @@ def _sanitize_updated_by(raw: Any) -> str:
     return text[:200]
 
 
-def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
+def update_policy(
+    patch: Dict[str, Any], *, expected_policy: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
     """
     Merge *patch* into the current governance policy and persist.
 
     Changes are written atomically and appended to the audit history log.
     All registered callbacks (e.g. FUJI hot-reload) are notified after save.
+    A supplied expected_policy is the snapshot used for validation and persistence.
 
     Raises:
         TypeError: If *patch* is not a dict.
@@ -478,7 +481,7 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(patch, dict):
         raise TypeError("policy patch must be a dict")
 
-    previous = _load()
+    previous = _load() if expected_policy is None else expected_policy
     current = deepcopy(previous)
 
     previous_wat = current.get("wat") if isinstance(current.get("wat"), dict) else {}
@@ -543,14 +546,19 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     proposer = _sanitize_updated_by(patch.get("updated_by", "api"))
     event_type = str(patch.get("_event_type", "update"))
 
-    _get_repository().update_policy(
-        previous=previous,
-        updated=result,
-        proposer=proposer,
-        approvers=approver_ids,
-        event_type=event_type,
-        approval_records=approvals if isinstance(approvals, list) else None,
-    )
+    try:
+        _get_repository().update_policy(
+            previous=previous,
+            updated=result,
+            proposer=proposer,
+            approvers=approver_ids,
+            event_type=event_type,
+            approval_records=approvals if isinstance(approvals, list) else None,
+        )
+    except GovernanceHistoryWriteError:
+        # The policy is already on disk, so refresh in-process consumers.
+        _notify_policy_update(result)
+        raise
 
     # Notify subscribers (e.g. FUJI hot-reload) — best-effort, non-blocking
     _notify_policy_update(result)
@@ -690,14 +698,19 @@ def rollback_policy(
                 if r:
                     approver_ids.append(r)
 
-    _get_repository().rollback_policy(
-        previous=previous,
-        restored=result,
-        proposer=_sanitize_updated_by(rolled_back_by),
-        approvers=approver_ids,
-        approval_records=approvals if isinstance(approvals, list) else None,
-        reason=reason,
-    )
+    try:
+        _get_repository().rollback_policy(
+            previous=previous,
+            restored=result,
+            proposer=_sanitize_updated_by(rolled_back_by),
+            approvers=approver_ids,
+            approval_records=approvals if isinstance(approvals, list) else None,
+            reason=reason,
+        )
+    except GovernanceHistoryWriteError:
+        # The policy is already on disk, so refresh in-process consumers.
+        _notify_policy_update(result)
+        raise
 
     _notify_policy_update(result)
 

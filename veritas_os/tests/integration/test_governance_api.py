@@ -42,6 +42,91 @@ def _approved(payload: dict | None = None) -> dict:
     return base
 
 
+def test_policy_update_reports_partial_commit_on_history_failure(monkeypatch, _temp_policy):
+    from veritas_os.governance.file_repository import FileGovernanceRepository
+    from veritas_os.policy.bind_core import core as bind_core
+
+    policy = json.loads(_temp_policy.read_text(encoding="utf-8"))
+    policy["bind_adjudication"]["rollback_on_apply_failure"] = True
+    _temp_policy.write_text(json.dumps(policy), encoding="utf-8")
+
+    def fail_history(_repository, _event):
+        raise OSError("history unavailable")
+
+    monkeypatch.setattr(FileGovernanceRepository, "_append_policy_event_locked", fail_history)
+    monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", lambda intent: None)
+    monkeypatch.setattr(bind_core, "append_bind_receipt_trustlog", lambda receipt: receipt)
+    response = client.put(
+        "/v1/governance/policy", headers=HEADERS, json=_approved({"version": "saved"})
+    )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["bind_outcome"] == "APPLY_FAILED"
+    assert "Policy saved but audit history write failed" in response.json()["error"]
+    assert srv.get_policy()["version"] == "saved"
+
+
+@pytest.mark.parametrize("drift_required", [True, False])
+def test_policy_update_rejects_change_before_bind_validation(
+    monkeypatch, _temp_policy, drift_required
+):
+    """Keep one policy version across route selection and the governed write."""
+    from veritas_os.policy.bind_core import core as bind_core
+
+    initial = json.loads(_temp_policy.read_text(encoding="utf-8"))
+    initial["bind_adjudication"]["drift_required"] = drift_required
+    _temp_policy.write_text(json.dumps(initial), encoding="utf-8")
+    real_read = srv.get_policy
+    changed = False
+
+    def read_with_concurrent_commit():
+        nonlocal changed
+        policy = real_read()
+        if not changed:
+            changed = True
+            srv.update_policy({
+                "version": "concurrent-policy",
+                "bind_adjudication": {"ttl_required": True},
+            })
+        return policy
+
+    monkeypatch.setattr(srv, "get_policy", read_with_concurrent_commit)
+    monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", lambda intent: None)
+    monkeypatch.setattr(bind_core, "append_bind_receipt_trustlog", lambda receipt: receipt)
+    response = client.put(
+        "/v1/governance/policy",
+        headers=HEADERS,
+        json=_approved({"version": "requested-policy"}),
+    )
+
+    assert response.status_code == 409, response.text
+    assert real_read()["version"] == "concurrent-policy"
+
+
+def test_policy_update_rejects_change_after_bind_validation(monkeypatch, _temp_policy):
+    """Compare the write against the policy snapshot Bind validated."""
+    from veritas_os.policy.bind_core import core as bind_core
+
+    real_update = srv.update_policy
+
+    def update_after_concurrent_commit(patch, **kwargs):
+        real_update({"version": "concurrent-policy"})
+        return real_update(patch, **kwargs)
+
+    monkeypatch.setattr(srv, "update_policy", update_after_concurrent_commit)
+    monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", lambda intent: None)
+    monkeypatch.setattr(bind_core, "append_bind_receipt_trustlog", lambda receipt: receipt)
+    response = client.put(
+        "/v1/governance/policy",
+        headers=HEADERS,
+        json=_approved({"version": "requested-policy"}),
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["bind_outcome"] == "APPLY_FAILED"
+    assert json.loads(_temp_policy.read_text(encoding="utf-8"))["version"] == "concurrent-policy"
+
+
 @pytest.mark.parametrize("required", ["ttl_required", "approval_freshness_required"])
 @pytest.mark.parametrize("missing_signal, outcome", [("block", "BLOCKED"), ("escalate", "ESCALATED")])
 def test_policy_update_http_rejects_bind_policy_override_in_lineage(
@@ -58,9 +143,9 @@ def test_policy_update_http_rejects_bind_policy_override_in_lineage(
     updates = []
     real_update = srv.update_policy
 
-    def track_update(patch):
+    def track_update(patch, **kwargs):
         updates.append(patch)
-        return real_update(patch)
+        return real_update(patch, **kwargs)
 
     monkeypatch.setattr(srv, "update_policy", track_update)
     monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", lambda intent: None)
@@ -213,6 +298,16 @@ def _temp_policy(tmp_path: Path, monkeypatch):
     policy_path.write_text(json.dumps(default.model_dump(), ensure_ascii=False, indent=2))
     with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", policy_path):
         yield policy_path
+
+
+def test_decide_refuses_unreadable_policy_before_loading_pipeline(_temp_policy):
+    _temp_policy.write_text("{", encoding="utf-8")
+    with patch.object(srv, "get_decision_pipeline") as pipeline:
+        response = client.post("/v1/decide", headers=HEADERS, json=srv._decide_example())
+
+    assert response.status_code == 503, response.text
+    assert response.json()["error"] == srv.DECIDE_GENERIC_ERROR
+    pipeline.assert_not_called()
 
 
 class TestGetPolicy:
@@ -590,13 +685,13 @@ class TestGovernanceModule:
         assert policy["version"] == "governance_v1"
         assert policy["fuji_rules"]["pii_check"] is True
 
-    def test_load_handles_corrupt_json(self, tmp_path):
-        """When governance file has bad JSON, return defaults."""
+    def test_load_rejects_corrupt_json(self, tmp_path):
+        """Reject malformed saved JSON."""
         bad = tmp_path / "bad.json"
         bad.write_text("NOT-VALID-JSON!!!")
         with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", bad):
-            policy = gov_mod.get_policy()
-        assert policy["version"] == "governance_v1"
+            with pytest.raises(RuntimeError, match="Cannot read saved governance policy"):
+                gov_mod.get_policy()
 
     def test_update_creates_missing_nested_key(self, tmp_path):
         """When nested key is non-dict, update_policy creates it."""
@@ -1523,7 +1618,7 @@ class TestGovernanceServerErrors:
 
     def test_put_policy_internal_error(self, monkeypatch):
         """PUT /v1/governance/policy returns 500 on internal error."""
-        def boom(body):
+        def boom(body, **_kwargs):
             raise RuntimeError("write fail")
         monkeypatch.setattr(srv, "update_policy", boom)
         resp = client.put(
@@ -1668,7 +1763,7 @@ class TestGovernanceHardeningBranches:
         def _boom(*_args, **_kwargs):
             raise OSError("disk error")
 
-        monkeypatch.setattr(Path, "read_text", _boom)
+        monkeypatch.setattr(Path, "read_bytes", _boom)
         with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path):
             assert gov_mod.get_policy_history(limit=5) == []
 

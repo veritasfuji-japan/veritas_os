@@ -44,6 +44,8 @@ BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
     BindCoverageEntry("/", "GET", BindCoverageClass.NON_EFFECT),
     BindCoverageEntry("/health", "GET", BindCoverageClass.NON_EFFECT),
     BindCoverageEntry("/v1/health", "GET", BindCoverageClass.NON_EFFECT),
+    BindCoverageEntry("/livez", "GET", BindCoverageClass.NON_EFFECT),
+    BindCoverageEntry("/readyz", "GET", BindCoverageClass.NON_EFFECT),
     BindCoverageEntry("/status", "GET", BindCoverageClass.NON_EFFECT),
     BindCoverageEntry("/v1/status", "GET", BindCoverageClass.NON_EFFECT),
     BindCoverageEntry("/api/status", "GET", BindCoverageClass.NON_EFFECT),

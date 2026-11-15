@@ -65,12 +65,13 @@ describe("GET /api/auth/dev-login", () => {
     vi.stubEnv("VERITAS_ENV", "");
     vi.stubEnv("VERITAS_BFF_SESSION_TOKEN", "dev-token");
 
-    const response = await GET(
-      makeRequest("http://localhost:3000/api/auth/dev-login?redirect=/audit"),
-    );
+    const url = new URL("http://localhost:3000/api/auth/dev-login");
+    url.searchParams.set("redirect", "/audit?status=ready#latest");
+
+    const response = await GET(makeRequest(url.href));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/audit");
+    expect(response.headers.get("location")).toBe("http://localhost:3000/audit?status=ready#latest");
   });
 
   it("rejects open-redirect attempts by falling back to /console", async () => {

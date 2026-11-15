@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import time
+from unittest.mock import AsyncMock
 
 _TEST_API_KEY = "test-backend-improvements-key"
 os.environ["VERITAS_API_KEY"] = _TEST_API_KEY
@@ -95,6 +96,66 @@ class TestRateLimitHeaders:
 # -------------------------------------------------
 # 3. Enhanced health endpoint
 # -------------------------------------------------
+
+
+class TestHealthProbes:
+    @pytest.mark.parametrize("dependency", ["get_decision_pipeline", "get_memory_store"])
+    def test_unavailable_dependency_refuses_readiness_but_keeps_liveness(
+        self, monkeypatch, dependency
+    ):
+        monkeypatch.setattr(server, dependency, lambda: None)
+        ready = client.get("/readyz")
+        assert ready.status_code == 503
+        assert ready.json() == {"ok": False}
+        assert client.get("/livez").json() == {"ok": True}
+
+    def test_degraded_health_can_remain_ready(self, monkeypatch):
+        monkeypatch.setattr(server, "_HAS_SANITIZE", False)
+        assert client.get("/health").json()["status"] == "degraded"
+        ready = client.get("/readyz")
+        assert ready.status_code == 200
+        assert ready.json() == {"ok": True}
+
+    @pytest.mark.parametrize(
+        "backends",
+        [
+            ("postgresql", "jsonl"),
+            ("json", "postgresql"),
+            ("postgresql", "postgresql"),
+        ],
+    )
+    def test_postgresql_readiness_tracks_failure_and_recovery(self, monkeypatch, backends):
+        from veritas_os.storage import db
+
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", backends[0])
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", backends[1])
+        probe = AsyncMock(side_effect=[None, TimeoutError(), None])
+        monkeypatch.setattr(db, "probe_postgresql", probe)
+
+        assert client.get("/readyz").status_code == 200
+        failure = client.get("/readyz")
+        assert failure.status_code == 503
+        assert failure.json() == {"ok": False}
+        assert client.get("/livez").status_code == 200
+        assert client.get("/readyz").status_code == 200
+        assert probe.await_count == 3
+
+    def test_file_storage_readiness_does_not_probe_postgresql(self, monkeypatch):
+        from veritas_os.storage import db
+
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "json")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+        probe = AsyncMock()
+        monkeypatch.setattr(db, "probe_postgresql", probe)
+
+        assert client.get("/readyz").status_code == 200
+        probe.assert_not_awaited()
+
+    def test_strict_security_startup_must_complete_before_readiness(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_ENV", "production")
+        monkeypatch.setattr(server.app.state, "security_startup_complete", False, raising=False)
+        assert client.get("/readyz").status_code == 503
+        assert client.get("/livez").status_code == 200
 
 
 class TestEnhancedHealth:

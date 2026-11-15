@@ -23,10 +23,10 @@ export default defineConfig({
       VERITAS_BFF_AUTH_TOKENS_JSON: JSON.stringify({
         "cookie-path-admin-test-only": "admin", "cookie-path-viewer-test-only": "viewer",
       }),
-      // No backend requests or business operations are possible in this fixture.
-      VERITAS_API_BASE_URL: "",
+      // A loopback fixture in the governance feed spec serves synthetic data.
+      VERITAS_API_BASE_URL: "http://127.0.0.1:3102",
       NEXT_PUBLIC_VERITAS_API_BASE_URL: "",
-      VERITAS_API_KEY: "",
+      VERITAS_API_KEY: "cookie-path-backend-test-only",
     },
   },
 });

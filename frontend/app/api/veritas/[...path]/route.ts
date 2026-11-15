@@ -153,7 +153,29 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   }
   responseHeaders.set(TRACE_ID_HEADER_NAME, traceId);
 
-  return new Response(upstreamResponse.body, {
+  let responseBody = upstreamResponse.body;
+  const mediaType = upstreamContentType?.split(";", 1)[0]?.trim().toLowerCase();
+  if (responseBody && mediaType === "text/event-stream") {
+    const admittedRole = authResult.role;
+    responseBody = responseBody.pipeThrough(
+      new TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>({
+        transform(chunk, controller) {
+          const currentTokens = parseAuthTokensConfig(
+            process.env.VERITAS_BFF_AUTH_TOKENS_JSON,
+          );
+          const currentAuth = authenticateRoleFromHeaders(request.headers, currentTokens);
+          // The upstream connection was opened with admittedRole in X-Role.
+          if (currentAuth.role !== admittedRole) {
+            controller.terminate();
+            return;
+          }
+          controller.enqueue(chunk);
+        },
+      }),
+    );
+  }
+
+  return new Response(responseBody, {
     status: upstreamResponse.status,
     headers: responseHeaders,
   });

@@ -6,8 +6,8 @@ LLM クライアント（マルチプロバイダー対応版 / 実運用は gpt
 サポートティア定義 / Support Tier Definitions:
 
     production
-        CI テスト済み・本番デプロイ対象・SLA の範囲内。
-        Fully tested in CI, production-deployment target, covered by SLA.
+        現行ランタイムの対象。契約上のSLAや顧客本番環境の検証を意味しない。
+        Current supported runtime tier; not a contractual SLA or customer-production validation.
 
     planned
         コードパスは実装済みだが本番未検証。API 変更に追従していない場合がある。

@@ -7,6 +7,7 @@ mocks.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -85,6 +86,79 @@ class TestBuildConninfo:
         assert "connect_timeout=20" in result
         assert "sslmode=verify-full" in result
         assert "statement_timeout=5000" in result
+
+
+@pytest.mark.asyncio
+async def test_postgresql_probe_executes_read_only_query_and_closes(monkeypatch):
+    AsyncConnection = pytest.importorskip("psycopg").AsyncConnection
+
+    connection = AsyncMock()
+    connect = AsyncMock(return_value=connection)
+    monkeypatch.setattr(AsyncConnection, "connect", connect)
+    monkeypatch.setattr(db, "build_conninfo", lambda: "dbname=probe")
+
+    await db.probe_postgresql()
+
+    connect.assert_awaited_once_with("dbname=probe", autocommit=True)
+    connection.execute.assert_awaited_once_with("SELECT 1")
+    connection.__aexit__.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_postgresql_probe_closes_connection_when_query_times_out(monkeypatch):
+    AsyncConnection = pytest.importorskip("psycopg").AsyncConnection
+
+    connection = AsyncMock()
+    never_ready = asyncio.Event()
+
+    async def stall_query(_statement):
+        await never_ready.wait()
+
+    connection.execute.side_effect = stall_query
+    monkeypatch.setattr(AsyncConnection, "connect", AsyncMock(return_value=connection))
+    monkeypatch.setattr(db, "build_conninfo", lambda: "dbname=probe")
+
+    with pytest.raises(TimeoutError):
+        await db.probe_postgresql(timeout_seconds=0.01)
+
+    connection.execute.assert_awaited_once()
+    connection.__aexit__.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_postgresql_probes_share_one_connection(monkeypatch):
+    connection_type = pytest.importorskip("psycopg").AsyncConnection
+    connection = AsyncMock()
+    query_started = asyncio.Event()
+    finish_query = asyncio.Event()
+
+    async def wait_for_completion(_statement):
+        query_started.set()
+        await finish_query.wait()
+
+    connection.execute.side_effect = wait_for_completion
+    connect = AsyncMock(return_value=connection)
+    monkeypatch.setattr(connection_type, "connect", connect)
+    monkeypatch.setattr(db, "build_conninfo", lambda: "dbname=probe")
+
+    first = asyncio.create_task(db.probe_postgresql())
+    await query_started.wait()
+    waiters = [asyncio.create_task(db.probe_postgresql()) for _ in range(8)]
+    await asyncio.sleep(0)
+
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+    assert all(not waiter.done() for waiter in waiters)
+    connect.assert_awaited_once()
+
+    finish_query.set()
+    await asyncio.gather(*waiters)
+    connection.execute.assert_awaited_once_with("SELECT 1")
+    connection.__aexit__.assert_awaited_once()
+
+    await db.probe_postgresql()
+    assert connect.await_count == 2
 
 
 class TestPoolMinMax:

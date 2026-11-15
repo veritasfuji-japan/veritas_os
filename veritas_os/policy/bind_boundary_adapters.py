@@ -12,6 +12,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from veritas_os.core.atomic_io import atomic_write_json
+from veritas_os.governance.repository import (
+    GovernanceHistoryWriteError,
+    GovernanceWriteConflictError,
+)
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.policy.runtime_adapter import load_runtime_bundle
@@ -28,7 +32,7 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
     """
 
     policy_reader: Callable[[], dict[str, Any]]
-    policy_updater: Callable[[dict[str, Any]], dict[str, Any]]
+    policy_updater: Callable[..., dict[str, Any]]
     policy_patch: dict[str, Any]
     policy_rollback: Callable[..., dict[str, Any]] | None = None
     revert_actor: str = "bind_boundary"
@@ -82,9 +86,14 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
 
     def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
         """Apply governed policy patch via existing update path."""
-        del intent, snapshot
+        if self.fingerprint_state(snapshot) != intent.expected_state_fingerprint:
+            raise GovernanceWriteConflictError("GOVERNANCE_POLICY_WRITE_CONFLICT")
         try:
-            updated = self.policy_updater(self.policy_patch)
+            updated = self.policy_updater(self.policy_patch, expected_policy=snapshot["policy"])
+        except GovernanceHistoryWriteError:
+            raise
+        except GovernanceWriteConflictError as exc:
+            raise GovernanceWriteConflictError("GOVERNANCE_POLICY_WRITE_CONFLICT") from exc
         except (TypeError, ValueError) as exc:
             raise ValueError(f"GOVERNANCE_POLICY_VALIDATION_FAILED:{exc}") from exc
         except Exception as exc:

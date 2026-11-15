@@ -536,8 +536,8 @@ def _parse_api_keys_config() -> List[dict]:
         return []
     try:
         entries = _json.loads(raw)
-    except _json.JSONDecodeError as exc:
-        raise ValueError(f"VERITAS_API_KEYS is not valid JSON: {exc}") from exc
+    except (ValueError, RecursionError):
+        raise ValueError("VERITAS_API_KEYS is not valid JSON") from None
     if not isinstance(entries, list):
         raise ValueError("VERITAS_API_KEYS must be a JSON array")
     valid_roles = {r.value for r in Role}
@@ -547,7 +547,7 @@ def _parse_api_keys_config() -> List[dict]:
             raise ValueError("Each VERITAS_API_KEYS entry must have 'key' and 'role' fields")
         role_str = str(entry["role"]).strip().lower()
         if role_str not in valid_roles:
-            raise ValueError(f"Invalid role '{entry['role']}' in VERITAS_API_KEYS; valid roles: {sorted(valid_roles)}")
+            raise ValueError(f"Invalid role in VERITAS_API_KEYS; valid roles: {sorted(valid_roles)}")
         key_str = str(entry["key"]).strip()
         if not key_str:
             raise ValueError("Empty key in VERITAS_API_KEYS entry")
@@ -567,19 +567,13 @@ def resolve_role_for_key(api_key: str) -> Role:
     Priority:
     1. VERITAS_API_KEYS (JSON, multi-key) — exact match → role from config
     2. VERITAS_API_KEY (single legacy key) — match → admin
-    3. No match → raises ValueError
+    3. No match or malformed multi-key config → raises ValueError
     """
     api_key = (api_key or "").strip()
     if not api_key:
         raise ValueError("empty api key")
 
-    # Check multi-key config first
-    try:
-        multi_keys = _parse_api_keys_config()
-    except ValueError:
-        multi_keys = []
-
-    for entry in multi_keys:
+    for entry in _parse_api_keys_config():
         if secrets.compare_digest(api_key, entry["key"]):
             return Role(entry["role"])
 
@@ -868,7 +862,7 @@ def _has_configured_api_key() -> bool:
         if _parse_api_keys_config():
             return True
     except ValueError:
-        pass
+        return False
 
     return bool((_get_expected_api_key() or "").strip())
 
@@ -879,14 +873,13 @@ def _is_valid_api_key(candidate: str) -> bool:
     if not candidate:
         return False
 
-    # Check multi-key config
     try:
         multi_keys = _parse_api_keys_config()
-        for entry in multi_keys:
-            if secrets.compare_digest(candidate, entry["key"]):
-                return True
     except ValueError:
-        pass
+        return False
+    for entry in multi_keys:
+        if secrets.compare_digest(candidate, entry["key"]):
+            return True
 
     # Fallback to single-key
     expected = (_get_expected_api_key() or "").strip()
@@ -1009,13 +1002,7 @@ def require_api_key_header_or_query(
     x_forwarded_for: Optional[str] = Header(default=None, alias="X-Forwarded-For"),
 ):
     """Authenticate SSE requests with header-first policy."""
-    has_multi = False
-    try:
-        has_multi = bool(_parse_api_keys_config())
-    except ValueError:
-        pass
-    expected = (_get_expected_api_key() or "").strip()
-    if not expected and not has_multi:
+    if not _has_configured_api_key():
         _record_auth_reject_reason("api_key_server_unconfigured")
         raise HTTPException(status_code=500, detail="Server API key not configured")
 

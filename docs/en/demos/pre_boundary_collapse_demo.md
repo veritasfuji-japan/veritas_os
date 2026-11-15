@@ -180,7 +180,8 @@ governability claim.
 
 ## Run and verification entrypoint
 
-Run the representative demo from Mission Control with:
+Set `VERITAS_ENABLE_E2E_SCENARIOS=1` on the frontend server in a dedicated demo
+environment, then open the representative demo in Mission Control:
 
 - `/?demo_scenario=pre_boundary_collapse`
 

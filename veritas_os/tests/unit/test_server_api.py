@@ -2910,7 +2910,7 @@ def test_websocket_auth_rejects_query_api_key_in_production_even_with_dual_flags
     assert server._authenticate_websocket_api_key(ws) is False
 
 
-def test_websocket_auth_falls_back_to_legacy_key_when_multi_key_config_malformed(monkeypatch):
+def test_websocket_auth_rejects_legacy_key_when_multi_key_config_malformed(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", "legacy-ws-key")
     monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
 
@@ -2919,7 +2919,7 @@ def test_websocket_auth_falls_back_to_legacy_key_when_multi_key_config_malformed
         query_params={},
     )
 
-    assert server._authenticate_websocket_api_key(ws) is True
+    assert server._authenticate_websocket_api_key(ws) is False
 
 
 def test_websocket_auth_fail_closed_when_multi_key_config_malformed_without_legacy_key(monkeypatch):
@@ -2964,11 +2964,11 @@ def test_resolve_role_from_request_multi_key_role_is_preserved(monkeypatch):
     assert server._resolve_role_from_request("operator-key") == server.Role.operator
 
 
-def test_resolve_role_from_request_malformed_multi_key_valid_legacy_is_admin(monkeypatch):
+def test_resolve_role_from_request_malformed_multi_key_uses_least_privilege(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEYS", "{bad-json")
     monkeypatch.setenv("VERITAS_API_KEY", "legacy-admin-key")
 
-    assert server._resolve_role_from_request("legacy-admin-key") == server.Role.admin
+    assert server._resolve_role_from_request("legacy-admin-key") == server.Role.auditor
 
 
 def test_resolve_role_from_request_malformed_multi_key_invalid_key_falls_back_to_auditor(monkeypatch):
