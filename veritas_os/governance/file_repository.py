@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 import os
@@ -168,7 +169,12 @@ class FileGovernanceRepository(GovernanceRepository):
         if hasattr(os, "O_DIRECTORY"):
             directory_fd = os.open(self._history_path.parent, os.O_RDONLY | os.O_DIRECTORY)
             try:
-                os.fsync(directory_fd)
+                try:
+                    os.fsync(directory_fd)
+                except OSError as exc:
+                    if exc.errno not in {errno.EINVAL, errno.ENOTSUP, errno.EOPNOTSUPP}:
+                        raise
+                    logger.warning("Governance history directory sync unsupported: %s", exc)
             finally:
                 os.close(directory_fd)
         self._trim_policy_history_locked()
