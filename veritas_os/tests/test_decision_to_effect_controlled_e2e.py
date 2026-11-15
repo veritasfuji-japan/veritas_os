@@ -11,7 +11,7 @@ payloads, credentials, keys and external effects are synthetic.
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from datetime import UTC, datetime, timedelta
@@ -51,7 +51,10 @@ from veritas_os.policy.native_bind_authorization import verify_native_bind_autho
 from veritas_os.policy.native_bind_authorization_consumption import (
     consume_native_bind_authorization,
 )
-from veritas_os.policy.sandbox_bind_execution import execute_sandbox_bind
+from veritas_os.policy.sandbox_bind_execution import (
+    SandboxBindExecutionError,
+    execute_sandbox_bind,
+)
 from veritas_os.policy.sandbox_credential_resolution import (
     SandboxCredentialMetadata,
     SandboxProviderCredential,
@@ -80,7 +83,7 @@ from veritas_os.tests.helpers.native_approval_source import build_native_authori
 from veritas_os.tests.helpers.proof_provenance import capture_proof_provenance
 from veritas_os.tests.helpers.fixture_clock import wait_for_fixture_issuance
 from veritas_os.tests.test_native_bind_authorization import _setup
-from veritas_os.tests.test_native_bind_authorization_consumption import _fresh
+from veritas_os.tests.test_native_bind_authorization_consumption import _Revocation, _fresh
 from veritas_os.tests.test_sandbox_action_binding import contract, deployment
 
 pytestmark = [
@@ -596,6 +599,71 @@ async def test_sandbox_does_not_accept_writes_without_writer_credentials(use_rea
     assert response.status_code == 401
     assert response.json() == {"detail": "SSE_UNAUTHORIZED"}
     assert await _sandbox_row_count() == rows_before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["revoked", "expired", "already-dispatched"])
+async def test_sandbox_bind_rejects_inactive_permission_without_dispatch(tmp_path, mode):
+    event = {"event_id": str(uuid4()), "message": "controlled authorization rejection"}
+    case = _build_decision_case(tmp_path, event)
+    artifact, inputs, config = case["artifact"], case["inputs"], case["deployment"]
+    ca_pem = Path(os.environ["VERITAS_SANDBOX_CA_FILE"]).read_text()
+    transport = SandboxHTTPSTransport(endpoint_url=config.endpoint_url, ca_pem=ca_pem)
+    writer = ControlledCredentialProvider(os.environ["VERITAS_SANDBOX_WRITER_TOKEN"])
+    load_current, _ = _load_current(inputs)
+
+    try:
+        consumption_store, _ = await _consume(case)
+        args = {
+            "deployment": config,
+            "issuance_source_inputs": inputs["source_inputs"],
+            "governance_inputs": inputs["governance_inputs"],
+            "trust_inputs": inputs["trust_inputs"],
+            "consumption_store": consumption_store,
+            "effect_store": PostgresAtomicEffectStateStore(),
+            "trusted_clock": _clock,
+            "load_current_inputs": load_current,
+            "provider": writer,
+            "transport": transport,
+        }
+        payload = json.dumps(event)
+        if mode == "revoked":
+            checker = _Revocation(inputs["governance_inputs"], "revoked")
+
+            def load_revoked(now: datetime) -> SandboxCurrentInputs:
+                current = load_current(now)
+                return replace(
+                    current,
+                    governance=replace(
+                        current.governance, authority_revocation_checker=checker
+                    ),
+                )
+
+            args["load_current_inputs"] = load_revoked
+        elif mode == "expired":
+            expiry = datetime.fromisoformat(artifact.valid_until)
+            args["trusted_clock"] = lambda: replace(
+                _clock(), now=expiry, health_checked_at=expiry
+            )
+        else:
+            rows_before_first_dispatch = await _sandbox_row_count()
+            first = await execute_sandbox_bind(artifact, payload, **args)
+            assert first.reason_code == "HTTP_201_MATCHING_ACK"
+            assert transport.send_calls == 1
+            assert await _sandbox_row_count() == rows_before_first_dispatch + 1
+
+        rows_before_rejection = await _sandbox_row_count()
+        with pytest.raises(
+            SandboxBindExecutionError, match="^SBE_FAILED_ATTEMPT_NOT_RELEASED$"
+        ):
+            await execute_sandbox_bind(artifact, payload, **args)
+
+        assert transport.send_calls == (1 if mode == "already-dispatched" else 0)
+        assert await _sandbox_row_count() == rows_before_rejection
+        if mode == "revoked":
+            assert any(now > checker.issued_at for now in checker.times)
+    finally:
+        await close_pool()
 
 
 @pytest.mark.asyncio
