@@ -8,8 +8,10 @@ import logging
 import os
 import tempfile
 import threading
+from collections import deque
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from itertools import islice
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -287,33 +289,32 @@ class FileGovernanceRepository(GovernanceRepository):
         try:
             if not self._history_path.exists():
                 return
-            lines = self._history_path.read_bytes().split(b"\n")
-            if lines[-1] == b"":
-                lines.pop()
-            if len(lines) <= self._policy_history_max:
-                return
-
             # Count only complete JSON objects toward the retention limit.
-            retained = []
+            retained: deque[str] = deque(maxlen=self._policy_history_max or None)
             invalid = 0
-            for line in lines:
-                if not line.strip():
-                    continue
-                try:
-                    decoded = line.decode("utf-8")
-                    record = json.loads(decoded)
-                except (ValueError, RecursionError):
-                    invalid += 1
-                    continue
-                if isinstance(record, dict):
-                    retained.append(decoded)
-                else:
-                    invalid += 1
+            with self._history_path.open("rb") as history:
+                scan_limit = self._policy_history_max + 1
+                if sum(1 for _ in islice(history, scan_limit)) < scan_limit:
+                    return
+                history.seek(0)
+                for line in history:
+                    if not line.strip():
+                        continue
+                    try:
+                        decoded = line.removesuffix(b"\n").decode("utf-8")
+                        record = json.loads(decoded)
+                    except (ValueError, RecursionError):
+                        invalid += 1
+                        continue
+                    if isinstance(record, dict):
+                        retained.append(decoded)
+                    else:
+                        invalid += 1
             if invalid:
                 logger.warning(
                     "Skipped %d invalid governance policy history record(s) during trim", invalid
                 )
-            trimmed = "".join(line + "\n" for line in retained[-self._policy_history_max :])
+            trimmed = "".join(line + "\n" for line in retained)
             if self._has_atomic_io:
                 _atomic_write_text(self._history_path, trimmed)
                 return
