@@ -216,6 +216,7 @@ class FileGovernanceRepository(GovernanceRepository):
                 return []
 
         records: list[dict[str, Any]] = []
+        invalid = 0
         for line in reversed(lines):
             line = line.strip()
             if not line:
@@ -223,12 +224,16 @@ class FileGovernanceRepository(GovernanceRepository):
             try:
                 record = json.loads(line.decode("utf-8"))
             except (ValueError, RecursionError):
+                invalid += 1
                 continue
             if not isinstance(record, dict):
+                invalid += 1
                 continue
             records.append(record)
             if len(records) >= bounded_limit:
                 break
+        if invalid:
+            logger.warning("Skipped %d invalid governance policy history record(s) during read", invalid)
         return records
 
     def update_policy(
@@ -290,14 +295,24 @@ class FileGovernanceRepository(GovernanceRepository):
 
             # Count only complete JSON objects toward the retention limit.
             retained = []
+            invalid = 0
             for line in lines:
+                if not line.strip():
+                    continue
                 try:
                     decoded = line.decode("utf-8")
                     record = json.loads(decoded)
                 except (ValueError, RecursionError):
+                    invalid += 1
                     continue
                 if isinstance(record, dict):
                     retained.append(decoded)
+                else:
+                    invalid += 1
+            if invalid:
+                logger.warning(
+                    "Skipped %d invalid governance policy history record(s) during trim", invalid
+                )
             trimmed = "".join(line + "\n" for line in retained[-self._policy_history_max :])
             if self._has_atomic_io:
                 _atomic_write_text(self._history_path, trimmed)
