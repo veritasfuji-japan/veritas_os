@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, BinaryIO, Callable, Iterator
 
 from veritas_os.governance.models import GovernancePolicyEventRecord
 from veritas_os.governance.repository import (
@@ -36,6 +36,28 @@ except ImportError:  # pragma: no cover
     _HAS_ATOMIC_IO = False
 
 logger = logging.getLogger(__name__)
+_HISTORY_READ_BLOCK_SIZE = 64 * 1024
+
+
+def _reverse_history_lines(history: BinaryIO) -> Iterator[bytes]:
+    """Yield lines newest-first, buffering only the current chunk and line."""
+    position = history.seek(0, os.SEEK_END)
+    fragments: list[bytes] = []
+    while position:
+        size = min(position, _HISTORY_READ_BLOCK_SIZE)
+        position -= size
+        history.seek(position)
+        block = history.read(size)
+        if len(block) != size:
+            raise OSError("Governance history changed size during read")
+        lines = block.split(b"\n")
+        fragments.append(lines.pop())
+        if lines:
+            yield b"".join(reversed(fragments))
+            yield from reversed(lines[1:])
+            fragments = [lines[0]]
+    if fragments:
+        yield b"".join(reversed(fragments))
 
 
 class FileGovernanceRepository(GovernanceRepository):
@@ -208,32 +230,31 @@ class FileGovernanceRepository(GovernanceRepository):
 
     def list_policy_history(self, *, limit: int, max_records: int) -> list[dict[str, Any]]:
         bounded_limit = max(1, min(limit, max_records))
+        records: list[dict[str, Any]] = []
+        invalid = 0
         with self._lock:
-            if not self._history_path.exists():
-                return []
             try:
-                lines = self._history_path.read_bytes().split(b"\n")
+                with self._history_path.open("rb") as history:
+                    for line in _reverse_history_lines(history):
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            record = json.loads(line.decode("utf-8"))
+                        except (ValueError, RecursionError):
+                            invalid += 1
+                            continue
+                        if not isinstance(record, dict):
+                            invalid += 1
+                            continue
+                        records.append(record)
+                        if len(records) >= bounded_limit:
+                            break
+            except FileNotFoundError:
+                return []
             except OSError as exc:
                 logger.warning("Failed to read governance policy history: %s", exc)
                 return []
-
-        records: list[dict[str, Any]] = []
-        invalid = 0
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line.decode("utf-8"))
-            except (ValueError, RecursionError):
-                invalid += 1
-                continue
-            if not isinstance(record, dict):
-                invalid += 1
-                continue
-            records.append(record)
-            if len(records) >= bounded_limit:
-                break
         if invalid:
             logger.warning("Skipped %d invalid governance policy history record(s) during read", invalid)
         return records

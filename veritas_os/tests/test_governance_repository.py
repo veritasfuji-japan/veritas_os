@@ -346,6 +346,33 @@ def test_history_trim_preserves_appended_events_on_replace_failure(
     )] == ["second"]
 
 
+@pytest.mark.parametrize("terminator", [b"", b"\n"])
+def test_history_read_handles_records_spanning_blocks(tmp_path, monkeypatch, terminator):
+    """Return the newest valid records even when lines span read blocks."""
+    monkeypatch.setattr(
+        "veritas_os.governance.file_repository._HISTORY_READ_BLOCK_SIZE", 7
+    )
+    history_path = tmp_path / "history.jsonl"
+    history_path.write_bytes(
+        '{"new_version":"古い"}\n'.encode()
+        + b'{"new_version":"second"}\n{\n{"new_version":"third"}'
+        + terminator
+    )
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+
+    assert [record["new_version"] for record in repo.list_policy_history(
+        limit=2, max_records=10
+    )] == ["third", "second"]
+    assert [record["new_version"] for record in repo.list_policy_history(
+        limit=10, max_records=10
+    )] == ["third", "second", "古い"]
+
+
 @pytest.mark.parametrize("history_max", [2, 10])
 @pytest.mark.parametrize("fragment", [b'{"new_version":', b'{"new_version":"\xe3\x81'])
 def test_history_append_isolates_incomplete_record(tmp_path, history_max, fragment, caplog):
