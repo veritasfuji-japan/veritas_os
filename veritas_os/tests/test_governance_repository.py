@@ -283,7 +283,7 @@ def test_fallback_trim_syncs_directory_after_replace(tmp_path, monkeypatch):
     assert synced_contents == [b'{"new_version":"second"}\n']
 
 
-def test_fallback_history_trim_preserves_existing_temp_named_file(tmp_path):
+def test_fallback_history_trim_preserves_existing_temp_named_file(tmp_path, monkeypatch):
     """The history replacement owns its temporary file."""
     history_path = tmp_path / "history.jsonl"
     history_path.write_bytes(b'{"new_version":"first"}\n{"new_version":"second"}\n')
@@ -297,7 +297,12 @@ def test_fallback_history_trim_preserves_existing_temp_named_file(tmp_path):
         has_atomic_io=False,
     )
 
-    repo.trim_policy_history()
+    def reject_full_read(*args, **kwargs):
+        pytest.fail("History trim must not read the whole file at once")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(type(history_path), "read_bytes", reject_full_read)
+        repo.trim_policy_history()
 
     assert sibling.read_bytes() == b"existing data"
     assert repo.list_policy_history(limit=10, max_records=10) == [{"new_version": "second"}]
