@@ -240,6 +240,79 @@ def test_recovery_refuses_divergent_policy(tmp_path, monkeypatch):
     assert repo._pending_path.exists()
 
 
+@pytest.mark.parametrize("stage", ["before_history", "after_history"])
+def test_recovery_serializes_processes_after_writer_exit(tmp_path, stage):
+    """Independent processes recover one event after an abrupt writer exit."""
+    import multiprocessing
+    import os
+
+    pytest.importorskip("fcntl", exc_type=ImportError)
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("fork is unavailable")
+    context = multiprocessing.get_context("fork")
+    policy_path = tmp_path / "policy.json"
+    history_path = tmp_path / "history.jsonl"
+
+    def repository():
+        return FileGovernanceRepository(
+            policy_path=policy_path, history_path=history_path,
+            lock=threading.Lock(), policy_history_max=10,
+        )
+
+    def interrupted_writer():
+        repo = repository()
+        append = repo._append_policy_event_locked
+
+        def interrupt(event):
+            if stage == "after_history":
+                append(event)
+            os._exit(73)
+
+        repo._append_policy_event_locked = interrupt
+        repo.update_policy(
+            previous={}, updated={"version": "saved"}, proposer="operator",
+            approvers=[], event_type="update",
+        )
+
+    writer = context.Process(target=interrupted_writer)
+    writer.start()
+    try:
+        writer.join(timeout=15)
+        assert writer.exitcode == 73
+    finally:
+        if writer.is_alive():
+            writer.terminate()
+            writer.join(timeout=5)
+    assert repository()._pending_path.exists()
+    start = context.Barrier(2)
+    results = context.Queue()
+
+    def recover():
+        repo = repository()
+        start.wait(timeout=10)
+        results.put(repo.get_current_policy(default_factory=dict))
+
+    readers = [context.Process(target=recover) for _ in range(2)]
+    try:
+        for reader in readers:
+            reader.start()
+        for reader in readers:
+            reader.join(timeout=15)
+            assert reader.exitcode == 0
+        assert [results.get(timeout=2) for _ in readers] == [{"version": "saved"}] * 2
+    finally:
+        for reader in readers:
+            if reader.is_alive():
+                reader.terminate()
+                reader.join(timeout=5)
+        results.close()
+        results.join_thread()
+    records = repository().list_policy_history(limit=10, max_records=10)
+    assert len(records) == 1
+    assert records[0]["new_policy"] == {"version": "saved"}
+    assert not repository()._pending_path.exists()
+
+
 def test_corrupt_recovery_journal_blocks_policy_reads(tmp_path):
     repo = FileGovernanceRepository(
         policy_path=tmp_path / "policy.json", history_path=tmp_path / "history.jsonl",
@@ -249,6 +322,67 @@ def test_corrupt_recovery_journal_blocks_policy_reads(tmp_path):
     with pytest.raises(GovernanceRecoveryRequiredError):
         repo.get_current_policy(default_factory=dict)
     assert repo._pending_path.read_bytes() == b"{"
+
+
+@pytest.mark.parametrize("has_atomic_io", [True, False])
+def test_history_trim_sync_failure_preserves_recovery_journal(
+    tmp_path, monkeypatch, has_atomic_io
+):
+    """A trimmed history must be directory-synced before discarding recovery."""
+    import os
+    import stat
+
+    if not hasattr(os, "O_DIRECTORY"):
+        pytest.skip("directory descriptors are unavailable")
+    history_dir = tmp_path / "history"
+    history_dir.mkdir()
+    history_path = history_dir / "events.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json", history_path=history_path,
+        lock=threading.Lock(), policy_history_max=1, has_atomic_io=has_atomic_io,
+    )
+    initial = {"version": "initial"}
+    repo.update_policy(
+        previous={}, updated=initial, proposer="operator",
+        approvers=[], event_type="update",
+    )
+    history_inode = history_dir.stat().st_ino
+    fsync, replace_file = os.fsync, os.replace
+    trimmed = False
+
+    def track_history_replace(source, destination):
+        nonlocal trimmed
+        result = replace_file(source, destination)
+        if Path(destination) == history_path:
+            trimmed = True
+        return result
+
+    def fail_trimmed_history_sync(fd):
+        info = os.fstat(fd)
+        if trimmed and stat.S_ISDIR(info.st_mode) and info.st_ino == history_inode:
+            raise OSError(errno.EIO, "trimmed history directory sync failed")
+        fsync(fd)
+
+    updated = {"version": "updated"}
+    with monkeypatch.context() as patcher:
+        patcher.setattr(os, "replace", track_history_replace)
+        patcher.setattr(os, "fsync", fail_trimmed_history_sync)
+        with pytest.raises(GovernanceHistoryWriteError):
+            repo.update_policy(
+                previous=initial, updated=updated, proposer="operator",
+                approvers=[], event_type="update",
+            )
+        assert trimmed
+        assert repo._pending_path.exists()
+        with pytest.raises(GovernanceRecoveryRequiredError):
+            repo.get_current_policy(default_factory=dict)
+        assert repo._pending_path.exists()
+
+    assert repo.get_current_policy(default_factory=dict) == updated
+    assert not repo._pending_path.exists()
+    records = repo.list_policy_history(limit=10, max_records=10)
+    assert len(records) == 1
+    assert records[0]["new_policy"] == updated
 
 
 def test_governance_reports_history_failure_after_saving_policy(tmp_path):

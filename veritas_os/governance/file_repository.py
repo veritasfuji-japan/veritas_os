@@ -314,6 +314,10 @@ class FileGovernanceRepository(GovernanceRepository):
         # can leave the name visible in memory.
         self._sync_directory(self._history_path.parent)
         self._trim_policy_history_locked()
+        # Trimming can replace the file after the append's directory sync.
+        # Its best-effort writer must not let us discard a pending journal
+        # before that replacement is durable.
+        self._sync_directory(self._history_path.parent)
 
     @staticmethod
     def _sync_directory(directory: Path) -> None:
