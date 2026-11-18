@@ -205,18 +205,18 @@ class FileGovernanceRepository(GovernanceRepository):
                 or not all(isinstance(value, str) for value in (
                     event.changed_at, event.changed_by, event.proposer, event.event_type,
                 ))
-                or any(value is not None and not isinstance(value, str) for value in (
-                    event.previous_version, event.new_version,
-                ))
+                or (event.new_version is not None and not isinstance(event.new_version, str))
             ):
                 raise ValueError("Invalid recovery journal")
             previous_digest = compute_governance_digest(event.previous_policy)
             updated_digest = compute_governance_digest(updated)
+            # The update may be repairing a non-string version in the saved policy.
+            previous_version = json.dumps(event.previous_policy.get("version"), sort_keys=True)
             if (
                 event.previous_digest != previous_digest
                 or event.new_digest != updated_digest
                 or compute_governance_digest(event.new_policy) != updated_digest
-                or event.previous_version != event.previous_policy.get("version")
+                or json.dumps(event.previous_version, sort_keys=True) != previous_version
                 or event.new_version != updated.get("version")
                 or event.changed_by != updated.get("updated_by", "unknown")
                 or ("updated_at" in updated and event.changed_at != updated["updated_at"])

@@ -407,6 +407,44 @@ def test_recovery_rejects_inconsistent_event(tmp_path, monkeypatch, stage, corru
         assert (history_path.read_bytes() if history_path.exists() else None) == history_bytes
 
 
+@pytest.mark.parametrize("alter_previous_version", [False, True])
+def test_recovery_after_correcting_numeric_policy_version(
+    tmp_path, monkeypatch, alter_previous_version
+):
+    """Recover a valid update while preserving the older version's JSON type."""
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json", history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(), policy_history_max=10,
+    )
+    repo.save_policy({**gov.GovernancePolicy().model_dump(), "version": 1})
+    gov.set_governance_repository_factory(lambda: repo)
+
+    def interrupt(_event):
+        raise SystemExit("simulated interruption after policy replacement")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(repo, "_append_policy_event_locked", interrupt)
+        with pytest.raises(SystemExit):
+            gov.update_policy({"version": "v2"})
+
+    if alter_previous_version:
+        pending = json.loads(repo._pending_path.read_bytes())
+        pending["event"]["previous_version"] = True
+        repo._pending_path.write_text(json.dumps(pending))
+        with pytest.raises(GovernanceRecoveryRequiredError):
+            gov.get_policy()
+        assert repo._pending_path.exists()
+        assert not repo._history_path.exists()
+        return
+
+    assert gov.get_policy()["version"] == "v2"
+    (event,) = repo.list_policy_history(limit=10, max_records=10)
+    assert type(event["previous_version"]) is int
+    assert event["previous_version"] == 1
+    assert event["new_version"] == "v2"
+    assert not repo._pending_path.exists()
+
+
 def test_recovery_preserves_initial_default_policy_provenance(tmp_path, monkeypatch):
     """A first write can start from application defaults without a policy file."""
     repo = FileGovernanceRepository(

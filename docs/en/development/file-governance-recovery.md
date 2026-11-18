@@ -28,6 +28,8 @@ policy snapshots, that its change metadata matches the updated snapshot, and
 that its previous snapshot matches the journal's previous disk state when one
 existed. First initialization may instead record application
 defaults as the previous snapshot while the previous disk state is absent.
+If an update corrects a non-string version in a previously saved policy,
+the event retains that previous value and recovery compares it as JSON.
 Snapshot and existing-event comparisons distinguish JSON booleans from numbers.
 An inconsistent event blocks both reads and writes and preserves the journal.
 These checks detect internal inconsistencies; they do not authenticate the
