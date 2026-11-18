@@ -6,6 +6,8 @@ import errno
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
+from pathlib import Path
 
 import pytest
 
@@ -371,6 +373,42 @@ def test_history_read_handles_records_spanning_blocks(tmp_path, monkeypatch, ter
     assert [record["new_version"] for record in repo.list_policy_history(
         limit=10, max_records=10
     )] == ["third", "second", "古い"]
+
+
+def test_history_read_stops_after_requested_valid_records(tmp_path, monkeypatch, caplog):
+    """The latest valid record can be returned without scanning older blocks."""
+    block_size = 64
+    monkeypatch.setattr(
+        "veritas_os.governance.file_repository._HISTORY_READ_BLOCK_SIZE", block_size
+    )
+    history_path = tmp_path / "history.jsonl"
+    newest = b'{"new_version":"latest"}\n{\n'
+    payload = b'{"new_version":"older"}\n' * 100 + newest
+    reads = []
+
+    class TrackedHistory(BytesIO):
+        def read(self, size=-1):
+            reads.append((self.tell(), size))
+            return super().read(size)
+
+    real_open = Path.open
+
+    def open_history(path, *args, **kwargs):
+        if path == history_path:
+            return TrackedHistory(payload)
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_history)
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json",
+        history_path=history_path,
+        lock=threading.Lock(),
+        policy_history_max=10,
+    )
+
+    assert repo.list_policy_history(limit=1, max_records=10) == [{"new_version": "latest"}]
+    assert reads == [(len(payload) - block_size, block_size)]
+    assert "Skipped 1 invalid governance policy history record" in caplog.text
 
 
 @pytest.mark.parametrize("history_max", [2, 10])
