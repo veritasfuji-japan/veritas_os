@@ -29,9 +29,11 @@ class GovernancePolicyEventRecord:
     previous_policy: dict[str, Any] = field(default_factory=dict)
     new_policy: dict[str, Any] = field(default_factory=dict)
 
+    event_id: str = ""
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
-        return {
+        record = {
             "changed_at": self.changed_at,
             "changed_by": self.changed_by,
             "proposer": self.proposer,
@@ -44,3 +46,6 @@ class GovernancePolicyEventRecord:
             "previous_policy": self.previous_policy,
             "new_policy": self.new_policy,
         }
+        if self.event_id:
+            record["event_id"] = self.event_id
+        return record

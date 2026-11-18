@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from starlette.requests import HTTPConnection
 
+from veritas_os.governance.repository import GovernanceRecoveryRequiredError
 from veritas_os.api.auth import (
     _derive_api_user_id,
     require_authenticated_principal,
@@ -559,7 +560,12 @@ def governance_put(body: dict, request: Request):
             set_span_attribute("final_outcome", bind_receipt.get("final_outcome"))
             set_span_attribute("bind_reason_code", resolve_bind_reason_code(bind_receipt) or "")
             with trace_step("governance.policy.persist"):
-                updated = srv.get_policy()
+                try:
+                    updated = srv.get_policy()
+                except GovernanceRecoveryRequiredError:
+                    if bind_receipt.get("final_outcome") == FinalOutcome.COMMITTED.value:
+                        raise
+                    updated = None
             bind_payload = build_bind_response_payload(bind_receipt)
             if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
                 with trace_step("governance.policy_update.response"):

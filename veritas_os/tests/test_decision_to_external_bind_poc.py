@@ -102,3 +102,39 @@ def test_invalid_authority_blocks_before_bind(tmp_path: Path) -> None:
     assert report["external_post_count"] == 0
     assert report["bind_receipt_created"] is False
     assert report["result"] == "pass"
+
+
+def test_live_capture_uses_writable_governance_state(tmp_path: Path) -> None:
+    """A read-only source checkout must still support isolated decision capture."""
+    output = tmp_path / "decision.json"
+    code = """
+from pathlib import Path
+import errno
+import sys
+from unittest.mock import patch
+from veritas_os.tests.helpers.live_decision_capture import capture
+
+source_api = Path("veritas_os/api").resolve()
+real_open = Path.open
+
+def read_only_source(path, mode="r", *args, **kwargs):
+    if path.parent.resolve() == source_api and any(flag in mode for flag in "wax+"):
+        raise OSError(errno.EROFS, "Read-only source checkout")
+    return real_open(path, mode, *args, **kwargs)
+
+with patch.object(Path, "open", read_only_source):
+    capture(Path(sys.argv[1]))
+"""
+    subprocess.run(
+        [sys.executable, "-c", code, str(output)],
+        cwd=SCRIPT.parents[1],
+        check=True,
+        timeout=180,
+    )
+    captured = json.loads(output.read_bytes())
+    assert captured["pipeline_ok"] is True
+    assert captured["canonical_decision_artifact"]
+    assert (tmp_path / "runtime" / "governance.json.lock").exists()
+    assert json.loads((tmp_path / "runtime" / "governance.json").read_bytes()) == json.loads(
+        (SCRIPT.parents[1] / "veritas_os/api/governance.json").read_bytes()
+    )
