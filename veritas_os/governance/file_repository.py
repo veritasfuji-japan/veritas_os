@@ -197,9 +197,34 @@ class FileGovernanceRepository(GovernanceRepository):
                 or not isinstance(event.event_id, str)
                 or not event.event_id
                 or pending["history_path"] != str(self._history_path.resolve())
-                or event.new_policy != updated
+                or set(pending["event"]) != set(event.to_dict())
+                or not isinstance(event.previous_policy, dict)
+                or not isinstance(event.new_policy, dict)
+                or not isinstance(event.approvers, list)
+                or not all(isinstance(approver, str) for approver in event.approvers)
+                or not all(isinstance(value, str) for value in (
+                    event.changed_at, event.changed_by, event.proposer, event.event_type,
+                ))
+                or any(value is not None and not isinstance(value, str) for value in (
+                    event.previous_version, event.new_version,
+                ))
             ):
                 raise ValueError("Invalid recovery journal")
+            previous_digest = compute_governance_digest(event.previous_policy)
+            updated_digest = compute_governance_digest(updated)
+            if (
+                event.previous_digest != previous_digest
+                or event.new_digest != updated_digest
+                or compute_governance_digest(event.new_policy) != updated_digest
+                or event.previous_version != event.previous_policy.get("version")
+                or event.new_version != updated.get("version")
+                or event.changed_by != updated.get("updated_by", "unknown")
+                or ("updated_at" in updated and event.changed_at != updated["updated_at"])
+                or (previous is not None and (
+                    compute_governance_digest(previous) != previous_digest
+                ))
+            ):
+                raise ValueError("Recovery event does not match the policy transition")
             current = self._read_policy_locked()
             matches_previous = (
                 current is None and previous is None
@@ -228,7 +253,9 @@ class FileGovernanceRepository(GovernanceRepository):
                         except (ValueError, RecursionError):
                             continue
                         if isinstance(record, dict) and record.get("event_id") == event.event_id:
-                            if record != event.to_dict():
+                            if json.dumps(record, sort_keys=True) != json.dumps(
+                                event.to_dict(), sort_keys=True
+                            ):
                                 raise ValueError("Recovery event ID has conflicting contents")
                             found = True
             except FileNotFoundError:
