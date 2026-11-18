@@ -10,14 +10,17 @@ import tempfile
 import threading
 from collections import deque
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator
+from uuid import uuid4
 
 from veritas_os.governance.models import GovernancePolicyEventRecord
 from veritas_os.governance.repository import (
     GovernanceHistoryWriteError,
+    GovernanceRecoveryRequiredError,
     GovernanceRepository,
     GovernanceWriteConflictError,
 )
@@ -74,6 +77,7 @@ class FileGovernanceRepository(GovernanceRepository):
     ) -> None:
         self._policy_path = policy_path
         self._history_path = history_path
+        self._pending_path = policy_path.with_name(policy_path.name + ".pending.json")
         self._lock = lock
         self._policy_history_max = policy_history_max
         self._has_atomic_io = _HAS_ATOMIC_IO if has_atomic_io is None else has_atomic_io
@@ -84,7 +88,7 @@ class FileGovernanceRepository(GovernanceRepository):
         default_factory: Callable[[], dict[str, Any]],
     ) -> dict[str, Any]:
         """Use defaults on first initialization and reject unreadable policy state."""
-        with self._lock:
+        with self._policy_write_lock():
             policy = self._read_policy_locked()
             return default_factory() if policy is None else policy
 
@@ -112,6 +116,7 @@ class FileGovernanceRepository(GovernanceRepository):
         with self._lock:
             self._policy_path.parent.mkdir(parents=True, exist_ok=True)
             if fcntl is None:
+                self._recover_pending_locked()
                 yield
                 return
 
@@ -119,6 +124,7 @@ class FileGovernanceRepository(GovernanceRepository):
             lock_path = self._policy_path.with_name(self._policy_path.name + ".lock")
             with lock_path.open("ab") as lock_file:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                self._recover_pending_locked()
                 yield
 
     def _save_with_event(
@@ -136,13 +142,108 @@ class FileGovernanceRepository(GovernanceRepository):
                 compute_governance_digest(current) != compute_governance_digest(previous)
             ):
                 raise GovernanceWriteConflictError("Current governance policy has changed")
-            self._save_policy_locked(updated)
+            event = replace(event, event_id=uuid4().hex)
+            pending = {
+                "previous": current,
+                "updated": updated,
+                "event": event.to_dict(),
+                "history_path": str(self._history_path.resolve()),
+            }
+            policy_saved = False
+            try:
+                self._replace_text_fallback(
+                    self._pending_path, json.dumps(pending, ensure_ascii=False)
+                )
+                self._sync_directory(self._pending_path.parent)
+                self._save_policy_locked(updated)
+                policy_saved = True
+                self._sync_directory(self._policy_path.parent)
+            except (OSError, ValueError, TypeError, RecursionError) as exc:
+                if policy_saved:
+                    raise GovernanceHistoryWriteError(
+                        "GOVERNANCE_POLICY_HISTORY_WRITE_FAILED"
+                    ) from exc
+                raise GovernanceRecoveryRequiredError(
+                    "GOVERNANCE_POLICY_RECOVERY_REQUIRED"
+                ) from exc
             try:
                 self._append_policy_event_locked(event)
+                self._pending_path.unlink()
+                self._sync_directory(self._pending_path.parent)
             except (OSError, ValueError, TypeError, RecursionError) as exc:
                 raise GovernanceHistoryWriteError(
                     "GOVERNANCE_POLICY_HISTORY_WRITE_FAILED"
                 ) from exc
+
+    def _recover_pending_locked(self) -> None:
+        """Complete a journaled change before serving policy reads or writes."""
+        try:
+            with self._pending_path.open("r", encoding="utf-8") as pending_file:
+                pending = json.load(pending_file)
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError, RecursionError) as exc:
+            raise GovernanceRecoveryRequiredError("Cannot read governance recovery journal") from exc
+
+        from veritas_os.policy.governance_identity import compute_governance_digest
+
+        try:
+            previous = pending["previous"]
+            updated = pending["updated"]
+            event = GovernancePolicyEventRecord(**pending["event"])
+            if (
+                not isinstance(updated, dict)
+                or (previous is not None and not isinstance(previous, dict))
+                or not isinstance(event.event_id, str)
+                or not event.event_id
+                or pending["history_path"] != str(self._history_path.resolve())
+                or event.new_policy != updated
+            ):
+                raise ValueError("Invalid recovery journal")
+            current = self._read_policy_locked()
+            matches_previous = (
+                current is None and previous is None
+            ) or (
+                current is not None and previous is not None
+                and compute_governance_digest(current) == compute_governance_digest(previous)
+            )
+            matches_updated = (
+                current is not None
+                and compute_governance_digest(current) == compute_governance_digest(updated)
+            )
+            if not matches_updated:
+                if not matches_previous:
+                    raise ValueError("Policy diverged from recovery journal")
+                # Abort a prepared operation whose replacement never became visible.
+                self._pending_path.unlink()
+                self._sync_directory(self._pending_path.parent)
+                return
+            self._sync_directory(self._policy_path.parent)
+            found = False
+            try:
+                with self._history_path.open("rb") as history:
+                    for line in history:
+                        try:
+                            record = json.loads(line.decode("utf-8"))
+                        except (ValueError, RecursionError):
+                            continue
+                        if isinstance(record, dict) and record.get("event_id") == event.event_id:
+                            if record != event.to_dict():
+                                raise ValueError("Recovery event ID has conflicting contents")
+                            found = True
+            except FileNotFoundError:
+                pass
+            if not found:
+                self._append_policy_event_locked(event)
+            else:
+                with self._history_path.open("ab") as history:
+                    history.flush()
+                    os.fsync(history.fileno())
+                self._sync_directory(self._history_path.parent)
+            self._pending_path.unlink()
+            self._sync_directory(self._pending_path.parent)
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError, RecursionError) as exc:
+            raise GovernanceRecoveryRequiredError("GOVERNANCE_POLICY_RECOVERY_REQUIRED") from exc
 
     def save_policy(self, policy: dict[str, Any]) -> None:
         with self._policy_write_lock():
@@ -232,7 +333,7 @@ class FileGovernanceRepository(GovernanceRepository):
         bounded_limit = max(1, min(limit, max_records))
         records: list[dict[str, Any]] = []
         invalid = 0
-        with self._lock:
+        with self._policy_write_lock():
             try:
                 with self._history_path.open("rb") as history:
                     for line in _reverse_history_lines(history):

@@ -63,7 +63,7 @@ def test_policy_update_reports_partial_commit_on_history_failure(monkeypatch, _t
     assert response.status_code == 500, response.text
     assert response.json()["bind_outcome"] == "APPLY_FAILED"
     assert "Policy saved but audit history write failed" in response.json()["error"]
-    assert srv.get_policy()["version"] == "saved"
+    assert json.loads(_temp_policy.read_text())["version"] == "saved"
 
 
 @pytest.mark.parametrize("drift_required", [True, False])
@@ -1763,7 +1763,14 @@ class TestGovernanceHardeningBranches:
         def _boom(*_args, **_kwargs):
             raise OSError("disk error")
 
-        monkeypatch.setattr(Path, "open", _boom)
+        real_open = Path.open
+
+        def open_history(path, *args, **kwargs):
+            if path == history_path:
+                return _boom()
+            return real_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", open_history)
         with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path):
             assert gov_mod.get_policy_history(limit=5) == []
 

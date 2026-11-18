@@ -11,7 +11,11 @@ class GovernanceWriteConflictError(RuntimeError):
     """Raised when governance policy writes detect a stale caller state."""
 
 
-class GovernanceHistoryWriteError(RuntimeError):
+class GovernanceRecoveryRequiredError(RuntimeError):
+    """Raised when a journaled policy change still needs recovery."""
+
+
+class GovernanceHistoryWriteError(GovernanceRecoveryRequiredError):
     """Raised when the policy was saved but its history write failed."""
 
 
