@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from veritas_os.api import auth, pipeline_orchestrator, routes_system, server
 from veritas_os.core.eu_ai_act_oversight import SystemHaltController
+from veritas_os.policy.bind_boundary_adapters import SystemResumeAdapter
 from veritas_os.policy.bind_core import core as bind_core
 from veritas_os.security.hash import sha256_of_canonical_json
 
@@ -135,6 +136,38 @@ def test_http_halt_blocks_decide_until_resume(
     assert response.status_code == 200
     load_pipeline.assert_called_once()
     pipeline.run_decide_pipeline.assert_awaited_once()
+
+
+def test_http_bind_denied_resume_keeps_decide_halted(monkeypatch, management_state):
+    client, _, intents = management_state
+    key = "management-actor-one"
+    halt = _request(client, "halt", key)
+    assert halt.status_code == 200
+    assert halt.json()["bind_outcome"] == "COMMITTED"
+    before = SystemHaltController.status()
+    history_before = tuple(SystemHaltController._history)
+
+    monkeypatch.setattr(
+        SystemResumeAdapter, "validate_authority", lambda self, intent, snapshot: False
+    )
+    load_pipeline = Mock()
+    monkeypatch.setattr(server, "get_decision_pipeline", load_pipeline)
+
+    resume = _request(client, "resume", key)
+    assert resume.status_code == 403
+    body = resume.json()
+    assert body["bind_outcome"] == "BLOCKED"
+    assert body["bind_receipt"]["actor_identity"] == auth._derive_api_user_id(key)
+    assert body["execution_intent_id"] == intents[-1].execution_intent_id
+    assert SystemHaltController.status() == before
+    assert tuple(SystemHaltController._history) == history_before
+
+    decide = client.post(
+        "/v1/decide", headers={"X-API-Key": key}, json={"query": "test"}
+    )
+    assert decide.status_code == 503
+    assert decide.json()["status"] == "HALTED"
+    load_pipeline.assert_not_called()
 
 
 def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, management_state):
