@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from veritas_os.core.atomic_io import atomic_write_json
 from veritas_os.governance.repository import (
-    GovernanceHistoryWriteError,
+    GovernanceRecoveryRequiredError,
     GovernanceWriteConflictError,
 )
 from veritas_os.policy.bind_artifacts import ExecutionIntent
@@ -90,7 +90,7 @@ class GovernancePolicyUpdateAdapter(BindAdapterContract):
             raise GovernanceWriteConflictError("GOVERNANCE_POLICY_WRITE_CONFLICT")
         try:
             updated = self.policy_updater(self.policy_patch, expected_policy=snapshot["policy"])
-        except GovernanceHistoryWriteError:
+        except GovernanceRecoveryRequiredError:
             raise
         except GovernanceWriteConflictError as exc:
             raise GovernanceWriteConflictError("GOVERNANCE_POLICY_WRITE_CONFLICT") from exc

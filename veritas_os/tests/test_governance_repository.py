@@ -13,7 +13,7 @@ import pytest
 
 from veritas_os.api import governance as gov
 from veritas_os.governance.file_repository import FileGovernanceRepository
-from veritas_os.governance.repository import GovernanceHistoryWriteError, GovernanceWriteConflictError
+from veritas_os.governance.repository import GovernanceHistoryWriteError, GovernanceRecoveryRequiredError, GovernanceWriteConflictError
 
 
 @pytest.fixture(autouse=True)
@@ -153,6 +153,104 @@ def test_governance_policy_write_holds_lock_until_history_append(tmp_path, monke
     assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "v1"
 
 
+@pytest.mark.parametrize("stage", ["before_policy", "before_history", "after_history"])
+@pytest.mark.parametrize("operation", ["update", "rollback"])
+def test_pending_policy_change_recovers_once_after_interruption(
+    tmp_path, monkeypatch, stage, operation
+):
+    """Reopening completes the journaled operation without duplicating its event."""
+    policy_path = tmp_path / "policy.json"
+    history_path = tmp_path / "history.jsonl"
+
+    def repository():
+        return FileGovernanceRepository(
+            policy_path=policy_path, history_path=history_path,
+            lock=threading.Lock(), policy_history_max=10,
+        )
+
+    repo = repository()
+    initial = {"version": "initial"}
+    repo.save_policy(initial)
+    updated = {"version": "updated"}
+
+    def stop_before_policy(_policy):
+        raise SystemExit("simulated process interruption")
+
+    append = repo._append_policy_event_locked
+
+    def stop_at_history(event):
+        if stage == "after_history":
+            append(event)
+        raise SystemExit("simulated process interruption")
+
+    with monkeypatch.context() as patcher:
+        if stage == "before_policy":
+            patcher.setattr(repo, "_save_policy_locked", stop_before_policy)
+        else:
+            patcher.setattr(repo, "_append_policy_event_locked", stop_at_history)
+        with pytest.raises(SystemExit):
+            if operation == "rollback":
+                repo.rollback_policy(
+                    previous=initial, restored=updated, proposer="operator", approvers=[],
+                )
+            else:
+                repo.update_policy(
+                    previous=initial, updated=updated, proposer="operator",
+                    approvers=[], event_type="update",
+                )
+
+    assert policy_path.with_name("policy.json.pending.json").exists()
+    expected = initial if stage == "before_policy" else updated
+    assert repository().get_current_policy(default_factory=dict) == expected
+    for _ in range(2):
+        history = repository().list_policy_history(limit=10, max_records=10)
+        if stage == "before_policy":
+            assert history == []
+        else:
+            assert len(history) == 1
+            assert history[0]["event_id"]
+            assert history[0]["new_policy"] == updated
+    assert not policy_path.with_name("policy.json.pending.json").exists()
+
+
+def test_recovery_refuses_divergent_policy(tmp_path, monkeypatch):
+    """A pending operation must not overwrite an unrelated policy."""
+    policy_path = tmp_path / "policy.json"
+    repo = FileGovernanceRepository(
+        policy_path=policy_path, history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(), policy_history_max=10,
+    )
+
+    def stop(_policy):
+        raise SystemExit("simulated interruption")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(repo, "_save_policy_locked", stop)
+        with pytest.raises(SystemExit):
+            repo.update_policy(
+                previous={}, updated={"version": "pending"}, proposer="operator",
+                approvers=[], event_type="update",
+            )
+    divergent = {"version": "external"}
+    policy_path.write_text(json.dumps(divergent))
+
+    with pytest.raises(GovernanceRecoveryRequiredError):
+        repo.get_current_policy(default_factory=dict)
+    assert json.loads(policy_path.read_bytes()) == divergent
+    assert repo._pending_path.exists()
+
+
+def test_corrupt_recovery_journal_blocks_policy_reads(tmp_path):
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json", history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(), policy_history_max=10,
+    )
+    repo._pending_path.write_bytes(b"{")
+    with pytest.raises(GovernanceRecoveryRequiredError):
+        repo.get_current_policy(default_factory=dict)
+    assert repo._pending_path.read_bytes() == b"{"
+
+
 def test_governance_reports_history_failure_after_saving_policy(tmp_path):
     history_path = tmp_path / "history.jsonl"
     history_path.mkdir()
@@ -168,7 +266,11 @@ def test_governance_reports_history_failure_after_saving_policy(tmp_path):
             previous={}, updated=updated, proposer="operator",
             approvers=[], event_type="update",
         )
+    with pytest.raises(GovernanceRecoveryRequiredError):
+        repo.get_current_policy(default_factory=dict)
+    history_path.rmdir()
     assert repo.get_current_policy(default_factory=dict) == updated
+    assert len(repo.list_policy_history(limit=10, max_records=10)) == 1
 
 
 @pytest.mark.parametrize("sync_errno", [errno.EIO, errno.EINVAL, errno.ENOTSUP])
@@ -208,6 +310,7 @@ def test_governance_history_directory_sync_failure(tmp_path, monkeypatch, caplog
     else:
         repo.update_policy(**changes)
         assert "Governance directory sync unsupported" in caplog.text
+    monkeypatch.setattr(os, "fsync", fsync)
     assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "saved"
     assert repo.get_current_policy(default_factory=dict)["version"] == "saved"
 
@@ -253,13 +356,11 @@ def test_fallback_policy_syncs_directory_after_replace(tmp_path, monkeypatch, ca
             raise OSError("directory sync failed")
 
     monkeypatch.setattr(repo, "_sync_directory", sync_directory)
-    repo.update_policy(
-        previous={}, updated=updated, proposer="operator",
-        approvers=[], event_type="update",
-    )
-    assert synced == [policy_path.parent, history_path.parent]
+    repo.save_policy(updated)
+    assert synced == [policy_path.parent]
     assert "Failed to sync governance policy directory" in caplog.text
-    assert repo.list_policy_history(limit=1, max_records=10)[0]["new_version"] == "saved"
+    assert json.loads(policy_path.read_text()) == updated
+
 
 
 def test_fallback_trim_syncs_directory_after_replace(tmp_path, monkeypatch):
