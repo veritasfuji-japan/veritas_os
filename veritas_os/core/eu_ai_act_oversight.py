@@ -21,6 +21,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, MutableMapping
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from veritas_os.core.eu_ai_act_config import EUComplianceConfig
 
@@ -266,6 +267,7 @@ class SystemHaltController:
 
     _lock = threading.Lock()
     _halted: bool = False
+    _halt_id: str | None = None
     _halted_by: str | None = None
     _halted_at: str | None = None
     _halt_reason: str | None = None
@@ -282,14 +284,17 @@ class SystemHaltController:
         Returns:
             Dict with halt confirmation details.
         """
-        now = datetime.now(timezone.utc).isoformat()
         with cls._lock:
+            now = datetime.now(timezone.utc).isoformat()
+            halt_id = uuid4().hex
+            cls._halt_id = halt_id
             cls._halted = True
             cls._halted_by = operator
             cls._halted_at = now
             cls._halt_reason = reason
             cls._history.append({
                 "action": "halt",
+                "halt_id": halt_id,
                 "operator": operator,
                 "reason": reason,
                 "timestamp": now,
@@ -299,6 +304,7 @@ class SystemHaltController:
         )
         return {
             "halted": True,
+            "halt_id": halt_id,
             "halted_by": operator,
             "halted_at": now,
             "reason": reason,
@@ -315,15 +321,45 @@ class SystemHaltController:
         Returns:
             Dict with resume confirmation details.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        result = cls._resume(operator=operator, comment=comment)
+        assert result is not None
+        return result
+
+    @classmethod
+    def resume_if_halt_matches(
+        cls, *, expected_halt_id: str, operator: str, comment: str = ""
+    ) -> Dict[str, Any] | None:
+        """Clear the active halt only if its identifier matches.
+
+        The caller supplies the halt ID from an already verified authorization.
+        A successful result identifies the halt cleared by this transition.
+        """
+        if not isinstance(expected_halt_id, str) or not expected_halt_id:
+            return None
+        return cls._resume(
+            operator=operator, comment=comment, expected_halt_id=expected_halt_id
+        )
+
+    @classmethod
+    def _resume(
+        cls, *, operator: str, comment: str, expected_halt_id: str | None = None
+    ) -> Dict[str, Any] | None:
         with cls._lock:
+            if expected_halt_id is not None and (
+                not cls._halted or cls._halt_id != expected_halt_id
+            ):
+                return None
+            now = datetime.now(timezone.utc).isoformat()
             was_halted = cls._halted
+            cleared_halt_id = cls._halt_id
             cls._halted = False
+            cls._halt_id = None
             cls._halted_by = None
             cls._halted_at = None
             cls._halt_reason = None
             cls._history.append({
                 "action": "resume",
+                "halt_id": cleared_halt_id,
                 "operator": operator,
                 "comment": comment,
                 "timestamp": now,
@@ -332,6 +368,7 @@ class SystemHaltController:
         return {
             "resumed": True,
             "was_halted": was_halted,
+            "cleared_halt_id": cleared_halt_id,
             "resumed_by": operator,
             "resumed_at": now,
         }
@@ -348,6 +385,7 @@ class SystemHaltController:
         with cls._lock:
             return {
                 "halted": cls._halted,
+                "halt_id": cls._halt_id,
                 "halted_by": cls._halted_by,
                 "halted_at": cls._halted_at,
                 "reason": cls._halt_reason,
@@ -358,6 +396,7 @@ class SystemHaltController:
         """Reset state (test helper only)."""
         with cls._lock:
             cls._halted = False
+            cls._halt_id = None
             cls._halted_by = None
             cls._halted_at = None
             cls._halt_reason = None
