@@ -49,6 +49,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      VERITAS_API_KEY: "${VERITAS_API_KEY:?Set VERITAS_API_KEY in .env before running docker compose}"
       VERITAS_CORS_ALLOW_ORIGINS: ${VERITAS_CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       VERITAS_MEMORY_BACKEND: ${VERITAS_MEMORY_BACKEND:-postgresql}
       VERITAS_TRUSTLOG_BACKEND: ${VERITAS_TRUSTLOG_BACKEND:-postgresql}
@@ -89,6 +90,7 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
+      VERITAS_API_KEY: "${VERITAS_API_KEY:?Set VERITAS_API_KEY in .env before running docker compose}"
       VERITAS_API_BASE_URL: ${VERITAS_API_BASE_URL:-http://backend:8000}
       # Local Docker development still requires explicit secrets in .env.
       # Do not commit real values.
