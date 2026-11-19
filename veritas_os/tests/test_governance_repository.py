@@ -563,6 +563,38 @@ def test_history_trim_sync_failure_preserves_recovery_journal(
     assert records[0]["new_policy"] == updated
 
 
+def test_recovery_retries_history_retention_after_interrupted_append(tmp_path, monkeypatch):
+    """Recover an already appended event and apply the pending history retention."""
+    history_path = tmp_path / "history.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json", history_path=history_path,
+        lock=threading.Lock(), policy_history_max=1,
+    )
+    initial = {"version": "initial"}
+    updated = {"version": "updated"}
+    repo.update_policy(
+        previous={}, updated=initial, proposer="operator", approvers=[], event_type="update",
+    )
+
+    def interrupt():
+        raise SystemExit("simulated interruption before history retention")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(repo, "_trim_policy_history_locked", interrupt)
+        with pytest.raises(SystemExit):
+            repo.update_policy(
+                previous=initial, updated=updated, proposer="operator",
+                approvers=[], event_type="update",
+            )
+    assert repo._pending_path.exists()
+    before = [json.loads(line) for line in history_path.read_bytes().splitlines()]
+    assert [record["new_policy"] for record in before] == [initial, updated]
+
+    assert repo.get_current_policy(default_factory=dict) == updated
+    assert not repo._pending_path.exists()
+    assert [json.loads(line) for line in history_path.read_bytes().splitlines()] == [before[-1]]
+
+
 def test_governance_reports_history_failure_after_saving_policy(tmp_path):
     history_path = tmp_path / "history.jsonl"
     history_path.mkdir()

@@ -266,7 +266,8 @@ class FileGovernanceRepository(GovernanceRepository):
                 with self._history_path.open("ab") as history:
                     history.flush()
                     os.fsync(history.fileno())
-                self._sync_directory(self._history_path.parent)
+                # The previous writer may have stopped after append but before retention.
+                self._finish_history_append_locked()
             self._pending_path.unlink()
             self._sync_directory(self._pending_path.parent)
         except (OSError, ValueError, TypeError, KeyError, RuntimeError, RecursionError) as exc:
@@ -336,6 +337,10 @@ class FileGovernanceRepository(GovernanceRepository):
             history.write(line)
             history.flush()
             os.fsync(history.fileno())
+        self._finish_history_append_locked()
+
+    def _finish_history_append_locked(self) -> None:
+        """Apply retention and sync the history directory before finalizing."""
         # A file fsync alone does not persist a newly created directory entry.
         # Sync the directory on retries too, since a previously failed sync
         # can leave the name visible in memory.
