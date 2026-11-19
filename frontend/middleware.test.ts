@@ -254,11 +254,18 @@ describe("middleware CSP", () => {
     expect(isDevelopmentRuntime()).toBe(false);
   });
 
-  it("allows shared BFF session cookie issuance in non-production", () => {
+  it.each([undefined, "false", "TRUE", "true"])("gates local session cookies on explicit opt-in (%s)", (flag) => {
+    vi.stubEnv("VERITAS_BFF_ENABLE_DEV_SESSION", flag);
+    vi.stubEnv("VERITAS_BFF_SESSION_TOKEN", "session-token");
     vi.stubEnv("VERITAS_ENV", "development");
     vi.stubEnv("NODE_ENV", "development");
 
-    expect(shouldIssueDefaultBffSessionCookie()).toBe(true);
+    const response = middleware({
+      headers: new Headers(),
+      cookies: { get: () => undefined },
+      nextUrl: { protocol: "http:" },
+    } as never);
+    expect(response.cookies.get("__veritas_bff")?.value).toBe(flag === "true" ? "session-token" : undefined);
   });
 
   it("denies shared BFF session cookie issuance in production by default", () => {

@@ -6,6 +6,7 @@
 
 - `.env.example` を `.env` にコピーする
 - `CHANGE_ME` をすべて置き換える
+- `.env` の `VERITAS_API_KEY` に、ブラウザー用トークンとは別に生成したランダムな値を設定する。Compose がこのキーを BFF とバックエンドの両方に渡す
 - `.env` をコミットしない
 - local compose secrets を staging / production で使い回さない
 - 本番では managed secrets / managed database を使う

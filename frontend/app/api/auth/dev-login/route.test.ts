@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET } from "./route";
 
@@ -7,6 +7,20 @@ function makeRequest(url = "http://localhost:3000/api/auth/dev-login"): Request 
 }
 
 describe("GET /api/auth/dev-login", () => {
+  beforeEach(() => {
+    vi.stubEnv("VERITAS_BFF_ENABLE_DEV_SESSION", "true");
+  });
+
+  it.each([undefined, "false", "TRUE"])("denies local login without explicit opt-in (%s)", async (flag) => {
+    vi.stubEnv("VERITAS_ENV", "development");
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERITAS_BFF_ENABLE_DEV_SESSION", flag);
+    vi.stubEnv("VERITAS_BFF_SESSION_TOKEN", "dev-token");
+    const response = await GET(makeRequest());
+    expect(response.status).toBe(403);
+    expect(response.headers.has("set-cookie")).toBe(false);
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });
