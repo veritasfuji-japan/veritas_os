@@ -75,8 +75,8 @@ class _FakeHaltController:
         return {"halted": True, "halted_by": operator, "reason": reason}
 
     @staticmethod
-    def resume(operator, comment=""):
-        return {"halted": False}
+    def resume_if_halt_matches(*, expected_halt_id, operator, comment=""):
+        pytest.fail("A blocked resume must not invoke the halt controller")
 
     @staticmethod
     def status():
@@ -233,6 +233,8 @@ def test_system_resume_blocked_returns_bind_lineage(monkeypatch):
     assert resp.status_code == 403
     body = resp.json()
     assert body["ok"] is False
+    assert body["halted"] is True
+    assert body["halt_id"] == "fixture-halt"
     assert body["bind_outcome"] == "BLOCKED"
     assert body["bind_summary"]["bind_outcome"] == "BLOCKED"
     assert body["bind_receipt_id"] == "br-resume-blocked-1"
