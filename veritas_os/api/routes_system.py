@@ -10,6 +10,7 @@ import logging
 import os
 import queue
 import time
+from functools import partial
 from pathlib import Path
 from typing import Any, Dict
 from uuid import uuid4
@@ -1093,6 +1094,14 @@ def system_resume(body: SystemResumeRequest, request: Request):
     try:
         current_policy = srv.get_policy()
         payload = {"operator": actor_identity, "comment": body.comment}
+        controller = srv.SystemHaltController
+        halt_id = controller.status().get("halt_id")
+        resume_executor = controller.resume
+        if halt_id is not None:
+            payload["halt_id"] = halt_id
+            resume_executor = partial(
+                controller.resume_if_halt_matches, expected_halt_id=halt_id
+            )
         decision_id = uuid4().hex
         bind_receipt = resume_system_with_bind_boundary(
             decision_id=decision_id,
@@ -1106,8 +1115,8 @@ def system_resume(body: SystemResumeRequest, request: Request):
             decision_hash=sha256_of_canonical_json(payload),
             operator=actor_identity,
             comment=body.comment,
-            status_reader=srv.SystemHaltController.status,
-            resume_executor=srv.SystemHaltController.resume,
+            status_reader=controller.status,
+            resume_executor=resume_executor,
             approval_context={"system_resume_approved": True},
             governance_policy=current_policy if isinstance(current_policy, dict) else None,
         ).to_dict()
