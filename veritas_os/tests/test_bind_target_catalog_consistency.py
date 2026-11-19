@@ -191,6 +191,7 @@ def test_management_http_reaches_expected_bind_and_preserves_state_on_refusal(
     for name, value in {
         "_halted": path.endswith("/resume"), "_halted_by": None,
         "_halted_at": None, "_halt_reason": None, "_history": [],
+        "_halt_id": "fixture-halt" if path.endswith("/resume") else None,
     }.items():
         monkeypatch.setattr(SystemHaltController, name, value)
     config = {"eu_ai_act_mode": False, "safety_threshold": 0.8}
