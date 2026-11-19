@@ -10,7 +10,8 @@ Policy reads, history reads, and repository writes check the journal under
 the repository write lock. When the disk policy matches the intended policy,
 recovery appends the missing audit event and removes the journal after syncing
 the history. When the event ID already exists with identical contents, recovery
-syncs the existing history and removes the journal without appending again.
+syncs the existing history, retries retention, and removes the journal without
+appending again.
 History retention can replace the history file after an append. The repository
 syncs the history directory again after retention before removing the journal,
 including when policy and history are stored in different directories. An I/O
