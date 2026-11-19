@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isDevBffSessionEnabled, isProductionRuntime } from "./lib/dev-bff-session";
+
+export { isProductionRuntime };
+
 const NONCE_BYTES = 16;
 const ENFORCE_NONCE_ENV = "VERITAS_CSP_ENFORCE_NONCE";
 const ALLOW_UNSAFE_INLINE_COMPAT_ENV = "VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT";
@@ -218,35 +222,12 @@ export function resolveCspReportOnlyEndpoint(): string {
   return "/api/veritas/csp-report";
 }
 
-/**
- * Returns whether the runtime should be treated as production.
- */
-export function isProductionRuntime(): boolean {
-  const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
-  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
-  return (
-    veritasEnv === "prod" ||
-    veritasEnv === "production" ||
-    nodeEnv === "production"
-  );
-}
-
-/**
- * Returns whether middleware may mint the shared BFF session cookie.
- *
- * Security behavior:
- * - Shared session cookie issuance is allowed by default in non-production
- *   environments for local/demo ergonomics.
- * - In production runtime, issuance is denied by default to avoid globally
- *   granting a static role-bearing token to every browser session.
- * - Operators can temporarily re-enable in production only through
- *   VERITAS_BFF_ALLOW_GLOBAL_SESSION_IN_PROD=true.
- */
+/** Production demos have a separate, explicit middleware-only override. */
 export function shouldIssueDefaultBffSessionCookie(): boolean {
-  if (!isProductionRuntime()) {
-    return true;
+  if (isProductionRuntime()) {
+    return process.env[ALLOW_GLOBAL_BFF_SESSION_IN_PROD_ENV] === "true";
   }
-  return process.env[ALLOW_GLOBAL_BFF_SESSION_IN_PROD_ENV] === "true";
+  return isDevBffSessionEnabled();
 }
 
 /**
