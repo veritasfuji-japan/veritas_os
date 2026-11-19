@@ -39,6 +39,16 @@ protect the transition within one process. A deployment-wide guarantee across
 workers needs shared authoritative halt state with an atomic conditional update.
 ## Startup recovery and approval issuance
 
+`POST /v1/system/resume/prepare` implements the preparation step. Set
+`VERITAS_DEPLOYMENT_ID` in the backend environment to a stable identifier
+unique to the deployment. A caller with `config_write` can submit the request
+without a body. The response includes the request and execution intent IDs,
+active halt ID, authenticated execution principal, and SHA-256 digest of the
+current canonical governance policy. Requests are kept in process memory.
+Repeating preparation for the same principal and context returns the same
+pending request. A new halt, policy, or deployment context supersedes older
+requests. After a process restart, create a fresh request for the startup halt.
+
 Provision authorized human approvers and the approval verifier before enabling
 strict resume. An operator with `config_write` can prepare a resume request via
 an authenticated control-plane operation while decision admission is halted.

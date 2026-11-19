@@ -6,10 +6,10 @@ This artifact summarizes FastAPI runtime route classification against the canoni
 ## Summary table
 | Metric | Value |
 | --- | --- |
-| total_runtime_routes | 49 |
-| total_effect_bearing_routes | 17 |
+| total_runtime_routes | 50 |
+| total_effect_bearing_routes | 18 |
 | bind_governed_routes | 5 |
-| audited_exemptions | 12 |
+| audited_exemptions | 13 |
 | unclassified_routes | 0 |
 | status | ok |
 | registry_errors | 0 |
@@ -30,6 +30,7 @@ This artifact summarizes FastAPI runtime route classification against the canoni
 - `POST /v1/memory/put` reason=Memory write persists internal context only; no governed external execution target.; risk_level=medium; governance_owner=memory; review_required_by=quarterly
 - `POST /v1/memory/search` reason=Search uses POST for payload size/shape but is read semantics only.; risk_level=low; governance_owner=memory; review_required_by=quarterly
 - `POST /v1/replay/{decision_id}` reason=Replay endpoint reproduces prior decisions for audit and does not authorize execution.; risk_level=low; governance_owner=audit; review_required_by=quarterly
+- `POST /v1/system/resume/prepare` reason=Preparation records a pending request while the system remains halted.; risk_level=medium; governance_owner=governance; review_required_by=quarterly
 - `POST /v1/trust/feedback` reason=Trust feedback updates scoring telemetry only; no execution authorization.; risk_level=low; governance_owner=trust; review_required_by=quarterly
 - `POST /v1/wat/issue-shadow` reason=Shadow WAT issuance is observer-lane telemetry and non-enforcement.; risk_level=medium; governance_owner=governance; review_required_by=quarterly
 - `POST /v1/wat/revocation/{wat_id}` reason=Revocation mutates WAT lane state but is not a bind-governed execution path.; risk_level=high; governance_owner=governance; review_required_by=monthly

@@ -13,6 +13,7 @@ from veritas_os.api import auth, pipeline_orchestrator, routes_system, server
 from veritas_os.core.eu_ai_act_oversight import SystemHaltController
 from veritas_os.policy.bind_boundary_adapters import SystemResumeAdapter
 from veritas_os.policy.bind_core import core as bind_core
+from veritas_os.policy.governance_identity import compute_governance_digest
 from veritas_os.security.hash import sha256_of_canonical_json
 
 
@@ -24,6 +25,7 @@ def management_state(monkeypatch):
         {"key": key, "role": "admin"} for key in keys
     ]))
     monkeypatch.setattr(server, "get_policy", lambda: {"version": "actor-fixture"})
+    monkeypatch.setattr(routes_system, "_pending_system_resumes", {})
     monkeypatch.setattr(server, "SystemHaltController", SystemHaltController)
     for name, value in {
         "_halted": False, "_halted_by": None, "_halted_at": None,
@@ -236,19 +238,72 @@ def test_http_resume_preserves_replacement_halt(
     assert resumes == ([] if replacement_before_clear else [first_halt])
 
 
+@pytest.mark.parametrize("change", ["halt", "policy", "deployment"])
+def test_resume_preparation_refreshes_stale_context(monkeypatch, management_state, change):
+    client, _, intents = management_state
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "fixture-deployment")
+    halt = SystemHaltController.halt(reason="test halt", operator="setup")
+    headers = {"X-API-Key": "management-actor-one"}
+    path = "/v1/system/resume/prepare"
+    first = client.post(path, headers=headers)
+    assert first.status_code == 200
+    assert client.post(path, headers=headers).json() == first.json()
+    if change == "halt":
+        halt = SystemHaltController.halt(reason="replacement halt", operator="setup")
+    elif change == "policy":
+        monkeypatch.setattr(server, "get_policy", lambda: {"version": "updated"})
+    else:
+        monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "updated-deployment")
+    second = client.post(path, headers=headers)
+    assert second.status_code == 200
+    assert second.json()["request_id"] != first.json()["request_id"]
+    assert second.json()["execution_intent_id"] != first.json()["execution_intent_id"]
+    assert second.json()["halt_id"] == halt["halt_id"]
+    assert list(routes_system._pending_system_resumes) == [second.json()["request_id"]]
+    assert SystemHaltController.is_halted()
+    assert not intents
+
+
+def test_resume_preparation_requires_active_halt_and_deployment(monkeypatch, management_state):
+    client, _, _ = management_state
+    monkeypatch.delenv("VERITAS_DEPLOYMENT_ID", raising=False)
+    headers = {"X-API-Key": "management-actor-one"}
+    path = "/v1/system/resume/prepare"
+    assert client.post(path, headers=headers).status_code == 409
+    SystemHaltController.halt(reason="test halt", operator="setup")
+    assert client.post(path, headers=headers).status_code == 503
+    assert SystemHaltController.is_halted()
+    assert not routes_system._pending_system_resumes
+
+
+def test_resume_preparation_refuses_unavailable_policy(monkeypatch, management_state):
+    client, _, intents = management_state
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "fixture-deployment")
+    halt = SystemHaltController.halt(reason="test halt", operator="setup")
+    monkeypatch.setattr(server, "get_policy", Mock(side_effect=RuntimeError("policy unavailable")))
+    response = client.post("/v1/system/resume/prepare", headers={"X-API-Key": "management-actor-one"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Resume preparation unavailable"
+    assert SystemHaltController.status()["halt_id"] == halt["halt_id"]
+    assert SystemHaltController.is_halted()
+    assert not routes_system._pending_system_resumes
+    assert not intents
+
+
 def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, management_state):
     """Each strict API lifecycle refuses decisions until an authenticated resume."""
     from veritas_os.api import governance, lifespan
     from veritas_os.api import middleware
     from veritas_os.core import posture
 
-    client, _, _ = management_state
+    client, _, intents = management_state
     for module in (server, middleware):
         monkeypatch.setattr(module, "_shutting_down", False)
         monkeypatch.setattr(module, "_inflight_count", 0)
     for name in ("memory_store", "trust_log_store"):
         monkeypatch.setattr(server.app.state, name, None, raising=False)
     monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "fixture-deployment")
     monkeypatch.delenv("VERITAS_POSTURE", raising=False)
     monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([
         {"key": "management-actor-one", "role": "admin"},
@@ -288,6 +343,26 @@ def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, managemen
             denied = _request(client, "resume", "startup-operator")
             assert denied.status_code == 403
             assert SystemHaltController.is_halted() is True
+            path = "/v1/system/resume/prepare"
+            denied = client.post(path, headers={"X-API-Key": "startup-operator"})
+            assert denied.status_code == 403
+            active_halt = SystemHaltController.status()["halt_id"]
+            count = len(intents)
+            prepared = client.post(path, headers=headers, json={"operator": "other"})
+            assert prepared.status_code == 200
+            body = prepared.json()
+            assert body["request_id"]
+            assert body["execution_intent_id"]
+            assert body["action"] == "system_resume"
+            assert body["halt_id"] == active_halt
+            assert body["deployment_id"] == "fixture-deployment"
+            assert body["execution_principal"] == auth._derive_api_user_id(headers["X-API-Key"])
+            assert body["policy_snapshot_digest"] == compute_governance_digest(server.get_policy())
+            assert len(intents) == count
+            response = client.post("/v1/decide", headers=headers, json={"query": "test"})
+            assert response.status_code == 503
+            assert response.json()["status"] == "HALTED"
+            load_pipeline.assert_not_called()
             assert _request(client, "resume", headers["X-API-Key"]).json()["bind_outcome"] == "COMMITTED"
             response = client.post("/v1/decide", headers=headers, json={"query": "test"})
             assert response.status_code == 200

@@ -12,12 +12,13 @@ import queue
 import time
 from functools import partial
 from pathlib import Path
-from typing import Any, Dict
+from threading import Lock
+from typing import Any, Dict, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocketState
@@ -50,6 +51,7 @@ from veritas_os.policy.bind_artifacts import FinalOutcome
 from veritas_os.policy.compliance_config_update import (
     update_compliance_config_with_bind_boundary,
 )
+from veritas_os.policy.governance_identity import compute_governance_digest
 from veritas_os.policy.system_halt_update import (
     halt_system_with_bind_boundary,
     resume_system_with_bind_boundary,
@@ -342,6 +344,25 @@ class SystemResumeRequest(BaseModel):
     """Request body for POST /v1/system/resume."""
     operator: str = Field(..., min_length=1, max_length=200)
     comment: str = Field(default="", max_length=500)
+
+
+class SystemResumePreparation(BaseModel):
+    """The server-owned context of a pending system resume request."""
+
+    model_config = ConfigDict(frozen=True)
+
+    request_id: str
+    execution_intent_id: str
+    action: Literal["system_resume"]
+    deployment_id: str
+    halt_id: str
+    execution_principal: str
+    policy_snapshot_digest: str
+
+
+_MAX_PENDING_SYSTEM_RESUMES = 128
+_pending_system_resumes: dict[str, SystemResumePreparation] = {}
+_pending_system_resumes_lock = Lock()
 
 
 # ------------------------------------------------------------------
@@ -1075,6 +1096,62 @@ def system_halt(body: SystemHaltRequest, request: Request):
             status_code=500,
             content={"ok": False, "error": "Failed to halt system"},
         )
+
+
+@router.post(
+    "/v1/system/resume/prepare",
+    response_model=SystemResumePreparation,
+    responses={
+        409: {"description": "No active halt to resume"},
+        503: {"description": "Resume preparation unavailable"},
+    },
+    dependencies=[Depends(require_permission(Permission.config_write))],
+)
+def prepare_system_resume(request: Request) -> SystemResumePreparation:
+    """Prepare a pending request for the authenticated operator during a halt."""
+    principal = require_authenticated_principal(request)
+    srv = _get_server()
+    with _pending_system_resumes_lock:
+        status = srv.SystemHaltController.status()
+        halt_id = status.get("halt_id")
+        if not status.get("halted") or not isinstance(halt_id, str) or not halt_id:
+            _pending_system_resumes.clear()
+            raise HTTPException(status_code=409, detail="No active halt to resume")
+
+        deployment_id = os.getenv("VERITAS_DEPLOYMENT_ID", "").strip()
+        if not deployment_id:
+            raise HTTPException(status_code=503, detail="Resume preparation unavailable")
+        try:
+            policy = srv.get_policy()
+        except Exception as exc:
+            # Repository backends propagate different storage and driver exceptions.
+            logger.warning("Resume preparation policy read failed (%s)", type(exc).__name__)
+            raise HTTPException(status_code=503, detail="Resume preparation unavailable") from None
+        if not isinstance(policy, dict) or not policy:
+            raise HTTPException(status_code=503, detail="Resume preparation unavailable")
+        policy_digest = compute_governance_digest(policy)
+
+        for pending in tuple(_pending_system_resumes.values()):
+            if (pending.deployment_id, pending.halt_id, pending.policy_snapshot_digest) != (
+                deployment_id, halt_id, policy_digest,
+            ):
+                del _pending_system_resumes[pending.request_id]
+            elif pending.execution_principal == principal:
+                return pending
+        if len(_pending_system_resumes) >= _MAX_PENDING_SYSTEM_RESUMES:
+            raise HTTPException(status_code=503, detail="Resume preparation capacity reached")
+
+        preparation = SystemResumePreparation(
+            request_id=uuid4().hex,
+            execution_intent_id=uuid4().hex,
+            action="system_resume",
+            deployment_id=deployment_id,
+            halt_id=halt_id,
+            execution_principal=principal,
+            policy_snapshot_digest=policy_digest,
+        )
+        _pending_system_resumes[preparation.request_id] = preparation
+        return preparation
 
 
 @router.post(
