@@ -3447,6 +3447,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemHaltResponse'
+  /v1/system/resume/prepare:
+    post:
+      summary: Prepare system resume
+      description: >-
+        Requires config_write. While the system is halted, records a pending
+        resume request for the authenticated principal. Preparation leaves the
+        system halted and can be called without a request body.
+      responses:
+        '200':
+          description: Pending resume request
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - request_id
+                - execution_intent_id
+                - action
+                - deployment_id
+                - halt_id
+                - execution_principal
+                - policy_snapshot_digest
+                properties:
+                  request_id:
+                    type: string
+                  execution_intent_id:
+                    type: string
+                  action:
+                    type: string
+                    const: system_resume
+                  deployment_id:
+                    type: string
+                  halt_id:
+                    type: string
+                  execution_principal:
+                    type: string
+                  policy_snapshot_digest:
+                    type: string
+        '409':
+          description: No active halt to resume
+        '503':
+          description: Resume preparation unavailable
   /v1/system/resume:
     post:
       summary: System resume
