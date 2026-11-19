@@ -593,8 +593,10 @@ class SystemResumeAdapter(BindAdapterContract):
         return True
 
     def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
-        """Verify system is no longer halted after apply execution."""
+        """Use the transition result when it identifies the cleared halt."""
         del intent, snapshot
+        if self._last_resume_result and self._last_resume_result.get("cleared_halt_id"):
+            return self._last_resume_result.get("resumed") is True
         status = self.status_reader()
         if not isinstance(status, dict):
             return False
