@@ -68,7 +68,8 @@ authenticated key principals. When the governance policy lists
    to `POST /v1/system/resume/requests/{request_id}/approve` using the reviewer
    credential. The signed v1 receipt binds the complete prepared context.
    The reviewer can hand this artifact to the executor. Retries return the
-   same receipt through its five-minute validity window. After expiry the
+   same receipt while it is valid and the signing key is current. If the key is
+   unavailable, retries fail closed. After key rotation or five-minute expiry the
    executor prepares a new request, which requires a new review.
 
 Issuance keeps the halt active. Runtime verification and enforcement at

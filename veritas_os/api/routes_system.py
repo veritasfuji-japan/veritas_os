@@ -17,6 +17,7 @@ from threading import Lock
 from typing import Any, Dict
 from uuid import uuid4
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -33,7 +34,7 @@ from veritas_os.api.auth import (
     stream_has_permission,
 )
 from veritas_os.api.system_resume_approval import (
-    PendingResume, ResumeApprovalDecision, ResumeReview, SystemResumePreparation, sign_resume_approval,
+    PendingResume, ResumeApprovalDecision, ResumeReview, SystemResumePreparation, resume_key_id, sign_resume_approval,
 )
 from veritas_os.api.bind_summary import build_bind_response_payload
 from veritas_os.api import sse_hub
@@ -61,6 +62,7 @@ from veritas_os.policy.system_halt_update import (
     resume_system_with_bind_boundary,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
+from veritas_os.security.signing import load_ed25519_private_key
 from veritas_os.storage import db
 from veritas_os.storage.factory import get_backend_info
 # Note: report/compliance functions accessed via _get_server() to support
@@ -1116,6 +1118,17 @@ def _resume_context(*, approver: str | None = None) -> tuple[str, str, str] | No
     return deployment_id, halt_id, policy_digest
 
 
+def _resume_signing_key() -> Ed25519PrivateKey:
+    """Load the current key, failing closed when it is unavailable."""
+    path = os.getenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", "").strip()
+    if path:
+        try:
+            return load_ed25519_private_key(Path(path))
+        except (OSError, ValueError):
+            pass
+    raise HTTPException(status_code=503, detail="Resume approval signer unavailable")
+
+
 @router.post(
     "/v1/system/resume/prepare",
     response_model=SystemResumePreparation,
@@ -1141,7 +1154,11 @@ def prepare_system_resume(request: Request) -> SystemResumePreparation:
             if expired or pending.context != context:
                 del _pending_system_resumes[pending.request_id]
             elif pending.execution_principal == principal:
-                return pending
+                if record.artifact is None:
+                    return pending
+                if record.artifact["signer"]["key_id"] == resume_key_id(_resume_signing_key()):
+                    return pending
+                del _pending_system_resumes[pending.request_id]
         if len(_pending_system_resumes) >= _MAX_PENDING_SYSTEM_RESUMES:
             raise HTTPException(status_code=503, detail="Resume preparation capacity reached")
 
@@ -1199,19 +1216,17 @@ def approve_system_resume(request_id: str, body: ResumeApprovalDecision, request
         record = _reviewable_resume(request_id, principal)
         if body.context_hash != sha256_of_canonical_json(record.preparation.model_dump()):
             raise HTTPException(status_code=409, detail="Reviewed context mismatch")
+        key = _resume_signing_key()
         if record.artifact is not None:
+            if record.artifact["signer"]["key_id"] != resume_key_id(key):
+                del _pending_system_resumes[request_id]
+                raise HTTPException(status_code=409, detail="Signing key changed; prepare a new resume request")
             if record.artifact["signer"]["identity"] != principal:
                 raise HTTPException(status_code=409, detail="Receipt already issued to another approver")
             return record.artifact
-        path = os.getenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", "").strip()
-        if not path:
-            raise HTTPException(status_code=503, detail="Resume approval signer unavailable")
-        try:
-            artifact, expiry = sign_resume_approval(
-                record.preparation, principal, Path(path), datetime.now(timezone.utc),
-            )
-        except (OSError, ValueError):
-            raise HTTPException(status_code=503, detail="Resume approval signer unavailable") from None
+        artifact, expiry = sign_resume_approval(
+            record.preparation, principal, key, datetime.now(timezone.utc),
+        )
         _reviewable_resume(request_id, principal)
         if expiry <= datetime.now(timezone.utc):
             raise HTTPException(status_code=503, detail="Resume approval expired during signing")

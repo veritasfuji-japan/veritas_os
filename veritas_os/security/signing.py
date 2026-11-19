@@ -143,7 +143,7 @@ def _check_private_key_stat(
         raise PermissionError(
             f"Private key file {private_key_path} must be a regular file"
         )
-    if mode & (stat.S_IRGRP | stat.S_IROTH):
+    if mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise PermissionError(
             f"Private key file {private_key_path} has unsafe permissions "
             f"({oct(mode)}). Expected 0o600 (owner-read/write only). "

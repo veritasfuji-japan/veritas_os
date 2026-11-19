@@ -5,10 +5,10 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import BaseModel, ConfigDict, Field
 
 from veritas_os.governance.human_approval_receipt import (
@@ -20,7 +20,6 @@ from veritas_os.governance.human_approval_receipt_signing import (
     human_approval_signature_payload,
 )
 from veritas_os.security.hash import sha256_hex, sha256_of_canonical_json
-from veritas_os.security.signing import load_ed25519_private_key
 
 
 class SystemResumePreparation(BaseModel):
@@ -59,14 +58,18 @@ class PendingResume:
     expires_at: datetime | None = None
 
 
+def resume_key_id(key: Ed25519PrivateKey) -> str:
+    """Identify the exact signing key used for issuance and cache validation."""
+    return sha256_hex(key.public_key().public_bytes_raw())
+
+
 def sign_resume_approval(
     preparation: SystemResumePreparation,
     approver: str,
-    key_path: Path,
+    key: Ed25519PrivateKey,
     now: datetime,
 ) -> tuple[dict[str, Any], datetime]:
     """Issue a five-minute v1 receipt using the provisioned resume signing key."""
-    key = load_ed25519_private_key(key_path)
     context = preparation.model_dump()
     expiry = now + timedelta(minutes=5)
     receipt = HumanApprovalReceipt(
@@ -95,7 +98,7 @@ def sign_resume_approval(
         "receipt": receipt.to_dict_for_hash(),
         "receipt_hash": receipt.deterministic_digest(),
         "signer": {
-            "key_id": sha256_hex(key.public_key().public_bytes_raw()),
+            "key_id": resume_key_id(key),
             "identity": approver,
             "role": receipt.approver_role,
             "algorithm": "Ed25519",

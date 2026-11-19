@@ -443,3 +443,40 @@ def test_independent_resume_approval_issues_bound_receipt(monkeypatch, tmp_path,
     stale = client.post(current_review + "/approve", headers=reviewer,
                         json={"decision": "approve", "context_hash": current_hash})
     assert stale.status_code == 409
+
+
+@pytest.mark.parametrize("retry_approval_first", [True, False])
+def test_resume_key_rotation_requires_new_review(monkeypatch, tmp_path, management_state, retry_approval_first):
+    from veritas_os.security.signing import store_keypair
+
+    client, _, _ = management_state
+    executor = {"X-API-Key": "management-actor-one"}
+    reviewer = {"X-API-Key": "management-actor-two"}
+    key, pub = store_keypair(tmp_path / "approval.key", tmp_path / "approval.pub")
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", str(key))
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "fixture-deployment")
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", auth._derive_api_user_id(reviewer["X-API-Key"]))
+    SystemHaltController.halt(reason="test", operator="setup")
+    prepare = "/v1/system/resume/prepare"
+    requests = "/v1/system/resume/requests/"
+    original = client.post(prepare, headers=executor).json()
+    review = requests + original["request_id"]
+    decision = {"decision": "approve", "context_hash": client.get(review, headers=reviewer).json()["context_hash"]}
+    approve = review + "/approve"
+    old = client.post(approve, headers=reviewer, json=decision).json()
+    key.chmod(0o620)
+    assert client.post(approve, headers=reviewer, json=decision).status_code == 503
+    key.chmod(0o600)
+    store_keypair(key, pub)
+    if retry_approval_first:
+        assert client.post(approve, headers=reviewer, json=decision).status_code == 409
+    fresh = client.post(prepare, headers=executor).json()
+    assert fresh["request_id"] != original["request_id"]
+    assert client.post(approve, headers=reviewer, json=decision).status_code == 404
+    review = requests + fresh["request_id"]
+    approve = review + "/approve"
+    assert client.post(approve, headers=reviewer, json=decision).status_code == 409
+    decision["context_hash"] = client.get(review, headers=reviewer).json()["context_hash"]
+    new = client.post(approve, headers=reviewer, json=decision).json()
+    assert new["signer"]["key_id"] != old["signer"]["key_id"]
+    assert client.post(approve, headers=reviewer, json=decision).json() == new
