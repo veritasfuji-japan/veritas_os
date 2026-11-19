@@ -11,11 +11,29 @@ the repository write lock. When the disk policy matches the intended policy,
 recovery appends the missing audit event and removes the journal after syncing
 the history. When the event ID already exists with identical contents, recovery
 syncs the existing history and removes the journal without appending again.
+History retention can replace the history file after an append. The repository
+syncs the history directory again after retention before removing the journal,
+including when policy and history are stored in different directories. An I/O
+failure at this boundary preserves the journal and blocks reads until recovery
+can sync the retained history.
 
 When the disk policy still matches its previous state, recovery discards the
 prepared operation. It does not apply the intended policy. A divergent policy,
 unreadable journal, conflicting event ID, or continuing I/O failure prevents
 the repository operation and preserves the journal for inspection.
+
+Before recovery changes any files, it checks that the journal event contains
+the expected fields and field types, that its digests and versions match its
+policy snapshots, that its change metadata matches the updated snapshot, and
+that its previous snapshot matches the journal's previous disk state when one
+existed. First initialization may instead record application
+defaults as the previous snapshot while the previous disk state is absent.
+If an update corrects a non-string version in a previously saved policy,
+the event retains that previous value and recovery compares it as JSON.
+Snapshot and existing-event comparisons distinguish JSON booleans from numbers.
+An inconsistent event blocks both reads and writes and preserves the journal.
+These checks detect internal inconsistencies; they do not authenticate the
+journal or its proposer and approvers. Trusted storage remains required.
 
 A failed request can have changed the policy. Clients must inspect current
 state before resubmitting. Pending recovery bypasses automatic Bind rollback
