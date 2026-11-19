@@ -887,22 +887,43 @@ class TestServerStorePutGetSearch:
         with pytest.raises(RuntimeError, match="store.search not found"):
             server._store_search(SimpleNamespace(), query="q", k=5, kinds=None, min_sim=0.25, user_id="u")
 
-    def test_store_put_fallback_signatures(self):
-        """_store_put tries multiple signatures."""
+    def test_key_only_store_is_rejected_without_access(self):
         calls = []
-        def two_arg_put(key, val):
-            calls.append(("two", key, val))
-        store = SimpleNamespace(put=two_arg_put)
-        server._store_put(store, "uid", "mykey", {"v": 1})
-        assert len(calls) == 1
+        store = SimpleNamespace(
+            put=lambda key, value: calls.append((key, value)),
+            get=lambda key, default=None: calls.append(key),
+        )
+        with pytest.raises(TypeError):
+            server._store_put(store, "uid", "shared", {"v": 1})
+        with pytest.raises(TypeError):
+            server._store_get(store, "uid", "shared")
+        assert calls == []
 
-    def test_store_get_fallback_signatures(self):
-        """_store_get tries multiple signatures."""
-        def one_arg_get(key):
-            return {"data": key}
-        store = SimpleNamespace(get=one_arg_get)
-        result = server._store_get(store, "uid", "mykey")
-        assert result["data"] == "mykey"
+    def test_positional_only_store_keeps_identical_keys_separate(self):
+        records = {}
+
+        def put(user_id, key, value, /):
+            records[user_id, key] = value
+
+        def get(user_id, key, /):
+            return records[user_id, key]
+
+        store = SimpleNamespace(put=put, get=get)
+        for uid in ("alice", "bob"):
+            server._store_put(store, uid, "same", {"owner": uid})
+        for uid in ("alice", "bob"):
+            assert server._store_get(store, uid, "same") == {"owner": uid}
+
+    def test_backend_type_error_is_not_retried(self):
+        calls = []
+
+        def put(user_id, key, value):
+            calls.append((user_id, key))
+            raise TypeError("backend failure")
+
+        with pytest.raises(TypeError, match="backend failure"):
+            server._store_put(SimpleNamespace(put=put), "alice", "same", {})
+        assert calls == [("alice", "same")]
 
     def test_store_search_fallback_signatures(self):
         """_store_search tries multiple signatures."""
