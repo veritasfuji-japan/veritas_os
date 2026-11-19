@@ -80,7 +80,10 @@ class _FakeHaltController:
 
     @staticmethod
     def status():
-        return {"halted": True, "halted_by": "tester", "reason": "emergency test"}
+        return {
+            "halted": True, "halt_id": "fixture-halt",
+            "halted_by": "tester", "reason": "emergency test",
+        }
 
 
 def test_system_halt(monkeypatch):
@@ -159,14 +162,23 @@ def test_system_halt_error(monkeypatch):
 
 def test_system_resume(monkeypatch):
     class _ResumeCommittedController:
-        @staticmethod
-        def resume(operator, comment=""):
-            del operator, comment
-            return {"halted": False}
+        halted = True
 
-        @staticmethod
-        def status():
-            return {"halted": False, "halted_by": None, "reason": None}
+        @classmethod
+        def resume_if_halt_matches(cls, *, expected_halt_id, operator, comment=""):
+            del operator, comment
+            assert expected_halt_id == "fixture-halt"
+            cls.halted = False
+            return {"resumed": True, "cleared_halt_id": expected_halt_id}
+
+        @classmethod
+        def status(cls):
+            return {
+                "halted": cls.halted,
+                "halt_id": "fixture-halt" if cls.halted else None,
+                "halted_by": None,
+                "reason": None,
+            }
 
     monkeypatch.setattr(server, "SystemHaltController", _ResumeCommittedController)
     monkeypatch.setattr(
@@ -230,7 +242,7 @@ def test_system_resume_blocked_returns_bind_lineage(monkeypatch):
 def test_system_resume_error(monkeypatch):
     class _Broken:
         @staticmethod
-        def resume(operator, comment=""):
+        def status():
             raise RuntimeError("boom")
     monkeypatch.setattr(server, "SystemHaltController", _Broken)
     resp = client.post(

@@ -65,7 +65,9 @@ def _request(client, operation: str, key: str):
 @pytest.mark.parametrize("key", ["management-actor-one", "management-actor-two"])
 def test_management_effect_actor_is_authenticated(management_state, operation, key):
     client, config, intents = management_state
-    SystemHaltController._halted = operation == "resume"
+    initial_halt = None
+    if operation == "resume":
+        initial_halt = SystemHaltController.halt(reason="test halt", operator="setup")
     response = _request(client, operation, key)
     assert response.status_code == 200
     assert response.json()["bind_outcome"] == "COMMITTED"
@@ -80,6 +82,8 @@ def test_management_effect_actor_is_authenticated(management_state, operation, k
         assert SystemHaltController._history[-1]["operator"] == expected
         action = {"operator": expected}
         action.update({"reason": "test halt"} if operation == "halt" else {"comment": "test resume"})
+        if initial_halt is not None:
+            action["halt_id"] = initial_halt["halt_id"]
         assert response.json()["bind_receipt"]["decision_hash"] == sha256_of_canonical_json(action)
         if operation == "halt":
             assert response.json()["halted_by"] == expected
@@ -170,6 +174,23 @@ def test_http_bind_denied_resume_keeps_decide_halted(monkeypatch, management_sta
     load_pipeline.assert_not_called()
 
 
+def test_http_resume_without_active_halt_refuses_state_change(monkeypatch, management_state):
+    client, _, intents = management_state
+    resume = Mock(wraps=SystemHaltController.resume)
+    conditional_resume = Mock(wraps=SystemHaltController.resume_if_halt_matches)
+    monkeypatch.setattr(SystemHaltController, "resume", resume)
+    monkeypatch.setattr(SystemHaltController, "resume_if_halt_matches", conditional_resume)
+
+    response = _request(client, "resume", "management-actor-one")
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "No active halt to resume"
+    resume.assert_not_called()
+    conditional_resume.assert_not_called()
+    assert not intents
+    assert not SystemHaltController._history
+
+
 @pytest.mark.parametrize("replacement_before_clear", [True, False])
 def test_http_resume_preserves_replacement_halt(
     monkeypatch, management_state, replacement_before_clear,
@@ -180,6 +201,10 @@ def test_http_resume_preserves_replacement_halt(
     assert halt.status_code == 200
     first_halt = SystemHaltController.status()["halt_id"]
     assert first_halt
+    monkeypatch.setattr(
+        server, "get_policy",
+        lambda: {"version": "actor-fixture", "bind_adjudication": {"rollback_on_apply_failure": True}},
+    )
 
     conditional_resume = SystemHaltController.resume_if_halt_matches
 
@@ -196,7 +221,10 @@ def test_http_resume_preserves_replacement_halt(
     )
     response = _request(client, "resume", key)
     assert response.status_code == (403 if replacement_before_clear else 200)
-    if not replacement_before_clear:
+    if replacement_before_clear:
+        assert response.json()["bind_outcome"] == "BLOCKED"
+        assert response.json()["bind_reason_code"] == "state_conflict"
+    else:
         assert response.json()["bind_outcome"] == "COMMITTED"
     status = SystemHaltController.status()
     assert status["halted"] is True

@@ -1095,13 +1095,17 @@ def system_resume(body: SystemResumeRequest, request: Request):
         current_policy = srv.get_policy()
         payload = {"operator": actor_identity, "comment": body.comment}
         controller = srv.SystemHaltController
-        halt_id = controller.status().get("halt_id")
-        resume_executor = controller.resume
-        if halt_id is not None:
-            payload["halt_id"] = halt_id
-            resume_executor = partial(
-                controller.resume_if_halt_matches, expected_halt_id=halt_id
+        status = controller.status()
+        halt_id = status.get("halt_id")
+        if not status.get("halted") or not isinstance(halt_id, str) or not halt_id:
+            return JSONResponse(
+                status_code=409,
+                content={"ok": False, "error": "No active halt to resume", **status},
             )
+        payload["halt_id"] = halt_id
+        resume_executor = partial(
+            controller.resume_if_halt_matches, expected_halt_id=halt_id
+        )
         decision_id = uuid4().hex
         bind_receipt = resume_system_with_bind_boundary(
             decision_id=decision_id,
