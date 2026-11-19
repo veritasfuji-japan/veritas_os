@@ -2,6 +2,7 @@
 """Tests for Article 14 human oversight helpers."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 
 import pytest
@@ -125,6 +126,51 @@ class TestSystemHaltController:
     def test_resume_when_not_halted(self):
         result = SystemHaltController.resume(operator="op")
         assert result["was_halted"] is False
+
+    def test_conditional_resume_preserves_a_replacement_halt(self):
+        first = SystemHaltController.halt(reason="first", operator="op")
+        second = SystemHaltController.halt(reason="replacement", operator="op")
+        assert first["halt_id"] != second["halt_id"]
+
+        denied = SystemHaltController.resume_if_halt_matches(
+            expected_halt_id=first["halt_id"], operator="op"
+        )
+        assert denied is None
+        assert SystemHaltController.status() == second
+        assert [item["action"] for item in SystemHaltController._history] == [
+            "halt",
+            "halt",
+        ]
+
+        resumed = SystemHaltController.resume_if_halt_matches(
+            expected_halt_id=second["halt_id"], operator="op"
+        )
+        assert resumed is not None
+        assert resumed["cleared_halt_id"] == second["halt_id"]
+        assert SystemHaltController.status()["halt_id"] is None
+
+    def test_conditional_resume_commits_once(self):
+        halt = SystemHaltController.halt(reason="test", operator="op")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first = executor.submit(
+                SystemHaltController.resume_if_halt_matches,
+                expected_halt_id=halt["halt_id"],
+                operator="op",
+            )
+            second = executor.submit(
+                SystemHaltController.resume_if_halt_matches,
+                expected_halt_id=halt["halt_id"],
+                operator="op",
+            )
+        results = [first.result(), second.result()]
+        committed = [result for result in results if result is not None]
+        assert len(committed) == 1
+        assert committed[0]["cleared_halt_id"] == halt["halt_id"]
+        assert not SystemHaltController.is_halted()
+        assert [item["action"] for item in SystemHaltController._history] == [
+            "halt",
+            "resume",
+        ]
 
 
 class TestApplyHumanOversightHook:
