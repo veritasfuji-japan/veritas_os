@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isDevBffSessionEnabled } from "../../../../lib/dev-bff-session";
 
 /**
  * Development-only convenience endpoint that sets the BFF session cookie
@@ -11,7 +12,7 @@ import { NextResponse } from "next/server";
  *
  * Security:
  *   - Returns 403 in production runtime (VERITAS_ENV=prod|production
- *     or NODE_ENV=production).
+ *     or NODE_ENV=production), or unless local sessions are explicitly enabled.
  *   - Returns 503 when VERITAS_BFF_SESSION_TOKEN is not configured.
  *   - Never exposes the token value in response bodies.
  *
@@ -20,17 +21,6 @@ import { NextResponse } from "next/server";
 
 const BFF_SESSION_COOKIE = "__veritas_bff";
 const BFF_SESSION_TOKEN_ENV = "VERITAS_BFF_SESSION_TOKEN";
-
-/** Returns true when the runtime is production. */
-function isProduction(): boolean {
-  const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
-  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
-  return (
-    veritasEnv === "prod" ||
-    veritasEnv === "production" ||
-    nodeEnv === "production"
-  );
-}
 
 /** Resolve a root-relative destination and enforce the parsed URL's origin. */
 function resolveRedirect(target: string | null, origin: string): URL {
@@ -50,10 +40,9 @@ function resolveRedirect(target: string | null, origin: string): URL {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  // ── Guard: never run in production ──
-  if (isProduction()) {
+  if (!isDevBffSessionEnabled()) {
     return NextResponse.json(
-      { error: "forbidden", detail: "Dev login is disabled in production." },
+      { error: "forbidden", detail: "Dev login is disabled." },
       { status: 403 },
     );
   }

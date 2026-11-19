@@ -15,6 +15,7 @@ Copy `.env.example` to `.env`.
 Replace every `CHANGE_ME` value.
 At minimum, set:
 
+- `VERITAS_API_KEY` (generate a separate random key for BFF-to-backend requests)
 - `VERITAS_DB_PASSWORD`
 - `VERITAS_DATABASE_URL`
 - `VERITAS_BFF_SESSION_TOKEN`

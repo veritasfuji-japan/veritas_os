@@ -118,3 +118,25 @@ def test_readme_has_no_known_compose_database_password_examples() -> None:
     ]
     for item in blocked:
         assert item not in text
+
+
+def test_dev_frontend_uses_loopback_and_disables_shared_sessions_by_default() -> None:
+    import yaml
+
+    services = yaml.safe_load(Path("docker-compose.yml").read_text())["services"]
+    frontend = services["frontend"]
+    assert frontend["ports"] == ["127.0.0.1:3000:3000"]
+    assert frontend["environment"]["VERITAS_BFF_ENABLE_DEV_SESSION"] == (
+        "${VERITAS_BFF_ENABLE_DEV_SESSION:-false}"
+    )
+
+
+def test_bff_and_backend_require_the_same_server_api_key() -> None:
+    import yaml
+
+    services = yaml.safe_load(Path("docker-compose.yml").read_text())["services"]
+    for name in ("frontend", "backend"):
+        assert services[name]["environment"]["VERITAS_API_KEY"].startswith(
+            "${VERITAS_API_KEY:?"
+        )
+    assert "VERITAS_API_KEY=" in Path(".env.example").read_text().splitlines()
