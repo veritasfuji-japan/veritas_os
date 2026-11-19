@@ -899,6 +899,39 @@ class TestServerStorePutGetSearch:
             server._store_get(store, "uid", "shared")
         assert calls == []
 
+    def test_variadic_store_is_rejected_before_access(self):
+        calls = []
+
+        def accept_anything(*user_id, **kwargs):
+            calls.append((user_id, kwargs))
+
+        def accept_options(namespace, **fields):
+            calls.append((namespace, fields))
+
+        for method in (accept_anything, accept_options):
+            store = SimpleNamespace(put=method, get=method)
+            with pytest.raises(TypeError, match="user-scoped"):
+                server._store_put(store, "alice", "same", {})
+            with pytest.raises(TypeError, match="user-scoped"):
+                server._store_get(store, "alice", "same")
+        assert calls == []
+
+    def test_core_module_adapter_forwards_authenticated_owner(self, monkeypatch):
+        from veritas_os.core import memory
+
+        records = {}
+
+        def put(user_id, key, value):
+            records[user_id, key] = value
+            return True
+
+        monkeypatch.setattr(memory, "MEM", SimpleNamespace(
+            put=put, get=lambda user_id, key: records.get((user_id, key)),
+        ))
+        server._store_put(memory, "alice", "same", {"note": "private"})
+        assert server._store_get(memory, "alice", "same") == {"note": "private"}
+        assert server._store_get(memory, "bob", "same") is None
+
     def test_positional_only_store_keeps_identical_keys_separate(self):
         records = {}
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import sys
 import time
 from datetime import datetime, timezone
 from json import JSONDecodeError
@@ -112,14 +113,16 @@ def _observe_memory_store_entries(store: Any, user_id: str) -> None:
 def _call_scoped_kv(fn: Any, user_id: str, **fields: Any) -> Any:
     """Select a principal-scoped call shape before invoking the store once."""
     signature = inspect.signature(fn)
+    owner = next(iter(signature.parameters.values()), None)
+    if (
+        owner is None
+        or owner.name not in ("user_id", "uid")
+        or owner.kind not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ):
+        raise TypeError("memory KVS requires a user-scoped method")
     try:
         signature.bind(user_id, **fields)
     except TypeError:
-        # Only a declared owner-first API may use positional field names.
-        # In particular, get(key, default) is an unscoped lookup.
-        first = next(iter(signature.parameters), None)
-        if first not in ("user_id", "uid"):
-            raise TypeError("memory KVS requires a user-scoped method") from None
         signature.bind(user_id, *fields.values())
         return fn(user_id, *fields.values())
     return fn(user_id, **fields)
@@ -128,6 +131,9 @@ def _call_scoped_kv(fn: Any, user_id: str, **fields: Any) -> Any:
 def _store_put(store: Any, user_id: str, key: str, value: dict) -> None:
     if not hasattr(store, "put"):
         raise RuntimeError("store.put not found")
+    if store is sys.modules.get("veritas_os.core.memory"):
+        store.put_scoped(user_id, key, value)
+        return
     _call_scoped_kv(store.put, user_id, key=key, value=value)
 
 

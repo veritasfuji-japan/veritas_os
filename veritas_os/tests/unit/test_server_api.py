@@ -2219,12 +2219,9 @@ def test_memory_put_reports_partial_failure_when_vector_save_fails(monkeypatch):
         def __init__(self):
             self.legacy = {}
 
-        def put(self, *args, **kwargs):
-            if len(args) == 2 and isinstance(args[1], dict) and "text" in args[1]:
+        def put(self, user_id, key, value=None):
+            if isinstance(key, dict) and "text" in key:
                 raise RuntimeError("vector backend offline")
-            user_id = args[0]
-            key = kwargs.get("key", args[1] if len(args) > 1 else None)
-            value = kwargs.get("value", args[2] if len(args) > 2 else None)
             self.legacy[(user_id, key)] = value
             return None
 
@@ -2258,7 +2255,7 @@ def test_memory_put_reports_failed_when_all_save_paths_fail(monkeypatch):
     """memory_put should not mask a total write failure as success."""
 
     class FailingStore:
-        def put(self, *args, **kwargs):
+        def put(self, user_id, key, value=None):
             raise RuntimeError("backend offline")
 
     monkeypatch.setattr(server, "get_memory_store", lambda: FailingStore())
@@ -3187,7 +3184,7 @@ def test_memory_put_does_not_swallow_base_exceptions(monkeypatch):
         """Sentinel used to verify BaseException propagation."""
 
     class ExplodingStore:
-        def put(self, *args, **kwargs):
+        def put(self, user_id, key, value=None):
             raise WriteAbort("stop write")
 
     monkeypatch.setattr(server, "get_memory_store", lambda: ExplodingStore())
