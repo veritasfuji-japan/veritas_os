@@ -1206,8 +1206,9 @@ _SKIP_NO_REAL_PG = pytest.mark.skipif(
 class TestPostgresMemoryStoreRealDriverIntegration:
     """Live PostgreSQL driver integration tests for ``PostgresMemoryStore``.
 
-    Exercises JSONB array deserialization and ensures that non-dict payloads
-    yield ``None`` when fetched through the real psycopg driver.
+    Exercises real psycopg driver behavior against PostgreSQL, including:
+    - JSONB array deserialization and non-dict payload rejection in get().
+    - Multi-user duplicate key isolation, fail-closed get(), and single-user deletion.
     """
 
     @pytest.mark.asyncio
@@ -1269,4 +1270,95 @@ class TestPostgresMemoryStoreRealDriverIntegration:
                         )
             finally:
                 await close_pool()
+
+    @pytest.mark.asyncio
+    async def test_shared_key_multi_user_isolation_lifecycle_under_real_driver(
+        self,
+    ) -> None:
+        """Verify cross-user duplicate key lifecycle under a real PostgreSQL driver.
+
+        Scope:
+        1. Use put() to save different dictionary values for users A and B under
+           the same unique test key.
+        2. Confirm directly through the database that both records exist.
+        3. Verify that get(key) returns None while both users own that key.
+        4. Delete only A's record using delete(key, user_id=A), then confirm that
+           B's record remains and get(key) returns B's value.
+        5. Clean up test records even if an assertion fails.
+        """
+        import uuid
+        from veritas_os.storage.db import close_pool, get_pool
+        from veritas_os.storage.postgresql import PostgresMemoryStore
+
+        key = f"test-real-driver-shared-{uuid.uuid4().hex}"
+        user_a = f"test-user-a-{uuid.uuid4().hex[:8]}"
+        user_b = f"test-user-b-{uuid.uuid4().hex[:8]}"
+        val_a = {"user": "A", "role": "admin", "data": {"code": 101}}
+        val_b = {"user": "B", "role": "member", "data": {"code": 202}}
+
+        store = PostgresMemoryStore()
+        pool = await get_pool()
+        try:
+            # 1. Use put() to save different dictionary values for users A and B
+            #    under the same unique test key
+            await store.put(key, val_a, user_id=user_a)
+            await store.put(key, val_b, user_id=user_b)
+
+            # 2. Confirm directly through the database that both records exist
+            async with pool.connection() as conn:
+                cur = await conn.execute(
+                    """
+                    SELECT user_id, value
+                    FROM memory_records
+                    WHERE key = %s
+                    ORDER BY user_id
+                    """,
+                    (key,),
+                )
+                raw_rows = await cur.fetchall()
+                assert len(raw_rows) == 2
+                records_by_user = {row[0]: row[1] for row in raw_rows}
+                assert user_a in records_by_user
+                assert user_b in records_by_user
+                assert records_by_user[user_a] == val_a
+                assert records_by_user[user_b] == val_b
+
+            # 3. Verify that get(key) returns None while both users own that key
+            result_shared = await store.get(key)
+            assert result_shared is None
+
+            # 4. Delete only A's record using delete(key, user_id=A)
+            deleted_a = await store.delete(key, user_id=user_a)
+            assert deleted_a is True
+
+            # Confirm directly through the database that B's record remains
+            async with pool.connection() as conn:
+                cur = await conn.execute(
+                    """
+                    SELECT user_id, value
+                    FROM memory_records
+                    WHERE key = %s
+                    """,
+                    (key,),
+                )
+                remaining_rows = await cur.fetchall()
+                assert len(remaining_rows) == 1
+                assert remaining_rows[0][0] == user_b
+                assert remaining_rows[0][1] == val_b
+
+            # Confirm that get(key) returns B's value
+            result_after_delete = await store.get(key)
+            assert result_after_delete == val_b
+        finally:
+            # Clean up the test records even if an assertion fails
+            try:
+                async with pool.connection() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            "DELETE FROM memory_records WHERE key = %s",
+                            (key,),
+                        )
+            finally:
+                await close_pool()
+
 
