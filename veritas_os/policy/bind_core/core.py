@@ -36,7 +36,7 @@ from veritas_os.policy.bind_artifacts import (
 )
 from veritas_os.policy.bind_core.constants import BindReasonCode
 from veritas_os.policy.bind_core.constants import BindFailureCategory, BindRetrySafety
-from veritas_os.policy.bind_core.contracts import BindAdapterContract
+from veritas_os.policy.bind_core.contracts import BindAdapterContract, BindStateConflictError
 from veritas_os.policy.bind_core.normalizers import normalize_execution_intent
 from veritas_os.policy.bind_execution_capability import (
     _current_consumed_authorization_lineage,
@@ -496,6 +496,28 @@ def execute_bind_adjudication(
         if authorize_dispatch is not None:
             dispatch_token = authorize_dispatch(normalized_intent)
         adapter.apply(normalized_intent, pre_snapshot)
+    except BindStateConflictError as exc:
+        return _finalize_receipt(
+            execution_intent=normalized_intent,
+            append_trustlog=append_trustlog,
+            receipt=_with_receipt(
+                base_receipt,
+                live_state_fingerprint_before=pre_fingerprint,
+                authority_check_result=authority_result,
+                constraint_check_result=constraint_result,
+                drift_check_result=drift_result,
+                risk_check_result=risk_result,
+                admissibility_result={
+                    "admissible": False,
+                    "recommended_outcome": "block",
+                    "reason_codes": ["BIND_STATE_CONFLICT"],
+                    "target": adapter.describe_target(),
+                },
+                bind_reason_code="state_conflict",
+                bind_failure_reason=str(exc),
+                final_outcome=FinalOutcome.BLOCKED,
+            ),
+        )
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
         # A second write cannot repair a failed history store, and a conflict
         # has no state to revert.

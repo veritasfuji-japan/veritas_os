@@ -83,7 +83,7 @@ def resume_system_with_bind_boundary(
     operator: str,
     comment: str,
     status_reader: Callable[[], dict[str, Any]],
-    resume_executor: Callable[..., dict[str, Any]],
+    resume_executor: Callable[..., dict[str, Any] | None],
     approval_context: dict[str, Any] | None = None,
     policy_lineage: dict[str, Any] | None = None,
     governance_policy: dict[str, Any] | None = None,
