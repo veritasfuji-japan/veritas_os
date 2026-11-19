@@ -27,7 +27,7 @@ def management_state(monkeypatch):
     monkeypatch.setattr(server, "SystemHaltController", SystemHaltController)
     for name, value in {
         "_halted": False, "_halted_by": None, "_halted_at": None,
-        "_halt_reason": None, "_history": [],
+        "_halt_reason": None, "_halt_id": None, "_history": [],
     }.items():
         monkeypatch.setattr(SystemHaltController, name, value)
     config = {"eu_ai_act_mode": False, "safety_threshold": 0.8}
@@ -168,6 +168,44 @@ def test_http_bind_denied_resume_keeps_decide_halted(monkeypatch, management_sta
     assert decide.status_code == 503
     assert decide.json()["status"] == "HALTED"
     load_pipeline.assert_not_called()
+
+
+@pytest.mark.parametrize("replacement_before_clear", [True, False])
+def test_http_resume_preserves_replacement_halt(
+    monkeypatch, management_state, replacement_before_clear,
+):
+    client, _, _ = management_state
+    key = "management-actor-one"
+    halt = _request(client, "halt", key)
+    assert halt.status_code == 200
+    first_halt = SystemHaltController.status()["halt_id"]
+    assert first_halt
+
+    conditional_resume = SystemHaltController.resume_if_halt_matches
+
+    def replace_halt_during_resume(**kwargs):
+        if replacement_before_clear:
+            SystemHaltController.halt(reason="replacement", operator="op")
+        result = conditional_resume(**kwargs)
+        if not replacement_before_clear:
+            SystemHaltController.halt(reason="replacement", operator="op")
+        return result
+
+    monkeypatch.setattr(
+        SystemHaltController, "resume_if_halt_matches", replace_halt_during_resume
+    )
+    response = _request(client, "resume", key)
+    assert response.status_code == (403 if replacement_before_clear else 200)
+    if not replacement_before_clear:
+        assert response.json()["bind_outcome"] == "COMMITTED"
+    status = SystemHaltController.status()
+    assert status["halted"] is True
+    assert status["halt_id"] != first_halt
+    resumes = [
+        event["halt_id"] for event in SystemHaltController._history
+        if event["action"] == "resume"
+    ]
+    assert resumes == ([] if replacement_before_clear else [first_halt])
 
 
 def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, management_state):
