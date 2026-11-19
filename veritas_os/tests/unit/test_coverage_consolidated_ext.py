@@ -600,8 +600,8 @@ class TestServerMemoryEndpoints:
         monkeypatch,
     ):
         class PartialStore:
-            def put(self, *args, **kwargs):
-                if args and args[0] == server._derive_api_user_id(_TEST_KEY):
+            def put(self, user_id, key, value=None):
+                if user_id == server._derive_api_user_id(_TEST_KEY):
                     raise RuntimeError("legacy backend unavailable")
                 return "vector-id"
 
