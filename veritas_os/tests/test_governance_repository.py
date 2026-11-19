@@ -324,6 +324,184 @@ def test_corrupt_recovery_journal_blocks_policy_reads(tmp_path):
     assert repo._pending_path.read_bytes() == b"{"
 
 
+@pytest.mark.parametrize("stage", ["before_policy", "before_history", "after_history"])
+@pytest.mark.parametrize("corruption", [
+    "previous_digest", "new_digest", "previous_version", "new_version",
+    "previous_policy", "invalid_previous_policy", "new_policy_boolean",
+    "missing_approvers", "invalid_approvers", "invalid_approver",
+    "changed_at", "changed_by", "proposer", "event_type",
+    "changed_at_value", "changed_by_value",
+])
+def test_recovery_rejects_inconsistent_event(tmp_path, monkeypatch, stage, corruption):
+    """Journal recovery must not publish or discard an inconsistent transition."""
+    from veritas_os.policy.governance_identity import compute_governance_digest
+
+    policy_path = tmp_path / "policy.json"
+    history_path = tmp_path / "history.jsonl"
+    repo = FileGovernanceRepository(
+        policy_path=policy_path, history_path=history_path,
+        lock=threading.Lock(), policy_history_max=10,
+    )
+    previous = {"version": "initial"}
+    repo.save_policy(previous)
+    updated = {
+        "version": "updated", "enabled": 1, "updated_by": "operator",
+        "updated_at": "2026-11-18T00:00:00+00:00",
+    }
+    append = repo._append_policy_event_locked
+
+    def interrupt(value):
+        if stage == "after_history":
+            append(value)
+        raise SystemExit("simulated interruption")
+
+    with monkeypatch.context() as patcher:
+        target = "_save_policy_locked" if stage == "before_policy" else "_append_policy_event_locked"
+        patcher.setattr(repo, target, interrupt)
+        with pytest.raises(SystemExit):
+            repo.update_policy(
+                previous=previous, updated=updated, proposer="operator",
+                approvers=[], event_type="update",
+            )
+
+    pending = json.loads(repo._pending_path.read_text())
+    event = pending["event"]
+    if corruption in {"previous_digest", "new_digest"}:
+        event[corruption] = "0" * 64
+    elif corruption in {"previous_version", "new_version"}:
+        event[corruption] = "incorrect-version"
+    elif corruption == "previous_policy":
+        event["previous_policy"] = {"version": "unrelated"}
+        event["previous_version"] = "unrelated"
+        event["previous_digest"] = compute_governance_digest(event["previous_policy"])
+    elif corruption == "invalid_previous_policy":
+        event["previous_policy"] = []
+    elif corruption == "missing_approvers":
+        del event["approvers"]
+    elif corruption == "invalid_approvers":
+        event["approvers"] = None
+    elif corruption == "invalid_approver":
+        event["approvers"] = [1]
+    elif corruption in {"changed_at", "changed_by", "proposer", "event_type"}:
+        event[corruption] = None
+    elif corruption in {"changed_at_value", "changed_by_value"}:
+        event[corruption.removesuffix("_value")] = "incorrect-value"
+    else:
+        # Python equality considers 1 == True, but their policy digests differ.
+        event["new_policy"]["enabled"] = True
+    repo._pending_path.write_text(json.dumps(pending))
+    journal_bytes = repo._pending_path.read_bytes()
+    policy_bytes = policy_path.read_bytes()
+    history_bytes = history_path.read_bytes() if history_path.exists() else None
+
+    operations = [
+        lambda: repo.get_current_policy(default_factory=dict),
+        lambda: repo.list_policy_history(limit=10, max_records=10),
+        lambda: repo.save_policy({"version": "must-not-save"}),
+    ]
+    for operation in operations:
+        with pytest.raises(GovernanceRecoveryRequiredError):
+            operation()
+        assert repo._pending_path.read_bytes() == journal_bytes
+        assert policy_path.read_bytes() == policy_bytes
+        assert (history_path.read_bytes() if history_path.exists() else None) == history_bytes
+
+
+@pytest.mark.parametrize("alter_previous_version", [False, True])
+def test_recovery_after_correcting_numeric_policy_version(
+    tmp_path, monkeypatch, alter_previous_version
+):
+    """Recover a valid update while preserving the older version's JSON type."""
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json", history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(), policy_history_max=10,
+    )
+    repo.save_policy({**gov.GovernancePolicy().model_dump(), "version": 1})
+    gov.set_governance_repository_factory(lambda: repo)
+
+    def interrupt(_event):
+        raise SystemExit("simulated interruption after policy replacement")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(repo, "_append_policy_event_locked", interrupt)
+        with pytest.raises(SystemExit):
+            gov.update_policy({"version": "v2"})
+
+    if alter_previous_version:
+        pending = json.loads(repo._pending_path.read_bytes())
+        pending["event"]["previous_version"] = True
+        repo._pending_path.write_text(json.dumps(pending))
+        with pytest.raises(GovernanceRecoveryRequiredError):
+            gov.get_policy()
+        assert repo._pending_path.exists()
+        assert not repo._history_path.exists()
+        return
+
+    assert gov.get_policy()["version"] == "v2"
+    (event,) = repo.list_policy_history(limit=10, max_records=10)
+    assert type(event["previous_version"]) is int
+    assert event["previous_version"] == 1
+    assert event["new_version"] == "v2"
+    assert not repo._pending_path.exists()
+
+
+def test_recovery_preserves_initial_default_policy_provenance(tmp_path, monkeypatch):
+    """A first write can start from application defaults without a policy file."""
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json", history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(), policy_history_max=10,
+    )
+    previous = gov.GovernancePolicy().model_dump()
+    updated = {**previous, "version": "updated"}
+
+    def interrupt(_event):
+        raise SystemExit("simulated interruption")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(repo, "_append_policy_event_locked", interrupt)
+        with pytest.raises(SystemExit):
+            repo.update_policy(
+                previous=previous, updated=updated, proposer="operator",
+                approvers=[], event_type="update",
+            )
+    assert json.loads(repo._pending_path.read_text())["previous"] is None
+    assert repo.get_current_policy(default_factory=dict) == updated
+    records = repo.list_policy_history(limit=10, max_records=10)
+    assert len(records) == 1
+    assert records[0]["previous_policy"] == previous
+    assert not repo._pending_path.exists()
+
+
+def test_recovery_rejects_type_conflicting_existing_event(tmp_path, monkeypatch):
+    """A matching event ID must not hide bool-versus-number content conflicts."""
+    repo = FileGovernanceRepository(
+        policy_path=tmp_path / "policy.json", history_path=tmp_path / "history.jsonl",
+        lock=threading.Lock(), policy_history_max=10,
+    )
+    append = repo._append_policy_event_locked
+
+    def interrupt(event):
+        append(event)
+        raise SystemExit("simulated interruption")
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(repo, "_append_policy_event_locked", interrupt)
+        with pytest.raises(SystemExit):
+            repo.update_policy(
+                previous={}, updated={"version": "updated", "enabled": 1},
+                proposer="operator", approvers=[], event_type="update",
+            )
+    record = json.loads(repo._history_path.read_text())
+    record["new_policy"]["enabled"] = True
+    repo._history_path.write_text(json.dumps(record) + "\n")
+    history_bytes = repo._history_path.read_bytes()
+    journal_bytes = repo._pending_path.read_bytes()
+    with pytest.raises(GovernanceRecoveryRequiredError):
+        repo.get_current_policy(default_factory=dict)
+    assert repo._history_path.read_bytes() == history_bytes
+    assert repo._pending_path.read_bytes() == journal_bytes
+
+
 @pytest.mark.parametrize("has_atomic_io", [True, False])
 def test_history_trim_sync_failure_preserves_recovery_journal(
     tmp_path, monkeypatch, has_atomic_io
