@@ -276,6 +276,20 @@ def test_resume_preparation_requires_active_halt_and_deployment(monkeypatch, man
     assert not routes_system._pending_system_resumes
 
 
+def test_resume_preparation_refuses_unavailable_policy(monkeypatch, management_state):
+    client, _, intents = management_state
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "fixture-deployment")
+    halt = SystemHaltController.halt(reason="test halt", operator="setup")
+    monkeypatch.setattr(server, "get_policy", Mock(side_effect=RuntimeError("policy unavailable")))
+    response = client.post("/v1/system/resume/prepare", headers={"X-API-Key": "management-actor-one"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Resume preparation unavailable"
+    assert SystemHaltController.status()["halt_id"] == halt["halt_id"]
+    assert SystemHaltController.is_halted()
+    assert not routes_system._pending_system_resumes
+    assert not intents
+
+
 def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, management_state):
     """Each strict API lifecycle refuses decisions until an authenticated resume."""
     from veritas_os.api import governance, lifespan

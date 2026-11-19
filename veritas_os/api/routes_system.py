@@ -1121,7 +1121,12 @@ def prepare_system_resume(request: Request) -> SystemResumePreparation:
         deployment_id = os.getenv("VERITAS_DEPLOYMENT_ID", "").strip()
         if not deployment_id:
             raise HTTPException(status_code=503, detail="Resume preparation unavailable")
-        policy = srv.get_policy()
+        try:
+            policy = srv.get_policy()
+        except Exception as exc:
+            # Repository backends propagate different storage and driver exceptions.
+            logger.warning("Resume preparation policy read failed (%s)", type(exc).__name__)
+            raise HTTPException(status_code=503, detail="Resume preparation unavailable") from None
         if not isinstance(policy, dict) or not policy:
             raise HTTPException(status_code=503, detail="Resume preparation unavailable")
         policy_digest = compute_governance_digest(policy)

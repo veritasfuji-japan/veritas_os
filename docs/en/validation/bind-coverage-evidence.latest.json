@@ -85,6 +85,16 @@
     {
       "bind_target_metadata_present": false,
       "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/system/resume/prepare",
+      "reason": "Preparation records a pending request while the system remains halted.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
       "governance_owner": "trust",
       "method": "POST",
       "path": "/v1/trust/feedback",
@@ -183,8 +193,8 @@
     "/v1/system/resume"
   ],
   "catalog_registry_mismatch": [],
-  "classified_routes": 49,
-  "generated_at": "2026-11-12T13:55:01.638799+00:00",
+  "classified_routes": 50,
+  "generated_at": "2026-11-19T09:34:32.049201+00:00",
   "non_effect_routes": [
     {
       "bind_target_metadata_present": false,
@@ -891,6 +901,16 @@
     {
       "bind_target_metadata_present": false,
       "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/system/resume/prepare",
+      "reason": "Preparation records a pending request while the system remains halted.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
       "governance_owner": "trust",
       "method": "POST",
       "path": "/v1/trust/feedback",
@@ -1011,7 +1031,7 @@
   ],
   "schema_version": "bind_coverage_evidence.v1",
   "status": "ok",
-  "total_effect_bearing_routes": 17,
-  "total_runtime_routes": 49,
+  "total_effect_bearing_routes": 18,
+  "total_runtime_routes": 50,
   "unclassified_routes": []
 }
