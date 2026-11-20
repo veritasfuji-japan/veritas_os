@@ -528,6 +528,22 @@ def test_signed_resume_commit_boundary(monkeypatch, tmp_path, management_state, 
     submission = {"operator": "executor", "request_id": prepared["request_id"], "approval_artifact": artifact}
     url = "/v1/system/resume"
     if scenario == "concurrent":
+        from veritas_os.audit import trustlog_signed
+        from veritas_os.logging import paths, trust_log
+        from veritas_os.logging.encryption import generate_key
+        from veritas_os.policy import bind_artifacts
+
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        ledger = tmp_path / "trust_log.jsonl"
+        monkeypatch.setattr(paths, "LOG_JSONL", ledger)
+        monkeypatch.setattr(trust_log, "LOG_DIR", tmp_path)
+        monkeypatch.setattr(trust_log, "LOG_JSONL", ledger)
+        monkeypatch.setattr(trust_log, "LOG_JSON", tmp_path / "trust_log.json")
+        monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", tmp_path / "signed.jsonl")
+        monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", tmp_path / "audit.key")
+        monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", tmp_path / "audit.pub")
+        monkeypatch.setattr(bind_core, "append_execution_intent_trustlog", bind_artifacts.append_execution_intent_trustlog)
+        monkeypatch.setattr(bind_core, "append_bind_receipt_trustlog", bind_artifacts.append_bind_receipt_trustlog)
         barrier = Barrier(2)
 
         def submit():
@@ -539,6 +555,17 @@ def test_signed_resume_commit_boundary(monkeypatch, tmp_path, management_state, 
         assert sum(r.status_code == 200 for r in responses) == 1
         assert all(r.status_code in {200, 403, 409} for r in responses)
         assert [e["halt_id"] for e in SystemHaltController._history if e["action"] == "resume"] == [original]
+        entries = [entry for entry in trust_log.iter_trust_log()
+                   if entry.get("execution_intent_id") == prepared["execution_intent_id"]]
+        commits = [entry for entry in entries if entry["kind"] == "governance.bind_receipt"
+                   and entry["final_outcome"] == "COMMITTED"]
+        assert len(commits) == 1
+        success = next(response.json() for response in responses if response.status_code == 200)
+        assert commits[0]["decision_id"] == prepared["request_id"]
+        assert commits[0]["bind_receipt_id"] == success["bind_receipt_id"]
+        assert any(entry["execution_intent"]["approval_context"]["approval_receipt_id"]
+                   == artifact["receipt"]["approval_receipt_id"]
+                   for entry in entries if entry["kind"] == "governance.execution_intent")
         return
 
     if scenario == "wrong_key":
