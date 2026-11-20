@@ -2,7 +2,9 @@
 """Memory CRUD API endpoints."""
 from __future__ import annotations
 
+import inspect
 import logging
+import sys
 import time
 from datetime import datetime, timezone
 from json import JSONDecodeError
@@ -108,33 +110,37 @@ def _observe_memory_store_entries(store: Any, user_id: str) -> None:
 # Memory store adapter helpers
 # ------------------------------------------------------------------
 
+def _call_scoped_kv(fn: Any, user_id: str, **fields: Any) -> Any:
+    """Select a principal-scoped call shape before invoking the store once."""
+    signature = inspect.signature(fn)
+    owner = next(iter(signature.parameters.values()), None)
+    if (
+        owner is None
+        or owner.name not in ("user_id", "uid")
+        or owner.kind not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ):
+        raise TypeError("memory KVS requires a user-scoped method")
+    try:
+        signature.bind(user_id, **fields)
+    except TypeError:
+        signature.bind(user_id, *fields.values())
+        return fn(user_id, *fields.values())
+    return fn(user_id, **fields)
+
+
 def _store_put(store: Any, user_id: str, key: str, value: dict) -> None:
     if not hasattr(store, "put"):
         raise RuntimeError("store.put not found")
-    fn = store.put
-    try:
-        fn(user_id, key=key, value=value)
+    if store is sys.modules.get("veritas_os.core.memory"):
+        store.put_scoped(user_id, key, value)
         return
-    except TypeError:
-        pass
-    try:
-        fn(user_id, key, value)
-        return
-    except TypeError:
-        fn(key, value)  # type: ignore
+    _call_scoped_kv(store.put, user_id, key=key, value=value)
 
 
 def _store_get(store: Any, user_id: str, key: str) -> Any:
     if not hasattr(store, "get"):
         raise RuntimeError("store.get not found")
-    fn = store.get
-    try:
-        return fn(user_id, key=key)
-    except TypeError:
-        try:
-            return fn(user_id, key)
-        except TypeError:
-            return fn(key)  # type: ignore
+    return _call_scoped_kv(store.get, user_id, key=key)
 
 
 def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float, user_id: Optional[str]) -> Any:

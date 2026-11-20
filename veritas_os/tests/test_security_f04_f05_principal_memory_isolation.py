@@ -280,3 +280,32 @@ def test_f05_put_episode_explicit_owner_overrides_metadata() -> None:
 
     assert captured["user_id"] == "owner-b"
     assert captured["record"]["meta"]["user_id"] == "owner-b"
+
+
+def test_memory_kv_routes_isolate_the_same_key_by_authenticated_owner(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEYS", _multi_key_config())
+    records = {}
+
+    def put(user_id, *, key, value):
+        records[user_id, key] = value
+
+    def get(user_id, *, key):
+        return records.get((user_id, key))
+
+    store = SimpleNamespace(put=put, get=get)
+    monkeypatch.setattr(server, "get_memory_store", lambda: store)
+    client = TestClient(server.app)
+    for token, label in ((KEY_A, "first"), (KEY_B, "second")):
+        result = client.post(
+            "/v1/memory/put",
+            headers={"X-API-Key": token},
+            json={"key": "shared", "value": {"note": label}},
+        )
+        assert result.json()["legacy"]["saved"] is True
+    for token, label in ((KEY_A, "first"), (KEY_B, "second")):
+        result = client.post(
+            "/v1/memory/get",
+            headers={"X-API-Key": token},
+            json={"key": "shared", "user_id": _principal(KEY_A)},
+        )
+        assert result.json() == {"ok": True, "value": {"note": label}}
