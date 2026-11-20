@@ -290,13 +290,19 @@ def test_resume_preparation_refuses_unavailable_policy(monkeypatch, management_s
     assert not intents
 
 
-def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, management_state):
+def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, tmp_path, management_state):
     """Each strict API lifecycle refuses decisions until an authenticated resume."""
     from veritas_os.api import governance, lifespan
     from veritas_os.api import middleware
+    from veritas_os.security.signing import store_keypair
     from veritas_os.core import posture
 
     client, _, intents = management_state
+    key, pub = store_keypair(tmp_path / "resume.key", tmp_path / "resume.pub")
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", str(key))
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_PUBLIC_KEY", pub.read_text().strip())
+    reviewer = {"X-API-Key": "management-actor-two"}
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", auth._derive_api_user_id(reviewer["X-API-Key"]))
     for module in (server, middleware):
         monkeypatch.setattr(module, "_shutting_down", False)
         monkeypatch.setattr(module, "_inflight_count", 0)
@@ -308,6 +314,7 @@ def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, managemen
     monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([
         {"key": "management-actor-one", "role": "admin"},
         {"key": "startup-operator", "role": "operator"},
+        {"key": reviewer["X-API-Key"], "role": "admin"},
     ]))
     monkeypatch.setattr(
         posture, "init_posture",
@@ -363,7 +370,20 @@ def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, managemen
             assert response.status_code == 503
             assert response.json()["status"] == "HALTED"
             load_pipeline.assert_not_called()
-            assert _request(client, "resume", headers["X-API-Key"]).json()["bind_outcome"] == "COMMITTED"
+            assert _request(client, "resume", headers["X-API-Key"]).status_code == 403
+            review = "/v1/system/resume/requests/" + body["request_id"]
+            digest = client.get(review, headers=reviewer).json()["context_hash"]
+            artifact = client.post(review + "/approve", headers=reviewer,
+                                   json={"decision": "approve", "context_hash": digest}).json()
+            submission = {"operator": "operator", "request_id": body["request_id"], "approval_artifact": artifact}
+            url = "/v1/system/resume"
+            assert client.post(url, headers=reviewer, json=submission).status_code == 403
+            with monkeypatch.context() as scoped:
+                scoped.delenv("VERITAS_SYSTEM_RESUME_PUBLIC_KEY")
+                assert client.post(url, headers=headers, json=submission).status_code == 403
+            assert SystemHaltController.is_halted()
+            assert client.post(url, headers=headers, json=submission).json()["bind_outcome"] == "COMMITTED"
+            assert client.post(url, headers=headers, json=submission).status_code == 409
             response = client.post("/v1/decide", headers=headers, json={"query": "test"})
             assert response.status_code == 200
             load_pipeline.assert_called_once()
@@ -480,3 +500,67 @@ def test_resume_key_rotation_requires_new_review(monkeypatch, tmp_path, manageme
     new = client.post(approve, headers=reviewer, json=decision).json()
     assert new["signer"]["key_id"] != old["signer"]["key_id"]
     assert client.post(approve, headers=reviewer, json=decision).json() == new
+
+
+@pytest.mark.parametrize("scenario", ["concurrent", "replacement", "expired_at_commit", "policy_change", "tampered", "wrong_key"])
+def test_signed_resume_commit_boundary(monkeypatch, tmp_path, management_state, scenario):
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timedelta, timezone
+    from threading import Barrier
+
+    from veritas_os.core import eu_ai_act_oversight
+    from veritas_os.security.signing import store_keypair
+
+    client, _, _ = management_state
+    key, pub = store_keypair(tmp_path / "approval.key", tmp_path / "approval.pub")
+    executor = {"X-API-Key": "management-actor-one"}
+    reviewer = {"X-API-Key": "management-actor-two"}
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", str(key))
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_PUBLIC_KEY", pub.read_text().strip())
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", auth._derive_api_user_id(reviewer["X-API-Key"]))
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "boundary-test")
+    original = SystemHaltController.halt(reason="test", operator="setup")["halt_id"]
+    prepared = client.post("/v1/system/resume/prepare", headers=executor).json()
+    review = "/v1/system/resume/requests/" + prepared["request_id"]
+    digest = client.get(review, headers=reviewer).json()["context_hash"]
+    artifact = client.post(review + "/approve", headers=reviewer,
+                           json={"decision": "approve", "context_hash": digest}).json()
+    submission = {"operator": "executor", "request_id": prepared["request_id"], "approval_artifact": artifact}
+    url = "/v1/system/resume"
+    if scenario == "concurrent":
+        barrier = Barrier(2)
+
+        def submit():
+            barrier.wait(timeout=10)
+            return client.post(url, headers=executor, json=submission)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = [job.result() for job in [pool.submit(submit), pool.submit(submit)]]
+        assert sum(r.status_code == 200 for r in responses) == 1
+        assert all(r.status_code in {200, 403, 409} for r in responses)
+        assert [e["halt_id"] for e in SystemHaltController._history if e["action"] == "resume"] == [original]
+        return
+
+    if scenario == "wrong_key":
+        _, other_pub = store_keypair(tmp_path / "other.key", tmp_path / "other.pub")
+        monkeypatch.setenv("VERITAS_SYSTEM_RESUME_PUBLIC_KEY", other_pub.read_text().strip())
+    elif scenario == "tampered":
+        artifact["signature"] = "invalid"
+    else:
+        apply = SystemResumeAdapter.apply
+
+        def change_before_apply(adapter, intent, snapshot):
+            if scenario == "replacement":
+                SystemHaltController.halt(reason="replacement", operator="setup")
+            elif scenario == "policy_change":
+                monkeypatch.setattr(server, "get_policy", lambda: {"version": "updated"})
+            else:
+                clock = Mock(wraps=datetime)
+                clock.now.return_value = datetime.now(timezone.utc) + timedelta(minutes=6)
+                monkeypatch.setattr(eu_ai_act_oversight, "datetime", clock)
+            return apply(adapter, intent, snapshot)
+
+        monkeypatch.setattr(SystemResumeAdapter, "apply", change_before_apply)
+    assert client.post(url, headers=executor, json=submission).status_code == 403
+    assert SystemHaltController.is_halted()
+    assert not any(e["action"] == "resume" for e in SystemHaltController._history)
