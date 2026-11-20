@@ -6,6 +6,7 @@ import subprocess
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -31,18 +32,6 @@ def _completed(returncode: int, stdout: str = "", stderr: str = "") -> subproces
     )
 
 
-def test_should_tolerate_endpoint_retirement_true() -> None:
-    """Known endpoint-retirement signatures should be tolerated."""
-    output = "ERR_PNPM_AUDIT_BAD_RESPONSE responded with 410 endpoint is being retired"
-    assert pnpm_audit_gate.should_tolerate_endpoint_retirement(output)
-
-
-def test_should_tolerate_endpoint_retirement_false() -> None:
-    """Non-retirement errors should not be tolerated."""
-    output = "high severity vulnerabilities found"
-    assert not pnpm_audit_gate.should_tolerate_endpoint_retirement(output)
-
-
 def test_transient_transport_failure_signatures_are_narrow() -> None:
     """Known registry transport errors should be retryable, not tolerated."""
     assert pnpm_audit_gate.is_transient_transport_failure("ERR_SOCKET_TIMEOUT")
@@ -63,17 +52,18 @@ def test_run_pnpm_audit_success(monkeypatch) -> None:
     assert pnpm_audit_gate.run_pnpm_audit(["--audit-level=high", "--prod"]) == 0
 
 
-def test_run_pnpm_audit_tolerates_known_410(monkeypatch) -> None:
-    """Known endpoint-retirement errors should exit zero with warnings."""
-
+@pytest.mark.parametrize("message", [
+    "ERR_PNPM_AUDIT_BAD_RESPONSE",
+    "endpoint is being retired",
+    "responded with 410",
+    "ERR_PNPM_AUDIT_BAD_RESPONSE: endpoint is being retired; responded with 410",
+])
+def test_registry_errors_block_the_audit(monkeypatch, message) -> None:
     def _fake_run(*_args, **_kwargs):
-        return _completed(
-            returncode=1,
-            stderr="ERR_PNPM_AUDIT_BAD_RESPONSE: endpoint is being retired; responded with 410",
-        )
+        return _completed(returncode=1, stderr=message)
 
     monkeypatch.setattr(pnpm_audit_gate.subprocess, "run", _fake_run)
-    assert pnpm_audit_gate.run_pnpm_audit(["--audit-level=high", "--prod"]) == 0
+    assert pnpm_audit_gate.run_pnpm_audit(["--audit-level=high", "--prod"]) == 1
 
 
 def test_run_pnpm_audit_preserves_other_failures(monkeypatch) -> None:
