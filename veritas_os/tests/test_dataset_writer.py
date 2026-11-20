@@ -189,22 +189,21 @@ class TestBuildDatasetRecord:
         assert labels["memory_used"] is True
         assert labels["memory_citations"] == 3
 
-    def test_decision_status_normalization(self):
-        """DecisionStatus が正しく正規化されることを確認"""
-        req = create_dummy_request()
-        
-        # 各ステータスをテスト
-        statuses = ["allow", "modify", "rejected"]
-        
-        for status in statuses:
-            res = create_dummy_response(status=status)
-            meta = create_dummy_meta()
-            
-            record = build_dataset_record(req, res, meta)
-            
-            assert record["labels"]["status"] == status
-            assert record["labels"]["blocked"] == (status == "rejected")
+    @pytest.mark.parametrize("status", [*(item.value for item in DecisionStatus), "hold"])
+    def test_decision_status_normalization(self, status):
+        record = build_dataset_record({}, create_dummy_response(status=status), {})
 
+        assert record["labels"]["status"] == status
+        assert record["response"]["gate"]["decision_status"] == status
+        assert record["labels"]["blocked"] == (status in {"block", "rejected"})
+
+    @pytest.mark.parametrize("response", [
+        {}, {"gate": {}}, {"gate": "allow"}, {"gate": {"decision_status": None}},
+        {"gate": {"decision_status": "unrecognized"}}, {"gate": {"decision_status": []}},
+    ])
+    def test_invalid_gate_cannot_create_training_label(self, response):
+        with pytest.raises(ValueError, match="Missing or invalid gate decision_status"):
+            build_dataset_record({}, response, {})
 
     def test_memory_citations_negative_value_is_sanitized(self):
         """memory citations の負数が 0 に正規化されることを確認"""
