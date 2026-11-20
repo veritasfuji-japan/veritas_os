@@ -613,6 +613,11 @@ def add(
     return record
 
 
+def put_scoped(user_id: str, key: str, value: Any) -> bool:
+    """Write a KVS record through the module API for an explicit owner."""
+    return MEM.put(user_id, key, value)
+
+
 def put(*args, **kwargs) -> bool:
     """
     グローバル関数版 put
@@ -625,7 +630,7 @@ def put(*args, **kwargs) -> bool:
         user_id = args[0]
         key = kwargs["key"]
         value = kwargs.get("value")
-        return MEM.put(user_id, key, value)
+        return put_scoped(user_id, key, value)
 
     if len(args) == 2 and isinstance(args[1], dict):
         kind = str(args[0] or "semantic")
@@ -653,10 +658,10 @@ def put(*args, **kwargs) -> bool:
 
     if len(args) >= 3:
         user_id, key, value = args[0], args[1], args[2]
-        return MEM.put(user_id, key, value)
+        return put_scoped(user_id, key, value)
 
     if "user_id" in kwargs and "key" in kwargs:
-        return MEM.put(kwargs["user_id"], kwargs["key"], kwargs.get("value"))
+        return put_scoped(kwargs["user_id"], kwargs["key"], kwargs.get("value"))
 
     raise TypeError(
         "put() expected (user_id, key, value) for KVS "

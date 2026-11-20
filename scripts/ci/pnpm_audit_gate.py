@@ -1,15 +1,14 @@
 """Run ``pnpm audit`` with bounded handling for npm audit endpoint failures.
 
-This helper keeps production dependency audit blocking for real vulnerability
-or runtime failures. It tolerates only the known upstream endpoint-retirement
-response (HTTP 410), and retries transient registry transport failures before
-failing closed.
+Only a successful audit passes. Registry transport failures and timeouts
+are retried within a fixed budget; endpoint retirement and other errors
+preserve the scanner's failure status.
 
 Usage:
     python scripts/ci/pnpm_audit_gate.py --prod
 
 Exit codes:
-    0   Audit passed, or failed only because of known endpoint retirement.
+    0   Audit passed.
     75  The audit subprocess repeatedly exceeded its bounded timeout.
     >0  Any other pnpm audit failure (preserves pnpm exit code when possible).
 """
@@ -21,12 +20,6 @@ import subprocess
 import sys
 import time
 from typing import Sequence
-
-_ENDPOINT_RETIREMENT_SIGNATURES = (
-    "ERR_PNPM_AUDIT_BAD_RESPONSE",
-    "endpoint is being retired",
-    "responded with 410",
-)
 
 _TRANSIENT_TRANSPORT_SIGNATURES = (
     "ERR_SOCKET_TIMEOUT",
@@ -46,12 +39,6 @@ _MAX_ATTEMPTS = 3
 _ATTEMPT_TIMEOUT_SECONDS = 75
 _RETRY_DELAYS_SECONDS = (5, 15)
 _TEMPORARY_FAILURE_EXIT_CODE = 75
-
-
-def should_tolerate_endpoint_retirement(output: str) -> bool:
-    """Return ``True`` when output matches known endpoint-retirement failures."""
-    lowered = output.lower()
-    return any(signature.lower() in lowered for signature in _ENDPOINT_RETIREMENT_SIGNATURES)
 
 
 def is_transient_transport_failure(output: str) -> bool:
@@ -109,25 +96,6 @@ def run_pnpm_audit(args: Sequence[str]) -> int:
             return 0
 
         combined_output = f"{stdout}\n{stderr}"
-        if should_tolerate_endpoint_retirement(combined_output):
-            print(
-                "::warning::pnpm audit failed due to npm audit endpoint retirement "
-                "(HTTP 410).",
-                file=sys.stderr,
-            )
-            print(
-                "::warning::Treating this as a temporary upstream outage to "
-                "avoid false-red CI.",
-                file=sys.stderr,
-            )
-            print(
-                "::warning::Security risk: production Node dependency "
-                "vulnerability blocking is degraded until scanner migration is "
-                "completed.",
-                file=sys.stderr,
-            )
-            return 0
-
         transient = timed_out or is_transient_transport_failure(combined_output)
         if not transient:
             return returncode
