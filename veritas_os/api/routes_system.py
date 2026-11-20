@@ -10,15 +10,17 @@ import logging
 import os
 import queue
 import time
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, Literal
+from typing import Any, Dict
 from uuid import uuid4
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocketState
@@ -30,6 +32,9 @@ from veritas_os.api.auth import (
     require_deployment_tenant,
     stream_api_key_is_current,
     stream_has_permission,
+)
+from veritas_os.api.system_resume_approval import (
+    PendingResume, ResumeApprovalDecision, ResumeReview, SystemResumePreparation, resume_key_id, sign_resume_approval,
 )
 from veritas_os.api.bind_summary import build_bind_response_payload
 from veritas_os.api import sse_hub
@@ -57,6 +62,7 @@ from veritas_os.policy.system_halt_update import (
     resume_system_with_bind_boundary,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
+from veritas_os.security.signing import load_ed25519_private_key
 from veritas_os.storage import db
 from veritas_os.storage.factory import get_backend_info
 # Note: report/compliance functions accessed via _get_server() to support
@@ -346,22 +352,8 @@ class SystemResumeRequest(BaseModel):
     comment: str = Field(default="", max_length=500)
 
 
-class SystemResumePreparation(BaseModel):
-    """The server-owned context of a pending system resume request."""
-
-    model_config = ConfigDict(frozen=True)
-
-    request_id: str
-    execution_intent_id: str
-    action: Literal["system_resume"]
-    deployment_id: str
-    halt_id: str
-    execution_principal: str
-    policy_snapshot_digest: str
-
-
 _MAX_PENDING_SYSTEM_RESUMES = 128
-_pending_system_resumes: dict[str, SystemResumePreparation] = {}
+_pending_system_resumes: dict[str, PendingResume] = {}
 _pending_system_resumes_lock = Lock()
 
 
@@ -1098,6 +1090,45 @@ def system_halt(body: SystemHaltRequest, request: Request):
         )
 
 
+def _resume_context(*, approver: str | None = None) -> tuple[str, str, str] | None:
+    """Read the active halt, deployment and governing policy from the server."""
+    srv = _get_server()
+    status = srv.SystemHaltController.status()
+    halt_id = status.get("halt_id")
+    if not status.get("halted") or not isinstance(halt_id, str) or not halt_id:
+        return None
+
+    deployment_id = os.getenv("VERITAS_DEPLOYMENT_ID", "").strip()
+    if not deployment_id:
+        raise HTTPException(status_code=503, detail="Resume preparation unavailable")
+    try:
+        policy = srv.get_policy()
+    except Exception as exc:
+        # Repository backends propagate different storage and driver exceptions.
+        logger.warning("Resume preparation policy read failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Resume preparation unavailable") from None
+    if not isinstance(policy, dict) or not policy:
+        raise HTTPException(status_code=503, detail="Resume preparation unavailable")
+    if approver is not None:
+        workflow = policy.get("approval_workflow", {})
+        identities = workflow.get("approver_identities", []) if isinstance(workflow, dict) else None
+        if not isinstance(identities, list) or (identities and approver not in identities):
+            raise HTTPException(status_code=403, detail="Approver outside governance policy")
+    policy_digest = compute_governance_digest(policy)
+    return deployment_id, halt_id, policy_digest
+
+
+def _resume_signing_key() -> Ed25519PrivateKey:
+    """Load the current key, failing closed when it is unavailable."""
+    path = os.getenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", "").strip()
+    if path:
+        try:
+            return load_ed25519_private_key(Path(path))
+        except (OSError, ValueError):
+            pass
+    raise HTTPException(status_code=503, detail="Resume approval signer unavailable")
+
+
 @router.post(
     "/v1/system/resume/prepare",
     response_model=SystemResumePreparation,
@@ -1110,34 +1141,24 @@ def system_halt(body: SystemHaltRequest, request: Request):
 def prepare_system_resume(request: Request) -> SystemResumePreparation:
     """Prepare a pending request for the authenticated operator during a halt."""
     principal = require_authenticated_principal(request)
-    srv = _get_server()
     with _pending_system_resumes_lock:
-        status = srv.SystemHaltController.status()
-        halt_id = status.get("halt_id")
-        if not status.get("halted") or not isinstance(halt_id, str) or not halt_id:
+        context = _resume_context()
+        if context is None:
             _pending_system_resumes.clear()
             raise HTTPException(status_code=409, detail="No active halt to resume")
-
-        deployment_id = os.getenv("VERITAS_DEPLOYMENT_ID", "").strip()
-        if not deployment_id:
-            raise HTTPException(status_code=503, detail="Resume preparation unavailable")
-        try:
-            policy = srv.get_policy()
-        except Exception as exc:
-            # Repository backends propagate different storage and driver exceptions.
-            logger.warning("Resume preparation policy read failed (%s)", type(exc).__name__)
-            raise HTTPException(status_code=503, detail="Resume preparation unavailable") from None
-        if not isinstance(policy, dict) or not policy:
-            raise HTTPException(status_code=503, detail="Resume preparation unavailable")
-        policy_digest = compute_governance_digest(policy)
-
-        for pending in tuple(_pending_system_resumes.values()):
-            if (pending.deployment_id, pending.halt_id, pending.policy_snapshot_digest) != (
-                deployment_id, halt_id, policy_digest,
-            ):
+        deployment_id, halt_id, policy_digest = context
+        now = datetime.now(timezone.utc)
+        for record in tuple(_pending_system_resumes.values()):
+            pending = record.preparation
+            expired = record.expires_at is not None and record.expires_at <= now
+            if expired or pending.context != context:
                 del _pending_system_resumes[pending.request_id]
             elif pending.execution_principal == principal:
-                return pending
+                if record.artifact is None:
+                    return pending
+                if record.artifact["signer"]["key_id"] == resume_key_id(_resume_signing_key()):
+                    return pending
+                del _pending_system_resumes[pending.request_id]
         if len(_pending_system_resumes) >= _MAX_PENDING_SYSTEM_RESUMES:
             raise HTTPException(status_code=503, detail="Resume preparation capacity reached")
 
@@ -1150,8 +1171,68 @@ def prepare_system_resume(request: Request) -> SystemResumePreparation:
             execution_principal=principal,
             policy_snapshot_digest=policy_digest,
         )
-        _pending_system_resumes[preparation.request_id] = preparation
+        _pending_system_resumes[preparation.request_id] = PendingResume(preparation)
         return preparation
+
+
+def _reviewable_resume(request_id: str, principal: str) -> PendingResume:
+    """Resolve a pending request against the current server state while holding the store lock."""
+    configured = os.getenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", "").strip()
+    if not configured or principal != configured:
+        raise HTTPException(status_code=403, detail="Designated resume approver required")
+    record = _pending_system_resumes.get(request_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown resume request")
+    pending = record.preparation
+    if pending.execution_principal == principal:
+        raise HTTPException(status_code=403, detail="Independent approver required")
+    if pending.context != _resume_context(approver=principal):
+        raise HTTPException(status_code=409, detail="Resume request context changed")
+    if record.expires_at is not None and record.expires_at <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=409, detail="Prepare a new resume request")
+    return record
+
+
+@router.get(
+    "/v1/system/resume/requests/{request_id}",
+    dependencies=[Depends(require_permission(Permission.governance_write))],
+)
+def review_system_resume(request_id: str, request: Request) -> ResumeReview:
+    """Retrieve the exact pending context for independent human review."""
+    principal = require_authenticated_principal(request)
+    with _pending_system_resumes_lock:
+        pending = _reviewable_resume(request_id, principal).preparation
+        return ResumeReview(preparation=pending, context_hash=sha256_of_canonical_json(pending.model_dump()))
+
+
+@router.post(
+    "/v1/system/resume/requests/{request_id}/approve",
+    dependencies=[Depends(require_permission(Permission.governance_write))],
+)
+def approve_system_resume(request_id: str, body: ResumeApprovalDecision, request: Request) -> dict[str, Any]:
+    """Sign the explicitly approved context and return the existing receipt on retry."""
+    principal = require_authenticated_principal(request)
+    with _pending_system_resumes_lock:
+        record = _reviewable_resume(request_id, principal)
+        if body.context_hash != sha256_of_canonical_json(record.preparation.model_dump()):
+            raise HTTPException(status_code=409, detail="Reviewed context mismatch")
+        key = _resume_signing_key()
+        if record.artifact is not None:
+            if record.artifact["signer"]["key_id"] != resume_key_id(key):
+                del _pending_system_resumes[request_id]
+                raise HTTPException(status_code=409, detail="Signing key changed; prepare a new resume request")
+            if record.artifact["signer"]["identity"] != principal:
+                raise HTTPException(status_code=409, detail="Receipt already issued to another approver")
+            return record.artifact
+        artifact, expiry = sign_resume_approval(
+            record.preparation, principal, key, datetime.now(timezone.utc),
+        )
+        _reviewable_resume(request_id, principal)
+        if expiry <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=503, detail="Resume approval expired during signing")
+        record.artifact = artifact
+        record.expires_at = expiry
+        return artifact
 
 
 @router.post(

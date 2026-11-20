@@ -367,3 +367,116 @@ def test_strict_lifespan_requires_resume_after_each_start(monkeypatch, managemen
             response = client.post("/v1/decide", headers=headers, json={"query": "test"})
             assert response.status_code == 200
             load_pipeline.assert_called_once()
+
+
+def test_independent_resume_approval_issues_bound_receipt(monkeypatch, tmp_path, management_state):
+    import base64
+    from datetime import datetime, timedelta
+
+    from veritas_os.governance.human_approval_receipt import (
+        HumanApprovalSignerPolicy, verify_human_approval_receipt_artifact_to_proof,
+    )
+    from veritas_os.governance.human_approval_receipt_signing import TrustedEd25519HumanApprovalVerifier
+    from veritas_os.security.hash import sha256_hex
+    from veritas_os.security.signing import store_keypair
+
+    client, _, intents = management_state
+    executor = {"X-API-Key": "management-actor-one"}
+    reviewer = {"X-API-Key": "management-actor-two"}
+    identity = auth._derive_api_user_id(reviewer["X-API-Key"])
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "fixture-deployment")
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", identity)
+    key = tmp_path / "approval.key"
+    pub = tmp_path / "approval.pub"
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", str(key))
+    halt = SystemHaltController.halt(reason="test", operator="setup")
+    prepared = client.post("/v1/system/resume/prepare", headers=executor).json()
+    review = "/v1/system/resume/requests/" + prepared["request_id"]
+    assert client.get(review, headers=executor).status_code == 403
+    details = client.get(review, headers=reviewer).json()
+    assert details["preparation"] == prepared
+    decision = {"decision": "approve", "context_hash": details["context_hash"]}
+    approve = review + "/approve"
+    assert client.post(approve, headers=executor, json=decision).status_code == 403
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", prepared["execution_principal"])
+    assert client.post(approve, headers=executor, json=decision).status_code == 403
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", identity)
+    assert client.post(approve, headers=reviewer, json={**decision, "context_hash": "0"*64}).status_code == 409
+    assert client.post(approve, headers=reviewer, json=decision).status_code == 503
+    with monkeypatch.context() as scoped:
+        scoped.setattr(server, "get_policy", lambda: {"approval_workflow": {"approver_identities": ["other"]}})
+        assert client.post(approve, headers=reviewer, json=decision).status_code == 403
+    store_keypair(key, pub)
+    response = client.post(approve, headers=reviewer, json=decision)
+    assert response.status_code == 200
+    artifact = response.json()
+    assert client.post(approve, headers=reviewer, json=decision).json() == artifact
+    public_key = base64.urlsafe_b64decode(pub.read_bytes())
+    kid = sha256_hex(public_key)
+    role = "system_resume_approver"
+    verifier = TrustedEd25519HumanApprovalVerifier({kid: public_key}, {kid: identity}, {kid: role}, "fixture")
+    policy = HumanApprovalSignerPolicy("resume-policy", [kid], ["Ed25519"], [role], [identity], ["system_resume"])
+    proof = verify_human_approval_receipt_artifact_to_proof(
+        artifact, verifier.verify, signer_policy=policy, require_structured_signature_result=True,
+        requested_scope=["system_resume"], action_class="system_resume",
+        policy_snapshot_id=prepared["policy_snapshot_digest"],
+    )
+    assert proof.receipt.metadata["system_resume"] == prepared
+    assert proof.receipt.approver_identity == identity
+    assert proof.receipt.execution_intent_id == prepared["execution_intent_id"]
+    assert proof.receipt.bind_context_hash == sha256_of_canonical_json(prepared)
+    assert datetime.fromisoformat(proof.receipt.expires_at) - datetime.fromisoformat(proof.receipt.approved_at) == timedelta(minutes=5)
+    assert SystemHaltController.status()["halt_id"] == halt["halt_id"]
+    assert not intents
+    response = client.post("/v1/decide", headers=executor, json={"query": "test"})
+    assert response.status_code == 503 and response.json()["status"] == "HALTED"
+    with monkeypatch.context() as scoped:
+        clock = Mock(wraps=datetime)
+        clock.now.return_value = datetime.fromisoformat(proof.receipt.expires_at)
+        scoped.setattr(routes_system, "datetime", clock)
+        assert client.post(approve, headers=reviewer, json=decision).status_code == 409
+        renewed = client.post("/v1/system/resume/prepare", headers=executor).json()
+        assert renewed["request_id"] != prepared["request_id"]
+    current_review = "/v1/system/resume/requests/" + renewed["request_id"]
+    current_hash = client.get(current_review, headers=reviewer).json()["context_hash"]
+    SystemHaltController.halt(reason="replacement", operator="setup")
+    stale = client.post(current_review + "/approve", headers=reviewer,
+                        json={"decision": "approve", "context_hash": current_hash})
+    assert stale.status_code == 409
+
+
+@pytest.mark.parametrize("retry_approval_first", [True, False])
+def test_resume_key_rotation_requires_new_review(monkeypatch, tmp_path, management_state, retry_approval_first):
+    from veritas_os.security.signing import store_keypair
+
+    client, _, _ = management_state
+    executor = {"X-API-Key": "management-actor-one"}
+    reviewer = {"X-API-Key": "management-actor-two"}
+    key, pub = store_keypair(tmp_path / "approval.key", tmp_path / "approval.pub")
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE", str(key))
+    monkeypatch.setenv("VERITAS_DEPLOYMENT_ID", "fixture-deployment")
+    monkeypatch.setenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", auth._derive_api_user_id(reviewer["X-API-Key"]))
+    SystemHaltController.halt(reason="test", operator="setup")
+    prepare = "/v1/system/resume/prepare"
+    requests = "/v1/system/resume/requests/"
+    original = client.post(prepare, headers=executor).json()
+    review = requests + original["request_id"]
+    decision = {"decision": "approve", "context_hash": client.get(review, headers=reviewer).json()["context_hash"]}
+    approve = review + "/approve"
+    old = client.post(approve, headers=reviewer, json=decision).json()
+    key.chmod(0o620)
+    assert client.post(approve, headers=reviewer, json=decision).status_code == 503
+    key.chmod(0o600)
+    store_keypair(key, pub)
+    if retry_approval_first:
+        assert client.post(approve, headers=reviewer, json=decision).status_code == 409
+    fresh = client.post(prepare, headers=executor).json()
+    assert fresh["request_id"] != original["request_id"]
+    assert client.post(approve, headers=reviewer, json=decision).status_code == 404
+    review = requests + fresh["request_id"]
+    approve = review + "/approve"
+    assert client.post(approve, headers=reviewer, json=decision).status_code == 409
+    decision["context_hash"] = client.get(review, headers=reviewer).json()["context_hash"]
+    new = client.post(approve, headers=reviewer, json=decision).json()
+    assert new["signer"]["key_id"] != old["signer"]["key_id"]
+    assert client.post(approve, headers=reviewer, json=decision).json() == new

@@ -49,6 +49,32 @@ Repeating preparation for the same principal and context returns the same
 pending request. A new halt, policy, or deployment context supersedes older
 requests. After a process restart, create a fresh request for the startup halt.
 
+### Issue a signed approval during a halt
+
+Provision a separate credential with `governance_write` for the human reviewer.
+Set `VERITAS_SYSTEM_RESUME_APPROVER_ID` to its authenticated principal ID and
+mount a dedicated Ed25519 private key at `VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE`
+in the backend (URL-safe base64 raw key, mode 0600). Provision the verifier
+separately with the public key, its SHA-256 raw-byte fingerprint as key ID,
+the designated principal, and the role `system_resume_approver`. Assign the
+executor and reviewer credentials to different people. The API distinguishes
+authenticated key principals. When the governance policy lists
+`approval_workflow.approver_identities`, include the reviewer there as well.
+
+1. The executor gives the prepared request ID to the reviewer.
+2. The reviewer authenticates and reads `GET /v1/system/resume/requests/{request_id}`.
+   Review the displayed deployment, halt ID, execution principal and policy digest.
+3. On acceptance, submit `{"decision":"approve","context_hash":"<reviewed hash>"}`
+   to `POST /v1/system/resume/requests/{request_id}/approve` using the reviewer
+   credential. The signed v1 receipt binds the complete prepared context.
+   The reviewer can hand this artifact to the executor. Retries return the
+   same receipt while it is valid and the signing key is current. If the key is
+   unavailable, retries fail closed. After key rotation or five-minute expiry the
+   executor prepares a new request, which requires a new review.
+
+Issuance keeps the halt active. Runtime verification and enforcement at
+`/v1/system/resume` are a subsequent implementation step.
+
 Provision authorized human approvers and the approval verifier before enabling
 strict resume. An operator with `config_write` can prepare a resume request via
 an authenticated control-plane operation while decision admission is halted.
