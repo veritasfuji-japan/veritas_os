@@ -16,6 +16,69 @@ components:
       in: header
       name: X-API-Key
   schemas:
+    ResumeReview:
+      properties:
+        preparation:
+          $ref: '#/components/schemas/SystemResumePreparation'
+        context_hash:
+          type: string
+          title: Context Hash
+      type: object
+      required:
+      - preparation
+      - context_hash
+      title: ResumeReview
+    SystemResumePreparation:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        execution_intent_id:
+          type: string
+          title: Execution Intent Id
+        action:
+          type: string
+          const: system_resume
+          title: Action
+        deployment_id:
+          type: string
+          title: Deployment Id
+        halt_id:
+          type: string
+          title: Halt Id
+        execution_principal:
+          type: string
+          title: Execution Principal
+        policy_snapshot_digest:
+          type: string
+          title: Policy Snapshot Digest
+      type: object
+      required:
+      - request_id
+      - execution_intent_id
+      - action
+      - deployment_id
+      - halt_id
+      - execution_principal
+      - policy_snapshot_digest
+      title: SystemResumePreparation
+      description: Server-owned context of a pending resume request.
+    ResumeApprovalDecision:
+      properties:
+        decision:
+          type: string
+          const: approve
+          title: Decision
+        context_hash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Context Hash
+      additionalProperties: false
+      type: object
+      required:
+      - decision
+      - context_hash
+      title: ResumeApprovalDecision
     Context:
       type: object
       required:
@@ -3447,6 +3510,130 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemHaltResponse'
+  /v1/system/resume/requests/{request_id}:
+    get:
+      summary: Review System Resume
+      description: Retrieve the exact pending context for independent human review.
+      operationId: review_system_resume_v1_system_resume_requests__request_id__get
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: X-Forwarded-For
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Forwarded-For
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumeReview'
+        '422':
+          description: Invalid request
+        '403':
+          description: Independent designated approver required
+        '404':
+          description: Unknown request
+        '409':
+          description: Request expired or context changed
+        '503':
+          description: Review or signing unavailable
+  /v1/system/resume/requests/{request_id}/approve:
+    post:
+      summary: Approve System Resume
+      description: Sign the explicitly approved context and return the existing receipt on retry.
+      operationId: approve_system_resume_v1_system_resume_requests__request_id__approve_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: X-Forwarded-For
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Forwarded-For
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResumeApprovalDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Approve System Resume V1 System Resume Requests  Request Id  Approve Post
+        '422':
+          description: Invalid request
+        '403':
+          description: Independent designated approver required
+        '404':
+          description: Unknown request
+        '409':
+          description: Request expired or context changed
+        '503':
+          description: Review or signing unavailable
+  /v1/system/resume/prepare:
+    post:
+      summary: Prepare system resume
+      description: >-
+        Requires config_write. While the system is halted, records a pending
+        resume request for the authenticated principal. Preparation leaves the
+        system halted and can be called without a request body.
+      responses:
+        '200':
+          description: Pending resume request
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - request_id
+                - execution_intent_id
+                - action
+                - deployment_id
+                - halt_id
+                - execution_principal
+                - policy_snapshot_digest
+                properties:
+                  request_id:
+                    type: string
+                  execution_intent_id:
+                    type: string
+                  action:
+                    type: string
+                    const: system_resume
+                  deployment_id:
+                    type: string
+                  halt_id:
+                    type: string
+                  execution_principal:
+                    type: string
+                  policy_snapshot_digest:
+                    type: string
+        '409':
+          description: No active halt to resume
+        '503':
+          description: Resume preparation unavailable
   /v1/system/resume:
     post:
       summary: System resume

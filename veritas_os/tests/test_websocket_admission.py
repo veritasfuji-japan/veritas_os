@@ -83,7 +83,8 @@ def test_mounted_sse_retains_http_auth_and_startup_guard(ws_app, monkeypatch):
     monkeypatch.setattr(auth, "_auth_fail_bucket", {})
     app, hub, _ = ws_app
     monkeypatch.setattr(app.state, "security_startup_complete", False)
-    client = TestClient(app)
+    # Isolate this auth check from failures recorded for the default test client.
+    client = TestClient(app, client=("192.0.2.241", 50000))
     assert client.get("/v1/events").status_code == 401
     response = client.get("/v1/events", headers={"X-API-Key": "websocket-admission-test"})
     assert response.status_code == 503

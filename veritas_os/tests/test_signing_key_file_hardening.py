@@ -36,10 +36,11 @@ def test_load_private_key_rejects_symlink(tmp_path: Path) -> None:
         signing._load_private_key(symlink_key)
 
 
-def test_load_private_key_rejects_unsafe_permissions(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mode", [0o644, 0o620, 0o602])
+def test_load_private_key_rejects_unsafe_permissions(tmp_path: Path, mode: int) -> None:
     private_raw, _ = signing.generate_ed25519_keypair()
     private_key_path = tmp_path / "private_unsafe.key"
-    _write_private_key_file(private_key_path, private_raw, mode=0o644)
+    _write_private_key_file(private_key_path, private_raw, mode=mode)
 
     with pytest.raises(PermissionError, match="unsafe permissions"):
         signing._load_private_key(private_key_path)
@@ -76,11 +77,13 @@ def test_check_private_key_permissions_rejects_symlink(tmp_path: Path) -> None:
         signing._check_private_key_permissions(symlink_key)
 
 
-def test_file_backed_signing_flow_remains_valid(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mode", [0o400, 0o600])
+def test_file_backed_signing_flow_remains_valid(tmp_path: Path, mode: int) -> None:
     private_key_path = tmp_path / "private.key"
     public_key_path = tmp_path / "public.key"
     signing.store_keypair(private_key_path, public_key_path)
 
+    private_key_path.chmod(mode)
     loaded_private_key = signing._load_private_key(private_key_path)
     assert loaded_private_key is not None
 

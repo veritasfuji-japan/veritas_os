@@ -85,6 +85,26 @@
     {
       "bind_target_metadata_present": false,
       "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/system/resume/prepare",
+      "reason": "Preparation records a pending request while the system remains halted.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/system/resume/requests/{request_id}/approve",
+      "reason": "Issues signed human approval evidence for a reviewed pending resume request.",
+      "review_required_by": "monthly",
+      "risk_level": "high"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
       "governance_owner": "trust",
       "method": "POST",
       "path": "/v1/trust/feedback",
@@ -183,8 +203,8 @@
     "/v1/system/resume"
   ],
   "catalog_registry_mismatch": [],
-  "classified_routes": 49,
-  "generated_at": "2026-11-12T13:55:01.638799+00:00",
+  "classified_routes": 52,
+  "generated_at": "2026-11-19T10:08:45.835880+00:00",
   "non_effect_routes": [
     {
       "bind_target_metadata_present": false,
@@ -424,6 +444,16 @@
       "governance_owner": null,
       "method": "GET",
       "path": "/v1/system/halt-status",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/system/resume/requests/{request_id}",
       "reason": null,
       "review_required_by": null,
       "risk_level": null
@@ -891,6 +921,36 @@
     {
       "bind_target_metadata_present": false,
       "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/system/resume/prepare",
+      "reason": "Preparation records a pending request while the system remains halted.",
+      "review_required_by": "quarterly",
+      "risk_level": "medium"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "read_only",
+      "governance_owner": null,
+      "method": "GET",
+      "path": "/v1/system/resume/requests/{request_id}",
+      "reason": null,
+      "review_required_by": null,
+      "risk_level": null
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
+      "governance_owner": "governance",
+      "method": "POST",
+      "path": "/v1/system/resume/requests/{request_id}/approve",
+      "reason": "Issues signed human approval evidence for a reviewed pending resume request.",
+      "review_required_by": "monthly",
+      "risk_level": "high"
+    },
+    {
+      "bind_target_metadata_present": false,
+      "coverage_class": "audited_exemption",
       "governance_owner": "trust",
       "method": "POST",
       "path": "/v1/trust/feedback",
@@ -1011,7 +1071,7 @@
   ],
   "schema_version": "bind_coverage_evidence.v1",
   "status": "ok",
-  "total_effect_bearing_routes": 17,
-  "total_runtime_routes": 49,
+  "total_effect_bearing_routes": 19,
+  "total_runtime_routes": 52,
   "unclassified_routes": []
 }
