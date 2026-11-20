@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from veritas_os.core import shared_halt
 from veritas_os.security.trustlog_production_posture import (
     STRICT_PRODUCTION_POSTURE_ALIASES,
     check_trustlog_production_posture,
@@ -126,6 +127,10 @@ def initialize_system_halt_on_startup() -> None:
     This re-arms a process-local stop; it does not restore historical state.
     Preserve a halt already set in this process, including its original reason.
     """
+    if shared_halt.enabled():
+        shared_halt.halt(reason="API startup requires an authenticated operator resume",
+                         operator="system:startup", startup=True)
+        return
     if not should_fail_fast_startup():
         return
     from veritas_os.core.eu_ai_act_oversight import SystemHaltController
@@ -193,7 +198,7 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
         managed_runtime = "multiprocessing child"
     elif (os.getenv("SERVER_SOFTWARE") or "").strip().lower().startswith("gunicorn/"):
         managed_runtime = "Gunicorn-marked runtime"
-    if managed_runtime is not None:
+    if managed_runtime is not None and not shared_halt.enabled():
         message = (
             "[SECURITY] The process-local emergency halt cannot establish a "
             f"single API process in a {managed_runtime}. Run the API as one "
@@ -211,7 +216,7 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
             worker_count = int(raw_count.strip())
         except ValueError:
             continue
-        if worker_count <= 1:
+        if worker_count <= 1 or shared_halt.enabled():
             continue
         message = (
             "[SECURITY] The process-local emergency halt is not shared across "

@@ -28,9 +28,26 @@ Secure and production deployments require an independently signed approval befor
    the current halt status separately. Keep the emergency halt available
    without a resume approval.
 
-The current halt controller stores its state in process. A local lock can
-protect the transition within one process. A deployment-wide guarantee across
-workers needs shared authoritative halt state with an atomic conditional update.
+## Shared deployment halt
+
+For multiple API workers, apply Alembic revision `0013` and configure every
+worker with `VERITAS_HALT_BACKEND=postgresql`, the same stable
+`VERITAS_DEPLOYMENT_ID`, database, policy, approver and key configuration.
+Use the primary PostgreSQL server for `VERITAS_DATABASE_URL`. The normal
+shared authentication requirements still apply. Configure the same protected
+TrustLog directory on workers for a common file-backed audit stream.
+The default `memory` backend retains the single-worker strict startup guard.
+
+Each shared worker startup preserves an existing halt or rearms the deployment
+if it was running. Rolling restarts can therefore require a new approval.
+Decision admission reads the authoritative row and refuses requests when it
+cannot read it. Pending approvals are serialized under a deployment row lock.
+A database clock check after row locking gates the conditional release.
+The winning Bind receipt is saved in `deployment_resume_receipts` in the
+transaction that clears the halt. The native file TrustLog is a separate
+write: in a crash or commit-acknowledgement failure, reconcile its receipt
+against the database before reporting a completed transition.
+
 ## Startup recovery and approval issuance
 
 `POST /v1/system/resume/prepare` implements the preparation step. Set
@@ -38,7 +55,7 @@ workers needs shared authoritative halt state with an atomic conditional update.
 unique to the deployment. A caller with `config_write` can submit the request
 without a body. The response includes the request and execution intent IDs,
 active halt ID, authenticated execution principal, and SHA-256 digest of the
-current canonical governance policy. Requests are kept in process memory.
+current canonical governance policy. Requests use the configured halt backend.
 Repeating preparation for the same principal and context returns the same
 pending request. A new halt, policy, or deployment context supersedes older
 requests. After a process restart, create a fresh request for the startup halt.
@@ -114,5 +131,4 @@ leave B active. A status read alone cannot establish which transition occurred.
 | Approval verification is unavailable | Resume is refused and emergency halt remains available |
 
 Exercise these cases through the mounted HTTP application using synthetic data.
-Use a separate shared-state test with multiple workers before claiming
-deployment-wide coverage.
+The PostgreSQL contention workflow runs the shared-state acceptance test in two API processes.
