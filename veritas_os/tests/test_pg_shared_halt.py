@@ -93,7 +93,9 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
             assert _receive(parent) == proc.pid
             workers.append(parent)
         a, b = workers
-        halt = request(a, "POST", "/v1/system/halt", executor, {"operator": "fixture", "reason": "test"})
+        request(a, "POST", "/v1/system/halt", executor, {"operator": "fixture", "reason": "test"})
+        halt = request(a, "GET", "/v1/system/halt-status", executor)
+        assert halt["halted"] and halt["reason"] == "test"
         assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
         blocked = request(b, "POST", "/v1/decide", executor, {"query": "blocked"}, expected=503)
         assert blocked["status"] == "HALTED"
@@ -123,7 +125,9 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
                 (deployment, halt["halt_id"]),
             ).fetchall()
         assert [row[0]["bind_receipt_id"] for row in receipts] == [winner["bind_receipt_id"]]
-        replacement = request(b, "POST", "/v1/system/halt", executor,
-                              {"operator": "fixture", "reason": "replacement"})
+        request(b, "POST", "/v1/system/halt", executor,
+                {"operator": "fixture", "reason": "replacement"})
+        replacement = request(b, "GET", "/v1/system/halt-status", executor)
+        assert replacement["halt_id"] != halt["halt_id"]
         request(a, "POST", url, executor, body, expected=404)
         assert request(a, "GET", "/v1/system/halt-status", executor)["halt_id"] == replacement["halt_id"]
