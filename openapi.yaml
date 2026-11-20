@@ -3645,6 +3645,14 @@ paths:
               required:
               - operator
               properties:
+                request_id:
+                  type: string
+                  maxLength: 128
+                  description: Prepared request ID required for secure or production resume.
+                approval_artifact:
+                  type: object
+                  additionalProperties: true
+                  description: Signed Human Approval Receipt envelope for the prepared request.
                 operator:
                   type: string
                   minLength: 1

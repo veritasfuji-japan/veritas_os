@@ -1,12 +1,6 @@
 # Explicit approval for system resume
 
-Status: proposed
-
-In secure and prod, system resume should require both an authenticated caller
-with `config_write` and verified human approval for the active halt. Today,
-the HTTP route sets `system_resume_approved` after authenticating the operator.
-The existing integration test supplies a negative authority result and confirms
-that Bind preserves the halt and keeps decision admission closed.
+Secure and production deployments require an independently signed approval before clearing the active halt.
 
 ## Approval and execution
 
@@ -72,8 +66,13 @@ authenticated key principals. When the governance policy lists
    unavailable, retries fail closed. After key rotation or five-minute expiry the
    executor prepares a new request, which requires a new review.
 
-Issuance keeps the halt active. Runtime verification and enforcement at
-`/v1/system/resume` are a subsequent implementation step.
+Issuance keeps the halt active. Set `VERITAS_SYSTEM_RESUME_PUBLIC_KEY` to the
+independently provisioned URL-safe base64 raw Ed25519 public key. The executor
+posts `operator`, `request_id` and the complete signed `approval_artifact` to
+`/v1/system/resume`. The authenticated credential determines the executor.
+Configure the public key before startup and rotate it with the approval signer.
+Development deployments continue to support operator-only resume. Providing
+either approval field always selects the signed flow.
 
 Provision authorized human approvers and the approval verifier before enabling
 strict resume. An operator with `config_write` can prepare a resume request via

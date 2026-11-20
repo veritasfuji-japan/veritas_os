@@ -327,7 +327,8 @@ class SystemHaltController:
 
     @classmethod
     def resume_if_halt_matches(
-        cls, *, expected_halt_id: str, operator: str, comment: str = ""
+        cls, *, expected_halt_id: str, operator: str, comment: str = "",
+        expires_at: datetime | None = None,
     ) -> Dict[str, Any] | None:
         """Clear the active halt only if its identifier matches.
 
@@ -337,19 +338,23 @@ class SystemHaltController:
         if not isinstance(expected_halt_id, str) or not expected_halt_id:
             return None
         return cls._resume(
-            operator=operator, comment=comment, expected_halt_id=expected_halt_id
+            operator=operator, comment=comment, expected_halt_id=expected_halt_id, expires_at=expires_at
         )
 
     @classmethod
     def _resume(
-        cls, *, operator: str, comment: str, expected_halt_id: str | None = None
+        cls, *, operator: str, comment: str, expected_halt_id: str | None = None,
+        expires_at: datetime | None = None,
     ) -> Dict[str, Any] | None:
         with cls._lock:
             if expected_halt_id is not None and (
                 not cls._halted or cls._halt_id != expected_halt_id
             ):
                 return None
-            now = datetime.now(timezone.utc).isoformat()
+            transition_time = datetime.now(timezone.utc)
+            if expires_at is not None and transition_time >= expires_at:
+                return None
+            now = transition_time.isoformat()
             was_halted = cls._halted
             cleared_halt_id = cls._halt_id
             cls._halted = False

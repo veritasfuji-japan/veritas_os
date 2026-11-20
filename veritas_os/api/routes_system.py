@@ -33,7 +33,9 @@ from veritas_os.api.auth import (
     stream_api_key_is_current,
     stream_has_permission,
 )
+from veritas_os.api.startup_health import should_fail_fast_startup
 from veritas_os.api.system_resume_approval import (
+    verify_resume_approval,
     PendingResume, ResumeApprovalDecision, ResumeReview, SystemResumePreparation, resume_key_id, sign_resume_approval,
 )
 from veritas_os.api.bind_summary import build_bind_response_payload
@@ -348,6 +350,8 @@ class SystemHaltRequest(BaseModel):
 
 class SystemResumeRequest(BaseModel):
     """Request body for POST /v1/system/resume."""
+    request_id: str | None = Field(default=None, max_length=128)
+    approval_artifact: dict[str, Any] | None = None
     operator: str = Field(..., min_length=1, max_length=200)
     comment: str = Field(default="", max_length=500)
 
@@ -1180,13 +1184,20 @@ def _reviewable_resume(request_id: str, principal: str) -> PendingResume:
     configured = os.getenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", "").strip()
     if not configured or principal != configured:
         raise HTTPException(status_code=403, detail="Designated resume approver required")
+    return _current_resume_record(request_id, principal)
+
+
+def _current_resume_record(request_id: str, approver: str) -> PendingResume:
+    """Validate pending state and its designated reviewer while holding the store lock."""
+    if not approver:
+        raise HTTPException(status_code=403, detail="Designated resume approver required")
     record = _pending_system_resumes.get(request_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Unknown resume request")
     pending = record.preparation
-    if pending.execution_principal == principal:
+    if pending.execution_principal == approver:
         raise HTTPException(status_code=403, detail="Independent approver required")
-    if pending.context != _resume_context(approver=principal):
+    if pending.context != _resume_context(approver=approver):
         raise HTTPException(status_code=409, detail="Resume request context changed")
     if record.expires_at is not None and record.expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=409, detail="Prepare a new resume request")
@@ -1265,21 +1276,55 @@ def system_resume(body: SystemResumeRequest, request: Request):
             controller.resume_if_halt_matches, expected_halt_id=halt_id
         )
         decision_id = uuid4().hex
+        intent_id = None
+        policy_snapshot_id = str(current_policy.get("updated_at") or current_policy.get("version") or "system_resume")
+        approval_context: dict[str, Any] = {"system_resume_approved": True}
+        if should_fail_fast_startup() or body.request_id is not None or body.approval_artifact is not None:
+            if not body.request_id or not body.approval_artifact:
+                raise HTTPException(status_code=403, detail="Signed resume approval required")
+            with _pending_system_resumes_lock:
+                approver = os.getenv("VERITAS_SYSTEM_RESUME_APPROVER_ID", "").strip()
+                record = _current_resume_record(body.request_id, approver)
+                pending = record.preparation
+                if (actor_identity != pending.execution_principal or pending.halt_id != halt_id
+                        or pending.policy_snapshot_digest != compute_governance_digest(current_policy)):
+                    raise HTTPException(status_code=403, detail="Resume approval context mismatch")
+                try:
+                    receipt = verify_resume_approval(record, body.approval_artifact, approver)
+                except ValueError:
+                    raise HTTPException(status_code=403, detail="Invalid resume approval") from None
+            decision_id = pending.request_id
+            intent_id = pending.execution_intent_id
+            policy_snapshot_id = pending.policy_snapshot_digest
+            approval_context["approval_receipt_id"] = receipt.approval_receipt_id
+            approval_context["halt_id"] = pending.halt_id
+            def resume_executor(*, operator: str, comment: str) -> dict[str, Any] | None:
+                # Bind may interleave with new approvals, key rotation or policy changes.
+                with _pending_system_resumes_lock:
+                    try:
+                        current = _current_resume_record(pending.request_id, approver)
+                        if (current is not record or approver != os.getenv(
+                                "VERITAS_SYSTEM_RESUME_APPROVER_ID", "").strip()):
+                            return None
+                        verify_resume_approval(current, body.approval_artifact, approver)
+                    except (HTTPException, ValueError):
+                        return None
+                    return controller.resume_if_halt_matches(
+                        expected_halt_id=pending.halt_id, operator=operator, comment=comment,
+                        expires_at=datetime.fromisoformat(receipt.expires_at),
+                    )
         bind_receipt = resume_system_with_bind_boundary(
             decision_id=decision_id,
             request_id=decision_id,
             actor_identity=actor_identity,
-            policy_snapshot_id=str(
-                current_policy.get("updated_at")
-                or current_policy.get("version")
-                or "system_resume"
-            ),
+            policy_snapshot_id=policy_snapshot_id,
+            execution_intent_id=intent_id,
             decision_hash=sha256_of_canonical_json(payload),
             operator=actor_identity,
             comment=body.comment,
             status_reader=controller.status,
             resume_executor=resume_executor,
-            approval_context={"system_resume_approved": True},
+            approval_context=approval_context,
             governance_policy=current_policy if isinstance(current_policy, dict) else None,
         ).to_dict()
         bind_receipt.setdefault("target_path", "/v1/system/resume")
@@ -1297,6 +1342,8 @@ def system_resume(body: SystemResumeRequest, request: Request):
                 },
             )
         return {"ok": True, **status, **bind_payload}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("system_resume failed: %s", e)
         return JSONResponse(

@@ -1455,6 +1455,8 @@ export interface SystemHaltRequest {
  * Source of truth: veritas_os/api/server.py — SystemResumeRequest
  */
 export interface SystemResumeRequest {
+  request_id?: string;
+  approval_artifact?: Record<string, unknown>;
   operator: string;
   comment?: string;
   [key: string]: unknown;
