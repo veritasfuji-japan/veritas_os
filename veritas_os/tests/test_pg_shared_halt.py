@@ -2,7 +2,7 @@
 import json
 import multiprocessing
 import os
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from time import monotonic, sleep
 from unittest.mock import patch
 from uuid import uuid4
@@ -50,23 +50,28 @@ def _worker(pipe, barrier, release_audit, release_key, *, use_lifespan=False):
             assert release_key.wait(20)
             return build_provider("env").load_key()
 
-    decrypt = shared_halt_audit.decrypt
-    fail_next_decrypt = True
+    key_scope = shared_halt_audit.resolved_encryption_key
+    fail_next_lookup = True
 
-    def decrypt_with_transient_outage(payload):
-        nonlocal fail_next_decrypt
-        if fail_next_decrypt:
-            fail_next_decrypt = False
-            with patch.object(encryption, "_build_key_provider", return_value=UnavailableProvider()):
-                return decrypt(payload)
-        return decrypt(payload)
+    @contextmanager
+    def key_scope_with_transient_outage():
+        nonlocal fail_next_lookup
+        if fail_next_lookup:
+            fail_next_lookup = False
+            with patch.object(encryption, "_build_key_provider", return_value=UnavailableProvider()), key_scope():
+                yield
+        else:
+            with key_scope():
+                yield
 
     client = TestClient(server.app)
     if not use_lifespan:
         initialize_system_halt_on_startup()
     with pipe, ExitStack() as worker_cleanup:
         if use_lifespan:
-            worker_cleanup.enter_context(patch.object(shared_halt_audit, "decrypt", decrypt_with_transient_outage))
+            worker_cleanup.enter_context(
+                patch.object(shared_halt_audit, "resolved_encryption_key", key_scope_with_transient_outage),
+            )
             worker_cleanup.enter_context(client)
         pipe.send(os.getpid())
         while True:
@@ -79,8 +84,12 @@ def _worker(pipe, barrier, release_audit, release_key, *, use_lifespan=False):
                            if entry.get("execution_intent_id") == path])
                 continue
             if method == "publish_with_lost_ack":
-                with patch.object(shared_halt_audit, "append_trust_log", pause_and_lose_ack):
-                    pipe.send(shared_halt_audit.publish_next_resume_audit())
+                with (
+                    patch.object(shared_halt_audit, "append_trust_log", pause_and_lose_ack),
+                    patch.object(encryption, "_build_key_provider", wraps=build_provider) as lookup,
+                ):
+                    published = shared_halt_audit.publish_next_resume_audit()
+                pipe.send((published, lookup.call_count))
                 continue
             if method == "concurrent_log":
                 barrier.wait(timeout=30)
@@ -224,7 +233,7 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
             assert replacement["halt_id"] != halt["halt_id"]
         finally:
             release_audit.set()
-        assert _receive(a) is True
+        assert _receive(a) == (True, 1)
         with shared_halt.transaction() as conn:
             assert conn.execute(
                 "SELECT published_at FROM deployment_resume_receipts WHERE deployment_id=%s",

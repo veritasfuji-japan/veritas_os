@@ -56,8 +56,9 @@ A worker claims only a pending audit row while publishing, so slow file
 writes and signed mirror delivery do not hold the emergency halt row.
 Native JSONL writers serialize previous-hash lookup, rotation and append
 across processes. The active and retained rotated logs use stable publication
-identities to deduplicate retries. The authoritative receipt remains in
-PostgreSQL, including after local log rotation. For a delayed audit record,
+identities to deduplicate retries. Each delivery resolves the encryption key
+before taking the shared file lock and reuses it for retained-log lookup,
+rotation and append. The authoritative receipt remains in PostgreSQL, including after local log rotation. For a delayed audit record,
 check `published_at` on the receipt row. Pending rows are retried after the
 underlying error is resolved, including errors returned by remote key
 providers. Signed mirrors and transparency anchors retain

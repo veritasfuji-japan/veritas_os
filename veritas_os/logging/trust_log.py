@@ -37,6 +37,7 @@ from veritas_os.logging.encryption import (
     encrypt as _encrypt_line,
     decrypt as _decrypt_line,
     is_encryption_enabled,
+    resolved_encryption_key,
     EncryptionKeyMissing,
     DecryptionError,
 )
@@ -430,7 +431,7 @@ def append_trust_log(entry: dict, *, publication_id: str | None = None) -> Dict[
     """
     # ★ スレッドセーフ: ハッシュチェーンの整合性を保証するためロックを取得
     try:
-        with _trust_log_lock:
+        with resolved_encryption_key(), _trust_log_lock:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
             with trust_log_process_lock(LOG_JSONL):
                 if publication_id is not None:

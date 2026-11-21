@@ -9,7 +9,7 @@ import logging
 from typing import Any, Callable
 
 from veritas_os.core import shared_halt
-from veritas_os.logging.encryption import decrypt
+from veritas_os.logging.encryption import decrypt, resolved_encryption_key
 from veritas_os.logging.trust_log import append_trust_log
 from veritas_os.policy.bind_artifacts import (
     BindReceipt,
@@ -57,9 +57,10 @@ def publish_next_resume_audit() -> bool:
             return False
         halt_id, receipt_id, encrypted = row
         try:
-            for entry in json.loads(decrypt(encrypted)):
-                publication_id = f"{receipt_id}:{entry['kind']}"
-                append_trust_log(entry, publication_id=publication_id)
+            with resolved_encryption_key():
+                for entry in json.loads(decrypt(encrypted)):
+                    publication_id = f"{receipt_id}:{entry['kind']}"
+                    append_trust_log(entry, publication_id=publication_id)
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             logger.warning("Resume audit publication will retry (%s)", type(exc).__name__)
             conn.execute(

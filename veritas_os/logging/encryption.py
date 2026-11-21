@@ -36,6 +36,9 @@ import logging
 import os
 import secrets
 import struct
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Callable, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
@@ -302,6 +305,23 @@ def _build_key_provider(provider: str) -> EncryptionKeyProvider:
     )
 
 
+_resolved_key: ContextVar[tuple[bytes | None] | None] = ContextVar("trustlog_resolved_key", default=None)
+
+
+@contextmanager
+def resolved_encryption_key() -> Iterator[None]:
+    """Reuse a single provider lookup within a synchronous TrustLog operation."""
+    if _resolved_key.get() is not None:
+        yield
+        return
+
+    token = _resolved_key.set((_get_key_bytes(),))
+    try:
+        yield
+    finally:
+        _resolved_key.reset(token)
+
+
 def _get_key_bytes() -> Optional[bytes]:
     """Return the 32-byte master key from configured key provider.
 
@@ -312,6 +332,10 @@ def _get_key_bytes() -> Optional[bytes]:
         During migration you can temporarily allow fallback to env key with:
         ``VERITAS_ENCRYPTION_ALLOW_ENV_FALLBACK=1``.
     """
+    resolved = _resolved_key.get()
+    if resolved is not None:
+        return resolved[0]
+
     provider_name = os.getenv(_ENCRYPTION_PROVIDER_ENV, "env")
     provider = _build_key_provider(provider_name)
     try:
