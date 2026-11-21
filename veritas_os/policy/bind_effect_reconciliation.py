@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
+import re
 from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,6 +25,7 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
     AuthorizationConsumptionRecord,
     AuthorizationConsumptionStoreError,
 )
+from veritas_os.policy.native_bind_authorization import NATIVE_AUTHORIZATION_ID_PATTERN
 from veritas_os.security.hash import sha256_of_canonical_json
 
 if TYPE_CHECKING:
@@ -43,6 +45,23 @@ class EffectExecutionState(StrEnum):
 class EffectProvenance(StrEnum):
     GENERIC_AMBIGUOUS_V1 = "GENERIC_AMBIGUOUS_V1"
     SANDBOX_PRE_DISPATCH_V1 = "SANDBOX_PRE_DISPATCH_V1"
+
+
+class SandboxAuthorizationRevocation(StrEnum):
+    """Committed ordering result, independent of any external effect."""
+
+    REVOKED_BEFORE_DISPATCH = "REVOKED_BEFORE_DISPATCH"
+    DISPATCH_ALREADY_COMMITTED = "DISPATCH_ALREADY_COMMITTED"
+
+
+def _is_sandbox_dispatch(
+    expected_state: EffectExecutionState, record: EffectStateRecord,
+) -> bool:
+    return (
+        record.effect_provenance == EffectProvenance.SANDBOX_PRE_DISPATCH_V1
+        and expected_state == EffectExecutionState.IN_FLIGHT
+        and record.state == EffectExecutionState.EFFECT_UNKNOWN
+    )
 
 
 class SandboxOwnershipState(StrEnum):
@@ -322,6 +341,7 @@ class InMemoryAtomicEffectStateStore:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._records: dict[str, EffectStateRecord] = {}
+        self._dispatch_order: dict[str, SandboxAuthorizationRevocation] = {}
         self._ownership: dict[str, SandboxOwnershipRecord] = {}
         self._archives: dict[str, SandboxReconciliationArchive] = {}
         self._sandbox_receipts: dict[str, str] = {}
@@ -469,6 +489,15 @@ class InMemoryAtomicEffectStateStore:
                 self._business_events.pop(business_event_key, None)
             return terminal
 
+    async def revoke_sandbox_authorization(self, authorization_id: str) -> SandboxAuthorizationRevocation:
+        """Record local revocation for a trusted caller, including before consumption."""
+        if not re.fullmatch(NATIVE_AUTHORIZATION_ID_PATTERN, authorization_id):
+            raise ValueError("A canonical native sandbox authorization ID is required")
+        async with self._lock:
+            return self._dispatch_order.setdefault(
+                authorization_id, SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH,
+            )
+
     async def transition(
         self,
         *,
@@ -485,6 +514,12 @@ class InMemoryAtomicEffectStateStore:
                 or not _legal_transition(current, record)
             ):
                 return False
+            if _is_sandbox_dispatch(expected_state, record):
+                if record.authorization_id in self._dispatch_order:
+                    return False
+                self._dispatch_order[record.authorization_id] = (
+                    SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED
+                )
             self._records[operation_id] = record
             return True
 
@@ -855,6 +890,27 @@ class PostgresAtomicEffectStateStore:
         except Exception:
             raise BindEffectStateError("BES_POSTGRES_NO_EFFECT_ARBITRATION_FAILED") from None
 
+    async def revoke_sandbox_authorization(self, authorization_id: str) -> SandboxAuthorizationRevocation:
+        """Order a trusted caller's revocation against sandbox dispatch commitment."""
+        if not re.fullmatch(NATIVE_AUTHORIZATION_ID_PATTERN, authorization_id):
+            raise ValueError("A canonical native sandbox authorization ID is required")
+        try:
+            from veritas_os.storage.db import get_pool
+
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                cur = await conn.execute(
+                    "INSERT INTO bind_sandbox_dispatch_order (authorization_id, resolution) "
+                    "VALUES (%s, %s) ON CONFLICT (authorization_id) DO UPDATE "
+                    "SET resolution = bind_sandbox_dispatch_order.resolution RETURNING resolution",
+                    (authorization_id, SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH.value),
+                )
+                row = await cur.fetchone()
+                result = SandboxAuthorizationRevocation(row[0])
+            return result
+        except Exception:
+            raise BindEffectStateError("BES_POSTGRES_SANDBOX_REVOCATION_FAILED") from None
+
     async def transition(
         self,
         *,
@@ -876,6 +932,15 @@ class PostgresAtomicEffectStateStore:
 
             pool = await get_pool()
             async with pool.connection() as conn:
+                sandbox_dispatch = _is_sandbox_dispatch(expected_state, record)
+                if sandbox_dispatch:
+                    claim = await conn.execute(
+                        "INSERT INTO bind_sandbox_dispatch_order (authorization_id, resolution) "
+                        "VALUES (%s, %s) ON CONFLICT (authorization_id) DO NOTHING RETURNING authorization_id",
+                        (record.authorization_id, SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED.value),
+                    )
+                    if await claim.fetchone() is None:
+                        return False
                 cur = await conn.execute(
                     "UPDATE bind_effect_states SET state=%s, revision=%s, record_hash=%s, "
                     "updated_at=%s, record=%s "
@@ -902,7 +967,10 @@ class PostgresAtomicEffectStateStore:
                         record.revision - 1,
                     ),
                 )
-                return await cur.fetchone() is not None
+                applied = await cur.fetchone() is not None
+                if sandbox_dispatch and not applied:
+                    await conn.rollback()
+                return applied
         except Exception:
             raise BindEffectStateError("BES_POSTGRES_TRANSITION_FAILED") from None
 

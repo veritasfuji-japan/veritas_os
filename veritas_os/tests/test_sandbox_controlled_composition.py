@@ -9,6 +9,7 @@ real inside the isolated runner environment.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -68,28 +69,37 @@ pytestmark = [
 ]
 
 
-def _clock() -> SandboxClockReading:
-    now = datetime.now(UTC)
-    return SandboxClockReading(
-        now=now,
-        monotonic_seconds=time.monotonic(),
-        health_checked_at=now,
-        uncertainty_seconds=0.05,
-    )
+def _fixture_clock(issued_at: datetime) -> Callable[[], SandboxClockReading]:
+    # The signed fixture's issuance timestamp can be ahead of wall time.
+    start = max(datetime.now(UTC), issued_at + timedelta(seconds=1))
+    started_at = time.monotonic()
+
+    def read() -> SandboxClockReading:
+        monotonic = time.monotonic()
+        now = start + timedelta(seconds=monotonic - started_at)
+        return SandboxClockReading(
+            now=now,
+            monotonic_seconds=monotonic,
+            health_checked_at=now,
+            uncertainty_seconds=0.05,
+        )
+
+    return read
 
 
 class ControlledCredentialProvider:
     """CI-only provider that binds one synthetic token to the exact request."""
 
-    def __init__(self, token: str) -> None:
+    def __init__(self, token: str, clock: Callable[[], SandboxClockReading]) -> None:
         self._token = token
+        self._clock = clock
         self._metadata: SandboxCredentialMetadata | None = None
         self.describe_calls = 0
         self.resolve_calls = 0
 
     async def describe(self, request):
         self.describe_calls += 1
-        now = datetime.now(UTC)
+        now = self._clock().now
         self._metadata = SandboxCredentialMetadata(
             credential_reference_id=request.credential_reference_id,
             credential_provider_type=request.credential_provider_type,
@@ -169,7 +179,8 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
     consumption_store = PostgresAtomicAuthorizationConsumptionStore()
     effect_store = PostgresAtomicEffectStateStore()
 
-    consume_at = datetime.now(UTC)
+    clock = _fixture_clock(inputs["governance_inputs"].verification_now)
+    consume_at = clock().now
     current_risk, current_source = _fresh(inputs, consume_at)
     consumed = await consume_native_bind_authorization(
         artifact,
@@ -191,7 +202,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
             runtime_risk_packet=risk,
         )
 
-    writer_provider = ControlledCredentialProvider(writer_token)
+    writer_provider = ControlledCredentialProvider(writer_token, clock)
     transport = SandboxHTTPSTransport(
         endpoint_url=config.endpoint_url,
         ca_pem=ca_pem,
@@ -207,7 +218,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         trust_inputs=inputs["trust_inputs"],
         consumption_store=consumption_store,
         effect_store=effect_store,
-        trusted_clock=_clock,
+        trusted_clock=clock,
         load_current_inputs=load_current,
         provider=writer_provider,
         transport=transport,
@@ -236,7 +247,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
             ),
         )
     )
-    reader_provider = ControlledCredentialProvider(reader_token)
+    reader_provider = ControlledCredentialProvider(reader_token, clock)
 
     outage_flag.parent.mkdir(parents=True, exist_ok=True)
     outage_flag.touch()
@@ -253,7 +264,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
             reader_policy=reader_policy,
             verifier_policy=verifier_policy,
             provider=reader_provider,
-            trusted_clock=_clock,
+            trusted_clock=clock,
         )
         assert unavailable.recovery_status == "STILL_UNKNOWN"
         assert unavailable.state == EffectExecutionState.EFFECT_UNKNOWN
@@ -274,7 +285,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         reader_policy=reader_policy,
         verifier_policy=verifier_policy,
         provider=reader_provider,
-        trusted_clock=_clock,
+        trusted_clock=clock,
     )
     assert recovered.recovery_status == "CONFIRMED_EFFECT"
     assert recovered.state == EffectExecutionState.CONFIRMED_EFFECT
@@ -297,7 +308,7 @@ async def test_native_v2_controlled_composition_lost_response_lookup_outage_then
         reader_policy=reader_policy,
         verifier_policy=verifier_policy,
         provider=reader_provider,
-        trusted_clock=_clock,
+        trusted_clock=clock,
     )
     assert repeated == recovered
     assert transport.send_calls == writer_calls_after_effect == 1

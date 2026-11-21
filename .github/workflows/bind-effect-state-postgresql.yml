@@ -72,6 +72,7 @@ jobs:
           mkdir -p test-reports
           pytest -q \
             veritas_os/tests/test_pg_bind_effect_state_contention.py \
+            veritas_os/tests/test_pg_sandbox_dispatch_revocation.py \
             -m "postgresql and contention" \
             -v \
             --tb=short \
