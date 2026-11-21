@@ -1,6 +1,7 @@
 """Exercise local revocation against the real PostgreSQL sandbox dispatch path."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 import os
 from pathlib import Path
@@ -43,6 +44,53 @@ def issued(tmp_path_factory, monkeypatch):
 
 
 prepared_inputs = pytest.fixture(prepared_inputs_fixture.__wrapped__)
+
+
+@asynccontextmanager
+async def operator_session(admin_pool, authorization_id):
+    import psycopg
+    from psycopg import sql
+    from psycopg.errors import InsufficientPrivilege
+
+    role = f"sandbox_operator_{uuid4().hex}"
+    password = uuid4().hex
+    principal = sql.Identifier(role)
+    async with admin_pool.connection() as admin:
+        await admin.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(principal, sql.Literal(password)))
+    try:
+        async with await psycopg.AsyncConnection.connect(
+            db.build_conninfo(), user=role, password=password, autocommit=True,
+        ) as operator:
+            call = "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)"
+            with pytest.raises(InsufficientPrivilege, match="permission denied for function"):
+                await operator.execute(call, (authorization_id, "fixture cancellation"))
+            async with admin_pool.connection() as admin:
+                await admin.execute(
+                    sql.SQL("GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO {}")
+                    .format(principal)
+                )
+            with pytest.raises(InsufficientPrivilege, match="scope denied"):
+                await operator.execute(call, (authorization_id, "fixture cancellation"))
+            with pytest.raises(InsufficientPrivilege):
+                await operator.execute("SELECT * FROM public.bind_sandbox_revocation_audit")
+            async with admin_pool.connection() as admin:
+                await admin.execute(
+                    "INSERT INTO public.bind_sandbox_revocation_grants (operator_role, authorization_id) "
+                    "SELECT oid, %s FROM pg_catalog.pg_roles WHERE rolname = %s",
+                    (authorization_id, role),
+                )
+            yield operator, role
+    finally:
+        async with admin_pool.connection() as admin:
+            await admin.execute(
+                "DELETE FROM public.bind_sandbox_revocation_grants "
+                "WHERE operator_role = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = %s)", (role,),
+            )
+            await admin.execute(
+                sql.SQL("REVOKE EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) FROM {}")
+                .format(principal)
+            )
+            await admin.execute(sql.SQL("DROP ROLE {}").format(principal))
 
 
 @pytest.mark.asyncio
@@ -151,6 +199,30 @@ async def test_postgres_orders_revocation_and_dispatch(prepared_inputs, monkeypa
         monkeypatch.setattr(db, "get_pool", get_pool)
         assert await consumptions.consume_once(consumption)
 
+        async def revoke_as_operator():
+            reason = "Fixture cancellation"
+            statement = "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)"
+            async with operator_session(revoker, artifact.authorization_id) as (operator, role):
+                if order == "revoke_first":
+                    async with operator.transaction(force_rollback=True):
+                        await operator.execute(statement, (artifact.authorization_id, reason))
+                    async with revoker.connection() as admin:
+                        cur = await admin.execute(
+                            "SELECT (SELECT count(*) FROM public.bind_sandbox_dispatch_order WHERE authorization_id = %s), "
+                            "(SELECT count(*) FROM public.bind_sandbox_revocation_audit WHERE authorization_id = %s)",
+                            (artifact.authorization_id, artifact.authorization_id),
+                        )
+                        assert await cur.fetchone() == (0, 0)
+                cur = await operator.execute(statement, (artifact.authorization_id, reason))
+                audit_id, resolution = await cur.fetchone()
+                async with revoker.connection() as admin:
+                    cur = await admin.execute(
+                        "SELECT operator_name, authorization_id, reason, resolution "
+                        "FROM public.bind_sandbox_revocation_audit WHERE audit_id = %s", (audit_id,),
+                    )
+                    assert await cur.fetchone() == (role, artifact.authorization_id, reason, resolution)
+                return SandboxAuthorizationRevocation(resolution)
+
         token = current_pool.set(dispatcher)
         try:
             worker = asyncio.create_task(run(artifact, args, TransportProvider(prepared_inputs, args), transport))
@@ -163,7 +235,7 @@ async def test_postgres_orders_revocation_and_dispatch(prepared_inputs, monkeypa
         else:
             try:
                 await asyncio.wait_for(reached.wait(), timeout=10)
-                result = await effects.revoke_sandbox_authorization(artifact.authorization_id)
+                result = await revoke_as_operator()
                 assert result == (
                     SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
                     if order == "revoke_first"
