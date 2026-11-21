@@ -2,7 +2,7 @@
 import json
 import multiprocessing
 import os
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack
 from time import monotonic, sleep
 from unittest.mock import patch
 from uuid import uuid4
@@ -10,11 +10,12 @@ from uuid import uuid4
 import pytest
 
 
-def _worker(pipe, barrier, release_audit, *, use_lifespan=False):
+def _worker(pipe, barrier, release_audit, release_key, *, use_lifespan=False):
     from fastapi.testclient import TestClient
     from veritas_os.api import server
     from veritas_os.api.startup_health import initialize_system_halt_on_startup
     from veritas_os.core import shared_halt_audit
+    from veritas_os.logging import encryption
     from veritas_os.logging.trust_log import append_trust_log, iter_trust_log, verify_trust_log
 
     def pause_and_lose_ack(entry, **kwargs):
@@ -28,14 +29,45 @@ def _worker(pipe, barrier, release_audit, *, use_lifespan=False):
 
     queue = shared_halt_audit.queue_resume_audit
 
-    def fail_after_insert(*args):
-        queue(*args)
+    def fail_after_insert(*args, **kwargs):
+        queue(*args, **kwargs)
         raise RuntimeError("injected rollback before database commit")
+
+    build_provider = encryption._build_key_provider
+
+    class SimulatedProviderError(Exception):
+        pass
+
+    class UnavailableProvider:
+        provider_name = "fixture_kms"
+
+        def load_key(self):
+            raise SimulatedProviderError("temporary provider outage")
+
+    class DelayedProvider:
+        def load_key(self):
+            pipe.send("key provider blocked")
+            assert release_key.wait(20)
+            return build_provider("env").load_key()
+
+    decrypt = shared_halt_audit.decrypt
+    fail_next_decrypt = True
+
+    def decrypt_with_transient_outage(payload):
+        nonlocal fail_next_decrypt
+        if fail_next_decrypt:
+            fail_next_decrypt = False
+            with patch.object(encryption, "_build_key_provider", return_value=UnavailableProvider()):
+                return decrypt(payload)
+        return decrypt(payload)
 
     client = TestClient(server.app)
     if not use_lifespan:
         initialize_system_halt_on_startup()
-    with pipe, client if use_lifespan else nullcontext():
+    with pipe, ExitStack() as worker_cleanup:
+        if use_lifespan:
+            worker_cleanup.enter_context(patch.object(shared_halt_audit, "decrypt", decrypt_with_transient_outage))
+            worker_cleanup.enter_context(client)
         pipe.send(os.getpid())
         while True:
             command = pipe.recv()
@@ -61,6 +93,11 @@ def _worker(pipe, barrier, release_audit, *, use_lifespan=False):
                 continue
             if method == "failed_queue":
                 with patch.object(shared_halt_audit, "queue_resume_audit", fail_after_insert):
+                    result = client.post(path, headers={"X-API-Key": credential}, json=body)
+                pipe.send((result.status_code, result.json()))
+                continue
+            if method == "resume_with_delayed_key":
+                with patch.object(encryption, "_build_key_provider", return_value=DelayedProvider()):
                     result = client.post(path, headers={"X-API-Key": credential}, json=body)
                 pipe.send((result.status_code, result.json()))
                 continue
@@ -120,10 +157,11 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
     ctx = multiprocessing.get_context("spawn")
     barrier = ctx.Barrier(2)
     release_audit = ctx.Event()
+    release_key = ctx.Event()
     with ExitStack() as cleanup:
         def start_worker(*, use_lifespan=False):
             parent, child = ctx.Pipe()
-            proc = ctx.Process(target=_worker, args=(child, barrier, release_audit),
+            proc = ctx.Process(target=_worker, args=(child, barrier, release_audit, release_key),
                                kwargs={"use_lifespan": use_lifespan})
             proc.start()
             child.close()
@@ -131,6 +169,16 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
             assert _receive(parent) == proc.pid
             return parent
 
+        def approve_resume(executor_worker, reviewer_worker):
+            prepared = request(executor_worker, "POST", url + "/prepare", executor)
+            review = url + "/requests/" + prepared["request_id"]
+            approval = request(reviewer_worker, "GET", review, reviewer)
+            assert approval["preparation"] == prepared
+            artifact = request(reviewer_worker, "POST", review + "/approve", reviewer,
+                               {"decision": "approve", "context_hash": approval["context_hash"]})
+            return prepared, {"operator": "fixture", "request_id": prepared["request_id"], "approval_artifact": artifact}
+
+        url = "/v1/system/resume"
         a, b = workers = [start_worker(), start_worker()]
         request(a, "POST", "/v1/system/halt", executor, {"operator": "fixture", "reason": "test"})
         halt = request(a, "GET", "/v1/system/halt-status", executor)
@@ -138,14 +186,7 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
         assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
         blocked = request(b, "POST", "/v1/decide", executor, {"query": "blocked"}, expected=503)
         assert blocked["status"] == "HALTED"
-        url = "/v1/system/resume"
-        prepared = request(a, "POST", url + "/prepare", executor)
-        review = url + "/requests/" + prepared["request_id"]
-        approval = request(b, "GET", review, reviewer)
-        assert approval["preparation"] == prepared
-        artifact = request(b, "POST", review + "/approve", reviewer,
-                           {"decision": "approve", "context_hash": approval["context_hash"]})
-        body = {"operator": "fixture", "request_id": prepared["request_id"], "approval_artifact": artifact}
+        prepared, body = approve_resume(a, b)
         request(a, "failed_queue", url, executor, body, expected=500)
         assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
         blocked = request(b, "POST", "/v1/decide", executor, {"query": "blocked"}, expected=503)
@@ -200,6 +241,25 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
         deadline = monotonic() + 10
         while monotonic() < deadline:
             with shared_halt.transaction() as conn:
+                scheduled_retry, published_at = conn.execute(
+                    "SELECT next_attempt_at > clock_timestamp(), published_at FROM deployment_resume_receipts "
+                    "WHERE deployment_id=%s", (deployment,),
+                ).fetchone()
+                if scheduled_retry:
+                    assert published_at is None
+                    conn.execute(
+                        "UPDATE deployment_resume_receipts SET next_attempt_at=clock_timestamp() WHERE deployment_id=%s",
+                        (deployment,),
+                    )
+            if scheduled_retry:
+                break
+            sleep(0.1)
+        else:
+            pytest.fail("key provider failure did not schedule another delivery attempt")
+
+        deadline = monotonic() + 10
+        while monotonic() < deadline:
+            with shared_halt.transaction() as conn:
                 published_at = conn.execute(
                     "SELECT published_at FROM deployment_resume_receipts WHERE deployment_id=%s",
                     (deployment,),
@@ -224,3 +284,17 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
         b.send(("verify_log", None, None, None))
         verification = _receive(b)
         assert verification["ok"], verification
+
+        _, next_body = approve_resume(a, b)
+        a.send(("resume_with_delayed_key", url, executor, next_body))
+        assert _receive(a) == "key provider blocked"
+        try:
+            request(b, "POST", "/v1/system/halt", executor,
+                    {"operator": "fixture", "reason": "while key provider is blocked"})
+            newer_halt = request(b, "GET", "/v1/system/halt-status", executor)
+            assert newer_halt["halt_id"] != replacement["halt_id"]
+        finally:
+            release_key.set()
+        code, response = _receive(a)
+        assert code == 409, response
+        assert request(a, "GET", "/v1/system/halt-status", executor)["halt_id"] == newer_halt["halt_id"]

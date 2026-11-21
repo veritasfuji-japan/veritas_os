@@ -6,9 +6,10 @@ import asyncio
 from dataclasses import replace
 import json
 import logging
+from typing import Any, Callable
 
 from veritas_os.core import shared_halt
-from veritas_os.logging.encryption import decrypt, encrypt
+from veritas_os.logging.encryption import decrypt
 from veritas_os.logging.trust_log import append_trust_log
 from veritas_os.policy.bind_artifacts import (
     BindReceipt,
@@ -21,7 +22,9 @@ from veritas_os.policy.bind_artifacts import (
 logger = logging.getLogger(__name__)
 
 
-def queue_resume_audit(halt_id: str, intent: ExecutionIntent, receipt: BindReceipt) -> dict:
+def queue_resume_audit(
+    halt_id: str, intent: ExecutionIntent, receipt: BindReceipt, *, encrypt_audit: Callable[[str], str],
+) -> dict[str, Any]:
     """Queue immutable audit entries in the transaction that clears the halt."""
     from psycopg.types.json import Jsonb
 
@@ -34,7 +37,7 @@ def queue_resume_audit(halt_id: str, intent: ExecutionIntent, receipt: BindRecei
         conn.execute(
             """INSERT INTO deployment_resume_receipts (deployment_id, halt_id, receipt, audit_entries)
                VALUES (%s,%s,%s,%s)""",
-            (shared_halt.deployment(), halt_id, Jsonb(finalized), encrypt(json.dumps(entries))),
+            (shared_halt.deployment(), halt_id, Jsonb(finalized), encrypt_audit(json.dumps(entries))),
         )
     return finalized
 

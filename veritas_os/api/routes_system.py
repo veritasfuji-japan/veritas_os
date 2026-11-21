@@ -1363,6 +1363,20 @@ def system_resume(body: SystemResumeRequest, request: Request):
         def capture_audit(intent: BindExecutionIntent, receipt: BindReceipt) -> None:
             audit.append((intent, receipt))
 
+        if use_shared_halt:
+            from veritas_os.core.shared_halt_audit import queue_resume_audit
+            from veritas_os.logging.encryption import (
+                EncryptionBackendUnavailable,
+                EncryptionKeyMissing,
+                EncryptionKeyUnavailable,
+                prepare_encryptor,
+            )
+
+            try:
+                encrypt_audit = prepare_encryptor()
+            except (EncryptionBackendUnavailable, EncryptionKeyMissing, EncryptionKeyUnavailable):
+                raise HTTPException(status_code=503, detail="Resume audit encryption unavailable") from None
+
         with shared_halt.transaction() if use_shared_halt else nullcontext() as conn:
             if conn is not None:
                 # Serialize competing resume transactions without locking audit delivery.
@@ -1386,9 +1400,7 @@ def system_resume(body: SystemResumeRequest, request: Request):
                 append_trustlog=capture_audit if use_shared_halt else True,
             ).to_dict()
             if conn is not None and bind_receipt["final_outcome"] == FinalOutcome.COMMITTED.value:
-                from veritas_os.core.shared_halt_audit import queue_resume_audit
-
-                bind_receipt = queue_resume_audit(halt_id, *audit[0])
+                bind_receipt = queue_resume_audit(halt_id, *audit[0], encrypt_audit=encrypt_audit)
                 if not conn.execute(
                     "SELECT clock_timestamp() < %s", (datetime.fromisoformat(receipt.expires_at),),
                 ).fetchone()[0]:

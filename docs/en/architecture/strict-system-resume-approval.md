@@ -45,8 +45,9 @@ if it was running. Rolling restarts can therefore require a new approval.
 Decision admission reads the authoritative row and refuses requests when it
 cannot read it. Pending approvals are serialized under a deployment row lock.
 The database clock gates the conditional release and checks approval expiry
-again just before commit. The winning Bind receipt and encrypted audit
-entries are saved in `deployment_resume_receipts` in the transaction that
+again just before commit. A worker retrieves the audit encryption key
+before locking the halt row, so key provider delays do not hold up an
+emergency halt. The winning Bind receipt and encrypted audit entries are saved in `deployment_resume_receipts` in the transaction that
 clears the halt. A successful HTTP response confirms the database transition.
 The TrustLog hash becomes available after file publication.
 
@@ -58,7 +59,8 @@ across processes. The active and retained rotated logs use stable publication
 identities to deduplicate retries. The authoritative receipt remains in
 PostgreSQL, including after local log rotation. For a delayed audit record,
 check `published_at` on the receipt row. Pending rows are retried after the
-underlying error is resolved. Signed mirrors and transparency anchors retain
+underlying error is resolved, including errors returned by remote key
+providers. Signed mirrors and transparency anchors retain
 their destination-specific delivery guarantees.
 
 ## Startup recovery and approval issuance
