@@ -150,3 +150,27 @@ historical compatibility layers against this frozen contract.
 
 Deletion and simplification are preferred over expansion when they preserve the
 frozen proof.
+
+## Local per-authorization revocation before sandbox dispatch
+
+The trusted control plane can call
+`PostgresAtomicEffectStateStore.revoke_sandbox_authorization(authorization_id)`
+for one issued native sandbox authorization, including before consumption.
+Migration `0014` adds a single PostgreSQL arbitration row per authorization.
+Deploy it with sandbox dispatchers drained, then restart them on the new code
+before enabling this control. Retain the arbitration rows and use the same
+PostgreSQL primary for revocation and dispatch.
+
+- `REVOKED_BEFORE_DISPATCH` means the committed local revocation prevents the
+  sandbox sender from committing dispatch for that authorization. Repeat
+  revocations return the same result.
+- `DISPATCH_ALREADY_COMMITTED` means dispatch won the ordering. The
+  arbitration row and `IN_FLIGHT → EFFECT_UNKNOWN` transition commit together.
+  That result leaves effect status to reconciliation.
+- If the sender cannot confirm the transaction, it does not enter transport.
+  A later execution with the same authorization cannot repeat the attempt.
+
+Ordering is determined by the shared PostgreSQL transaction. It covers
+revocations committed by this control plane. External authority updates still
+depend on the runtime recheck and its source. The ordering record does not
+confirm an external effect or change the frozen reconciliation contract.
