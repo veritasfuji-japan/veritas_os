@@ -27,6 +27,13 @@ from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocketState
 
 from veritas_os.core import shared_halt
+from veritas_os.policy.bind_artifacts import (
+    BindReceipt,
+    ExecutionIntent as BindExecutionIntent,
+    FinalOutcome,
+    append_bind_receipt_trustlog,
+    append_execution_intent_trustlog,
+)
 from veritas_os.api.auth import (
     require_api_key_header_or_query,
     require_authenticated_principal,
@@ -56,7 +63,6 @@ from veritas_os.api.pipeline_orchestrator import (
 from veritas_os.logging.encryption import get_encryption_status
 from veritas_os.security.trustlog_posture import get_trustlog_security_posture
 from veritas_os.policy.bind_route_markers import requires_bind_boundary
-from veritas_os.policy.bind_artifacts import FinalOutcome
 from veritas_os.policy.compliance_config_update import (
     update_compliance_config_with_bind_boundary,
 )
@@ -1299,6 +1305,7 @@ def system_resume(body: SystemResumeRequest, request: Request):
     srv = _get_server()
     try:
         current_policy = srv.get_policy()
+        use_shared_halt = shared_halt.enabled()
         payload = {"operator": actor_identity, "comment": body.comment}
         controller = srv.SystemHaltController
         status = controller.status()
@@ -1316,7 +1323,8 @@ def system_resume(body: SystemResumeRequest, request: Request):
         intent_id = None
         policy_snapshot_id = str(current_policy.get("updated_at") or current_policy.get("version") or "system_resume")
         approval_context: dict[str, Any] = {"system_resume_approved": True}
-        if shared_halt.enabled() or should_fail_fast_startup() or body.request_id is not None or body.approval_artifact is not None:
+        if (use_shared_halt or should_fail_fast_startup()
+                or body.request_id is not None or body.approval_artifact is not None):
             if not body.request_id or not body.approval_artifact:
                 raise HTTPException(status_code=403, detail="Signed resume approval required")
             with _resume_records() as records:
@@ -1350,10 +1358,14 @@ def system_resume(body: SystemResumeRequest, request: Request):
                         expected_halt_id=pending.halt_id, operator=operator, comment=comment,
                         expires_at=datetime.fromisoformat(receipt.expires_at),
                     )
-        with shared_halt.transaction() if shared_halt.enabled() else nullcontext() as conn:
+        audit: list[tuple[BindExecutionIntent, BindReceipt]] = []
+
+        def capture_audit(intent: BindExecutionIntent, receipt: BindReceipt) -> None:
+            audit.append((intent, receipt))
+
+        with shared_halt.transaction() if use_shared_halt else nullcontext() as conn:
             if conn is not None:
-                # Serialize competing submissions through receipt publication. Emergency
-                # stops remain independent until the final conditional update takes the row.
+                # Serialize competing resume transactions without locking audit delivery.
                 conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
                              ("system-resume:" + shared_halt.deployment(),))
                 if controller.status()["halt_id"] != halt_id:
@@ -1371,15 +1383,22 @@ def system_resume(body: SystemResumeRequest, request: Request):
                 resume_executor=resume_executor,
                 approval_context=approval_context,
                 governance_policy=current_policy if isinstance(current_policy, dict) else None,
+                append_trustlog=capture_audit if use_shared_halt else True,
             ).to_dict()
             if conn is not None and bind_receipt["final_outcome"] == FinalOutcome.COMMITTED.value:
-                from psycopg.types.json import Jsonb
-                conn.execute(
-                    "INSERT INTO deployment_resume_receipts (deployment_id, halt_id, receipt) VALUES (%s,%s,%s)",
-                    (shared_halt.deployment(), halt_id, Jsonb(bind_receipt)),
-                )
+                from veritas_os.core.shared_halt_audit import queue_resume_audit
+
+                bind_receipt = queue_resume_audit(halt_id, *audit[0])
+                if not conn.execute(
+                    "SELECT clock_timestamp() < %s", (datetime.fromisoformat(receipt.expires_at),),
+                ).fetchone()[0]:
+                    raise HTTPException(status_code=409, detail="Resume approval expired before commit")
             elif conn is not None:
                 conn.rollback()
+        if use_shared_halt and bind_receipt["final_outcome"] != FinalOutcome.COMMITTED.value:
+            intent, refused_receipt = audit[0]
+            append_execution_intent_trustlog(intent)
+            bind_receipt = append_bind_receipt_trustlog(refused_receipt).to_dict()
         bind_receipt.setdefault("target_path", "/v1/system/resume")
         bind_receipt.setdefault("target_type", "system_resume")
         bind_payload = build_bind_response_payload(bind_receipt)

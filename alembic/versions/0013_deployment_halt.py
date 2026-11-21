@@ -25,6 +25,17 @@ def upgrade() -> None:
         sa.Column("deployment_id", sa.Text(), primary_key=True),
         sa.Column("halt_id", sa.Text(), primary_key=True),
         sa.Column("receipt", JSONB(), nullable=False),
+        sa.Column("audit_entries", sa.Text(), nullable=False),
+        sa.Column("queued_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("published_at", sa.DateTime(timezone=True)),
+        sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
+
+    op.create_index(
+        "ix_deployment_resume_audit_pending",
+        "deployment_resume_receipts",
+        ["deployment_id", "next_attempt_at", "queued_at"],
+        postgresql_where=sa.text("published_at IS NULL"),
     )
 
 

@@ -128,6 +128,9 @@ def initialize_system_halt_on_startup() -> None:
     Preserve a halt already set in this process, including its original reason.
     """
     if shared_halt.enabled():
+        from veritas_os.logging.rotate import require_trust_log_process_lock
+
+        require_trust_log_process_lock()
         shared_halt.halt(reason="API startup requires an authenticated operator resume",
                          operator="system:startup", startup=True)
         return

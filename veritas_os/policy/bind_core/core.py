@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -43,6 +44,8 @@ from veritas_os.policy.bind_execution_capability import (
     _claim_bind_core_transition_issuer,
 )
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
+
+BindAuditSink = Callable[[ExecutionIntent, BindReceipt], None]
 
 MAX_BIND_DECISION_SOURCE_LENGTH = 80
 _BIND_DECISION_SOURCE_REPLACEMENT = "_"
@@ -157,7 +160,7 @@ def execute_bind_adjudication(
     adapter: BindBoundaryAdapter,
     bind_ts: str | None = None,
     bind_receipt_id: str | None = None,
-    append_trustlog: bool = True,
+    append_trustlog: bool | BindAuditSink = True,
 ) -> BindReceipt:
     """Orchestrate snapshot -> admissibility -> apply -> verify -> commit/revert."""
     normalized_intent = normalize_execution_intent(execution_intent)
@@ -168,7 +171,7 @@ def execute_bind_adjudication(
         execution_intent=normalized_intent,
     )
 
-    if append_trustlog and _idempotency_replay_enabled(
+    if append_trustlog is True and _idempotency_replay_enabled(
         adapter_key=adapter_idempotency_key,
         execution_intent=normalized_intent,
     ):
@@ -1176,7 +1179,7 @@ def _with_receipt(base_receipt: BindReceipt, **updates: Any) -> BindReceipt:
 def _finalize_receipt(
     *,
     execution_intent: ExecutionIntent,
-    append_trustlog: bool,
+    append_trustlog: bool | BindAuditSink,
     receipt: BindReceipt,
 ) -> BindReceipt:
     receipt = _apply_bind_target_metadata_from_lineage(receipt, execution_intent=execution_intent)
@@ -1194,6 +1197,9 @@ def _finalize_receipt(
         rollback_status=receipt.rollback_status or _resolve_rollback_status(receipt),
         failure_category=receipt.failure_category or _resolve_failure_category(receipt).value,
     )
+    if callable(append_trustlog):
+        append_trustlog(execution_intent, receipt)
+        return receipt
     if not append_trustlog:
         return receipt
     append_execution_intent_trustlog(execution_intent)

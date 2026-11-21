@@ -34,19 +34,32 @@ For multiple API workers, apply Alembic revision `0013` and configure every
 worker with `VERITAS_HALT_BACKEND=postgresql`, the same stable
 `VERITAS_DEPLOYMENT_ID`, database, policy, approver and key configuration.
 Use the primary PostgreSQL server for `VERITAS_DATABASE_URL`. The normal
-shared authentication requirements still apply. Configure the same protected
-TrustLog directory on workers for a common file-backed audit stream.
+shared authentication requirements still apply. Use a common protected
+TrustLog directory on a filesystem that honors POSIX advisory locks across
+all workers. Configure the same TrustLog encryption key or provider on every
+worker so each can deliver queued records.
 The default `memory` backend retains the single-worker strict startup guard.
 
 Each shared worker startup preserves an existing halt or rearms the deployment
 if it was running. Rolling restarts can therefore require a new approval.
 Decision admission reads the authoritative row and refuses requests when it
 cannot read it. Pending approvals are serialized under a deployment row lock.
-A database clock check after row locking gates the conditional release.
-The winning Bind receipt is saved in `deployment_resume_receipts` in the
-transaction that clears the halt. The native file TrustLog is a separate
-write: in a crash or commit-acknowledgement failure, reconcile its receipt
-against the database before reporting a completed transition.
+The database clock gates the conditional release and checks approval expiry
+again just before commit. The winning Bind receipt and encrypted audit
+entries are saved in `deployment_resume_receipts` in the transaction that
+clears the halt. A successful HTTP response confirms the database transition.
+The TrustLog hash becomes available after file publication.
+
+The API workers retry pending publication after startup and during operation.
+A worker claims only a pending audit row while publishing, so slow file
+writes and signed mirror delivery do not hold the emergency halt row.
+Native JSONL writers serialize previous-hash lookup, rotation and append
+across processes. The active and retained rotated logs use stable publication
+identities to deduplicate retries. The authoritative receipt remains in
+PostgreSQL, including after local log rotation. For a delayed audit record,
+check `published_at` on the receipt row. Pending rows are retried after the
+underlying error is resolved. Signed mirrors and transparency anchors retain
+their destination-specific delivery guarantees.
 
 ## Startup recovery and approval issuance
 
@@ -131,4 +144,7 @@ leave B active. A status read alone cannot establish which transition occurred.
 | Approval verification is unavailable | Resume is refused and emergency halt remains available |
 
 Exercise these cases through the mounted HTTP application using synthetic data.
-The PostgreSQL contention workflow runs the shared-state acceptance test in two API processes.
+The PostgreSQL contention workflow exercises two API processes. It checks
+rollback before commit, retry after file publication, a replacement halt
+during stalled audit delivery, and native hash-chain integrity under
+concurrent writes.
