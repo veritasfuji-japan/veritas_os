@@ -67,8 +67,10 @@ from veritas_os.policy.compliance_config_update import (
     update_compliance_config_with_bind_boundary,
 )
 from veritas_os.policy.governance_identity import compute_governance_digest
+from veritas_os.policy.bind_core.contracts import BindStateConflictError
 from veritas_os.policy.system_halt_update import (
     halt_system_with_bind_boundary,
+    new_system_control_intent_window,
     resume_system_with_bind_boundary,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
@@ -1059,6 +1061,16 @@ def system_halt(body: SystemHaltRequest, request: Request):
     actor_identity = require_authenticated_principal(request)
     srv = _get_server()
     try:
+        bounded_intent = shared_halt.enabled() or should_fail_fast_startup()
+        issued_at, deadline = new_system_control_intent_window() if bounded_intent else (None, None)
+        controller = srv.SystemHaltController
+
+        def halt_executor(*, reason: str, operator: str) -> dict[str, Any]:
+            try:
+                return controller.halt(reason=reason, operator=operator, expires_at=deadline)
+            except shared_halt.HaltIntentExpired as exc:
+                raise BindStateConflictError(str(exc)) from exc
+
         current_policy = srv.get_policy()
         payload = {"reason": body.reason, "operator": actor_identity}
         decision_id = uuid4().hex
@@ -1075,8 +1087,10 @@ def system_halt(body: SystemHaltRequest, request: Request):
             reason=body.reason,
             operator=actor_identity,
             status_reader=srv.SystemHaltController.status,
-            halt_executor=srv.SystemHaltController.halt,
+            halt_executor=halt_executor if bounded_intent else controller.halt,
             approval_context={"system_halt_approved": True},
+            decision_ts=issued_at,
+            bounded_intent=bounded_intent,
             governance_policy=current_policy if isinstance(current_policy, dict) else None,
         ).to_dict()
         bind_receipt.setdefault("target_path", "/v1/system/halt")
@@ -1321,6 +1335,8 @@ def system_resume(body: SystemResumeRequest, request: Request):
         )
         decision_id = uuid4().hex
         intent_id = None
+        issued_at = None
+        resume_deadline = None
         policy_snapshot_id = str(current_policy.get("updated_at") or current_policy.get("version") or "system_resume")
         approval_context: dict[str, Any] = {"system_resume_approved": True}
         if (use_shared_halt or should_fail_fast_startup()
@@ -1342,7 +1358,11 @@ def system_resume(body: SystemResumeRequest, request: Request):
             intent_id = pending.execution_intent_id
             policy_snapshot_id = pending.policy_snapshot_digest
             approval_context["approval_receipt_id"] = receipt.approval_receipt_id
+            approval_context["approval_expires_at"] = receipt.expires_at
             approval_context["halt_id"] = pending.halt_id
+            issued_at, intent_deadline = new_system_control_intent_window()
+            resume_deadline = min(intent_deadline, datetime.fromisoformat(receipt.expires_at))
+
             def resume_executor(*, operator: str, comment: str) -> dict[str, Any] | None:
                 # Bind may interleave with new approvals, key rotation or policy changes.
                 with _resume_records() as records:
@@ -1356,7 +1376,7 @@ def system_resume(body: SystemResumeRequest, request: Request):
                         return None
                     return controller.resume_if_halt_matches(
                         expected_halt_id=pending.halt_id, operator=operator, comment=comment,
-                        expires_at=datetime.fromisoformat(receipt.expires_at),
+                        expires_at=resume_deadline,
                     )
         audit: list[tuple[BindExecutionIntent, BindReceipt]] = []
 
@@ -1397,14 +1417,16 @@ def system_resume(body: SystemResumeRequest, request: Request):
                 resume_executor=resume_executor,
                 approval_context=approval_context,
                 governance_policy=current_policy if isinstance(current_policy, dict) else None,
+                decision_ts=issued_at,
+                bounded_intent=issued_at is not None,
                 append_trustlog=capture_audit if use_shared_halt else True,
             ).to_dict()
             if conn is not None and bind_receipt["final_outcome"] == FinalOutcome.COMMITTED.value:
                 bind_receipt = queue_resume_audit(halt_id, *audit[0], encrypt_audit=encrypt_audit)
                 if not conn.execute(
-                    "SELECT clock_timestamp() < %s", (datetime.fromisoformat(receipt.expires_at),),
+                    "SELECT clock_timestamp() < %s", (resume_deadline,),
                 ).fetchone()[0]:
-                    raise HTTPException(status_code=409, detail="Resume approval expired before commit")
+                    raise HTTPException(status_code=409, detail="Resume intent or approval expired before commit")
             elif conn is not None:
                 conn.rollback()
         if use_shared_halt and bind_receipt["final_outcome"] != FinalOutcome.COMMITTED.value:

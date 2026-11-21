@@ -275,20 +275,24 @@ class SystemHaltController:
     _history: List[Dict[str, Any]] = []
 
     @classmethod
-    def halt(cls, *, reason: str, operator: str) -> Dict[str, Any]:
+    def halt(cls, *, reason: str, operator: str, expires_at: datetime | None = None) -> Dict[str, Any]:
         """Halt the AI decision system.
 
         Args:
             reason: Human-readable explanation for the halt.
             operator: Identifier of the person initiating the halt.
+            expires_at: Optional deadline for an authenticated halt intent.
 
         Returns:
             Dict with halt confirmation details.
         """
         if shared_halt.enabled():
-            return shared_halt.halt(reason=reason, operator=operator)
+            return shared_halt.halt(reason=reason, operator=operator, expires_at=expires_at)
         with cls._lock:
-            now = datetime.now(timezone.utc).isoformat()
+            transition_time = datetime.now(timezone.utc)
+            if expires_at is not None and transition_time >= expires_at:
+                raise shared_halt.HaltIntentExpired("Emergency halt intent expired before the state change")
+            now = transition_time.isoformat()
             halt_id = uuid4().hex
             cls._halt_id = halt_id
             cls._halted = True

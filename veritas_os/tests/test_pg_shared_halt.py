@@ -1,8 +1,12 @@
 """Two independently imported ASGI applications sharing a deployment halt."""
+import asyncio
 import json
 import multiprocessing
 import os
+import socket
 from contextlib import ExitStack, contextmanager
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from time import monotonic, sleep
 from unittest.mock import patch
 from uuid import uuid4
@@ -12,10 +16,10 @@ import pytest
 
 def _worker(pipe, barrier, release_audit, release_key, *, use_lifespan=False):
     from fastapi.testclient import TestClient
-    from veritas_os.api import server
+    from veritas_os.api import auth, governance, routes_system, server
     from veritas_os.api.startup_health import initialize_system_halt_on_startup
     from veritas_os.core import shared_halt_audit
-    from veritas_os.logging import encryption
+    from veritas_os.logging import encryption, trust_log
     from veritas_os.logging.trust_log import append_trust_log, iter_trust_log, verify_trust_log
 
     def pause_and_lose_ack(entry, **kwargs):
@@ -65,14 +69,31 @@ def _worker(pipe, barrier, release_audit, release_key, *, use_lifespan=False):
                 yield
 
     client = TestClient(server.app)
-    if not use_lifespan:
+    strict = os.getenv("VERITAS_POSTURE") == "secure"
+    if not (strict or use_lifespan):
         initialize_system_halt_on_startup()
     with pipe, ExitStack() as worker_cleanup:
+        if strict:
+            worker_cleanup.enter_context(
+                patch.object(governance, "_DEFAULT_POLICY_PATH", Path(os.environ["VERITAS_DATA_DIR"]) / "policy.json"),
+            )
+            # The external signed mirror is outside this test. Keep the native
+            # encrypted TrustLog and independently signed resume approval real.
+            worker_cleanup.enter_context(patch.object(trust_log, "append_signed_decision", return_value={}))
+            if not use_lifespan:
+                # Control which worker drains the outbox for deterministic fault injection.
+                worker_cleanup.enter_context(
+                    patch.object(shared_halt_audit, "run_resume_audit_publisher", asyncio.Event().wait),
+                )
         if use_lifespan:
             worker_cleanup.enter_context(
                 patch.object(shared_halt_audit, "resolved_encryption_key", key_scope_with_transient_outage),
             )
+        if strict or use_lifespan:
             worker_cleanup.enter_context(client)
+        if strict:
+            assert server.app.state.security_startup_complete
+            assert isinstance(auth._get_effective_auth_store(), auth.RedisAuthSecurityStore)
         pipe.send(os.getpid())
         while True:
             command = pipe.recv()
@@ -110,6 +131,41 @@ def _worker(pipe, barrier, release_audit, release_key, *, use_lifespan=False):
                     result = client.post(path, headers={"X-API-Key": credential}, json=body)
                 pipe.send((result.status_code, result.json()))
                 continue
+            if method in {"expire_halt_apply", "expire_resume_apply", "expire_resume_commit"}:
+                controller = server.SystemHaltController
+                owner, name = {
+                    "expire_halt_apply": (controller, "halt"),
+                    "expire_resume_apply": (controller, "resume_if_halt_matches"),
+                    "expire_resume_commit": (shared_halt_audit, "queue_resume_audit"),
+                }[method]
+                operation = getattr(owner, name)
+                deadline = datetime.now(timezone.utc) + timedelta(seconds=2)
+                issued_at = (deadline - timedelta(seconds=30)).isoformat()
+
+                def after_deadline(*args, target=operation, expires=deadline, **kwargs):
+                    sleep(max(0, (expires - datetime.now(timezone.utc)).total_seconds()) + 0.05)
+                    return target(*args, **kwargs)
+
+                with (
+                    patch.object(routes_system, "new_system_control_intent_window", return_value=(issued_at, deadline)),
+                    patch.object(owner, name, side_effect=after_deadline) as apply,
+                ):
+                    result = client.post(path, headers={"X-API-Key": credential}, json=body)
+                    assert apply.call_count == 1, result.json()
+                pipe.send((result.status_code, result.json()))
+                continue
+            if method == "decide_without_database":
+                # Bind a port without listening so the actual database driver
+                # gets a connection refusal without disrupting the other worker.
+                with socket.socket() as unavailable:
+                    unavailable.bind(("127.0.0.1", 0))
+                    port = unavailable.getsockname()[1]
+                    with patch.dict(os.environ, {
+                        "VERITAS_DATABASE_URL": f"postgresql://127.0.0.1:{port}/unavailable?connect_timeout=1",
+                    }):
+                        result = client.post(path, headers={"X-API-Key": credential}, json=body)
+                pipe.send((result.status_code, result.json()))
+                continue
             if method == "race":
                 barrier.wait(timeout=30)
                 method = "POST"
@@ -135,8 +191,10 @@ def _stop(proc, pipe):
 @pytest.mark.postgresql
 @pytest.mark.contention
 @pytest.mark.skipif(not os.getenv("VERITAS_DATABASE_URL"), reason="requires migrated PostgreSQL")
-def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_path):
+@pytest.mark.parametrize("posture", ["dev", "secure"])
+def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_path, posture):
     from veritas_os.api.auth import _derive_api_user_id
+    from veritas_os.api.governance import GovernancePolicy
     from veritas_os.core import shared_halt
     from veritas_os.logging.encryption import generate_key
     from veritas_os.security.signing import store_keypair
@@ -144,8 +202,10 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
     executor, reviewer = uuid4().hex, uuid4().hex
     private, public = store_keypair(tmp_path / "approval.key", tmp_path / "approval.pub")
     deployment = uuid4().hex
+    if posture == "secure" and not os.getenv("VERITAS_TEST_SHARED_HALT_REDIS_URL"):
+        pytest.skip("requires the dedicated Redis 7+ AOF service for secure startup")
     for name, value in {
-        "VERITAS_ENV": "test", "VERITAS_POSTURE": "dev",
+        "VERITAS_ENV": "test", "VERITAS_POSTURE": posture,
         "VERITAS_DATA_DIR": str(tmp_path), "VERITAS_ENCRYPTION_KEY": generate_key(),
         "VERITAS_DEPLOYMENT_ID": deployment, "VERITAS_HALT_BACKEND": "postgresql",
         "VERITAS_SYSTEM_RESUME_PUBLIC_KEY": public.read_text().strip(),
@@ -156,6 +216,30 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
         ]),
     }.items():
         monkeypatch.setenv(name, value)
+
+    if posture == "secure":
+        policy = GovernancePolicy().model_dump()
+        policy["bind_adjudication"].update(
+            ttl_required=True, approval_freshness_required=True, rollback_on_apply_failure=True,
+        )
+        (tmp_path / "policy.json").write_text(json.dumps(policy), encoding="utf-8")
+        for name, value in {
+            "WEB_CONCURRENCY": "2",
+            "VERITAS_API_SECRET": uuid4().hex,
+            "VERITAS_ENFORCE_API_SECRET_IN_TESTS": "1",
+            "VERITAS_AUTH_SECURITY_STORE": "redis",
+            "VERITAS_AUTH_REDIS_URL": os.environ["VERITAS_TEST_SHARED_HALT_REDIS_URL"],
+            "VERITAS_POSTURE_OVERRIDE_EXTERNAL_SECRET_MGR": "0",
+            "VERITAS_TRUSTLOG_BACKEND": "postgresql",
+            "VERITAS_TRUSTLOG_SIGNER_BACKEND": "aws_kms",
+            "VERITAS_TRUSTLOG_KMS_KEY_ID": "fixture-only",
+            "VERITAS_TRUSTLOG_MIRROR_BACKEND": "s3_object_lock",
+            "VERITAS_TRUSTLOG_S3_BUCKET": "fixture-only",
+            "VERITAS_TRUSTLOG_S3_PREFIX": "fixture-only",
+            "VERITAS_TRUSTLOG_ANCHOR_BACKEND": "local",
+            "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH": str(tmp_path / "anchor.jsonl"),
+        }.items():
+            monkeypatch.setenv(name, value)
 
     def request(worker, method, path, credential, body=None, expected=200):
         worker.send((method, path, credential, body))
@@ -189,19 +273,41 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
 
         url = "/v1/system/resume"
         a, b = workers = [start_worker(), start_worker()]
+        if posture == "secure":
+            request(a, "GET", "/v1/system/halt-status", "wrong-fixture-key", expected=401)
         request(a, "POST", "/v1/system/halt", executor, {"operator": "fixture", "reason": "test"})
         halt = request(a, "GET", "/v1/system/halt-status", executor)
         assert halt["halted"] and halt["reason"] == "test"
         assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
         blocked = request(b, "POST", "/v1/decide", executor, {"query": "blocked"}, expected=503)
         assert blocked["status"] == "HALTED"
+        if posture == "secure":
+            unavailable = request(
+                b, "decide_without_database", "/v1/decide", executor, {"query": "blocked"}, expected=503,
+            )
+            assert unavailable["error"] == "Emergency halt state unavailable"
         prepared, body = approve_resume(a, b)
+        if posture == "secure":
+            refused = request(
+                a, "expire_halt_apply", "/v1/system/halt", executor,
+                {"operator": "fixture", "reason": "expired stop"}, expected=403,
+            )
+            assert refused["bind_outcome"] == "BLOCKED"
+            assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
+
+            refused = request(a, "expire_resume_apply", url, executor, body, expected=403)
+            assert refused["bind_outcome"] == "BLOCKED"
+            assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
+            refused = request(a, "expire_resume_commit", url, executor, body, expected=409)
+            assert refused["detail"] == "Resume intent or approval expired before commit"
+            assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
+
         request(a, "failed_queue", url, executor, body, expected=500)
         assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == halt["halt_id"]
         blocked = request(b, "POST", "/v1/decide", executor, {"query": "blocked"}, expected=503)
         assert blocked["status"] == "HALTED"
         a.send(("audit", prepared["execution_intent_id"], None, None))
-        assert not _receive(a)
+        assert not any(entry.get("final_outcome") == "COMMITTED" for entry in _receive(a))
         with shared_halt.transaction() as conn:
             assert conn.execute(
                 "SELECT count(*) FROM deployment_resume_receipts WHERE deployment_id=%s", (deployment,),
@@ -223,6 +329,13 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
             ).fetchall()
         assert [row[0]["bind_receipt_id"] for row in receipts] == [winner["bind_receipt_id"]]
         assert receipts[0][1].startswith("ENC:") and receipts[0][2] is None
+        if posture == "secure":
+            assert receipts[0][0]["revalidation_context"]["approval_expires_at"] == body["approval_artifact"]["receipt"]["expires_at"]
+            replacement_worker = start_worker()
+            restarted = request(replacement_worker, "GET", "/v1/system/halt-status", executor)
+            assert restarted["halted"] and restarted["halt_id"] != halt["halt_id"]
+            assert request(b, "GET", "/v1/system/halt-status", executor)["halt_id"] == restarted["halt_id"]
+            request(b, "POST", url, executor, body, expected=404)
 
         a.send(("publish_with_lost_ack", None, None, None))
         assert _receive(a) == "audit blocked"
@@ -280,7 +393,7 @@ def test_two_processes_share_halt_approval_and_single_commit(monkeypatch, tmp_pa
             pytest.fail("restarted worker did not publish the pending audit receipt")
         assert request(recovery, "GET", "/v1/system/halt-status", executor)["halt_id"] == replacement["halt_id"]
         b.send(("audit", prepared["execution_intent_id"], None, None))
-        entries = _receive(b)
+        entries = [entry for entry in _receive(b) if entry.get("resume_publication_id")]
         assert [entry["kind"] for entry in entries] == ["governance.execution_intent", "governance.bind_receipt"]
         assert entries[-1]["final_outcome"] == "COMMITTED"
         assert entries[-1]["bind_receipt_id"] == winner["bind_receipt_id"]
