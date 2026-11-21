@@ -12,6 +12,7 @@ def upgrade() -> None:
     op.execute(
         """CREATE TABLE public.bind_sandbox_revocation_grants (
             operator_role oid NOT NULL,
+            operator_name name NOT NULL,
             authorization_id text NOT NULL
                 CHECK (authorization_id ~ '^laba:v2:sha256:[0-9a-f]{64}$'),
             PRIMARY KEY (operator_role, authorization_id)
@@ -52,8 +53,20 @@ def upgrade() -> None:
 
             SELECT rol.oid INTO actor_oid
                 FROM pg_catalog.pg_roles AS rol WHERE rol.rolname = session_user;
+            -- A logical restore can omit the ACL and restore default PUBLIC
+            -- execution. Require an explicit grant to the login itself.
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_proc AS routine
+                CROSS JOIN LATERAL pg_catalog.aclexplode(routine.proacl) AS privilege
+                WHERE routine.oid = 'public.revoke_sandbox_authorization(text,text)'::pg_catalog.regprocedure
+                    AND privilege.grantee = actor_oid AND privilege.privilege_type = 'EXECUTE'
+            ) THEN
+                RAISE EXCEPTION 'Sandbox revocation execution grant required' USING ERRCODE = '42501';
+            END IF;
             PERFORM 1 FROM public.bind_sandbox_revocation_grants AS scope
-                WHERE scope.operator_role = actor_oid AND scope.authorization_id = target_id
+                WHERE scope.operator_role = actor_oid AND scope.operator_name = session_user
+                    AND scope.authorization_id = target_id
                 FOR KEY SHARE;
             IF NOT FOUND THEN
                 RAISE EXCEPTION 'Sandbox revocation scope denied' USING ERRCODE = '42501';

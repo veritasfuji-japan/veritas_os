@@ -80,6 +80,14 @@ scripts/backup_postgres.sh --tables-only
 
 ### Manual fallback
 
+For backups that include Sandbox operator revocation (`0015`), use
+`scripts/restore_postgres.sh` so the logical restore skips operator assignments,
+retains dispatch ordering and audit records, and removes `PUBLIC` execution.
+Re-verify and enroll the operators and their assigned targets on the restored
+database before granting the function to individual logins again.
+
+For backups taken before `0015`:
+
 ```bash
 # Full compressed dump
 pg_dump -Fc --no-owner --no-privileges \

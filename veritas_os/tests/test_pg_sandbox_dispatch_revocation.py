@@ -66,6 +66,28 @@ async def operator_session(admin_pool, authorization_id):
                 await operator.execute(call, (authorization_id, "fixture cancellation"))
             async with admin_pool.connection() as admin:
                 await admin.execute(
+                    "INSERT INTO public.bind_sandbox_revocation_grants "
+                    "(operator_role, operator_name, authorization_id) "
+                    "SELECT oid, rolname, %s FROM pg_catalog.pg_roles WHERE rolname = %s",
+                    (authorization_id, role),
+                )
+                await admin.execute(
+                    "GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO PUBLIC"
+                )
+            try:
+                with pytest.raises(InsufficientPrivilege, match="execution grant required"):
+                    await operator.execute(call, (authorization_id, "fixture cancellation"))
+            finally:
+                async with admin_pool.connection() as admin:
+                    await admin.execute(
+                        "REVOKE EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) FROM PUBLIC"
+                    )
+            async with admin_pool.connection() as admin:
+                await admin.execute(
+                    "UPDATE public.bind_sandbox_revocation_grants SET operator_name = 'previous_login' "
+                    "WHERE authorization_id = %s", (authorization_id,),
+                )
+                await admin.execute(
                     sql.SQL("GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO {}")
                     .format(principal)
                 )
@@ -75,9 +97,10 @@ async def operator_session(admin_pool, authorization_id):
                 await operator.execute("SELECT * FROM public.bind_sandbox_revocation_audit")
             async with admin_pool.connection() as admin:
                 await admin.execute(
-                    "INSERT INTO public.bind_sandbox_revocation_grants (operator_role, authorization_id) "
-                    "SELECT oid, %s FROM pg_catalog.pg_roles WHERE rolname = %s",
-                    (authorization_id, role),
+                    "UPDATE public.bind_sandbox_revocation_grants SET operator_name = %s "
+                    "WHERE authorization_id = %s AND operator_role = "
+                    "(SELECT oid FROM pg_catalog.pg_roles WHERE rolname = %s)",
+                    (role, authorization_id, role),
                 )
             yield operator, role
     finally:

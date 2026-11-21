@@ -100,6 +100,7 @@ PG_DUMP_ARGS=(
     -Fc                         # Custom format (compressed, pg_restore-compatible)
     --no-owner                  # Omit ownership (portable across envs)
     --no-privileges             # Omit GRANT/REVOKE
+    --exclude-table-data=public.bind_sandbox_revocation_grants # Cluster-local operator assignments
     --verbose
 )
 

@@ -186,8 +186,9 @@ to the Bind, scope, or audit tables. The database owner grants function
 execution and enrolls each eligible authorization ID for its operator login.
 Verify the ID against the trusted Sandbox issuance record and deployment before
 enrollment. Keep provisioning access with the trusted deployment control plane.
-The function checks the authenticated login's PostgreSQL role ID and the exact
-authorization ID on every call.
+On every call the function requires a direct execution grant to the authenticated
+login and matches its PostgreSQL role ID, role name, and the exact authorization
+ID against the enrollment.
 
 For example, the database owner provisions an existing `sandbox_operator`
 login and a verified ID supplied as the psql variable `authorization_id`:
@@ -195,8 +196,8 @@ login and a verified ID supplied as the psql variable `authorization_id`:
 ```sql
 GRANT USAGE ON SCHEMA public TO sandbox_operator;
 GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO sandbox_operator;
-INSERT INTO public.bind_sandbox_revocation_grants (operator_role, authorization_id)
-SELECT oid, :'authorization_id'
+INSERT INTO public.bind_sandbox_revocation_grants (operator_role, operator_name, authorization_id)
+SELECT oid, rolname, :'authorization_id'
 FROM pg_catalog.pg_roles WHERE rolname = 'sandbox_operator';
 ```
 
@@ -215,3 +216,11 @@ audit record with the durable ordering result. A result of
 `DISPATCH_ALREADY_COMMITTED` leaves the effect outcome to reconciliation. An
 attempt without an execution grant or a scoped enrollment is denied. Migration
 `0015` rejects a downgrade while operator audit records exist.
+
+The repository backup and restore scripts preserve dispatch ordering and audit
+history. They exclude operator assignments from logical backups and skip those
+rows when restoring an older or external archive. The restore script also
+reapplies the restriction on `PUBLIC` execution. Re-verify and enroll operators
+and targets on the restored database before granting direct execution again.
+For manual logical backups, exclude the data in
+`public.bind_sandbox_revocation_grants` and apply the same restore steps.
