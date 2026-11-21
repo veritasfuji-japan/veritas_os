@@ -28,6 +28,11 @@ Secure and production deployments require an independently signed approval befor
    the current halt status separately. Keep the emergency halt available
    without a resume approval.
 
+In strict or shared deployments, emergency halt and signed resume issue a
+server-timestamped Bind intent valid for 30 seconds. The emergency halt applies the existing authenticated operator authority
+and the intent TTL. Bind's separate approval freshness check applies to
+resume, which uses the expiration from the verified signed approval.
+
 ## Shared deployment halt
 
 For multiple API workers, apply Alembic revision `0013` and configure every
@@ -151,3 +156,14 @@ The PostgreSQL contention workflow exercises two API processes. It checks
 rollback before commit, retry after file publication, a replacement halt
 during stalled audit delivery, and native hash-chain integrity under
 concurrent writes.
+
+
+## Secure CI coverage
+
+The PostgreSQL contention workflow exercises the `secure` application
+lifespan with a Redis 7 service configured for strict authentication and
+a governance policy that requires TTL, approval freshness and rollback.
+The fixture uses a temporary Ed25519 approval key and a shared native
+TrustLog. It substitutes the external signed TrustLog publication call and
+disables the external secret manager requirement for the test. This covers
+the application boundary and recovery under controlled service faults.

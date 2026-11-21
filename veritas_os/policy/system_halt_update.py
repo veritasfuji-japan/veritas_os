@@ -12,6 +12,9 @@ from veritas_os.policy.bind_core import execute_bind_adjudication
 from veritas_os.policy.bind_core.core import BindAuditSink
 
 
+_SYSTEM_CONTROL_INTENT_TTL_SECONDS = 30
+
+
 def halt_system_with_bind_boundary(
     *,
     decision_id: str,
@@ -27,6 +30,7 @@ def halt_system_with_bind_boundary(
     policy_lineage: dict[str, Any] | None = None,
     governance_policy: dict[str, Any] | None = None,
     decision_ts: str | None = None,
+    bounded_intent: bool = False,
     append_trustlog: bool = True,
     bind_ts: str | None = None,
     execution_intent_id: str | None = None,
@@ -39,11 +43,14 @@ def halt_system_with_bind_boundary(
         reason=reason,
         operator=operator,
     )
+    issued_at = decision_ts or _utc_now_iso8601()
     pre_snapshot = adapter.snapshot()
     expected_fingerprint = adapter.fingerprint_state(pre_snapshot)
 
     merged_approval_context: dict[str, Any] = dict(approval_context or {})
     merged_approval_context.setdefault("system_halt_approved", True)
+    if bounded_intent:
+        merged_approval_context["approval_freshness_basis"] = "authenticated_emergency_halt"
 
     intent = ExecutionIntent(
         execution_intent_id=execution_intent_id or uuid4().hex,
@@ -55,11 +62,13 @@ def halt_system_with_bind_boundary(
         target_resource="system/halt",
         intended_action="halt_system",
         decision_hash=decision_hash,
-        decision_ts=decision_ts or _utc_now_iso8601(),
+        decision_ts=issued_at,
+        ttl_seconds=_SYSTEM_CONTROL_INTENT_TTL_SECONDS if bounded_intent else None,
         expected_state_fingerprint=expected_fingerprint,
         approval_context=merged_approval_context,
         policy_lineage=_with_bind_policy_lineage(
             operation="halt",
+            authenticated_halt=bounded_intent,
             lineage=policy_lineage,
             governance_policy=governance_policy,
         ),
@@ -89,6 +98,7 @@ def resume_system_with_bind_boundary(
     policy_lineage: dict[str, Any] | None = None,
     governance_policy: dict[str, Any] | None = None,
     decision_ts: str | None = None,
+    bounded_intent: bool = False,
     append_trustlog: bool | BindAuditSink = True,
     bind_ts: str | None = None,
     execution_intent_id: str | None = None,
@@ -101,6 +111,7 @@ def resume_system_with_bind_boundary(
         operator=operator,
         comment=comment,
     )
+    issued_at = decision_ts or _utc_now_iso8601()
     pre_snapshot = adapter.snapshot()
     expected_fingerprint = adapter.fingerprint_state(pre_snapshot)
 
@@ -117,7 +128,8 @@ def resume_system_with_bind_boundary(
         target_resource="system/resume",
         intended_action="resume_system",
         decision_hash=decision_hash,
-        decision_ts=decision_ts or _utc_now_iso8601(),
+        decision_ts=issued_at,
+        ttl_seconds=_SYSTEM_CONTROL_INTENT_TTL_SECONDS if bounded_intent else None,
         expected_state_fingerprint=expected_fingerprint,
         approval_context=merged_approval_context,
         policy_lineage=_with_bind_policy_lineage(
@@ -144,6 +156,7 @@ def _utc_now_iso8601() -> str:
 def _with_bind_policy_lineage(
     *,
     operation: Literal["halt", "resume"],
+    authenticated_halt: bool = False,
     lineage: dict[str, Any] | None,
     governance_policy: dict[str, Any] | None,
 ) -> dict[str, Any]:
@@ -157,9 +170,17 @@ def _with_bind_policy_lineage(
         "operator_surface": "compliance",
         "relevant_ui_href": "/system",
     })
-    if not isinstance(governance_policy, dict):
-        return merged
-    bind_policy = governance_policy.get("bind_adjudication")
-    if isinstance(bind_policy, dict):
-        merged.setdefault("bind_adjudication", dict(bind_policy))
+    if isinstance(governance_policy, dict):
+        bind_policy = governance_policy.get("bind_adjudication")
+        if isinstance(bind_policy, dict):
+            merged.setdefault("bind_adjudication", dict(bind_policy))
+
+    if authenticated_halt:
+        # Halting uses the authenticated operator's authority and request TTL.
+        # A separate approval receipt is required to resume, not to stop.
+        existing_policy = merged.get("bind_adjudication")
+        halt_policy = dict(existing_policy) if isinstance(existing_policy, dict) else {}
+        halt_policy["approval_freshness_required"] = False
+        merged["bind_adjudication"] = halt_policy
+
     return merged

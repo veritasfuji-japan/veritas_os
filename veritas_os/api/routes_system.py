@@ -1077,6 +1077,7 @@ def system_halt(body: SystemHaltRequest, request: Request):
             status_reader=srv.SystemHaltController.status,
             halt_executor=srv.SystemHaltController.halt,
             approval_context={"system_halt_approved": True},
+            bounded_intent=shared_halt.enabled() or should_fail_fast_startup(),
             governance_policy=current_policy if isinstance(current_policy, dict) else None,
         ).to_dict()
         bind_receipt.setdefault("target_path", "/v1/system/halt")
@@ -1342,6 +1343,7 @@ def system_resume(body: SystemResumeRequest, request: Request):
             intent_id = pending.execution_intent_id
             policy_snapshot_id = pending.policy_snapshot_digest
             approval_context["approval_receipt_id"] = receipt.approval_receipt_id
+            approval_context["approval_expires_at"] = receipt.expires_at
             approval_context["halt_id"] = pending.halt_id
             def resume_executor(*, operator: str, comment: str) -> dict[str, Any] | None:
                 # Bind may interleave with new approvals, key rotation or policy changes.
@@ -1397,6 +1399,7 @@ def system_resume(body: SystemResumeRequest, request: Request):
                 resume_executor=resume_executor,
                 approval_context=approval_context,
                 governance_policy=current_policy if isinstance(current_policy, dict) else None,
+                bounded_intent="approval_expires_at" in approval_context,
                 append_trustlog=capture_audit if use_shared_halt else True,
             ).to_dict()
             if conn is not None and bind_receipt["final_outcome"] == FinalOutcome.COMMITTED.value:
