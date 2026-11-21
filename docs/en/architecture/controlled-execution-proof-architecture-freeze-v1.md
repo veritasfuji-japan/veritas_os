@@ -160,6 +160,9 @@ Migration `0014` adds a single PostgreSQL arbitration row per authorization.
 Deploy it with sandbox dispatchers drained, then restart them on the new code
 before enabling this control. Retain the arbitration rows and use the same
 PostgreSQL primary for revocation and dispatch.
+Migration `0014` rejects downgrade while committed revocations exist because
+older workers cannot enforce those records. The store requires the canonical
+native authorization ID without whitespace or other formatting changes.
 
 - `REVOKED_BEFORE_DISPATCH` means the committed local revocation prevents the
   sandbox sender from committing dispatch for that authorization. Repeat

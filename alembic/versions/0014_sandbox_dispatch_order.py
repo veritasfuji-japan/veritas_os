@@ -31,4 +31,18 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Keep the check and drop atomic with respect to revocation writers.
+    op.execute("LOCK TABLE bind_sandbox_dispatch_order IN ACCESS EXCLUSIVE MODE")
+    op.execute(
+        """DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM bind_sandbox_dispatch_order
+                WHERE resolution = 'REVOKED_BEFORE_DISPATCH'
+            ) THEN
+                RAISE EXCEPTION 'Cannot downgrade 0014 with committed sandbox authorization revocations';
+            END IF;
+        END
+        $$"""
+    )
     op.drop_table("bind_sandbox_dispatch_order")

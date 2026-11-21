@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
+import re
 from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,6 +25,7 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
     AuthorizationConsumptionRecord,
     AuthorizationConsumptionStoreError,
 )
+from veritas_os.policy.native_bind_authorization import NATIVE_AUTHORIZATION_ID_PATTERN
 from veritas_os.security.hash import sha256_of_canonical_json
 
 if TYPE_CHECKING:
@@ -489,8 +491,8 @@ class InMemoryAtomicEffectStateStore:
 
     async def revoke_sandbox_authorization(self, authorization_id: str) -> SandboxAuthorizationRevocation:
         """Record local revocation for a trusted caller, including before consumption."""
-        if not authorization_id.strip():
-            raise ValueError("Sandbox authorization ID is required")
+        if not re.fullmatch(NATIVE_AUTHORIZATION_ID_PATTERN, authorization_id):
+            raise ValueError("A canonical native sandbox authorization ID is required")
         async with self._lock:
             return self._dispatch_order.setdefault(
                 authorization_id, SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH,
@@ -890,8 +892,8 @@ class PostgresAtomicEffectStateStore:
 
     async def revoke_sandbox_authorization(self, authorization_id: str) -> SandboxAuthorizationRevocation:
         """Order a trusted caller's revocation against sandbox dispatch commitment."""
-        if not authorization_id.strip():
-            raise ValueError("Sandbox authorization ID is required")
+        if not re.fullmatch(NATIVE_AUTHORIZATION_ID_PATTERN, authorization_id):
+            raise ValueError("A canonical native sandbox authorization ID is required")
         try:
             from veritas_os.storage.db import get_pool
 

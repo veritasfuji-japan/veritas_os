@@ -53,6 +53,7 @@ from veritas_os.policy.promotion_requirement_runtime_risk import (
 )
 
 DOMAIN = "veritas.native-live-adapter-bind-authorization/v2"
+NATIVE_AUTHORIZATION_ID_PATTERN = r"^laba:v2:sha256:[0-9a-f]{64}$"
 
 
 def _supported_approval_rules(rules: dict[str, Any]) -> None:
@@ -111,7 +112,7 @@ class NativeBindAuthorizationArtifact(BaseModel):
     format_version: Literal["native-live-adapter-bind-authorization/v2"]
     artifact_type: Literal["live_adapter_bind_authorization"]
     artifact_version: Literal["v2"]
-    authorization_id: str = Field(pattern=r"^laba:v2:sha256:[0-9a-f]{64}$")
+    authorization_id: str = Field(pattern=NATIVE_AUTHORIZATION_ID_PATTERN)
     authorization_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     source_runtime_risk_packet: dict[str, Any]
     source_final_recheck_hash: str

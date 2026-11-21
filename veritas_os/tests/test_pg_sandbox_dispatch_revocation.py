@@ -3,6 +3,7 @@
 import asyncio
 from contextvars import ContextVar
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -10,6 +11,7 @@ from pydantic import SecretBytes
 
 from veritas_os.policy.bind_effect_reconciliation import (
     EffectExecutionState,
+    InMemoryAtomicEffectStateStore,
     PostgresAtomicEffectStateStore,
     SandboxAuthorizationRevocation,
 )
@@ -41,6 +43,59 @@ def issued(tmp_path_factory, monkeypatch):
 
 
 prepared_inputs = pytest.fixture(prepared_inputs_fixture.__wrapped__)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("store_type", [InMemoryAtomicEffectStateStore, PostgresAtomicEffectStateStore])
+async def test_revocation_rejects_noncanonical_ids(store_type, monkeypatch):
+    async def unexpected_pool():
+        pytest.fail("Malformed revocation must not reach PostgreSQL")
+
+    monkeypatch.setattr(db, "get_pool", unexpected_pool)
+    store = store_type()
+    canonical = "laba:v2:sha256:" + "a" * 64
+    for invalid in ("", f" {canonical}", f"{canonical}\n", canonical.upper(), canonical[:-1]):
+        with pytest.raises(ValueError, match="canonical native sandbox authorization ID"):
+            await store.revoke_sandbox_authorization(invalid)
+
+
+def test_downgrade_preserves_committed_revocations():
+    import psycopg
+    from alembic.config import Config
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import create_engine
+    from sqlalchemy.exc import DBAPIError
+
+    root = Path(__file__).resolve().parents[2]
+    migration = ScriptDirectory.from_config(Config(str(root / "alembic.ini"))).get_revision("0014")
+    assert migration is not None
+    engine = create_engine("postgresql+psycopg://", creator=lambda: psycopg.connect(db.build_conninfo()))
+    try:
+        with engine.begin() as conn:
+            # Shadow the migrated table within this connection only.
+            conn.exec_driver_sql(
+                "CREATE TEMP TABLE bind_sandbox_dispatch_order "
+                "(authorization_id text PRIMARY KEY, resolution text NOT NULL) ON COMMIT DROP"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO bind_sandbox_dispatch_order VALUES "
+                "('revoked', 'REVOKED_BEFORE_DISPATCH'), ('dispatched', 'DISPATCH_ALREADY_COMMITTED')"
+            )
+            with Operations.context(MigrationContext.configure(conn)):
+                with pytest.raises(DBAPIError, match="Cannot downgrade 0014"), conn.begin_nested():
+                    migration.module.downgrade()
+                assert conn.exec_driver_sql(
+                    "SELECT resolution FROM pg_temp.bind_sandbox_dispatch_order WHERE authorization_id = 'revoked'"
+                ).scalar_one() == "REVOKED_BEFORE_DISPATCH"
+                conn.exec_driver_sql("DELETE FROM pg_temp.bind_sandbox_dispatch_order WHERE authorization_id = 'revoked'")
+                migration.module.downgrade()
+            assert conn.exec_driver_sql(
+                "SELECT to_regclass('pg_temp.bind_sandbox_dispatch_order')"
+            ).scalar_one() is None
+    finally:
+        engine.dispose()
 
 
 class TransportProvider(Provider):
