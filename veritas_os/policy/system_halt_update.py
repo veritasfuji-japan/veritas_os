@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Literal
 from uuid import uuid4
 
@@ -13,6 +13,12 @@ from veritas_os.policy.bind_core.core import BindAuditSink
 
 
 _SYSTEM_CONTROL_INTENT_TTL_SECONDS = 30
+
+
+def new_system_control_intent_window() -> tuple[str, datetime]:
+    """Issue the timestamp and matching deadline for a bounded control intent."""
+    issued_at = _utc_now_iso8601()
+    return issued_at, datetime.fromisoformat(issued_at) + timedelta(seconds=_SYSTEM_CONTROL_INTENT_TTL_SECONDS)
 
 
 def halt_system_with_bind_boundary(

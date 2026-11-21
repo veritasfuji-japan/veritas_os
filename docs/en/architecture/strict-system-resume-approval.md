@@ -32,6 +32,8 @@ In strict or shared deployments, emergency halt and signed resume issue a
 server-timestamped Bind intent valid for 30 seconds. The emergency halt applies the existing authenticated operator authority
 and the intent TTL. Bind's separate approval freshness check applies to
 resume, which uses the expiration from the verified signed approval.
+The controller checks the deadline while holding the state lock. Shared
+resume also checks the earlier of the two deadlines just before commit.
 
 ## Shared deployment halt
 
