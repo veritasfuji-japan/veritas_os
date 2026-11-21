@@ -240,9 +240,13 @@ def redact_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     for key, value in entry.items():
         if key in _STRUCTURAL_FIELDS or (
-            key == "decision_snapshot_sha256"
+            key in {"decision_snapshot_sha256", "resume_publication_payload_sha256"}
             and isinstance(value, str)
             and re.fullmatch(r"[0-9a-f]{64}", value)
+        ) or (
+            key == "resume_publication_id"
+            and isinstance(value, str)
+            and re.fullmatch(r"[0-9a-f]{32}:governance\.(bind_receipt|execution_intent)", value)
         ):
             result[key] = value
         else:

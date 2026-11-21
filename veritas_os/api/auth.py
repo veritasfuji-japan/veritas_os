@@ -1337,7 +1337,10 @@ def _check_multiworker_auth_store() -> None:
     web_concurrency = (os.getenv("WEB_CONCURRENCY") or "").strip()
     uvicorn_workers = (os.getenv("UVICORN_WORKERS") or "").strip()
 
-    multi_worker = False
+    from veritas_os.core import shared_halt
+
+    # Shared deployments may use replicas without an explicit process count.
+    multi_worker = shared_halt.enabled()
     for worker_count in (web_concurrency, uvicorn_workers):
         try:
             multi_worker = multi_worker or int(worker_count) > 1

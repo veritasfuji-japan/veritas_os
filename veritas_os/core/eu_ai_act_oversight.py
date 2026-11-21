@@ -23,6 +23,7 @@ from typing import Any, Dict, List, MutableMapping
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from veritas_os.core import shared_halt
 from veritas_os.core.eu_ai_act_config import EUComplianceConfig
 
 
@@ -284,6 +285,8 @@ class SystemHaltController:
         Returns:
             Dict with halt confirmation details.
         """
+        if shared_halt.enabled():
+            return shared_halt.halt(reason=reason, operator=operator)
         with cls._lock:
             now = datetime.now(timezone.utc).isoformat()
             halt_id = uuid4().hex
@@ -321,6 +324,8 @@ class SystemHaltController:
         Returns:
             Dict with resume confirmation details.
         """
+        if shared_halt.enabled():
+            raise RuntimeError("Shared halt requires an approved conditional resume")
         result = cls._resume(operator=operator, comment=comment)
         assert result is not None
         return result
@@ -337,6 +342,8 @@ class SystemHaltController:
         """
         if not isinstance(expected_halt_id, str) or not expected_halt_id:
             return None
+        if shared_halt.enabled():
+            return shared_halt.resume(expected_halt_id=expected_halt_id, operator=operator, expires_at=expires_at)
         return cls._resume(
             operator=operator, comment=comment, expected_halt_id=expected_halt_id, expires_at=expires_at
         )
@@ -381,12 +388,16 @@ class SystemHaltController:
     @classmethod
     def is_halted(cls) -> bool:
         """Return ``True`` if the system is currently halted."""
+        if shared_halt.enabled():
+            return shared_halt.status()["halted"]
         with cls._lock:
             return cls._halted
 
     @classmethod
     def status(cls) -> Dict[str, Any]:
         """Return the current halt status for dashboards and health checks."""
+        if shared_halt.enabled():
+            return shared_halt.status()
         with cls._lock:
             return {
                 "halted": cls._halted,

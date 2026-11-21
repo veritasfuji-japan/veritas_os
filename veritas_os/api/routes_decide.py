@@ -8,6 +8,7 @@ stops, and response coercion/validation lives in
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -18,6 +19,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from veritas_os.core import shared_halt
 from veritas_os.api.auth import require_permission
 from veritas_os.api.governance import get_policy
 from veritas_os.api.rbac import Permission
@@ -531,7 +533,14 @@ async def decide(req: DecideRequest, request: Request):
     srv = _get_server()
     # Emergency halt applies independently of optional compliance processing.
     # Inspect one locked status snapshot before loading or running the pipeline.
-    halt_status = srv.SystemHaltController.status()
+    try:
+        if shared_halt.enabled():
+            halt_status = await asyncio.to_thread(srv.SystemHaltController.status)
+        else:
+            halt_status = srv.SystemHaltController.status()
+    except shared_halt.HaltStoreUnavailable:
+        _record("unavailable")
+        return _svc.error_response(503, error="Emergency halt state unavailable")
     if halt_status["halted"]:
         _record("halted")
         return _svc.error_response(

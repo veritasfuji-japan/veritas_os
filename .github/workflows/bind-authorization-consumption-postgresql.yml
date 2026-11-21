@@ -64,6 +64,9 @@ jobs:
           set -euxo pipefail
           alembic upgrade head
 
+      - name: Verify signed resume across two API processes
+        run: python -m pytest -q veritas_os/tests/test_pg_shared_halt.py
+
       - name: Prove atomic consume-once on real PostgreSQL
         run: |
           set -euxo pipefail

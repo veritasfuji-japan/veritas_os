@@ -138,6 +138,9 @@ def test_warn_legacy_core_shim_stacklevel_changes_warning_location() -> None:
 
 
 def test_memory_package_import_does_not_emit_legacy_memory_model_warning() -> None:
+    parent_namespace = vars(importlib.import_module("veritas_os.core"))
+    had_parent_memory = "memory" in parent_namespace
+    previous_parent_memory = parent_namespace.get("memory")
     previous_memory = sys.modules.get("veritas_os.core.memory")
     previous_legacy = sys.modules.get("veritas_os.core.models.memory_model")
     previous_llm_client = sys.modules.get("veritas_os.core.llm_client")
@@ -167,6 +170,12 @@ def test_memory_package_import_does_not_emit_legacy_memory_model_warning() -> No
             sys.modules["veritas_os.core.memory"] = previous_memory
         else:
             sys.modules.pop("veritas_os.core.memory", None)
+
+        # A fresh submodule import also replaces the parent package attribute.
+        if had_parent_memory:
+            parent_namespace["memory"] = previous_parent_memory
+        else:
+            parent_namespace.pop("memory", None)
 
         if had_legacy:
             sys.modules["veritas_os.core.models.memory_model"] = previous_legacy

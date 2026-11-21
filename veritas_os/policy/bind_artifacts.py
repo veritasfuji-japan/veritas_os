@@ -447,26 +447,25 @@ def append_bind_receipt_trustlog(receipt: BindReceipt) -> BindReceipt:
     bind_receipt_hash = hash_bind_receipt(candidate)
     candidate = replace(candidate, bind_receipt_hash=bind_receipt_hash)
 
-    entry = append_trust_log(
-        {
-            "kind": "governance.bind_receipt",
-            "request_id": candidate.decision_id,
-            "decision_id": candidate.decision_id,
-            "execution_intent_id": candidate.execution_intent_id,
-            "bind_receipt_id": candidate.bind_receipt_id,
-            "bind_ts": candidate.bind_ts,
-            "final_outcome": (
-                candidate.final_outcome.value
-                if isinstance(candidate.final_outcome, FinalOutcome)
-                else str(candidate.final_outcome)
-            ),
-            "prev_bind_hash": candidate.prev_bind_hash,
-            "bind_receipt_hash": bind_receipt_hash,
-            "bind_receipt": candidate.to_dict(),
-        }
-    )
+    entry = append_trust_log(build_bind_receipt_trustlog_entry(candidate.to_dict()))
     trustlog_hash = str(entry.get("sha256") or "")
     return replace(candidate, trustlog_hash=trustlog_hash)
+
+
+def build_bind_receipt_trustlog_entry(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Build the TrustLog envelope for a serialized Bind receipt."""
+    return {
+        "kind": "governance.bind_receipt",
+        "request_id": receipt["decision_id"],
+        "decision_id": receipt["decision_id"],
+        "execution_intent_id": receipt["execution_intent_id"],
+        "bind_receipt_id": receipt["bind_receipt_id"],
+        "bind_ts": receipt["bind_ts"],
+        "final_outcome": receipt["final_outcome"],
+        "prev_bind_hash": receipt["prev_bind_hash"],
+        "bind_receipt_hash": receipt["bind_receipt_hash"],
+        "bind_receipt": receipt,
+    }
 
 
 def find_bind_receipts(

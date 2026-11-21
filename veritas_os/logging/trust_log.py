@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import threading
 from datetime import datetime, timezone
@@ -27,11 +28,16 @@ from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
 
 from veritas_os.logging.paths import LOG_DIR
-from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
+from veritas_os.logging.rotate import (
+    load_last_hash_marker,
+    open_trust_log_for_append,
+    trust_log_process_lock,
+)
 from veritas_os.logging.encryption import (
     encrypt as _encrypt_line,
     decrypt as _decrypt_line,
     is_encryption_enabled,
+    resolved_encryption_key,
     EncryptionKeyMissing,
     DecryptionError,
 )
@@ -94,6 +100,24 @@ MAX_JSON_ITEMS = 2000
 #   この依存関係を変更する場合は、全ての呼び出しパスを確認すること。
 _trust_log_lock = threading.RLock()
 trust_log_lock = _trust_log_lock  # 公開 API（server.py 等から参照用）
+
+def _find_retained_publication(publication_id: str) -> dict[str, Any] | None:
+    """Find a replay in active and retained rotated JSONL under the writer lock."""
+    rotated = LOG_JSONL.with_name(LOG_JSONL.stem + "_old.jsonl")
+    for path in (LOG_JSONL, rotated):
+        try:
+            with path.open(encoding="utf-8") as stream:
+                for line in stream:
+                    record = _decode_line(line)
+                    if record is None and line.strip():
+                        raise ValueError("Cannot verify retained TrustLog publication")
+                    if record and record.get("resume_publication_id") == publication_id:
+                        os.fsync(stream.fileno())
+                        return record
+        except FileNotFoundError:
+            continue
+    return None
+
 
 # Counters for operational observability
 # NOTE: dict を使用することで global 宣言なしに値を更新可能。
@@ -376,7 +400,7 @@ def _save_json(items: list) -> None:
     atomic_write_json(LOG_JSON, {"items": items}, indent=2)
 
 
-def append_trust_log(entry: dict) -> Dict[str, Any]:
+def append_trust_log(entry: dict, *, publication_id: str | None = None) -> Dict[str, Any]:
     """
     決定ごとの監査ログ（軽量）を JSONL + JSON に保存。
 
@@ -393,7 +417,8 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
     - JSONL は 5000 行でローテーション（rotate.py 側）
     - trust_log.json は最新 MAX_JSON_ITEMS 件だけ保持
 
-    ★ スレッドセーフ: RLock で全操作を保護（ハッシュチェーンの整合性保証）
+    The thread and process locks cover the native hash chain and JSON aggregate.
+    An optional resume publication ID deduplicates retained native records.
 
     Returns:
         sha256, sha256_prev が付与された *redacted* エントリ
@@ -404,59 +429,71 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
         TypeError: エントリが JSON へシリアライズ不能な型を含む場合。
         ValueError: 不正なエントリ値や JSON 変換エラーが発生した場合。
     """
-    import os
-
     # ★ スレッドセーフ: ハッシュチェーンの整合性を保証するためロックを取得
     try:
-        with _trust_log_lock:
+        with resolved_encryption_key(), _trust_log_lock:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
+            with trust_log_process_lock(LOG_JSONL):
+                if publication_id is not None:
+                    payload_hash = sha256_hex(
+                        json.dumps(entry, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                    )
+                    existing = _find_retained_publication(publication_id)
+                    if existing is not None:
+                        if existing.get("resume_publication_payload_sha256") != payload_hash:
+                            raise ValueError("Resume audit publication payload changed")
+                        return existing
+                    entry = {
+                        **entry,
+                        "resume_publication_id": publication_id,
+                        "resume_publication_payload_sha256": payload_hash,
+                    }
 
-            # ---- 直前ハッシュの取得（JSONL 側を正とする）----
-            # ★ ロック保持中のためロック不要版を使用（RLock再入を回避）
-            sha256_prev = _get_last_hash_unlocked()
+                # ---- 直前ハッシュの取得（JSONL 側を正とする）----
+                # ★ ロック保持中のためロック不要版を使用（RLock再入を回避）
+                sha256_prev = _get_last_hash_unlocked()
 
-            items = _load_logs_json()
+                items = _load_logs_json()
 
-            # ★ Backend-independent secure entry pipeline (trust_log_core)
-            # redact → canonicalize → chain-hash → encrypt
-            entry, line = _prepare_entry(entry, previous_hash=sha256_prev)
+                # ★ Backend-independent secure entry pipeline (trust_log_core)
+                # redact → canonicalize → chain-hash → encrypt
+                entry, line = _prepare_entry(entry, previous_hash=sha256_prev)
 
-            # ★ Step 5: append to JSONL (with fsync for durability)
-            with open_trust_log_for_append() as f:
-                f.write(line + "\n")
-                f.flush()
-                os.fsync(f.fileno())
+                # ★ Step 5: append to JSONL (with fsync for durability)
+                with open_trust_log_for_append() as f:
+                    f.write(line + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
 
-            # ---- JSON(配列) を更新（最新 N 件だけ残す）----
-            items.append(entry)
-            if len(items) > MAX_JSON_ITEMS:
-                items = items[-MAX_JSON_ITEMS:]
+                # ---- JSON(配列) を更新（最新 N 件だけ残す）----
+                items.append(entry)
+                if len(items) > MAX_JSON_ITEMS:
+                    items = items[-MAX_JSON_ITEMS:]
 
-            _save_json(items)
+                _save_json(items)
 
-            # Signed TrustLog (append-only JSONL) is best-effort and must not
-            # break the existing decision pipeline.
+        # Signed TrustLog (append-only JSONL) is best-effort and must not
+        # break the existing decision pipeline.
+        try:
             try:
-                try:
-                    append_signed_decision(entry, enable_artifact_ref=True)
-                except TypeError as exc:
-                    # Backward-compatibility for tests or call sites that
-                    # monkeypatch append_signed_decision with legacy signature.
-                    if "enable_artifact_ref" not in str(exc):
-                        raise
-                    append_signed_decision(entry)
-            except SignedTrustLogWriteError:
-                logger.warning(
-                    "append_signed_decision failed; continuing with legacy trust log",
-                    exc_info=True,
-                )
+                append_signed_decision(entry, enable_artifact_ref=True)
+            except TypeError as exc:
+                # Backward-compatibility for tests or call sites that
+                # monkeypatch append_signed_decision with legacy signature.
+                if "enable_artifact_ref" not in str(exc):
+                    raise
+                append_signed_decision(entry)
+        except SignedTrustLogWriteError:
+            logger.warning(
+                "append_signed_decision failed; continuing with legacy trust log",
+                exc_info=True,
+            )
 
-            with _append_stats_lock:
-                _append_stats["success"] += 1
-            record_trustlog_append_success()
+        with _append_stats_lock:
+            _append_stats["success"] += 1
+        record_trustlog_append_success()
 
-            return entry
-
+        return entry
     except (OSError, TypeError, ValueError, json.JSONDecodeError, EncryptionKeyMissing):
         with _append_stats_lock:
             _append_stats["failure"] += 1
