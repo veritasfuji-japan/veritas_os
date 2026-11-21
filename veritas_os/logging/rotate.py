@@ -1,8 +1,9 @@
 import json
 import logging
 import os
+from contextlib import contextmanager
 from pathlib import Path
-from typing import TextIO, Union
+from typing import Iterator, TextIO, Union
 
 from .encryption import decrypt as _decrypt_line_if_needed
 from .paths import LOG_JSONL
@@ -10,6 +11,30 @@ from .paths import LOG_JSONL
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_LINES = 5000
+
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - unsupported by the shared halt backend
+    fcntl = None
+
+
+@contextmanager
+def trust_log_process_lock(path: Path) -> Iterator[None]:
+    """Coordinate writers across processes, including JSONL rotation."""
+    if fcntl is None:
+        yield
+        return
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with lock_path.open("a", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        yield
+
+
+def require_trust_log_process_lock() -> None:
+    """Reject a shared deployment when process-level file locking is unavailable."""
+    if fcntl is None:
+        raise RuntimeError("Shared halt requires TrustLog file locking")
 
 
 def _get_max_lines() -> int:

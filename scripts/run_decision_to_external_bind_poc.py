@@ -408,13 +408,40 @@ def _verified_authority(
     return proof, verifier_policy, revocation_policy
 
 
+def _resume_for_proof(client: TestClient, executor_key: str, reviewer_key: str) -> None:
+    """Approve only the startup halt through the real management endpoints."""
+    executor = {"X-API-Key": executor_key}
+    reviewer = {"X-API-Key": reviewer_key}
+    url = "/v1/system/resume"
+    prepared = client.post(url + "/prepare", headers=executor)
+    prepared.raise_for_status()
+    pending = prepared.json()
+    review_url = f"{url}/requests/{pending['request_id']}"
+    review = client.get(review_url, headers=reviewer)
+    review.raise_for_status()
+    expected_hash = sha256_of_canonical_json(pending)
+    if review.json()["preparation"] != pending or review.json()["context_hash"] != expected_hash:
+        raise RuntimeError("Controlled proof startup review differs from preparation")
+    approval = client.post(review_url + "/approve", headers=reviewer,
+                           json={"decision": "approve", "context_hash": expected_hash})
+    approval.raise_for_status()
+    resumed = client.post(url, headers=executor, json={
+        "operator": "synthetic-startup-operator", "comment": "controlled proof startup",
+        "request_id": pending["request_id"], "approval_artifact": approval.json(),
+    })
+    resumed.raise_for_status()
+    if resumed.json().get("bind_outcome") != "COMMITTED":
+        raise RuntimeError("Controlled proof startup resume did not commit")
+
+
 def _decide(
     *,
     aws_clients: _DeterministicAwsClients,
     policy_bundle_dir: Path,
 ) -> tuple[dict[str, Any], bool, dict[str, int]]:
     """Cross the authenticated real HTTP route with controlled provider output."""
-    from veritas_os.api import server
+    from veritas_os.api import auth, server
+    from veritas_os.security.signing import store_keypair
     from veritas_os.core import kernel as decision_kernel
     from veritas_os.core import llm_client
 
@@ -431,8 +458,9 @@ def _decide(
     observed = _observed_kernel_decide(decision_kernel.decide, counters)
     real_import_module = importlib.import_module
     startup_api_key = "poc-startup-" + secrets.token_urlsafe(24)
+    reviewer_key = "poc-reviewer-" + secrets.token_urlsafe(24)
     api_keys = json.loads(os.environ["VERITAS_API_KEYS"])
-    api_keys.append({"key": startup_api_key, "role": "admin"})
+    api_keys.extend({"key": key, "role": "admin"} for key in (startup_api_key, reviewer_key))
 
     def controlled_import_module(
         name: str,
@@ -442,28 +470,28 @@ def _decide(
             return aws_clients
         return real_import_module(name, package)
 
-    with (
-        patch.dict(os.environ, {"VERITAS_API_KEYS": json.dumps(api_keys)}),
-        patch.object(llm_client, "chat", controlled_chat),
-        patch.object(decision_kernel, "decide", observed),
-        patch("importlib.import_module", side_effect=controlled_import_module),
-    ):
-        with TestClient(server.app) as client:
-            # Strict startup requires an authenticated Bind-controlled resume
-            # before decision admission; never clear controller state directly.
-            resumed = client.post(
-                "/v1/system/resume",
-                headers={"X-API-Key": startup_api_key},
-                json={"operator": "synthetic-startup-operator", "comment": "controlled proof startup"},
-            )
-            resumed.raise_for_status()
-            if resumed.json().get("bind_outcome") != "COMMITTED":
-                raise RuntimeError("Controlled proof startup resume did not commit")
-            response = client.post(
-                "/v1/decide",
-                headers={"X-API-Key": os.environ["VERITAS_API_KEY"]},
-                json=_decision_request_fixture(policy_bundle_dir),
-            )
+    with tempfile.TemporaryDirectory(prefix="poc-resume-") as key_dir:
+        private, public = store_keypair(Path(key_dir) / "resume.key", Path(key_dir) / "resume.pub")
+        startup_env = {
+            "VERITAS_API_KEYS": json.dumps(api_keys),
+            "VERITAS_SYSTEM_RESUME_APPROVER_ID": auth._derive_api_user_id(reviewer_key),
+            "VERITAS_SYSTEM_RESUME_SIGNING_KEY_FILE": str(private),
+            "VERITAS_SYSTEM_RESUME_PUBLIC_KEY": public.read_text().strip(),
+            "VERITAS_DEPLOYMENT_ID": "isolated-decision-proof",
+        }
+        with (
+            patch.dict(os.environ, startup_env),
+            patch.object(llm_client, "chat", controlled_chat),
+            patch.object(decision_kernel, "decide", observed),
+            patch("importlib.import_module", side_effect=controlled_import_module),
+        ):
+            with TestClient(server.app) as client:
+                _resume_for_proof(client, startup_api_key, reviewer_key)
+                response = client.post(
+                    "/v1/decide",
+                    headers={"X-API-Key": os.environ["VERITAS_API_KEY"]},
+                    json=_decision_request_fixture(policy_bundle_dir),
+                )
     response.raise_for_status()
     return (
         response.json(),

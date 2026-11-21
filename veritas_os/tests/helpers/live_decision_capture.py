@@ -1,10 +1,9 @@
 """Capture a real /v1/decide response in an isolated test interpreter.
 
 Only model output and cloud clients are controlled. Route, kernel, signed
-policy verification and CDA construction execute normally. A separate synthetic
-admin credential performs the strict-startup resume through the real management
-Bind path. This helper issues no candidate execution authorization or human
-receipt, and does not execute the selected candidate.
+policy verification and CDA construction execute normally. Separate synthetic executor and reviewer credentials recover the startup halt
+through the signed management flow. The approval covers only system resume.
+The selected candidate receives no execution authority and is never executed.
 """
 
 from __future__ import annotations

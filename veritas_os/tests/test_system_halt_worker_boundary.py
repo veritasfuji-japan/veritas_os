@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from veritas_os.api import startup_health
+from veritas_os.api import auth, startup_health
 
 
 @pytest.fixture(autouse=True)
@@ -114,3 +114,10 @@ def test_halt_state_is_not_shared_with_another_process():
         finally:
             first.terminate()
             first.communicate(timeout=5)
+
+def test_strict_shared_halt_requires_shared_auth_even_without_worker_count(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENV", "secure")
+    monkeypatch.setenv("VERITAS_HALT_BACKEND", "postgresql")
+    monkeypatch.setattr(auth, "_get_effective_auth_store", lambda: object())
+    with pytest.raises(RuntimeError, match="shared Redis auth store"):
+        auth._check_multiworker_auth_store()

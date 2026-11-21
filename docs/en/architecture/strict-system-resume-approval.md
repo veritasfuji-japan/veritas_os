@@ -1,12 +1,6 @@
 # Explicit approval for system resume
 
-Status: proposed
-
-In secure and prod, system resume should require both an authenticated caller
-with `config_write` and verified human approval for the active halt. Today,
-the HTTP route sets `system_resume_approved` after authenticating the operator.
-The existing integration test supplies a negative authority result and confirms
-that Bind preserves the halt and keeps decision admission closed.
+Secure and production deployments require an independently signed approval before clearing the active halt.
 
 ## Approval and execution
 
@@ -34,9 +28,42 @@ that Bind preserves the halt and keeps decision admission closed.
    the current halt status separately. Keep the emergency halt available
    without a resume approval.
 
-The current halt controller stores its state in process. A local lock can
-protect the transition within one process. A deployment-wide guarantee across
-workers needs shared authoritative halt state with an atomic conditional update.
+## Shared deployment halt
+
+For multiple API workers, apply Alembic revision `0013` and configure every
+worker with `VERITAS_HALT_BACKEND=postgresql`, the same stable
+`VERITAS_DEPLOYMENT_ID`, database, policy, approver and key configuration.
+Use the primary PostgreSQL server for `VERITAS_DATABASE_URL`. The normal
+shared authentication requirements still apply. Use a common protected
+TrustLog directory on a filesystem that honors POSIX advisory locks across
+all workers. Configure the same TrustLog encryption key or provider on every
+worker so each can deliver queued records.
+The default `memory` backend retains the single-worker strict startup guard.
+
+Each shared worker startup preserves an existing halt or rearms the deployment
+if it was running. Rolling restarts can therefore require a new approval.
+Decision admission reads the authoritative row and refuses requests when it
+cannot read it. Pending approvals are serialized under a deployment row lock.
+The database clock gates the conditional release and checks approval expiry
+again just before commit. A worker retrieves the audit encryption key
+before locking the halt row, so key provider delays do not hold up an
+emergency halt. The winning Bind receipt and encrypted audit entries are saved in `deployment_resume_receipts` in the transaction that
+clears the halt. A successful HTTP response confirms the database transition.
+The TrustLog hash becomes available after file publication.
+
+The API workers retry pending publication after startup and during operation.
+A worker claims only a pending audit row while publishing, so slow file
+writes and signed mirror delivery do not hold the emergency halt row.
+Native JSONL writers serialize previous-hash lookup, rotation and append
+across processes. The active and retained rotated logs use stable publication
+identities to deduplicate retries. Each delivery resolves the encryption key
+before taking the shared file lock and reuses it for retained-log lookup,
+rotation and append. The authoritative receipt remains in PostgreSQL, including after local log rotation. For a delayed audit record,
+check `published_at` on the receipt row. Pending rows are retried after the
+underlying error is resolved, including errors returned by remote key
+providers. Signed mirrors and transparency anchors retain
+their destination-specific delivery guarantees.
+
 ## Startup recovery and approval issuance
 
 `POST /v1/system/resume/prepare` implements the preparation step. Set
@@ -44,7 +71,7 @@ workers needs shared authoritative halt state with an atomic conditional update.
 unique to the deployment. A caller with `config_write` can submit the request
 without a body. The response includes the request and execution intent IDs,
 active halt ID, authenticated execution principal, and SHA-256 digest of the
-current canonical governance policy. Requests are kept in process memory.
+current canonical governance policy. Requests use the configured halt backend.
 Repeating preparation for the same principal and context returns the same
 pending request. A new halt, policy, or deployment context supersedes older
 requests. After a process restart, create a fresh request for the startup halt.
@@ -72,8 +99,13 @@ authenticated key principals. When the governance policy lists
    unavailable, retries fail closed. After key rotation or five-minute expiry the
    executor prepares a new request, which requires a new review.
 
-Issuance keeps the halt active. Runtime verification and enforcement at
-`/v1/system/resume` are a subsequent implementation step.
+Issuance keeps the halt active. Set `VERITAS_SYSTEM_RESUME_PUBLIC_KEY` to the
+independently provisioned URL-safe base64 raw Ed25519 public key. The executor
+posts `operator`, `request_id` and the complete signed `approval_artifact` to
+`/v1/system/resume`. The authenticated credential determines the executor.
+Configure the public key before startup and rotate it with the approval signer.
+Development deployments continue to support operator-only resume. Providing
+either approval field always selects the signed flow.
 
 Provision authorized human approvers and the approval verifier before enabling
 strict resume. An operator with `config_write` can prepare a resume request via
@@ -115,5 +147,7 @@ leave B active. A status read alone cannot establish which transition occurred.
 | Approval verification is unavailable | Resume is refused and emergency halt remains available |
 
 Exercise these cases through the mounted HTTP application using synthetic data.
-Use a separate shared-state test with multiple workers before claiming
-deployment-wide coverage.
+The PostgreSQL contention workflow exercises two API processes. It checks
+rollback before commit, retry after file publication, a replacement halt
+during stalled audit delivery, and native hash-chain integrity under
+concurrent writes.

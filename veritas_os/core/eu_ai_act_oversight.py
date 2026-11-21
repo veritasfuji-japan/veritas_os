@@ -23,6 +23,7 @@ from typing import Any, Dict, List, MutableMapping
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from veritas_os.core import shared_halt
 from veritas_os.core.eu_ai_act_config import EUComplianceConfig
 
 
@@ -284,6 +285,8 @@ class SystemHaltController:
         Returns:
             Dict with halt confirmation details.
         """
+        if shared_halt.enabled():
+            return shared_halt.halt(reason=reason, operator=operator)
         with cls._lock:
             now = datetime.now(timezone.utc).isoformat()
             halt_id = uuid4().hex
@@ -321,13 +324,16 @@ class SystemHaltController:
         Returns:
             Dict with resume confirmation details.
         """
+        if shared_halt.enabled():
+            raise RuntimeError("Shared halt requires an approved conditional resume")
         result = cls._resume(operator=operator, comment=comment)
         assert result is not None
         return result
 
     @classmethod
     def resume_if_halt_matches(
-        cls, *, expected_halt_id: str, operator: str, comment: str = ""
+        cls, *, expected_halt_id: str, operator: str, comment: str = "",
+        expires_at: datetime | None = None,
     ) -> Dict[str, Any] | None:
         """Clear the active halt only if its identifier matches.
 
@@ -336,20 +342,26 @@ class SystemHaltController:
         """
         if not isinstance(expected_halt_id, str) or not expected_halt_id:
             return None
+        if shared_halt.enabled():
+            return shared_halt.resume(expected_halt_id=expected_halt_id, operator=operator, expires_at=expires_at)
         return cls._resume(
-            operator=operator, comment=comment, expected_halt_id=expected_halt_id
+            operator=operator, comment=comment, expected_halt_id=expected_halt_id, expires_at=expires_at
         )
 
     @classmethod
     def _resume(
-        cls, *, operator: str, comment: str, expected_halt_id: str | None = None
+        cls, *, operator: str, comment: str, expected_halt_id: str | None = None,
+        expires_at: datetime | None = None,
     ) -> Dict[str, Any] | None:
         with cls._lock:
             if expected_halt_id is not None and (
                 not cls._halted or cls._halt_id != expected_halt_id
             ):
                 return None
-            now = datetime.now(timezone.utc).isoformat()
+            transition_time = datetime.now(timezone.utc)
+            if expires_at is not None and transition_time >= expires_at:
+                return None
+            now = transition_time.isoformat()
             was_halted = cls._halted
             cleared_halt_id = cls._halt_id
             cls._halted = False
@@ -376,12 +388,16 @@ class SystemHaltController:
     @classmethod
     def is_halted(cls) -> bool:
         """Return ``True`` if the system is currently halted."""
+        if shared_halt.enabled():
+            return shared_halt.status()["halted"]
         with cls._lock:
             return cls._halted
 
     @classmethod
     def status(cls) -> Dict[str, Any]:
         """Return the current halt status for dashboards and health checks."""
+        if shared_halt.enabled():
+            return shared_halt.status()
         with cls._lock:
             return {
                 "halted": cls._halted,

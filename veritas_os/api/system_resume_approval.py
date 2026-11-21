@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -12,12 +13,17 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import BaseModel, ConfigDict, Field
 
 from veritas_os.governance.human_approval_receipt import (
+    ApprovedHumanApprovalVerifier,
     HumanApprovalReceipt,
+    HumanApprovalSignerPolicy,
+    HumanApprovalVerifierPolicy,
+    verify_human_approval_receipt_artifact_to_proof,
     SIGNED_APPROVAL_ARTIFACT_TYPE,
     SIGNED_APPROVAL_ARTIFACT_VERSION,
 )
 from veritas_os.governance.human_approval_receipt_signing import (
     human_approval_signature_payload,
+    TrustedEd25519HumanApprovalVerifier,
 )
 from veritas_os.security.hash import sha256_hex, sha256_of_canonical_json
 
@@ -108,3 +114,39 @@ def sign_resume_approval(
     signature = key.sign(human_approval_signature_payload(artifact).encode("utf-8"))
     artifact["signature"] = base64.urlsafe_b64encode(signature).decode("ascii")
     return artifact, expiry
+
+
+def verify_resume_approval(
+    record: PendingResume, artifact: dict[str, Any], approver: str,
+) -> HumanApprovalReceipt:
+    """Verify the issued artifact against the deployment's independently pinned public key."""
+    if record.artifact is None or record.artifact != artifact:
+        raise ValueError("Resume approval does not match issued receipt")
+    public_key = base64.b64decode(
+        os.getenv("VERITAS_SYSTEM_RESUME_PUBLIC_KEY", "").strip(), altchars=b"-_", validate=True,
+    )
+    if len(public_key) != 32:
+        raise ValueError("Resume verification key unavailable")
+    kid = sha256_hex(public_key)
+    role = "system_resume_approver"
+    verifier = TrustedEd25519HumanApprovalVerifier(
+        {kid: public_key}, {kid: approver}, {kid: role}, "system-resume-ed25519",
+    )
+    pending = record.preparation
+    receipt = verify_human_approval_receipt_artifact_to_proof(
+        artifact, verifier.verify, requested_scope=[pending.action], action_class=pending.action,
+        policy_snapshot_id=pending.policy_snapshot_digest,
+        signer_policy=HumanApprovalSignerPolicy(
+            "system-resume", [kid], ["Ed25519"], [role], [approver], [pending.action],
+        ),
+        verifier_policy=HumanApprovalVerifierPolicy([
+            ApprovedHumanApprovalVerifier(verifier.verifier_id, "production", kid,
+                                          verifier.verifier_policy_id, verifier.policy_hash()),
+        ]),
+        require_production_verifier=True, require_structured_signature_result=True,
+    ).receipt
+    if (receipt.approver_identity != approver or receipt.request_ref != pending.request_id
+            or receipt.execution_intent_id != pending.execution_intent_id
+            or receipt.bind_context_hash != sha256_of_canonical_json(pending.model_dump())):
+        raise ValueError("Resume approval context mismatch")
+    return receipt

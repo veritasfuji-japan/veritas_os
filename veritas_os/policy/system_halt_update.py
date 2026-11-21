@@ -9,6 +9,7 @@ from uuid import uuid4
 from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent
 from veritas_os.policy.bind_boundary_adapters import SystemHaltAdapter, SystemResumeAdapter
 from veritas_os.policy.bind_core import execute_bind_adjudication
+from veritas_os.policy.bind_core.core import BindAuditSink
 
 
 def halt_system_with_bind_boundary(
@@ -88,7 +89,7 @@ def resume_system_with_bind_boundary(
     policy_lineage: dict[str, Any] | None = None,
     governance_policy: dict[str, Any] | None = None,
     decision_ts: str | None = None,
-    append_trustlog: bool = True,
+    append_trustlog: bool | BindAuditSink = True,
     bind_ts: str | None = None,
     execution_intent_id: str | None = None,
     bind_receipt_id: str | None = None,

@@ -36,7 +36,10 @@ import logging
 import os
 import secrets
 import struct
-from typing import Optional, Protocol, Tuple
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Callable, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +216,10 @@ class EncryptionKeyMissing(RuntimeError):
     """Raised when encryption is required but no key is configured."""
 
 
+class EncryptionKeyUnavailable(RuntimeError):
+    """Raised when the configured key provider cannot complete a request."""
+
+
 class DecryptionError(RuntimeError):
     """Raised when decryption fails (fail-closed principle)."""
 
@@ -298,6 +305,23 @@ def _build_key_provider(provider: str) -> EncryptionKeyProvider:
     )
 
 
+_resolved_key: ContextVar[tuple[bytes | None] | None] = ContextVar("trustlog_resolved_key", default=None)
+
+
+@contextmanager
+def resolved_encryption_key() -> Iterator[None]:
+    """Reuse a single provider lookup within a synchronous TrustLog operation."""
+    if _resolved_key.get() is not None:
+        yield
+        return
+
+    token = _resolved_key.set((_get_key_bytes(),))
+    try:
+        yield
+    finally:
+        _resolved_key.reset(token)
+
+
 def _get_key_bytes() -> Optional[bytes]:
     """Return the 32-byte master key from configured key provider.
 
@@ -308,9 +332,20 @@ def _get_key_bytes() -> Optional[bytes]:
         During migration you can temporarily allow fallback to env key with:
         ``VERITAS_ENCRYPTION_ALLOW_ENV_FALLBACK=1``.
     """
+    resolved = _resolved_key.get()
+    if resolved is not None:
+        return resolved[0]
+
     provider_name = os.getenv(_ENCRYPTION_PROVIDER_ENV, "env")
     provider = _build_key_provider(provider_name)
-    key = provider.load_key()
+    try:
+        key = provider.load_key()
+    except EncryptionKeyMissing:
+        raise
+    except Exception as exc:  # noqa: BLE001 - optional SDKs have unrelated exception hierarchies
+        raise EncryptionKeyUnavailable(
+            f"{provider.provider_name} key provider failed ({type(exc).__name__})"
+        ) from exc
     if key is not None:
         return key
 
@@ -422,8 +457,12 @@ def encrypt(plaintext: str) -> str:
     if not isinstance(plaintext, str):
         raise TypeError(f"encrypt() requires a str, got {type(plaintext).__name__}")
 
-    _ensure_encryption_backend_available_for_posture()
+    return prepare_encryptor()(plaintext)
 
+
+def prepare_encryptor() -> Callable[[str], str]:
+    """Resolve the current key now and return a local-only encryptor."""
+    _ensure_encryption_backend_available_for_posture()
     key = _get_key_bytes()
     if key is None:
         raise EncryptionKeyMissing(
@@ -433,8 +472,15 @@ def encrypt(plaintext: str) -> str:
         )
 
     if _USE_REAL_AES:
-        return "ENC:aesgcm:" + _encrypt_aesgcm_raw(plaintext, key)
-    return "ENC:hmac-ctr:" + _encrypt_hmac_ctr_raw(plaintext, key)
+        def encrypt_with_aes(plaintext: str) -> str:
+            return "ENC:aesgcm:" + _encrypt_aesgcm_raw(plaintext, key)
+
+        return encrypt_with_aes
+
+    def encrypt_with_hmac(plaintext: str) -> str:
+        return "ENC:hmac-ctr:" + _encrypt_hmac_ctr_raw(plaintext, key)
+
+    return encrypt_with_hmac
 
 
 def decrypt(ciphertext: str) -> str:

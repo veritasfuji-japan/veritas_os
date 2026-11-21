@@ -141,8 +141,10 @@ def append_trust_log_entry(
         logger.warning("LOG_DIR mkdir failed: %s", errstr(exc))
         return
 
+    from veritas_os.logging.rotate import trust_log_process_lock
+
     lock = trust_log_lock or Lock()
-    with lock:
+    with lock, trust_log_process_lock(log_jsonl):
         try:
             jsonl_is_new = not log_jsonl.exists()
             if has_atomic_io and atomic_append_line is not None:
