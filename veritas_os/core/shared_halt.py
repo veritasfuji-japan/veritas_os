@@ -12,6 +12,10 @@ class HaltStoreUnavailable(RuntimeError):
     """The authoritative deployment state could not be read or written."""
 
 
+class HaltIntentExpired(RuntimeError):
+    """The bounded operator halt elapsed before the state change."""
+
+
 def enabled() -> bool:
     backend = os.getenv("VERITAS_HALT_BACKEND", "memory").strip().lower()
     if backend not in {"memory", "postgresql"}:
@@ -66,9 +70,28 @@ def status() -> dict:
                 halted_by=actor, reason=reason)
 
 
-def halt(*, reason: str, operator: str, startup: bool = False) -> dict:
+def halt(
+    *, reason: str, operator: str, startup: bool = False, expires_at: datetime | None = None,
+) -> dict:
     """Rearm on startup without replacing an existing emergency stop."""
     with transaction() as conn:
+        if expires_at is not None:
+            row = conn.execute(
+                "SELECT halt_id FROM deployment_halts WHERE deployment_id=%s FOR UPDATE",
+                (deployment(),),
+            ).fetchone()
+            if row is None:
+                raise HaltStoreUnavailable("Deployment halt has not been initialized")
+            confirmed = conn.execute(
+                """UPDATE deployment_halts SET halt_id=%s, halted_at=clock_timestamp(),
+                   operator=%s, reason=%s, pending='{}'::jsonb
+                   WHERE deployment_id=%s AND clock_timestamp() < %s RETURNING halt_id""",
+                (uuid4().hex, operator, reason, deployment(), expires_at),
+            ).fetchone()
+            if confirmed is None:
+                raise HaltIntentExpired("Emergency halt intent expired before the state change")
+            return status()
+
         conn.execute(
             """INSERT INTO deployment_halts (deployment_id, halt_id, halted_at, operator, reason)
                VALUES (%s,%s,clock_timestamp(),%s,%s)

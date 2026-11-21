@@ -21,6 +21,15 @@ jobs:
     timeout-minutes: 15
 
     services:
+      redis:
+        image: redis:7.4
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 6379:6379
       postgres:
         image: postgres:16
         env:
@@ -40,6 +49,7 @@ jobs:
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
       VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+      VERITAS_TEST_SHARED_HALT_REDIS_URL: "redis://127.0.0.1:6379/0"
 
     steps:
       - name: Checkout
@@ -57,12 +67,27 @@ jobs:
           python -m pip install --upgrade pip --retries 5 --timeout 60
           python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt
           python -m pip install --retries 5 --timeout 60 \
-            "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio
+            "psycopg[binary]" psycopg-pool alembic pytest pytest-asyncio redis
 
       - name: Run Alembic migrations
         run: |
           set -euxo pipefail
           alembic upgrade head
+
+      - name: Configure Redis for strict authentication
+        env:
+          REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$REDIS_CONTAINER_ID" redis-cli CONFIG SET appendfsync always no-appendfsync-on-rewrite no maxmemory-policy noeviction appendonly yes | grep -x OK
+          for attempt in {1..20}; do
+            persistence=$(docker exec "$REDIS_CONTAINER_ID" redis-cli INFO persistence | tr -d '\r')
+            if grep -qx 'aof_enabled:1' <<< "$persistence" && grep -qx 'aof_rewrite_in_progress:0' <<< "$persistence" && grep -qx 'aof_last_write_status:ok' <<< "$persistence"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
 
       - name: Verify signed resume across two API processes
         run: python -m pytest -q veritas_os/tests/test_pg_shared_halt.py
