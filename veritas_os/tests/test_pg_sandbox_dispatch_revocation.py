@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 import os
 from pathlib import Path
+import subprocess
 from uuid import uuid4
 
 import pytest
@@ -175,6 +176,119 @@ class TransportProvider(Provider):
     async def resolve(self, request, *, expected_metadata_digest):
         resolved = await super().resolve(request, expected_metadata_digest=expected_metadata_digest)
         return resolved.model_copy(update={"material": SecretBytes(TOKEN)})
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
+async def test_restored_operator_revocation_blocks_first_dispatch(prepared_inputs, monkeypatch, tmp_path):
+    import psycopg
+    from psycopg import sql
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
+    from psycopg.errors import InsufficientPrivilege
+    from psycopg_pool import AsyncConnectionPool
+
+    artifact, args = await _args(prepared_inputs)
+    authorization_id = artifact.authorization_id
+    consumption = prepared_inputs[2]
+    source_dsn = db.build_conninfo()
+    database = f"sandbox_restore_{uuid4().hex}"
+    restored_dsn = make_conninfo(source_dsn, dbname=database)
+    env = os.environ.copy()
+    connection = conninfo_to_dict(source_dsn)
+    for key, variable in (
+        ("host", "PGHOST"), ("port", "PGPORT"), ("user", "PGUSER"),
+        ("password", "PGPASSWORD"), ("dbname", "PGDATABASE"), ("sslmode", "PGSSLMODE"),
+    ):
+        if key in connection:
+            env[variable] = connection[key]
+    root = Path(__file__).resolve().parents[2]
+    call = "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)"
+    audit_query = (
+        "SELECT audit_id, operator_role, operator_name, authorization_id, reason, resolution, recorded_at "
+        "FROM public.bind_sandbox_revocation_audit WHERE authorization_id = %s"
+    )
+    reason = "Cancel before backup"
+    revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
+
+    async def run_script(script, *arguments):
+        result = await asyncio.to_thread(
+            subprocess.run, ["bash", str(root / "scripts" / script), *arguments],
+            env=env, capture_output=True, text=True, timeout=60, check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    async with AsyncConnectionPool(source_dsn, min_size=1, max_size=1, open=False) as source:
+        async with operator_session(source, authorization_id) as (operator, role):
+            result = await operator.execute(call, (authorization_id, reason))
+            audit_id, resolution = await result.fetchone()
+            assert resolution == revoked
+            async with source.connection() as admin:
+                cursor = await admin.execute(audit_query, (authorization_id,))
+                audit = await cursor.fetchall()
+                assert len(audit) == 1
+                assert audit[0][0] == audit_id and audit[0][2:6] == (role, authorization_id, reason, revoked)
+
+            await run_script("backup_postgres.sh", "--output", str(tmp_path))
+            (archive,) = tmp_path.glob("veritas_*.dump")
+            try:
+                await run_script("restore_postgres.sh", "--mode=test", "--test-db", database, str(archive))
+                async with await psycopg.AsyncConnection.connect(restored_dsn, autocommit=True) as admin:
+                    cursor = await admin.execute(audit_query, (authorization_id,))
+                    assert await cursor.fetchall() == audit
+                    cursor = await admin.execute(
+                        "SELECT resolution FROM public.bind_sandbox_dispatch_order WHERE authorization_id = %s",
+                        (authorization_id,),
+                    )
+                    assert await cursor.fetchone() == (revoked,)
+                    cursor = await admin.execute(
+                        "SELECT 1 FROM public.bind_sandbox_revocation_grants WHERE authorization_id = %s",
+                        (authorization_id,),
+                    )
+                    assert await cursor.fetchone() is None
+                    cursor = await admin.execute(
+                        "SELECT has_function_privilege(%s, 'public.revoke_sandbox_authorization(text,text)', 'EXECUTE')",
+                        (role,),
+                    )
+                    assert await cursor.fetchone() == (False,)
+                    await admin.execute(
+                        sql.SQL("GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO {}")
+                        .format(sql.Identifier(role))
+                    )
+                    await admin.execute(sql.SQL("SET SESSION AUTHORIZATION {}").format(sql.Identifier(role)))
+                    with pytest.raises(InsufficientPrivilege, match="scope denied"):
+                        await admin.execute(call, (authorization_id, reason))
+
+                async with AsyncConnectionPool(restored_dsn, min_size=1, max_size=1, open=False) as restored:
+                    async def get_pool():
+                        return restored
+
+                    monkeypatch.setattr(db, "get_pool", get_pool)
+                    effects = PostgresAtomicEffectStateStore()
+                    consumptions = PostgresAtomicAuthorizationConsumptionStore()
+                    assert await consumptions.get(authorization_id) is None
+                    assert await effects.get(consumption.consumption_id) is None
+                    assert await consumptions.consume_once(consumption)
+                    args.update(effect_store=effects, consumption_store=consumptions, allow_in_memory_for_testing=False)
+                    transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+                    writer, connections, _, _ = setup(monkeypatch, b"")
+                    transition = effects.transition
+                    dispatch_results = []
+
+                    async def record_dispatch_result(**kwargs):
+                        committed = await transition(**kwargs)
+                        dispatch_results.append(committed)
+                        return committed
+
+                    monkeypatch.setattr(effects, "transition", record_dispatch_result)
+                    with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                        await run(artifact, args, TransportProvider(prepared_inputs, args), transport)
+                    assert dispatch_results == [False]
+                    attempt = await effects.get(consumption.consumption_id)
+                    assert attempt is not None and attempt.state == EffectExecutionState.IN_FLIGHT
+                    assert transport.send_calls == len(connections) == len(writer.writes) == 0
+            finally:
+                async with await psycopg.AsyncConnection.connect(source_dsn, autocommit=True) as admin:
+                    await admin.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database)))
 
 
 @pytest.mark.asyncio

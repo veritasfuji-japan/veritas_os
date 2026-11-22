@@ -66,7 +66,20 @@ jobs:
           set -euxo pipefail
           alembic upgrade head
 
-      - name: Prove effect-state compare-and-set
+      - name: Check PostgreSQL client tools for the recovery test
+        run: |
+          set -euxo pipefail
+          if ! command -v pg_dump || ! command -v pg_restore || ! command -v psql; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          pg_dump --version
+          pg_restore --version
+          psql --version
+
+      - name: Prove effect-state compare-and-set and Sandbox restore
+        env:
+          VERITAS_SANDBOX_RESTORE_E2E: "1"
         run: |
           set -euxo pipefail
           mkdir -p test-reports
