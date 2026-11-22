@@ -429,6 +429,21 @@ This is an explicit documented subset.
 
 VERITAS does not claim that every effect-bearing route is bind-governed unless that route is covered by the relevant bind-coverage documentation and tests.
 
+### Revoking an individual Sandbox authorization
+
+A PostgreSQL operator with a direct execution grant and an assignment for a
+specific issued Sandbox authorization can revoke it. If revocation commits before
+dispatch is committed to the shared database, the Sandbox sender makes zero
+outbound writes for that authorization. If dispatch commits first, the operation
+returns `DISPATCH_ALREADY_COMMITTED` and any uncertain effect is left to read-only
+reconciliation. The operation records the authenticated operator, target,
+reason, and result in the same transaction.
+
+For migration `0015` or later, the documented logical restore preserves committed
+revocations and audit history. Operators and their authorization assignments must
+be verified and enrolled again before direct execution is granted.
+[Implementation and scope](docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md) · [PostgreSQL restore procedure](docs/en/operations/postgresql-drill-runbook.md)
+
 ---
 
 ## Authority Evidence
