@@ -180,12 +180,15 @@ class TransportProvider(Provider):
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
-async def test_restored_operator_revocation_blocks_first_dispatch(prepared_inputs, monkeypatch, tmp_path):
+@pytest.mark.parametrize("scenario", ["captured", "after_backup", "unverified", "missing_dispatch", "allowed"])
+async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_path, scenario):
     import psycopg
     from psycopg import sql
     from psycopg.conninfo import conninfo_to_dict, make_conninfo
     from psycopg.errors import InsufficientPrivilege
     from psycopg_pool import AsyncConnectionPool
+    from scripts.governance.reconcile_sandbox_restore import ordering_digest, reconcile
+    from veritas_os.storage.sandbox_restore import RECOVERY_PENDING
 
     artifact, args = await _args(prepared_inputs)
     authorization_id = artifact.authorization_id
@@ -209,6 +212,7 @@ async def test_restored_operator_revocation_blocks_first_dispatch(prepared_input
     )
     reason = "Cancel before backup"
     revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
+    fenced = scenario in {"unverified", "missing_dispatch"}
 
     async def run_script(script, *arguments):
         result = await asyncio.to_thread(
@@ -219,27 +223,65 @@ async def test_restored_operator_revocation_blocks_first_dispatch(prepared_input
 
     async with AsyncConnectionPool(source_dsn, min_size=1, max_size=1, open=False) as source:
         async with operator_session(source, authorization_id) as (operator, role):
-            result = await operator.execute(call, (authorization_id, reason))
-            audit_id, resolution = await result.fetchone()
-            assert resolution == revoked
-            async with source.connection() as admin:
-                cursor = await admin.execute(audit_query, (authorization_id,))
-                audit = await cursor.fetchall()
-                assert len(audit) == 1
-                assert audit[0][0] == audit_id and audit[0][2:6] == (role, authorization_id, reason, revoked)
+            async def cancel_authorization():
+                result = await operator.execute(call, (authorization_id, reason))
+                audit_id, resolution = await result.fetchone()
+                assert resolution == revoked
+                return audit_id
 
+            audit_id = await cancel_authorization() if scenario == "captured" else None
             await run_script("backup_postgres.sh", "--output", str(tmp_path))
             (archive,) = tmp_path.glob("veritas_*.dump")
+            if scenario in {"after_backup", "unverified"}:
+                audit_id = await cancel_authorization()
+            async with source.connection() as admin:
+                if scenario == "missing_dispatch":
+                    # The older archive has no corresponding effect and consumption history.
+                    await admin.execute(
+                        "INSERT INTO public.bind_sandbox_dispatch_order (authorization_id, resolution) VALUES (%s, %s)",
+                        (authorization_id, SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED.value),
+                    )
+                cursor = await admin.execute(audit_query, (authorization_id,))
+                audit = await cursor.fetchall()
+                if audit_id is None:
+                    assert audit == []
+                else:
+                    assert len(audit) == 1
+                    assert audit[0][0] == audit_id and audit[0][2:6] == (role, authorization_id, reason, revoked)
+
             # The disposable PostgreSQL service removes the restored database on teardown.
             await run_script("restore_postgres.sh", "--mode=test", "--test-db", database, str(archive))
+
+            def recover():
+                with psycopg.connect(source_dsn, autocommit=True) as donor, psycopg.connect(
+                    restored_dsn, autocommit=True,
+                ) as target:
+                    digest = ordering_digest(donor)
+                    if scenario == "unverified":
+                        with pytest.raises(ValueError, match="independently recorded ordering digest"):
+                            reconcile(donor, target, "0" * 64)
+                    elif scenario == "missing_dispatch":
+                        with pytest.raises(ValueError, match="lacks committed dispatch history"):
+                            reconcile(donor, target, digest)
+                    else:
+                        reconcile(donor, target, digest)
+
             async with await psycopg.AsyncConnection.connect(restored_dsn, autocommit=True) as admin:
+                cursor = await admin.execute(RECOVERY_PENDING)
+                assert await cursor.fetchone() == (True,)
                 cursor = await admin.execute(audit_query, (authorization_id,))
-                assert await cursor.fetchall() == audit
+                assert await cursor.fetchall() == (audit if scenario == "captured" else [])
+                await asyncio.to_thread(recover)
+                cursor = await admin.execute(RECOVERY_PENDING)
+                assert await cursor.fetchone() == (fenced,)
+                cursor = await admin.execute(audit_query, (authorization_id,))
+                assert await cursor.fetchall() == ([] if fenced else audit)
                 cursor = await admin.execute(
                     "SELECT resolution FROM public.bind_sandbox_dispatch_order WHERE authorization_id = %s",
                     (authorization_id,),
                 )
-                assert await cursor.fetchone() == (revoked,)
+                expected_ordering = (revoked,) if scenario in {"captured", "after_backup"} else None
+                assert await cursor.fetchone() == expected_ordering
                 cursor = await admin.execute(
                     "SELECT 1 FROM public.bind_sandbox_revocation_grants WHERE authorization_id = %s",
                     (authorization_id,),
@@ -256,6 +298,8 @@ async def test_restored_operator_revocation_blocks_first_dispatch(prepared_input
                 )
                 try:
                     await admin.execute(sql.SQL("SET SESSION AUTHORIZATION {}").format(sql.Identifier(role)))
+                    cursor = await admin.execute(RECOVERY_PENDING)
+                    assert await cursor.fetchone() == (fenced,)
                     with pytest.raises(InsufficientPrivilege, match="scope denied"):
                         await admin.execute(call, (authorization_id, reason))
                 finally:
@@ -287,12 +331,19 @@ async def test_restored_operator_revocation_blocks_first_dispatch(prepared_input
                     return committed
 
                 monkeypatch.setattr(effects, "transition", record_dispatch_result)
-                with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
-                    await run(artifact, args, TransportProvider(prepared_inputs, args), transport)
-                assert dispatch_results == [False]
+                provider = TransportProvider(prepared_inputs, args)
+                if scenario == "allowed":
+                    result = await run(artifact, args, provider, transport)
+                    assert result.state == "UNKNOWN"
+                else:
+                    with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                        await run(artifact, args, provider, transport)
+                allowed = scenario == "allowed"
+                assert dispatch_results == [allowed]
                 attempt = await effects.get(consumption.consumption_id)
-                assert attempt is not None and attempt.state == EffectExecutionState.IN_FLIGHT
-                assert transport.send_calls == len(connections) == len(writer.writes) == 0
+                assert attempt is not None
+                assert attempt.state == (EffectExecutionState.EFFECT_UNKNOWN if allowed else EffectExecutionState.IN_FLIGHT)
+                assert transport.send_calls == len(connections) == len(writer.writes) == int(allowed)
 
 
 @pytest.mark.asyncio
