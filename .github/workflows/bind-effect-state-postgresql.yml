@@ -66,16 +66,19 @@ jobs:
           set -euxo pipefail
           alembic upgrade head
 
-      - name: Check PostgreSQL client tools for the recovery test
+      - name: Use PostgreSQL 16 clients for the recovery test
         run: |
           set -euxo pipefail
-          if ! command -v pg_dump || ! command -v pg_restore || ! command -v psql; then
+          # Match the service so pg_restore does not emit settings from a newer server.
+          client_bin=/usr/lib/postgresql/16/bin
+          if [[ ! -x "$client_bin/pg_dump" || ! -x "$client_bin/pg_restore" || ! -x "$client_bin/psql" ]]; then
             sudo apt-get update
-            sudo apt-get install -y postgresql-client
+            sudo apt-get install -y postgresql-client-16
           fi
-          pg_dump --version
-          pg_restore --version
-          psql --version
+          "$client_bin/pg_dump" --version
+          "$client_bin/pg_restore" --version
+          "$client_bin/psql" --version
+          echo "$client_bin" >> "$GITHUB_PATH"
 
       - name: Prove effect-state compare-and-set and Sandbox restore
         env:
