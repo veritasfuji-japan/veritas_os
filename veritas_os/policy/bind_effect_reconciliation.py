@@ -934,6 +934,12 @@ class PostgresAtomicEffectStateStore:
             async with pool.connection() as conn:
                 sandbox_dispatch = _is_sandbox_dispatch(expected_state, record)
                 if sandbox_dispatch:
+                    from veritas_os.storage import sandbox_restore
+
+                    await conn.execute(sandbox_restore.LOCK_SHARED)
+                    recovery = await conn.execute(sandbox_restore.RECOVERY_PENDING)
+                    if await recovery.fetchone() != (False,):
+                        return False
                     claim = await conn.execute(
                         "INSERT INTO bind_sandbox_dispatch_order (authorization_id, resolution) "
                         "VALUES (%s, %s) ON CONFLICT (authorization_id) DO NOTHING RETURNING authorization_id",

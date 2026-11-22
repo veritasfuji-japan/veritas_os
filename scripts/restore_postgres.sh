@@ -142,6 +142,22 @@ fi
 log_info "Restoring from: ${BACKUP_FILE}"
 log_info "Target database: ${TARGET_DB}"
 
+# Keep Sandbox dispatch fenced even if the archive restore or its verification
+# fails. This database-level setting is outside the restored objects.
+if ! psql -X -v ON_ERROR_STOP=1 -d "$TARGET_DB" <<'SQL'
+BEGIN;
+SELECT pg_catalog.pg_advisory_xact_lock(91416, 1);
+SELECT pg_catalog.format(
+    'ALTER DATABASE %I SET veritas.sandbox_restore_pending = %L',
+    pg_catalog.current_database(), 'restoring'
+) \gexec
+COMMIT;
+SQL
+then
+    log_error "Could not fence Sandbox dispatch before restore."
+    exit 2
+fi
+
 PG_RESTORE_ARGS=(
     --no-owner
     --no-privileges
@@ -257,5 +273,20 @@ if [[ "$MODE" == "test" ]]; then
     log_info "To drop: psql -d postgres -c 'DROP DATABASE ${TEST_DB};'"
 fi
 
+if ! psql -X -v ON_ERROR_STOP=1 -d "$TARGET_DB" <<'SQL'
+BEGIN;
+SELECT pg_catalog.pg_advisory_xact_lock(91416, 1);
+SELECT pg_catalog.format(
+    'ALTER DATABASE %I SET veritas.sandbox_restore_pending = %L',
+    pg_catalog.current_database(), 'on'
+) \gexec
+COMMIT;
+SQL
+then
+    log_error "Could not mark Sandbox dispatch ready for reconciliation."
+    exit 2
+fi
+
 log_info "Restore complete."
+log_info "Sandbox dispatch remains fenced until authoritative ordering is reconciled."
 exit 0

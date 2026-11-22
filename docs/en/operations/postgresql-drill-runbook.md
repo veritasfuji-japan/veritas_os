@@ -145,9 +145,47 @@ records, and removes `PUBLIC` execution. Re-verify and enroll the operators
 and their assigned targets on the restored database before granting execution
 to individual logins again. Use the script if the archive's migration is unknown.
 
-### Manual fallback for backups before migration `0015`
+### Reconcile Sandbox dispatch after a logical restore
 
-Use the following commands only for backups taken before migration `0015`.
+Use the restore script for any destination that will execute Sandbox actions,
+including when restoring an older archive. Deploy workers that honor the
+restore fence, keep them drained during the restore, and run only one recovery
+operation per destination at a time. The script fences new Sandbox dispatch
+before loading the archive. After a successful restore, the fence stays in
+place until authorization ordering has been reconciled. Before reconciliation,
+bring an older restored schema up to at least migration `0015`.
+
+Use a separate authoritative PostgreSQL source that includes commits through
+the recovery cutover. Establish its completeness using the deployment's
+recovery records, keep the old primary fenced from writers, and record the
+recovery digest outside the restored database. An archive's contents cannot
+establish which decisions were committed after it was taken.
+
+1. Set `VERITAS_SANDBOX_RECOVERY_SOURCE_DSN` in the trusted operator environment.
+   On the verified source, run `python -m scripts.governance.reconcile_sandbox_restore --record-recovery-digest`
+   and record the digest through the deployment's trusted recovery process.
+2. Set `VERITAS_SANDBOX_RECOVERY_TARGET_DSN` to the restored database and
+   `VERITAS_SANDBOX_RECOVERY_SHA256` to the recorded digest. Run
+   `python -m scripts.governance.reconcile_sandbox_restore`.
+3. Resume Sandbox workers only after reconciliation succeeds. The command
+   copies missing revocations and audit records and releases the fence in one
+   transaction. The digest covers dispatch ordering, native v2 consumption,
+   and the complete revocation audit, including repeat cancellation requests.
+   Consumption can commit before a Sandbox attempt records its action class,
+   so the command compares every native v2 consumption record on the two
+   databases to preserve single-use semantics. Keep the target fenced if the
+   source is unavailable, the evidence differs, or the archive lacks committed
+   dispatch or consumption history. Verify that the source matches the recorded
+   digest before retrying. If the archive lacks history, restore a backup with
+   matching dispatch and consumption records before retrying.
+
+These steps require database administrative access and the supported restore
+script. They cover Sandbox authorization ordering within this deployment.
+
+### Manual fallback for non-Sandbox destinations before migration `0015`
+
+Use the following commands only for backups taken before migration `0015` and
+destinations that will not run Sandbox dispatch.
 
 ```bash
 # Test restore

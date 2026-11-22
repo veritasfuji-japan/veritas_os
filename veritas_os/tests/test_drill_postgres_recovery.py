@@ -114,7 +114,11 @@ def test_restore_aborts_after_pg_restore_error(tmp_path, monkeypatch):
         'exit 3\n'
     )
     psql = tmp_path / "psql"
-    psql.write_text("#!/bin/bash\necho 'unexpected post-restore check'\nexit 0\n")
+    psql.write_text(
+        "#!/bin/bash\n"
+        "if grep -q 'ALTER DATABASE.*sandbox_restore_pending'; then exit 0; fi\n"
+        "echo 'unexpected post-restore check'\nexit 0\n"
+    )
     for executable in (pg_restore, psql):
         executable.chmod(0o700)
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
