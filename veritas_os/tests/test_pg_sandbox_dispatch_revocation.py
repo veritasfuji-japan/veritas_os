@@ -271,7 +271,7 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                         (repeated_audit_id,),
                     )
                     assert deleted.rowcount == 1
-            if scenario == "missing_consumption":
+            if scenario in {"missing_consumption", "missing_dispatch"}:
                 async def get_source_pool():
                     return source
 
@@ -280,14 +280,19 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                     source_consumptions = PostgresAtomicAuthorizationConsumptionStore()
                     assert await source_consumptions.consume_once(consumption)
                     assert await source_consumptions.get(authorization_id) == consumption
-                    assert await PostgresAtomicEffectStateStore().get(consumption.consumption_id) is None
+                    source_effects = PostgresAtomicEffectStateStore()
+                    if scenario == "missing_dispatch":
+                        source_args = {
+                            **args, "consumption_store": source_consumptions, "effect_store": source_effects,
+                            "allow_in_memory_for_testing": False,
+                        }
+                        transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+                        writer, _, _, _ = setup(patch, b"")
+                        await run(artifact, source_args, TransportProvider(prepared_inputs, source_args), transport)
+                        assert transport.send_calls == len(writer.writes) == 1
+                    else:
+                        assert await source_effects.get(consumption.consumption_id) is None
             async with source.connection() as admin:
-                if scenario == "missing_dispatch":
-                    # The older archive has no corresponding effect and consumption history.
-                    await admin.execute(
-                        "INSERT INTO public.bind_sandbox_dispatch_order (authorization_id, resolution) VALUES (%s, %s)",
-                        (authorization_id, SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED.value),
-                    )
                 cursor = await admin.execute(audit_query, (authorization_id,))
                 audit = await cursor.fetchall()
                 if audit_id is None:
@@ -446,7 +451,7 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
     import psycopg
     from psycopg.conninfo import conninfo_to_dict, make_conninfo
     from psycopg_pool import AsyncConnectionPool
-    from scripts.governance.reconcile_sandbox_restore import recovery_digest
+    from scripts.governance.reconcile_sandbox_restore import SandboxRestoreError, reconcile, recovery_digest
     from veritas_os.policy.sandbox_bind_execution import execute_sandbox_bind
     from veritas_os.policy.sandbox_pre_effect import SandboxPreEffectError, prepare_sandbox_attempt
     from veritas_os.policy.sandbox_reconciliation import (
@@ -510,18 +515,43 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
         })
         env.update(
             VERITAS_RESTORE_TEST_DB=database,
-            VERITAS_SANDBOX_RECOVERY_SOURCE_DSN=source_dsn,
-            VERITAS_SANDBOX_RECOVERY_SHA256=digest,
         )
         script = Path(__file__).resolve().parents[2] / "scripts" / "drill_postgres_recovery.sh"
         drill = await asyncio.to_thread(
             subprocess.run, [
                 "bash", str(script), "--ci", "--skip-health", "--keep-test-db",
-                "--sandbox-recovery", "--backup-dir", str(tmp_path),
+                "--backup-dir", str(tmp_path),
             ], env=env, capture_output=True, text=True, timeout=60, check=False,
         )
         assert drill.returncode == 0, drill.stdout + drill.stderr
-        assert "sandbox-dispatch-recovery: PASS" in drill.stdout
+        assert "restore: PASS" in drill.stdout
+
+        def verify_restore():
+            update_claim = (
+                "UPDATE public.bind_effect_states SET business_event_key = %s WHERE operation_id = %s"
+            )
+            with psycopg.connect(source_dsn, autocommit=True) as donor, psycopg.connect(
+                target_dsn, autocommit=True,
+            ) as target:
+                assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                with donor.transaction(force_rollback=True):
+                    updated = donor.execute(update_claim, (None, consumption.consumption_id))
+                    assert updated.rowcount == 1
+                    with pytest.raises(SandboxRestoreError, match="source lacks a business event claim"):
+                        recovery_digest(donor)
+                wrong_key = "sandbox-business-event:v1:sha256:" + sha256_of_canonical_json(str(uuid4()))
+                for invalid_key in (None, wrong_key):
+                    # Isolate each incomplete backup fixture in a rolled-back transaction.
+                    with target.transaction(force_rollback=True):
+                        updated = target.execute(update_claim, (invalid_key, consumption.consumption_id))
+                        assert updated.rowcount == 1
+                        with pytest.raises(SandboxRestoreError, match="business event claims differ"):
+                            reconcile(donor, target, digest)
+                        assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                reconcile(donor, target, digest)
+                assert target.execute(RECOVERY_PENDING).fetchone() == (False,)
+
+        await asyncio.to_thread(verify_restore)
 
         async with AsyncConnectionPool(target_dsn, min_size=1, max_size=1, open=False) as restored:
             async def restored_pool():
