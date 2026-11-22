@@ -275,6 +275,7 @@ Differences from full mode:
 | 4 | Verification failed |
 | 5 | Health check failed |
 | 6 | Sandbox dispatch recovery failed |
+| 7 | Sandbox reconciliation passed, but test database cleanup failed |
 
 ---
 

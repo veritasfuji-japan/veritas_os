@@ -42,6 +42,7 @@
 #   4 — verification failed
 #   5 — health check failed
 #   6 — Sandbox dispatch recovery failed
+#   7 — Sandbox drill test database cleanup failed
 # ============================================================================
 
 set -euo pipefail
@@ -300,8 +301,16 @@ if $KEEP_TEST_DB; then
     log_info "Retaining test database '${TEST_DB}' (--keep-test-db)"
     record_step "cleanup" "SKIP" "test db retained"
 else
-    if psql -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" &>/dev/null; then
+    if psql -X -v ON_ERROR_STOP=1 -v test_database="$TEST_DB" -d postgres >/dev/null <<'SQL'
+DROP DATABASE IF EXISTS :"test_database";
+SQL
+    then
         record_step "cleanup" "PASS" "dropped ${TEST_DB}"
+    elif $SANDBOX_RECOVERY; then
+        record_step "cleanup" "FAIL" "could not drop ${TEST_DB}"
+        if [[ $FAILURE_EXIT -ne 6 ]]; then
+            FAILURE_EXIT=7
+        fi
     else
         record_step "cleanup" "WARN" "could not drop ${TEST_DB}"
     fi

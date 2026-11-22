@@ -183,7 +183,7 @@ class TransportProvider(Provider):
 @pytest.mark.parametrize(
     "scenario", [
         "captured", "after_backup", "unverified", "missing_dispatch", "missing_consumption", "missing_source_audit",
-        "allowed", "drill_bad_digest", "drill_unavailable", "drill_default",
+        "allowed", "drill_bad_digest", "drill_unavailable", "drill_default", "drill_cleanup",
     ],
 )
 async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_path, scenario):
@@ -199,7 +199,7 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
     authorization_id = artifact.authorization_id
     consumption = prepared_inputs[2]
     source_dsn = db.build_conninfo()
-    database = f"sandbox_restore_{uuid4().hex}"
+    database = "select" if scenario == "drill_cleanup" else f"sandbox_restore_{uuid4().hex}"
     restored_dsn = make_conninfo(source_dsn, dbname=database)
     env = os.environ.copy()
     connection = conninfo_to_dict(source_dsn)
@@ -218,7 +218,7 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
     reason = "Cancel before backup"
     revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
     drill = scenario == "allowed" or scenario.startswith("drill_")
-    fenced = scenario not in {"allowed", "captured", "after_backup"}
+    fenced = scenario not in {"allowed", "captured", "after_backup", "drill_cleanup"}
 
     async def run_script(script, *arguments, expected_exit=0):
         result = await asyncio.to_thread(
@@ -295,9 +295,10 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                 )
                 env.pop("VERITAS_API_KEY", None)
                 sandbox_option = [] if scenario == "drill_default" else ["--sandbox-recovery"]
+                keep_option = [] if scenario == "drill_cleanup" else ["--keep-test-db"]
                 drill_args = (
-                    "drill_postgres_recovery.sh", "--ci", "--keep-test-db", "--skip-health",
-                    "--backup-dir", str(tmp_path), *sandbox_option,
+                    "drill_postgres_recovery.sh", "--ci", "--skip-health",
+                    "--backup-dir", str(tmp_path), *sandbox_option, *keep_option,
                 )
                 result = await run_script(*drill_args, expected_exit=6 if fenced and sandbox_option else 0)
                 assert "restore: PASS" in result.stdout
@@ -308,6 +309,14 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                     assert "Sandbox dispatch is not cleared for restart" in result.stdout
                 else:
                     assert "sandbox-dispatch-recovery: PASS" in result.stdout
+                    if scenario == "drill_cleanup":
+                        assert "cleanup: PASS" in result.stdout
+                        async with source.connection() as admin:
+                            cursor = await admin.execute(
+                                "SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s", (database,),
+                            )
+                            assert await cursor.fetchone() is None
+                        return
                     retry = await run_script(*drill_args, expected_exit=3)
                     assert "Could not create fresh test database" in retry.stdout
             else:
