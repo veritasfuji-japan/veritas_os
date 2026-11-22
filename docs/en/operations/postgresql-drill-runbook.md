@@ -158,20 +158,24 @@ bring an older restored schema up to at least migration `0015`.
 Use a separate authoritative PostgreSQL source that includes commits through
 the recovery cutover. Establish its completeness using the deployment's
 recovery records, keep the old primary fenced from writers, and record the
-ordering digest outside the restored database. An archive's contents cannot
+recovery digest outside the restored database. An archive's contents cannot
 establish which decisions were committed after it was taken.
 
 1. Set `VERITAS_SANDBOX_RECOVERY_SOURCE_DSN` in the trusted operator environment.
-   On the verified source, run `python -m scripts.governance.reconcile_sandbox_restore --record-ordering`
+   On the verified source, run `python -m scripts.governance.reconcile_sandbox_restore --record-recovery-digest`
    and record the digest through the deployment's trusted recovery process.
 2. Set `VERITAS_SANDBOX_RECOVERY_TARGET_DSN` to the restored database and
-   `VERITAS_SANDBOX_RECOVERY_ORDERING_SHA256` to the recorded digest. Run
+   `VERITAS_SANDBOX_RECOVERY_SHA256` to the recorded digest. Run
    `python -m scripts.governance.reconcile_sandbox_restore`.
 3. Resume Sandbox workers only after reconciliation succeeds. The command
    copies missing revocations and audit records and releases the fence in one
-   transaction. If the source is unavailable, the evidence differs, or the
-   archive lacks a committed dispatch, keep the target fenced. A backup with
-   the missing dispatch history is required before retrying that recovery.
+   transaction. The digest covers dispatch ordering and native v2 consumption.
+   Consumption can commit before a Sandbox attempt records its action class,
+   so the command compares every native v2 consumption record on the two
+   databases to preserve single-use semantics. Keep the target fenced if the
+   source is unavailable, the evidence differs, or the archive lacks committed
+   dispatch or consumption history. Restore a backup with matching history
+   before retrying that recovery.
 
 These steps require database administrative access and the supported restore
 script. They cover Sandbox authorization ordering within this deployment.

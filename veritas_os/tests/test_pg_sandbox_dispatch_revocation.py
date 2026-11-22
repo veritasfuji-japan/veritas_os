@@ -180,14 +180,16 @@ class TransportProvider(Provider):
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
-@pytest.mark.parametrize("scenario", ["captured", "after_backup", "unverified", "missing_dispatch", "allowed"])
+@pytest.mark.parametrize(
+    "scenario", ["captured", "after_backup", "unverified", "missing_dispatch", "missing_consumption", "allowed"],
+)
 async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_path, scenario):
     import psycopg
     from psycopg import sql
     from psycopg.conninfo import conninfo_to_dict, make_conninfo
     from psycopg.errors import InsufficientPrivilege
     from psycopg_pool import AsyncConnectionPool
-    from scripts.governance.reconcile_sandbox_restore import ordering_digest, reconcile
+    from scripts.governance.reconcile_sandbox_restore import reconcile, recovery_digest
     from veritas_os.storage.sandbox_restore import RECOVERY_PENDING
 
     artifact, args = await _args(prepared_inputs)
@@ -212,7 +214,7 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
     )
     reason = "Cancel before backup"
     revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
-    fenced = scenario in {"unverified", "missing_dispatch"}
+    fenced = scenario in {"unverified", "missing_dispatch", "missing_consumption"}
 
     async def run_script(script, *arguments):
         result = await asyncio.to_thread(
@@ -234,6 +236,16 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
             (archive,) = tmp_path.glob("veritas_*.dump")
             if scenario in {"after_backup", "unverified"}:
                 audit_id = await cancel_authorization()
+            if scenario == "missing_consumption":
+                async def get_source_pool():
+                    return source
+
+                with monkeypatch.context() as patch:
+                    patch.setattr(db, "get_pool", get_source_pool)
+                    source_consumptions = PostgresAtomicAuthorizationConsumptionStore()
+                    assert await source_consumptions.consume_once(consumption)
+                    assert await source_consumptions.get(authorization_id) == consumption
+                    assert await PostgresAtomicEffectStateStore().get(consumption.consumption_id) is None
             async with source.connection() as admin:
                 if scenario == "missing_dispatch":
                     # The older archive has no corresponding effect and consumption history.
@@ -256,12 +268,15 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                 with psycopg.connect(source_dsn, autocommit=True) as donor, psycopg.connect(
                     restored_dsn, autocommit=True,
                 ) as target:
-                    digest = ordering_digest(donor)
+                    digest = recovery_digest(donor)
                     if scenario == "unverified":
-                        with pytest.raises(ValueError, match="independently recorded ordering digest"):
+                        with pytest.raises(ValueError, match="independently recorded recovery digest"):
                             reconcile(donor, target, "0" * 64)
                     elif scenario == "missing_dispatch":
                         with pytest.raises(ValueError, match="lacks committed dispatch history"):
+                            reconcile(donor, target, digest)
+                    elif scenario == "missing_consumption":
+                        with pytest.raises(ValueError, match="Native v2 consumption records differ"):
                             reconcile(donor, target, digest)
                     else:
                         reconcile(donor, target, digest)
