@@ -67,22 +67,36 @@ jobs:
           alembic upgrade head
 
       - name: Use PostgreSQL 16 clients for the recovery test
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
         run: |
           set -euxo pipefail
-          # Match the service so pg_restore does not emit settings from a newer server.
-          client_bin=/usr/lib/postgresql/16/bin
-          if [[ ! -x "$client_bin/pg_dump" || ! -x "$client_bin/pg_restore" || ! -x "$client_bin/psql" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y postgresql-client-16
-          fi
-          "$client_bin/pg_dump" --version
-          "$client_bin/pg_restore" --version
-          "$client_bin/psql" --version
+          # Use the same image as the service and mount only recovery scratch files.
+          client_image=$(docker inspect --format '{{.Image}}' "$POSTGRES_SERVICE_ID")
+          echo "SANDBOX_PG_CLIENT_IMAGE=$client_image" >> "$GITHUB_ENV"
+          export SANDBOX_PG_CLIENT_IMAGE="$client_image"
+          client_bin="$RUNNER_TEMP/sandbox-pg-client-bin"
+          mkdir -p "$client_bin" "$RUNNER_TEMP/sandbox-pg-restore"
+          cat > "$client_bin/run-client" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          scratch="$RUNNER_TEMP/sandbox-pg-restore"
+          exec docker run --rm -i --network host \
+            --user "$(id -u):$(id -g)" --volume "$scratch:$scratch" \
+            --env PGHOST --env PGPORT --env PGUSER --env PGPASSWORD --env PGDATABASE --env PGSSLMODE \
+            --entrypoint "${0##*/}" "$SANDBOX_PG_CLIENT_IMAGE" "$@"
+          BASH
+          chmod +x "$client_bin/run-client"
+          for tool in pg_dump pg_restore psql; do
+            ln -s run-client "$client_bin/$tool"
+            "$client_bin/$tool" --version
+          done
           echo "$client_bin" >> "$GITHUB_PATH"
 
       - name: Prove effect-state compare-and-set and Sandbox restore
         env:
           VERITAS_SANDBOX_RESTORE_E2E: "1"
+          TMPDIR: ${{ runner.temp }}/sandbox-pg-restore
         run: |
           set -euxo pipefail
           mkdir -p test-reports
