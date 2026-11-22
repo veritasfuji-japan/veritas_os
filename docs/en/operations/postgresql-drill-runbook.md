@@ -169,13 +169,15 @@ establish which decisions were committed after it was taken.
    `python -m scripts.governance.reconcile_sandbox_restore`.
 3. Resume Sandbox workers only after reconciliation succeeds. The command
    copies missing revocations and audit records and releases the fence in one
-   transaction. The digest covers dispatch ordering and native v2 consumption.
+   transaction. The digest covers dispatch ordering, native v2 consumption,
+   and the complete revocation audit, including repeat cancellation requests.
    Consumption can commit before a Sandbox attempt records its action class,
    so the command compares every native v2 consumption record on the two
    databases to preserve single-use semantics. Keep the target fenced if the
    source is unavailable, the evidence differs, or the archive lacks committed
-   dispatch or consumption history. Restore a backup with matching history
-   before retrying that recovery.
+   dispatch or consumption history. Verify that the source matches the recorded
+   digest before retrying. If the archive lacks history, restore a backup with
+   matching dispatch and consumption records before retrying.
 
 These steps require database administrative access and the supported restore
 script. They cover Sandbox authorization ordering within this deployment.

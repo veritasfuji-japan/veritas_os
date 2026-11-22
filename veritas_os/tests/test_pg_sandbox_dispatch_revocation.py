@@ -181,7 +181,10 @@ class TransportProvider(Provider):
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
 @pytest.mark.parametrize(
-    "scenario", ["captured", "after_backup", "unverified", "missing_dispatch", "missing_consumption", "allowed"],
+    "scenario", [
+        "captured", "after_backup", "unverified", "missing_dispatch", "missing_consumption", "missing_source_audit",
+        "allowed",
+    ],
 )
 async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_path, scenario):
     import psycopg
@@ -214,7 +217,7 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
     )
     reason = "Cancel before backup"
     revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
-    fenced = scenario in {"unverified", "missing_dispatch", "missing_consumption"}
+    fenced = scenario in {"unverified", "missing_dispatch", "missing_consumption", "missing_source_audit"}
 
     async def run_script(script, *arguments):
         result = await asyncio.to_thread(
@@ -234,8 +237,21 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
             audit_id = await cancel_authorization() if scenario == "captured" else None
             await run_script("backup_postgres.sh", "--output", str(tmp_path))
             (archive,) = tmp_path.glob("veritas_*.dump")
-            if scenario in {"after_backup", "unverified"}:
+            if scenario in {"after_backup", "unverified", "missing_source_audit"}:
                 audit_id = await cancel_authorization()
+            recorded_digest = None
+            if scenario == "missing_source_audit":
+                repeated_audit_id = await cancel_authorization()
+                assert repeated_audit_id != audit_id
+                with psycopg.connect(source_dsn, autocommit=True) as donor:
+                    recorded_digest = recovery_digest(donor)
+                    # Simulate a donor missing only the second audit row. The
+                    # repeated cancellation leaves dispatch ordering unchanged.
+                    deleted = donor.execute(
+                        "DELETE FROM public.bind_sandbox_revocation_audit WHERE audit_id = %s",
+                        (repeated_audit_id,),
+                    )
+                    assert deleted.rowcount == 1
             if scenario == "missing_consumption":
                 async def get_source_pool():
                     return source
@@ -268,10 +284,12 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                 with psycopg.connect(source_dsn, autocommit=True) as donor, psycopg.connect(
                     restored_dsn, autocommit=True,
                 ) as target:
-                    digest = recovery_digest(donor)
-                    if scenario == "unverified":
+                    digest = recorded_digest or recovery_digest(donor)
+                    donor.execute("SET TIME ZONE 'Asia/Tokyo'")
+                    if scenario in {"unverified", "missing_source_audit"}:
+                        expected_digest = "0" * 64 if scenario == "unverified" else digest
                         with pytest.raises(ValueError, match="independently recorded recovery digest"):
-                            reconcile(donor, target, "0" * 64)
+                            reconcile(donor, target, expected_digest)
                     elif scenario == "missing_dispatch":
                         with pytest.raises(ValueError, match="lacks committed dispatch history"):
                             reconcile(donor, target, digest)

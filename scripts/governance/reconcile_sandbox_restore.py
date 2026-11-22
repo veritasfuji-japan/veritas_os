@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+from datetime import timezone
 
 import psycopg
 from psycopg import sql
@@ -18,11 +19,12 @@ NATIVE_CONSUMPTIONS = """
     ORDER BY authorization_id COLLATE "C"
 """
 LOCK_SOURCE = """
-    LOCK TABLE public.bind_authorization_consumptions, public.bind_sandbox_dispatch_order IN SHARE MODE
+    LOCK TABLE public.bind_authorization_consumptions, public.bind_sandbox_dispatch_order,
+        public.bind_sandbox_revocation_audit IN SHARE MODE
 """
 AUDIT = """
     SELECT audit_id, operator_role, operator_name, authorization_id, reason, resolution, recorded_at
-    FROM public.bind_sandbox_revocation_audit
+    FROM public.bind_sandbox_revocation_audit ORDER BY audit_id
 """
 
 
@@ -34,14 +36,20 @@ def _read_recovery_state(connection: psycopg.Connection) -> dict:
     return {
         "ordering": dict(connection.execute(ORDERING).fetchall()),
         "native_consumptions": connection.execute(NATIVE_CONSUMPTIONS, (NATIVE_AUTHORIZATION_ID_PATTERN,)).fetchall(),
+        "revocation_audit": connection.execute(AUDIT).fetchall(),
     }
+
+
+def _digest_recovery_state(state: dict) -> str:
+    audit = [(*row[:-1], row[-1].astimezone(timezone.utc).isoformat()) for row in state["revocation_audit"]]
+    return sha256_of_canonical_json({**state, "revocation_audit": audit})
 
 
 def recovery_digest(source: psycopg.Connection) -> str:
     """Compute the digest to record independently at the recovery cutover."""
     with source.transaction():
         source.execute(LOCK_SOURCE)
-        return sha256_of_canonical_json(_read_recovery_state(source))
+        return _digest_recovery_state(_read_recovery_state(source))
 
 
 def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_digest: str) -> None:
@@ -57,11 +65,11 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
 
         source.execute(LOCK_SOURCE)
         target.execute(
-            "LOCK TABLE public.bind_authorization_consumptions, public.bind_sandbox_dispatch_order "
-            "IN SHARE ROW EXCLUSIVE MODE"
+            "LOCK TABLE public.bind_authorization_consumptions, public.bind_sandbox_dispatch_order, "
+            "public.bind_sandbox_revocation_audit IN SHARE ROW EXCLUSIVE MODE"
         )
         source_state = _read_recovery_state(source)
-        if sha256_of_canonical_json(source_state) != expected_digest:
+        if _digest_recovery_state(source_state) != expected_digest:
             raise SandboxRestoreError("The source does not match the independently recorded recovery digest.")
         authoritative = source_state["ordering"]
         restored = dict(target.execute(ORDERING).fetchall())
@@ -76,7 +84,7 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
         if source_state["native_consumptions"] != target_consumptions:
             raise SandboxRestoreError("Native v2 consumption records differ. Restore a matching verified backup.")
 
-        source_audit = {row[0]: row for row in source.execute(AUDIT).fetchall()}
+        source_audit = {row[0]: row for row in source_state["revocation_audit"]}
         target_audit = {row[0]: row for row in target.execute(AUDIT).fetchall()}
         if any(source_audit.get(key) != row for key, row in target_audit.items()):
             raise SandboxRestoreError("The source does not contain matching restored audit records.")
