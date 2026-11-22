@@ -136,6 +136,48 @@ def test_restore_aborts_after_pg_restore_error(tmp_path, monkeypatch):
 
 @pytest.mark.smoke
 @pytest.mark.unit
+@pytest.mark.parametrize("reconcile_exit, expected_exit", [(0, 7), (1, 6)])
+def test_sandbox_drill_reports_cleanup_failure(tmp_path, monkeypatch, reconcile_exit, expected_exit):
+    archive = tmp_path / "backup.dump"
+    archive.touch()
+    drill = tmp_path / SCRIPTS["drill"].name
+    drill.write_text(SCRIPTS["drill"].read_text())
+    commands = {
+        "pg_dump": "exit 0",
+        "pg_restore": "exit 0",
+        "backup_postgres.sh": 'printf "%s\\n" "$DRILL_TEST_ARCHIVE"',
+        "restore_postgres.sh": "exit 0",
+        "python3": f"exit {reconcile_exit}",
+        "psql": (
+            'if [[ "$*" == *"test_database="* ]]; then\n'
+            '  grep -Fq \'DROP DATABASE IF EXISTS :"test_database";\' || exit 2\n'
+            '  echo "controlled cleanup error" >&2\n'
+            '  exit 1\n'
+            "fi\n"
+            'echo "0"'
+        ),
+    }
+    for name, body in commands.items():
+        executable = tmp_path / name
+        executable.write_text(f"#!/bin/bash\n{body}\n")
+        executable.chmod(0o700)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("DRILL_TEST_ARCHIVE", str(archive))
+
+    result = subprocess.run(
+        ["bash", str(drill), "--sandbox-recovery", "--skip-health", "--backup-dir", str(tmp_path)],
+        capture_output=True, text=True, timeout=10,
+    )
+
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    assert "restore: PASS" in result.stdout
+    assert "controlled cleanup error" in result.stderr
+    assert "STEP FAILED: cleanup" in result.stdout
+    assert "Recovery drill FAILED" in result.stdout
+
+
+@pytest.mark.smoke
+@pytest.mark.unit
 class TestScriptContent:
     """Verify scripts reference expected tools and patterns."""
 

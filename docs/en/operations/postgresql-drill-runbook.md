@@ -218,8 +218,30 @@ This executes:
    - `trustlog_chain_state` singleton match.
    - (If `VERITAS_API_KEY` set) API `/v1/trustlog/verify` call.
 5. **Health check** — `GET /health` returns `ok` or `degraded`.
-6. **Cleanup** — drops the test database (unless `--keep-test-db`).
-7. **Report** — structured pass/fail summary.
+6. **Sandbox dispatch recovery** — reconciles the test database with
+   `--sandbox-recovery`. The default report marks this step `SKIP` and the
+   test database stays fenced until cleanup or separate reconciliation.
+7. **Cleanup** — drops the test database (unless `--keep-test-db`).
+8. **Report** — structured pass/fail summary.
+
+### Drill Sandbox dispatch recovery
+
+Use a Python environment with VERITAS dependencies. Set the trusted source
+DSN and externally recorded digest as described in
+[Reconcile Sandbox dispatch after a logical restore](#reconcile-sandbox-dispatch-after-a-logical-restore),
+then run the drill with a disposable test database name that does not exist
+yet. Choose a lowercase unquoted PostgreSQL identifier. The drill fails
+without replacing an existing database.
+
+```bash
+scripts/drill_postgres_recovery.sh --sandbox-recovery --skip-health
+```
+
+The drill always reconciles its own test database. The report shows `restore`
+and `sandbox-dispatch-recovery` as separate steps. If reconciliation fails,
+the drill reports Sandbox dispatch as not cleared for restart and exits with
+code `6`. Use `--keep-test-db` to inspect the resulting test database and its
+fence. The drill's result applies to that test database.
 
 ### CI mode
 
@@ -239,6 +261,7 @@ Differences from full mode:
 | `--ci` | CI-safe mode (cleanup backup, tolerate missing backend) |
 | `--keep-test-db` | Retain test database for post-mortem inspection |
 | `--skip-health` | Skip `/health` check phase |
+| `--sandbox-recovery` | Reconcile Sandbox dispatch on the drill's test database |
 | `--backup-dir=DIR` | Override backup storage directory |
 
 ### Exit codes
@@ -251,6 +274,8 @@ Differences from full mode:
 | 3 | Restore failed |
 | 4 | Verification failed |
 | 5 | Health check failed |
+| 6 | Sandbox dispatch recovery failed |
+| 7 | Sandbox reconciliation passed, but test database cleanup failed |
 
 ---
 
@@ -389,13 +414,17 @@ After a failover event (primary ↔ replica promotion):
 4. VERIFY chain integrity
    scripts/drill_postgres_recovery.sh --skip-health
 
-5. RESTART the backend
+5. RECONCILE Sandbox dispatch on the restored database if it runs Sandbox
+   actions. Follow "Reconcile Sandbox dispatch after a logical restore" above.
+   Resume Sandbox workers only after that reconciliation succeeds.
+
+6. RESTART the backend
    docker compose start backend
 
-6. VERIFY health
+7. VERIFY health
    curl -s http://localhost:8000/health
 
-7. DOCUMENT the incident
+8. DOCUMENT the incident
    - Time of failure
    - Backup used (filename, timestamp)
    - Chain verification result
