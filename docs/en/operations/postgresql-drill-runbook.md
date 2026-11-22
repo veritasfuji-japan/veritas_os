@@ -80,13 +80,9 @@ scripts/backup_postgres.sh --tables-only
 
 ### Manual fallback
 
-For backups that include Sandbox operator revocation (`0015`), use
-`scripts/restore_postgres.sh` so the logical restore skips operator assignments,
-retains dispatch ordering and audit records, and removes `PUBLIC` execution.
-Re-verify and enroll the operators and their assigned targets on the restored
-database before granting the function to individual logins again.
-
-For backups taken before `0015`:
+The manual dump below applies to databases before migration `0015`.
+For `0015` or later, use `scripts/backup_postgres.sh` to exclude Sandbox
+operator assignments from the archive.
 
 ```bash
 # Full compressed dump
@@ -143,7 +139,15 @@ The script restores the archive in a single transaction. A PostgreSQL error
 during the archive restore rolls back the changes and the script exits with code
 2. Post-restore verification runs after the archive transaction commits.
 
-### Manual fallback
+For archives from migration `0015` or later, use `scripts/restore_postgres.sh`.
+It skips Sandbox operator assignments, retains dispatch ordering and audit
+records, and removes `PUBLIC` execution. Re-verify and enroll the operators
+and their assigned targets on the restored database before granting execution
+to individual logins again. Use the script if the archive's migration is unknown.
+
+### Manual fallback for backups before migration `0015`
+
+Use the following commands only for backups taken before migration `0015`.
 
 ```bash
 # Test restore
