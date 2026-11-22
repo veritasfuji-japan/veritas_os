@@ -466,7 +466,7 @@ PostgreSQL で関数の実行権限を直接付与され、発行済みの Sandb
 Migration `0015` 以降の論理復元は、所定の手順で確定済みの取消しと監査履歴を
 保持します。復元後に運用者と対象の許可を再確認して割り当てを登録し、関数の実行権限を
 再付与します。
-[実装と適用範囲](docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md#local-per-authorization-revocation-before-sandbox-dispatch) · [PostgreSQL 復元手順（英語）](docs/en/operations/postgresql-drill-runbook.md#4-restore-procedure)
+[実装と適用範囲（英語正本）](docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md) · [PostgreSQL 復元手順（英語正本）](docs/en/operations/postgresql-drill-runbook.md)
 
 ---
 

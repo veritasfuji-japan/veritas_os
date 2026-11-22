@@ -442,7 +442,7 @@ reason, and result in the same transaction.
 For migration `0015` or later, the documented logical restore preserves committed
 revocations and audit history. Operators and their authorization assignments must
 be verified and enrolled again before direct execution is granted.
-[Implementation and scope](docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md#local-per-authorization-revocation-before-sandbox-dispatch) · [PostgreSQL restore procedure](docs/en/operations/postgresql-drill-runbook.md#4-restore-procedure)
+[Implementation and scope](docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md) · [PostgreSQL restore procedure](docs/en/operations/postgresql-drill-runbook.md)
 
 ---
 
