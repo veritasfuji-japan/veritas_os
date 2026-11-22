@@ -80,6 +80,10 @@ scripts/backup_postgres.sh --tables-only
 
 ### Manual fallback
 
+The manual dump below applies to databases before migration `0015`.
+For `0015` or later, use `scripts/backup_postgres.sh` to exclude Sandbox
+operator assignments from the archive.
+
 ```bash
 # Full compressed dump
 pg_dump -Fc --no-owner --no-privileges \
@@ -131,15 +135,27 @@ psql -d postgres -c "DROP DATABASE veritas_drill_test;"
 scripts/restore_postgres.sh --mode=clean --verify BACKUP_FILE
 ```
 
-### Manual fallback
+The script restores the archive in a single transaction. A PostgreSQL error
+during the archive restore rolls back the changes and the script exits with code
+2. Post-restore verification runs after the archive transaction commits.
+
+For archives from migration `0015` or later, use `scripts/restore_postgres.sh`.
+It skips Sandbox operator assignments, retains dispatch ordering and audit
+records, and removes `PUBLIC` execution. Re-verify and enroll the operators
+and their assigned targets on the restored database before granting execution
+to individual logins again. Use the script if the archive's migration is unknown.
+
+### Manual fallback for backups before migration `0015`
+
+Use the following commands only for backups taken before migration `0015`.
 
 ```bash
 # Test restore
 createdb -U veritas veritas_restore_test
-pg_restore --no-owner --no-privileges -d veritas_restore_test BACKUP_FILE
+pg_restore --single-transaction --no-owner --no-privileges -d veritas_restore_test BACKUP_FILE
 
 # Production restore
-pg_restore --clean --if-exists --no-owner --no-privileges -d veritas BACKUP_FILE
+pg_restore --single-transaction --clean --if-exists --no-owner --no-privileges -d veritas BACKUP_FILE
 ```
 
 ---

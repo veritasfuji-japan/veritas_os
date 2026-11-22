@@ -177,3 +177,50 @@ Ordering is determined by the shared PostgreSQL transaction. It covers
 revocations committed by this control plane. External authority updates still
 depend on the runtime recheck and its source. The ordering record does not
 confirm an external effect or change the frozen reconciliation contract.
+
+### Scoped operator revocation
+
+Migration `0015` adds a PostgreSQL operation for named operator logins.
+Use a dedicated login with no administrative membership or direct write access
+to the Bind, scope, or audit tables. The database owner grants function
+execution and enrolls each eligible authorization ID for its operator login.
+Verify the ID against the trusted Sandbox issuance record and deployment before
+enrollment. Keep provisioning access with the trusted deployment control plane.
+On every call the function requires a direct execution grant to the authenticated
+login and matches its PostgreSQL role ID, role name, and the exact authorization
+ID against the enrollment.
+
+For example, the database owner provisions an existing `sandbox_operator`
+login and a verified ID supplied as the psql variable `authorization_id`:
+
+```sql
+GRANT USAGE ON SCHEMA public TO sandbox_operator;
+GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO sandbox_operator;
+INSERT INTO public.bind_sandbox_revocation_grants (operator_role, operator_name, authorization_id)
+SELECT oid, rolname, :'authorization_id'
+FROM pg_catalog.pg_roles WHERE rolname = 'sandbox_operator';
+```
+
+The operator connects directly under that PostgreSQL login and runs the following
+with psql autocommit enabled. The `reason` variable is required and accepts up to
+512 characters. Keep personal data and credentials out of the reason.
+
+```sql
+SELECT * FROM public.revoke_sandbox_authorization(:'authorization_id', :'reason');
+```
+
+After a successful commit, the returned `audit_id` identifies the durable record
+of the authenticated operator, target ID, reason, ordering result, and database
+time. If the commit outcome is uncertain, another call is safe and adds an
+audit record with the durable ordering result. A result of
+`DISPATCH_ALREADY_COMMITTED` leaves the effect outcome to reconciliation. An
+attempt without an execution grant or a scoped enrollment is denied. Migration
+`0015` rejects a downgrade while operator audit records exist.
+
+The repository backup and restore scripts preserve dispatch ordering and audit
+history. They exclude operator assignments from logical backups and skip those
+rows when restoring an older or external archive. The restore script also
+reapplies the restriction on `PUBLIC` execution. Re-verify and enroll operators
+and targets on the restored database before granting direct execution again.
+For manual logical backups, exclude the data in
+`public.bind_sandbox_revocation_grants` and apply the same restore steps.

@@ -99,6 +99,39 @@ class TestScriptHelp:
 
 @pytest.mark.smoke
 @pytest.mark.unit
+def test_restore_aborts_after_pg_restore_error(tmp_path, monkeypatch):
+    archive = tmp_path / "backup.dump"
+    archive.touch()
+    pg_restore = tmp_path / "pg_restore"
+    pg_restore.write_text(
+        "#!/bin/bash\n"
+        'if [[ "$1" == "--list" ]]; then exit 0; fi\n'
+        'for arg in "$@"; do\n'
+        '  if [[ "$arg" == "--single-transaction" ]]; then\n'
+        '    echo "controlled restore error" >&2; exit 1\n'
+        '  fi\n'
+        'done\n'
+        'exit 3\n'
+    )
+    psql = tmp_path / "psql"
+    psql.write_text("#!/bin/bash\necho 'unexpected post-restore check'\nexit 0\n")
+    for executable in (pg_restore, psql):
+        executable.chmod(0o700)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    result = subprocess.run(
+        ["bash", str(SCRIPTS["restore"]), "--mode=clean", str(archive)],
+        capture_output=True, text=True, timeout=10,
+    )
+
+    assert result.returncode == 2
+    assert "controlled restore error" in result.stderr
+    assert "pg_restore failed (exit code: 1)" in result.stdout
+    assert "unexpected post-restore check" not in result.stdout
+    assert "Restore complete." not in result.stdout
+
+
+@pytest.mark.smoke
+@pytest.mark.unit
 class TestScriptContent:
     """Verify scripts reference expected tools and patterns."""
 

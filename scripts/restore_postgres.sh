@@ -113,6 +113,17 @@ export PGDATABASE="${PGDATABASE:-veritas}"
 # ── Restore ───────────────────────────────────────────────────────────────
 START_TIME=$(date +%s)
 
+# Older or externally produced backups may still contain cluster-local grants.
+# Keep the schema, dispatch ordering, and audit data.
+RESTORE_LIST=$(mktemp)
+trap 'rm -f -- "$RESTORE_LIST"' EXIT
+if ! pg_restore --list "$BACKUP_FILE" | awk '
+    !($4 == "TABLE" && $5 == "DATA" && $6 == "public" && $7 == "bind_sandbox_revocation_grants")
+' > "$RESTORE_LIST"; then
+    log_error "Could not read the backup catalog."
+    exit 2
+fi
+
 if [[ "$MODE" == "test" ]]; then
     log_info "Mode: test — restoring into database '${TEST_DB}'"
     TARGET_DB="$TEST_DB"
@@ -134,6 +145,8 @@ log_info "Target database: ${TARGET_DB}"
 PG_RESTORE_ARGS=(
     --no-owner
     --no-privileges
+    --single-transaction
+    --use-list="$RESTORE_LIST"
     --verbose
     -d "$TARGET_DB"
 )
@@ -145,22 +158,33 @@ fi
 if pg_restore "${PG_RESTORE_ARGS[@]}" "${BACKUP_FILE}"; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
-    log_info "Restore completed in ${DURATION}s ✓"
+    log_info "Archive restored in ${DURATION}s ✓"
 else
-    PG_RESTORE_RC=$?
-    # pg_restore returns 1 for warnings (e.g. "relation already exists" on
-    # clean mode when table was already dropped).  Treat only fatal (>1) as
-    # errors.
-    if [[ $PG_RESTORE_RC -gt 1 ]]; then
-        log_error "pg_restore failed (exit code: ${PG_RESTORE_RC})"
-        exit 2
-    else
-        log_warn "pg_restore completed with warnings (exit code: ${PG_RESTORE_RC})"
-    fi
+    log_error "pg_restore failed (exit code: $?)"
+    exit 2
 fi
 
 # ── Post-restore integrity checks ────────────────────────────────────────
 log_info "Running post-restore integrity checks..."
+
+# --no-privileges can restore this function with default PUBLIC execution.
+# The function also checks the login's explicit grant before any write.
+if ! psql -X -v ON_ERROR_STOP=1 -d "$TARGET_DB" <<'SQL'
+DO $$
+BEGIN
+    IF pg_catalog.to_regprocedure('public.revoke_sandbox_authorization(text,text)') IS NOT NULL THEN
+        REVOKE ALL ON FUNCTION public.revoke_sandbox_authorization(text, text) FROM PUBLIC;
+        IF EXISTS (SELECT 1 FROM public.bind_sandbox_revocation_grants) THEN
+            RAISE EXCEPTION 'Sandbox operator assignments must be empty after restore';
+        END IF;
+    END IF;
+END
+$$;
+SQL
+then
+    log_error "Could not verify Sandbox operator restrictions after restore."
+    exit 2
+fi
 
 # Check that all three tables exist and have data
 for TABLE in trustlog_entries trustlog_chain_state memory_records; do
