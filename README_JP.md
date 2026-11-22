@@ -454,6 +454,20 @@ POST /v1/system/resume
 
 Bind Coverage の文書やテストで確認されていないルートまで、自動的に Bind で統制されているとは主張しません。
 
+### 個別の Sandbox 実行許可の取消し
+
+PostgreSQL で関数の実行権限を直接付与され、発行済みの Sandbox 実行許可を
+割り当てられた運用者は、その許可を取り消せます。共有データベースで取消しが
+送信確定より先にコミットされれば、その許可による外部への書き込みは 0 回です。
+送信確定が先なら `DISPATCH_ALREADY_COMMITTED` を返し、結果が不明な外部作用は
+読み取り専用の照合に委ねます。運用者、対象、理由、判定結果は同じトランザクションで
+監査履歴に記録されます。
+
+Migration `0015` 以降の論理復元は、所定の手順で確定済みの取消しと監査履歴を
+保持します。復元後に運用者と対象の許可を再確認して割り当てを登録し、関数の実行権限を
+再付与します。
+[実装と適用範囲](docs/en/architecture/controlled-execution-proof-architecture-freeze-v1.md#local-per-authorization-revocation-before-sandbox-dispatch) · [PostgreSQL 復元手順（英語）](docs/en/operations/postgresql-drill-runbook.md#4-restore-procedure)
+
 ---
 
 ## Authority Evidence
