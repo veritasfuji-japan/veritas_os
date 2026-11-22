@@ -139,15 +139,19 @@ psql -d postgres -c "DROP DATABASE veritas_drill_test;"
 scripts/restore_postgres.sh --mode=clean --verify BACKUP_FILE
 ```
 
+The script restores the archive in a single transaction. A PostgreSQL error
+during the archive restore rolls back the changes and the script exits with code
+2. Post-restore verification runs after the archive transaction commits.
+
 ### Manual fallback
 
 ```bash
 # Test restore
 createdb -U veritas veritas_restore_test
-pg_restore --no-owner --no-privileges -d veritas_restore_test BACKUP_FILE
+pg_restore --single-transaction --no-owner --no-privileges -d veritas_restore_test BACKUP_FILE
 
 # Production restore
-pg_restore --clean --if-exists --no-owner --no-privileges -d veritas BACKUP_FILE
+pg_restore --single-transaction --clean --if-exists --no-owner --no-privileges -d veritas BACKUP_FILE
 ```
 
 ---

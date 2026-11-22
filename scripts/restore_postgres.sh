@@ -145,6 +145,7 @@ log_info "Target database: ${TARGET_DB}"
 PG_RESTORE_ARGS=(
     --no-owner
     --no-privileges
+    --single-transaction
     --use-list="$RESTORE_LIST"
     --verbose
     -d "$TARGET_DB"
@@ -157,18 +158,10 @@ fi
 if pg_restore "${PG_RESTORE_ARGS[@]}" "${BACKUP_FILE}"; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
-    log_info "Restore completed in ${DURATION}s ✓"
+    log_info "Archive restored in ${DURATION}s ✓"
 else
-    PG_RESTORE_RC=$?
-    # pg_restore returns 1 for warnings (e.g. "relation already exists" on
-    # clean mode when table was already dropped).  Treat only fatal (>1) as
-    # errors.
-    if [[ $PG_RESTORE_RC -gt 1 ]]; then
-        log_error "pg_restore failed (exit code: ${PG_RESTORE_RC})"
-        exit 2
-    else
-        log_warn "pg_restore completed with warnings (exit code: ${PG_RESTORE_RC})"
-    fi
+    log_error "pg_restore failed (exit code: $?)"
+    exit 2
 fi
 
 # ── Post-restore integrity checks ────────────────────────────────────────
