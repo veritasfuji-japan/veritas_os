@@ -3,6 +3,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -420,6 +421,126 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                 assert attempt is not None
                 assert attempt.state == (EffectExecutionState.EFFECT_UNKNOWN if allowed else EffectExecutionState.IN_FLIGHT)
                 assert transport.send_calls == len(connections) == len(writer.writes) == int(allowed)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
+async def test_restored_unknown_sandbox_attempt_confirms_without_resending(prepared_inputs, monkeypatch, tmp_path):
+    import psycopg
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
+    from psycopg_pool import AsyncConnectionPool
+    from scripts.governance.reconcile_sandbox_restore import recovery_digest
+    from veritas_os.policy.sandbox_reconciliation import (
+        SandboxReaderPolicy, VERIFIER_ID, sandbox_reconciliation_policy_hash,
+    )
+    from veritas_os.policy.sandbox_recovery import recover_sandbox_attempt
+    from veritas_os.policy.trusted_https_reconciliation import (
+        ApprovedReconciliationVerifier, ReconciliationVerifierPolicy,
+    )
+    from veritas_os.security.hash import sha256_of_canonical_json
+    from veritas_os.tests.test_sandbox_reconciliation import ReaderProvider
+
+    artifact, args = await _args(prepared_inputs)
+    consumption = prepared_inputs[2]
+    source_dsn = db.build_conninfo()
+    database = f"sandbox_unknown_{uuid4().hex}"
+    target_dsn = make_conninfo(source_dsn, dbname=database)
+    consumptions = PostgresAtomicAuthorizationConsumptionStore()
+    effects = PostgresAtomicEffectStateStore()
+    args.update(consumption_store=consumptions, effect_store=effects, allow_in_memory_for_testing=False)
+    provider = TransportProvider(prepared_inputs, args)
+    transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+
+    async with AsyncConnectionPool(source_dsn, min_size=1, max_size=1, open=False) as source:
+        async def source_pool():
+            return source
+
+        monkeypatch.setattr(db, "get_pool", source_pool)
+        assert await consumptions.consume_once(consumption)
+        # The synthetic receiver captures the POST and closes without an acknowledgement.
+        writer, _, _, _ = setup(monkeypatch, b"")
+        dispatch = await run(artifact, args, provider, transport)
+        assert dispatch.reason_code == "TRANSPORT_FAILED_OR_UNKNOWN"
+        original = await effects.get(consumption.consumption_id)
+        assert original is not None and original.state == EffectExecutionState.EFFECT_UNKNOWN
+        assert transport.send_calls == len(writer.writes) == 1
+        (sent,) = writer.writes
+        headers, payload = sent.split(b"\r\n\r\n", 1)
+        assert headers.startswith(b"POST /v1/events HTTP/1.1")
+        fields = dict(line.decode().split(": ", 1) for line in headers.split(b"\r\n")[1:])
+        event = json.loads(payload)
+        assert event == PAYLOAD
+        operation = dict(
+            operation_id=str(uuid4()), event_id=event["event_id"],
+            payload_digest=sha256_of_canonical_json(event), idempotency_key=fields["Idempotency-Key"],
+            state="PERSISTED",
+        )
+        with psycopg.connect(source_dsn, autocommit=True) as donor:
+            digest = recovery_digest(donor)
+
+        connection = conninfo_to_dict(source_dsn)
+        env = {key: value for key, value in os.environ.items() if key != "VERITAS_API_KEY"}
+        env.update({
+            variable: connection[key]
+            for key, variable in (
+                ("host", "PGHOST"), ("port", "PGPORT"), ("user", "PGUSER"),
+                ("password", "PGPASSWORD"), ("dbname", "PGDATABASE"), ("sslmode", "PGSSLMODE"),
+            )
+            if key in connection
+        })
+        env.update(
+            VERITAS_RESTORE_TEST_DB=database,
+            VERITAS_SANDBOX_RECOVERY_SOURCE_DSN=source_dsn,
+            VERITAS_SANDBOX_RECOVERY_SHA256=digest,
+        )
+        script = Path(__file__).resolve().parents[2] / "scripts" / "drill_postgres_recovery.sh"
+        drill = await asyncio.to_thread(
+            subprocess.run, [
+                "bash", str(script), "--ci", "--skip-health", "--keep-test-db",
+                "--sandbox-recovery", "--backup-dir", str(tmp_path),
+            ], env=env, capture_output=True, text=True, timeout=60, check=False,
+        )
+        assert drill.returncode == 0, drill.stdout + drill.stderr
+        assert "sandbox-dispatch-recovery: PASS" in drill.stdout
+
+        async with AsyncConnectionPool(target_dsn, min_size=1, max_size=1, open=False) as restored:
+            async def restored_pool():
+                return restored
+
+            monkeypatch.setattr(db, "get_pool", restored_pool)
+            assert await effects.get(consumption.consumption_id) == original
+            assert not await consumptions.consume_once(consumption)
+            retry_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+            with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                await run(artifact, args, provider, retry_transport)
+            assert retry_transport.send_calls == 0
+            assert len(writer.writes) == 1
+
+            body = json.dumps(operation).encode()
+            response = (
+                f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n".encode()
+                + body
+            )
+            lookup, _, _, _ = setup(monkeypatch, response)
+            reader = SandboxReaderPolicy("separate-reader", "reader-v1", "synthetic", "sandbox")
+            verifier = ReconciliationVerifierPolicy((ApprovedReconciliationVerifier(
+                VERIFIER_ID, sandbox_reconciliation_policy_hash(args["deployment"], reader),
+            ),))
+            recovered = await recover_sandbox_attempt(
+                artifact, json.dumps(event), deployment=args["deployment"],
+                issuance_source_inputs=args["issuance_source_inputs"],
+                historical_governance_inputs=args["governance_inputs"], trust_inputs=args["trust_inputs"],
+                consumption_store=consumptions, effect_store=effects,
+                reader_policy=reader, verifier_policy=verifier,
+                provider=ReaderProvider(prepared_inputs[4]), trusted_clock=args["trusted_clock"],
+            )
+            assert recovered.state == EffectExecutionState.CONFIRMED_EFFECT
+            assert recovered.external_effect_retry_permitted is False
+            assert recovered.receipt_bundle is not None
+            assert await effects.get_reconciliation(consumption.consumption_id) is not None
+            (query,) = lookup.writes
+            assert query.startswith(f'GET /v1/operations?idempotency_key={operation["idempotency_key"]} '.encode())
+            assert len(writer.writes) == 1
 
 
 @pytest.mark.asyncio
