@@ -179,6 +179,21 @@ class TransportProvider(Provider):
         return resolved.model_copy(update={"material": SecretBytes(TOKEN)})
 
 
+@pytest.fixture
+def restored_dispatch_alternatives(prepared_inputs, tmp_path_factory, monkeypatch):
+    replacement_payload = {**PAYLOAD, "message": PAYLOAD["message"] + " replacement"}
+    unrelated_payload = {**replacement_payload, "event_id": str(uuid4())}
+
+    def issue(payload):
+        with monkeypatch.context() as patch:
+            for field, value in payload.items():
+                patch.setitem(PAYLOAD, field, value)
+            grant = issued_fixture.__wrapped__(tmp_path_factory)
+        return prepared_inputs_fixture.__wrapped__(grant)
+
+    return (replacement_payload, issue(replacement_payload)), (unrelated_payload, issue(unrelated_payload))
+
+
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
 @pytest.mark.parametrize(
@@ -425,11 +440,15 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
-async def test_restored_unknown_sandbox_attempt_confirms_without_resending(prepared_inputs, monkeypatch, tmp_path):
+async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
+    prepared_inputs, restored_dispatch_alternatives, monkeypatch, tmp_path,
+):
     import psycopg
     from psycopg.conninfo import conninfo_to_dict, make_conninfo
     from psycopg_pool import AsyncConnectionPool
     from scripts.governance.reconcile_sandbox_restore import recovery_digest
+    from veritas_os.policy.sandbox_bind_execution import execute_sandbox_bind
+    from veritas_os.policy.sandbox_pre_effect import SandboxPreEffectError, prepare_sandbox_attempt
     from veritas_os.policy.sandbox_reconciliation import (
         SandboxReaderPolicy, VERIFIER_ID, sandbox_reconciliation_policy_hash,
     )
@@ -519,6 +538,45 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(prepa
                 await run(artifact, args, provider, retry_transport)
             assert retry_transport.send_calls == 0
             assert len(writer.writes) == 1
+
+            (replacement_payload, replacement), (unrelated_payload, unrelated) = restored_dispatch_alternatives
+            replacement_artifact, replacement_args = await _args(replacement)
+            replacement_args.update(
+                consumption_store=consumptions, effect_store=effects, allow_in_memory_for_testing=False,
+            )
+            assert replacement_payload["event_id"] == event["event_id"]
+            assert replacement_artifact.authorization_id != artifact.authorization_id
+            assert replacement_artifact.idempotency_key != artifact.idempotency_key
+            assert await consumptions.consume_once(replacement[2])
+            replacement_json = json.dumps(replacement_payload)
+            with pytest.raises(SandboxPreEffectError, match="^SPE_BUSINESS_EVENT_ALREADY_CLAIMED$"):
+                await prepare_sandbox_attempt(replacement_artifact, replacement_json, **replacement_args)
+            replacement_provider = TransportProvider(replacement, replacement_args)
+            replacement_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+            with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                await execute_sandbox_bind(
+                    replacement_artifact, replacement_json, provider=replacement_provider,
+                    transport=replacement_transport, **replacement_args,
+                )
+            assert replacement_provider.calls == []
+            assert replacement_transport.send_calls == 0
+            assert len(writer.writes) == 1
+            assert await effects.get(consumption.consumption_id) == original
+
+            unrelated_artifact, unrelated_args = await _args(unrelated)
+            unrelated_args.update(
+                consumption_store=consumptions, effect_store=effects, allow_in_memory_for_testing=False,
+            )
+            assert unrelated_payload["event_id"] != event["event_id"]
+            assert await consumptions.consume_once(unrelated[2])
+            unrelated_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+            unrelated_writer, _, _, _ = setup(monkeypatch, b"")
+            await execute_sandbox_bind(
+                unrelated_artifact, json.dumps(unrelated_payload), provider=TransportProvider(unrelated, unrelated_args),
+                transport=unrelated_transport, **unrelated_args,
+            )
+            assert unrelated_transport.send_calls == len(unrelated_writer.writes) == 1
+            assert json.loads(unrelated_writer.writes[0].split(b"\r\n\r\n", 1)[1]) == unrelated_payload
 
             body = json.dumps(operation).encode()
             response = (
