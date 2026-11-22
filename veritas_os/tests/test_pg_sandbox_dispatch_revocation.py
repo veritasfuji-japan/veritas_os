@@ -438,6 +438,7 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(prepa
         ApprovedReconciliationVerifier, ReconciliationVerifierPolicy,
     )
     from veritas_os.security.hash import sha256_of_canonical_json
+    from veritas_os.storage.sandbox_restore import RECOVERY_PENDING
     from veritas_os.tests.test_sandbox_reconciliation import ReaderProvider
 
     artifact, args = await _args(prepared_inputs)
@@ -510,6 +511,9 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(prepa
             monkeypatch.setattr(db, "get_pool", restored_pool)
             assert await effects.get(consumption.consumption_id) == original
             assert not await consumptions.consume_once(consumption)
+            async with restored.connection() as conn:
+                pending = await conn.execute(RECOVERY_PENDING)
+                assert await pending.fetchone() == (False,)
             retry_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
             with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
                 await run(artifact, args, provider, retry_transport)
