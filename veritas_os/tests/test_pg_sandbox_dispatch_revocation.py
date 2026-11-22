@@ -183,7 +183,7 @@ class TransportProvider(Provider):
 @pytest.mark.parametrize(
     "scenario", [
         "captured", "after_backup", "unverified", "missing_dispatch", "missing_consumption", "missing_source_audit",
-        "allowed",
+        "allowed", "drill_bad_digest", "drill_unavailable", "drill_default",
     ],
 )
 async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_path, scenario):
@@ -217,14 +217,16 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
     )
     reason = "Cancel before backup"
     revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
-    fenced = scenario in {"unverified", "missing_dispatch", "missing_consumption", "missing_source_audit"}
+    drill = scenario == "allowed" or scenario.startswith("drill_")
+    fenced = scenario not in {"allowed", "captured", "after_backup"}
 
-    async def run_script(script, *arguments):
+    async def run_script(script, *arguments, expected_exit=0):
         result = await asyncio.to_thread(
             subprocess.run, ["bash", str(root / "scripts" / script), *arguments],
             env=env, capture_output=True, text=True, timeout=60, check=False,
         )
-        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.returncode == expected_exit, result.stdout + result.stderr
+        return result
 
     async with AsyncConnectionPool(source_dsn, min_size=1, max_size=1, open=False) as source:
         async with operator_session(source, authorization_id) as (operator, role):
@@ -235,8 +237,9 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                 return audit_id
 
             audit_id = await cancel_authorization() if scenario == "captured" else None
-            await run_script("backup_postgres.sh", "--output", str(tmp_path))
-            (archive,) = tmp_path.glob("veritas_*.dump")
+            if not drill:
+                await run_script("backup_postgres.sh", "--output", str(tmp_path))
+                (archive,) = tmp_path.glob("veritas_*.dump")
             if scenario in {"after_backup", "unverified", "missing_source_audit"}:
                 audit_id = await cancel_authorization()
             recorded_digest = None
@@ -278,7 +281,37 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                     assert audit[0][0] == audit_id and audit[0][2:6] == (role, authorization_id, reason, revoked)
 
             # The disposable PostgreSQL service removes the restored database on teardown.
-            await run_script("restore_postgres.sh", "--mode=test", "--test-db", database, str(archive))
+            if drill:
+                with psycopg.connect(source_dsn, autocommit=True) as donor:
+                    digest = recovery_digest(donor)
+                env.update(
+                    VERITAS_RESTORE_TEST_DB=database,
+                    VERITAS_SANDBOX_RECOVERY_SOURCE_DSN=(
+                        make_conninfo(source_dsn, dbname=f"absent_{uuid4().hex}")
+                        if scenario == "drill_unavailable" else source_dsn
+                    ),
+                    VERITAS_SANDBOX_RECOVERY_SHA256="0" * 64 if scenario == "drill_bad_digest" else digest,
+                    VERITAS_SANDBOX_RECOVERY_TARGET_DSN=source_dsn,
+                )
+                env.pop("VERITAS_API_KEY", None)
+                sandbox_option = [] if scenario == "drill_default" else ["--sandbox-recovery"]
+                drill_args = (
+                    "drill_postgres_recovery.sh", "--ci", "--keep-test-db", "--skip-health",
+                    "--backup-dir", str(tmp_path), *sandbox_option,
+                )
+                result = await run_script(*drill_args, expected_exit=6 if fenced and sandbox_option else 0)
+                assert "restore: PASS" in result.stdout
+                if scenario == "drill_default":
+                    assert "sandbox-dispatch-recovery: SKIP" in result.stdout
+                elif fenced:
+                    assert "STEP FAILED: sandbox-dispatch-recovery" in result.stdout
+                    assert "Sandbox dispatch is not cleared for restart" in result.stdout
+                else:
+                    assert "sandbox-dispatch-recovery: PASS" in result.stdout
+                    retry = await run_script(*drill_args, expected_exit=3)
+                    assert "Could not create fresh test database" in retry.stdout
+            else:
+                await run_script("restore_postgres.sh", "--mode=test", "--test-db", database, str(archive))
 
             def recover():
                 with psycopg.connect(source_dsn, autocommit=True) as donor, psycopg.connect(
@@ -300,11 +333,12 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
                         reconcile(donor, target, digest)
 
             async with await psycopg.AsyncConnection.connect(restored_dsn, autocommit=True) as admin:
-                cursor = await admin.execute(RECOVERY_PENDING)
-                assert await cursor.fetchone() == (True,)
-                cursor = await admin.execute(audit_query, (authorization_id,))
-                assert await cursor.fetchall() == (audit if scenario == "captured" else [])
-                await asyncio.to_thread(recover)
+                if not drill:
+                    cursor = await admin.execute(RECOVERY_PENDING)
+                    assert await cursor.fetchone() == (True,)
+                    cursor = await admin.execute(audit_query, (authorization_id,))
+                    assert await cursor.fetchall() == (audit if scenario == "captured" else [])
+                    await asyncio.to_thread(recover)
                 cursor = await admin.execute(RECOVERY_PENDING)
                 assert await cursor.fetchone() == (fenced,)
                 cursor = await admin.execute(audit_query, (authorization_id,))

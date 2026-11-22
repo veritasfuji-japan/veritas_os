@@ -48,6 +48,7 @@ log_error() { echo -e "${RED}[RESTORE]${NC} $*"; }
 MODE="test"              # test | clean
 RUN_VERIFY=false
 BACKUP_FILE=""
+FRESH_TEST_DB=false
 TEST_DB="${VERITAS_RESTORE_TEST_DB:-veritas_restore_test}"
 BACKEND_URL="${VERITAS_BACKEND_URL:-http://localhost:8000}"
 API_KEY="${VERITAS_API_KEY:-}"
@@ -60,8 +61,9 @@ while [[ $# -gt 0 ]]; do
         --verify)      RUN_VERIFY=true; shift ;;
         --test-db=*)   TEST_DB="${1#*=}"; shift ;;
         --test-db)     TEST_DB="$2"; shift 2 ;;
+        --fresh-test-db) FRESH_TEST_DB=true; shift ;;
         --help|-h)
-            echo "Usage: $0 [--mode=test|clean] [--verify] [--test-db=NAME] BACKUP_FILE"
+            echo "Usage: $0 [--mode=test|clean] [--verify] [--test-db=NAME] [--fresh-test-db] BACKUP_FILE"
             exit 0
             ;;
         -*)
@@ -84,6 +86,10 @@ fi
 
 if [[ "$MODE" != "test" && "$MODE" != "clean" ]]; then
     log_error "Invalid mode: $MODE (must be 'test' or 'clean')"
+    exit 1
+fi
+if $FRESH_TEST_DB && [[ "$MODE" != "test" || ! "$TEST_DB" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
+    log_error "--fresh-test-db requires test mode and a simple unquoted PostgreSQL test database name."
     exit 1
 fi
 
@@ -128,12 +134,21 @@ if [[ "$MODE" == "test" ]]; then
     log_info "Mode: test — restoring into database '${TEST_DB}'"
     TARGET_DB="$TEST_DB"
 
-    # Create the test database (ignore if exists)
-    psql -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" 2>/dev/null || true
-    psql -d postgres -c "CREATE DATABASE ${TEST_DB} OWNER ${PGUSER};" || {
-        log_error "Could not create test database '${TEST_DB}'"
-        exit 2
-    }
+    # In fresh mode, CREATE fails without touching an existing database.
+    if $FRESH_TEST_DB; then
+        psql -X -v ON_ERROR_STOP=1 -v test_database="$TEST_DB" -v database_owner="$PGUSER" -d postgres <<'SQL' || {
+CREATE DATABASE :"test_database" OWNER :"database_owner";
+SQL
+            log_error "Could not create fresh test database '${TEST_DB}'."
+            exit 2
+        }
+    else
+        psql -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" 2>/dev/null || true
+        psql -d postgres -c "CREATE DATABASE ${TEST_DB} OWNER ${PGUSER};" || {
+            log_error "Could not create test database '${TEST_DB}'"
+            exit 2
+        }
+    fi
 else
     log_info "Mode: clean — restoring into '${PGDATABASE}' (destructive)"
     TARGET_DB="$PGDATABASE"
