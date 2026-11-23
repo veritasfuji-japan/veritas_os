@@ -19,8 +19,35 @@ NATIVE_CONSUMPTIONS = """
     ORDER BY authorization_id COLLATE "C"
 """
 LOCK_SOURCE = """
-    LOCK TABLE public.bind_authorization_consumptions, public.bind_sandbox_dispatch_order,
+    LOCK TABLE public.bind_authorization_consumptions, public.bind_sandbox_dispatch_order, public.bind_effect_states,
         public.bind_sandbox_revocation_audit IN SHARE MODE
+"""
+DISPATCH_CLAIMS = """
+    SELECT dispatch.authorization_id, effect.operation_id, effect.business_event_key
+    FROM public.bind_sandbox_dispatch_order AS dispatch
+    LEFT JOIN public.bind_authorization_consumptions AS consumption
+        ON consumption.authorization_id = dispatch.authorization_id
+    LEFT JOIN public.bind_effect_states AS effect
+        ON effect.authorization_id = dispatch.authorization_id
+        AND effect.consumption_id = consumption.consumption_id
+        AND effect.effect_provenance = 'SANDBOX_PRE_DISPATCH_V1'
+    WHERE dispatch.resolution = 'DISPATCH_ALREADY_COMMITTED'
+    ORDER BY dispatch.authorization_id COLLATE "C"
+"""
+BUSINESS_EVENT_UNIQUENESS = """
+    SELECT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_index AS i
+        JOIN pg_catalog.pg_attribute AS a
+            ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+        WHERE i.indrelid = 'public.bind_effect_states'::pg_catalog.regclass
+            AND a.attname = 'business_event_key'
+            AND NOT a.attisdropped
+            AND i.indnkeyatts = 1
+            AND i.indisunique AND i.indimmediate
+            AND i.indisvalid AND i.indisready AND i.indislive
+            AND i.indpred IS NULL AND i.indexprs IS NULL
+    )
 """
 AUDIT = """
     SELECT audit_id, operator_role, operator_name, authorization_id, reason, resolution, recorded_at
@@ -33,10 +60,14 @@ class SandboxRestoreError(ValueError):
 
 
 def _read_recovery_state(connection: psycopg.Connection) -> dict:
+    dispatch_claims = connection.execute(DISPATCH_CLAIMS).fetchall()
+    if any(not operation_id or not key for _, operation_id, key in dispatch_claims):
+        raise SandboxRestoreError("The source lacks a business event claim for a committed Sandbox dispatch.")
     return {
         "ordering": dict(connection.execute(ORDERING).fetchall()),
         "native_consumptions": connection.execute(NATIVE_CONSUMPTIONS, (NATIVE_AUTHORIZATION_ID_PATTERN,)).fetchall(),
         "revocation_audit": connection.execute(AUDIT).fetchall(),
+        "dispatch_claims": dispatch_claims,
     }
 
 
@@ -66,7 +97,7 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
         source.execute(LOCK_SOURCE)
         target.execute(
             "LOCK TABLE public.bind_authorization_consumptions, public.bind_sandbox_dispatch_order, "
-            "public.bind_sandbox_revocation_audit IN SHARE ROW EXCLUSIVE MODE"
+            "public.bind_effect_states, public.bind_sandbox_revocation_audit IN SHARE ROW EXCLUSIVE MODE"
         )
         source_state = _read_recovery_state(source)
         if _digest_recovery_state(source_state) != expected_digest:
@@ -83,6 +114,11 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
         target_consumptions = target.execute(NATIVE_CONSUMPTIONS, (NATIVE_AUTHORIZATION_ID_PATTERN,)).fetchall()
         if source_state["native_consumptions"] != target_consumptions:
             raise SandboxRestoreError("Native v2 consumption records differ. Restore a matching verified backup.")
+
+        if source_state["dispatch_claims"] != target.execute(DISPATCH_CLAIMS).fetchall():
+            raise SandboxRestoreError("Sandbox dispatch business event claims differ. Restore a matching verified backup.")
+        if target.execute(BUSINESS_EVENT_UNIQUENESS).fetchone() != (True,):
+            raise SandboxRestoreError("The target lacks an enforced unique Sandbox business event index.")
 
         source_audit = {row[0]: row for row in source_state["revocation_audit"]}
         target_audit = {row[0]: row for row in target.execute(AUDIT).fetchall()}

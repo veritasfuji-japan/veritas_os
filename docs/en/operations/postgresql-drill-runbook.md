@@ -170,14 +170,20 @@ establish which decisions were committed after it was taken.
 3. Resume Sandbox workers only after reconciliation succeeds. The command
    copies missing revocations and audit records and releases the fence in one
    transaction. The digest covers dispatch ordering, native v2 consumption,
+   the operation and business event key for each committed Sandbox dispatch,
    and the complete revocation audit, including repeat cancellation requests.
+   Before releasing the fence, reconciliation also requires an active,
+   unconditional unique index whose sole key is `business_event_key` on the
+   target's `public.bind_effect_states` table.
+   Record the digest with the same version of the tool used for reconciliation.
    Consumption can commit before a Sandbox attempt records its action class,
    so the command compares every native v2 consumption record on the two
    databases to preserve single-use semantics. Keep the target fenced if the
    source is unavailable, the evidence differs, or the archive lacks committed
    dispatch or consumption history. Verify that the source matches the recorded
    digest before retrying. If the archive lacks history, restore a backup with
-   matching dispatch and consumption records before retrying.
+   matching dispatch, business event claims, and consumption records before
+   retrying.
 
 These steps require database administrative access and the supported restore
 script. They cover Sandbox authorization ordering within this deployment.
