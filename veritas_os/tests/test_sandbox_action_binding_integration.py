@@ -24,14 +24,18 @@ pytestmark = pytest.mark.slow
 
 @pytest.fixture(scope="module")
 def issued(tmp_path_factory):
-    """Capture the real API and sign synthetic fixtures; never mock verifiers."""
-    output = tmp_path_factory.mktemp("sandbox-native") / "capture.json"
+    return issue_for_payload(tmp_path_factory.mktemp("sandbox-native"), PAYLOAD)
+
+
+def issue_for_payload(directory: Path, payload: dict[str, str]):
+    """Capture the real API and sign the exact synthetic payload."""
+    output = directory / "capture.json"
     config = deployment()
     overrides = {
         "intended_action": binding.ACTION,
         "target_system": config.target_system,
         "target_resource": config.endpoint_url,
-        "evidence_refs": [build().reference],
+        "evidence_refs": [build(json.dumps(payload)).reference],
     }
     code = (
         "import json,sys; from pathlib import Path; "
