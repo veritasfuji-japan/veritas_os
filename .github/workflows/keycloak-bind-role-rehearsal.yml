@@ -7,6 +7,7 @@ on:
       - 'veritas_os/tests/test_keycloak_bind_role_rehearsal.py'
       - 'veritas_os/tests/test_saas_role_grant_bind_rehearsal.py'
       - 'veritas_os/policy/sandbox_*.py'
+      - 'veritas_os/policy/bind_effect_reconciliation.py'
   workflow_dispatch:
 
 permissions:
