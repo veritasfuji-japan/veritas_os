@@ -96,10 +96,13 @@ jobs:
       - name: Prove effect-state compare-and-set and Sandbox restore
         env:
           VERITAS_SANDBOX_RESTORE_E2E: "1"
+          VERITAS_SANDBOX_RESTORE_EVIDENCE: test-reports/sandbox-restore-evidence-v1.json
           TMPDIR: ${{ runner.temp }}/sandbox-pg-restore
         run: |
           set -euxo pipefail
           mkdir -p test-reports
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          rm -f -- "$VERITAS_SANDBOX_RESTORE_EVIDENCE"
           pytest -q \
             veritas_os/tests/test_pg_bind_effect_state_contention.py \
             veritas_os/tests/test_pg_sandbox_dispatch_revocation.py \
@@ -107,6 +110,7 @@ jobs:
             -v \
             --tb=short \
             --junitxml=test-reports/bind-effect-state-postgresql.xml
+          test -s "$VERITAS_SANDBOX_RESTORE_EVIDENCE"
 
       - name: Export sandbox pre-dispatch arbitration proof
         run: |
@@ -122,4 +126,5 @@ jobs:
           path: |
             test-reports/bind-effect-state-postgresql.xml
             test-reports/sandbox-pre-dispatch-arbitration-proof-v1.json
+            test-reports/sandbox-restore-evidence-v1.json
           if-no-files-found: warn

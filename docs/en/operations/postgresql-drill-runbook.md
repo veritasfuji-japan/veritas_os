@@ -188,6 +188,14 @@ establish which decisions were committed after it was taken.
 These steps require database administrative access and the supported restore
 script. They cover Sandbox authorization ordering within this deployment.
 
+The Bind Effect State PostgreSQL workflow publishes
+`sandbox-restore-evidence-v1.json` with its contention report. The JSON
+records the tested commit SHA, whether the fence stayed in place for each
+rejected recovery, simulated receiver write counts, and the final effect
+state after a read-only lookup. It comes from the PostgreSQL recovery
+test with a simulated receiver. The workflow requires the evidence file
+on a successful test run.
+
 ### Manual fallback for non-Sandbox destinations before migration `0015`
 
 Use the following commands only for backups taken before migration `0015` and
