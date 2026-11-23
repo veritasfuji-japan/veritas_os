@@ -20,7 +20,11 @@ issued = issued_fixture
 
 @pytest.fixture(scope="module")
 def prepared_inputs(issued):
-    artifact, inputs = issued
+    return consume_fixture_authorization(*issued)
+
+
+def consume_fixture_authorization(artifact, inputs):
+    """Build a consumed native grant and a fresh snapshot using a fixture clock."""
     consumed_at = inputs["governance_inputs"].verification_now + timedelta(seconds=1)
     risk, source = _fresh(inputs, consumed_at)
     store = module.InMemoryAtomicAuthorizationConsumptionStore()
