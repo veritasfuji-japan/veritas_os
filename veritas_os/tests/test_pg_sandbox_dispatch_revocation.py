@@ -548,6 +548,18 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
                         with pytest.raises(SandboxRestoreError, match="business event claims differ"):
                             reconcile(donor, target, digest)
                         assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                with target.transaction(force_rollback=True):
+                    target.execute("DROP INDEX public.uq_bind_effect_states_business_event_key")
+                    with pytest.raises(SandboxRestoreError, match="lacks an enforced unique Sandbox business event index"):
+                        reconcile(donor, target, digest)
+                    assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                    target.execute(
+                        "CREATE INDEX uq_bind_effect_states_business_event_key "
+                        "ON public.bind_effect_states (business_event_key)"
+                    )
+                    with pytest.raises(SandboxRestoreError, match="lacks an enforced unique Sandbox business event index"):
+                        reconcile(donor, target, digest)
+                    assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
                 reconcile(donor, target, digest)
                 assert target.execute(RECOVERY_PENDING).fetchone() == (False,)
 

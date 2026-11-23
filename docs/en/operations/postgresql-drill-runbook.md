@@ -172,6 +172,9 @@ establish which decisions were committed after it was taken.
    transaction. The digest covers dispatch ordering, native v2 consumption,
    the operation and business event key for each committed Sandbox dispatch,
    and the complete revocation audit, including repeat cancellation requests.
+   Before releasing the fence, reconciliation also requires an active,
+   unconditional unique index whose sole key is `business_event_key` on the
+   target's `public.bind_effect_states` table.
    Record the digest with the same version of the tool used for reconciliation.
    Consumption can commit before a Sandbox attempt records its action class,
    so the command compares every native v2 consumption record on the two

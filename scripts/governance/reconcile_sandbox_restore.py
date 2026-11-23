@@ -34,6 +34,21 @@ DISPATCH_CLAIMS = """
     WHERE dispatch.resolution = 'DISPATCH_ALREADY_COMMITTED'
     ORDER BY dispatch.authorization_id COLLATE "C"
 """
+BUSINESS_EVENT_UNIQUENESS = """
+    SELECT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_index AS i
+        JOIN pg_catalog.pg_attribute AS a
+            ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+        WHERE i.indrelid = 'public.bind_effect_states'::pg_catalog.regclass
+            AND a.attname = 'business_event_key'
+            AND NOT a.attisdropped
+            AND i.indnkeyatts = 1
+            AND i.indisunique AND i.indimmediate
+            AND i.indisvalid AND i.indisready AND i.indislive
+            AND i.indpred IS NULL AND i.indexprs IS NULL
+    )
+"""
 AUDIT = """
     SELECT audit_id, operator_role, operator_name, authorization_id, reason, resolution, recorded_at
     FROM public.bind_sandbox_revocation_audit ORDER BY audit_id
@@ -102,6 +117,8 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
 
         if source_state["dispatch_claims"] != target.execute(DISPATCH_CLAIMS).fetchall():
             raise SandboxRestoreError("Sandbox dispatch business event claims differ. Restore a matching verified backup.")
+        if target.execute(BUSINESS_EVENT_UNIQUENESS).fetchone() != (True,):
+            raise SandboxRestoreError("The target lacks an enforced unique Sandbox business event index.")
 
         source_audit = {row[0]: row for row in source_state["revocation_audit"]}
         target_audit = {row[0]: row for row in target.execute(AUDIT).fetchall()}
