@@ -13,6 +13,7 @@ on:
       - "alembic/versions/0006_sandbox_reconciliation_archive.py"
       - "alembic/versions/0007_sandbox_receipt_bundle.py"
       - "alembic/versions/0008_sandbox_business_event_claim.py"
+      - "alembic/versions/0015_sandbox_operator_revocation.py"
       - "docs/en/architecture/native-v2-sandbox-event-spec-v1.md"
       - "docs/ja/architecture/native-v2-sandbox-event-spec-v1.md"
       - ".github/workflows/native-v2-sandbox-controlled-composition.yml"

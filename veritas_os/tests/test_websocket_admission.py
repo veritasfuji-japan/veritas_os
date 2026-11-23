@@ -7,7 +7,7 @@ import pytest
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
-from veritas_os.api import server
+from veritas_os.api import auth, server
 
 
 @pytest.fixture
@@ -79,9 +79,12 @@ def test_mounted_websocket_query_credentials_blocked_in_production(ws_app, monke
 
 
 def test_mounted_sse_retains_http_auth_and_startup_guard(ws_app, monkeypatch):
+    # Isolate failed attempts accumulated by other tests using the same client IP.
+    monkeypatch.setattr(auth, "_auth_fail_bucket", {})
     app, hub, _ = ws_app
     monkeypatch.setattr(app.state, "security_startup_complete", False)
-    client = TestClient(app)
+    # Isolate this auth check from failures recorded for the default test client.
+    client = TestClient(app, client=("192.0.2.241", 50000))
     assert client.get("/v1/events").status_code == 401
     response = client.get("/v1/events", headers={"X-API-Key": "websocket-admission-test"})
     assert response.status_code == 503

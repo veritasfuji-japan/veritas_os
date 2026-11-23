@@ -47,3 +47,29 @@ It does **not** connect to live:
 - production approval workflows
 
 This is **not** legal advice, regulatory approval, third-party certification, or production access-control validation.
+
+## Test-tenant role grant rehearsal
+
+A separate integration test uses the real Sandbox Bind execution and
+reconciliation paths with a synthetic directory. The native authorization binds
+the exact fixture tenant, user, and limited `report-viewer` role encoded in the
+Sandbox event before issuance. The directory updates its in-process state only
+when it receives a POST through the real transport code. The test replaces the
+network connection with an in-process stream.
+
+| Case | Expected observation |
+| --- | --- |
+| Exact grant | One POST changes one membership. A matching acknowledgement leaves the attempt in `EFFECT_UNKNOWN` until reconciliation. |
+| Changed tenant, user, or role | Zero connections and zero membership changes. |
+| Authority revoked when rechecked | Zero connections and zero membership changes. |
+| Replay of the same authorization | Zero additional POSTs or membership changes. |
+| Write succeeds and its response is lost | The attempt stays in `EFFECT_UNKNOWN`. A read-only GET by the original key confirms the recorded effect without another write. |
+
+```sh
+python -m pytest -q veritas_os/tests/test_saas_role_grant_bind_rehearsal.py
+```
+
+The rehearsal uses in-memory Bind stores, a fixture clock, and synthetic writer
+and reader identities. It exercises the existing Sandbox action class. A real
+SaaS/IdP integration and provider-side role enforcement require separate
+validation in the selected test tenant.

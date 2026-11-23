@@ -8,6 +8,10 @@ from typing import Any
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 
 
+class BindStateConflictError(RuntimeError):
+    """A conditional apply was refused because state changed before any write."""
+
+
 class BindAdapterContract(ABC):
     """Abstract bind adapter contract for bind-core adjudication."""
 

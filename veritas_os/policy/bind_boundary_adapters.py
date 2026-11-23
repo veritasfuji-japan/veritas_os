@@ -17,7 +17,7 @@ from veritas_os.governance.repository import (
     GovernanceWriteConflictError,
 )
 from veritas_os.policy.bind_artifacts import ExecutionIntent
-from veritas_os.policy.bind_core.contracts import BindAdapterContract
+from veritas_os.policy.bind_core.contracts import BindAdapterContract, BindStateConflictError
 from veritas_os.policy.runtime_adapter import load_runtime_bundle
 from veritas_os.security.hash import sha256_of_canonical_json
 
@@ -540,7 +540,7 @@ class SystemResumeAdapter(BindAdapterContract):
     """Bind adapter for operator-governed system resume."""
 
     status_reader: Callable[[], dict[str, Any]]
-    resume_executor: Callable[..., dict[str, Any]]
+    resume_executor: Callable[..., dict[str, Any] | None]
     operator: str
     comment: str = ""
     target_description: str = "system/resume"
@@ -587,14 +587,18 @@ class SystemResumeAdapter(BindAdapterContract):
         """Execute system resume through existing oversight controller."""
         del intent, snapshot
         result = self.resume_executor(operator=self.operator, comment=self.comment)
+        if result is None:
+            raise BindStateConflictError("The active halt changed before resume")
         if not isinstance(result, dict):
             raise ValueError("BIND_SYSTEM_RESUME_RESULT_INVALID")
         self._last_resume_result = result
         return True
 
     def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
-        """Verify system is no longer halted after apply execution."""
+        """Use the transition result when it identifies the cleared halt."""
         del intent, snapshot
+        if self._last_resume_result and self._last_resume_result.get("cleared_halt_id"):
+            return self._last_resume_result.get("resumed") is True
         status = self.status_reader()
         if not isinstance(status, dict):
             return False

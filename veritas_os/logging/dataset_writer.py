@@ -144,7 +144,7 @@ def build_dataset_record(
     alts = (res_payload or {}).get("alternatives") or []
     evs = (res_payload or {}).get("evidence") or []
     fuji = (res_payload or {}).get("fuji") or {}
-    gate = (res_payload or {}).get("gate") or {}
+    gate = (res_payload or {}).get("gate")
 
     # world は chosen 内にぶら下がっている前提（あれば拾う）
     world = chosen.get("world", {}) if chosen else {}
@@ -154,18 +154,21 @@ def build_dataset_record(
     mem_used = bool(mem.get("used", False))
     mem_citation = _i0(mem.get("citations", 0), 0)
 
-    # FUJI / Gate のステータス（Enumに正規化）
-    raw_status = gate.get("decision_status", DecisionStatus.ALLOW.value)
-    try:
-        status_enum = normalize_status(raw_status)
-    except ValueError:
-        status_enum = DecisionStatus.ALLOW
+    # A training label requires an explicit gate decision. The policy pipeline
+    # also emits "hold" when a decision is deferred.
+    raw_status = gate.get("decision_status") if isinstance(gate, dict) else None
+    if raw_status == "hold":
+        status = "hold"
+    else:
+        try:
+            status = normalize_status(raw_status).value
+        except ValueError:
+            raise ValueError("Missing or invalid gate decision_status") from None
 
-    # ラベル（学習用の meta label）
     decision_labels = {
-        "status": status_enum.value,          # "allow" / "modify" / "rejected"
-        "fuji_status": fuji.get("status"),    # FUJI の内部ステータス（任意）
-        "blocked": status_enum == DecisionStatus.REJECTED,
+        "status": status,
+        "fuji_status": fuji.get("status"),
+        "blocked": status in (DecisionStatus.BLOCK.value, DecisionStatus.REJECTED.value),
         "memory_used": mem_used,
         "memory_citations": mem_citation,
     }
@@ -196,7 +199,7 @@ def build_dataset_record(
                 "violations": fuji.get("violations", []),
             },
             "gate": {
-                "decision_status": status_enum.value,
+                "decision_status": status,
                 "risk": _f2(gate.get("risk"), 0.0),
                 "telos_score": _f2(gate.get("telos_score"), 0.0),
                 "reason": gate.get("reason"),

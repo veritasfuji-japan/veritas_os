@@ -80,6 +80,10 @@ scripts/backup_postgres.sh --tables-only
 
 ### Manual fallback
 
+The manual dump below applies to databases before migration `0015`.
+For `0015` or later, use `scripts/backup_postgres.sh` to exclude Sandbox
+operator assignments from the archive.
+
 ```bash
 # Full compressed dump
 pg_dump -Fc --no-owner --no-privileges \
@@ -131,15 +135,79 @@ psql -d postgres -c "DROP DATABASE veritas_drill_test;"
 scripts/restore_postgres.sh --mode=clean --verify BACKUP_FILE
 ```
 
-### Manual fallback
+The script restores the archive in a single transaction. A PostgreSQL error
+during the archive restore rolls back the changes and the script exits with code
+2. Post-restore verification runs after the archive transaction commits.
+
+For archives from migration `0015` or later, use `scripts/restore_postgres.sh`.
+It skips Sandbox operator assignments, retains dispatch ordering and audit
+records, and removes `PUBLIC` execution. Re-verify and enroll the operators
+and their assigned targets on the restored database before granting execution
+to individual logins again. Use the script if the archive's migration is unknown.
+
+### Reconcile Sandbox dispatch after a logical restore
+
+Use the restore script for any destination that will execute Sandbox actions,
+including when restoring an older archive. Deploy workers that honor the
+restore fence, keep them drained during the restore, and run only one recovery
+operation per destination at a time. The script fences new Sandbox dispatch
+before loading the archive. After a successful restore, the fence stays in
+place until authorization ordering has been reconciled. Before reconciliation,
+bring an older restored schema up to at least migration `0015`.
+
+Use a separate authoritative PostgreSQL source that includes commits through
+the recovery cutover. Establish its completeness using the deployment's
+recovery records, keep the old primary fenced from writers, and record the
+recovery digest outside the restored database. An archive's contents cannot
+establish which decisions were committed after it was taken.
+
+1. Set `VERITAS_SANDBOX_RECOVERY_SOURCE_DSN` in the trusted operator environment.
+   On the verified source, run `python -m scripts.governance.reconcile_sandbox_restore --record-recovery-digest`
+   and record the digest through the deployment's trusted recovery process.
+2. Set `VERITAS_SANDBOX_RECOVERY_TARGET_DSN` to the restored database and
+   `VERITAS_SANDBOX_RECOVERY_SHA256` to the recorded digest. Run
+   `python -m scripts.governance.reconcile_sandbox_restore`.
+3. Resume Sandbox workers only after reconciliation succeeds. The command
+   copies missing revocations and audit records and releases the fence in one
+   transaction. The digest covers dispatch ordering, native v2 consumption,
+   the operation and business event key for each committed Sandbox dispatch,
+   and the complete revocation audit, including repeat cancellation requests.
+   Before releasing the fence, reconciliation also requires an active,
+   unconditional unique index whose sole key is `business_event_key` on the
+   target's `public.bind_effect_states` table.
+   Record the digest with the same version of the tool used for reconciliation.
+   Consumption can commit before a Sandbox attempt records its action class,
+   so the command compares every native v2 consumption record on the two
+   databases to preserve single-use semantics. Keep the target fenced if the
+   source is unavailable, the evidence differs, or the archive lacks committed
+   dispatch or consumption history. Verify that the source matches the recorded
+   digest before retrying. If the archive lacks history, restore a backup with
+   matching dispatch, business event claims, and consumption records before
+   retrying.
+
+These steps require database administrative access and the supported restore
+script. They cover Sandbox authorization ordering within this deployment.
+
+The Bind Effect State PostgreSQL workflow publishes
+`sandbox-restore-evidence-v1.json` with its contention report. The JSON
+records the tested commit SHA, whether the fence stayed in place for each
+rejected recovery, simulated receiver write counts, and the final effect
+state after a read-only lookup. It comes from the PostgreSQL recovery
+test with a simulated receiver. The workflow requires the evidence file
+on a successful test run.
+
+### Manual fallback for non-Sandbox destinations before migration `0015`
+
+Use the following commands only for backups taken before migration `0015` and
+destinations that will not run Sandbox dispatch.
 
 ```bash
 # Test restore
 createdb -U veritas veritas_restore_test
-pg_restore --no-owner --no-privileges -d veritas_restore_test BACKUP_FILE
+pg_restore --single-transaction --no-owner --no-privileges -d veritas_restore_test BACKUP_FILE
 
 # Production restore
-pg_restore --clean --if-exists --no-owner --no-privileges -d veritas BACKUP_FILE
+pg_restore --single-transaction --clean --if-exists --no-owner --no-privileges -d veritas BACKUP_FILE
 ```
 
 ---
@@ -164,8 +232,30 @@ This executes:
    - `trustlog_chain_state` singleton match.
    - (If `VERITAS_API_KEY` set) API `/v1/trustlog/verify` call.
 5. **Health check** — `GET /health` returns `ok` or `degraded`.
-6. **Cleanup** — drops the test database (unless `--keep-test-db`).
-7. **Report** — structured pass/fail summary.
+6. **Sandbox dispatch recovery** — reconciles the test database with
+   `--sandbox-recovery`. The default report marks this step `SKIP` and the
+   test database stays fenced until cleanup or separate reconciliation.
+7. **Cleanup** — drops the test database (unless `--keep-test-db`).
+8. **Report** — structured pass/fail summary.
+
+### Drill Sandbox dispatch recovery
+
+Use a Python environment with VERITAS dependencies. Set the trusted source
+DSN and externally recorded digest as described in
+[Reconcile Sandbox dispatch after a logical restore](#reconcile-sandbox-dispatch-after-a-logical-restore),
+then run the drill with a disposable test database name that does not exist
+yet. Choose a lowercase unquoted PostgreSQL identifier. The drill fails
+without replacing an existing database.
+
+```bash
+scripts/drill_postgres_recovery.sh --sandbox-recovery --skip-health
+```
+
+The drill always reconciles its own test database. The report shows `restore`
+and `sandbox-dispatch-recovery` as separate steps. If reconciliation fails,
+the drill reports Sandbox dispatch as not cleared for restart and exits with
+code `6`. Use `--keep-test-db` to inspect the resulting test database and its
+fence. The drill's result applies to that test database.
 
 ### CI mode
 
@@ -185,6 +275,7 @@ Differences from full mode:
 | `--ci` | CI-safe mode (cleanup backup, tolerate missing backend) |
 | `--keep-test-db` | Retain test database for post-mortem inspection |
 | `--skip-health` | Skip `/health` check phase |
+| `--sandbox-recovery` | Reconcile Sandbox dispatch on the drill's test database |
 | `--backup-dir=DIR` | Override backup storage directory |
 
 ### Exit codes
@@ -197,6 +288,8 @@ Differences from full mode:
 | 3 | Restore failed |
 | 4 | Verification failed |
 | 5 | Health check failed |
+| 6 | Sandbox dispatch recovery failed |
+| 7 | Sandbox reconciliation passed, but test database cleanup failed |
 
 ---
 
@@ -335,13 +428,17 @@ After a failover event (primary ↔ replica promotion):
 4. VERIFY chain integrity
    scripts/drill_postgres_recovery.sh --skip-health
 
-5. RESTART the backend
+5. RECONCILE Sandbox dispatch on the restored database if it runs Sandbox
+   actions. Follow "Reconcile Sandbox dispatch after a logical restore" above.
+   Resume Sandbox workers only after that reconciliation succeeds.
+
+6. RESTART the backend
    docker compose start backend
 
-6. VERIFY health
+7. VERIFY health
    curl -s http://localhost:8000/health
 
-7. DOCUMENT the incident
+8. DOCUMENT the incident
    - Time of failure
    - Backup used (filename, timestamp)
    - Chain verification result

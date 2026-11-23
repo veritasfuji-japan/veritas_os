@@ -13,14 +13,16 @@
 #   3. Restore into test database (scripts/restore_postgres.sh --mode=test)
 #   4. TrustLog chain verification (SQL + optional API)
 #   5. Health check (if backend is running)
-#   6. Cleanup test database
-#   7. Summary report
+#   6. Sandbox dispatch recovery (opt-in)
+#   7. Cleanup test database
+#   8. Summary report
 #
 # Usage:
 #   scripts/drill_postgres_recovery.sh                   # full drill
 #   scripts/drill_postgres_recovery.sh --ci              # CI-safe (lightweight)
 #   scripts/drill_postgres_recovery.sh --keep-test-db    # don't drop test db
 #   scripts/drill_postgres_recovery.sh --skip-health     # skip /health check
+#   scripts/drill_postgres_recovery.sh --sandbox-recovery # verify Sandbox dispatch recovery
 #
 # Environment variables:
 #   PGHOST / PGPORT / PGUSER / PGPASSWORD / PGDATABASE
@@ -29,6 +31,8 @@
 #   VERITAS_BACKEND_URL         — backend base URL
 #   VERITAS_RESTORE_TEST_DB     — test database name
 #   VERITAS_DRILL_BACKUP_DIR    — where to store drill backups
+#   VERITAS_SANDBOX_RECOVERY_SOURCE_DSN / VERITAS_SANDBOX_RECOVERY_SHA256
+#                               — trusted source and recorded digest for Sandbox recovery
 #
 # Exit codes:
 #   0 — drill passed
@@ -37,6 +41,8 @@
 #   3 — restore failed
 #   4 — verification failed
 #   5 — health check failed
+#   6 — Sandbox dispatch recovery failed
+#   7 — Sandbox drill test database cleanup failed
 # ============================================================================
 
 set -euo pipefail
@@ -60,6 +66,7 @@ log_section() { echo -e "${CYAN}[DRILL]${NC} ── $* ──"; }
 CI_MODE=false
 KEEP_TEST_DB=false
 SKIP_HEALTH=false
+SANDBOX_RECOVERY=false
 BACKUP_DIR="${VERITAS_DRILL_BACKUP_DIR:-${REPO_ROOT}/backups/drill}"
 TEST_DB="${VERITAS_RESTORE_TEST_DB:-veritas_drill_test}"
 BACKEND_URL="${VERITAS_BACKEND_URL:-http://localhost:8000}"
@@ -74,10 +81,11 @@ while [[ $# -gt 0 ]]; do
         --ci)           CI_MODE=true; shift ;;
         --keep-test-db) KEEP_TEST_DB=true; shift ;;
         --skip-health)  SKIP_HEALTH=true; shift ;;
+        --sandbox-recovery) SANDBOX_RECOVERY=true; shift ;;
         --backup-dir=*) BACKUP_DIR="${1#*=}"; shift ;;
         --backup-dir)   BACKUP_DIR="$2"; shift 2 ;;
         --help|-h)
-            echo "Usage: $0 [--ci] [--keep-test-db] [--skip-health] [--backup-dir=DIR]"
+            echo "Usage: $0 [--ci] [--keep-test-db] [--skip-health] [--sandbox-recovery] [--backup-dir=DIR]"
             exit 0
             ;;
         *) log_error "Unknown option: $1"; exit 1 ;;
@@ -160,6 +168,9 @@ fi
 log_section "Phase 3: Restore (test mode)"
 
 RESTORE_ARGS=( --mode=test --test-db="${TEST_DB}" )
+if $SANDBOX_RECOVERY; then
+    RESTORE_ARGS+=( --fresh-test-db )
+fi
 if [[ -n "$API_KEY" ]]; then
     RESTORE_ARGS+=( --verify )
 fi
@@ -259,16 +270,47 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════════
-# Phase 6: Cleanup
+# Phase 6: Sandbox dispatch recovery (opt-in)
 # ══════════════════════════════════════════════════════════════════════════
-log_section "Phase 6: Cleanup"
+FAILURE_EXIT=1
+if $SANDBOX_RECOVERY; then
+    log_section "Phase 6: Sandbox Dispatch Recovery"
+    # Inherit the same libpq connection environment as the logical restore.
+    # Always reconcile the drill's scratch database.
+    if (
+        cd "$REPO_ROOT" &&
+        PGCONNECT_TIMEOUT="${PGCONNECT_TIMEOUT:-5}" \
+        VERITAS_SANDBOX_RECOVERY_TARGET_DSN="dbname=${TEST_DB}" \
+            python3 -m scripts.governance.reconcile_sandbox_restore
+    ); then
+        record_step "sandbox-dispatch-recovery" "PASS" "dispatch fence cleared on test database"
+    else
+        record_step "sandbox-dispatch-recovery" "FAIL" "Sandbox dispatch is not cleared for restart"
+        FAILURE_EXIT=6
+    fi
+else
+    record_step "sandbox-dispatch-recovery" "SKIP" "dispatch fence retained on test database"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════
+# Phase 7: Cleanup
+# ══════════════════════════════════════════════════════════════════════════
+log_section "Phase 7: Cleanup"
 
 if $KEEP_TEST_DB; then
     log_info "Retaining test database '${TEST_DB}' (--keep-test-db)"
     record_step "cleanup" "SKIP" "test db retained"
 else
-    if psql -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" &>/dev/null; then
+    if psql -X -v ON_ERROR_STOP=1 -v test_database="$TEST_DB" -d postgres >/dev/null <<'SQL'
+DROP DATABASE IF EXISTS :"test_database";
+SQL
+    then
         record_step "cleanup" "PASS" "dropped ${TEST_DB}"
+    elif $SANDBOX_RECOVERY; then
+        record_step "cleanup" "FAIL" "could not drop ${TEST_DB}"
+        if [[ $FAILURE_EXIT -ne 6 ]]; then
+            FAILURE_EXIT=7
+        fi
     else
         record_step "cleanup" "WARN" "could not drop ${TEST_DB}"
     fi
@@ -323,5 +365,5 @@ else
     log_error "═══════════════════════════════════════════"
     log_error "  Recovery drill FAILED (${FAIL_COUNT} step(s))"
     log_error "═══════════════════════════════════════════"
-    exit 1
+    exit "$FAILURE_EXIT"
 fi

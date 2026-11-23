@@ -48,6 +48,7 @@ log_error() { echo -e "${RED}[RESTORE]${NC} $*"; }
 MODE="test"              # test | clean
 RUN_VERIFY=false
 BACKUP_FILE=""
+FRESH_TEST_DB=false
 TEST_DB="${VERITAS_RESTORE_TEST_DB:-veritas_restore_test}"
 BACKEND_URL="${VERITAS_BACKEND_URL:-http://localhost:8000}"
 API_KEY="${VERITAS_API_KEY:-}"
@@ -60,8 +61,9 @@ while [[ $# -gt 0 ]]; do
         --verify)      RUN_VERIFY=true; shift ;;
         --test-db=*)   TEST_DB="${1#*=}"; shift ;;
         --test-db)     TEST_DB="$2"; shift 2 ;;
+        --fresh-test-db) FRESH_TEST_DB=true; shift ;;
         --help|-h)
-            echo "Usage: $0 [--mode=test|clean] [--verify] [--test-db=NAME] BACKUP_FILE"
+            echo "Usage: $0 [--mode=test|clean] [--verify] [--test-db=NAME] [--fresh-test-db] BACKUP_FILE"
             exit 0
             ;;
         -*)
@@ -84,6 +86,10 @@ fi
 
 if [[ "$MODE" != "test" && "$MODE" != "clean" ]]; then
     log_error "Invalid mode: $MODE (must be 'test' or 'clean')"
+    exit 1
+fi
+if $FRESH_TEST_DB && [[ "$MODE" != "test" || ! "$TEST_DB" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
+    log_error "--fresh-test-db requires test mode and a simple unquoted PostgreSQL test database name."
     exit 1
 fi
 
@@ -113,16 +119,36 @@ export PGDATABASE="${PGDATABASE:-veritas}"
 # ── Restore ───────────────────────────────────────────────────────────────
 START_TIME=$(date +%s)
 
+# Older or externally produced backups may still contain cluster-local grants.
+# Keep the schema, dispatch ordering, and audit data.
+RESTORE_LIST=$(mktemp)
+trap 'rm -f -- "$RESTORE_LIST"' EXIT
+if ! pg_restore --list "$BACKUP_FILE" | awk '
+    !($4 == "TABLE" && $5 == "DATA" && $6 == "public" && $7 == "bind_sandbox_revocation_grants")
+' > "$RESTORE_LIST"; then
+    log_error "Could not read the backup catalog."
+    exit 2
+fi
+
 if [[ "$MODE" == "test" ]]; then
     log_info "Mode: test — restoring into database '${TEST_DB}'"
     TARGET_DB="$TEST_DB"
 
-    # Create the test database (ignore if exists)
-    psql -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" 2>/dev/null || true
-    psql -d postgres -c "CREATE DATABASE ${TEST_DB} OWNER ${PGUSER};" || {
-        log_error "Could not create test database '${TEST_DB}'"
-        exit 2
-    }
+    # In fresh mode, CREATE fails without touching an existing database.
+    if $FRESH_TEST_DB; then
+        psql -X -v ON_ERROR_STOP=1 -v test_database="$TEST_DB" -v database_owner="$PGUSER" -d postgres <<'SQL' || {
+CREATE DATABASE :"test_database" OWNER :"database_owner";
+SQL
+            log_error "Could not create fresh test database '${TEST_DB}'."
+            exit 2
+        }
+    else
+        psql -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" 2>/dev/null || true
+        psql -d postgres -c "CREATE DATABASE ${TEST_DB} OWNER ${PGUSER};" || {
+            log_error "Could not create test database '${TEST_DB}'"
+            exit 2
+        }
+    fi
 else
     log_info "Mode: clean — restoring into '${PGDATABASE}' (destructive)"
     TARGET_DB="$PGDATABASE"
@@ -131,9 +157,27 @@ fi
 log_info "Restoring from: ${BACKUP_FILE}"
 log_info "Target database: ${TARGET_DB}"
 
+# Keep Sandbox dispatch fenced even if the archive restore or its verification
+# fails. This database-level setting is outside the restored objects.
+if ! psql -X -v ON_ERROR_STOP=1 -d "$TARGET_DB" <<'SQL'
+BEGIN;
+SELECT pg_catalog.pg_advisory_xact_lock(91416, 1);
+SELECT pg_catalog.format(
+    'ALTER DATABASE %I SET veritas.sandbox_restore_pending = %L',
+    pg_catalog.current_database(), 'restoring'
+) \gexec
+COMMIT;
+SQL
+then
+    log_error "Could not fence Sandbox dispatch before restore."
+    exit 2
+fi
+
 PG_RESTORE_ARGS=(
     --no-owner
     --no-privileges
+    --single-transaction
+    --use-list="$RESTORE_LIST"
     --verbose
     -d "$TARGET_DB"
 )
@@ -145,22 +189,33 @@ fi
 if pg_restore "${PG_RESTORE_ARGS[@]}" "${BACKUP_FILE}"; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
-    log_info "Restore completed in ${DURATION}s ✓"
+    log_info "Archive restored in ${DURATION}s ✓"
 else
-    PG_RESTORE_RC=$?
-    # pg_restore returns 1 for warnings (e.g. "relation already exists" on
-    # clean mode when table was already dropped).  Treat only fatal (>1) as
-    # errors.
-    if [[ $PG_RESTORE_RC -gt 1 ]]; then
-        log_error "pg_restore failed (exit code: ${PG_RESTORE_RC})"
-        exit 2
-    else
-        log_warn "pg_restore completed with warnings (exit code: ${PG_RESTORE_RC})"
-    fi
+    log_error "pg_restore failed (exit code: $?)"
+    exit 2
 fi
 
 # ── Post-restore integrity checks ────────────────────────────────────────
 log_info "Running post-restore integrity checks..."
+
+# --no-privileges can restore this function with default PUBLIC execution.
+# The function also checks the login's explicit grant before any write.
+if ! psql -X -v ON_ERROR_STOP=1 -d "$TARGET_DB" <<'SQL'
+DO $$
+BEGIN
+    IF pg_catalog.to_regprocedure('public.revoke_sandbox_authorization(text,text)') IS NOT NULL THEN
+        REVOKE ALL ON FUNCTION public.revoke_sandbox_authorization(text, text) FROM PUBLIC;
+        IF EXISTS (SELECT 1 FROM public.bind_sandbox_revocation_grants) THEN
+            RAISE EXCEPTION 'Sandbox operator assignments must be empty after restore';
+        END IF;
+    END IF;
+END
+$$;
+SQL
+then
+    log_error "Could not verify Sandbox operator restrictions after restore."
+    exit 2
+fi
 
 # Check that all three tables exist and have data
 for TABLE in trustlog_entries trustlog_chain_state memory_records; do
@@ -233,5 +288,20 @@ if [[ "$MODE" == "test" ]]; then
     log_info "To drop: psql -d postgres -c 'DROP DATABASE ${TEST_DB};'"
 fi
 
+if ! psql -X -v ON_ERROR_STOP=1 -d "$TARGET_DB" <<'SQL'
+BEGIN;
+SELECT pg_catalog.pg_advisory_xact_lock(91416, 1);
+SELECT pg_catalog.format(
+    'ALTER DATABASE %I SET veritas.sandbox_restore_pending = %L',
+    pg_catalog.current_database(), 'on'
+) \gexec
+COMMIT;
+SQL
+then
+    log_error "Could not mark Sandbox dispatch ready for reconciliation."
+    exit 2
+fi
+
 log_info "Restore complete."
+log_info "Sandbox dispatch remains fenced until authoritative ordering is reconciled."
 exit 0

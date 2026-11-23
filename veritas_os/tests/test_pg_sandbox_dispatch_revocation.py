@@ -1,0 +1,794 @@
+"""Exercise local revocation against the real PostgreSQL sandbox dispatch path."""
+
+import asyncio
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
+import json
+import os
+from pathlib import Path
+import subprocess
+from uuid import uuid4
+
+import pytest
+from pydantic import SecretBytes
+
+from veritas_os.policy.bind_effect_reconciliation import (
+    EffectExecutionState,
+    InMemoryAtomicEffectStateStore,
+    PostgresAtomicEffectStateStore,
+    SandboxAuthorizationRevocation,
+)
+from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
+    PostgresAtomicAuthorizationConsumptionStore,
+)
+from veritas_os.policy.sandbox_bind_execution import SandboxBindExecutionError
+from veritas_os.policy.sandbox_https_transport import SandboxHTTPSTransport
+from veritas_os.storage import db
+from veritas_os.tests.test_sandbox_bind_execution import PAYLOAD, Provider, run
+from veritas_os.tests.test_sandbox_https_transport import TOKEN, setup
+from veritas_os.tests.test_sandbox_pre_effect import (
+    _args,
+    issued as issued_fixture,
+    prepared_inputs as prepared_inputs_fixture,
+)
+
+pytestmark = [
+    pytest.mark.postgresql,
+    pytest.mark.contention,
+    pytest.mark.skipif(not os.getenv("VERITAS_DATABASE_URL"), reason="requires PostgreSQL"),
+]
+
+# Issue distinct signed authorizations so permutations do not clear durable rows.
+@pytest.fixture
+def issued(tmp_path_factory, monkeypatch):
+    monkeypatch.setitem(PAYLOAD, "event_id", str(uuid4()))
+    return issued_fixture.__wrapped__(tmp_path_factory)
+
+
+prepared_inputs = pytest.fixture(prepared_inputs_fixture.__wrapped__)
+
+
+@asynccontextmanager
+async def operator_session(admin_pool, authorization_id):
+    import psycopg
+    from psycopg import sql
+    from psycopg.errors import InsufficientPrivilege
+
+    role = f"sandbox_operator_{uuid4().hex}"
+    password = uuid4().hex
+    principal = sql.Identifier(role)
+    async with admin_pool.connection() as admin:
+        await admin.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(principal, sql.Literal(password)))
+    try:
+        async with await psycopg.AsyncConnection.connect(
+            db.build_conninfo(), user=role, password=password, autocommit=True,
+        ) as operator:
+            call = "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)"
+            with pytest.raises(InsufficientPrivilege, match="permission denied for function"):
+                await operator.execute(call, (authorization_id, "fixture cancellation"))
+            async with admin_pool.connection() as admin:
+                await admin.execute(
+                    "INSERT INTO public.bind_sandbox_revocation_grants "
+                    "(operator_role, operator_name, authorization_id) "
+                    "SELECT oid, rolname, %s FROM pg_catalog.pg_roles WHERE rolname = %s",
+                    (authorization_id, role),
+                )
+                await admin.execute(
+                    "GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO PUBLIC"
+                )
+            try:
+                with pytest.raises(InsufficientPrivilege, match="execution grant required"):
+                    await operator.execute(call, (authorization_id, "fixture cancellation"))
+            finally:
+                async with admin_pool.connection() as admin:
+                    await admin.execute(
+                        "REVOKE EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) FROM PUBLIC"
+                    )
+            async with admin_pool.connection() as admin:
+                await admin.execute(
+                    "UPDATE public.bind_sandbox_revocation_grants SET operator_name = 'previous_login' "
+                    "WHERE authorization_id = %s", (authorization_id,),
+                )
+                await admin.execute(
+                    sql.SQL("GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO {}")
+                    .format(principal)
+                )
+            with pytest.raises(InsufficientPrivilege, match="scope denied"):
+                await operator.execute(call, (authorization_id, "fixture cancellation"))
+            with pytest.raises(InsufficientPrivilege):
+                await operator.execute("SELECT * FROM public.bind_sandbox_revocation_audit")
+            async with admin_pool.connection() as admin:
+                await admin.execute(
+                    "UPDATE public.bind_sandbox_revocation_grants SET operator_name = %s "
+                    "WHERE authorization_id = %s AND operator_role = "
+                    "(SELECT oid FROM pg_catalog.pg_roles WHERE rolname = %s)",
+                    (role, authorization_id, role),
+                )
+            yield operator, role
+    finally:
+        async with admin_pool.connection() as admin:
+            await admin.execute(
+                "DELETE FROM public.bind_sandbox_revocation_grants "
+                "WHERE operator_role = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = %s)", (role,),
+            )
+            await admin.execute(
+                sql.SQL("REVOKE EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) FROM {}")
+                .format(principal)
+            )
+            await admin.execute(sql.SQL("DROP ROLE {}").format(principal))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("store_type", [InMemoryAtomicEffectStateStore, PostgresAtomicEffectStateStore])
+async def test_revocation_rejects_noncanonical_ids(store_type, monkeypatch):
+    async def unexpected_pool():
+        pytest.fail("Malformed revocation must not reach PostgreSQL")
+
+    monkeypatch.setattr(db, "get_pool", unexpected_pool)
+    store = store_type()
+    canonical = "laba:v2:sha256:" + "a" * 64
+    for invalid in ("", f" {canonical}", f"{canonical}\n", canonical.upper(), canonical[:-1]):
+        with pytest.raises(ValueError, match="canonical native sandbox authorization ID"):
+            await store.revoke_sandbox_authorization(invalid)
+
+
+def test_downgrade_preserves_committed_revocations():
+    import psycopg
+    from alembic.config import Config
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import create_engine
+    from sqlalchemy.exc import DBAPIError
+
+    root = Path(__file__).resolve().parents[2]
+    migration = ScriptDirectory.from_config(Config(str(root / "alembic.ini"))).get_revision("0014")
+    assert migration is not None
+    engine = create_engine("postgresql+psycopg://", creator=lambda: psycopg.connect(db.build_conninfo()))
+    try:
+        with engine.begin() as conn:
+            # Shadow the migrated table within this connection only.
+            conn.exec_driver_sql(
+                "CREATE TEMP TABLE bind_sandbox_dispatch_order "
+                "(authorization_id text PRIMARY KEY, resolution text NOT NULL) ON COMMIT DROP"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO bind_sandbox_dispatch_order VALUES "
+                "('revoked', 'REVOKED_BEFORE_DISPATCH'), ('dispatched', 'DISPATCH_ALREADY_COMMITTED')"
+            )
+            with Operations.context(MigrationContext.configure(conn)):
+                with pytest.raises(DBAPIError, match="Cannot downgrade 0014"), conn.begin_nested():
+                    migration.module.downgrade()
+                assert conn.exec_driver_sql(
+                    "SELECT resolution FROM pg_temp.bind_sandbox_dispatch_order WHERE authorization_id = 'revoked'"
+                ).scalar_one() == "REVOKED_BEFORE_DISPATCH"
+                conn.exec_driver_sql("DELETE FROM pg_temp.bind_sandbox_dispatch_order WHERE authorization_id = 'revoked'")
+                migration.module.downgrade()
+            assert conn.exec_driver_sql(
+                "SELECT to_regclass('pg_temp.bind_sandbox_dispatch_order')"
+            ).scalar_one() is None
+    finally:
+        engine.dispose()
+
+
+class TransportProvider(Provider):
+    """Use a synthetic token that meets the real transport's length contract."""
+
+    async def resolve(self, request, *, expected_metadata_digest):
+        resolved = await super().resolve(request, expected_metadata_digest=expected_metadata_digest)
+        return resolved.model_copy(update={"material": SecretBytes(TOKEN)})
+
+
+@pytest.fixture
+def restored_dispatch_alternatives(prepared_inputs, tmp_path_factory, monkeypatch):
+    replacement_payload = {**PAYLOAD, "message": PAYLOAD["message"] + " replacement"}
+    unrelated_payload = {**replacement_payload, "event_id": str(uuid4())}
+
+    def issue(payload):
+        with monkeypatch.context() as patch:
+            for field, value in payload.items():
+                patch.setitem(PAYLOAD, field, value)
+            grant = issued_fixture.__wrapped__(tmp_path_factory)
+        return prepared_inputs_fixture.__wrapped__(grant)
+
+    return (replacement_payload, issue(replacement_payload)), (unrelated_payload, issue(unrelated_payload))
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
+@pytest.mark.parametrize(
+    "scenario", [
+        "captured", "after_backup", "unverified", "missing_dispatch", "missing_consumption", "missing_source_audit",
+        "allowed", "drill_bad_digest", "drill_unavailable", "drill_default", "drill_cleanup",
+    ],
+)
+async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_path, scenario):
+    import psycopg
+    from psycopg import sql
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
+    from psycopg.errors import InsufficientPrivilege
+    from psycopg_pool import AsyncConnectionPool
+    from scripts.governance.reconcile_sandbox_restore import reconcile, recovery_digest
+    from veritas_os.storage.sandbox_restore import RECOVERY_PENDING
+
+    artifact, args = await _args(prepared_inputs)
+    authorization_id = artifact.authorization_id
+    consumption = prepared_inputs[2]
+    source_dsn = db.build_conninfo()
+    database = "select" if scenario == "drill_cleanup" else f"sandbox_restore_{uuid4().hex}"
+    restored_dsn = make_conninfo(source_dsn, dbname=database)
+    env = os.environ.copy()
+    connection = conninfo_to_dict(source_dsn)
+    for key, variable in (
+        ("host", "PGHOST"), ("port", "PGPORT"), ("user", "PGUSER"),
+        ("password", "PGPASSWORD"), ("dbname", "PGDATABASE"), ("sslmode", "PGSSLMODE"),
+    ):
+        if key in connection:
+            env[variable] = connection[key]
+    root = Path(__file__).resolve().parents[2]
+    call = "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)"
+    audit_query = (
+        "SELECT audit_id, operator_role, operator_name, authorization_id, reason, resolution, recorded_at "
+        "FROM public.bind_sandbox_revocation_audit WHERE authorization_id = %s"
+    )
+    reason = "Cancel before backup"
+    revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
+    drill = scenario == "allowed" or scenario.startswith("drill_")
+    fenced = scenario not in {"allowed", "captured", "after_backup", "drill_cleanup"}
+
+    async def run_script(script, *arguments, expected_exit=0):
+        result = await asyncio.to_thread(
+            subprocess.run, ["bash", str(root / "scripts" / script), *arguments],
+            env=env, capture_output=True, text=True, timeout=60, check=False,
+        )
+        assert result.returncode == expected_exit, result.stdout + result.stderr
+        return result
+
+    async with AsyncConnectionPool(source_dsn, min_size=1, max_size=1, open=False) as source:
+        async with operator_session(source, authorization_id) as (operator, role):
+            async def cancel_authorization():
+                result = await operator.execute(call, (authorization_id, reason))
+                audit_id, resolution = await result.fetchone()
+                assert resolution == revoked
+                return audit_id
+
+            audit_id = await cancel_authorization() if scenario == "captured" else None
+            if not drill:
+                await run_script("backup_postgres.sh", "--output", str(tmp_path))
+                (archive,) = tmp_path.glob("veritas_*.dump")
+            if scenario in {"after_backup", "unverified", "missing_source_audit"}:
+                audit_id = await cancel_authorization()
+            recorded_digest = None
+            if scenario == "missing_source_audit":
+                repeated_audit_id = await cancel_authorization()
+                assert repeated_audit_id != audit_id
+                with psycopg.connect(source_dsn, autocommit=True) as donor:
+                    recorded_digest = recovery_digest(donor)
+                    # Simulate a donor missing only the second audit row. The
+                    # repeated cancellation leaves dispatch ordering unchanged.
+                    deleted = donor.execute(
+                        "DELETE FROM public.bind_sandbox_revocation_audit WHERE audit_id = %s",
+                        (repeated_audit_id,),
+                    )
+                    assert deleted.rowcount == 1
+            if scenario in {"missing_consumption", "missing_dispatch"}:
+                async def get_source_pool():
+                    return source
+
+                with monkeypatch.context() as patch:
+                    patch.setattr(db, "get_pool", get_source_pool)
+                    source_consumptions = PostgresAtomicAuthorizationConsumptionStore()
+                    assert await source_consumptions.consume_once(consumption)
+                    assert await source_consumptions.get(authorization_id) == consumption
+                    source_effects = PostgresAtomicEffectStateStore()
+                    if scenario == "missing_dispatch":
+                        source_args = {
+                            **args, "consumption_store": source_consumptions, "effect_store": source_effects,
+                            "allow_in_memory_for_testing": False,
+                        }
+                        transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+                        writer, _, _, _ = setup(patch, b"")
+                        await run(artifact, source_args, TransportProvider(prepared_inputs, source_args), transport)
+                        assert transport.send_calls == len(writer.writes) == 1
+                    else:
+                        assert await source_effects.get(consumption.consumption_id) is None
+            async with source.connection() as admin:
+                cursor = await admin.execute(audit_query, (authorization_id,))
+                audit = await cursor.fetchall()
+                if audit_id is None:
+                    assert audit == []
+                else:
+                    assert len(audit) == 1
+                    assert audit[0][0] == audit_id and audit[0][2:6] == (role, authorization_id, reason, revoked)
+
+            # The disposable PostgreSQL service removes the restored database on teardown.
+            if drill:
+                with psycopg.connect(source_dsn, autocommit=True) as donor:
+                    digest = recovery_digest(donor)
+                env.update(
+                    VERITAS_RESTORE_TEST_DB=database,
+                    VERITAS_SANDBOX_RECOVERY_SOURCE_DSN=(
+                        make_conninfo(source_dsn, dbname=f"absent_{uuid4().hex}")
+                        if scenario == "drill_unavailable" else source_dsn
+                    ),
+                    VERITAS_SANDBOX_RECOVERY_SHA256="0" * 64 if scenario == "drill_bad_digest" else digest,
+                    VERITAS_SANDBOX_RECOVERY_TARGET_DSN=source_dsn,
+                )
+                env.pop("VERITAS_API_KEY", None)
+                sandbox_option = [] if scenario == "drill_default" else ["--sandbox-recovery"]
+                keep_option = [] if scenario == "drill_cleanup" else ["--keep-test-db"]
+                drill_args = (
+                    "drill_postgres_recovery.sh", "--ci", "--skip-health",
+                    "--backup-dir", str(tmp_path), *sandbox_option, *keep_option,
+                )
+                result = await run_script(*drill_args, expected_exit=6 if fenced and sandbox_option else 0)
+                assert "restore: PASS" in result.stdout
+                if scenario == "drill_default":
+                    assert "sandbox-dispatch-recovery: SKIP" in result.stdout
+                elif fenced:
+                    assert "STEP FAILED: sandbox-dispatch-recovery" in result.stdout
+                    assert "Sandbox dispatch is not cleared for restart" in result.stdout
+                else:
+                    assert "sandbox-dispatch-recovery: PASS" in result.stdout
+                    if scenario == "drill_cleanup":
+                        assert "cleanup: PASS" in result.stdout
+                        async with source.connection() as admin:
+                            cursor = await admin.execute(
+                                "SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s", (database,),
+                            )
+                            assert await cursor.fetchone() is None
+                        return
+                    retry = await run_script(*drill_args, expected_exit=3)
+                    assert "Could not create fresh test database" in retry.stdout
+            else:
+                await run_script("restore_postgres.sh", "--mode=test", "--test-db", database, str(archive))
+
+            def recover():
+                with psycopg.connect(source_dsn, autocommit=True) as donor, psycopg.connect(
+                    restored_dsn, autocommit=True,
+                ) as target:
+                    digest = recorded_digest or recovery_digest(donor)
+                    donor.execute("SET TIME ZONE 'Asia/Tokyo'")
+                    if scenario in {"unverified", "missing_source_audit"}:
+                        expected_digest = "0" * 64 if scenario == "unverified" else digest
+                        with pytest.raises(ValueError, match="independently recorded recovery digest"):
+                            reconcile(donor, target, expected_digest)
+                    elif scenario == "missing_dispatch":
+                        with pytest.raises(ValueError, match="lacks committed dispatch history"):
+                            reconcile(donor, target, digest)
+                    elif scenario == "missing_consumption":
+                        with pytest.raises(ValueError, match="Native v2 consumption records differ"):
+                            reconcile(donor, target, digest)
+                    else:
+                        reconcile(donor, target, digest)
+
+            async with await psycopg.AsyncConnection.connect(restored_dsn, autocommit=True) as admin:
+                if not drill:
+                    cursor = await admin.execute(RECOVERY_PENDING)
+                    assert await cursor.fetchone() == (True,)
+                    cursor = await admin.execute(audit_query, (authorization_id,))
+                    assert await cursor.fetchall() == (audit if scenario == "captured" else [])
+                    await asyncio.to_thread(recover)
+                cursor = await admin.execute(RECOVERY_PENDING)
+                assert await cursor.fetchone() == (fenced,)
+                cursor = await admin.execute(audit_query, (authorization_id,))
+                assert await cursor.fetchall() == ([] if fenced else audit)
+                cursor = await admin.execute(
+                    "SELECT resolution FROM public.bind_sandbox_dispatch_order WHERE authorization_id = %s",
+                    (authorization_id,),
+                )
+                expected_ordering = (revoked,) if scenario in {"captured", "after_backup"} else None
+                assert await cursor.fetchone() == expected_ordering
+                cursor = await admin.execute(
+                    "SELECT 1 FROM public.bind_sandbox_revocation_grants WHERE authorization_id = %s",
+                    (authorization_id,),
+                )
+                assert await cursor.fetchone() is None
+                cursor = await admin.execute(
+                    "SELECT has_function_privilege(%s, 'public.revoke_sandbox_authorization(text,text)', 'EXECUTE')",
+                    (role,),
+                )
+                assert await cursor.fetchone() == (False,)
+                await admin.execute(
+                    sql.SQL("GRANT EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) TO {}")
+                    .format(sql.Identifier(role))
+                )
+                try:
+                    await admin.execute(sql.SQL("SET SESSION AUTHORIZATION {}").format(sql.Identifier(role)))
+                    cursor = await admin.execute(RECOVERY_PENDING)
+                    assert await cursor.fetchone() == (fenced,)
+                    with pytest.raises(InsufficientPrivilege, match="scope denied"):
+                        await admin.execute(call, (authorization_id, reason))
+                finally:
+                    await admin.execute("RESET SESSION AUTHORIZATION")
+                    await admin.execute(
+                        sql.SQL("REVOKE EXECUTE ON FUNCTION public.revoke_sandbox_authorization(text, text) FROM {}")
+                        .format(sql.Identifier(role))
+                    )
+
+            async with AsyncConnectionPool(restored_dsn, min_size=1, max_size=1, open=False) as restored:
+                async def get_pool():
+                    return restored
+
+                monkeypatch.setattr(db, "get_pool", get_pool)
+                effects = PostgresAtomicEffectStateStore()
+                consumptions = PostgresAtomicAuthorizationConsumptionStore()
+                assert await consumptions.get(authorization_id) is None
+                assert await effects.get(consumption.consumption_id) is None
+                assert await consumptions.consume_once(consumption)
+                args.update(effect_store=effects, consumption_store=consumptions, allow_in_memory_for_testing=False)
+                transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+                writer, connections, _, _ = setup(monkeypatch, b"")
+                transition = effects.transition
+                dispatch_results = []
+
+                async def record_dispatch_result(**kwargs):
+                    committed = await transition(**kwargs)
+                    dispatch_results.append(committed)
+                    return committed
+
+                monkeypatch.setattr(effects, "transition", record_dispatch_result)
+                provider = TransportProvider(prepared_inputs, args)
+                if scenario == "allowed":
+                    result = await run(artifact, args, provider, transport)
+                    assert result.state == "UNKNOWN"
+                else:
+                    with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                        await run(artifact, args, provider, transport)
+                allowed = scenario == "allowed"
+                assert dispatch_results == [allowed]
+                attempt = await effects.get(consumption.consumption_id)
+                assert attempt is not None
+                assert attempt.state == (EffectExecutionState.EFFECT_UNKNOWN if allowed else EffectExecutionState.IN_FLIGHT)
+                assert transport.send_calls == len(connections) == len(writer.writes) == int(allowed)
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires a disposable PostgreSQL service")
+async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
+    prepared_inputs, restored_dispatch_alternatives, monkeypatch, tmp_path,
+):
+    import psycopg
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
+    from psycopg_pool import AsyncConnectionPool
+    from scripts.governance.reconcile_sandbox_restore import SandboxRestoreError, reconcile, recovery_digest
+    from veritas_os.policy.sandbox_bind_execution import execute_sandbox_bind
+    from veritas_os.policy.sandbox_pre_effect import SandboxPreEffectError, prepare_sandbox_attempt
+    from veritas_os.policy.sandbox_reconciliation import (
+        SandboxReaderPolicy, VERIFIER_ID, sandbox_reconciliation_policy_hash,
+    )
+    from veritas_os.policy.sandbox_recovery import recover_sandbox_attempt
+    from veritas_os.policy.trusted_https_reconciliation import (
+        ApprovedReconciliationVerifier, ReconciliationVerifierPolicy,
+    )
+    from veritas_os.security.hash import sha256_of_canonical_json
+    from veritas_os.storage.sandbox_restore import RECOVERY_PENDING
+    from veritas_os.tests.test_sandbox_reconciliation import ReaderProvider
+
+    artifact, args = await _args(prepared_inputs)
+    consumption = prepared_inputs[2]
+    source_dsn = db.build_conninfo()
+    database = f"sandbox_unknown_{uuid4().hex}"
+    target_dsn = make_conninfo(source_dsn, dbname=database)
+    consumptions = PostgresAtomicAuthorizationConsumptionStore()
+    effects = PostgresAtomicEffectStateStore()
+    args.update(consumption_store=consumptions, effect_store=effects, allow_in_memory_for_testing=False)
+    provider = TransportProvider(prepared_inputs, args)
+    transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+
+    async with AsyncConnectionPool(source_dsn, min_size=1, max_size=1, open=False) as source:
+        async def source_pool():
+            return source
+
+        monkeypatch.setattr(db, "get_pool", source_pool)
+        assert await consumptions.consume_once(consumption)
+        # The synthetic receiver captures the POST and closes without an acknowledgement.
+        writer, _, _, _ = setup(monkeypatch, b"")
+        dispatch = await run(artifact, args, provider, transport)
+        assert dispatch.reason_code == "TRANSPORT_FAILED_OR_UNKNOWN"
+        original = await effects.get(consumption.consumption_id)
+        assert original is not None and original.state == EffectExecutionState.EFFECT_UNKNOWN
+        assert transport.send_calls == len(writer.writes) == 1
+        (sent,) = writer.writes
+        headers, payload = sent.split(b"\r\n\r\n", 1)
+        assert headers.startswith(b"POST /v1/events HTTP/1.1")
+        fields = dict(line.decode().split(": ", 1) for line in headers.split(b"\r\n")[1:])
+        event = json.loads(payload)
+        assert event == PAYLOAD
+        operation = dict(
+            operation_id=str(uuid4()), event_id=event["event_id"],
+            payload_digest=sha256_of_canonical_json(event), idempotency_key=fields["Idempotency-Key"],
+            state="PERSISTED",
+        )
+        with psycopg.connect(source_dsn, autocommit=True) as donor:
+            digest = recovery_digest(donor)
+
+        connection = conninfo_to_dict(source_dsn)
+        env = {key: value for key, value in os.environ.items() if key != "VERITAS_API_KEY"}
+        env.update({
+            variable: connection[key]
+            for key, variable in (
+                ("host", "PGHOST"), ("port", "PGPORT"), ("user", "PGUSER"),
+                ("password", "PGPASSWORD"), ("dbname", "PGDATABASE"), ("sslmode", "PGSSLMODE"),
+            )
+            if key in connection
+        })
+        env.update(
+            VERITAS_RESTORE_TEST_DB=database,
+        )
+        script = Path(__file__).resolve().parents[2] / "scripts" / "drill_postgres_recovery.sh"
+        drill = await asyncio.to_thread(
+            subprocess.run, [
+                "bash", str(script), "--ci", "--skip-health", "--keep-test-db",
+                "--backup-dir", str(tmp_path),
+            ], env=env, capture_output=True, text=True, timeout=60, check=False,
+        )
+        assert drill.returncode == 0, drill.stdout + drill.stderr
+        assert "restore: PASS" in drill.stdout
+
+        def verify_restore() -> dict[str, bool]:
+            observed_fences: dict[str, bool] = {}
+            update_claim = (
+                "UPDATE public.bind_effect_states SET business_event_key = %s WHERE operation_id = %s"
+            )
+            with psycopg.connect(source_dsn, autocommit=True) as donor, psycopg.connect(
+                target_dsn, autocommit=True,
+            ) as target:
+                assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                with donor.transaction(force_rollback=True):
+                    updated = donor.execute(update_claim, (None, consumption.consumption_id))
+                    assert updated.rowcount == 1
+                    with pytest.raises(SandboxRestoreError, match="source lacks a business event claim"):
+                        recovery_digest(donor)
+                wrong_key = "sandbox-business-event:v1:sha256:" + sha256_of_canonical_json(str(uuid4()))
+                for scenario, invalid_key in (("missing_key", None), ("mismatched_key", wrong_key)):
+                    # Isolate each incomplete backup fixture in a rolled-back transaction.
+                    with target.transaction(force_rollback=True):
+                        updated = target.execute(update_claim, (invalid_key, consumption.consumption_id))
+                        assert updated.rowcount == 1
+                        with pytest.raises(SandboxRestoreError, match="business event claims differ"):
+                            reconcile(donor, target, digest)
+                        (observed_fences[scenario],) = target.execute(RECOVERY_PENDING).fetchone()
+                with target.transaction(force_rollback=True):
+                    target.execute("DROP INDEX public.uq_bind_effect_states_business_event_key")
+                    with pytest.raises(SandboxRestoreError, match="lacks an enforced unique Sandbox business event index"):
+                        reconcile(donor, target, digest)
+                    (observed_fences["missing_unique_index"],) = target.execute(RECOVERY_PENDING).fetchone()
+                    target.execute(
+                        "CREATE INDEX uq_bind_effect_states_business_event_key "
+                        "ON public.bind_effect_states (business_event_key)"
+                    )
+                    with pytest.raises(SandboxRestoreError, match="lacks an enforced unique Sandbox business event index"):
+                        reconcile(donor, target, digest)
+                    (observed_fences["nonunique_index"],) = target.execute(RECOVERY_PENDING).fetchone()
+                assert observed_fences == {
+                    "missing_key": True,
+                    "mismatched_key": True,
+                    "missing_unique_index": True,
+                    "nonunique_index": True,
+                }
+                reconcile(donor, target, digest)
+                assert target.execute(RECOVERY_PENDING).fetchone() == (False,)
+            return observed_fences
+
+        observed_fences = await asyncio.to_thread(verify_restore)
+
+        async with AsyncConnectionPool(target_dsn, min_size=1, max_size=1, open=False) as restored:
+            async def restored_pool():
+                return restored
+
+            monkeypatch.setattr(db, "get_pool", restored_pool)
+            assert await effects.get(consumption.consumption_id) == original
+            assert not await consumptions.consume_once(consumption)
+            async with restored.connection() as conn:
+                pending = await conn.execute(RECOVERY_PENDING)
+                (recovery_pending_before_dispatch,) = await pending.fetchone()
+                assert recovery_pending_before_dispatch is False
+            retry_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+            with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                await run(artifact, args, provider, retry_transport)
+            assert retry_transport.send_calls == 0
+            assert len(writer.writes) == 1
+
+            (replacement_payload, replacement), (unrelated_payload, unrelated) = restored_dispatch_alternatives
+            replacement_artifact, replacement_args = await _args(replacement)
+            replacement_args.update(
+                consumption_store=consumptions, effect_store=effects, allow_in_memory_for_testing=False,
+            )
+            assert replacement_payload["event_id"] == event["event_id"]
+            assert replacement_artifact.authorization_id != artifact.authorization_id
+            assert replacement_artifact.idempotency_key != artifact.idempotency_key
+            assert await consumptions.consume_once(replacement[2])
+            replacement_json = json.dumps(replacement_payload)
+            with pytest.raises(SandboxPreEffectError, match="^SPE_BUSINESS_EVENT_ALREADY_CLAIMED$"):
+                await prepare_sandbox_attempt(replacement_artifact, replacement_json, **replacement_args)
+            replacement_provider = TransportProvider(replacement, replacement_args)
+            replacement_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+            writes_before_replacement = len(writer.writes)
+            with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                await execute_sandbox_bind(
+                    replacement_artifact, replacement_json, provider=replacement_provider,
+                    transport=replacement_transport, **replacement_args,
+                )
+            assert replacement_provider.calls == []
+            replacement_post_writes = len(writer.writes) - writes_before_replacement
+            assert replacement_transport.send_calls == replacement_post_writes == 0
+            assert len(writer.writes) == 1
+            assert await effects.get(consumption.consumption_id) == original
+
+            unrelated_artifact, unrelated_args = await _args(unrelated)
+            unrelated_args.update(
+                consumption_store=consumptions, effect_store=effects, allow_in_memory_for_testing=False,
+            )
+            assert unrelated_payload["event_id"] != event["event_id"]
+            assert await consumptions.consume_once(unrelated[2])
+            unrelated_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+            unrelated_writer, _, _, _ = setup(monkeypatch, b"")
+            await execute_sandbox_bind(
+                unrelated_artifact, json.dumps(unrelated_payload), provider=TransportProvider(unrelated, unrelated_args),
+                transport=unrelated_transport, **unrelated_args,
+            )
+            assert unrelated_transport.send_calls == len(unrelated_writer.writes) == 1
+            assert json.loads(unrelated_writer.writes[0].split(b"\r\n\r\n", 1)[1]) == unrelated_payload
+
+            body = json.dumps(operation).encode()
+            response = (
+                f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n".encode()
+                + body
+            )
+            lookup, _, _, _ = setup(monkeypatch, response)
+            reader = SandboxReaderPolicy("separate-reader", "reader-v1", "synthetic", "sandbox")
+            verifier = ReconciliationVerifierPolicy((ApprovedReconciliationVerifier(
+                VERIFIER_ID, sandbox_reconciliation_policy_hash(args["deployment"], reader),
+            ),))
+            recovered = await recover_sandbox_attempt(
+                artifact, json.dumps(event), deployment=args["deployment"],
+                issuance_source_inputs=args["issuance_source_inputs"],
+                historical_governance_inputs=args["governance_inputs"], trust_inputs=args["trust_inputs"],
+                consumption_store=consumptions, effect_store=effects,
+                reader_policy=reader, verifier_policy=verifier,
+                provider=ReaderProvider(prepared_inputs[4]), trusted_clock=args["trusted_clock"],
+            )
+            assert recovered.state == EffectExecutionState.CONFIRMED_EFFECT
+            assert recovered.external_effect_retry_permitted is False
+            assert recovered.receipt_bundle is not None
+            assert await effects.get_reconciliation(consumption.consumption_id) is not None
+            (query,) = lookup.writes
+            assert query.startswith(f'GET /v1/operations?idempotency_key={operation["idempotency_key"]} '.encode())
+            assert len(writer.writes) == 1
+
+            if evidence_path := os.getenv("VERITAS_SANDBOX_RESTORE_EVIDENCE"):
+                commit_sha = subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], cwd=script.parents[1], text=True,
+                ).strip()
+                evidence = {
+                    "schema_version": 1,
+                    "commit_sha": commit_sha,
+                    "recovery_pending_after_rejection": observed_fences,
+                    "recovery_pending_before_dispatch": recovery_pending_before_dispatch,
+                    "replacement_post_writes": replacement_post_writes,
+                    "unrelated_event_post_writes": len(unrelated_writer.writes),
+                    "original_effect_state": recovered.state.value,
+                    "readonly_lookup_count": len(lookup.writes),
+                }
+                Path(evidence_path).write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", ["revoke_first", "dispatch_first", "lost_ack"])
+async def test_postgres_orders_revocation_and_dispatch(prepared_inputs, monkeypatch, order):
+    from psycopg_pool import AsyncConnectionPool
+
+    artifact, args = await _args(prepared_inputs)
+    consumption = prepared_inputs[2]
+    effects = PostgresAtomicEffectStateStore()
+    consumptions = PostgresAtomicAuthorizationConsumptionStore()
+    args.update(effect_store=effects, consumption_store=consumptions, allow_in_memory_for_testing=False)
+    transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+    writer, connections, _, _ = setup(monkeypatch, b"")  # No external response or network.
+    original_transition = effects.transition
+    reached = asyncio.Event()
+    resume = asyncio.Event()
+
+    async def controlled_transition(**kwargs):
+        if order == "revoke_first":
+            reached.set()
+            await resume.wait()
+        committed = await original_transition(**kwargs)
+        if order == "dispatch_first":
+            reached.set()
+            await resume.wait()
+        if order == "lost_ack":
+            assert committed
+            raise OSError("fixture lost the commit response")
+        return committed
+
+    monkeypatch.setattr(effects, "transition", controlled_transition)
+
+    async with (
+        AsyncConnectionPool(db.build_conninfo(), min_size=1, max_size=1, open=False) as revoker,
+        AsyncConnectionPool(db.build_conninfo(), min_size=1, max_size=1, open=False) as dispatcher,
+    ):
+        current_pool = ContextVar("sandbox_test_pool", default=revoker)
+
+        async def get_pool():
+            return current_pool.get()
+
+        async with revoker.connection() as first, dispatcher.connection() as second:
+            assert first.info.backend_pid != second.info.backend_pid
+        monkeypatch.setattr(db, "get_pool", get_pool)
+        assert await consumptions.consume_once(consumption)
+
+        async def revoke_as_operator():
+            reason = "Fixture cancellation"
+            statement = "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)"
+            async with operator_session(revoker, artifact.authorization_id) as (operator, role):
+                if order == "revoke_first":
+                    async with operator.transaction(force_rollback=True):
+                        await operator.execute(statement, (artifact.authorization_id, reason))
+                    async with revoker.connection() as admin:
+                        cur = await admin.execute(
+                            "SELECT (SELECT count(*) FROM public.bind_sandbox_dispatch_order WHERE authorization_id = %s), "
+                            "(SELECT count(*) FROM public.bind_sandbox_revocation_audit WHERE authorization_id = %s)",
+                            (artifact.authorization_id, artifact.authorization_id),
+                        )
+                        assert await cur.fetchone() == (0, 0)
+                cur = await operator.execute(statement, (artifact.authorization_id, reason))
+                audit_id, resolution = await cur.fetchone()
+                async with revoker.connection() as admin:
+                    cur = await admin.execute(
+                        "SELECT operator_name, authorization_id, reason, resolution "
+                        "FROM public.bind_sandbox_revocation_audit WHERE audit_id = %s", (audit_id,),
+                    )
+                    assert await cur.fetchone() == (role, artifact.authorization_id, reason, resolution)
+                return SandboxAuthorizationRevocation(resolution)
+
+        token = current_pool.set(dispatcher)
+        try:
+            worker = asyncio.create_task(run(artifact, args, TransportProvider(prepared_inputs, args), transport))
+        finally:
+            current_pool.reset(token)
+
+        if order == "lost_ack":
+            with pytest.raises(SandboxBindExecutionError):
+                await worker
+        else:
+            try:
+                await asyncio.wait_for(reached.wait(), timeout=10)
+                result = await revoke_as_operator()
+                assert result == (
+                    SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
+                    if order == "revoke_first"
+                    else SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED
+                )
+                assert transport.send_calls == 0 and not writer.writes
+            except BaseException:
+                worker.cancel()
+                await asyncio.gather(worker, return_exceptions=True)
+                raise
+            finally:
+                resume.set()
+            if order == "revoke_first":
+                with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
+                    await worker
+            else:
+                assert (await worker).state == "UNKNOWN"
+
+        restarted = PostgresAtomicEffectStateStore()
+        row = await restarted.get(consumption.consumption_id)
+        assert row is not None
+        assert row.state == (
+            EffectExecutionState.IN_FLIGHT if order == "revoke_first"
+            else EffectExecutionState.EFFECT_UNKNOWN
+        )
+        expected_revocation = (
+            SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH if order == "revoke_first"
+            else SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED
+        )
+        assert await restarted.revoke_sandbox_authorization(artifact.authorization_id) == expected_revocation
+        assert not await consumptions.consume_once(consumption)
+        args["effect_store"] = restarted
+        with pytest.raises(SandboxBindExecutionError):
+            await run(artifact, args, TransportProvider(prepared_inputs, args), transport)
+        expected_writes = int(order == "dispatch_first")
+        assert transport.send_calls == len(connections) == len(writer.writes) == expected_writes

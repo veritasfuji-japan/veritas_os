@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any, AsyncIterator, Callable
 
 from veritas_os.security.trustlog_posture import validate_trustlog_secure_defaults
@@ -73,6 +73,13 @@ async def run_lifespan(
     from veritas_os.api.startup_health import initialize_system_halt_on_startup
 
     initialize_system_halt_on_startup()
+    from veritas_os.core import shared_halt
+
+    audit_publisher = None
+    if shared_halt.enabled():
+        from veritas_os.core.shared_halt_audit import run_resume_audit_publisher
+
+        audit_publisher = asyncio.create_task(run_resume_audit_publisher())
     start_nonce_cleanup_scheduler()
     start_rate_cleanup_scheduler()
     app.state.security_startup_pid = os.getpid()
@@ -81,6 +88,10 @@ async def run_lifespan(
     try:
         yield
     finally:
+        if audit_publisher is not None:
+            audit_publisher.cancel()
+            with suppress(asyncio.CancelledError):
+                await audit_publisher
         app.state.security_startup_complete = False
         app.state.security_startup_pid = None
         middleware._shutting_down = True

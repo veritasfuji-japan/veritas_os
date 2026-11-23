@@ -143,7 +143,7 @@ def _check_private_key_stat(
         raise PermissionError(
             f"Private key file {private_key_path} must be a regular file"
         )
-    if mode & (stat.S_IRGRP | stat.S_IROTH):
+    if mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise PermissionError(
             f"Private key file {private_key_path} has unsafe permissions "
             f"({oct(mode)}). Expected 0o600 (owner-read/write only). "
@@ -164,9 +164,13 @@ def _read_private_key_file_secure(private_key_path: Path) -> str:
             os.close(fd)
 
 
-def _load_private_key(private_key_path: Path) -> Ed25519PrivateKey:
+def load_ed25519_private_key(private_key_path: Path) -> Ed25519PrivateKey:
+    """Load a provisioned signing key using descriptor-based permission checks."""
     raw = base64.urlsafe_b64decode(_read_private_key_file_secure(private_key_path))
     return Ed25519PrivateKey.from_private_bytes(raw)
+
+
+_load_private_key = load_ed25519_private_key
 
 
 def _load_public_key(public_key_path: Path) -> Ed25519PublicKey:

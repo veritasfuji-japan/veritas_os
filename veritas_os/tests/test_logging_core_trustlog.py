@@ -7,6 +7,7 @@ core/logging.py は後方互換性のためのラッパーであり、
 """
 
 import json
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -129,6 +130,7 @@ def test_verify_trust_log_after_rotation(tmp_path, monkeypatch):
     # まず 2 件のエントリを正常に作成
     e1 = core_logging.append_trust_log({"request_id": "r1", "value": 1})
     e2 = core_logging.append_trust_log({"request_id": "r2", "value": 2})
+    assert e2["sha256_prev"] == e1["sha256"]
 
     # ローテーションをシミュレート:
     # 2 件目だけを暗号化して新しい JSONL に残す。
@@ -162,3 +164,52 @@ def test_verify_trust_log_detects_tamper(tmp_path, monkeypatch):
     result = core_logging.verify_trust_log()
     assert result["ok"] is False
     assert result["broken"] is True
+
+
+def test_publication_reuses_key_outside_process_lock_across_rotation(tmp_path, monkeypatch):
+    from veritas_os.logging import encryption
+
+    log_path = _setup_tmp_trust_log(tmp_path, monkeypatch)
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY_PROVIDER", "env")
+    monkeypatch.setenv("VERITAS_LOG_MAX_LINES", "3")
+    monkeypatch.setattr(trust_log_impl, "append_signed_decision", lambda *args, **kwargs: None)
+    provider_load = encryption.EnvEncryptionKeyProvider.load_key
+    process_lock = trust_log_impl.trust_log_process_lock
+    locked = False
+    lookups = 0
+
+    @contextmanager
+    def track_lock(path):
+        nonlocal locked
+        with process_lock(path):
+            locked = True
+            try:
+                yield
+            finally:
+                locked = False
+
+    def load_key(provider):
+        nonlocal lookups
+        assert not locked
+        lookups += 1
+        return provider_load(provider)
+
+    monkeypatch.setattr(trust_log_impl, "trust_log_process_lock", track_lock)
+    monkeypatch.setattr(encryption.EnvEncryptionKeyProvider, "load_key", load_key)
+
+    kind = "governance.execution_intent"
+    publication_id = f"{'a' * 32}:{kind}"
+    intent = {"request_id": "intent", "kind": kind}
+    original = trust_log_impl.append_trust_log(intent, publication_id=publication_id)
+    for request_id in ("one", "two"):
+        trust_log_impl.append_trust_log({"request_id": request_id})
+
+    lookups = 0
+    tail = trust_log_impl.append_trust_log({"request_id": "rotates"}, publication_id=f"{'b' * 32}:{kind}")
+    assert lookups == 1
+    assert log_path.with_name("trust_log_old.jsonl").exists()
+    lookups = 0
+    assert trust_log_impl.append_trust_log(intent, publication_id=publication_id) == original
+    assert lookups == 1
+    assert trust_log_impl.get_last_hash() == tail["sha256"]
+    assert trust_log_impl.verify_trust_log()["ok"]
