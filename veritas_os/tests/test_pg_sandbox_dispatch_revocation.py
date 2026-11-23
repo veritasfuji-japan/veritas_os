@@ -526,7 +526,8 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
         assert drill.returncode == 0, drill.stdout + drill.stderr
         assert "restore: PASS" in drill.stdout
 
-        def verify_restore():
+        def verify_restore() -> dict[str, bool]:
+            observed_fences: dict[str, bool] = {}
             update_claim = (
                 "UPDATE public.bind_effect_states SET business_event_key = %s WHERE operation_id = %s"
             )
@@ -540,30 +541,37 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
                     with pytest.raises(SandboxRestoreError, match="source lacks a business event claim"):
                         recovery_digest(donor)
                 wrong_key = "sandbox-business-event:v1:sha256:" + sha256_of_canonical_json(str(uuid4()))
-                for invalid_key in (None, wrong_key):
+                for scenario, invalid_key in (("missing_key", None), ("mismatched_key", wrong_key)):
                     # Isolate each incomplete backup fixture in a rolled-back transaction.
                     with target.transaction(force_rollback=True):
                         updated = target.execute(update_claim, (invalid_key, consumption.consumption_id))
                         assert updated.rowcount == 1
                         with pytest.raises(SandboxRestoreError, match="business event claims differ"):
                             reconcile(donor, target, digest)
-                        assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                        (observed_fences[scenario],) = target.execute(RECOVERY_PENDING).fetchone()
                 with target.transaction(force_rollback=True):
                     target.execute("DROP INDEX public.uq_bind_effect_states_business_event_key")
                     with pytest.raises(SandboxRestoreError, match="lacks an enforced unique Sandbox business event index"):
                         reconcile(donor, target, digest)
-                    assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                    (observed_fences["missing_unique_index"],) = target.execute(RECOVERY_PENDING).fetchone()
                     target.execute(
                         "CREATE INDEX uq_bind_effect_states_business_event_key "
                         "ON public.bind_effect_states (business_event_key)"
                     )
                     with pytest.raises(SandboxRestoreError, match="lacks an enforced unique Sandbox business event index"):
                         reconcile(donor, target, digest)
-                    assert target.execute(RECOVERY_PENDING).fetchone() == (True,)
+                    (observed_fences["nonunique_index"],) = target.execute(RECOVERY_PENDING).fetchone()
+                assert observed_fences == {
+                    "missing_key": True,
+                    "mismatched_key": True,
+                    "missing_unique_index": True,
+                    "nonunique_index": True,
+                }
                 reconcile(donor, target, digest)
                 assert target.execute(RECOVERY_PENDING).fetchone() == (False,)
+            return observed_fences
 
-        await asyncio.to_thread(verify_restore)
+        observed_fences = await asyncio.to_thread(verify_restore)
 
         async with AsyncConnectionPool(target_dsn, min_size=1, max_size=1, open=False) as restored:
             async def restored_pool():
@@ -574,7 +582,8 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
             assert not await consumptions.consume_once(consumption)
             async with restored.connection() as conn:
                 pending = await conn.execute(RECOVERY_PENDING)
-                assert await pending.fetchone() == (False,)
+                (recovery_pending_before_dispatch,) = await pending.fetchone()
+                assert recovery_pending_before_dispatch is False
             retry_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
             with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
                 await run(artifact, args, provider, retry_transport)
@@ -595,13 +604,15 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
                 await prepare_sandbox_attempt(replacement_artifact, replacement_json, **replacement_args)
             replacement_provider = TransportProvider(replacement, replacement_args)
             replacement_transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+            writes_before_replacement = len(writer.writes)
             with pytest.raises(SandboxBindExecutionError, match="SBE_FAILED_ATTEMPT_NOT_RELEASED"):
                 await execute_sandbox_bind(
                     replacement_artifact, replacement_json, provider=replacement_provider,
                     transport=replacement_transport, **replacement_args,
                 )
             assert replacement_provider.calls == []
-            assert replacement_transport.send_calls == 0
+            replacement_post_writes = len(writer.writes) - writes_before_replacement
+            assert replacement_transport.send_calls == replacement_post_writes == 0
             assert len(writer.writes) == 1
             assert await effects.get(consumption.consumption_id) == original
 
@@ -645,6 +656,22 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
             (query,) = lookup.writes
             assert query.startswith(f'GET /v1/operations?idempotency_key={operation["idempotency_key"]} '.encode())
             assert len(writer.writes) == 1
+
+            if evidence_path := os.getenv("VERITAS_SANDBOX_RESTORE_EVIDENCE"):
+                commit_sha = subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], cwd=script.parents[1], text=True,
+                ).strip()
+                evidence = {
+                    "schema_version": 1,
+                    "commit_sha": commit_sha,
+                    "recovery_pending_after_rejection": observed_fences,
+                    "recovery_pending_before_dispatch": recovery_pending_before_dispatch,
+                    "replacement_post_writes": replacement_post_writes,
+                    "unrelated_event_post_writes": len(unrelated_writer.writes),
+                    "original_effect_state": recovered.state.value,
+                    "readonly_lookup_count": len(lookup.writes),
+                }
+                Path(evidence_path).write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 @pytest.mark.asyncio
