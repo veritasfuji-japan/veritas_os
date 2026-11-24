@@ -451,8 +451,11 @@ async def test_keycloak_post_timeout_keeps_effect_unknown(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("keycloak", [True], indirect=True, ids=["admin-audit-enabled"])
-async def test_keycloak_post_timeout_reconciles_with_unique_admin_event(
-    keycloak, keycloak_grant, monkeypatch,
+@pytest.mark.parametrize(
+    "role_revoked", [False, True], ids=["role-still-present", "role-revoked-before-lookup"],
+)
+async def test_keycloak_post_timeout_reconciliation_checks_current_role(
+    keycloak, keycloak_grant, monkeypatch, role_revoked,
 ):
     _, event, prepared = keycloak_grant
     artifact, args = await _args(prepared)
@@ -507,9 +510,25 @@ async def test_keycloak_post_timeout_reconciles_with_unique_admin_event(
                 assert unresolved.record == row and unresolved.evidence is None
                 assert await store.get(observed.attempt_id) == row
 
+        if role_revoked:
+            expect(await permissions_client.request(
+                "DELETE", bridge.path, headers=bearer(keycloak["writer"]), json=[keycloak["role"]],
+            ), 204)
+            assert await bridge.mappings() == []
+            # The original success event still qualifies after the direct role is removed.
+            events = await bridge.audit_events()
+            assert bridge.audited_operation(events) == record["id"]
+            assert any(event["operationType"] == "DELETE" for event in events)
+
         result = await reconcile_grant(artifact, args, event, prepared[4])
-        assert result.record.state == execution.EffectExecutionState.CONFIRMED_EFFECT
-        assert result.evidence.evidence.external_operation_reference == record["id"]
+        if role_revoked:
+            assert result.record == row and result.evidence is None
+            assert await store.get(observed.attempt_id) == row
+            with pytest.raises(BindEffectStateError, match="BES_ARCHIVE_MISSING_OR_MISMATCHED"):
+                await store.get_reconciliation(observed.attempt_id)
+        else:
+            assert result.record.state == execution.EffectExecutionState.CONFIRMED_EFFECT
+            assert result.evidence.evidence.external_operation_reference == record["id"]
         with pytest.raises(execution.SandboxBindExecutionError):
             await execution.execute_sandbox_bind(
                 artifact, payload, provider=provider, transport=transport, **args,

@@ -106,7 +106,9 @@ expected actor and realm, the exact target and role, and the current direct
 role mapping. Missing or ambiguous evidence keeps the attempt in
 `EFFECT_UNKNOWN`. The audit event records successful handling of the
 request. The current mapping is checked separately because the same grant
-can succeed when a mapping already exists.
+can succeed when a mapping already exists. If the role is revoked before
+reconciliation, the original success event remains in the audit log and the
+attempt stays in `EFFECT_UNKNOWN` without issuing another grant.
 
 The workflow `Keycloak Bind Role Rehearsal` provisions the disposable server
 and runs this test. To reproduce locally with Docker, run these commands from
