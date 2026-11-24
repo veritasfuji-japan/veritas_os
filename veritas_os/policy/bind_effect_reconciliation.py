@@ -615,13 +615,6 @@ class PostgresAtomicEffectStateStore:
             from psycopg.types.json import Jsonb
             from veritas_os.storage.db import get_pool
 
-            query = (
-                "INSERT INTO bind_effect_states "
-                "(operation_id, authorization_id, authorization_hash, consumption_id, "
-                "consumption_hash, execution_intent_id, idempotency_key, effect_provenance, "
-                "state, revision, record_hash, updated_at, record, business_event_key) "
-                "SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s "
-            )
             parameters = (
                 record.operation_id,
                 record.authorization_id,
@@ -638,11 +631,29 @@ class PostgresAtomicEffectStateStore:
                 Jsonb(record.model_dump(mode="json")),
                 business_event_key,
             )
-            if keycloak_intent is not None:
-                query += (
+            if keycloak_intent is None:
+                query = (
+                    "INSERT INTO bind_effect_states "
+                    "(operation_id, authorization_id, authorization_hash, consumption_id, "
+                    "consumption_hash, execution_intent_id, idempotency_key, effect_provenance, "
+                    "state, revision, record_hash, updated_at, record, business_event_key) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT DO NOTHING RETURNING operation_id"
+                )
+            else:
+                query = (
+                    "WITH reserved AS ("
+                    "INSERT INTO bind_effect_states "
+                    "(operation_id, authorization_id, authorization_hash, consumption_id, "
+                    "consumption_hash, execution_intent_id, idempotency_key, effect_provenance, "
+                    "state, revision, record_hash, updated_at, record, business_event_key) "
+                    "SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s "
                     "WHERE EXISTS (SELECT 1 FROM bind_authorization_consumptions "
                     "WHERE consumption_id=%s AND consumption_hash=%s AND authorization_id=%s "
                     "AND authorization_hash=%s AND execution_intent_id=%s AND idempotency_key=%s) "
+                    "ON CONFLICT DO NOTHING RETURNING operation_id) "
+                    "INSERT INTO bind_keycloak_dispatch_intents (operation_id, intent) "
+                    "SELECT operation_id, %s FROM reserved RETURNING operation_id"
                 )
                 parameters += (
                     record.consumption_id,
@@ -651,15 +662,8 @@ class PostgresAtomicEffectStateStore:
                     record.authorization_hash,
                     record.execution_intent_id,
                     record.idempotency_key,
+                    Jsonb(keycloak_intent),
                 )
-            query += "ON CONFLICT DO NOTHING RETURNING operation_id"
-            if keycloak_intent is not None:
-                query = (
-                    "WITH reserved AS (" + query + ") "
-                    "INSERT INTO bind_keycloak_dispatch_intents (operation_id, intent) "
-                    "SELECT operation_id, %s FROM reserved RETURNING operation_id"
-                )
-                parameters += (Jsonb(keycloak_intent),)
             pool = await get_pool()
             async with pool.connection() as conn:
                 cur = await conn.execute(query, parameters)
