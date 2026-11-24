@@ -675,7 +675,7 @@ async def test_keycloak_durable_reservation_recovers_using_only_read_operations(
             bridge = KeycloakBridge(reader, keycloak, None)
             assert recovered_binding.endpoint_url == target.origin + bridge.path
             bridge.write_started_ms = int(datetime.fromisoformat(winner.updated_at).timestamp() * 1000)
-            events = await bridge.audit_events()
+            events = await bridge.audit_events(require_available=True)
             assert isinstance(events, list) and len(events) < AUDIT_PAGE_LIMIT
             payload = json.loads(recovered_binding.body)
             operation_id = bridge.audited_operation(events, role_payload=payload)
