@@ -73,3 +73,48 @@ The rehearsal uses in-memory Bind stores, a fixture clock, and synthetic writer
 and reader identities. It exercises the existing Sandbox action class. A real
 SaaS/IdP integration and provider-side role enforcement require separate
 validation in the selected test tenant.
+
+## Self-hosted Keycloak role-grant rehearsal
+
+The opt-in Keycloak integration test starts with a fresh realm in a disposable,
+loopback-only Keycloak server. It binds the realm, user UUID, client UUID, and
+role UUID to the existing Sandbox authorization. A test-only bridge checks the
+bound command and maps it to the Keycloak Admin REST role-mapping API. The
+bridge uses separate Keycloak service accounts for writing and reading. The
+test verifies that Keycloak returns HTTP 403 when the read-only account attempts
+the write operation.
+
+The rehearsal checks that substituted identifiers and a revoked authority cause
+zero writes. It then observes one successful Keycloak POST, drops the response
+at the Sandbox boundary, and checks that the same authorization cannot send
+again. A simulated lookup outage keeps the outcome unknown. A subsequent GET of
+the actual role mapping in Keycloak supplies the observation used to reconcile
+the outcome.
+
+The workflow `Keycloak Bind Role Rehearsal` provisions the disposable server
+and runs this test. To reproduce locally with Docker, run these commands from
+the checkout after installing the repository's Python test dependencies.
+
+```sh
+export KC_BOOTSTRAP_ADMIN_USERNAME=fixture-admin
+export KC_BOOTSTRAP_ADMIN_PASSWORD="$(openssl rand -hex 32)"
+docker run --rm -d --name keycloak-bind-proof -p 127.0.0.1:18080:8080 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME -e KC_BOOTSTRAP_ADMIN_PASSWORD \
+  quay.io/keycloak/keycloak:26.8.2 start-dev
+```
+
+After the server is ready, run the test and remove the container.
+
+```sh
+VERITAS_KEYCLOAK_REHEARSAL=1 python -m pytest -q \
+  veritas_os/tests/test_keycloak_bind_role_rehearsal.py
+docker stop keycloak-bind-proof
+unset KC_BOOTSTRAP_ADMIN_USERNAME KC_BOOTSTRAP_ADMIN_PASSWORD
+```
+
+The bridge supplies the Sandbox operation envelope from the observed role
+mapping and the test's known write association. Keycloak provides the role
+mapping, while the correlation is scoped to the isolated run. The rehearsal
+uses in-memory Bind stores, an in-process Sandbox transport connection, and
+loopback HTTP to Keycloak. Live TLS, durable recovery, and a deployed Keycloak
+adapter require separate validation.
