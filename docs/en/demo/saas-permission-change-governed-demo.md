@@ -91,6 +91,13 @@ again. A simulated lookup outage keeps the outcome unknown. A subsequent GET of
 the actual role mapping in Keycloak supplies the observation used to reconcile
 the outcome.
 
+The rehearsal also injects a timeout at the bridge's Keycloak HTTP client.
+One case drops the request before forwarding. The other forwards it to the
+real Keycloak server and withholds the successful response from the bridge.
+The read-only lookup sees no role in the first case and sees the new role in
+the second. In both cases the observation lacks evidence tying it to the
+original request, so the attempt stays in `EFFECT_UNKNOWN` and rejects replay.
+
 The workflow `Keycloak Bind Role Rehearsal` provisions the disposable server
 and runs this test. To reproduce locally with Docker, run these commands from
 the checkout after installing the repository's Python test dependencies.
