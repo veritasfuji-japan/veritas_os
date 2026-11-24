@@ -8,6 +8,8 @@ on:
       - 'veritas_os/tests/test_saas_role_grant_bind_rehearsal.py'
       - 'veritas_os/policy/sandbox_*.py'
       - 'veritas_os/policy/bind_effect_reconciliation.py'
+      - 'veritas_os/policy/keycloak_*.py'
+      - 'alembic/versions/**'
   workflow_dispatch:
 
 permissions:
@@ -17,8 +19,23 @@ jobs:
   keycloak-bind-role-rehearsal:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     env:
       VERITAS_KEYCLOAK_REHEARSAL: "1"
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test
       KC_BOOTSTRAP_ADMIN_USERNAME: fixture-admin
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +45,8 @@ jobs:
           cache: pip
       - name: Install test dependencies
         run: python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt pytest pytest-asyncio httpx cryptography
+      - name: Apply reservation schema
+        run: alembic upgrade head
       - name: Start disposable Keycloak on loopback
         run: |
           set -euo pipefail
