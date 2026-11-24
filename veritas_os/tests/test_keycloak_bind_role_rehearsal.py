@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import replace
+from datetime import datetime
 import json
 import os
 from secrets import token_urlsafe
@@ -13,16 +14,36 @@ import pytest
 
 from veritas_os.policy import sandbox_bind_execution as execution
 from veritas_os.policy import sandbox_reconciliation as reconciliation
-from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
+from veritas_os.policy.bind_effect_reconciliation import (
+    BindEffectStateError,
+    PostgresAtomicEffectStateStore,
+)
+from veritas_os.policy.keycloak_dispatch_reservation import (
+    get_keycloak_dispatch_intent,
+    reserve_keycloak_dispatch,
+)
+from veritas_os.policy.keycloak_role_grant_binding import (
+    ACTION,
+    KeycloakRoleGrantTarget,
+    build_keycloak_role_grant_binding,
+    verify_keycloak_role_grant_binding,
+)
+from veritas_os.policy.live_adapter_bind_authorization_consumption_store import (
+    PostgresAtomicAuthorizationConsumptionStore,
+    build_authorization_consumption_record,
+)
+from veritas_os.policy.native_bind_authorization import _verified_source
 from veritas_os.policy.sandbox_event_store import parse_event, validate_uuid
 from veritas_os.policy.sandbox_https_transport import SandboxHTTPSTransport
 from veritas_os.policy.trusted_https_reconciliation import ApprovedReconciliationVerifier
 from veritas_os.security.hash import sha256_of_canonical_json
+from veritas_os.storage.db import close_pool
 from veritas_os.tests.test_native_bind_authorization_consumption import _Revocation
 from veritas_os.tests.test_saas_role_grant_bind_rehearsal import (
     READER_TOKEN, WRITER_TOKEN, WriterProvider,
 )
-from veritas_os.tests.test_sandbox_action_binding_integration import issue_for_payload
+from veritas_os.tests.test_sandbox_action_binding import contract
+from veritas_os.tests.test_sandbox_action_binding_integration import issue_for_action, issue_for_payload
 from veritas_os.tests.test_sandbox_pre_effect import _args, consume_fixture_authorization
 from veritas_os.tests.test_sandbox_reconciliation import ReaderProvider
 
@@ -197,24 +218,27 @@ class KeycloakBridge:
             role = {**role, "description": f"veritas-rehearsal:{self.event['event_id']}"}
         return [role]
 
-    async def audit_events(self):
+    async def audit_events(self, *, require_available=False):
         response = await self.client.get(
             f"/admin/realms/{self.fixture['realm']}/admin-events",
             headers=bearer(self.fixture["audit_reader"]),
             params={"resourcePath": self.audit_path, "max": AUDIT_PAGE_LIMIT},
         )
+        if require_available:
+            expect(response, 200)
         if response.status_code != 200:
             return []
         return response.json()
 
-    def audited_operation(self, events) -> str | None:
+    def audited_operation(self, events, *, role_payload=None) -> str | None:
         if (
             self.write_started_ms is None
             or not isinstance(events, list)
             or len(events) >= AUDIT_PAGE_LIMIT
         ):
             return None
-        expected_roles = [{**self.grant_payload()[0], "composite": False}]
+        payload = self.grant_payload() if role_payload is None else role_payload
+        expected_roles = [{**payload[0], "composite": False}]
         matches = []
         for event in events:
             try:
@@ -516,7 +540,7 @@ async def test_keycloak_post_timeout_reconciliation_checks_current_role(
             ), 204)
             assert await bridge.mappings() == []
             # The original success event still qualifies after the direct role is removed.
-            events = await bridge.audit_events()
+            events = await bridge.audit_events(require_available=True)
             assert bridge.audited_operation(events) == record["id"]
             assert any(event["operationType"] == "DELETE" for event in events)
 
@@ -534,3 +558,136 @@ async def test_keycloak_post_timeout_reconciliation_checks_current_role(
                 artifact, payload, provider=provider, transport=transport, **args,
             )
         assert bridge.writes == upstream.post_attempts == 1
+
+
+def _issue_durable_grant(directory, target, event_id):
+    request = {
+        "target": target,
+        "event_id": event_id,
+        "attempt_id": str(uuid4()),
+        "deployment_policy_digest": sha256_of_canonical_json({
+            "profile": "disposable-keycloak-durable-rehearsal",
+        }),
+    }
+    binding = build_keycloak_role_grant_binding(**request)
+    authorization, inputs = issue_for_action(
+        directory,
+        {
+            "intended_action": ACTION,
+            "target_system": "synthetic-keycloak",
+            "target_resource": binding.endpoint_url,
+            "evidence_refs": [binding.reference],
+        },
+        replace(contract(), id=ACTION, action_class=ACTION),
+        endpoint_overrides={
+            "endpoint_host": "keycloak.example.invalid", "endpoint_path_prefix": "/admin",
+        },
+        credential_overrides={},
+    )
+    _, _, context = _verified_source(
+        authorization.source_runtime_risk_packet, inputs["source_inputs"], inputs["governance_inputs"],
+    )
+    consumption = build_authorization_consumption_record(
+        live_adapter_bind_authorization_id=authorization.authorization_id,
+        live_adapter_bind_authorization_hash=authorization.authorization_hash,
+        idempotency_key=authorization.idempotency_key,
+        bind_context_hash=authorization.bind_context_hash,
+        execution_intent_id=authorization.execution_intent_id,
+        execution_intent_hash=authorization.execution_intent_hash,
+        endpoint_identity_binding_digest=context.endpoint_identity_binding_digest,
+        credential_reference_digest=context.credential_reference_digest,
+        credential_scope_binding_digest=context.credential_scope_binding_digest,
+        consumed_at=authorization.valid_from,
+    )
+    return request | inputs | {"authorization": authorization, "consumption": consumption}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("keycloak", [True], indirect=True)
+@pytest.mark.parametrize("send", [False, True], ids=["exit-before-post", "lost-post-response"])
+@pytest.mark.skipif(
+    not os.getenv("VERITAS_DATABASE_URL", "").startswith("postgresql"),
+    reason="requires the disposable PostgreSQL reservation store",
+)
+async def test_keycloak_durable_reservation_recovers_using_only_read_operations(
+    keycloak, tmp_path_factory, send,
+):
+    """Compose the durable reservation with an isolated provider and reconnect for recovery."""
+    target = KeycloakRoleGrantTarget(
+        origin="https://keycloak.example.invalid",
+        realm_name=keycloak["realm"],
+        realm_id=keycloak["realm_id"],
+        user_id=keycloak["user"],
+        client_id=keycloak["client"],
+        role_id=keycloak["role"]["id"],
+        role_name=keycloak["role"]["name"],
+    )
+    event_id = f"assignment-{uuid4().hex}"
+    attempts = [
+        _issue_durable_grant(tmp_path_factory.mktemp("keycloak-durable"), target, event_id)
+        for _ in range(2)
+    ]
+    try:
+        consumptions = PostgresAtomicAuthorizationConsumptionStore()
+        for attempt in attempts:
+            assert await consumptions.consume_once(attempt["consumption"])
+        results = await asyncio.gather(*(reserve_keycloak_dispatch(**attempt) for attempt in attempts))
+        winner, = (record for record in results if record is not None)
+        assert winner.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+
+        # This fixture maps the signed HTTPS identity to the disposable loopback server.
+        # Only the worker holding the successful reservation result can enter this block.
+        if send:
+            original = attempts[results.index(winner)]
+            binding = build_keycloak_role_grant_binding(**{
+                field: original[field]
+                for field in ("target", "event_id", "attempt_id", "deployment_policy_digest")
+            })
+            transport = KeycloakPostTimeout(forward=True)
+            async with httpx.AsyncClient(
+                base_url=ORIGIN, transport=transport, trust_env=False,
+                follow_redirects=False, timeout=3,
+            ) as writer:
+                with pytest.raises(httpx.ReadTimeout):
+                    await writer.post(
+                        binding.endpoint_url.removeprefix(target.origin),
+                        headers={**bearer(keycloak["writer"]), "Content-Type": "application/json"},
+                        content=binding.body,
+                    )
+            assert transport.post_attempts == 1 and transport.upstream_status == 204
+
+        # Discard the connection pool and load the original operation through fresh connections.
+        await close_pool()
+        assert await PostgresAtomicEffectStateStore().get(winner.operation_id) == winner
+        for attempt in attempts:
+            assert await reserve_keycloak_dispatch(**attempt) is None
+        recovered = await get_keycloak_dispatch_intent(winner.operation_id)
+        assert recovered is not None
+        recovered_binding = verify_keycloak_role_grant_binding(
+            target=recovered.target,
+            event_id=recovered.event_id,
+            attempt_id=recovered.attempt_id,
+            deployment_policy_digest=recovered.deployment_policy_digest,
+            approved_reference=recovered.approved_reference,
+        )
+
+        async with httpx.AsyncClient(base_url=ORIGIN, trust_env=False, timeout=3) as reader:
+            bridge = KeycloakBridge(reader, keycloak, None)
+            assert recovered_binding.endpoint_url == target.origin + bridge.path
+            bridge.write_started_ms = int(datetime.fromisoformat(winner.updated_at).timestamp() * 1000)
+            events = await bridge.audit_events(require_available=True)
+            assert isinstance(events, list) and len(events) < AUDIT_PAGE_LIMIT
+            payload = json.loads(recovered_binding.body)
+            operation_id = bridge.audited_operation(events, role_payload=payload)
+            mappings = await bridge.mappings()
+
+        grant_events = [
+            event for event in events
+            if event.get("resourcePath") == bridge.audit_path and event.get("operationType") == "CREATE"
+        ]
+        assert len(grant_events) == int(send)
+        assert (operation_id is not None) is send
+        assert mappings == ([keycloak["role"]] if send else [])
+        assert await PostgresAtomicEffectStateStore().get(winner.operation_id) == winner
+    finally:
+        await close_pool()
