@@ -5,6 +5,7 @@ from dataclasses import replace
 import json
 import os
 from secrets import token_urlsafe
+from time import time_ns
 from uuid import uuid4
 
 import httpx
@@ -13,7 +14,7 @@ import pytest
 from veritas_os.policy import sandbox_bind_execution as execution
 from veritas_os.policy import sandbox_reconciliation as reconciliation
 from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
-from veritas_os.policy.sandbox_event_store import parse_event
+from veritas_os.policy.sandbox_event_store import parse_event, validate_uuid
 from veritas_os.policy.sandbox_https_transport import SandboxHTTPSTransport
 from veritas_os.policy.trusted_https_reconciliation import ApprovedReconciliationVerifier
 from veritas_os.security.hash import sha256_of_canonical_json
@@ -33,6 +34,7 @@ pytestmark = [
 
 ORIGIN = "http://127.0.0.1:18080"
 ROLE = "report-viewer"
+AUDIT_PAGE_LIMIT = 100
 
 
 def expect(response: httpx.Response, status: int) -> httpx.Response:
@@ -45,9 +47,10 @@ def bearer(token: str) -> dict[str, str]:
 
 
 @pytest.fixture
-def keycloak():
+def keycloak(request):
     """Isolate each run in a fresh realm with separate writer and reader principals."""
     realm = f"veritas-rehearsal-{uuid4().hex}"
+    realm_id = str(uuid4())
     resource = f"/admin/realms/{realm}"
     with httpx.Client(base_url=ORIGIN, trust_env=False, timeout=10) as client:
         admin = expect(client.post("/realms/master/protocol/openid-connect/token", data={
@@ -58,7 +61,7 @@ def keycloak():
         }), 200).json()["access_token"]
         auth = bearer(admin)
         expect(client.post("/admin/realms", headers=auth, json={
-            "realm": realm, "enabled": True,
+            "id": realm_id, "realm": realm, "enabled": True,
         }), 201)
         try:
             def create(path, body):
@@ -79,7 +82,7 @@ def keycloak():
             scopes = expect(client.get(f"{resource}/client-scopes", headers=auth), 200).json()
             admin_scope = next(scope["id"] for scope in scopes if scope["name"] == "kc-admin-api")
 
-            def principal(name, permission):
+            def principal(name, *permissions):
                 secret = token_urlsafe(32)
                 app = create("/clients", {
                     "clientId": name, "enabled": True, "publicClient": False,
@@ -97,7 +100,7 @@ def keycloak():
                     expect(client.get(
                         f"{resource}/clients/{management}/roles/{label}", headers=auth,
                     ), 200).json()
-                    for label in (permission, "view-clients")
+                    for label in permissions
                 ]
                 expect(client.post(
                     f"{resource}/users/{service_user}/role-mappings/clients/{management}",
@@ -107,19 +110,29 @@ def keycloak():
                     f"{resource}/clients/{app}/scope-mappings/clients/{management}",
                     headers=auth, json=roles,
                 ), 204)
-                return expect(client.post(
+                token = expect(client.post(
                     f"/realms/{realm}/protocol/openid-connect/token",
                     data={"grant_type": "client_credentials", "client_id": name,
                           "client_secret": secret},
                 ), 200).json()["access_token"]
 
-            writer = principal("bind-writer", "manage-users")
-            reader = principal("bind-reader", "view-users")
+                return token, service_user, app
+
+            writer, writer_user, writer_client = principal("bind-writer", "manage-users", "view-clients")
+            reader, _, _ = principal("bind-reader", "view-users", "view-clients")
             assert writer != reader
-            yield {
-                "realm": realm, "user": target, "client": application,
+            fixture = {
+                "realm": realm, "realm_id": realm_id, "user": target, "client": application,
                 "role": {"id": role["id"], "name": ROLE}, "writer": writer, "reader": reader,
+                "writer_user": writer_user, "writer_client": writer_client,
             }
+            if getattr(request, "param", False):
+                audit_reader, _, _ = principal("bind-audit-reader", "view-events")
+                expect(client.put(f"{resource}/events/config", headers=auth, json={
+                    "adminEventsEnabled": True, "adminEventsDetailsEnabled": True,
+                }), 204)
+                fixture["audit_reader"] = audit_reader
+            yield fixture
         finally:
             expect(client.delete(resource, headers=auth), 204)
 
@@ -168,16 +181,61 @@ class KeycloakBridge:
         self.reads = 0
         self.lookup_available = True
         self.request_key = None
-        self.path = (
-            f"/admin/realms/{fixture['realm']}/users/{fixture['user']}"
-            f"/role-mappings/clients/{fixture['client']}"
-        )
+        self.write_started_ms = None
+        self.audit_path = f"users/{fixture['user']}/role-mappings/clients/{fixture['client']}"
+        self.path = f"/admin/realms/{fixture['realm']}/{self.audit_path}"
 
     async def mappings(self):
         result = expect(await self.client.get(
             self.path, headers=bearer(self.fixture["reader"]),
         ), 200)
         return [{key: role[key] for key in ("id", "name")} for role in result.json()]
+
+    def grant_payload(self):
+        role = self.fixture["role"]
+        if "audit_reader" in self.fixture:
+            role = {**role, "description": f"veritas-rehearsal:{self.event['event_id']}"}
+        return [role]
+
+    async def audit_events(self):
+        response = await self.client.get(
+            f"/admin/realms/{self.fixture['realm']}/admin-events",
+            headers=bearer(self.fixture["audit_reader"]),
+            params={"resourcePath": self.audit_path, "max": AUDIT_PAGE_LIMIT},
+        )
+        if response.status_code != 200:
+            return []
+        return response.json()
+
+    def audited_operation(self, events) -> str | None:
+        if (
+            self.write_started_ms is None
+            or not isinstance(events, list)
+            or len(events) >= AUDIT_PAGE_LIMIT
+        ):
+            return None
+        expected_roles = [{**self.grant_payload()[0], "composite": False}]
+        matches = []
+        for event in events:
+            try:
+                actor = event["authDetails"]
+                roles = json.loads(event["representation"])
+                if (
+                    event["realmId"] == self.fixture["realm_id"]
+                    and actor["realmId"] == self.fixture["realm_id"]
+                    and actor["userId"] == self.fixture["writer_user"]
+                    and actor["clientId"] == self.fixture["writer_client"]
+                    and event["operationType"] == "CREATE"
+                    and event["resourceType"] == "CLIENT_ROLE_MAPPING"
+                    and event["resourcePath"] == self.audit_path
+                    and self.write_started_ms <= event["time"] <= time_ns() // 1_000_000
+                    and not event.get("error")
+                    and roles == expected_roles
+                ):
+                    matches.append(validate_uuid(event["id"]))
+            except (KeyError, TypeError, ValueError, AttributeError):
+                continue
+        return matches[0] if len(matches) == 1 else None
 
     async def respond(self, wire):
         headers, _, body = wire.partition(b"\r\n\r\n")
@@ -190,11 +248,12 @@ class KeycloakBridge:
             assert parse_event(body).model_dump() == self.event
             self.writes += 1
             self.request_key = values[b"Idempotency-Key"].decode()
+            self.write_started_ms = time_ns() // 1_000_000
             try:
                 response = await self.client.post(
                     self.path,
                     headers=bearer(self.fixture["writer"]),
-                    json=[self.fixture["role"]],
+                    json=self.grant_payload(),
                 )
             except httpx.TimeoutException:
                 return b""
@@ -210,11 +269,13 @@ class KeycloakBridge:
         if not self.lookup_available:
             return b"HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\n\r\n"
         mappings = await self.mappings()
-        # A role mapping alone cannot identify which request created it.
-        if self.post_status != 204 or self.fixture["role"] not in mappings:
+        operation_id = self.event["event_id"] if self.post_status == 204 else None
+        if "audit_reader" in self.fixture:
+            operation_id = self.audited_operation(await self.audit_events())
+        if operation_id is None or self.fixture["role"] not in mappings:
             return b"HTTP/1.1 404 Missing\r\nContent-Length: 0\r\n\r\n"
         payload = json.dumps({
-            "operation_id": self.event["event_id"],
+            "operation_id": operation_id,
             "event_id": self.event["event_id"],
             "idempotency_key": self.request_key,
             "payload_digest": sha256_of_canonical_json(self.event),
@@ -385,4 +446,72 @@ async def test_keycloak_post_timeout_keeps_effect_unknown(
                 artifact, payload, provider=provider, transport=transport, **args,
             )
         assert bridge.connections == 2
+        assert bridge.writes == upstream.post_attempts == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("keycloak", [True], indirect=True, ids=["admin-audit-enabled"])
+async def test_keycloak_post_timeout_reconciles_with_unique_admin_event(
+    keycloak, keycloak_grant, monkeypatch,
+):
+    _, event, prepared = keycloak_grant
+    artifact, args = await _args(prepared)
+    store = args["effect_store"]
+    transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+    provider = WriterProvider(prepared, args)
+    payload = json.dumps(event)
+    upstream = KeycloakPostTimeout(forward=True)
+    async with (
+        httpx.AsyncClient(base_url=ORIGIN, trust_env=False, timeout=3) as permissions_client,
+        httpx.AsyncClient(base_url=ORIGIN, transport=upstream, trust_env=False, timeout=3) as client,
+    ):
+        bridge = KeycloakBridge(client, keycloak, event)
+        expect(await permissions_client.post(
+            bridge.path, headers=bearer(keycloak["audit_reader"]), json=[],
+        ), 403)
+        assert await bridge.mappings() == []
+        assert await bridge.audit_events() == []
+        monkeypatch.setattr(asyncio, "open_connection", bridge.connect)
+        observed = await execution.execute_sandbox_bind(
+            artifact, payload, provider=provider, transport=transport, **args,
+        )
+        assert observed.reason_code == "TRANSPORT_FAILED_OR_UNKNOWN"
+        assert bridge.post_status is None and upstream.upstream_status == 204
+        row = await store.get(observed.attempt_id)
+        assert row.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+        assert await bridge.mappings() == [keycloak["role"]]
+
+        events = await bridge.audit_events()
+        assert len(events) == 1
+        record = events[0]
+        assert bridge.audited_operation(events) == record["id"]
+        role = json.loads(record["representation"])[0]
+        unrelated = [
+            {**record, "representation": json.dumps([{**role, "description": str(uuid4())}])},
+            {**record, "representation": json.dumps([{**role, "id": str(uuid4())}])},
+            {**record, "authDetails": {**record["authDetails"], "userId": str(uuid4())}},
+            {**record, "resourcePath": f"users/{uuid4()}/role-mappings"},
+            {**record, "time": bridge.write_started_ms - 1},
+            {**record, "error": "synthetic-failure"},
+        ]
+        for wrong_event in unrelated:
+            assert bridge.audited_operation([wrong_event]) is None
+
+        for inconclusive in ([], [unrelated[0]], [record, {**record, "id": str(uuid4())}]):
+            async def audit_response():
+                return inconclusive
+
+            with monkeypatch.context() as patch:
+                patch.setattr(bridge, "audit_events", audit_response)
+                unresolved = await reconcile_grant(artifact, args, event, prepared[4])
+                assert unresolved.record == row and unresolved.evidence is None
+                assert await store.get(observed.attempt_id) == row
+
+        result = await reconcile_grant(artifact, args, event, prepared[4])
+        assert result.record.state == execution.EffectExecutionState.CONFIRMED_EFFECT
+        assert result.evidence.evidence.external_operation_reference == record["id"]
+        with pytest.raises(execution.SandboxBindExecutionError):
+            await execution.execute_sandbox_bind(
+                artifact, payload, provider=provider, transport=transport, **args,
+            )
         assert bridge.writes == upstream.post_attempts == 1

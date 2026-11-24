@@ -98,6 +98,16 @@ The read-only lookup sees no role in the first case and sees the new role in
 the second. In both cases the observation lacks evidence tying it to the
 original request, so the attempt stays in `EFFECT_UNKNOWN` and rejects replay.
 
+An audit-enabled case uses a separate read-only audit identity. The test
+bridge places the bound Sandbox event ID in the role-mapping request body
+and checks the persisted Keycloak admin event after withholding the HTTP
+response. Confirmation requires one matching successful event from the
+expected actor and realm, the exact target and role, and the current direct
+role mapping. Missing or ambiguous evidence keeps the attempt in
+`EFFECT_UNKNOWN`. The audit event records successful handling of the
+request. The current mapping is checked separately because the same grant
+can succeed when a mapping already exists.
+
 The workflow `Keycloak Bind Role Rehearsal` provisions the disposable server
 and runs this test. To reproduce locally with Docker, run these commands from
 the checkout after installing the repository's Python test dependencies.
