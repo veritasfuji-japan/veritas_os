@@ -580,37 +580,95 @@ class PostgresAtomicEffectStateStore:
     ) -> bool:
         if record.effect_provenance == EffectProvenance.SANDBOX_PRE_DISPATCH_V1:
             raise BindEffectStateError("BES_RAW_SANDBOX_ORIGIN_FORBIDDEN")
+        return await self._insert_effect_state(record, business_event_key=business_event_key)
+
+    async def reserve_dispatch_intent(
+        self, record: EffectStateRecord, *, business_event_key: str, keycloak_intent: dict[str, Any],
+    ) -> bool:
+        """Commit a durable unknown outcome and its reservation in one insert.
+
+        Use after independent authorization, current checks, and durable
+        consumption. A conflict or exception creates no ownership for the caller.
+        """
+        if (
+            record.effect_provenance != EffectProvenance.GENERIC_AMBIGUOUS_V1
+            or record.state != EffectExecutionState.EFFECT_UNKNOWN
+            or record.revision != 1
+            or record.reconciliation_evidence_hash is not None
+            or not _record_hash_valid(record)
+            or type(business_event_key) is not str
+            or not re.fullmatch(_HASH, business_event_key)
+        ):
+            raise BindEffectStateError("BES_DISPATCH_INTENT_INVALID")
+        return await self._insert_effect_state(
+            record, business_event_key=business_event_key, keycloak_intent=keycloak_intent,
+        )
+
+    async def _insert_effect_state(
+        self,
+        record: EffectStateRecord,
+        *,
+        business_event_key: str | None,
+        keycloak_intent: dict[str, Any] | None = None,
+    ) -> bool:
         try:
             from psycopg.types.json import Jsonb
             from veritas_os.storage.db import get_pool
 
-            pool = await get_pool()
-            async with pool.connection() as conn:
-                cur = await conn.execute(
+            parameters = (
+                record.operation_id,
+                record.authorization_id,
+                record.authorization_hash,
+                record.consumption_id,
+                record.consumption_hash,
+                record.execution_intent_id,
+                record.idempotency_key,
+                record.effect_provenance.value,
+                record.state.value,
+                record.revision,
+                record.record_hash,
+                record.updated_at,
+                Jsonb(record.model_dump(mode="json")),
+                business_event_key,
+            )
+            if keycloak_intent is None:
+                query = (
                     "INSERT INTO bind_effect_states "
                     "(operation_id, authorization_id, authorization_hash, consumption_id, "
                     "consumption_hash, execution_intent_id, idempotency_key, effect_provenance, "
                     "state, revision, record_hash, updated_at, record, business_event_key) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT DO NOTHING RETURNING operation_id",
-                    (
-                        record.operation_id,
-                        record.authorization_id,
-                        record.authorization_hash,
-                        record.consumption_id,
-                        record.consumption_hash,
-                        record.execution_intent_id,
-                        record.idempotency_key,
-                        record.effect_provenance.value,
-                        record.state.value,
-                        record.revision,
-                        record.record_hash,
-                        record.updated_at,
-                        Jsonb(record.model_dump(mode="json")),
-                        business_event_key,
-                    ),
+                    "ON CONFLICT DO NOTHING RETURNING operation_id"
                 )
-                return await cur.fetchone() is not None
+            else:
+                query = (
+                    "WITH reserved AS ("
+                    "INSERT INTO bind_effect_states "
+                    "(operation_id, authorization_id, authorization_hash, consumption_id, "
+                    "consumption_hash, execution_intent_id, idempotency_key, effect_provenance, "
+                    "state, revision, record_hash, updated_at, record, business_event_key) "
+                    "SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s "
+                    "WHERE EXISTS (SELECT 1 FROM bind_authorization_consumptions "
+                    "WHERE consumption_id=%s AND consumption_hash=%s AND authorization_id=%s "
+                    "AND authorization_hash=%s AND execution_intent_id=%s AND idempotency_key=%s) "
+                    "ON CONFLICT DO NOTHING RETURNING operation_id) "
+                    "INSERT INTO bind_keycloak_dispatch_intents (operation_id, intent) "
+                    "SELECT operation_id, %s FROM reserved RETURNING operation_id"
+                )
+                parameters += (
+                    record.consumption_id,
+                    record.consumption_hash,
+                    record.authorization_id,
+                    record.authorization_hash,
+                    record.execution_intent_id,
+                    record.idempotency_key,
+                    Jsonb(keycloak_intent),
+                )
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                cur = await conn.execute(query, parameters)
+                inserted = await cur.fetchone() is not None
+            return inserted
         except BindEffectStateError:
             raise
         except Exception:

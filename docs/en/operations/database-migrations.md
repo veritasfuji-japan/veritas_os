@@ -111,6 +111,13 @@ alembic upgrade head
 
 This is safe to run repeatedly — already-applied revisions are skipped.
 
+### Keycloak dispatch intents (0016)
+
+Revision `0016` stores Keycloak recovery inputs beside the dispatch reservation.
+Back up `bind_keycloak_dispatch_intents` together with the Bind effect-state
+and authorization-consumption tables. The migration refuses downgrade while
+any Keycloak dispatch intent remains, preserving recovery evidence.
+
 ### Downgrade (rollback)
 
 ```bash

@@ -14,8 +14,6 @@ from veritas_os.policy.canonical_verified_decision_promotion import (
     build_canonical_verified_decision_promotion_packet,
 )
 from veritas_os.tests.helpers.native_approval_source import build_native_authority_source
-from veritas_os.tests import test_canonical_promotion_live_adapter_dry_run_endpoint_allowlist as endpoints
-from veritas_os.tests import test_canonical_promotion_live_adapter_dry_run_credential_authorization as credentials
 from veritas_os.tests.test_native_bind_authorization import _setup
 from veritas_os.tests.test_sandbox_action_binding import PAYLOAD, build, contract, deployment
 
@@ -29,7 +27,6 @@ def issued(tmp_path_factory):
 
 def issue_for_payload(directory: Path, payload: dict[str, str]):
     """Capture the real API and sign the exact synthetic payload."""
-    output = directory / "capture.json"
     config = deployment()
     overrides = {
         "intended_action": binding.ACTION,
@@ -37,6 +34,21 @@ def issue_for_payload(directory: Path, payload: dict[str, str]):
         "target_resource": config.endpoint_url,
         "evidence_refs": [build(json.dumps(payload)).reference],
     }
+    return issue_for_action(
+        directory, overrides, contract(),
+        endpoint_overrides={
+            "endpoint_host": "sandbox.example.invalid", "endpoint_path_prefix": "/v1/events",
+        },
+        credential_overrides={
+            "credential_scope": config.credential_scope,
+            "credential_environment": config.credential_environment,
+        },
+    )
+
+
+def issue_for_action(directory, overrides, action_contract, *, endpoint_overrides, credential_overrides):
+    """Capture an API decision and issue a native grant using synthetic authority sources."""
+    output = directory / "capture.json"
     code = (
         "import json,sys; from pathlib import Path; "
         "from veritas_os.tests.helpers.live_decision_capture import capture; "
@@ -55,19 +67,11 @@ def issue_for_payload(directory: Path, payload: dict[str, str]):
         promoted_at=now, ttl_seconds=300,
         expected_state_fingerprint="synthetic:sandbox:empty",
     )
-    original = endpoints._candidate
-    original_reference = credentials._reference
-    with pytest.MonkeyPatch.context() as patch:
-        # Change only fixture metadata; all source builders/verifiers are real.
-        patch.setattr(endpoints, "_candidate", lambda **kw: original(
-            **kw, endpoint_host="sandbox.example.invalid", endpoint_path_prefix="/v1/events",
-        ))
-        patch.setattr(credentials, "_reference", lambda **kw: original_reference(
-            **kw, credential_scope=config.credential_scope,
-            credential_environment=config.credential_environment,
-        ))
-        source = build_native_authority_source(promotion, now)
-    artifact, inputs, *_ = _setup(source, contract(), now)
+    source = build_native_authority_source(
+        promotion, now, endpoint_overrides=endpoint_overrides,
+        credential_overrides=credential_overrides,
+    )
+    artifact, inputs, *_ = _setup(source, action_contract, now)
     return artifact, inputs
 
 
