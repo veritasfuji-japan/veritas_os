@@ -645,85 +645,141 @@ async def test_real_postgres_arbitration_commit_ack_loss_is_classified_only_by_r
         )
 
 
-@pytest.mark.asyncio
-async def test_keycloak_dispatch_reservation_is_unique_across_authorizations() -> None:
-    """Two distinct, consumed permissions for one grant get one reservation."""
-    from veritas_os.policy.keycloak_dispatch_reservation import reserve_keycloak_dispatch
-    from veritas_os.policy.keycloak_role_grant_binding import build_keycloak_role_grant_binding
+@pytest.fixture
+def keycloak_signed_reservations(tmp_path_factory):
+    """Use signed native artifacts with genuine API lineage and separate attempts."""
+    from dataclasses import replace
+
+    from veritas_os.policy.keycloak_role_grant_binding import ACTION, build_keycloak_role_grant_binding
+    from veritas_os.policy.native_bind_authorization import _verified_source
     from veritas_os.tests.test_keycloak_role_grant_binding import TARGET
+    from veritas_os.tests.test_sandbox_action_binding import contract
+    from veritas_os.tests.test_sandbox_action_binding_integration import issue_for_action
 
     _require_real_postgresql()
-    consumptions = PostgresAtomicAuthorizationConsumptionStore()
-    first, replacement = (_consumption(uuid4().hex) for _ in range(2))
     common = {
         "target": TARGET,
         "event_id": f"assignment-{uuid4().hex}",
         "deployment_policy_digest": "a" * 64,
     }
 
-    def request(consumption):
+    def issue():
         args = {**common, "attempt_id": str(uuid4())}
         binding = build_keycloak_role_grant_binding(**args)
-        return {
-            **args, "approved_reference": binding.reference, "consumption": consumption,
-        }
+        authorization, inputs = issue_for_action(
+            tmp_path_factory.mktemp("keycloak-native"),
+            {
+                "intended_action": ACTION,
+                "target_system": "synthetic-keycloak",
+                "target_resource": binding.endpoint_url,
+                "evidence_refs": [binding.reference],
+            },
+            replace(contract(), id=ACTION, action_class=ACTION),
+            endpoint_overrides={
+                "endpoint_host": "keycloak.example.invalid", "endpoint_path_prefix": "/admin",
+            },
+            credential_overrides={},
+        )
+        _, _, context = _verified_source(
+            authorization.source_runtime_risk_packet,
+            inputs["source_inputs"],
+            inputs["governance_inputs"],
+        )
+        consumption = build_authorization_consumption_record(
+            live_adapter_bind_authorization_id=authorization.authorization_id,
+            live_adapter_bind_authorization_hash=authorization.authorization_hash,
+            idempotency_key=authorization.idempotency_key,
+            bind_context_hash=authorization.bind_context_hash,
+            execution_intent_id=authorization.execution_intent_id,
+            execution_intent_hash=authorization.execution_intent_hash,
+            endpoint_identity_binding_digest=context.endpoint_identity_binding_digest,
+            credential_reference_digest=context.credential_reference_digest,
+            credential_scope_binding_digest=context.credential_scope_binding_digest,
+            consumed_at=authorization.valid_from,
+        )
+        return args | inputs | {"authorization": authorization, "consumption": consumption}
 
-    first_request, replacement_request = request(first), request(replacement)
-    assert first_request["approved_reference"] != replacement_request["approved_reference"]
-    assert await reserve_keycloak_dispatch(**first_request) is None
-    assert await consumptions.consume_once(first)
-    assert await consumptions.consume_once(replacement)
+    return issue(), issue()
 
-    outcomes = await asyncio.gather(
-        reserve_keycloak_dispatch(**first_request),
-        reserve_keycloak_dispatch(**replacement_request),
+
+@pytest.mark.asyncio
+async def test_keycloak_dispatch_reservation_is_unique_across_authorizations(
+    keycloak_signed_reservations,
+) -> None:
+    """Two signed, consumed permissions for one grant get one durable reservation."""
+    from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
+    from veritas_os.policy.keycloak_dispatch_reservation import (
+        get_keycloak_dispatch_intent,
+        reserve_keycloak_dispatch,
     )
-    winners = [outcome for outcome in outcomes if outcome is not None]
-    assert len(winners) == 1
-    winner = winners[0]
-    assert winner.state == EffectExecutionState.EFFECT_UNKNOWN
-    assert winner.revision == 1
-    store = PostgresAtomicEffectStateStore()
-    assert await store.get(winner.operation_id) == winner
-    loser = replacement if winner.consumption_id == first.consumption_id else first
-    assert await store.get(loser.consumption_id) is None
+    from veritas_os.policy.keycloak_role_grant_binding import build_keycloak_role_grant_binding
 
-    # Fresh store instances for both the original and the replacement still lose.
-    assert await reserve_keycloak_dispatch(**first_request) is None
-    assert await reserve_keycloak_dispatch(**replacement_request) is None
+    first, replacement = keycloak_signed_reservations
+    original = first["consumption"]
+    alternate = replacement["consumption"]
+    assert original.live_adapter_bind_authorization_id != alternate.live_adapter_bind_authorization_id
+    assert await reserve_keycloak_dispatch(**first) is None
+    consumptions = PostgresAtomicAuthorizationConsumptionStore()
+    assert await consumptions.consume_once(original)
+    assert await consumptions.consume_once(alternate)
+    with pytest.raises(BindEffectStateError, match="KGR_CONSUMPTION_LINEAGE_MISMATCH"):
+        await reserve_keycloak_dispatch(**(first | {"consumption": alternate}))
+    assert await PostgresAtomicEffectStateStore().get(original.consumption_id) is None
+    assert await get_keycloak_dispatch_intent(alternate.consumption_id) is None
+
+    contenders = (first, replacement)
+    outcomes = await asyncio.gather(*(reserve_keycloak_dispatch(**item) for item in contenders))
+    assert sum(result is not None for result in outcomes) == 1
+    winner_index = next(i for i, result in enumerate(outcomes) if result is not None)
+    winner = outcomes[winner_index]
+    assert winner.state == EffectExecutionState.EFFECT_UNKNOWN
+    assert await PostgresAtomicEffectStateStore().get(winner.operation_id) == winner
+    assert await get_keycloak_dispatch_intent(contenders[1 - winner_index]["consumption"].consumption_id) is None
+    recovered = await get_keycloak_dispatch_intent(winner.operation_id)
+    args = {key: contenders[winner_index][key] for key in (
+        "target", "event_id", "attempt_id", "deployment_policy_digest",
+    )}
+    expected = build_keycloak_role_grant_binding(**args)
+    assert recovered.attempt_id == args["attempt_id"]
+    assert recovered.target == args["target"]
+    assert recovered.endpoint_url == expected.endpoint_url
+    assert recovered.body_digest == expected.body_digest
+    assert recovered.approved_reference == expected.reference
+    assert recovered.deployment_policy_digest == args["deployment_policy_digest"]
+    assert await reserve_keycloak_dispatch(**first) is None
+    assert await reserve_keycloak_dispatch(**replacement) is None
 
 
 @pytest.mark.asyncio
 async def test_keycloak_dispatch_reservation_does_not_recover_ownership_after_lost_commit_ack(
-    monkeypatch,
+    monkeypatch, keycloak_signed_reservations,
 ) -> None:
-    """A committed reservation survives loss of the database acknowledgement."""
+    """The intent and claim both survive a lost database acknowledgement."""
     from contextlib import asynccontextmanager
 
     from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
-    from veritas_os.policy.keycloak_dispatch_reservation import reserve_keycloak_dispatch
-    from veritas_os.policy.keycloak_role_grant_binding import build_keycloak_role_grant_binding
+    from veritas_os.policy.keycloak_dispatch_reservation import (
+        get_keycloak_dispatch_intent,
+        reserve_keycloak_dispatch,
+    )
     from veritas_os.storage import db
-    from veritas_os.tests.test_keycloak_role_grant_binding import TARGET
 
-    _require_real_postgresql()
-    consumption = _consumption(uuid4().hex)
+    # Use a separately issued pair so neither event nor authorization is reused.
+    args = keycloak_signed_reservations[0]
+    consumption = args["consumption"]
     assert await PostgresAtomicAuthorizationConsumptionStore().consume_once(consumption)
-    args = {
-        "target": TARGET,
-        "event_id": f"assignment-{uuid4().hex}",
-        "attempt_id": str(uuid4()),
-        "deployment_policy_digest": "a" * 64,
-    }
-    binding = build_keycloak_role_grant_binding(**args)
     pool = await db.get_pool()
+    reservation_connections = 0
 
     class LostAcknowledgement:
         @asynccontextmanager
         async def connection(self):
+            nonlocal reservation_connections
+            reservation_connections += 1
             async with pool.connection() as conn:
                 yield conn
-            raise RuntimeError("injected after commit")
+            if reservation_connections == 2:
+                raise RuntimeError("injected after commit")
 
     async def faulty_pool():
         return LostAcknowledgement()
@@ -731,12 +787,11 @@ async def test_keycloak_dispatch_reservation_does_not_recover_ownership_after_lo
     with monkeypatch.context() as patch:
         patch.setattr(db, "get_pool", faulty_pool)
         with pytest.raises(BindEffectStateError, match="BES_POSTGRES_CREATE_FAILED"):
-            await reserve_keycloak_dispatch(
-                **args, approved_reference=binding.reference, consumption=consumption,
-            )
+            await reserve_keycloak_dispatch(**args)
 
     stored = await PostgresAtomicEffectStateStore().get(consumption.consumption_id)
     assert stored is not None and stored.state == EffectExecutionState.EFFECT_UNKNOWN
-    assert await reserve_keycloak_dispatch(
-        **args, approved_reference=binding.reference, consumption=consumption,
-    ) is None
+    recovered = await get_keycloak_dispatch_intent(consumption.consumption_id)
+    assert recovered.attempt_id == args["attempt_id"]
+    assert recovered.authorization_hash == consumption.live_adapter_bind_authorization_hash
+    assert await reserve_keycloak_dispatch(**args) is None

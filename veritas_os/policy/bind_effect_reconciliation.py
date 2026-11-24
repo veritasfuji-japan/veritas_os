@@ -583,7 +583,7 @@ class PostgresAtomicEffectStateStore:
         return await self._insert_effect_state(record, business_event_key=business_event_key)
 
     async def reserve_dispatch_intent(
-        self, record: EffectStateRecord, *, business_event_key: str,
+        self, record: EffectStateRecord, *, business_event_key: str, keycloak_intent: dict[str, Any],
     ) -> bool:
         """Commit a durable unknown outcome and its reservation in one insert.
 
@@ -601,7 +601,7 @@ class PostgresAtomicEffectStateStore:
         ):
             raise BindEffectStateError("BES_DISPATCH_INTENT_INVALID")
         return await self._insert_effect_state(
-            record, business_event_key=business_event_key, require_consumption=True,
+            record, business_event_key=business_event_key, keycloak_intent=keycloak_intent,
         )
 
     async def _insert_effect_state(
@@ -609,7 +609,7 @@ class PostgresAtomicEffectStateStore:
         record: EffectStateRecord,
         *,
         business_event_key: str | None,
-        require_consumption: bool = False,
+        keycloak_intent: dict[str, Any] | None = None,
     ) -> bool:
         try:
             from psycopg.types.json import Jsonb
@@ -638,7 +638,7 @@ class PostgresAtomicEffectStateStore:
                 Jsonb(record.model_dump(mode="json")),
                 business_event_key,
             )
-            if require_consumption:
+            if keycloak_intent is not None:
                 query += (
                     "WHERE EXISTS (SELECT 1 FROM bind_authorization_consumptions "
                     "WHERE consumption_id=%s AND consumption_hash=%s AND authorization_id=%s "
@@ -652,12 +652,17 @@ class PostgresAtomicEffectStateStore:
                     record.execution_intent_id,
                     record.idempotency_key,
                 )
+            query += "ON CONFLICT DO NOTHING RETURNING operation_id"
+            if keycloak_intent is not None:
+                query = (
+                    "WITH reserved AS (" + query + ") "
+                    "INSERT INTO bind_keycloak_dispatch_intents (operation_id, intent) "
+                    "SELECT operation_id, %s FROM reserved RETURNING operation_id"
+                )
+                parameters += (Jsonb(keycloak_intent),)
             pool = await get_pool()
             async with pool.connection() as conn:
-                cur = await conn.execute(
-                    query + "ON CONFLICT DO NOTHING RETURNING operation_id",
-                    parameters,
-                )
+                cur = await conn.execute(query, parameters)
                 inserted = await cur.fetchone() is not None
             return inserted
         except BindEffectStateError:
