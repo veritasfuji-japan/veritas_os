@@ -12,6 +12,7 @@ import pytest
 
 from veritas_os.policy import sandbox_bind_execution as execution
 from veritas_os.policy import sandbox_reconciliation as reconciliation
+from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError
 from veritas_os.policy.sandbox_event_store import parse_event
 from veritas_os.policy.sandbox_https_transport import SandboxHTTPSTransport
 from veritas_os.policy.trusted_https_reconciliation import ApprovedReconciliationVerifier
@@ -123,6 +124,33 @@ def keycloak():
             expect(client.delete(resource, headers=auth), 204)
 
 
+class KeycloakPostTimeout(httpx.AsyncHTTPTransport):
+    """Inject a client-side timeout before forwarding or after Keycloak commits."""
+
+    def __init__(self, *, forward: bool) -> None:
+        super().__init__(trust_env=False, retries=0)
+        self.forward = forward
+        self.post_attempts = 0
+        self.upstream_status = None
+        self.role_reads = 0
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            self.role_reads += 1
+            return await super().handle_async_request(request)
+
+        assert request.method == "POST"
+        self.post_attempts += 1
+        if self.forward:
+            response = await super().handle_async_request(request)
+            try:
+                self.upstream_status = response.status_code
+                expect(response, 204)
+            finally:
+                await response.aclose()
+        raise httpx.ReadTimeout("Injected Keycloak response timeout", request=request)
+
+
 class KeycloakBridge:
     """Translate only the exact test command and look up actual Keycloak state.
 
@@ -139,7 +167,7 @@ class KeycloakBridge:
         self.post_status = None
         self.reads = 0
         self.lookup_available = True
-        self.key = None
+        self.request_key = None
         self.path = (
             f"/admin/realms/{fixture['realm']}/users/{fixture['user']}"
             f"/role-mappings/clients/{fixture['client']}"
@@ -161,27 +189,34 @@ class KeycloakBridge:
             assert values[b"Authorization"] == b"Bearer " + WRITER_TOKEN
             assert parse_event(body).model_dump() == self.event
             self.writes += 1
-            response = await self.client.post(
-                self.path, headers=bearer(self.fixture["writer"]), json=[self.fixture["role"]],
-            )
-            self.post_status = response.status_code
+            self.request_key = values[b"Idempotency-Key"].decode()
+            try:
+                response = await self.client.post(
+                    self.path,
+                    headers=bearer(self.fixture["writer"]),
+                    json=[self.fixture["role"]],
+                )
+            except httpx.TimeoutException:
+                return b""
             expect(response, 204)
-            self.key = values[b"Idempotency-Key"].decode()
+            self.post_status = response.status_code
             # Keycloak completed the write. Lose the response at the Sandbox boundary.
             return b""
         assert method == b"GET"
         assert values[b"Authorization"] == b"Bearer " + READER_TOKEN
-        assert not body and self.key is not None
-        assert path == f"/v1/operations?idempotency_key={self.key}".encode()
+        assert not body and self.request_key is not None
+        assert path == f"/v1/operations?idempotency_key={self.request_key}".encode()
         self.reads += 1
         if not self.lookup_available:
             return b"HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\n\r\n"
-        if self.fixture["role"] not in await self.mappings():
+        mappings = await self.mappings()
+        # A role mapping alone cannot identify which request created it.
+        if self.post_status != 204 or self.fixture["role"] not in mappings:
             return b"HTTP/1.1 404 Missing\r\nContent-Length: 0\r\n\r\n"
         payload = json.dumps({
             "operation_id": self.event["event_id"],
             "event_id": self.event["event_id"],
-            "idempotency_key": self.key,
+            "idempotency_key": self.request_key,
             "payload_digest": sha256_of_canonical_json(self.event),
             "state": "PERSISTED",
         }).encode()
@@ -225,6 +260,25 @@ def keycloak_grant(keycloak, tmp_path):
     }
     prepared = consume_fixture_authorization(*issue_for_payload(tmp_path, event))
     return command, event, prepared
+
+
+async def reconcile_grant(artifact, args, event, clock):
+    options = args.copy()
+    historical = options.pop("governance_inputs")
+    options.pop("load_current_inputs")
+    reader = reconciliation.SandboxReaderPolicy(
+        "keycloak-rehearsal-reader", "reader-v1", "synthetic", "sandbox",
+    )
+    verifier = ApprovedReconciliationVerifier(
+        reconciliation.VERIFIER_ID,
+        reconciliation.sandbox_reconciliation_policy_hash(options["deployment"], reader),
+    )
+    return await reconciliation.reconcile_sandbox_effect(
+        artifact, json.dumps(event), historical_governance_inputs=historical,
+        reader_policy=reader,
+        verifier_policy=reconciliation.ReconciliationVerifierPolicy((verifier,)),
+        provider=ReaderProvider(clock), **options,
+    )
 
 
 @pytest.mark.asyncio
@@ -276,31 +330,59 @@ async def test_keycloak_grant_reconciles_after_lost_response(keycloak, keycloak_
             await execute(artifact, args, event)
         assert bridge.connections == bridge.writes == 1
 
-        historical = args.pop("governance_inputs")
-        args.pop("load_current_inputs")
-        reader = reconciliation.SandboxReaderPolicy(
-            "keycloak-rehearsal-reader", "reader-v1", "synthetic", "sandbox",
-        )
-        verifier = ApprovedReconciliationVerifier(
-            reconciliation.VERIFIER_ID,
-            reconciliation.sandbox_reconciliation_policy_hash(args["deployment"], reader),
-        )
-        async def reconcile():
-            return await reconciliation.reconcile_sandbox_effect(
-                artifact, json.dumps(event), historical_governance_inputs=historical,
-                reader_policy=reader, verifier_policy=reconciliation.ReconciliationVerifierPolicy(
-                    (verifier,),
-                ), provider=ReaderProvider(prepared[4]), **args,
-            )
-
         bridge.lookup_available = False
-        unavailable = await reconcile()
+        unavailable = await reconcile_grant(artifact, args, event, prepared[4])
         assert unavailable.record == row and unavailable.evidence is None
         assert bridge.writes == 1
 
         bridge.lookup_available = True
-        result = await reconcile()
+        result = await reconcile_grant(artifact, args, event, prepared[4])
         assert result.record.state == execution.EffectExecutionState.CONFIRMED_EFFECT
         assert result.evidence is not None
         assert bridge.writes == 1 and bridge.reads == 2
         assert await bridge.mappings() == [keycloak["role"]]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "forward", [False, True], ids=["request-not-forwarded", "response-lost-after-commit"],
+)
+async def test_keycloak_post_timeout_keeps_effect_unknown(
+    keycloak, keycloak_grant, monkeypatch, forward,
+):
+    _, event, prepared = keycloak_grant
+    artifact, args = await _args(prepared)
+    store = args["effect_store"]
+    transport = SandboxHTTPSTransport(endpoint_url=args["deployment"].endpoint_url)
+    upstream = KeycloakPostTimeout(forward=forward)
+    async with httpx.AsyncClient(
+        base_url=ORIGIN, transport=upstream, trust_env=False, timeout=3,
+    ) as client:
+        bridge = KeycloakBridge(client, keycloak, event)
+        assert await bridge.mappings() == []
+        monkeypatch.setattr(asyncio, "open_connection", bridge.connect)
+        payload = json.dumps(event)
+        provider = WriterProvider(prepared, args)
+        observed = await execution.execute_sandbox_bind(
+            artifact, payload, provider=provider, transport=transport, **args,
+        )
+        assert observed.reason_code == "TRANSPORT_FAILED_OR_UNKNOWN"
+        assert bridge.post_status is None
+        assert upstream.upstream_status == (204 if forward else None)
+        row = await store.get(observed.attempt_id)
+        assert row.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+
+        result = await reconcile_grant(artifact, args, event, prepared[4])
+        assert bridge.reads == 1 and upstream.role_reads == 2
+        assert result.record == row and result.evidence is None
+        assert await store.get(observed.attempt_id) == row
+        with pytest.raises(BindEffectStateError, match="BES_ARCHIVE_MISSING_OR_MISMATCHED"):
+            await store.get_reconciliation(observed.attempt_id)
+        assert await bridge.mappings() == ([keycloak["role"]] if forward else [])
+
+        with pytest.raises(execution.SandboxBindExecutionError):
+            await execution.execute_sandbox_bind(
+                artifact, payload, provider=provider, transport=transport, **args,
+            )
+        assert bridge.connections == 2
+        assert bridge.writes == upstream.post_attempts == 1
