@@ -138,6 +138,11 @@ and do not grant authority or publish a TrustLog entry. Retain the receipt
 column with the dispatch intent and observation in backups. Downgrade is
 rejected while any receipt pair exists.
 
+Auditors can read an issued pair by operation ID. The reader checks the hashes
+and links to the confirmed effect and consumption in PostgreSQL. It needs no
+Keycloak connection or original authorization inputs. The result reports the
+stored historical effect and its observed mapping.
+
 ### Downgrade (rollback)
 
 ```bash

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from veritas_os.governance.outcome_receipt import build_outcome_receipt, validate_outcome_receipt
+from veritas_os.governance.outcome_receipt import OutcomeReceipt, build_outcome_receipt, validate_outcome_receipt
 from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome, hash_bind_receipt
 from veritas_os.policy.bind_core.normalizers import normalize_execution_intent
 from veritas_os.policy.keycloak_reconciliation import (
@@ -44,6 +44,106 @@ class KeycloakReceiptBundle(BaseModel):
     bind_receipt: dict[str, Any]
     outcome_receipt: dict[str, Any]
     bundle_hash: str
+
+
+def _stored_receipt_lineage(confirmation: KeycloakConfirmedReconciliation) -> dict[str, Any]:
+    record, dispatch, observation = confirmation.record, confirmation.intent, confirmation.observation
+    return {
+        "recording_basis": "RETROSPECTIVE_KEYCLOAK_RECONCILIATION",
+        "bind_timestamp_basis": "AUTHORIZATION_CONSUMED_AT",
+        "authorization_id": record.authorization_id,
+        "authorization_hash": record.authorization_hash,
+        "consumption_id": record.consumption_id,
+        "consumption_hash": record.consumption_hash,
+        "dispatch_reservation_hash": observation.reservation_record_hash,
+        "effect_record_hash": record.record_hash,
+        "reconciliation_evidence_hash": record.reconciliation_evidence_hash,
+        "archive_hash": sha256_of_canonical_json(observation.model_dump(mode="json")),
+        "approved_reference": dispatch.approved_reference,
+        "deployment_policy_digest": dispatch.deployment_policy_digest,
+        "payload_digest": dispatch.body_digest,
+        "external_operation_reference": str(observation.audit_event_id),
+        "external_effect_claim": "KEYCLOAK_ACCEPTED_GRANT_AND_DIRECT_MAPPING_OBSERVED",
+        "trustlog_publication": "NOT_PUBLISHED",
+    }
+
+
+def _observed_role_effect(confirmation: KeycloakConfirmedReconciliation) -> dict[str, Any]:
+    return {
+        "kind": "keycloak_direct_role_mapping_observed",
+        "audit_event_id": str(confirmation.observation.audit_event_id),
+        "role_id": confirmation.intent.target.role_id,
+        "mapping_observed_at": confirmation.observation.mapping_observed_at.isoformat(),
+        "reverified_at": confirmation.record.updated_at,
+    }
+
+
+async def read_verified_keycloak_receipts(operation_id: str) -> KeycloakReceiptBundle | None:
+    """Verify a published pair from stored evidence without publishing or querying Keycloak."""
+    from veritas_os.storage.db import get_pool
+
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            cursor = await conn.execute(
+                "SELECT receipt_bundle FROM bind_keycloak_dispatch_intents WHERE operation_id=%s",
+                (operation_id,),
+            )
+            row = await cursor.fetchone()
+        if row is None or row[0] is None:
+            return None
+        bundle = KeycloakReceiptBundle.model_validate(row[0])
+        confirmation = await read_verified_keycloak_confirmation(operation_id)
+        if confirmation is None:
+            raise ValueError("missing confirmed effect")
+        record, dispatch = confirmation.record, confirmation.intent
+        consumption = await PostgresAtomicAuthorizationConsumptionStore().get(record.authorization_id)
+        receipt = BindReceipt(**bundle.bind_receipt)
+        outcome = OutcomeReceipt(**bundle.outcome_receipt)
+        if (
+            bundle.bundle_hash != sha256_of_canonical_json(bundle.model_dump(mode="json", exclude={"bundle_hash"}))
+            or receipt.to_dict() != bundle.bind_receipt
+            or hash_bind_receipt(receipt) != receipt.bind_receipt_hash
+            or outcome.to_dict() != bundle.outcome_receipt
+            or outcome.deterministic_digest() != outcome.outcome_hash
+            or not validate_outcome_receipt(outcome).is_valid
+        ):
+            raise ValueError("receipt integrity")
+
+        lineage = receipt.governance_identity
+        expected_lineage = _stored_receipt_lineage(confirmation)
+        if (
+            not isinstance(lineage, dict)
+            or any(lineage.get(key) != value for key, value in expected_lineage.items())
+            or outcome.metadata != {
+                **lineage, "bind_receipt_hash": receipt.bind_receipt_hash,
+                "idempotency_key": record.idempotency_key,
+            }
+            or consumption is None
+            or consumption.consumption_id != record.consumption_id
+            or consumption.consumption_hash != record.consumption_hash
+            or receipt.bind_ts != consumption.consumed_at
+            or receipt.idempotency_key != record.idempotency_key
+            or receipt.bind_receipt_id != "keycloak-bind-" + record.consumption_id
+            or receipt.execution_intent_id != record.execution_intent_id
+            or receipt.execution_intent_hash != dispatch.execution_intent_hash
+            or receipt.target_path != dispatch.endpoint_url
+            or receipt.final_outcome != FinalOutcome.COMMITTED.value
+            or outcome.operation_id != operation_id
+            or outcome.outcome_receipt_id != f"outcome-{operation_id}"
+            or outcome.bind_receipt_id != receipt.bind_receipt_id
+            or outcome.execution_intent_id != receipt.execution_intent_id
+            or outcome.decision_id != receipt.decision_id
+            or outcome.target_resource != dispatch.endpoint_url
+            or outcome.action_class != ACTION or outcome.intended_action != ACTION
+            or outcome.final_outcome != "COMMITTED" or outcome.committed is not True
+            or outcome.postcondition_status != "passed" or outcome.evaluated_at != record.updated_at
+            or outcome.observed_effects != [_observed_role_effect(confirmation)]
+        ):
+            raise ValueError("receipt lineage")
+    except Exception:
+        raise KeycloakReceiptError("KGR_RECEIPT_READ_INTEGRITY_FAILED") from None
+    return bundle
 
 
 async def publish_keycloak_receipts(
@@ -130,24 +230,9 @@ async def _build_keycloak_receipts(
         raise ValueError("scope")
 
     lineage = {
-        "recording_basis": "RETROSPECTIVE_KEYCLOAK_RECONCILIATION",
-        "bind_timestamp_basis": "AUTHORIZATION_CONSUMED_AT",
-        "authorization_id": verified.authorization_id,
-        "authorization_hash": verified.authorization_hash,
-        "consumption_id": consumption.consumption_id,
-        "consumption_hash": consumption.consumption_hash,
-        "dispatch_reservation_hash": observation.reservation_record_hash,
-        "effect_record_hash": record.record_hash,
-        "reconciliation_evidence_hash": record.reconciliation_evidence_hash,
-        "archive_hash": sha256_of_canonical_json(observation.model_dump(mode="json")),
-        "approved_reference": dispatch.approved_reference,
-        "deployment_policy_digest": dispatch.deployment_policy_digest,
-        "payload_digest": dispatch.body_digest,
-        "external_operation_reference": str(observation.audit_event_id),
+        **_stored_receipt_lineage(confirmation),
         "human_approval_requirement_status": verified.human_approval_requirement_status,
         "human_approval_verification_proof_digest": verified.human_approval_verification_proof_digest,
-        "external_effect_claim": "KEYCLOAK_ACCEPTED_GRANT_AND_DIRECT_MAPPING_OBSERVED",
-        "trustlog_publication": "NOT_PUBLISHED",
     }
     contract = governance_inputs.action_contract
     receipt = BindReceipt(
@@ -176,13 +261,7 @@ async def _build_keycloak_receipts(
         action_class=contract.action_class, target_system=intent.target_system,
         target_resource=intent.target_resource, intended_action=intent.intended_action,
         requested_scope=scope, final_outcome="COMMITTED", postcondition_status="passed",
-        observed_effects=[{
-            "kind": "keycloak_direct_role_mapping_observed",
-            "audit_event_id": str(observation.audit_event_id),
-            "role_id": dispatch.target.role_id,
-            "mapping_observed_at": observation.mapping_observed_at.isoformat(),
-            "reverified_at": record.updated_at,
-        }],
+        observed_effects=[_observed_role_effect(confirmation)],
         evaluated_at=record.updated_at,
         metadata={**lineage, "bind_receipt_hash": receipt.bind_receipt_hash,
                   "idempotency_key": consumption.idempotency_key},

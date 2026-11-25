@@ -38,7 +38,11 @@ from veritas_os.policy.keycloak_reconciliation_observation import (
     archive_keycloak_reconciliation_observation,
     get_keycloak_reconciliation_observation,
 )
-from veritas_os.policy.keycloak_receipt_outcome import KeycloakReceiptError, publish_keycloak_receipts
+from veritas_os.policy.keycloak_receipt_outcome import (
+    KeycloakReceiptError,
+    publish_keycloak_receipts,
+    read_verified_keycloak_receipts,
+)
 from veritas_os.policy.keycloak_role_grant_binding import (
     ACTION,
     KeycloakRoleGrantTarget,
@@ -886,6 +890,46 @@ async def _rehearse_receipt_publication(operation_id, original, replacement, *, 
         await close_pool()
 
 
+async def _reject_corrupted_receipt_bundles(operation_id, bundle):
+    from psycopg.types.json import Jsonb
+
+    from veritas_os.storage.db import get_pool
+
+    stored = bundle.model_dump(mode="json")
+    missing_outcome = {key: value for key, value in stored.items() if key != "outcome_receipt"}
+    other_operation = str(uuid4())
+    wrong_outcome = {
+        **stored["outcome_receipt"],
+        "operation_id": other_operation,
+        "outcome_receipt_id": f"outcome-{other_operation}",
+    }
+    wrong_outcome.pop("outcome_hash")
+    wrong_outcome["outcome_hash"] = sha256_of_canonical_json(wrong_outcome)
+    substituted = {**stored, "outcome_receipt": wrong_outcome}
+    substituted.pop("bundle_hash")
+    substituted["bundle_hash"] = sha256_of_canonical_json(substituted)
+    invalid_hash = {**stored, "bundle_hash": "0" * 64}
+    pool = await get_pool()
+
+    async def replace_bundle(payload):
+        async with pool.connection() as conn:
+            await conn.execute(
+                "UPDATE bind_keycloak_dispatch_intents SET receipt_bundle=%s WHERE operation_id=%s",
+                (Jsonb(payload), operation_id),
+            )
+
+    try:
+        for mutation in (missing_outcome, substituted, invalid_hash):
+            await replace_bundle(mutation)
+            with pytest.raises(KeycloakReceiptError, match="KGR_RECEIPT_READ_INTEGRITY_FAILED"):
+                await read_verified_keycloak_receipts(operation_id)
+    finally:
+        try:
+            await replace_bundle(stored)
+        finally:
+            await close_pool()
+
+
 @pytest.mark.parametrize("keycloak", [True], indirect=True)
 @pytest.mark.parametrize("send", [False, True], ids=["kill-before-post", "kill-after-lost-response"])
 @pytest.mark.skipif(
@@ -974,13 +1018,29 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         assert final_record == row and report["confirmation_hash"] is None
         assert verified is None
     receipts = asyncio.run(_rehearse_receipt_publication(operation_id, original, replacement, confirmed=send))
+    audit_file = tmp_path / "verified-receipts.json"
+    audit_code = (
+        "import asyncio, json, sys; from pathlib import Path; "
+        "from veritas_os.policy.keycloak_receipt_outcome import read_verified_keycloak_receipts; "
+        "bundle = asyncio.run(read_verified_keycloak_receipts(sys.argv[1])); "
+        "result = None if bundle is None else bundle.model_dump(mode='json'); "
+        "Path(sys.argv[2]).write_text(json.dumps(result), encoding='utf-8')"
+    )
+    subprocess.run(
+        [sys.executable, "-c", audit_code, operation_id, str(audit_file)],
+        cwd=Path(__file__).resolve().parents[2], check=True, timeout=60,
+        env=recovery_env,
+    )
+    audit_result = json.loads(audit_file.read_text(encoding="utf-8"))
     if send:
         assert receipts is not None
+        assert audit_result == receipts.model_dump(mode="json")
         lineage = receipts.bind_receipt["governance_identity"]
         assert lineage["authorization_id"] == row.authorization_id
         assert lineage["consumption_id"] == row.consumption_id
         assert lineage["reconciliation_evidence_hash"] == report["confirmation_hash"]
         assert receipts.outcome_receipt["bind_receipt_id"] == receipts.bind_receipt["bind_receipt_id"]
         assert receipts.outcome_receipt["observed_effects"][0]["audit_event_id"] == report["audit_id"]
+        asyncio.run(_reject_corrupted_receipt_bundles(operation_id, receipts))
     else:
-        assert receipts is None
+        assert receipts is None and audit_result is None
