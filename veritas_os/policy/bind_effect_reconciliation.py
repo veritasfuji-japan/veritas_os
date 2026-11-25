@@ -1012,7 +1012,9 @@ class PostgresAtomicEffectStateStore:
                     "AND consumption_id=%s AND consumption_hash=%s "
                     "AND execution_intent_id=%s AND idempotency_key=%s "
                     "AND effect_provenance=%s AND state=%s "
-                    "AND revision=%s AND reconciliation_archive IS NULL RETURNING operation_id",
+                    "AND revision=%s AND reconciliation_archive IS NULL "
+                    "AND NOT EXISTS (SELECT 1 FROM bind_keycloak_dispatch_intents AS k "
+                    "WHERE k.operation_id=bind_effect_states.operation_id) RETURNING operation_id",
                     (
                         record.state.value,
                         record.revision,

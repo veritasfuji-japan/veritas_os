@@ -101,6 +101,18 @@ existed. The separate role observation shows the mapping was present at the
 read. It does not assert that the request created a new mapping or that the
 mapping will remain present afterward.
 
+## Rehearsal confirmation
+
+The confirmation service reloads the persisted reservation and observation,
+then uses a trusted read-only source to recheck the uniquely matching audit
+event and the direct role mapping. The approved deployment policy digest must
+bind the expected writer identities and the verifier profile. The final
+PostgreSQL update compares the original pending reservation and archived
+observation and records the confirmation digest. An absent or changed mapping,
+missing or ambiguous audit evidence, or an older unbound verifier profile
+leaves the operation unresolved. Confirmation observes the mapping at the
+fresh read and grants no authority to send again.
+
 ## Implementation acceptance
 
 Exercise the adapter as a separate process against isolated Keycloak and real

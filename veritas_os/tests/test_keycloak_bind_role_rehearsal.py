@@ -27,6 +27,11 @@ from veritas_os.policy.keycloak_dispatch_reservation import (
     get_keycloak_dispatch_intent,
     reserve_keycloak_dispatch,
 )
+from veritas_os.policy.keycloak_reconciliation import (
+    AUDIT_PAGE_LIMIT,
+    confirm_keycloak_reconciliation,
+    keycloak_reconciliation_policy_digest,
+)
 from veritas_os.policy.keycloak_reconciliation_observation import (
     KeycloakReconciliationObservation,
     archive_keycloak_reconciliation_observation,
@@ -65,7 +70,6 @@ pytestmark = [
 
 ORIGIN = "http://127.0.0.1:18080"
 ROLE = "report-viewer"
-AUDIT_PAGE_LIMIT = 100
 
 
 def expect(response: httpx.Response, status: int) -> httpx.Response:
@@ -570,14 +574,12 @@ async def test_keycloak_post_timeout_reconciliation_checks_current_role(
         assert bridge.writes == upstream.post_attempts == 1
 
 
-def _issue_durable_grant(directory, target, event_id):
+def _issue_durable_grant(directory, target, event_id, deployment_policy_digest):
     request = {
         "target": target,
         "event_id": event_id,
         "attempt_id": str(uuid4()),
-        "deployment_policy_digest": sha256_of_canonical_json({
-            "profile": "disposable-keycloak-durable-rehearsal",
-        }),
+        "deployment_policy_digest": deployment_policy_digest,
     }
     binding = build_keycloak_role_grant_binding(**request)
     authorization, inputs = issue_for_action(
@@ -746,12 +748,45 @@ async def _read_durable_grant(operation_id, record_hash, keycloak):
             assert sorted(results) == [False, True]
 
         assert await store.get(operation_id) == row
+        async with httpx.AsyncClient(
+            base_url=ORIGIN, trust_env=False, timeout=3, event_hooks={"request": [require_read]},
+        ) as verifier_client:
+            verifier = KeycloakBridge(verifier_client, keycloak, None)
+
+            async def read_events(intent):
+                assert intent.endpoint_url == recovered.target.origin + verifier.path
+                return await verifier.audit_events(require_available=True)
+
+            async def read_mappings(intent):
+                assert intent.endpoint_url == recovered.target.origin + verifier.path
+                return await verifier.mappings()
+
+            async def missing_mappings(_intent):
+                return []
+
+            verifier_inputs = {
+                "writer_user": keycloak["writer_user"],
+                "writer_client": keycloak["writer_client"],
+                "read_admin_events": read_events,
+            }
+            assert await confirm_keycloak_reconciliation(
+                operation_id, **verifier_inputs, read_direct_mappings=missing_mappings,
+            ) is None
+            assert await store.get(operation_id) == row
+            confirmed = await confirm_keycloak_reconciliation(
+                operation_id, **verifier_inputs, read_direct_mappings=read_mappings,
+            )
+            assert await confirm_keycloak_reconciliation(
+                operation_id, **verifier_inputs, read_direct_mappings=read_mappings,
+            ) is None
+
         return {
             "attempt_id": recovered.attempt_id,
             "grant_events": len(grant_events),
             "audit_id": audit_id,
             "mappings": mappings,
             "archive": observation.model_dump(mode="json") if observation is not None else None,
+            "confirmation_hash": confirmed.reconciliation_evidence_hash if confirmed else None,
         }
     finally:
         await close_pool()
@@ -759,7 +794,10 @@ async def _read_durable_grant(operation_id, record_hash, keycloak):
 
 async def _read_observation_after_recovery(operation_id):
     try:
-        return await get_keycloak_reconciliation_observation(operation_id)
+        return (
+            await get_keycloak_reconciliation_observation(operation_id),
+            await PostgresAtomicEffectStateStore().get(operation_id),
+        )
     finally:
         await close_pool()
 
@@ -785,8 +823,11 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         role_name=keycloak["role"]["name"],
     )
     event_id = f"assignment-{uuid4().hex}"
+    policy_digest = keycloak_reconciliation_policy_digest(
+        keycloak["writer_user"], keycloak["writer_client"],
+    )
     attempts = [
-        _issue_durable_grant(tmp_path_factory.mktemp("keycloak-durable"), target, event_id)
+        _issue_durable_grant(tmp_path_factory.mktemp("keycloak-durable"), target, event_id, policy_digest)
         for _ in range(2)
     ]
     operation_id, record_hash = _kill_dispatch_worker(attempts, keycloak["writer"], send)
@@ -828,11 +869,17 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
     assert report["grant_events"] == int(send)
     assert (report["audit_id"] is not None) is send
     assert report["mappings"] == ([keycloak["role"]] if send else [])
-    archive = asyncio.run(_read_observation_after_recovery(operation_id))
+    archive, final_record = asyncio.run(_read_observation_after_recovery(operation_id))
     if send:
         assert archive is not None
         assert archive.model_dump(mode="json") == report["archive"]
         assert str(archive.audit_event_id) == report["audit_id"]
         assert archive.reservation_record_hash == record_hash
+        assert final_record is not None
+        assert final_record.state == execution.EffectExecutionState.CONFIRMED_EFFECT
+        assert final_record.revision == row.revision + 1
+        assert final_record.reconciliation_evidence_hash == report["confirmation_hash"]
+        assert final_record.reconciliation_evidence_hash is not None
     else:
         assert archive is None and report["archive"] is None
+        assert final_record == row and report["confirmation_hash"] is None
