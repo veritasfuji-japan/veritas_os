@@ -637,7 +637,7 @@ async def _dispatch_for_process_crash(attempts, writer_token, send, ready):
 
     # Publish the crash checkpoint only after the reservation commit and, when
     # requested, after Keycloak has accepted the POST and its response was lost.
-    ready.send_bytes(winner.operation_id.encode("ascii"))
+    ready.send_bytes(json.dumps([winner.operation_id, winner.record_hash]).encode("ascii"))
     await asyncio.Event().wait()
 
 
@@ -656,7 +656,7 @@ def _kill_dispatch_worker(attempts, writer_token, send):
         ready.close()
         try:
             assert checkpoint.poll(60), "sender did not reach the crash checkpoint"
-            operation_id = checkpoint.recv_bytes(256).decode("ascii")
+            operation_id, record_hash = json.loads(checkpoint.recv_bytes(256))
             assert worker.is_alive()
         finally:
             if worker.is_alive():
@@ -666,26 +666,30 @@ def _kill_dispatch_worker(attempts, writer_token, send):
             exit_code = worker.exitcode
             worker.close()
     assert exit_code == -signal.SIGKILL
-    return operation_id
+    return operation_id, record_hash
 
 
-async def _check_dispatch_claims_after_crash(attempts, operation_id):
+async def _check_dispatch_claims_after_crash(attempts, operation_id, record_hash):
     try:
-        row = await PostgresAtomicEffectStateStore().get(operation_id)
+        store = PostgresAtomicEffectStateStore()
+        row = await store.get(operation_id)
         assert row is not None and row.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+        assert row.record_hash == record_hash
         for attempt in attempts:
             assert await reserve_keycloak_dispatch(**attempt) is None
+        assert await store.get(operation_id) == row
         return row
     finally:
         await close_pool()
 
 
-async def _read_durable_grant(operation_id, keycloak):
+async def _read_durable_grant(operation_id, record_hash, keycloak):
     """Recover from PostgreSQL with only the two Keycloak read credentials."""
     try:
         store = PostgresAtomicEffectStateStore()
         row = await store.get(operation_id)
         assert row is not None and row.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+        assert row.record_hash == record_hash
         recovered = await get_keycloak_dispatch_intent(operation_id)
         assert recovered is not None
         binding = verify_keycloak_role_grant_binding(
@@ -750,8 +754,8 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         _issue_durable_grant(tmp_path_factory.mktemp("keycloak-durable"), target, event_id)
         for _ in range(2)
     ]
-    operation_id = _kill_dispatch_worker(attempts, keycloak["writer"], send)
-    row = asyncio.run(_check_dispatch_claims_after_crash(attempts, operation_id))
+    operation_id, record_hash = _kill_dispatch_worker(attempts, keycloak["writer"], send)
+    row = asyncio.run(_check_dispatch_claims_after_crash(attempts, operation_id, record_hash))
     original, = [a for a in attempts if a["consumption"].consumption_id == row.consumption_id]
 
     readers = {
@@ -763,13 +767,26 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
     code = (
         "import asyncio, json, sys; from pathlib import Path; "
         "from veritas_os.tests.test_keycloak_bind_role_rehearsal import _read_durable_grant; "
-        "result = asyncio.run(_read_durable_grant(sys.argv[1], json.load(sys.stdin))); "
-        "Path(sys.argv[2]).write_text(json.dumps(result), encoding='utf-8')"
+        "result = asyncio.run(_read_durable_grant(sys.argv[1], sys.argv[2], json.load(sys.stdin))); "
+        "Path(sys.argv[3]).write_text(json.dumps(result), encoding='utf-8')"
     )
+    # The test runner has Keycloak bootstrap credentials. Pass only database settings.
+    recovery_env = {
+        name: os.environ[name]
+        for name in (
+            "VERITAS_DATABASE_URL",
+            "VERITAS_DB_CONNECT_TIMEOUT",
+            "VERITAS_DB_POOL_MIN_SIZE",
+            "VERITAS_DB_POOL_MAX_SIZE",
+            "VERITAS_DB_SSLMODE",
+            "VERITAS_DB_STATEMENT_TIMEOUT_MS",
+        )
+        if name in os.environ
+    }
     subprocess.run(
-        [sys.executable, "-c", code, operation_id, str(result_file)],
+        [sys.executable, "-c", code, operation_id, record_hash, str(result_file)],
         cwd=Path(__file__).resolve().parents[2], check=True, timeout=60,
-        input=json.dumps(readers), text=True,
+        env=recovery_env, input=json.dumps(readers), text=True,
     )
     report = json.loads(result_file.read_text(encoding="utf-8"))
     assert report["attempt_id"] == original["attempt_id"]
