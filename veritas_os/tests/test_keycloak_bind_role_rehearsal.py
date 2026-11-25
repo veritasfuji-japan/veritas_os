@@ -4,8 +4,13 @@ import asyncio
 from dataclasses import replace
 from datetime import datetime
 import json
+from multiprocessing import get_all_start_methods, get_context
 import os
+from pathlib import Path
 from secrets import token_urlsafe
+import signal
+import subprocess
+import sys
 from time import time_ns
 from uuid import uuid4
 
@@ -602,17 +607,139 @@ def _issue_durable_grant(directory, target, event_id):
     return request | inputs | {"authorization": authorization, "consumption": consumption}
 
 
-@pytest.mark.asyncio
+async def _dispatch_for_process_crash(attempts, writer_token, send, ready):
+    consumptions = PostgresAtomicAuthorizationConsumptionStore()
+    for attempt in attempts:
+        assert await consumptions.consume_once(attempt["consumption"])
+    results = await asyncio.gather(*(reserve_keycloak_dispatch(**attempt) for attempt in attempts))
+    winner, = (record for record in results if record is not None)
+    assert winner.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+
+    if send:
+        original = attempts[results.index(winner)]
+        binding = build_keycloak_role_grant_binding(**{
+            field: original[field]
+            for field in ("target", "event_id", "attempt_id", "deployment_policy_digest")
+        })
+        # Map the signed HTTPS identity to the disposable loopback server.
+        transport = KeycloakPostTimeout(forward=True)
+        async with httpx.AsyncClient(
+            base_url=ORIGIN, transport=transport, trust_env=False,
+            follow_redirects=False, timeout=3,
+        ) as writer:
+            with pytest.raises(httpx.ReadTimeout):
+                await writer.post(
+                    binding.endpoint_url.removeprefix(original["target"].origin),
+                    headers={**bearer(writer_token), "Content-Type": "application/json"},
+                    content=binding.body,
+                )
+        assert transport.post_attempts == 1 and transport.upstream_status == 204
+
+    # Publish the crash checkpoint only after the reservation commit and, when
+    # requested, after Keycloak has accepted the POST and its response was lost.
+    ready.send_bytes(json.dumps([winner.operation_id, winner.record_hash]).encode("ascii"))
+    await asyncio.Event().wait()
+
+
+def _dispatch_crash_worker(attempts, writer_token, send, ready):
+    asyncio.run(_dispatch_for_process_crash(attempts, writer_token, send, ready))
+
+
+def _kill_dispatch_worker(attempts, writer_token, send):
+    context = get_context("fork")
+    checkpoint, ready = context.Pipe(duplex=False)
+    with checkpoint, ready:
+        worker = context.Process(
+            target=_dispatch_crash_worker, args=(attempts, writer_token, send, ready),
+        )
+        worker.start()
+        ready.close()
+        try:
+            assert checkpoint.poll(60), "sender did not reach the crash checkpoint"
+            operation_id, record_hash = json.loads(checkpoint.recv_bytes(256))
+            assert worker.is_alive()
+        finally:
+            if worker.is_alive():
+                worker.kill()
+            worker.join(timeout=10)
+            assert worker.exitcode is not None, "sender did not exit after SIGKILL"
+            exit_code = worker.exitcode
+            worker.close()
+    assert exit_code == -signal.SIGKILL
+    return operation_id, record_hash
+
+
+async def _check_dispatch_claims_after_crash(attempts, operation_id, record_hash):
+    try:
+        store = PostgresAtomicEffectStateStore()
+        row = await store.get(operation_id)
+        assert row is not None and row.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+        assert row.record_hash == record_hash
+        for attempt in attempts:
+            assert await reserve_keycloak_dispatch(**attempt) is None
+        assert await store.get(operation_id) == row
+        return row
+    finally:
+        await close_pool()
+
+
+async def _read_durable_grant(operation_id, record_hash, keycloak):
+    """Recover from PostgreSQL with only the two Keycloak read credentials."""
+    try:
+        store = PostgresAtomicEffectStateStore()
+        row = await store.get(operation_id)
+        assert row is not None and row.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+        assert row.record_hash == record_hash
+        recovered = await get_keycloak_dispatch_intent(operation_id)
+        assert recovered is not None
+        binding = verify_keycloak_role_grant_binding(
+            target=recovered.target,
+            event_id=recovered.event_id,
+            attempt_id=recovered.attempt_id,
+            deployment_policy_digest=recovered.deployment_policy_digest,
+            approved_reference=recovered.approved_reference,
+        )
+
+        async def require_read(request: httpx.Request) -> None:
+            assert request.method == "GET"
+
+        async with httpx.AsyncClient(
+            base_url=ORIGIN, trust_env=False, timeout=3, event_hooks={"request": [require_read]},
+        ) as reader:
+            bridge = KeycloakBridge(reader, keycloak, None)
+            assert binding.endpoint_url == recovered.target.origin + bridge.path
+            bridge.write_started_ms = int(datetime.fromisoformat(row.updated_at).timestamp() * 1000)
+            events = await bridge.audit_events(require_available=True)
+            assert isinstance(events, list) and len(events) < AUDIT_PAGE_LIMIT
+            audit_id = bridge.audited_operation(events, role_payload=json.loads(binding.body))
+            mappings = await bridge.mappings()
+
+        grant_events = [
+            event for event in events
+            if event.get("resourcePath") == bridge.audit_path and event.get("operationType") == "CREATE"
+        ]
+        assert await store.get(operation_id) == row
+        return {
+            "attempt_id": recovered.attempt_id,
+            "grant_events": len(grant_events),
+            "audit_id": audit_id,
+            "mappings": mappings,
+        }
+    finally:
+        await close_pool()
+
+
 @pytest.mark.parametrize("keycloak", [True], indirect=True)
-@pytest.mark.parametrize("send", [False, True], ids=["exit-before-post", "lost-post-response"])
+@pytest.mark.parametrize("send", [False, True], ids=["kill-before-post", "kill-after-lost-response"])
 @pytest.mark.skipif(
-    not os.getenv("VERITAS_DATABASE_URL", "").startswith("postgresql"),
-    reason="requires the disposable PostgreSQL reservation store",
+    "fork" not in get_all_start_methods()
+    or not os.getenv("VERITAS_DATABASE_URL", "").startswith("postgresql"),
+    reason="requires POSIX process isolation and the disposable PostgreSQL reservation store",
 )
-async def test_keycloak_durable_reservation_recovers_using_only_read_operations(
-    keycloak, tmp_path_factory, send,
+def test_keycloak_durable_reservation_recovers_using_only_read_operations(
+    keycloak, tmp_path, tmp_path_factory, send,
 ):
-    """Compose the durable reservation with an isolated provider and reconnect for recovery."""
+    """Kill the writer at a durable checkpoint and recover in a fresh interpreter."""
     target = KeycloakRoleGrantTarget(
         origin="https://keycloak.example.invalid",
         realm_name=keycloak["realm"],
@@ -627,67 +754,42 @@ async def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         _issue_durable_grant(tmp_path_factory.mktemp("keycloak-durable"), target, event_id)
         for _ in range(2)
     ]
-    try:
-        consumptions = PostgresAtomicAuthorizationConsumptionStore()
-        for attempt in attempts:
-            assert await consumptions.consume_once(attempt["consumption"])
-        results = await asyncio.gather(*(reserve_keycloak_dispatch(**attempt) for attempt in attempts))
-        winner, = (record for record in results if record is not None)
-        assert winner.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+    operation_id, record_hash = _kill_dispatch_worker(attempts, keycloak["writer"], send)
+    row = asyncio.run(_check_dispatch_claims_after_crash(attempts, operation_id, record_hash))
+    original, = [a for a in attempts if a["consumption"].consumption_id == row.consumption_id]
 
-        # This fixture maps the signed HTTPS identity to the disposable loopback server.
-        # Only the worker holding the successful reservation result can enter this block.
-        if send:
-            original = attempts[results.index(winner)]
-            binding = build_keycloak_role_grant_binding(**{
-                field: original[field]
-                for field in ("target", "event_id", "attempt_id", "deployment_policy_digest")
-            })
-            transport = KeycloakPostTimeout(forward=True)
-            async with httpx.AsyncClient(
-                base_url=ORIGIN, transport=transport, trust_env=False,
-                follow_redirects=False, timeout=3,
-            ) as writer:
-                with pytest.raises(httpx.ReadTimeout):
-                    await writer.post(
-                        binding.endpoint_url.removeprefix(target.origin),
-                        headers={**bearer(keycloak["writer"]), "Content-Type": "application/json"},
-                        content=binding.body,
-                    )
-            assert transport.post_attempts == 1 and transport.upstream_status == 204
-
-        # Discard the connection pool and load the original operation through fresh connections.
-        await close_pool()
-        assert await PostgresAtomicEffectStateStore().get(winner.operation_id) == winner
-        for attempt in attempts:
-            assert await reserve_keycloak_dispatch(**attempt) is None
-        recovered = await get_keycloak_dispatch_intent(winner.operation_id)
-        assert recovered is not None
-        recovered_binding = verify_keycloak_role_grant_binding(
-            target=recovered.target,
-            event_id=recovered.event_id,
-            attempt_id=recovered.attempt_id,
-            deployment_policy_digest=recovered.deployment_policy_digest,
-            approved_reference=recovered.approved_reference,
+    readers = {
+        field: keycloak[field]
+        for field in ("realm", "realm_id", "user", "client", "reader", "audit_reader",
+                      "writer_user", "writer_client")
+    }
+    result_file = tmp_path / "read-only-recovery.json"
+    code = (
+        "import asyncio, json, sys; from pathlib import Path; "
+        "from veritas_os.tests.test_keycloak_bind_role_rehearsal import _read_durable_grant; "
+        "result = asyncio.run(_read_durable_grant(sys.argv[1], sys.argv[2], json.load(sys.stdin))); "
+        "Path(sys.argv[3]).write_text(json.dumps(result), encoding='utf-8')"
+    )
+    # The test runner has Keycloak bootstrap credentials. Pass only database settings.
+    recovery_env = {
+        name: os.environ[name]
+        for name in (
+            "VERITAS_DATABASE_URL",
+            "VERITAS_DB_CONNECT_TIMEOUT",
+            "VERITAS_DB_POOL_MIN_SIZE",
+            "VERITAS_DB_POOL_MAX_SIZE",
+            "VERITAS_DB_SSLMODE",
+            "VERITAS_DB_STATEMENT_TIMEOUT_MS",
         )
-
-        async with httpx.AsyncClient(base_url=ORIGIN, trust_env=False, timeout=3) as reader:
-            bridge = KeycloakBridge(reader, keycloak, None)
-            assert recovered_binding.endpoint_url == target.origin + bridge.path
-            bridge.write_started_ms = int(datetime.fromisoformat(winner.updated_at).timestamp() * 1000)
-            events = await bridge.audit_events(require_available=True)
-            assert isinstance(events, list) and len(events) < AUDIT_PAGE_LIMIT
-            payload = json.loads(recovered_binding.body)
-            operation_id = bridge.audited_operation(events, role_payload=payload)
-            mappings = await bridge.mappings()
-
-        grant_events = [
-            event for event in events
-            if event.get("resourcePath") == bridge.audit_path and event.get("operationType") == "CREATE"
-        ]
-        assert len(grant_events) == int(send)
-        assert (operation_id is not None) is send
-        assert mappings == ([keycloak["role"]] if send else [])
-        assert await PostgresAtomicEffectStateStore().get(winner.operation_id) == winner
-    finally:
-        await close_pool()
+        if name in os.environ
+    }
+    subprocess.run(
+        [sys.executable, "-c", code, operation_id, record_hash, str(result_file)],
+        cwd=Path(__file__).resolve().parents[2], check=True, timeout=60,
+        env=recovery_env, input=json.dumps(readers), text=True,
+    )
+    report = json.loads(result_file.read_text(encoding="utf-8"))
+    assert report["attempt_id"] == original["attempt_id"]
+    assert report["grant_events"] == int(send)
+    assert (report["audit_id"] is not None) is send
+    assert report["mappings"] == ([keycloak["role"]] if send else [])
