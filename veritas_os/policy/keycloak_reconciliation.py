@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 from urllib.parse import urlsplit
@@ -27,6 +28,73 @@ from veritas_os.security.hash import sha256_of_canonical_json
 
 AUDIT_PAGE_LIMIT = 100
 _RECHECK_TIMEOUT_SECONDS = 5
+_CONFIRMED_REASON = "KEYCLOAK_AUDIT_AND_DIRECT_MAPPING_REVERIFIED"
+
+
+@dataclass(frozen=True)
+class KeycloakConfirmedReconciliation:
+    """Stored confirmation linked to the approved intent and archived observation."""
+
+    record: EffectStateRecord
+    intent: KeycloakDispatchIntent
+    observation: KeycloakReconciliationObservation
+
+
+def _confirmation_digest(
+    operation_id: str,
+    intent: KeycloakDispatchIntent,
+    observation: KeycloakReconciliationObservation,
+    verified_at: str,
+) -> str:
+    return sha256_of_canonical_json({
+        "format_version": "keycloak-reconciliation-confirmation/v1",
+        "operation_id": operation_id,
+        "policy_digest": intent.deployment_policy_digest,
+        "observation": observation.model_dump(mode="json"),
+        "verified_at": verified_at,
+    })
+
+
+async def read_verified_keycloak_confirmation(
+    operation_id: str,
+) -> KeycloakConfirmedReconciliation | None:
+    """Verify stored confirmation lineage and integrity using PostgreSQL only.
+
+    A pending, missing, or non-Keycloak effect returns None. An inconsistent
+    Keycloak confirmation raises an integrity error. This is historical evidence.
+    """
+    record = await PostgresAtomicEffectStateStore().get(operation_id)
+    if record is None or record.state != EffectExecutionState.CONFIRMED_EFFECT:
+        return None
+    intent = await get_keycloak_dispatch_intent(operation_id)
+    if intent is None and record.reason_code != _CONFIRMED_REASON:
+        return None
+    observation = await get_keycloak_reconciliation_observation(operation_id)
+    try:
+        if intent is None or observation is None:
+            raise ValueError("confirmation lineage is missing")
+        verified_at = datetime.fromisoformat(record.updated_at)
+        if (
+            record.format_version != "bind-effect-state/v2"
+            or record.revision < 2
+            or record.reason_code != _CONFIRMED_REASON
+            or record.authorization_id != intent.authorization_id
+            or record.authorization_hash != intent.authorization_hash
+            or observation.approved_reference != intent.approved_reference
+            or str(observation.attempt_id) != intent.attempt_id
+            or observation.direct_mapping_digest != sha256_of_canonical_json({
+                "id": intent.target.role_id, "name": intent.target.role_name,
+            })
+            or verified_at.utcoffset() is None
+            or verified_at < observation.mapping_observed_at
+            or record.reconciliation_evidence_hash != _confirmation_digest(
+                operation_id, intent, observation, record.updated_at,
+            )
+        ):
+            raise ValueError("confirmation lineage is inconsistent")
+    except ValueError:
+        raise BindEffectStateError("KGR_CONFIRMATION_READ_INTEGRITY_FAILED") from None
+    return KeycloakConfirmedReconciliation(record, intent, observation)
 
 
 def keycloak_reconciliation_policy_digest(writer_user: str, writer_client: str) -> str:
@@ -156,14 +224,10 @@ async def confirm_keycloak_reconciliation(
         state=EffectExecutionState.CONFIRMED_EFFECT.value,
         revision=current.revision + 1,
         updated_at=verified_at,
-        reason_code="KEYCLOAK_AUDIT_AND_DIRECT_MAPPING_REVERIFIED",
-        reconciliation_evidence_hash=sha256_of_canonical_json({
-            "format_version": "keycloak-reconciliation-confirmation/v1",
-            "operation_id": operation_id,
-            "policy_digest": intent.deployment_policy_digest,
-            "observation": observation.model_dump(mode="json"),
-            "verified_at": verified_at,
-        }),
+        reason_code=_CONFIRMED_REASON,
+        reconciliation_evidence_hash=_confirmation_digest(
+            operation_id, intent, observation, verified_at,
+        ),
     )
     record = EffectStateRecord(**values, record_hash=sha256_of_canonical_json(values))
     return await _commit_keycloak_confirmation(current, record, observation)

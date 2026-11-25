@@ -31,6 +31,7 @@ from veritas_os.policy.keycloak_reconciliation import (
     AUDIT_PAGE_LIMIT,
     confirm_keycloak_reconciliation,
     keycloak_reconciliation_policy_digest,
+    read_verified_keycloak_confirmation,
 )
 from veritas_os.policy.keycloak_reconciliation_observation import (
     KeycloakReconciliationObservation,
@@ -797,9 +798,68 @@ async def _read_observation_after_recovery(operation_id):
         return (
             await get_keycloak_reconciliation_observation(operation_id),
             await PostgresAtomicEffectStateStore().get(operation_id),
+            await read_verified_keycloak_confirmation(operation_id),
         )
     finally:
         await close_pool()
+
+
+async def _reject_corrupted_confirmation_lineage(record, observation):
+    from psycopg.types.json import Jsonb
+
+    from veritas_os.storage.db import get_pool
+
+    stored = observation.model_dump(mode="json")
+    mutations = (
+        None,
+        Jsonb({**stored, "attempt_id": str(uuid4())}),
+        Jsonb({**stored, "audit_event_digest": "0" * 64}),
+    )
+    pool = await get_pool()
+
+    async def replace_observation(value):
+        async with pool.connection() as conn:
+            await conn.execute(
+                "UPDATE bind_keycloak_dispatch_intents SET reconciliation_observation=%s "
+                "WHERE operation_id=%s",
+                (value, record.operation_id),
+            )
+
+    async def replace_effect(payload):
+        async with pool.connection() as conn:
+            await conn.execute(
+                "UPDATE bind_effect_states SET execution_intent_id=%s, idempotency_key=%s, "
+                "record_hash=%s, record=%s WHERE operation_id=%s",
+                (
+                    payload["execution_intent_id"], payload["idempotency_key"],
+                    payload["record_hash"], Jsonb(payload), record.operation_id,
+                ),
+            )
+
+    try:
+        try:
+            for value in mutations:
+                await replace_observation(value)
+                with pytest.raises(BindEffectStateError):
+                    await read_verified_keycloak_confirmation(record.operation_id)
+        finally:
+            await replace_observation(Jsonb(stored))
+
+        for field in ("execution_intent_id", "idempotency_key"):
+            mismatched = record.model_dump(mode="json", exclude={"record_hash"})
+            mismatched[field] = str(uuid4())
+            mismatched["record_hash"] = sha256_of_canonical_json(mismatched)
+            await replace_effect(mismatched)
+            # Local integrity remains valid. The separate consumption must reject the mismatch.
+            readback = await PostgresAtomicEffectStateStore().get(record.operation_id)
+            assert readback is not None and getattr(readback, field) == mismatched[field]
+            with pytest.raises(BindEffectStateError, match="KGR_DISPATCH_INTENT_READ_FAILED"):
+                await read_verified_keycloak_confirmation(record.operation_id)
+    finally:
+        try:
+            await replace_effect(record.model_dump(mode="json"))
+        finally:
+            await close_pool()
 
 
 @pytest.mark.parametrize("keycloak", [True], indirect=True)
@@ -869,7 +929,7 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
     assert report["grant_events"] == int(send)
     assert (report["audit_id"] is not None) is send
     assert report["mappings"] == ([keycloak["role"]] if send else [])
-    archive, final_record = asyncio.run(_read_observation_after_recovery(operation_id))
+    archive, final_record, verified = asyncio.run(_read_observation_after_recovery(operation_id))
     if send:
         assert archive is not None
         assert archive.model_dump(mode="json") == report["archive"]
@@ -880,6 +940,11 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         assert final_record.revision == row.revision + 1
         assert final_record.reconciliation_evidence_hash == report["confirmation_hash"]
         assert final_record.reconciliation_evidence_hash is not None
+        assert verified is not None
+        assert verified.record == final_record and verified.observation == archive
+        assert verified.intent.attempt_id == original["attempt_id"]
+        asyncio.run(_reject_corrupted_confirmation_lineage(final_record, archive))
     else:
         assert archive is None and report["archive"] is None
         assert final_record == row and report["confirmation_hash"] is None
+        assert verified is None

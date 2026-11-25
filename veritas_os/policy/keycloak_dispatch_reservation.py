@@ -147,6 +147,8 @@ async def get_keycloak_dispatch_intent(operation_id: str) -> KeycloakDispatchInt
                 "ON c.consumption_id=e.consumption_id AND c.consumption_hash=e.consumption_hash "
                 "AND c.authorization_id=e.authorization_id "
                 "AND c.authorization_hash=e.authorization_hash "
+                "AND c.execution_intent_id=e.execution_intent_id "
+                "AND c.idempotency_key=e.idempotency_key "
                 "WHERE k.operation_id=%s",
                 (operation_id,),
             )
