@@ -46,18 +46,19 @@ async def archive_keycloak_reconciliation_observation(
         pool = await get_pool()
         async with pool.connection() as conn:
             cursor = await conn.execute(
-                "UPDATE bind_keycloak_dispatch_intents AS k "
+                "WITH pending AS ("
+                "SELECT operation_id FROM bind_effect_states "
+                "WHERE operation_id=%s AND state=%s AND record_hash=%s FOR SHARE"
+                ") UPDATE bind_keycloak_dispatch_intents AS k "
                 "SET reconciliation_observation=%s "
-                "FROM bind_effect_states AS e "
-                "WHERE e.operation_id=k.operation_id AND k.operation_id=%s "
-                "AND e.state=%s AND e.record_hash=%s "
+                "FROM pending WHERE pending.operation_id=k.operation_id "
                 "AND k.intent->>'approved_reference'=%s AND k.intent->>'attempt_id'=%s "
                 "AND k.reconciliation_observation IS NULL RETURNING k.operation_id",
                 (
-                    Jsonb(observation.model_dump(mode="json")),
                     operation_id,
                     EffectExecutionState.EFFECT_UNKNOWN.value,
                     observation.reservation_record_hash,
+                    Jsonb(observation.model_dump(mode="json")),
                     observation.approved_reference,
                     str(observation.attempt_id),
                 ),

@@ -795,3 +795,84 @@ async def test_keycloak_dispatch_reservation_does_not_recover_ownership_after_lo
     assert recovered.attempt_id == args["attempt_id"]
     assert recovered.authorization_hash == consumption.live_adapter_bind_authorization_hash
     assert await reserve_keycloak_dispatch(**args) is None
+
+
+@pytest.mark.asyncio
+async def test_keycloak_archive_rechecks_reservation_after_concurrent_update(
+    keycloak_signed_reservations,
+) -> None:
+    """A writer that commits a new reservation revision invalidates a waiting archive."""
+    from datetime import UTC, datetime
+
+    from psycopg.types.json import Jsonb
+
+    from veritas_os.policy.keycloak_dispatch_reservation import (
+        get_keycloak_dispatch_intent,
+        reserve_keycloak_dispatch,
+    )
+    from veritas_os.policy.keycloak_reconciliation_observation import (
+        KeycloakReconciliationObservation,
+        archive_keycloak_reconciliation_observation,
+        get_keycloak_reconciliation_observation,
+    )
+    from veritas_os.storage.db import get_pool
+
+    args = keycloak_signed_reservations[0]
+    consumption = args["consumption"]
+    assert await PostgresAtomicAuthorizationConsumptionStore().consume_once(consumption)
+    reservation = await reserve_keycloak_dispatch(**args)
+    assert reservation is not None
+    operation_id = reservation.operation_id
+    intent = await get_keycloak_dispatch_intent(operation_id)
+    assert intent is not None
+    now = datetime.now(UTC)
+    observation = KeycloakReconciliationObservation(
+        reservation_record_hash=reservation.record_hash,
+        approved_reference=intent.approved_reference,
+        attempt_id=intent.attempt_id,
+        audit_event_id=uuid4(),
+        audit_event_digest="a" * 64,
+        direct_mapping_digest="b" * 64,
+        mapping_observed_at=now,
+    )
+    updated = _build_record(
+        consumption=consumption,
+        state=EffectExecutionState.EFFECT_UNKNOWN,
+        revision=reservation.revision + 1,
+        updated_at=now.isoformat(),
+        reason_code="RECONCILIATION_STILL_UNKNOWN",
+    )
+    pool = await get_pool()
+    archive = None
+    try:
+        async with pool.connection() as writer:
+            cursor = await writer.execute(
+                "UPDATE bind_effect_states SET revision=%s, record_hash=%s, updated_at=%s, record=%s "
+                "WHERE operation_id=%s AND record_hash=%s RETURNING operation_id",
+                (
+                    updated.revision, updated.record_hash, updated.updated_at,
+                    Jsonb(updated.model_dump(mode="json")), operation_id, reservation.record_hash,
+                ),
+            )
+            assert await cursor.fetchone() == (operation_id,)
+            archive = asyncio.create_task(
+                archive_keycloak_reconciliation_observation(operation_id, observation),
+            )
+            async with asyncio.timeout(10):
+                while True:
+                    assert not archive.done(), "archive completed before the reservation update committed"
+                    blocked = await writer.execute(
+                        "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                        "WHERE pg_backend_pid() = ANY(pg_blocking_pids(pid)))",
+                    )
+                    if await blocked.fetchone() == (True,):
+                        break
+                    await asyncio.sleep(0.01)
+
+        assert await archive is False
+        assert await get_keycloak_reconciliation_observation(operation_id) is None
+        assert await PostgresAtomicEffectStateStore().get(operation_id) == updated
+    finally:
+        if archive is not None:
+            archive.cancel()
+            await asyncio.gather(archive, return_exceptions=True)
