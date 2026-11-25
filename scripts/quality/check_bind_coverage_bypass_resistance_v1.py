@@ -81,6 +81,10 @@ DECLARED_EFFECT_CAPABILITIES = {
         "os",
     ): "process_launch_capable_but_not_used",
     (
+        "veritas_os/policy/keycloak_reconciliation.py",
+        "asyncio",
+    ): "auxiliary_read_only_network",
+    (
         "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
         "asyncio",
     ): "outside_v1_but_declared",
@@ -144,6 +148,10 @@ DECLARED_EFFECT_USAGES: dict[tuple[str, str], tuple[int, str]] = {
     ("veritas_os/policy/debate_safety_policy_runtime_shadow.py", "os.getenv"): (
         1,
         "process_capable_but_non_effect_use",
+    ),
+    ("veritas_os/policy/keycloak_reconciliation.py", "asyncio.timeout"): (
+        1,
+        "synchronization_only",
     ),
     (
         "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
@@ -305,6 +313,11 @@ DECLARED_EFFECT_USAGE_CONTEXTS: dict[tuple[str, str, str], tuple[int, str]] = {
         "build_debate_safety_policy_shadow_diagnostics_from_env",
         "os.getenv",
     ): (1, "process_capable_but_non_effect_use"),
+    (
+        "veritas_os/policy/keycloak_reconciliation.py",
+        "confirm_keycloak_reconciliation",
+        "asyncio.timeout",
+    ): (1, "synchronization_only"),
     (
         "veritas_os/policy/live_adapter_bind_authorization_consumption_store.py",
         "InMemoryAtomicAuthorizationConsumptionStore.__init__",
@@ -541,6 +554,7 @@ DECLARED_REVIEWED_DEPENDENCIES = {
     "asyncio": "effect_capable",
     "base64": "stdlib_non_effect",
     "binascii": "stdlib_non_effect",
+    "collections.abc": "stdlib_non_effect",
     "concurrent.futures": "stdlib_non_effect",
     "contextlib": "stdlib_non_effect",
     "contextvars": "stdlib_non_effect",
