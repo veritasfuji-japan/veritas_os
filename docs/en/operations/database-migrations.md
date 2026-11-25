@@ -129,6 +129,15 @@ effect state or grant dispatch authority. Back up this column with the dispatch
 intents and their referenced Bind records. Downgrade is rejected while any
 archived observation exists.
 
+### Keycloak receipt bundle (0018)
+
+Revision `0018` adds a nullable, write-once BindReceipt and Outcome pair to the
+Keycloak dispatch intent. Publication revalidates historical authorization,
+consumption and confirmed evidence. The artifacts record the reconciled effect
+and do not grant authority or publish a TrustLog entry. Retain the receipt
+column with the dispatch intent and observation in backups. Downgrade is
+rejected while any receipt pair exists.
+
 ### Downgrade (rollback)
 
 ```bash

@@ -38,6 +38,7 @@ from veritas_os.policy.keycloak_reconciliation_observation import (
     archive_keycloak_reconciliation_observation,
     get_keycloak_reconciliation_observation,
 )
+from veritas_os.policy.keycloak_receipt_outcome import KeycloakReceiptError, publish_keycloak_receipts
 from veritas_os.policy.keycloak_role_grant_binding import (
     ACTION,
     KeycloakRoleGrantTarget,
@@ -862,6 +863,29 @@ async def _reject_corrupted_confirmation_lineage(record, observation):
             await close_pool()
 
 
+async def _rehearse_receipt_publication(operation_id, original, replacement, *, confirmed):
+    async def publish(attempt):
+        return await publish_keycloak_receipts(
+            operation_id, attempt["authorization"], source_inputs=attempt["source_inputs"],
+            governance_inputs=attempt["governance_inputs"], trust_inputs=attempt["trust_inputs"],
+        )
+
+    try:
+        with pytest.raises(KeycloakReceiptError, match="KGR_RECEIPT_PUBLICATION_FAILED"):
+            await publish(replacement)
+        if not confirmed:
+            with pytest.raises(KeycloakReceiptError, match="KGR_RECEIPT_PUBLICATION_FAILED"):
+                await publish(original)
+            return None
+        first, second = await asyncio.gather(publish(original), publish(original))
+        assert first == second
+        await close_pool()
+        assert await publish(original) == first
+        return first
+    finally:
+        await close_pool()
+
+
 @pytest.mark.parametrize("keycloak", [True], indirect=True)
 @pytest.mark.parametrize("send", [False, True], ids=["kill-before-post", "kill-after-lost-response"])
 @pytest.mark.skipif(
@@ -893,6 +917,7 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
     operation_id, record_hash = _kill_dispatch_worker(attempts, keycloak["writer"], send)
     row = asyncio.run(_check_dispatch_claims_after_crash(attempts, operation_id, record_hash))
     original, = [a for a in attempts if a["consumption"].consumption_id == row.consumption_id]
+    replacement, = [a for a in attempts if a is not original]
 
     readers = {
         field: keycloak[field]
@@ -948,3 +973,14 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         assert archive is None and report["archive"] is None
         assert final_record == row and report["confirmation_hash"] is None
         assert verified is None
+    receipts = asyncio.run(_rehearse_receipt_publication(operation_id, original, replacement, confirmed=send))
+    if send:
+        assert receipts is not None
+        lineage = receipts.bind_receipt["governance_identity"]
+        assert lineage["authorization_id"] == row.authorization_id
+        assert lineage["consumption_id"] == row.consumption_id
+        assert lineage["reconciliation_evidence_hash"] == report["confirmation_hash"]
+        assert receipts.outcome_receipt["bind_receipt_id"] == receipts.bind_receipt["bind_receipt_id"]
+        assert receipts.outcome_receipt["observed_effects"][0]["audit_event_id"] == report["audit_id"]
+    else:
+        assert receipts is None
