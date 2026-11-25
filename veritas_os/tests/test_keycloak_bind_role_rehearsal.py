@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 from multiprocessing import get_all_start_methods, get_context
 import os
@@ -26,6 +26,11 @@ from veritas_os.policy.bind_effect_reconciliation import (
 from veritas_os.policy.keycloak_dispatch_reservation import (
     get_keycloak_dispatch_intent,
     reserve_keycloak_dispatch,
+)
+from veritas_os.policy.keycloak_reconciliation_observation import (
+    KeycloakReconciliationObservation,
+    archive_keycloak_reconciliation_observation,
+    get_keycloak_reconciliation_observation,
 )
 from veritas_os.policy.keycloak_role_grant_binding import (
     ACTION,
@@ -713,18 +718,48 @@ async def _read_durable_grant(operation_id, record_hash, keycloak):
             assert isinstance(events, list) and len(events) < AUDIT_PAGE_LIMIT
             audit_id = bridge.audited_operation(events, role_payload=json.loads(binding.body))
             mappings = await bridge.mappings()
+            observed_at = datetime.now(UTC)
 
         grant_events = [
             event for event in events
             if event.get("resourcePath") == bridge.audit_path and event.get("operationType") == "CREATE"
         ]
+        observation = None
+        role = {"id": recovered.target.role_id, "name": recovered.target.role_name}
+        if audit_id is not None and role in mappings:
+            event, = (event for event in grant_events if event.get("id") == audit_id)
+            observation = KeycloakReconciliationObservation(
+                reservation_record_hash=record_hash,
+                approved_reference=recovered.approved_reference,
+                attempt_id=recovered.attempt_id,
+                audit_event_id=audit_id,
+                audit_event_digest=sha256_of_canonical_json(event),
+                direct_mapping_digest=sha256_of_canonical_json(role),
+                mapping_observed_at=observed_at,
+            )
+            stale = observation.model_copy(update={"reservation_record_hash": "0" * 64})
+            assert not await archive_keycloak_reconciliation_observation(operation_id, stale)
+            results = await asyncio.gather(*(
+                archive_keycloak_reconciliation_observation(operation_id, observation)
+                for _ in range(2)
+            ))
+            assert sorted(results) == [False, True]
+
         assert await store.get(operation_id) == row
         return {
             "attempt_id": recovered.attempt_id,
             "grant_events": len(grant_events),
             "audit_id": audit_id,
             "mappings": mappings,
+            "archive": observation.model_dump(mode="json") if observation is not None else None,
         }
+    finally:
+        await close_pool()
+
+
+async def _read_observation_after_recovery(operation_id):
+    try:
+        return await get_keycloak_reconciliation_observation(operation_id)
     finally:
         await close_pool()
 
@@ -793,3 +828,11 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
     assert report["grant_events"] == int(send)
     assert (report["audit_id"] is not None) is send
     assert report["mappings"] == ([keycloak["role"]] if send else [])
+    archive = asyncio.run(_read_observation_after_recovery(operation_id))
+    if send:
+        assert archive is not None
+        assert archive.model_dump(mode="json") == report["archive"]
+        assert str(archive.audit_event_id) == report["audit_id"]
+        assert archive.reservation_record_hash == record_hash
+    else:
+        assert archive is None and report["archive"] is None

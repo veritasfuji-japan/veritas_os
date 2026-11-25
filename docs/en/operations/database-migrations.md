@@ -118,6 +118,17 @@ Back up `bind_keycloak_dispatch_intents` together with the Bind effect-state
 and authorization-consumption tables. The migration refuses downgrade while
 any Keycloak dispatch intent remains, preserving recovery evidence.
 
+### Keycloak reconciliation observation (0017)
+
+Revision `0017` adds a nullable archive to each Keycloak dispatch intent.
+The archive preserves the first positive point-in-time observation of a matching
+audit event and direct role mapping. It includes their digests, the original
+reservation record hash and attempt identity, and the mapping observation time.
+An empty archive leaves the outcome unresolved. Archiving does not transition
+effect state or grant dispatch authority. Back up this column with the dispatch
+intents and their referenced Bind records. Downgrade is rejected while any
+archived observation exists.
+
 ### Downgrade (rollback)
 
 ```bash
