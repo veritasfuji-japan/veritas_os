@@ -113,6 +113,12 @@ missing or ambiguous audit evidence, or an older unbound verifier profile
 leaves the operation unresolved. Confirmation observes the mapping at the
 fresh read and grants no authority to send again.
 
+The audit reader reconstructs the confirmation digest from the stored effect
+record, approved intent, and archived observation in PostgreSQL. It checks the
+stored authorization and consumption lineage and rejects missing or mismatching
+evidence for a confirmed operation. This read path does not contact Keycloak.
+The result describes the historical confirmation and its observed role mapping.
+
 ## Implementation acceptance
 
 Exercise the adapter as a separate process against isolated Keycloak and real

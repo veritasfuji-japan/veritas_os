@@ -31,6 +31,7 @@ from veritas_os.policy.keycloak_reconciliation import (
     AUDIT_PAGE_LIMIT,
     confirm_keycloak_reconciliation,
     keycloak_reconciliation_policy_digest,
+    read_verified_keycloak_confirmation,
 )
 from veritas_os.policy.keycloak_reconciliation_observation import (
     KeycloakReconciliationObservation,
@@ -797,9 +798,43 @@ async def _read_observation_after_recovery(operation_id):
         return (
             await get_keycloak_reconciliation_observation(operation_id),
             await PostgresAtomicEffectStateStore().get(operation_id),
+            await read_verified_keycloak_confirmation(operation_id),
         )
     finally:
         await close_pool()
+
+
+async def _reject_corrupted_confirmation_observations(operation_id, observation):
+    from psycopg.types.json import Jsonb
+
+    from veritas_os.storage.db import get_pool
+
+    stored = observation.model_dump(mode="json")
+    mutations = (
+        None,
+        Jsonb({**stored, "attempt_id": str(uuid4())}),
+        Jsonb({**stored, "audit_event_digest": "0" * 64}),
+    )
+    pool = await get_pool()
+
+    async def replace_observation(value):
+        async with pool.connection() as conn:
+            await conn.execute(
+                "UPDATE bind_keycloak_dispatch_intents SET reconciliation_observation=%s "
+                "WHERE operation_id=%s",
+                (value, operation_id),
+            )
+
+    try:
+        for value in mutations:
+            await replace_observation(value)
+            with pytest.raises(BindEffectStateError):
+                await read_verified_keycloak_confirmation(operation_id)
+    finally:
+        try:
+            await replace_observation(Jsonb(stored))
+        finally:
+            await close_pool()
 
 
 @pytest.mark.parametrize("keycloak", [True], indirect=True)
@@ -869,7 +904,7 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
     assert report["grant_events"] == int(send)
     assert (report["audit_id"] is not None) is send
     assert report["mappings"] == ([keycloak["role"]] if send else [])
-    archive, final_record = asyncio.run(_read_observation_after_recovery(operation_id))
+    archive, final_record, verified = asyncio.run(_read_observation_after_recovery(operation_id))
     if send:
         assert archive is not None
         assert archive.model_dump(mode="json") == report["archive"]
@@ -880,6 +915,11 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         assert final_record.revision == row.revision + 1
         assert final_record.reconciliation_evidence_hash == report["confirmation_hash"]
         assert final_record.reconciliation_evidence_hash is not None
+        assert verified is not None
+        assert verified.record == final_record and verified.observation == archive
+        assert verified.intent.attempt_id == original["attempt_id"]
+        asyncio.run(_reject_corrupted_confirmation_observations(operation_id, archive))
     else:
         assert archive is None and report["archive"] is None
         assert final_record == row and report["confirmation_hash"] is None
+        assert verified is None
