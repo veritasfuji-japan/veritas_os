@@ -804,7 +804,7 @@ async def _read_observation_after_recovery(operation_id):
         await close_pool()
 
 
-async def _reject_corrupted_confirmation_observations(operation_id, observation):
+async def _reject_corrupted_confirmation_lineage(record, observation):
     from psycopg.types.json import Jsonb
 
     from veritas_os.storage.db import get_pool
@@ -822,17 +822,42 @@ async def _reject_corrupted_confirmation_observations(operation_id, observation)
             await conn.execute(
                 "UPDATE bind_keycloak_dispatch_intents SET reconciliation_observation=%s "
                 "WHERE operation_id=%s",
-                (value, operation_id),
+                (value, record.operation_id),
+            )
+
+    async def replace_effect(payload):
+        async with pool.connection() as conn:
+            await conn.execute(
+                "UPDATE bind_effect_states SET execution_intent_id=%s, idempotency_key=%s, "
+                "record_hash=%s, record=%s WHERE operation_id=%s",
+                (
+                    payload["execution_intent_id"], payload["idempotency_key"],
+                    payload["record_hash"], Jsonb(payload), record.operation_id,
+                ),
             )
 
     try:
-        for value in mutations:
-            await replace_observation(value)
-            with pytest.raises(BindEffectStateError):
-                await read_verified_keycloak_confirmation(operation_id)
+        try:
+            for value in mutations:
+                await replace_observation(value)
+                with pytest.raises(BindEffectStateError):
+                    await read_verified_keycloak_confirmation(record.operation_id)
+        finally:
+            await replace_observation(Jsonb(stored))
+
+        for field in ("execution_intent_id", "idempotency_key"):
+            mismatched = record.model_dump(mode="json", exclude={"record_hash"})
+            mismatched[field] = str(uuid4())
+            mismatched["record_hash"] = sha256_of_canonical_json(mismatched)
+            await replace_effect(mismatched)
+            # Local integrity remains valid. The separate consumption must reject the mismatch.
+            readback = await PostgresAtomicEffectStateStore().get(record.operation_id)
+            assert readback is not None and getattr(readback, field) == mismatched[field]
+            with pytest.raises(BindEffectStateError, match="KGR_DISPATCH_INTENT_READ_FAILED"):
+                await read_verified_keycloak_confirmation(record.operation_id)
     finally:
         try:
-            await replace_observation(Jsonb(stored))
+            await replace_effect(record.model_dump(mode="json"))
         finally:
             await close_pool()
 
@@ -918,7 +943,7 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         assert verified is not None
         assert verified.record == final_record and verified.observation == archive
         assert verified.intent.attempt_id == original["attempt_id"]
-        asyncio.run(_reject_corrupted_confirmation_observations(operation_id, archive))
+        asyncio.run(_reject_corrupted_confirmation_lineage(final_record, archive))
     else:
         assert archive is None and report["archive"] is None
         assert final_record == row and report["confirmation_hash"] is None
