@@ -137,6 +137,8 @@ async def read_verified_keycloak_receipts(operation_id: str) -> KeycloakReceiptB
             or outcome.target_resource != dispatch.endpoint_url
             or outcome.action_class != ACTION or outcome.intended_action != ACTION
             or outcome.final_outcome != "COMMITTED" or outcome.committed is not True
+            or outcome.blocked is not False or outcome.escalated is not False
+            or outcome.rolled_back is not False or outcome.rollback_status is not None
             or outcome.postcondition_status != "passed" or outcome.evaluated_at != record.updated_at
             or outcome.observed_effects != [_observed_role_effect(confirmation)]
         ):

@@ -897,18 +897,25 @@ async def _reject_corrupted_receipt_bundles(operation_id, bundle):
 
     stored = bundle.model_dump(mode="json")
     missing_outcome = {key: value for key, value in stored.items() if key != "outcome_receipt"}
+
+    def replace_outcome(**changes):
+        outcome = {**stored["outcome_receipt"], **changes}
+        outcome.pop("outcome_hash")
+        outcome["outcome_hash"] = sha256_of_canonical_json(outcome)
+        pair = {**stored, "outcome_receipt": outcome}
+        pair.pop("bundle_hash")
+        pair["bundle_hash"] = sha256_of_canonical_json(pair)
+        return pair
+
     other_operation = str(uuid4())
-    wrong_outcome = {
-        **stored["outcome_receipt"],
-        "operation_id": other_operation,
-        "outcome_receipt_id": f"outcome-{other_operation}",
-    }
-    wrong_outcome.pop("outcome_hash")
-    wrong_outcome["outcome_hash"] = sha256_of_canonical_json(wrong_outcome)
-    substituted = {**stored, "outcome_receipt": wrong_outcome}
-    substituted.pop("bundle_hash")
-    substituted["bundle_hash"] = sha256_of_canonical_json(substituted)
+    substituted = replace_outcome(operation_id=other_operation, outcome_receipt_id=f"outcome-{other_operation}")
     invalid_hash = {**stored, "bundle_hash": "0" * 64}
+    contradictory_statuses = (
+        replace_outcome(blocked=True),
+        replace_outcome(escalated=True),
+        replace_outcome(rolled_back=True),
+        replace_outcome(rollback_status="performed"),
+    )
     pool = await get_pool()
 
     async def replace_bundle(payload):
@@ -919,7 +926,7 @@ async def _reject_corrupted_receipt_bundles(operation_id, bundle):
             )
 
     try:
-        for mutation in (missing_outcome, substituted, invalid_hash):
+        for mutation in (missing_outcome, substituted, invalid_hash, *contradictory_statuses):
             await replace_bundle(mutation)
             with pytest.raises(KeycloakReceiptError, match="KGR_RECEIPT_READ_INTEGRITY_FAILED"):
                 await read_verified_keycloak_receipts(operation_id)
