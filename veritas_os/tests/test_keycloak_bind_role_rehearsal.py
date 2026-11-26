@@ -1116,8 +1116,6 @@ async def lab_db_pool(monkeypatch):
 
     monkeypatch.setattr(db, "_pool", None)
     try:
-        # Open the shared pool before the contenders start on this loop.
-        await db.get_pool()
         yield
     finally:
         await close_pool()
@@ -1133,6 +1131,7 @@ async def lab_db_pool(monkeypatch):
         "contention",
         "substituted",
         "slow_recheck",
+        "risk_expires",
         "lost_response",
     ],
 )
@@ -1283,7 +1282,7 @@ async def test_keycloak_lab_executor_https_boundary(
             first = issue(tmp_path / "first")
             second = issue(tmp_path / "second") if scenario == "contention" else None
             expected_path = first[1].endpoint_url.removeprefix(target.origin)
-            slow_recheck_triggered = False
+            clock_advanced = False
 
             def wiring(issued):
                 attempt_id, _, artifact, inputs = issued
@@ -1294,17 +1293,26 @@ async def test_keycloak_lab_executor_https_boundary(
 
                 def clock():
                     now = initial + timedelta(seconds=elapsed)
-                    return SandboxClockReading(now, elapsed, now, 0)
+                    uncertainty = 0.25 if scenario == "risk_expires" and elapsed else 0
+                    return SandboxClockReading(now, elapsed, now, uncertainty)
 
                 def load_current(now):
-                    nonlocal elapsed, loads, slow_recheck_triggered
-                    risk, fresh_source = _fresh(inputs, now)
+                    nonlocal elapsed, loads, clock_advanced
                     loads += 1
-                    # Advance only during the post-TLS recheck in this case.
                     # Runner speed does not determine the age of fixture evidence.
-                    if scenario == "slow_recheck" and loads == 3:
-                        elapsed += 2
-                        slow_recheck_triggered = True
+                    if scenario == "risk_expires" and loads == 3:
+                        risk, fresh_source = _fresh(
+                            inputs,
+                            now,
+                            valid_until=(now + timedelta(seconds=0.75)).isoformat(),
+                        )
+                        elapsed += 0.5
+                        clock_advanced = True
+                    else:
+                        risk, fresh_source = _fresh(inputs, now)
+                        if scenario == "slow_recheck" and loads == 3:
+                            elapsed += 2
+                            clock_advanced = True
                     return SandboxCurrentInputs(fresh_source, gov, risk)
 
                 _, _, context = _verified_source(
@@ -1422,7 +1430,7 @@ async def test_keycloak_lab_executor_https_boundary(
                     )
                     assert posts == [first[1].body]
                 else:
-                    assert slow_recheck_triggered
+                    assert clock_advanced
 
             assert len(posts) == (
                 1 if scenario in {"contention", "lost_response"} else 0

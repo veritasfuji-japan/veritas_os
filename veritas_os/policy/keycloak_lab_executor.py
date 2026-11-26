@@ -203,7 +203,7 @@ class KeycloakLabExecutor:
             fresh = self._load_current_inputs(started.now)
             if type(fresh) is not SandboxCurrentInputs:
                 raise KeycloakLabExecutionError("KGR_LAB_CURRENT_INPUTS_REQUIRED")
-            _recheck_native_consumption_inputs(
+            risk, _, _ = _recheck_native_consumption_inputs(
                 verified,
                 governance_inputs=fresh.governance,
                 current_source_inputs=fresh.source,
@@ -217,6 +217,7 @@ class KeycloakLabExecutor:
                 or started.monotonic_seconds < initial.monotonic_seconds
                 or not 0 <= (finished.now - started.now).total_seconds() <= 1
                 or not 0 <= finished.monotonic_seconds - started.monotonic_seconds <= 1
+                or latest >= datetime.fromisoformat(risk.risk_decision.valid_until)
                 or credential.expires_at <= latest
             ):
                 raise KeycloakLabExecutionError("KGR_LAB_SEND_WINDOW_INVALID")

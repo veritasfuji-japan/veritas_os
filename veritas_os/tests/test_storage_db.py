@@ -221,6 +221,50 @@ class TestGetPool:
                     assert pool2 is pool
 
     @pytest.mark.asyncio
+    async def test_concurrent_pool_waiters_share_initialization(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://u:p@host/db")
+        started, ready = asyncio.Event(), asyncio.Event()
+
+        async def open_pool(*, wait):
+            assert wait
+            started.set()
+            await ready.wait()
+
+        pool = AsyncMock()
+        pool.open.side_effect = open_pool
+        pool_factory = MagicMock(return_value=pool)
+        monkeypatch.setattr("psycopg_pool.AsyncConnectionPool", pool_factory)
+
+        first = asyncio.create_task(db.get_pool())
+        await started.wait()
+        other = [asyncio.create_task(db.get_pool()) for _ in range(3)]
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        ready.set()
+
+        assert all(result is pool for result in await asyncio.gather(*other))
+        pool_factory.assert_called_once()
+        pool.open.assert_awaited_once_with(wait=True)
+        await db.close_pool()
+        pool.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_failed_pool_initialization_closes_and_can_retry(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://u:p@host/db")
+        failed, replacement = AsyncMock(), AsyncMock()
+        failed.open.side_effect = RuntimeError("could not initialize")
+        pool_factory = MagicMock(side_effect=[failed, replacement])
+        monkeypatch.setattr("psycopg_pool.AsyncConnectionPool", pool_factory)
+
+        with pytest.raises(RuntimeError, match="could not initialize"):
+            await db.get_pool()
+        failed.close.assert_awaited_once()
+        assert await db.get_pool() is replacement
+        assert pool_factory.call_count == 2
+        await db.close_pool()
+
+    @pytest.mark.asyncio
     async def test_close_pool_noop_when_none(self):
         """close_pool should be safe when no pool exists."""
         await db.close_pool()
