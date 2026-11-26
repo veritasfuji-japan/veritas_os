@@ -1116,6 +1116,8 @@ async def lab_db_pool(monkeypatch):
 
     monkeypatch.setattr(db, "_pool", None)
     try:
+        # Open the shared pool before the contenders start on this loop.
+        await db.get_pool()
         yield
     finally:
         await close_pool()
@@ -1125,7 +1127,14 @@ async def lab_db_pool(monkeypatch):
 @pytest.mark.parametrize("keycloak", [True], indirect=True)
 @pytest.mark.parametrize(
     "scenario",
-    ["cancel_first", "lost_commit", "contention", "substituted", "lost_response"],
+    [
+        "cancel_first",
+        "lost_commit",
+        "contention",
+        "substituted",
+        "slow_recheck",
+        "lost_response",
+    ],
 )
 async def test_keycloak_lab_executor_https_boundary(
     keycloak,
@@ -1137,7 +1146,6 @@ async def test_keycloak_lab_executor_https_boundary(
     """Count POSTs through the actual Executor and disposable Keycloak realm."""
     from datetime import timedelta
     import ssl
-    from time import monotonic
 
     from pydantic import SecretBytes
     from veritas_os.policy import keycloak_lab_executor as module
@@ -1275,20 +1283,28 @@ async def test_keycloak_lab_executor_https_boundary(
             first = issue(tmp_path / "first")
             second = issue(tmp_path / "second") if scenario == "contention" else None
             expected_path = first[1].endpoint_url.removeprefix(target.origin)
+            slow_recheck_triggered = False
 
             def wiring(issued):
                 attempt_id, _, artifact, inputs = issued
                 gov, source = inputs["governance_inputs"], inputs["source_inputs"]
-                started = monotonic()
                 initial = gov.verification_now + timedelta(seconds=1)
+                elapsed = 0
+                loads = 0
 
                 def clock():
-                    sampled = monotonic()
-                    now = initial + timedelta(seconds=sampled - started)
-                    return SandboxClockReading(now, sampled, now, 0)
+                    now = initial + timedelta(seconds=elapsed)
+                    return SandboxClockReading(now, elapsed, now, 0)
 
                 def load_current(now):
+                    nonlocal elapsed, loads, slow_recheck_triggered
                     risk, fresh_source = _fresh(inputs, now)
+                    loads += 1
+                    # Advance only during the post-TLS recheck in this case.
+                    # Runner speed does not determine the age of fixture evidence.
+                    if scenario == "slow_recheck" and loads == 3:
+                        elapsed += 2
+                        slow_recheck_triggered = True
                     return SandboxCurrentInputs(fresh_source, gov, risk)
 
                 _, _, context = _verified_source(
@@ -1385,25 +1401,28 @@ async def test_keycloak_lab_executor_https_boundary(
                     effect is not None
                     and effect.state == execution.EffectExecutionState.EFFECT_UNKNOWN
                 )
-                evidence = await _read_durable_grant(
-                    effect.operation_id,
-                    effect.record_hash,
-                    keycloak,
-                    lab_deployment=deployment,
-                )
-                assert (
-                    evidence["grant_events"] == 1
-                    and evidence["recovery_post_requests"] == 0
-                )
-                assert evidence["confirmation_hash"] is not None
-                receipts = await publish_keycloak_receipts(
-                    effect.operation_id, first[2], **first[3]
-                )
-                assert (
-                    await read_verified_keycloak_receipts(effect.operation_id)
-                    == receipts
-                )
-                assert posts == [first[1].body]
+                if scenario == "lost_response":
+                    evidence = await _read_durable_grant(
+                        effect.operation_id,
+                        effect.record_hash,
+                        keycloak,
+                        lab_deployment=deployment,
+                    )
+                    assert (
+                        evidence["grant_events"] == 1
+                        and evidence["recovery_post_requests"] == 0
+                    )
+                    assert evidence["confirmation_hash"] is not None
+                    receipts = await publish_keycloak_receipts(
+                        effect.operation_id, first[2], **first[3]
+                    )
+                    assert (
+                        await read_verified_keycloak_receipts(effect.operation_id)
+                        == receipts
+                    )
+                    assert posts == [first[1].body]
+                else:
+                    assert slow_recheck_triggered
 
             assert len(posts) == (
                 1 if scenario in {"contention", "lost_response"} else 0
