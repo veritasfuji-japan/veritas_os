@@ -30,9 +30,20 @@ DISPATCH_CLAIMS = """
     LEFT JOIN public.bind_effect_states AS effect
         ON effect.authorization_id = dispatch.authorization_id
         AND effect.consumption_id = consumption.consumption_id
-        AND effect.effect_provenance = 'SANDBOX_PRE_DISPATCH_V1'
-    WHERE dispatch.resolution = 'DISPATCH_ALREADY_COMMITTED'
+        AND effect.effect_provenance = CASE
+            WHEN dispatch.resolution = 'DISPATCH_ALREADY_COMMITTED' THEN 'SANDBOX_PRE_DISPATCH_V1'
+            ELSE 'GENERIC_AMBIGUOUS_V1'
+        END
+    WHERE dispatch.resolution IN (
+        'DISPATCH_ALREADY_COMMITTED', 'KEYCLOAK_RESERVED', 'KEYCLOAK_DISPATCH_ALREADY_COMMITTED'
+    ) OR (dispatch.resolution = 'KEYCLOAK_REVOKED_BEFORE_DISPATCH' AND effect.operation_id IS NOT NULL)
     ORDER BY dispatch.authorization_id COLLATE "C"
+"""
+KEYCLOAK_INTENTS = """
+    SELECT effect.authorization_id, intent.intent::jsonb
+    FROM public.bind_keycloak_dispatch_intents AS intent
+    JOIN public.bind_effect_states AS effect USING (operation_id)
+    WHERE effect.authorization_id = ANY(%s)
 """
 BUSINESS_EVENT_UNIQUENESS = """
     SELECT EXISTS (
@@ -62,7 +73,7 @@ class SandboxRestoreError(ValueError):
 def _read_recovery_state(connection: psycopg.Connection) -> dict:
     dispatch_claims = connection.execute(DISPATCH_CLAIMS).fetchall()
     if any(not operation_id or not key for _, operation_id, key in dispatch_claims):
-        raise SandboxRestoreError("The source lacks a business event claim for a committed Sandbox dispatch.")
+        raise SandboxRestoreError("The source lacks a business event claim required by dispatch ordering.")
     return {
         "ordering": dict(connection.execute(ORDERING).fetchall()),
         "native_consumptions": connection.execute(NATIVE_CONSUMPTIONS, (NATIVE_AUTHORIZATION_ID_PATTERN,)).fetchall(),
@@ -104,19 +115,41 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
             raise SandboxRestoreError("The source does not match the independently recorded recovery digest.")
         authoritative = source_state["ordering"]
         restored = dict(target.execute(ORDERING).fetchall())
-        if any(authoritative.get(key) != resolution for key, resolution in restored.items()):
+        later_keycloak_revocations = {
+            key for key, resolution in restored.items()
+            if resolution == "KEYCLOAK_RESERVED"
+            and authoritative.get(key) == "KEYCLOAK_REVOKED_BEFORE_DISPATCH"
+        }
+        if any(
+            authoritative.get(key) != resolution and key not in later_keycloak_revocations
+            for key, resolution in restored.items()
+        ):
             raise SandboxRestoreError("The source does not contain matching decisions for the restored ordering.")
 
         missing = {key: value for key, value in authoritative.items() if key not in restored}
-        if any(value != "REVOKED_BEFORE_DISPATCH" for value in missing.values()):
+        if any(
+            value not in {"REVOKED_BEFORE_DISPATCH", "KEYCLOAK_REVOKED_BEFORE_DISPATCH"}
+            for value in missing.values()
+        ):
             raise SandboxRestoreError("The backup lacks committed dispatch history. Restore a newer verified backup.")
 
         target_consumptions = target.execute(NATIVE_CONSUMPTIONS, (NATIVE_AUTHORIZATION_ID_PATTERN,)).fetchall()
         if source_state["native_consumptions"] != target_consumptions:
             raise SandboxRestoreError("Native v2 consumption records differ. Restore a matching verified backup.")
 
-        if source_state["dispatch_claims"] != target.execute(DISPATCH_CLAIMS).fetchall():
-            raise SandboxRestoreError("Sandbox dispatch business event claims differ. Restore a matching verified backup.")
+        source_claim_ids = {key for key, _, _ in source_state["dispatch_claims"]}
+        if not later_keycloak_revocations.issubset(source_claim_ids):
+            raise SandboxRestoreError("The source lacks a business event claim for a later Keycloak revocation.")
+        if later_keycloak_revocations:
+            # Take matching snapshots of the immutable reservation payloads
+            # before replaying cancellations over them.
+            keys = sorted(later_keycloak_revocations)
+            source.execute("LOCK TABLE public.bind_keycloak_dispatch_intents IN SHARE MODE")
+            target.execute("LOCK TABLE public.bind_keycloak_dispatch_intents IN SHARE ROW EXCLUSIVE MODE")
+            source_intents = dict(source.execute(KEYCLOAK_INTENTS, (keys,)).fetchall())
+            target_intents = dict(target.execute(KEYCLOAK_INTENTS, (keys,)).fetchall())
+            if source_intents.keys() != later_keycloak_revocations or source_intents != target_intents:
+                raise SandboxRestoreError("Keycloak reservation intents differ. Restore a matching verified backup.")
         if target.execute(BUSINESS_EVENT_UNIQUENESS).fetchone() != (True,):
             raise SandboxRestoreError("The target lacks an enforced unique Sandbox business event index.")
 
@@ -130,11 +163,19 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
                 missing.items(),
             )
             cursor.executemany(
+                "UPDATE public.bind_sandbox_dispatch_order "
+                "SET resolution = 'KEYCLOAK_REVOKED_BEFORE_DISPATCH' "
+                "WHERE authorization_id = %s AND resolution = 'KEYCLOAK_RESERVED'",
+                ((key,) for key in sorted(later_keycloak_revocations)),
+            )
+            cursor.executemany(
                 """INSERT INTO public.bind_sandbox_revocation_audit
                    (audit_id, operator_role, operator_name, authorization_id, reason, resolution, recorded_at)
                    OVERRIDING SYSTEM VALUE VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                 (row for key, row in source_audit.items() if key not in target_audit),
             )
+        if source_state["dispatch_claims"] != target.execute(DISPATCH_CLAIMS).fetchall():
+            raise SandboxRestoreError("Dispatch business event claims differ. Restore a matching verified backup.")
         if source_audit:
             target.execute(
                 sql.SQL("ALTER TABLE public.bind_sandbox_revocation_audit ALTER COLUMN audit_id RESTART WITH {}")

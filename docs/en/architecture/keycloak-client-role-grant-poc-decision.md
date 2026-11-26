@@ -197,3 +197,33 @@ link here before treating the result as evidence from `main`.
 
 The maintainer decision is whether this boundary is acceptable for isolated
 implementation. A successful rehearsal supplies evidence for that decision.
+
+### Database ordering prerequisite
+
+Migration `0019` records Keycloak reservations, cancellations and dispatch
+commitments in the same PostgreSQL ordering table as Sandbox, with distinct
+Keycloak values. The trusted Keycloak control-plane function verifies the signed
+authorization and exact Keycloak binding even before consumption or reservation.
+Before a trusted operator can cancel an unreserved Sandbox authorization,
+the control plane must call `register_sandbox_revocation_scope` with the
+signed native artifact and its exact Sandbox binding. A verified Sandbox
+attempt already provides durable scope. Both Sandbox cancellation interfaces
+require that scope and reject existing Keycloak intents, including reservations
+created before migration `0019`. Operator grants remain independently required.
+An existing Sandbox ordering row blocks a Keycloak commitment for the same ID.
+
+A reservation commits its ordering row, effect row and recovery intent
+together. Only the call that receives a fresh reservation can attempt the
+subsequent commitment. A committed cancellation prevents the commitment.
+A lost acknowledgement or a restore fence blocks the caller from proceeding.
+The commitment records database ordering only. A future executor still needs
+current governance, the authorized credentials and the registered transport
+boundary. There is no Keycloak operator SQL entry point in this change.
+
+Apply the migration with workers drained and use the same PostgreSQL primary.
+Existing Keycloak reservations remain readable for reconciliation and cannot
+be resumed through the new commitment path. Use the matching restore reconciler
+before clearing the restore fence. It can replay an authoritative Keycloak
+revocation over a restored reservation when the durable consumption and
+business event claims match. Other decision conflicts keep the fence set.
+The migration refuses downgrade while Keycloak ordering history exists.

@@ -195,6 +195,30 @@ def _window(reading: SandboxClockReading, authorization: Any) -> tuple[datetime,
     return lower, upper
 
 
+async def register_sandbox_revocation_scope(
+    authorization: Any,
+    payload_json: str,
+    *,
+    deployment: SandboxDeployment,
+    issuance_source_inputs: NativeAuthorizationSourceInputs,
+    governance_inputs: RealBindAuthorizationGovernanceInputs,
+    trust_inputs: BindAuthorizationTrustInputs,
+) -> None:
+    """Record the verified Sandbox scope before an operator may cancel it.
+
+    This is a trusted control-plane operation. It neither grants operator
+    access nor consumes or commits the authorization.
+    """
+    binding = verify_sandbox_action_binding(
+        authorization, payload_json, deployment=deployment,
+        source_inputs=issuance_source_inputs, governance_inputs=governance_inputs,
+        trust_inputs=trust_inputs,
+    )
+    await PostgresAtomicEffectStateStore()._register_sandbox_revocation_scope(
+        binding.authorization_id, origin_authority=_SANDBOX_ORIGIN_CAPABILITY,
+    )
+
+
 async def prepare_sandbox_attempt(
     authorization: Any,
     payload_json: str,

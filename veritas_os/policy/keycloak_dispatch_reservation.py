@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict, Unpack
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,12 +11,14 @@ from veritas_os.policy.bind_effect_reconciliation import (
     BindEffectStateError,
     EffectExecutionState,
     EffectStateRecord,
+    KeycloakDispatchOrder,
     PostgresAtomicEffectStateStore,
     _build_record,
 )
 from veritas_os.policy.keycloak_role_grant_binding import (
     ACTION,
     REFERENCE_PREFIX,
+    KeycloakRoleGrantBinding,
     KeycloakRoleGrantTarget,
     verify_keycloak_role_grant_binding,
 )
@@ -31,9 +33,11 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
 )
 from veritas_os.policy.native_bind_authorization import (
     NativeAuthorizationSourceInputs,
+    NativeBindAuthorizationArtifact,
     _verified_source,
     verify_native_bind_authorization,
 )
+from veritas_os.storage import sandbox_restore
 
 
 class KeycloakDispatchIntent(BaseModel):
@@ -54,6 +58,54 @@ class KeycloakDispatchIntent(BaseModel):
     execution_intent_hash: str
 
 
+class KeycloakAuthorizationInputs(TypedDict):
+    """Signed, deployment-bound inputs shared by preparation and cancellation."""
+
+    target: KeycloakRoleGrantTarget
+    event_id: str
+    attempt_id: str
+    deployment_policy_digest: str
+    authorization: Any
+    source_inputs: NativeAuthorizationSourceInputs
+    governance_inputs: RealBindAuthorizationGovernanceInputs
+    trust_inputs: BindAuthorizationTrustInputs
+
+
+class _KeycloakReservationInputs(KeycloakAuthorizationInputs):
+    consumption: AuthorizationConsumptionRecord
+
+
+def _verify_keycloak_dispatch(
+    *,
+    target: KeycloakRoleGrantTarget,
+    event_id: str,
+    attempt_id: str,
+    deployment_policy_digest: str,
+    authorization: Any,
+    source_inputs: NativeAuthorizationSourceInputs,
+    governance_inputs: RealBindAuthorizationGovernanceInputs,
+    trust_inputs: BindAuthorizationTrustInputs,
+) -> tuple[NativeBindAuthorizationArtifact, KeycloakRoleGrantBinding]:
+    verified = verify_native_bind_authorization(
+        authorization, source_inputs=source_inputs, governance_inputs=governance_inputs,
+        trust_inputs=trust_inputs,
+    )
+    intent = verified.execution_intent
+    refs = [
+        ref for ref in intent["evidence_refs"]
+        if isinstance(ref, str) and ref.startswith(REFERENCE_PREFIX)
+    ]
+    if intent.get("intended_action") != ACTION or len(refs) != 1:
+        raise BindEffectStateError("KGR_SIGNED_REFERENCE_REQUIRED")
+    binding = verify_keycloak_role_grant_binding(
+        target=target, event_id=event_id, attempt_id=attempt_id,
+        deployment_policy_digest=deployment_policy_digest, approved_reference=refs[0],
+    )
+    if intent.get("target_resource") != binding.endpoint_url:
+        raise BindEffectStateError("KGR_SIGNED_TARGET_MISMATCH")
+    return verified, binding
+
+
 async def reserve_keycloak_dispatch(
     *,
     target: KeycloakRoleGrantTarget,
@@ -71,9 +123,10 @@ async def reserve_keycloak_dispatch(
     The executor remains responsible for fresh governance and dispatch checks.
     A durable intent is a recovery input, never permission to send on restart.
     """
-    verified = verify_native_bind_authorization(
-        authorization, source_inputs=source_inputs, governance_inputs=governance_inputs,
-        trust_inputs=trust_inputs,
+    verified, binding = _verify_keycloak_dispatch(
+        target=target, event_id=event_id, attempt_id=attempt_id,
+        deployment_policy_digest=deployment_policy_digest, authorization=authorization,
+        source_inputs=source_inputs, governance_inputs=governance_inputs, trust_inputs=trust_inputs,
     )
     _, _, context = _verified_source(
         verified.source_runtime_risk_packet, source_inputs, governance_inputs,
@@ -93,19 +146,6 @@ async def reserve_keycloak_dispatch(
     if consumption != expected:
         raise BindEffectStateError("KGR_CONSUMPTION_LINEAGE_MISMATCH")
 
-    intent = verified.execution_intent
-    refs = [
-        ref for ref in intent["evidence_refs"]
-        if isinstance(ref, str) and ref.startswith(REFERENCE_PREFIX)
-    ]
-    if intent.get("intended_action") != ACTION or len(refs) != 1:
-        raise BindEffectStateError("KGR_SIGNED_REFERENCE_REQUIRED")
-    binding = verify_keycloak_role_grant_binding(
-        target=target, event_id=event_id, attempt_id=attempt_id,
-        deployment_policy_digest=deployment_policy_digest, approved_reference=refs[0],
-    )
-    if intent.get("target_resource") != binding.endpoint_url:
-        raise BindEffectStateError("KGR_SIGNED_TARGET_MISMATCH")
     if await PostgresAtomicAuthorizationConsumptionStore().get(verified.authorization_id) != expected:
         return None
     record = _build_record(
@@ -129,6 +169,97 @@ async def reserve_keycloak_dispatch(
     ):
         return record
     return None
+
+
+async def revoke_keycloak_authorization(
+    **inputs: Unpack[KeycloakAuthorizationInputs],
+) -> KeycloakDispatchOrder:
+    """Order a trusted control-plane cancellation of a verified Keycloak grant.
+
+    The signed issuance and its request binding establish scope before any
+    consumption or reservation. This internal function is not an operator API.
+    """
+    from veritas_os.storage.db import get_pool
+
+    verified, _ = _verify_keycloak_dispatch(**inputs)
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            await conn.execute(sandbox_restore.LOCK_SHARED)
+            recovery = await conn.execute(sandbox_restore.RECOVERY_PENDING)
+            if await recovery.fetchone() != (False,):
+                raise BindEffectStateError("KGR_RESTORE_RECOVERY_PENDING")
+            cursor = await conn.execute(
+                """INSERT INTO bind_sandbox_dispatch_order AS ordering (authorization_id, resolution)
+                   VALUES (%s, %s)
+                   ON CONFLICT (authorization_id) DO UPDATE SET resolution =
+                       CASE WHEN ordering.resolution = %s THEN ordering.resolution ELSE EXCLUDED.resolution END
+                   WHERE ordering.resolution IN (%s, %s, %s)
+                   RETURNING ordering.resolution""",
+                (
+                    verified.authorization_id, KeycloakDispatchOrder.REVOKED.value,
+                    KeycloakDispatchOrder.COMMITTED.value, KeycloakDispatchOrder.RESERVED.value,
+                    KeycloakDispatchOrder.REVOKED.value, KeycloakDispatchOrder.COMMITTED.value,
+                ),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                raise BindEffectStateError("KGR_REVOCATION_SCOPE_MISMATCH")
+            result = KeycloakDispatchOrder(row[0])
+        return result
+    except BindEffectStateError:
+        raise
+    except Exception:
+        raise BindEffectStateError("KGR_REVOCATION_FAILED_OR_UNKNOWN") from None
+
+
+async def reserve_and_commit_keycloak_dispatch(
+    **inputs: Unpack[_KeycloakReservationInputs],
+) -> EffectStateRecord | None:
+    """Reserve a fresh attempt and commit its place in the ordering.
+
+    Only a reservation acknowledged to this call can be committed here.
+    Recovery has no entry point for resuming an existing reservation. This
+    records DB ordering only. The future executor owns fresh governance,
+    connection and transport checks. No credentials or network are used here.
+    """
+    from veritas_os.storage.db import get_pool
+
+    record = await reserve_keycloak_dispatch(**inputs)
+    if record is None:
+        return None
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            await conn.execute(sandbox_restore.LOCK_SHARED)
+            recovery = await conn.execute(sandbox_restore.RECOVERY_PENDING)
+            if await recovery.fetchone() != (False,):
+                return None
+            cursor = await conn.execute(
+                """UPDATE bind_sandbox_dispatch_order
+                   SET resolution = %s
+                   WHERE authorization_id = %s AND resolution = %s
+                   AND EXISTS (
+                       SELECT 1 FROM bind_effect_states AS effect
+                       JOIN bind_keycloak_dispatch_intents USING (operation_id)
+                       WHERE effect.operation_id = %s
+                         AND effect.authorization_id = %s
+                         AND effect.record_hash = %s
+                         AND effect.state = 'EFFECT_UNKNOWN'
+                         AND effect.revision = 1
+                       FOR UPDATE OF effect
+                   )
+                   RETURNING authorization_id""",
+                (
+                    KeycloakDispatchOrder.COMMITTED.value, record.authorization_id,
+                    KeycloakDispatchOrder.RESERVED.value, record.operation_id,
+                    record.authorization_id, record.record_hash,
+                ),
+            )
+            applied = await cursor.fetchone() is not None
+        return record if applied else None
+    except Exception:
+        raise BindEffectStateError("KGR_DISPATCH_COMMIT_FAILED_OR_UNKNOWN") from None
 
 
 async def get_keycloak_dispatch_intent(operation_id: str) -> KeycloakDispatchIntent | None:

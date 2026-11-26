@@ -23,6 +23,7 @@ from veritas_os.policy.live_adapter_bind_authorization_consumption_store import 
 )
 from veritas_os.policy.sandbox_bind_execution import SandboxBindExecutionError
 from veritas_os.policy.sandbox_https_transport import SandboxHTTPSTransport
+from veritas_os.policy.sandbox_pre_effect import register_sandbox_revocation_scope
 from veritas_os.storage import db
 from veritas_os.tests.test_sandbox_bind_execution import PAYLOAD, Provider, run
 from veritas_os.tests.test_sandbox_https_transport import TOKEN, setup
@@ -46,6 +47,14 @@ def issued(tmp_path_factory, monkeypatch):
 
 
 prepared_inputs = pytest.fixture(prepared_inputs_fixture.__wrapped__)
+
+
+async def _register_scope(artifact, args):
+    await register_sandbox_revocation_scope(
+        artifact, json.dumps(PAYLOAD), deployment=args["deployment"],
+        issuance_source_inputs=args["issuance_source_inputs"],
+        governance_inputs=args["governance_inputs"], trust_inputs=args["trust_inputs"],
+    )
 
 
 @asynccontextmanager
@@ -231,6 +240,7 @@ async def test_sandbox_dispatch_after_restore(prepared_inputs, monkeypatch, tmp_
         "SELECT audit_id, operator_role, operator_name, authorization_id, reason, resolution, recorded_at "
         "FROM public.bind_sandbox_revocation_audit WHERE authorization_id = %s"
     )
+    await _register_scope(artifact, args)
     reason = "Cancel before backup"
     revoked = SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH
     drill = scenario == "allowed" or scenario.startswith("drill_")
@@ -677,6 +687,7 @@ async def test_restored_unknown_sandbox_attempt_confirms_without_resending(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("order", ["revoke_first", "dispatch_first", "lost_ack"])
 async def test_postgres_orders_revocation_and_dispatch(prepared_inputs, monkeypatch, order):
+    from psycopg.errors import InsufficientPrivilege
     from psycopg_pool import AsyncConnectionPool
 
     artifact, args = await _args(prepared_inputs)
@@ -717,6 +728,14 @@ async def test_postgres_orders_revocation_and_dispatch(prepared_inputs, monkeypa
         async with revoker.connection() as first, dispatcher.connection() as second:
             assert first.info.backend_pid != second.info.backend_pid
         monkeypatch.setattr(db, "get_pool", get_pool)
+        if order == "revoke_first":
+            async with operator_session(revoker, artifact.authorization_id) as (operator, _):
+                with pytest.raises(InsufficientPrivilege, match="Sandbox authorization binding required"):
+                    await operator.execute(
+                        "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)",
+                        (artifact.authorization_id, "Fixture cancellation"),
+                    )
+        await _register_scope(artifact, args)
         assert await consumptions.consume_once(consumption)
 
         async def revoke_as_operator():

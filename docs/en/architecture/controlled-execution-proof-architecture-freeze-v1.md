@@ -186,6 +186,11 @@ to the Bind, scope, or audit tables. The database owner grants function
 execution and enrolls each eligible authorization ID for its operator login.
 Verify the ID against the trusted Sandbox issuance record and deployment before
 enrollment. Keep provisioning access with the trusted deployment control plane.
+From migration `0019`, use the trusted control-plane function
+`register_sandbox_revocation_scope` to verify and record the signed Sandbox
+binding before allowing cancellation of an authorization without a durable
+Sandbox attempt. The operator enrollment grants access to the already verified
+scope.
 On every call the function requires a direct execution grant to the authenticated
 login and matches its PostgreSQL role ID, role name, and the exact authorization
 ID against the enrollment.
