@@ -9,6 +9,8 @@ on:
       - 'veritas_os/policy/sandbox_*.py'
       - 'veritas_os/policy/bind_effect_reconciliation.py'
       - 'veritas_os/policy/keycloak_*.py'
+      - 'veritas_os/policy/native_bind_authorization_consumption.py'
+      - 'veritas_os/policy/bind_coverage_registry.py'
       - 'scripts/validation/export_keycloak_rehearsal_evidence.py'
       - 'alembic/versions/**'
   workflow_dispatch:

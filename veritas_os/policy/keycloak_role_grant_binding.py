@@ -7,7 +7,7 @@ or credential access.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import re
 from uuid import UUID
 
@@ -41,6 +41,64 @@ class KeycloakRoleGrantTarget:
     client_id: str
     role_id: str
     role_name: str
+
+
+@dataclass(frozen=True)
+class KeycloakLabDeployment:
+    """Reviewed configuration for a disposable loopback TLS Keycloak lab."""
+
+    target: KeycloakRoleGrantTarget
+    tls_port: int
+    ca_pem: str
+    writer_user: str
+    writer_client: str
+    audit_reader_client: str
+    mapping_reader_client: str
+    writer_reference_id: str
+    writer_scope: str
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.target) is not KeycloakRoleGrantTarget
+            or type(self.target.realm_name) is not str
+            or not self.target.realm_name.startswith("veritas-rehearsal-")
+            or type(self.target.origin) is not str
+            or not self.target.origin.endswith(".invalid")
+            or type(self.tls_port) is not int
+            or not 1024 <= self.tls_port <= 65535
+            or type(self.ca_pem) is not str
+            or not self.ca_pem
+            or not all(
+                type(value) is str and _PATH_NAME.fullmatch(value)
+                for value in (
+                    self.writer_client,
+                    self.audit_reader_client,
+                    self.mapping_reader_client,
+                )
+            )
+            or len(
+                {
+                    self.writer_client,
+                    self.audit_reader_client,
+                    self.mapping_reader_client,
+                }
+            )
+            != 3
+            or not _canonical_uuid(self.writer_user)
+            or not all(
+                type(value) is str and 0 < len(value) <= 256
+                for value in (self.writer_reference_id, self.writer_scope)
+            )
+        ):
+            raise KeycloakRoleGrantBindingError("KGR_LAB_DEPLOYMENT_INVALID")
+
+    def digest(self) -> str:
+        """Bind the local TLS peer, target and distinct credential identities."""
+        policy = asdict(self)
+        policy["ca_pem"] = sha256_hex(self.ca_pem.encode("ascii"))
+        return sha256_of_canonical_json(
+            {"profile": "keycloak-loopback-lab/v1", **policy}
+        )
 
 
 @dataclass(frozen=True)

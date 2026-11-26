@@ -16,6 +16,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+import pytest_asyncio
 
 from veritas_os.policy import sandbox_bind_execution as execution
 from veritas_os.policy import sandbox_reconciliation as reconciliation
@@ -159,20 +160,43 @@ def keycloak(request):
 
                 return token, service_user, app
 
-            writer, writer_user, writer_client = principal("bind-writer", "manage-users", "view-clients")
-            reader, _, _ = principal("bind-reader", "view-users", "view-clients")
+            writer, writer_user, writer_client = principal(
+                "bind-writer", "manage-users", "view-clients"
+            )
+            reader, _, reader_client = principal(
+                "bind-reader", "view-users", "view-clients"
+            )
             assert writer != reader
             fixture = {
-                "realm": realm, "realm_id": realm_id, "user": target, "client": application,
-                "role": {"id": role["id"], "name": ROLE}, "writer": writer, "reader": reader,
-                "writer_user": writer_user, "writer_client": writer_client,
+                "realm": realm,
+                "realm_id": realm_id,
+                "user": target,
+                "client": application,
+                "role": {"id": role["id"], "name": ROLE},
+                "writer": writer,
+                "reader": reader,
+                "writer_user": writer_user,
+                "writer_client": writer_client,
+                "reader_client": reader_client,
             }
             if getattr(request, "param", False):
-                audit_reader, _, _ = principal("bind-audit-reader", "view-events")
-                expect(client.put(f"{resource}/events/config", headers=auth, json={
-                    "adminEventsEnabled": True, "adminEventsDetailsEnabled": True,
-                }), 204)
-                fixture["audit_reader"] = audit_reader
+                audit_reader, _, audit_reader_client = principal(
+                    "bind-audit-reader", "view-events"
+                )
+                expect(
+                    client.put(
+                        f"{resource}/events/config",
+                        headers=auth,
+                        json={
+                            "adminEventsEnabled": True,
+                            "adminEventsDetailsEnabled": True,
+                        },
+                    ),
+                    204,
+                )
+                fixture.update(
+                    audit_reader=audit_reader, audit_reader_client=audit_reader_client
+                )
             yield fixture
         finally:
             expect(client.delete(resource, headers=auth), 204)
@@ -544,9 +568,14 @@ async def test_keycloak_post_timeout_reconciliation_checks_current_role(
         for wrong_event in unrelated:
             assert bridge.audited_operation([wrong_event]) is None
 
-        for inconclusive in ([], [unrelated[0]], [record, {**record, "id": str(uuid4())}]):
-            async def audit_response():
-                return inconclusive
+        for inconclusive in (
+            [],
+            [unrelated[0]],
+            [record, {**record, "id": str(uuid4())}],
+        ):
+
+            async def audit_response(events=inconclusive):
+                return events
 
             with monkeypatch.context() as patch:
                 patch.setattr(bridge, "audit_events", audit_response)
@@ -696,7 +725,9 @@ async def _check_dispatch_claims_after_crash(attempts, operation_id, record_hash
         await close_pool()
 
 
-async def _read_durable_grant(operation_id, record_hash, keycloak):
+async def _read_durable_grant(
+    operation_id, record_hash, keycloak, *, lab_deployment=None
+):
     """Recover from PostgreSQL with only the two Keycloak read credentials."""
     try:
         store = PostgresAtomicEffectStateStore()
@@ -777,6 +808,7 @@ async def _read_durable_grant(operation_id, record_hash, keycloak):
                 "writer_user": keycloak["writer_user"],
                 "writer_client": keycloak["writer_client"],
                 "read_admin_events": read_events,
+                "lab_deployment": lab_deployment,
             }
             assert await confirm_keycloak_reconciliation(
                 operation_id, **verifier_inputs, read_direct_mappings=missing_mappings,
@@ -1075,3 +1107,304 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         output = Path(evidence_dir)
         output.mkdir(parents=True, exist_ok=True)
         (output / f"{scenario}.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+
+@pytest_asyncio.fixture
+async def lab_db_pool(monkeypatch):
+    """Bind each lab scenario's connection pool to its own pytest event loop."""
+    from veritas_os.storage import db
+
+    monkeypatch.setattr(db, "_pool", None)
+    try:
+        yield
+    finally:
+        await close_pool()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("keycloak", [True], indirect=True)
+@pytest.mark.parametrize(
+    "scenario",
+    ["cancel_first", "lost_commit", "contention", "substituted", "lost_response"],
+)
+async def test_keycloak_lab_executor_https_boundary(
+    keycloak,
+    scenario,
+    tmp_path,
+    monkeypatch,
+    lab_db_pool,
+):
+    """Count POSTs through the actual Executor and disposable Keycloak realm."""
+    from datetime import timedelta
+    import ssl
+    from time import monotonic
+
+    from pydantic import SecretBytes
+    from veritas_os.policy import keycloak_lab_executor as module
+    from veritas_os.policy.keycloak_dispatch_reservation import (
+        KeycloakDispatchOrder,
+        revoke_keycloak_authorization,
+    )
+    from veritas_os.policy.keycloak_role_grant_binding import KeycloakLabDeployment
+    from veritas_os.policy.sandbox_pre_effect import (
+        SandboxClockReading,
+        SandboxCurrentInputs,
+    )
+    from veritas_os.tests.test_native_bind_authorization_consumption import _fresh
+
+    host = "keycloak.example.invalid"
+    cert = tmp_path / "lab.pem"
+    tls_key = tmp_path / "lab-key.pem"
+    subprocess.run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-keyout",
+            str(tls_key),
+            "-out",
+            str(cert),
+            "-subj",
+            f"/CN={host}",
+            "-addext",
+            f"subjectAltName=DNS:{host}",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls.load_cert_chain(cert, tls_key)
+    target = KeycloakRoleGrantTarget(
+        "https://" + host,
+        keycloak["realm"],
+        keycloak["realm_id"],
+        keycloak["user"],
+        keycloak["client"],
+        keycloak["role"]["id"],
+        keycloak["role"]["name"],
+    )
+    posts = []
+    event_id = f"lab-{uuid4()}"
+
+    async with httpx.AsyncClient(
+        base_url=ORIGIN, trust_env=False, timeout=3
+    ) as upstream:
+
+        async def forward(reader, writer):
+            try:
+                raw = await reader.readuntil(b"\r\n\r\n")
+                request, *lines = raw.decode("ascii").split("\r\n")[:-2]
+                method, path, _ = request.split(" ")
+                headers = dict(line.split(": ", 1) for line in lines)
+                payload = await reader.readexactly(int(headers["Content-Length"]))
+                assert method == "POST" and path == expected_path
+                posts.append(payload)
+                response = await upstream.post(
+                    path,
+                    content=payload,
+                    headers={
+                        "Authorization": headers["Authorization"],
+                        "Content-Type": "application/json",
+                    },
+                )
+                assert response.status_code == 204
+                if scenario != "lost_response":
+                    writer.write(
+                        b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"
+                    )
+                    await writer.drain()
+            finally:
+                writer.close()
+                await writer.wait_closed()
+
+        server = await asyncio.start_server(forward, "127.0.0.1", 0, ssl=tls)
+        async with server:
+            deployment = KeycloakLabDeployment(
+                target,
+                server.sockets[0].getsockname()[1],
+                cert.read_text(),
+                keycloak["writer_user"],
+                keycloak["writer_client"],
+                keycloak["audit_reader_client"],
+                keycloak["reader_client"],
+                "credential-ref:keycloak:lab-writer:v1",
+                "keycloak:role-grant",
+            )
+
+            def issue(directory):
+                attempt_id = str(uuid4())
+                binding = build_keycloak_role_grant_binding(
+                    target=target,
+                    event_id=event_id,
+                    attempt_id=attempt_id,
+                    deployment_policy_digest=deployment.digest(),
+                )
+                directory.mkdir()
+                action_contract = replace(
+                    contract(),
+                    id=ACTION,
+                    action_class=ACTION,
+                    human_approval_rules={"required": True, "minimum_approvals": 1},
+                )
+                artifact, inputs = issue_for_action(
+                    directory,
+                    {
+                        "intended_action": ACTION,
+                        "target_system": "synthetic-keycloak",
+                        "target_resource": binding.endpoint_url,
+                        "evidence_refs": [binding.reference],
+                        "required_human_approval": True,
+                    },
+                    action_contract,
+                    endpoint_overrides={
+                        "endpoint_host": host,
+                        "endpoint_path_prefix": "/admin",
+                    },
+                    credential_overrides={
+                        "credential_reference_id": deployment.writer_reference_id,
+                        "credential_scope": deployment.writer_scope,
+                    },
+                )
+                return attempt_id, binding, artifact, inputs
+
+            first = issue(tmp_path / "first")
+            second = issue(tmp_path / "second") if scenario == "contention" else None
+            expected_path = first[1].endpoint_url.removeprefix(target.origin)
+
+            def wiring(issued):
+                attempt_id, _, artifact, inputs = issued
+                gov, source = inputs["governance_inputs"], inputs["source_inputs"]
+                started = monotonic()
+                initial = gov.verification_now + timedelta(seconds=1)
+
+                def clock():
+                    sampled = monotonic()
+                    now = initial + timedelta(seconds=sampled - started)
+                    return SandboxClockReading(now, sampled, now, 0)
+
+                def load_current(now):
+                    risk, fresh_source = _fresh(inputs, now)
+                    return SandboxCurrentInputs(fresh_source, gov, risk)
+
+                _, _, context = _verified_source(
+                    artifact.source_runtime_risk_packet, source, gov
+                )
+
+                async def credential():
+                    return module.KeycloakLabWriterCredential(
+                        SecretBytes(keycloak["writer"].encode()),
+                        context.credential_reference_digest,
+                        context.credential_scope_binding_digest,
+                        clock().now + timedelta(seconds=15),
+                    )
+
+                executor = module.KeycloakLabExecutor(
+                    deployment,
+                    trusted_clock=clock,
+                    load_current_inputs=load_current,
+                    resolve_writer=credential,
+                )
+                return executor, dict(
+                    authorization=artifact,
+                    event_id=event_id,
+                    attempt_id=attempt_id,
+                    issuance_source_inputs=source,
+                    governance_inputs=gov,
+                    trust_inputs=inputs["trust_inputs"],
+                )
+
+            executor, args = wiring(first)
+            if scenario == "lost_response":
+                for reader in ("reader", "audit_reader"):
+                    headers = bearer(keycloak[reader])
+                    expect(
+                        await upstream.post(expected_path, headers=headers, json=[]),
+                        403,
+                    )
+                    expect(
+                        await upstream.delete(
+                            f"/admin/realms/{target.realm_name}/admin-events",
+                            headers=headers,
+                        ),
+                        403,
+                    )
+            if scenario == "cancel_first":
+                assert (
+                    await revoke_keycloak_authorization(
+                        target=target,
+                        deployment_policy_digest=deployment.digest(),
+                        source_inputs=args["issuance_source_inputs"],
+                        **{
+                            k: v
+                            for k, v in args.items()
+                            if k != "issuance_source_inputs"
+                        },
+                    )
+                    == KeycloakDispatchOrder.REVOKED
+                )
+                assert await executor.execute(**args) is None
+            elif scenario == "lost_commit":
+                commit = module.reserve_and_commit_keycloak_dispatch
+                committed = False
+
+                async def unacknowledged(**inputs):
+                    nonlocal committed
+                    committed = await commit(**inputs) is not None
+                    assert committed
+                    raise RuntimeError("fixture lost the commitment response")
+
+                monkeypatch.setattr(
+                    module, "reserve_and_commit_keycloak_dispatch", unacknowledged
+                )
+                with pytest.raises(module.KeycloakLabExecutionError):
+                    await executor.execute(**args)
+                assert committed
+            elif scenario == "substituted":
+                with pytest.raises(module.KeycloakLabExecutionError):
+                    await executor.execute(**(args | {"attempt_id": str(uuid4())}))
+            elif scenario == "contention":
+                another, other_args = wiring(second)
+                results = await asyncio.gather(
+                    executor.execute(**args), another.execute(**other_args)
+                )
+                assert sum(result is not None for result in results) == 1
+                assert [result.observation for result in results if result] == [
+                    "HTTP_204_UNVERIFIED"
+                ]
+                assert posts == [first[1].body] or posts == [second[1].body]
+            else:
+                result = await executor.execute(**args)
+                assert result is not None and result.observation == "TRANSPORT_UNKNOWN"
+                effect = await PostgresAtomicEffectStateStore().get(result.operation_id)
+                assert (
+                    effect is not None
+                    and effect.state == execution.EffectExecutionState.EFFECT_UNKNOWN
+                )
+                evidence = await _read_durable_grant(
+                    effect.operation_id,
+                    effect.record_hash,
+                    keycloak,
+                    lab_deployment=deployment,
+                )
+                assert (
+                    evidence["grant_events"] == 1
+                    and evidence["recovery_post_requests"] == 0
+                )
+                assert evidence["confirmation_hash"] is not None
+                receipts = await publish_keycloak_receipts(
+                    effect.operation_id, first[2], **first[3]
+                )
+                assert (
+                    await read_verified_keycloak_receipts(effect.operation_id)
+                    == receipts
+                )
+                assert posts == [first[1].body]
+
+            assert len(posts) == (
+                1 if scenario in {"contention", "lost_response"} else 0
+            )

@@ -40,6 +40,14 @@ DECLARED_EFFECT_SINKS = {
         "writer.write",
     ): "auxiliary_reconciliation_read_outside_v1",
     (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "asyncio.open_connection",
+    ): "isolated_keycloak_lab_outside_v1",
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "writer.write",
+    ): "isolated_keycloak_lab_outside_v1",
+    (
         "veritas_os/policy/sandbox_https_transport.py",
         "asyncio.open_connection",
     ): "native_v2_sandbox_action",
@@ -68,6 +76,10 @@ DECLARED_EFFECT_SINKS = {
 # An import is evidence that the module can acquire the capability.  It is not
 # a claim that every use is Bind-governed or that importing it performs I/O.
 DECLARED_EFFECT_CAPABILITIES = {
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "asyncio",
+    ): "isolated_keycloak_lab_outside_v1",
     (
         "veritas_os/policy/bind_effect_reconciliation.py",
         "asyncio",
@@ -137,6 +149,30 @@ DECLARED_EFFECT_CAPABILITIES = {
 # It is populated below from the reviewed policy tree and kept as source data,
 # not inferred at proof time.
 DECLARED_EFFECT_USAGES: dict[tuple[str, str], tuple[int, str]] = {
+    ("veritas_os/policy/keycloak_lab_executor.py", "asyncio.open_connection"): (
+        1,
+        "isolated_keycloak_lab_outside_v1",
+    ),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "result(asyncio.open_connection)[1].write",
+    ): (1, "isolated_keycloak_lab_outside_v1"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "result(asyncio.open_connection)[1].drain",
+    ): (1, "isolated_keycloak_lab_outside_v1"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "result(asyncio.open_connection)[0].readline",
+    ): (1, "bounded_lab_observation"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "result(asyncio.open_connection)[1].transport.abort",
+    ): (1, "transport_cleanup"),
+    ("veritas_os/policy/keycloak_lab_executor.py", "asyncio.timeout"): (
+        2,
+        "bounded_lab_operation",
+    ),
     ("veritas_os/policy/bind_effect_reconciliation.py", "asyncio.Lock"): (
         1,
         "synchronization_only",
@@ -298,6 +334,41 @@ DECLARED_EFFECT_USAGES: dict[tuple[str, str], tuple[int, str]] = {
 # Lexical context is an authority-bearing inventory dimension; source lines are
 # retained only as evidence and deliberately do not participate in equality.
 DECLARED_EFFECT_USAGE_CONTEXTS: dict[tuple[str, str, str], tuple[int, str]] = {
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._execute",
+        "asyncio.timeout",
+    ): (1, "bounded_lab_operation"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "asyncio.timeout",
+    ): (1, "bounded_lab_operation"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "asyncio.open_connection",
+    ): (1, "isolated_keycloak_lab_outside_v1"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "result(asyncio.open_connection)[1].write",
+    ): (1, "isolated_keycloak_lab_outside_v1"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "result(asyncio.open_connection)[1].drain",
+    ): (1, "isolated_keycloak_lab_outside_v1"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "result(asyncio.open_connection)[0].readline",
+    ): (1, "bounded_lab_observation"),
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "result(asyncio.open_connection)[1].transport.abort",
+    ): (1, "transport_cleanup"),
     (
         "veritas_os/policy/bind_effect_reconciliation.py",
         "InMemoryAtomicEffectStateStore.__init__",
@@ -490,6 +561,16 @@ DECLARED_EFFECT_USAGE_CONTEXTS: dict[tuple[str, str, str], tuple[int, str]] = {
 }
 
 DECLARED_EFFECT_SINK_CONTEXTS: dict[tuple[str, str, str], str] = {
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "asyncio.open_connection",
+    ): "isolated_keycloak_lab_outside_v1",
+    (
+        "veritas_os/policy/keycloak_lab_executor.py",
+        "KeycloakLabExecutor._post_once",
+        "writer.write",
+    ): "isolated_keycloak_lab_outside_v1",
     (
         "veritas_os/policy/bundle.py",
         "create_bundle_archive",

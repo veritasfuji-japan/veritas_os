@@ -237,6 +237,59 @@ class NativeAuthorizationConsumptionResult:
     external_action_executed: Literal[False] = False
 
 
+def _recheck_native_consumption_inputs(
+    authorization: NativeBindAuthorizationArtifact,
+    *,
+    governance_inputs: RealBindAuthorizationGovernanceInputs,
+    current_source_inputs: NativeAuthorizationSourceInputs,
+    current_runtime_risk_packet: Any,
+    current: datetime,
+):
+    """Check fresh authority, policy, approval and exact native binding."""
+    if not (
+        datetime.fromisoformat(authorization.valid_from)
+        <= current
+        < datetime.fromisoformat(authorization.valid_until)
+    ):
+        raise NativeAuthorizationConsumptionError("NABC_AUTHORIZATION_EXPIRED")
+    current_governance = replace(governance_inputs, verification_now=current)
+    risk, final, context = _verified_source(
+        current_runtime_risk_packet,
+        current_source_inputs,
+        current_governance,
+    )
+    if (
+        datetime.fromisoformat(risk.risk_decision.reviewed_at) != current
+        or datetime.fromisoformat(risk.recorded_at) != current
+    ):
+        raise NativeAuthorizationConsumptionError("NABC_FRESH_RISK_REVIEW_REQUIRED")
+    if (
+        final.bind_context_hash != authorization.bind_context_hash
+        or final.exact_bind_context.action_contract_digest
+        != authorization.action_contract_digest
+        or context.execution_intent != authorization.execution_intent
+        or context.execution_intent_id != authorization.execution_intent_id
+        or context.execution_intent_hash != authorization.execution_intent_hash
+        or final.exact_bind_context.gate_packet_hash != authorization.source_gate_hash
+    ):
+        raise NativeAuthorizationConsumptionError("NABC_CURRENT_CONTEXT_MISMATCH")
+    _supported_approval_rules(current_governance.action_contract.human_approval_rules)
+    governance = _validate_governance_for_verified_context(
+        context,
+        current_governance,
+        bind_context_hash=final.bind_context_hash,
+    )
+    if (
+        governance.human_approval_status
+        != authorization.human_approval_requirement_status
+        or (governance.human_approval_status == "VERIFIED")
+        != risk.required_human_approval
+    ):
+        raise NativeAuthorizationConsumptionError("NABC_CURRENT_APPROVAL_MISMATCH")
+
+    return risk, context, governance
+
+
 async def consume_native_bind_authorization(
     artifact: Any,
     *,
@@ -301,46 +354,13 @@ async def consume_native_bind_authorization(
         governance_inputs=governance_inputs,
         trust_inputs=trust_inputs,
     )
-    if not (
-        datetime.fromisoformat(authorization.valid_from)
-        <= current
-        < datetime.fromisoformat(authorization.valid_until)
-    ):
-        raise NativeAuthorizationConsumptionError("NABC_AUTHORIZATION_EXPIRED")
-    current_governance = replace(governance_inputs, verification_now=current)
-    risk, final, context = _verified_source(
-        current_runtime_risk_packet,
-        current_source_inputs,
-        current_governance,
+    risk, context, governance = _recheck_native_consumption_inputs(
+        authorization,
+        governance_inputs=governance_inputs,
+        current_source_inputs=current_source_inputs,
+        current_runtime_risk_packet=current_runtime_risk_packet,
+        current=current,
     )
-    if (
-        datetime.fromisoformat(risk.risk_decision.reviewed_at) != current
-        or datetime.fromisoformat(risk.recorded_at) != current
-    ):
-        raise NativeAuthorizationConsumptionError("NABC_FRESH_RISK_REVIEW_REQUIRED")
-    if (
-        final.bind_context_hash != authorization.bind_context_hash
-        or final.exact_bind_context.action_contract_digest
-        != authorization.action_contract_digest
-        or context.execution_intent != authorization.execution_intent
-        or context.execution_intent_id != authorization.execution_intent_id
-        or context.execution_intent_hash != authorization.execution_intent_hash
-        or final.exact_bind_context.gate_packet_hash != authorization.source_gate_hash
-    ):
-        raise NativeAuthorizationConsumptionError("NABC_CURRENT_CONTEXT_MISMATCH")
-    _supported_approval_rules(current_governance.action_contract.human_approval_rules)
-    governance = _validate_governance_for_verified_context(
-        context,
-        current_governance,
-        bind_context_hash=final.bind_context_hash,
-    )
-    if (
-        governance.human_approval_status
-        != authorization.human_approval_requirement_status
-        or (governance.human_approval_status == "VERIFIED")
-        != risk.required_human_approval
-    ):
-        raise NativeAuthorizationConsumptionError("NABC_CURRENT_APPROVAL_MISMATCH")
 
     (
         reconciliation_policy_id,

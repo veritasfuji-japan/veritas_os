@@ -154,10 +154,9 @@ deployable PoC.
 
 ## Isolated PoC implementation review
 
-**Decision pending.** Review whether to implement an adapter for the following
-isolated configuration. Review approval would cover implementation and testing
-in the dedicated lab, with separate approval for credentials or deployment
-outside that lab.
+**Implementation approved for the disposable lab.** This decision covers
+implementation and testing for the isolated configuration below. Credentials
+and deployment outside that lab require separate approval.
 
 ### Boundary to approve
 
@@ -195,8 +194,19 @@ link here before treating the result as evidence from `main`.
 | Reader credentials | The [Keycloak rehearsal](../../../veritas_os/tests/test_keycloak_bind_role_rehearsal.py#L390) checks a denied grant route for the mapping reader, and [checks the same for the audit reader](../../../veritas_os/tests/test_keycloak_bind_role_rehearsal.py#L501). | Check denial of both grant and audit mutations for each provisioned reader using the approved provider policy. |
 | Unresolved evidence | The rehearsal exercises missing mappings, role revocation and retry refusal in its isolated fixtures. | Exercise missing, ambiguous and stale observations through the registered adapter recovery path, and verify that they stay unresolved with 0 grant POSTs. |
 
-The maintainer decision is whether this boundary is acceptable for isolated
-implementation. A successful rehearsal supplies evidence for that decision.
+The dedicated executable boundary uses the separate
+`KEYCLOAK_DISPOSABLE_LOOPBACK_LAB_V1` registry scope. The executor only connects
+to a fixed loopback TLS peer, authenticates its signed lab hostname using
+configured lab roots, and exposes no application route. Its transport records a
+bounded HTTP observation. Separate read credentials and recorded Keycloak
+events plus direct mappings establish confirmed effect.
+
+The single-use consumer and an independent current-input recheck must verify
+the signed human approval and exact request. The durable dispatch commitment
+must return successfully before the executor opens the transport. The owning
+task rechecks governance after TLS and spends its internal permit immediately
+before the sole write. The local acknowledgement, a restored reservation, and
+an unresolved effect cannot create another send authority.
 
 ### Database ordering prerequisite
 
