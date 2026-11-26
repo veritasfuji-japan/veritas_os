@@ -80,6 +80,13 @@ jobs:
           test "$tested_sha" = "$GITHUB_SHA"
           keycloak_image="$(docker inspect --format '{{.Config.Image}}' keycloak-bind-proof)"
           keycloak_image_id="$(docker inspect --format '{{.Image}}' keycloak-bind-proof)"
+          postgres_image_id="$(docker inspect --format '{{.Image}}' "$POSTGRES_CONTAINER")"
+          keycloak_repo_digest="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$keycloak_image_id" |
+            awk '/^quay\.io\/keycloak\/keycloak@sha256:/ && !found {print; found=1}')"
+          postgres_repo_digest="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$postgres_image_id" |
+            awk '/^((docker\.io\/)?library\/)?postgres@sha256:/ && !found {
+              sub(/^[^@]+/, "docker.io/library/postgres"); print; found=1
+            }')"
           postgres_version="$(docker exec "$POSTGRES_CONTAINER" psql -XAt -U veritas -d veritas_test -c 'SHOW server_version')"
           python scripts/validation/export_keycloak_rehearsal_evidence.py \
             --scenario-dir "$KEYCLOAK_EVIDENCE_DIR" \
@@ -87,6 +94,8 @@ jobs:
             --tested-sha "$tested_sha" \
             --keycloak-image "$keycloak_image" \
             --keycloak-image-id "$keycloak_image_id" \
+            --keycloak-repo-digest "$keycloak_repo_digest" \
+            --postgres-repo-digest "$postgres_repo_digest" \
             --postgres-version "$postgres_version"
       - name: Upload crash rehearsal evidence
         uses: actions/upload-artifact@v4

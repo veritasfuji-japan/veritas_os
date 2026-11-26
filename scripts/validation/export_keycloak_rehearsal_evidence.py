@@ -49,6 +49,8 @@ def main() -> None:
     parser.add_argument("--tested-sha", required=True)
     parser.add_argument("--keycloak-image", required=True)
     parser.add_argument("--keycloak-image-id", required=True)
+    parser.add_argument("--keycloak-repo-digest", required=True)
+    parser.add_argument("--postgres-repo-digest", required=True)
     parser.add_argument("--postgres-version", required=True)
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9a-f]{40}", args.tested_sha):
@@ -57,6 +59,10 @@ def main() -> None:
         parser.error("invalid Keycloak image reference")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", args.keycloak_image_id):
         parser.error("invalid Keycloak image ID")
+    if not re.fullmatch(r"quay\.io/keycloak/keycloak@sha256:[0-9a-f]{64}", args.keycloak_repo_digest):
+        parser.error("invalid Keycloak repository digest")
+    if not re.fullmatch(r"docker\.io/library/postgres@sha256:[0-9a-f]{64}", args.postgres_repo_digest):
+        parser.error("invalid PostgreSQL repository digest")
     if not re.fullmatch(r"[0-9][A-Za-z0-9 .()+~_-]{0,127}", args.postgres_version):
         parser.error("invalid PostgreSQL server version")
     try:
@@ -69,6 +75,8 @@ def main() -> None:
         "tested_sha": args.tested_sha,
         "keycloak_image": args.keycloak_image,
         "keycloak_image_id": args.keycloak_image_id,
+        "keycloak_repo_digest": args.keycloak_repo_digest,
+        "postgres_repo_digest": args.postgres_repo_digest,
         "postgres_server_version": args.postgres_version,
         "test_command": _TEST_COMMAND,
         "workflow_file": ".github/workflows/keycloak-bind-role-rehearsal.yml",

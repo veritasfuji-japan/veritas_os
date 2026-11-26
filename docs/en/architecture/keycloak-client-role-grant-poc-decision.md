@@ -130,6 +130,8 @@ Run **Keycloak Bind Role Rehearsal** from GitHub Actions to repeat the
 disposable Keycloak/PostgreSQL test. A successful run publishes
 `keycloak-rehearsal-evidence-<tested-sha>` with the actual checkout SHA,
 Keycloak image reference and ID, PostgreSQL server version, and pytest command.
+Use the Keycloak and PostgreSQL repository digests to pull the recorded images
+instead of resolving the version tags again.
 The two crash cases report provider grant events, recovery POST counts,
 reservation rejections, final states, and the confirmation and receipt hashes
 when published. The report omits provider credentials, request bodies, external
