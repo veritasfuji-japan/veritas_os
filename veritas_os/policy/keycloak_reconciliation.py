@@ -23,7 +23,10 @@ from veritas_os.policy.keycloak_reconciliation_observation import (
     KeycloakReconciliationObservation,
     get_keycloak_reconciliation_observation,
 )
-from veritas_os.policy.keycloak_role_grant_binding import verify_keycloak_role_grant_binding
+from veritas_os.policy.keycloak_role_grant_binding import (
+    KeycloakLabDeployment,
+    verify_keycloak_role_grant_binding,
+)
 from veritas_os.security.hash import sha256_of_canonical_json
 
 AUDIT_PAGE_LIMIT = 100
@@ -174,6 +177,7 @@ async def confirm_keycloak_reconciliation(
     writer_client: str,
     read_admin_events: Callable[[KeycloakDispatchIntent], Awaitable[object]],
     read_direct_mappings: Callable[[KeycloakDispatchIntent], Awaitable[object]],
+    lab_deployment: KeycloakLabDeployment | None = None,
 ) -> EffectStateRecord | None:
     """Confirm one reservation using read callbacks supplied by trusted application wiring.
 
@@ -187,16 +191,27 @@ async def confirm_keycloak_reconciliation(
     if current is None or current.state != EffectExecutionState.EFFECT_UNKNOWN:
         return None
     intent = await get_keycloak_dispatch_intent(operation_id)
-    observation = await get_keycloak_reconciliation_observation(operation_id) if intent else None
+    observation = (
+        await get_keycloak_reconciliation_observation(operation_id) if intent else None
+    )
+    policy_digest = keycloak_reconciliation_policy_digest(writer_user, writer_client)
+    if lab_deployment is not None:
+        if (
+            type(lab_deployment) is not KeycloakLabDeployment
+            or intent is None
+            or intent.target != lab_deployment.target
+            or (writer_user, writer_client)
+            != (lab_deployment.writer_user, lab_deployment.writer_client)
+        ):
+            return None
+        policy_digest = lab_deployment.digest()
     if (
         intent is None or observation is None
         or observation.reservation_record_hash != current.record_hash
         or observation.approved_reference != intent.approved_reference
         or str(observation.attempt_id) != intent.attempt_id
         or observation.mapping_observed_at > datetime.now(UTC)
-        or intent.deployment_policy_digest != keycloak_reconciliation_policy_digest(
-            writer_user, writer_client,
-        )
+        or intent.deployment_policy_digest != policy_digest
     ):
         return None
     try:
@@ -230,13 +245,20 @@ async def confirm_keycloak_reconciliation(
         ),
     )
     record = EffectStateRecord(**values, record_hash=sha256_of_canonical_json(values))
-    return await _commit_keycloak_confirmation(current, record, observation)
+    return await _commit_keycloak_confirmation(
+        current,
+        record,
+        observation,
+        require_lab_commitment=lab_deployment is not None,
+    )
 
 
 async def _commit_keycloak_confirmation(
     current: EffectStateRecord,
     record: EffectStateRecord,
     observation: KeycloakReconciliationObservation,
+    *,
+    require_lab_commitment: bool,
 ) -> EffectStateRecord | None:
     from psycopg.types.json import Jsonb
     from veritas_os.storage.db import get_pool
@@ -251,12 +273,16 @@ async def _commit_keycloak_confirmation(
                 "WHERE k.operation_id=e.operation_id AND e.operation_id=%s "
                 "AND e.state=%s AND e.revision=%s AND e.record_hash=%s "
                 "AND e.record::jsonb=%s::jsonb AND e.reconciliation_archive IS NULL "
-                "AND k.reconciliation_observation::jsonb=%s::jsonb RETURNING e.operation_id",
+                "AND k.reconciliation_observation::jsonb=%s::jsonb "
+                "AND (NOT %s OR EXISTS (SELECT 1 FROM bind_sandbox_dispatch_order AS d "
+                "WHERE d.authorization_id=e.authorization_id "
+                "AND d.resolution='KEYCLOAK_DISPATCH_ALREADY_COMMITTED')) RETURNING e.operation_id",
                 (
                     record.state.value, record.revision, record.updated_at, record.record_hash,
                     Jsonb(record.model_dump(mode="json")), current.operation_id, current.state.value,
                     current.revision, current.record_hash, Jsonb(current.model_dump(mode="json")),
                     Jsonb(observation.model_dump(mode="json")),
+                    require_lab_commitment,
                 ),
             )
             committed = await cursor.fetchone() is not None

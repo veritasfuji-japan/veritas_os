@@ -184,6 +184,7 @@ async def _run_postgresql_probe(timeout_seconds: float) -> None:
 # ---------------------------------------------------------------------------
 
 _pool: Optional[object] = None  # AsyncConnectionPool | None
+_pool_open_task: asyncio.Task | None = None
 
 
 async def get_pool():
@@ -197,10 +198,25 @@ async def get_pool():
     -------
     psycopg_pool.AsyncConnectionPool
     """
-    global _pool
+    global _pool_open_task
     if _pool is not None:
         return _pool
+    if _pool_open_task is None:
+        _pool_open_task = asyncio.create_task(_open_pool())
+        _pool_open_task.add_done_callback(_finish_pool_open)
+    return await asyncio.shield(_pool_open_task)
 
+
+def _finish_pool_open(task: asyncio.Task) -> None:
+    global _pool_open_task
+    _pool_open_task = None
+    # Consume failures even if every caller was cancelled while waiting.
+    if not task.cancelled():
+        task.exception()
+
+
+async def _open_pool():
+    global _pool
     _require_psycopg()
     from psycopg_pool import AsyncConnectionPool
 
@@ -218,10 +234,17 @@ async def get_pool():
         max_size=max_size,
         open=False,
     )
-    await pool.open(wait=True)
+    try:
+        await pool.open(wait=True)
+    except (Exception, asyncio.CancelledError):
+        try:
+            await pool.close()
+        except Exception:
+            logger.exception("Error closing an uninitialized PostgreSQL pool")
+        raise
     _pool = pool
     logger.info("PostgreSQL connection pool ready")
-    return _pool
+    return pool
 
 
 async def close_pool() -> None:
@@ -230,6 +253,13 @@ async def close_pool() -> None:
     Safe to call even when no pool has been created.
     """
     global _pool
+    if _pool_open_task is not None:
+        try:
+            await asyncio.shield(_pool_open_task)
+        except Exception:
+            logger.exception(
+                "PostgreSQL connection pool initialization failed during shutdown"
+            )
     if _pool is None:
         return
     try:

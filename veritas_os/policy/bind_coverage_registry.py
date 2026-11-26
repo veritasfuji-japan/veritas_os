@@ -13,6 +13,8 @@ AuthorityControlType = Literal["authority_evidence", "bind_authority_signal", "n
 BlockBehavior = Literal["block", "not_required"]
 FailureMode = Literal["fail_closed"]
 
+KEYCLOAK_LAB_SCOPE = "KEYCLOAK_DISPOSABLE_LOOPBACK_LAB_V1"
+
 _ALLOWED_EFFECT_LEVELS = {"low", "medium", "high", "critical"}
 
 
@@ -149,6 +151,37 @@ _BIND_COVERAGE_REGISTRY: tuple[BindCoverageEntry, ...] = (
         proof_scope=PROOF_SCOPE,
     ),
     BindCoverageEntry(
+        operation_id="native_v2_keycloak_loopback_lab",
+        operation_type="governance_action",
+        action_class="keycloak.client-role.grant.v1",
+        effect_level="critical",
+        requires_bind=True,
+        authority_control_type="authority_evidence",
+        requires_authority_evidence=True,
+        requires_human_approval=True,
+        requires_policy_snapshot=True,
+        expected_without_authority="block",
+        expected_without_human_approval="block",
+        default_failure_mode="fail_closed",
+        implementation_refs=("veritas_os/policy/keycloak_lab_executor.py",),
+        test_refs=("veritas_os/tests/test_keycloak_bind_role_rehearsal.py",),
+        docs_refs=("docs/en/architecture/keycloak-client-role-grant-poc-decision.md",),
+        boundary_note="one fixed role grant in the disposable loopback Keycloak lab",
+        coverage_entry_id="keycloak-loopback-lab-v1",
+        authorization_mode="consumed_native_v2_authorization",
+        execution_entrypoint_id="keycloak-lab-executor.execute",
+        runtime_implementation="veritas_os.policy.keycloak_lab_executor.KeycloakLabExecutor",
+        effect_boundary_id="native-v2-keycloak-loopback-lab",
+        dispatch_kind="ACTION",
+        endpoint_binding_requirements=(
+            "exact_deployment_endpoint",
+            "loopback_pinned_tls_peer",
+        ),
+        credential_binding_requirements=("credential_reference", "credential_scope"),
+        request_binding_requirements=("exact_body_bytes", "business_event_identity"),
+        proof_scope=KEYCLOAK_LAB_SCOPE,
+    ),
+    BindCoverageEntry(
         operation_id="saas_permission_change_demo",
         operation_type="demo",
         action_class="permission_change",
@@ -243,8 +276,11 @@ def validate_bind_coverage_registry(
             errors.append(f"duplicate operation_id: {entry.operation_id}")
         seen_ids.add(entry.operation_id)
 
-        if entry.proof_scope == PROOF_SCOPE:
-            if not entry.coverage_entry_id or entry.coverage_entry_id in seen_coverage_ids:
+        if entry.proof_scope in {PROOF_SCOPE, KEYCLOAK_LAB_SCOPE}:
+            if (
+                not entry.coverage_entry_id
+                or entry.coverage_entry_id in seen_coverage_ids
+            ):
                 errors.append(
                     f"duplicate or empty coverage_entry_id: {entry.coverage_entry_id}"
                 )
@@ -357,13 +393,14 @@ def match_frozen_runtime_boundary(
     effect_boundary_id: str,
     dispatch_kind: str,
     entries: list[BindCoverageEntry] | None = None,
+    proof_scope: str = PROOF_SCOPE,
 ) -> BindCoverageEntry:
-    """Return exactly one exact-class V1 match or fail closed."""
+    """Return exactly one match for the concrete runtime and approved proof scope."""
     identity = f"{type(runtime).__module__}.{type(runtime).__qualname__}"
     matches = [
         entry
         for entry in (entries or load_bind_coverage_registry())
-        if entry.proof_scope == PROOF_SCOPE
+        if entry.proof_scope == proof_scope
         and entry.runtime_implementation == identity
         and entry.effect_boundary_id == effect_boundary_id
         and entry.dispatch_kind == dispatch_kind
