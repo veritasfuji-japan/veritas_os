@@ -151,3 +151,49 @@ identifiers, and full receipt contents.
 A maintainer-approved boundary registration, a pinned PoC configuration, and
 passing crash/recovery evidence are required before offering the adapter as a
 deployable PoC.
+
+## Isolated PoC implementation review
+
+**Decision pending.** Review whether to implement an adapter for the following
+isolated configuration. Review approval would cover implementation and testing
+in the dedicated lab, with separate approval for credentials or deployment
+outside that lab.
+
+### Boundary to approve
+
+- Allow one preconfigured client role assignment to one synthetic user in one
+  dedicated Keycloak realm. Bind the HTTPS origin, realm name and ID, user ID,
+  client UUID, role name and UUID, POST route and canonical body to the approved
+  execution intent. Reject substitutions before transport.
+- Use distinct credentials for the single grant POST, admin-event reads, and
+  direct-mapping reads. Keep bootstrap administration with the lab operator.
+  If provider policy cannot enforce the configured target scope, confine the
+  credentials and all writes to the disposable realm.
+- Require current governance checks, durable single-use consumption and a
+  committed PostgreSQL reservation before HTTPS dispatch. Pin the approved
+  endpoint and trust anchors. Allow one POST with bounded timeouts, redirects
+  disabled, and transport retries disabled.
+- Recover using read-only reconciliation and the stored attempt identity.
+  Persist the confirmed outcome and audit receipts only after the bound event
+  and direct mapping are verified.
+
+### Evidence and remaining acceptance work
+
+The [PR #2556 rehearsal artifact](https://github.com/veritasfuji-japan/veritas_os/actions/runs/45731492668/artifacts/15077790117)
+records CI checkout `20162ee89d99e7dda937dad6a6915f6a54c3a48f` and both
+container repository digests. The [merge into main](https://github.com/veritasfuji-japan/veritas_os/commit/bdb8db78b838f9ec0f8f5e047f0ec9ad174f6f8f)
+has SHA `bdb8db78b838f9ec0f8f5e047f0ec9ad174f6f8f`. A separate
+[`main` workflow run](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/keycloak-bind-role-rehearsal.yml)
+and its artifact are pending. Record the run ID, exact tested SHA and artifact
+link here before treating the result as evidence from `main`.
+
+| Acceptance area | Evidence available for review | Required before offering the adapter |
+| --- | --- | --- |
+| Request binding and contention | The rehearsal composes signed requests with PostgreSQL and denies a replacement reservation for the same business event. | Exercise the actual registered HTTPS boundary with changed binding inputs and two separate sender workers. |
+| Crash before POST or after accepted POST with a lost response | The artifact records 0 and 1 provider grant events, respectively, with 0 recovery POSTs in both cases. The positive case includes verified receipt hashes. | Repeat against the approved adapter entry point and pinned lab configuration. |
+| Ambiguous PostgreSQL commit | The [PostgreSQL regression](../../../veritas_os/tests/test_pg_bind_effect_state_contention.py#L754) injects a lost acknowledgement and proves that a committed reservation survives and cannot be claimed again. | Inject acknowledgement loss at the adapter boundary and measure 0 outgoing grant POSTs from the affected worker. |
+| Reader credentials | The [Keycloak rehearsal](../../../veritas_os/tests/test_keycloak_bind_role_rehearsal.py#L390) checks a denied grant route for the mapping reader, and [checks the same for the audit reader](../../../veritas_os/tests/test_keycloak_bind_role_rehearsal.py#L501). | Check denial of both grant and audit mutations for each provisioned reader using the approved provider policy. |
+| Unresolved evidence | The rehearsal exercises missing mappings, role revocation and retry refusal in its isolated fixtures. | Exercise missing, ambiguous and stale observations through the registered adapter recovery path, and verify that they stay unresolved with 0 grant POSTs. |
+
+The maintainer decision is whether this boundary is acceptable for isolated
+implementation. A successful rehearsal supplies evidence for that decision.
