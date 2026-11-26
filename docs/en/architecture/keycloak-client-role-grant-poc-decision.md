@@ -126,6 +126,17 @@ PostgreSQL. Kill and restart that process with the original database, and use
 observed provider writes rather than in-process counters as evidence. Report
 the tested commit and a sanitized attempt/evidence summary.
 
+Run **Keycloak Bind Role Rehearsal** from GitHub Actions to repeat the
+disposable Keycloak/PostgreSQL test. A successful run publishes
+`keycloak-rehearsal-evidence-<tested-sha>` with the actual checkout SHA,
+Keycloak image reference and ID, PostgreSQL server version, and pytest command.
+Use the Keycloak and PostgreSQL repository digests to pull the recorded images
+instead of resolving the version tags again.
+The two crash cases report provider grant events, recovery POST counts,
+reservation rejections, final states, and the confirmation and receipt hashes
+when published. The report omits provider credentials, request bodies, external
+identifiers, and full receipt contents.
+
 | Scenario | Required result |
 | --- | --- |
 | Target, request, verifier, or deployment binding is different, including a marker changed after approval | Zero Keycloak grant POSTs. |

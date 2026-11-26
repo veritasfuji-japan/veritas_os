@@ -713,7 +713,10 @@ async def _read_durable_grant(operation_id, record_hash, keycloak):
             approved_reference=recovered.approved_reference,
         )
 
+        recovery_methods = []
+
         async def require_read(request: httpx.Request) -> None:
+            recovery_methods.append(request.method)
             assert request.method == "GET"
 
         async with httpx.AsyncClient(
@@ -789,6 +792,7 @@ async def _read_durable_grant(operation_id, record_hash, keycloak):
         return {
             "attempt_id": recovered.attempt_id,
             "grant_events": len(grant_events),
+            "recovery_post_requests": recovery_methods.count("POST"),
             "audit_id": audit_id,
             "mappings": mappings,
             "archive": observation.model_dump(mode="json") if observation is not None else None,
@@ -1051,3 +1055,23 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         asyncio.run(_reject_corrupted_receipt_bundles(operation_id, receipts))
     else:
         assert receipts is None and audit_result is None
+
+    evidence_dir = os.getenv("VERITAS_KEYCLOAK_EVIDENCE_DIR")
+    if evidence_dir:
+        assert final_record is not None
+        scenario = "kill-after-lost-response" if send else "kill-before-post"
+        evidence = {
+            "scenario": scenario,
+            "provider_grant_events": report["grant_events"],
+            "recovery_post_requests": report["recovery_post_requests"],
+            "blocked_reservations": len(attempts),
+            "effect_state": final_record.state.value,
+            "effect_record_hash": final_record.record_hash,
+            "confirmation_hash": final_record.reconciliation_evidence_hash,
+            "receipt_bundle_hash": audit_result["bundle_hash"] if audit_result else None,
+            "bind_receipt_hash": audit_result["bind_receipt"]["bind_receipt_hash"] if audit_result else None,
+            "outcome_hash": audit_result["outcome_receipt"]["outcome_hash"] if audit_result else None,
+        }
+        output = Path(evidence_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        (output / f"{scenario}.json").write_text(json.dumps(evidence), encoding="utf-8")
