@@ -39,6 +39,12 @@ DISPATCH_CLAIMS = """
     ) OR (dispatch.resolution = 'KEYCLOAK_REVOKED_BEFORE_DISPATCH' AND effect.operation_id IS NOT NULL)
     ORDER BY dispatch.authorization_id COLLATE "C"
 """
+KEYCLOAK_INTENTS = """
+    SELECT effect.authorization_id, intent.intent::jsonb
+    FROM public.bind_keycloak_dispatch_intents AS intent
+    JOIN public.bind_effect_states AS effect USING (operation_id)
+    WHERE effect.authorization_id = ANY(%s)
+"""
 BUSINESS_EVENT_UNIQUENESS = """
     SELECT EXISTS (
         SELECT 1
@@ -109,7 +115,15 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
             raise SandboxRestoreError("The source does not match the independently recorded recovery digest.")
         authoritative = source_state["ordering"]
         restored = dict(target.execute(ORDERING).fetchall())
-        if any(authoritative.get(key) != resolution for key, resolution in restored.items()):
+        later_keycloak_revocations = {
+            key for key, resolution in restored.items()
+            if resolution == "KEYCLOAK_RESERVED"
+            and authoritative.get(key) == "KEYCLOAK_REVOKED_BEFORE_DISPATCH"
+        }
+        if any(
+            authoritative.get(key) != resolution and key not in later_keycloak_revocations
+            for key, resolution in restored.items()
+        ):
             raise SandboxRestoreError("The source does not contain matching decisions for the restored ordering.")
 
         missing = {key: value for key, value in authoritative.items() if key not in restored}
@@ -123,6 +137,19 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
         if source_state["native_consumptions"] != target_consumptions:
             raise SandboxRestoreError("Native v2 consumption records differ. Restore a matching verified backup.")
 
+        source_claim_ids = {key for key, _, _ in source_state["dispatch_claims"]}
+        if not later_keycloak_revocations.issubset(source_claim_ids):
+            raise SandboxRestoreError("The source lacks a business event claim for a later Keycloak revocation.")
+        if later_keycloak_revocations:
+            # Take matching snapshots of the immutable reservation payloads
+            # before replaying cancellations over them.
+            keys = sorted(later_keycloak_revocations)
+            source.execute("LOCK TABLE public.bind_keycloak_dispatch_intents IN SHARE MODE")
+            target.execute("LOCK TABLE public.bind_keycloak_dispatch_intents IN SHARE ROW EXCLUSIVE MODE")
+            source_intents = dict(source.execute(KEYCLOAK_INTENTS, (keys,)).fetchall())
+            target_intents = dict(target.execute(KEYCLOAK_INTENTS, (keys,)).fetchall())
+            if source_intents.keys() != later_keycloak_revocations or source_intents != target_intents:
+                raise SandboxRestoreError("Keycloak reservation intents differ. Restore a matching verified backup.")
         if target.execute(BUSINESS_EVENT_UNIQUENESS).fetchone() != (True,):
             raise SandboxRestoreError("The target lacks an enforced unique Sandbox business event index.")
 
@@ -134,6 +161,12 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
             cursor.executemany(
                 "INSERT INTO public.bind_sandbox_dispatch_order (authorization_id, resolution) VALUES (%s, %s)",
                 missing.items(),
+            )
+            cursor.executemany(
+                "UPDATE public.bind_sandbox_dispatch_order "
+                "SET resolution = 'KEYCLOAK_REVOKED_BEFORE_DISPATCH' "
+                "WHERE authorization_id = %s AND resolution = 'KEYCLOAK_RESERVED'",
+                ((key,) for key in sorted(later_keycloak_revocations)),
             )
             cursor.executemany(
                 """INSERT INTO public.bind_sandbox_revocation_audit

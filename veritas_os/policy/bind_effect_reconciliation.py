@@ -974,6 +974,31 @@ class PostgresAtomicEffectStateStore:
         except Exception:
             raise BindEffectStateError("BES_POSTGRES_NO_EFFECT_ARBITRATION_FAILED") from None
 
+    async def _register_sandbox_revocation_scope(
+        self, authorization_id: str, *, origin_authority: object,
+    ) -> None:
+        if origin_authority is not _SANDBOX_ORIGIN_CAPABILITY:
+            raise BindEffectStateError("BES_SANDBOX_ORIGIN_AUTHORITY_REQUIRED")
+        from veritas_os.storage import sandbox_restore
+        from veritas_os.storage.db import get_pool
+
+        try:
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                await conn.execute(sandbox_restore.LOCK_SHARED)
+                recovery = await conn.execute(sandbox_restore.RECOVERY_PENDING)
+                if await recovery.fetchone() != (False,):
+                    raise BindEffectStateError("BES_SANDBOX_RESTORE_RECOVERY_PENDING")
+                await conn.execute(
+                    "INSERT INTO public.bind_sandbox_revocation_scopes (authorization_id) "
+                    "VALUES (%s) ON CONFLICT (authorization_id) DO NOTHING",
+                    (authorization_id,),
+                )
+        except BindEffectStateError:
+            raise
+        except Exception:
+            raise BindEffectStateError("BES_SANDBOX_REVOCATION_SCOPE_REGISTRATION_FAILED") from None
+
     async def revoke_sandbox_authorization(self, authorization_id: str) -> SandboxAuthorizationRevocation:
         """Order a trusted caller's revocation against sandbox dispatch commitment."""
         if not re.fullmatch(NATIVE_AUTHORIZATION_ID_PATTERN, authorization_id):
@@ -985,11 +1010,13 @@ class PostgresAtomicEffectStateStore:
             async with pool.connection() as conn:
                 cur = await conn.execute(
                     "INSERT INTO bind_sandbox_dispatch_order (authorization_id, resolution) "
-                    "VALUES (%s, %s) ON CONFLICT (authorization_id) DO UPDATE "
+                    "SELECT %s, %s WHERE public.sandbox_revocation_scope_allows(%s) "
+                    "ON CONFLICT (authorization_id) DO UPDATE "
                     "SET resolution = bind_sandbox_dispatch_order.resolution "
                     "WHERE bind_sandbox_dispatch_order.resolution IN (%s, %s) RETURNING resolution",
                     (
                         authorization_id, SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH.value,
+                        authorization_id,
                         SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH.value,
                         SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED.value,
                     ),

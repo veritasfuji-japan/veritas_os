@@ -204,8 +204,12 @@ Migration `0019` records Keycloak reservations, cancellations and dispatch
 commitments in the same PostgreSQL ordering table as Sandbox, with distinct
 Keycloak values. The trusted Keycloak control-plane function verifies the signed
 authorization and exact Keycloak binding even before consumption or reservation.
-The Sandbox operator function remains scoped to Sandbox. A Keycloak ordering
-row cannot produce a successful Sandbox cancellation or a Sandbox audit entry.
+Before a trusted operator can cancel an unreserved Sandbox authorization,
+the control plane must call `register_sandbox_revocation_scope` with the
+signed native artifact and its exact Sandbox binding. A verified Sandbox
+attempt already provides durable scope. Both Sandbox cancellation interfaces
+require that scope and reject existing Keycloak intents, including reservations
+created before migration `0019`. Operator grants remain independently required.
 An existing Sandbox ordering row blocks a Keycloak commitment for the same ID.
 
 A reservation commits its ordering row, effect row and recovery intent
@@ -219,6 +223,7 @@ boundary. There is no Keycloak operator SQL entry point in this change.
 Apply the migration with workers drained and use the same PostgreSQL primary.
 Existing Keycloak reservations remain readable for reconciliation and cannot
 be resumed through the new commitment path. Use the matching restore reconciler
-before clearing the restore fence. It checks ordering and affected business
-event claims. The migration refuses downgrade while Keycloak ordering history
-exists.
+before clearing the restore fence. It can replay an authoritative Keycloak
+revocation over a restored reservation when the durable consumption and
+business event claims match. Other decision conflicts keep the fence set.
+The migration refuses downgrade while Keycloak ordering history exists.

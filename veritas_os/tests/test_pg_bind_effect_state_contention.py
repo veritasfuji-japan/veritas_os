@@ -939,10 +939,11 @@ async def test_keycloak_revocation_orders_against_dispatch_commitment(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("reservation_state", ["unreserved", "legacy", "reserved"])
 async def test_keycloak_ordering_cannot_be_acknowledged_by_sandbox_revocation(
-    keycloak_signed_reservations,
+    keycloak_signed_reservations, reservation_state,
 ) -> None:
-    from psycopg.errors import CheckViolation
+    from psycopg.errors import InsufficientPrivilege
     from veritas_os.policy.bind_effect_reconciliation import BindEffectStateError, KeycloakDispatchOrder
     from veritas_os.policy.keycloak_dispatch_reservation import (
         reserve_keycloak_dispatch,
@@ -952,29 +953,36 @@ async def test_keycloak_ordering_cannot_be_acknowledged_by_sandbox_revocation(
     from veritas_os.tests.test_pg_sandbox_dispatch_revocation import operator_session
 
     args = keycloak_signed_reservations[0]
-    assert await PostgresAtomicAuthorizationConsumptionStore().consume_once(args["consumption"])
-    record = await reserve_keycloak_dispatch(**args)
-    assert record is not None
+    authorization_id = args["authorization"].authorization_id
+    pool = await db.get_pool()
+    if reservation_state != "unreserved":
+        assert await PostgresAtomicAuthorizationConsumptionStore().consume_once(args["consumption"])
+        assert await reserve_keycloak_dispatch(**args) is not None
+    if reservation_state == "legacy":
+        async with pool.connection() as conn:
+            await conn.execute(
+                "DELETE FROM bind_sandbox_dispatch_order WHERE authorization_id = %s", (authorization_id,),
+            )
 
     with pytest.raises(BindEffectStateError, match="BES_SANDBOX_REVOCATION_SCOPE_MISMATCH"):
-        await PostgresAtomicEffectStateStore().revoke_sandbox_authorization(record.authorization_id)
+        await PostgresAtomicEffectStateStore().revoke_sandbox_authorization(authorization_id)
 
-    pool = await db.get_pool()
-    async with operator_session(pool, record.authorization_id) as (operator, _):
-        with pytest.raises(CheckViolation):
+    async with operator_session(pool, authorization_id) as (operator, _):
+        with pytest.raises(InsufficientPrivilege, match="Sandbox authorization binding required"):
             await operator.execute(
                 "SELECT * FROM public.revoke_sandbox_authorization(%s, %s)",
-                (record.authorization_id, "fixture cancellation"),
+                (authorization_id, "fixture cancellation"),
             )
     async with pool.connection() as conn:
         ordering = await conn.execute(
             "SELECT resolution FROM bind_sandbox_dispatch_order WHERE authorization_id = %s",
-            (record.authorization_id,),
+            (authorization_id,),
         )
-        assert await ordering.fetchone() == (KeycloakDispatchOrder.RESERVED.value,)
+        expected = (KeycloakDispatchOrder.RESERVED.value,) if reservation_state == "reserved" else None
+        assert await ordering.fetchone() == expected
         audit = await conn.execute(
             "SELECT count(*) FROM bind_sandbox_revocation_audit WHERE authorization_id = %s",
-            (record.authorization_id,),
+            (authorization_id,),
         )
         assert await audit.fetchone() == (0,)
     cancellation = {key: value for key, value in args.items() if key != "consumption"}
@@ -1063,3 +1071,80 @@ async def test_keycloak_dispatch_commitment_respects_restore_fence(
         await set_restore_pending(False)
     assert await dispatch.revoke_keycloak_authorization(**cancellation) == KeycloakDispatchOrder.REVOKED
     assert await dispatch.reserve_and_commit_keycloak_dispatch(**args) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires PostgreSQL backup clients")
+async def test_restore_replays_keycloak_revocation_of_existing_reservation(
+    keycloak_signed_reservations, tmp_path,
+) -> None:
+    import subprocess
+    from pathlib import Path
+
+    import psycopg
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
+    from scripts.governance.reconcile_sandbox_restore import SandboxRestoreError, reconcile, recovery_digest
+    from veritas_os.policy.bind_effect_reconciliation import KeycloakDispatchOrder
+    from veritas_os.policy.keycloak_dispatch_reservation import (
+        reserve_keycloak_dispatch,
+        revoke_keycloak_authorization,
+    )
+    from veritas_os.storage import db, sandbox_restore
+
+    args = keycloak_signed_reservations[0]
+    assert await PostgresAtomicAuthorizationConsumptionStore().consume_once(args["consumption"])
+    reservation = await reserve_keycloak_dispatch(**args)
+    assert reservation is not None
+    source_dsn = db.build_conninfo()
+    database = f"keycloak_restore_{uuid4().hex}"
+    target_dsn = make_conninfo(source_dsn, dbname=database)
+    connection = conninfo_to_dict(source_dsn)
+    env = os.environ.copy()
+    env.update({
+        variable: connection[key]
+        for key, variable in (
+            ("host", "PGHOST"), ("port", "PGPORT"), ("user", "PGUSER"),
+            ("password", "PGPASSWORD"), ("dbname", "PGDATABASE"), ("sslmode", "PGSSLMODE"),
+        )
+        if key in connection
+    })
+    scripts = Path(__file__).resolve().parents[2] / "scripts"
+    await asyncio.to_thread(
+        subprocess.run, ["bash", str(scripts / "backup_postgres.sh"), "--output", str(tmp_path)],
+        env=env, capture_output=True, text=True, timeout=60, check=True,
+    )
+    (archive,) = tmp_path.glob("veritas_*.dump")
+    cancellation = {key: value for key, value in args.items() if key != "consumption"}
+    assert await revoke_keycloak_authorization(**cancellation) == KeycloakDispatchOrder.REVOKED
+    await asyncio.to_thread(
+        subprocess.run,
+        ["bash", str(scripts / "restore_postgres.sh"), "--mode=test", "--test-db", database, str(archive)],
+        env=env, capture_output=True, text=True, timeout=60, check=True,
+    )
+    with psycopg.connect(source_dsn, autocommit=True) as source, psycopg.connect(
+        target_dsn, autocommit=True,
+    ) as target:
+        digest = recovery_digest(source)
+        select = "SELECT resolution FROM bind_sandbox_dispatch_order WHERE authorization_id = %s"
+        key = (reservation.authorization_id,)
+        assert target.execute(select, key).fetchone() == (KeycloakDispatchOrder.RESERVED.value,)
+        with target.transaction(force_rollback=True):
+            target.execute(
+                "UPDATE bind_effect_states SET business_event_key = NULL WHERE operation_id = %s",
+                (reservation.operation_id,),
+            )
+            with pytest.raises(SandboxRestoreError, match="business event claims differ"):
+                reconcile(source, target, digest)
+            assert target.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+            assert target.execute(select, key).fetchone() == (KeycloakDispatchOrder.RESERVED.value,)
+        with target.transaction(force_rollback=True):
+            target.execute(
+                "DELETE FROM bind_keycloak_dispatch_intents WHERE operation_id = %s",
+                (reservation.operation_id,),
+            )
+            with pytest.raises(SandboxRestoreError, match="reservation intents differ"):
+                reconcile(source, target, digest)
+            assert target.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+        reconcile(source, target, digest)
+        assert target.execute(select, key).fetchone() == (KeycloakDispatchOrder.REVOKED.value,)
+        assert target.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (False,)
