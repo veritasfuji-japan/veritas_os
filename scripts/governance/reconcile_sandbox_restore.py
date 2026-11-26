@@ -30,8 +30,13 @@ DISPATCH_CLAIMS = """
     LEFT JOIN public.bind_effect_states AS effect
         ON effect.authorization_id = dispatch.authorization_id
         AND effect.consumption_id = consumption.consumption_id
-        AND effect.effect_provenance = 'SANDBOX_PRE_DISPATCH_V1'
-    WHERE dispatch.resolution = 'DISPATCH_ALREADY_COMMITTED'
+        AND effect.effect_provenance = CASE
+            WHEN dispatch.resolution = 'DISPATCH_ALREADY_COMMITTED' THEN 'SANDBOX_PRE_DISPATCH_V1'
+            ELSE 'GENERIC_AMBIGUOUS_V1'
+        END
+    WHERE dispatch.resolution IN (
+        'DISPATCH_ALREADY_COMMITTED', 'KEYCLOAK_RESERVED', 'KEYCLOAK_DISPATCH_ALREADY_COMMITTED'
+    ) OR (dispatch.resolution = 'KEYCLOAK_REVOKED_BEFORE_DISPATCH' AND effect.operation_id IS NOT NULL)
     ORDER BY dispatch.authorization_id COLLATE "C"
 """
 BUSINESS_EVENT_UNIQUENESS = """
@@ -62,7 +67,7 @@ class SandboxRestoreError(ValueError):
 def _read_recovery_state(connection: psycopg.Connection) -> dict:
     dispatch_claims = connection.execute(DISPATCH_CLAIMS).fetchall()
     if any(not operation_id or not key for _, operation_id, key in dispatch_claims):
-        raise SandboxRestoreError("The source lacks a business event claim for a committed Sandbox dispatch.")
+        raise SandboxRestoreError("The source lacks a business event claim required by dispatch ordering.")
     return {
         "ordering": dict(connection.execute(ORDERING).fetchall()),
         "native_consumptions": connection.execute(NATIVE_CONSUMPTIONS, (NATIVE_AUTHORIZATION_ID_PATTERN,)).fetchall(),
@@ -108,15 +113,16 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
             raise SandboxRestoreError("The source does not contain matching decisions for the restored ordering.")
 
         missing = {key: value for key, value in authoritative.items() if key not in restored}
-        if any(value != "REVOKED_BEFORE_DISPATCH" for value in missing.values()):
+        if any(
+            value not in {"REVOKED_BEFORE_DISPATCH", "KEYCLOAK_REVOKED_BEFORE_DISPATCH"}
+            for value in missing.values()
+        ):
             raise SandboxRestoreError("The backup lacks committed dispatch history. Restore a newer verified backup.")
 
         target_consumptions = target.execute(NATIVE_CONSUMPTIONS, (NATIVE_AUTHORIZATION_ID_PATTERN,)).fetchall()
         if source_state["native_consumptions"] != target_consumptions:
             raise SandboxRestoreError("Native v2 consumption records differ. Restore a matching verified backup.")
 
-        if source_state["dispatch_claims"] != target.execute(DISPATCH_CLAIMS).fetchall():
-            raise SandboxRestoreError("Sandbox dispatch business event claims differ. Restore a matching verified backup.")
         if target.execute(BUSINESS_EVENT_UNIQUENESS).fetchone() != (True,):
             raise SandboxRestoreError("The target lacks an enforced unique Sandbox business event index.")
 
@@ -135,6 +141,8 @@ def reconcile(source: psycopg.Connection, target: psycopg.Connection, expected_d
                    OVERRIDING SYSTEM VALUE VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                 (row for key, row in source_audit.items() if key not in target_audit),
             )
+        if source_state["dispatch_claims"] != target.execute(DISPATCH_CLAIMS).fetchall():
+            raise SandboxRestoreError("Dispatch business event claims differ. Restore a matching verified backup.")
         if source_audit:
             target.execute(
                 sql.SQL("ALTER TABLE public.bind_sandbox_revocation_audit ALTER COLUMN audit_id RESTART WITH {}")

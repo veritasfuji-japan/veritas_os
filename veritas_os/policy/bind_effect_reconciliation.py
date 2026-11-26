@@ -54,6 +54,15 @@ class SandboxAuthorizationRevocation(StrEnum):
     DISPATCH_ALREADY_COMMITTED = "DISPATCH_ALREADY_COMMITTED"
 
 
+
+class KeycloakDispatchOrder(StrEnum):
+    """Provider-scoped values in the shared durable ordering table."""
+
+    RESERVED = "KEYCLOAK_RESERVED"
+    REVOKED = "KEYCLOAK_REVOKED_BEFORE_DISPATCH"
+    COMMITTED = "KEYCLOAK_DISPATCH_ALREADY_COMMITTED"
+
+
 def _is_sandbox_dispatch(
     expected_state: EffectExecutionState, record: EffectStateRecord,
 ) -> bool:
@@ -666,8 +675,25 @@ class PostgresAtomicEffectStateStore:
                 )
             pool = await get_pool()
             async with pool.connection() as conn:
+                if keycloak_intent is not None:
+                    from veritas_os.storage import sandbox_restore
+
+                    await conn.execute(sandbox_restore.LOCK_SHARED)
+                    recovery = await conn.execute(sandbox_restore.RECOVERY_PENDING)
+                    if await recovery.fetchone() != (False,):
+                        return False
+                    claim = await conn.execute(
+                        "INSERT INTO bind_sandbox_dispatch_order (authorization_id, resolution) "
+                        "VALUES (%s, %s) ON CONFLICT (authorization_id) DO NOTHING "
+                        "RETURNING authorization_id",
+                        (record.authorization_id, KeycloakDispatchOrder.RESERVED.value),
+                    )
+                    if await claim.fetchone() is None:
+                        return False
                 cur = await conn.execute(query, parameters)
                 inserted = await cur.fetchone() is not None
+                if keycloak_intent is not None and not inserted:
+                    await conn.rollback()
             return inserted
         except BindEffectStateError:
             raise
@@ -960,12 +986,21 @@ class PostgresAtomicEffectStateStore:
                 cur = await conn.execute(
                     "INSERT INTO bind_sandbox_dispatch_order (authorization_id, resolution) "
                     "VALUES (%s, %s) ON CONFLICT (authorization_id) DO UPDATE "
-                    "SET resolution = bind_sandbox_dispatch_order.resolution RETURNING resolution",
-                    (authorization_id, SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH.value),
+                    "SET resolution = bind_sandbox_dispatch_order.resolution "
+                    "WHERE bind_sandbox_dispatch_order.resolution IN (%s, %s) RETURNING resolution",
+                    (
+                        authorization_id, SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH.value,
+                        SandboxAuthorizationRevocation.REVOKED_BEFORE_DISPATCH.value,
+                        SandboxAuthorizationRevocation.DISPATCH_ALREADY_COMMITTED.value,
+                    ),
                 )
                 row = await cur.fetchone()
+                if row is None:
+                    raise BindEffectStateError("BES_SANDBOX_REVOCATION_SCOPE_MISMATCH")
                 result = SandboxAuthorizationRevocation(row[0])
             return result
+        except BindEffectStateError:
+            raise
         except Exception:
             raise BindEffectStateError("BES_POSTGRES_SANDBOX_REVOCATION_FAILED") from None
 
