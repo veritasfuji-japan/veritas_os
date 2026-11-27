@@ -1437,6 +1437,9 @@ async def test_keycloak_lab_executor_https_boundary(
                     reconcile,
                     recovery_digest,
                 )
+                from veritas_os.policy.native_bind_authorization_consumption import (
+                    NativeAuthorizationConsumptionError,
+                )
                 from veritas_os.storage import db, sandbox_restore
 
                 source_dsn = db.build_conninfo()
@@ -1501,15 +1504,39 @@ async def test_keycloak_lab_executor_https_boundary(
                 assert await bridge.audit_events(require_available=True) == before_events
                 assert await bridge.mappings() == before_mappings
                 if scenario == "restore_then_resume":
+                    consumption_store = PostgresAtomicAuthorizationConsumptionStore()
+                    authorization_id = args["authorization"].authorization_id
+                    original_consumption = await consumption_store.get(authorization_id)
+                    assert original_consumption is not None
+
                     await close_pool()
                     target_url = urlsplit(source_dsn)._replace(path=f"/{database}").geturl()
                     monkeypatch.setenv("VERITAS_DATABASE_URL", target_url)
                     pool = await db.get_pool()
                     async with pool.connection() as conn:
                         assert conn.info.dbname == database
+                    assert await consumption_store.get(authorization_id) == original_consumption
 
-                    with pytest.raises(module.KeycloakLabExecutionError):
-                        await executor.execute(**args)
+                    consume = module.consume_native_bind_authorization
+                    rejection_reasons: list[str] = []
+
+                    async def observe_consumption(*consume_args, **consume_kwargs):
+                        try:
+                            return await consume(*consume_args, **consume_kwargs)
+                        except NativeAuthorizationConsumptionError as error:
+                            rejection_reasons.append(str(error))
+                            raise
+
+                    with monkeypatch.context() as replay_patch:
+                        replay_patch.setattr(
+                            module, "consume_native_bind_authorization", observe_consumption
+                        )
+                        with pytest.raises(
+                            module.KeycloakLabExecutionError,
+                            match="^KGR_LAB_EXECUTION_STOPPED$",
+                        ):
+                            await executor.execute(**args)
+                    assert rejection_reasons == ["NABC_ALREADY_CONSUMED"]
                     assert posts == [first[1].body]
                     assert await bridge.audit_events(require_available=True) == before_events
                     assert await bridge.mappings() == before_mappings

@@ -108,12 +108,14 @@ jobs:
           import sys
           from xml.etree import ElementTree
 
-          cases = [
-              case for case in ElementTree.parse(sys.argv[1]).iter("testcase")
-              if case.get("name") == "test_keycloak_lab_executor_https_boundary[restore_after_grant-True]"
-          ]
-          if len(cases) != 1 or any(cases[0].find(tag) is not None for tag in ("failure", "error", "skipped")):
-              raise SystemExit("The Keycloak restore-after-grant case must run and pass.")
+          report = ElementTree.parse(sys.argv[1])
+          for scenario in ("restore_after_grant", "restore_then_resume"):
+              name = f"test_keycloak_lab_executor_https_boundary[{scenario}-True]"
+              cases = [case for case in report.iter("testcase") if case.get("name") == name]
+              if len(cases) != 1 or any(
+                  cases[0].find(tag) is not None for tag in ("failure", "error", "skipped")
+              ):
+                  raise SystemExit(f"The Keycloak {scenario} case must run once and pass.")
           PYTHON
       - name: Upload Keycloak rehearsal test results
         if: always()
