@@ -197,6 +197,13 @@ def keycloak(request):
                 fixture.update(
                     audit_reader=audit_reader, audit_reader_client=audit_reader_client
                 )
+                if request.node.callspec.params.get("scenario") == "restore_then_resume":
+                    resume_role = "report-editor"
+                    create(f"/clients/{application}/roles", {"name": resume_role})
+                    role_data = expect(client.get(
+                        f"{resource}/clients/{application}/roles/{resume_role}", headers=auth,
+                    ), 200).json()
+                    fixture["resume_role"] = {"id": role_data["id"], "name": resume_role}
             yield fixture
         finally:
             expect(client.delete(resource, headers=auth), 204)
@@ -1135,6 +1142,13 @@ async def lab_db_pool(monkeypatch):
                 reason="requires PostgreSQL backup clients",
             ),
         ),
+        pytest.param(
+            "restore_then_resume",
+            marks=pytest.mark.skipif(
+                os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1",
+                reason="requires PostgreSQL backup clients",
+            ),
+        ),
         "lost_commit",
         "contention",
         "substituted",
@@ -1251,10 +1265,10 @@ async def test_keycloak_lab_executor_https_boundary(
                 "keycloak:role-grant",
             )
 
-            def issue(directory):
+            def issue(directory, *, deployment=deployment, event_id=event_id):
                 attempt_id = str(uuid4())
                 binding = build_keycloak_role_grant_binding(
-                    target=target,
+                    target=deployment.target,
                     event_id=event_id,
                     attempt_id=attempt_id,
                     deployment_policy_digest=deployment.digest(),
@@ -1292,7 +1306,7 @@ async def test_keycloak_lab_executor_https_boundary(
             expected_path = first[1].endpoint_url.removeprefix(target.origin)
             clock_advanced = False
 
-            def wiring(issued):
+            def wiring(issued, *, deployment=deployment, event_id=event_id):
                 attempt_id, _, artifact, inputs = issued
                 gov, source = inputs["governance_inputs"], inputs["source_inputs"]
                 initial = gov.verification_now + timedelta(seconds=1)
@@ -1412,7 +1426,9 @@ async def test_keycloak_lab_executor_https_boundary(
                                 "ALTER DATABASE {} RESET veritas.sandbox_restore_pending"
                             ).format(database)
                         )
-            elif scenario == "restore_after_grant":
+            elif scenario in {"restore_after_grant", "restore_then_resume"}:
+                from urllib.parse import urlsplit
+
                 import psycopg
                 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
@@ -1432,12 +1448,18 @@ async def test_keycloak_lab_executor_https_boundary(
                         name = "PGDATABASE" if key == "dbname" else f"PG{key.upper()}"
                         env[name] = value
                 scripts = Path(__file__).resolve().parents[2] / "scripts"
-                await asyncio.to_thread(
-                    subprocess.run,
-                    ["bash", str(scripts / "backup_postgres.sh"), "--output", str(tmp_path)],
-                    env=env, check=True, capture_output=True, timeout=60,
-                )
-                (archive,) = tmp_path.glob("veritas_*.dump")
+
+                async def backup():
+                    await asyncio.to_thread(
+                        subprocess.run,
+                        ["bash", str(scripts / "backup_postgres.sh"), "--output", str(tmp_path)],
+                        env=env, check=True, capture_output=True, timeout=60,
+                    )
+                    (archive,) = tmp_path.glob("veritas_*.dump")
+                    return archive
+
+                if scenario == "restore_after_grant":
+                    archive = await backup()
                 bridge = KeycloakBridge(upstream, keycloak, None)
                 assert await bridge.audit_events(require_available=True) == []
                 assert await bridge.mappings() == []
@@ -1450,6 +1472,8 @@ async def test_keycloak_lab_executor_https_boundary(
                 assert before_mappings == [
                     {"id": keycloak["role"]["id"], "name": keycloak["role"]["name"]}
                 ]
+                if scenario == "restore_then_resume":
+                    archive = await backup()
                 await asyncio.to_thread(
                     subprocess.run,
                     [
@@ -1462,14 +1486,64 @@ async def test_keycloak_lab_executor_https_boundary(
                     psycopg.connect(source_dsn, autocommit=True) as source,
                     psycopg.connect(target_dsn, autocommit=True) as restored,
                 ):
-                    with pytest.raises(
-                        SandboxRestoreError, match="backup lacks committed dispatch history"
-                    ):
-                        reconcile(source, restored, recovery_digest(source))
                     assert restored.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+                    digest = recovery_digest(source)
+                    if scenario == "restore_after_grant":
+                        with pytest.raises(
+                            SandboxRestoreError, match="backup lacks committed dispatch history"
+                        ):
+                            reconcile(source, restored, digest)
+                        assert restored.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+                    else:
+                        reconcile(source, restored, digest)
+                        assert restored.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (False,)
                 assert posts == [first[1].body]
                 assert await bridge.audit_events(require_available=True) == before_events
                 assert await bridge.mappings() == before_mappings
+                if scenario == "restore_then_resume":
+                    await close_pool()
+                    target_url = urlsplit(source_dsn)._replace(path=f"/{database}").geturl()
+                    monkeypatch.setenv("VERITAS_DATABASE_URL", target_url)
+                    pool = await db.get_pool()
+                    async with pool.connection() as conn:
+                        assert conn.info.dbname == database
+
+                    with pytest.raises(module.KeycloakLabExecutionError):
+                        await executor.execute(**args)
+                    assert posts == [first[1].body]
+                    assert await bridge.audit_events(require_available=True) == before_events
+                    assert await bridge.mappings() == before_mappings
+
+                    role = keycloak["resume_role"]
+                    resume_deployment = replace(
+                        deployment,
+                        target=replace(target, role_id=role["id"], role_name=role["name"]),
+                    )
+                    resume_event_id = f"lab-{uuid4()}"
+                    resumed = issue(
+                        tmp_path / "resumed",
+                        deployment=resume_deployment,
+                        event_id=resume_event_id,
+                    )
+                    resumed_executor, resumed_args = wiring(
+                        resumed, deployment=resume_deployment, event_id=resume_event_id
+                    )
+                    result = await resumed_executor.execute(**resumed_args)
+                    assert result is not None and result.observation == "HTTP_204_UNVERIFIED"
+                    assert posts == [first[1].body, resumed[1].body]
+                    after_events = await bridge.audit_events(require_available=True)
+                    assert len(after_events) == 2 and before_events[0] in after_events
+                    (new_event,) = [event for event in after_events if event not in before_events]
+                    assert new_event["authDetails"]["userId"] == keycloak["writer_user"]
+                    assert new_event["operationType"] == "CREATE"
+                    assert new_event["resourceType"] == "CLIENT_ROLE_MAPPING"
+                    assert any(
+                        entry["id"] == role["id"]
+                        for entry in json.loads(new_event["representation"])
+                    )
+                    assert sorted(item["id"] for item in await bridge.mappings()) == sorted(
+                        [keycloak["role"]["id"], role["id"]]
+                    )
             elif scenario == "lost_commit":
                 commit = module.reserve_and_commit_keycloak_dispatch
                 committed = False
@@ -1530,6 +1604,10 @@ async def test_keycloak_lab_executor_https_boundary(
                 else:
                     assert clock_advanced
 
-            assert len(posts) == (
-                1 if scenario in {"contention", "lost_response", "restore_after_grant"} else 0
-            )
+            expected_posts = {
+                "contention": 1,
+                "lost_response": 1,
+                "restore_after_grant": 1,
+                "restore_then_resume": 2,
+            }
+            assert len(posts) == expected_posts.get(scenario, 0)
