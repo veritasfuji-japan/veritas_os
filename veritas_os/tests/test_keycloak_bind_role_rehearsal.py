@@ -1127,6 +1127,7 @@ async def lab_db_pool(monkeypatch):
     "scenario",
     [
         "cancel_first",
+        "restore_pending",
         "lost_commit",
         "contention",
         "substituted",
@@ -1372,6 +1373,38 @@ async def test_keycloak_lab_executor_https_boundary(
                     == KeycloakDispatchOrder.REVOKED
                 )
                 assert await executor.execute(**args) is None
+            elif scenario == "restore_pending":
+                from psycopg import sql
+
+                from veritas_os.storage import db, sandbox_restore
+
+                bridge = KeycloakBridge(upstream, keycloak, None)
+                before_events = await bridge.audit_events(require_available=True)
+                before_mappings = await bridge.mappings()
+                assert len(before_events) < AUDIT_PAGE_LIMIT
+
+                pool = await db.get_pool()
+                async with pool.connection() as conn:
+                    database = sql.Identifier(conn.info.dbname)
+                    await conn.execute(
+                        sql.SQL(
+                            "ALTER DATABASE {} SET veritas.sandbox_restore_pending TO 'on'"
+                        ).format(database)
+                    )
+                try:
+                    assert await executor.execute(**args) is None
+                    async with pool.connection() as conn:
+                        result = await conn.execute(sandbox_restore.RECOVERY_PENDING)
+                        assert await result.fetchone() == (True,)
+                    assert await bridge.audit_events(require_available=True) == before_events
+                    assert await bridge.mappings() == before_mappings
+                finally:
+                    async with pool.connection() as conn:
+                        await conn.execute(
+                            sql.SQL(
+                                "ALTER DATABASE {} RESET veritas.sandbox_restore_pending"
+                            ).format(database)
+                        )
             elif scenario == "lost_commit":
                 commit = module.reserve_and_commit_keycloak_dispatch
                 committed = False
