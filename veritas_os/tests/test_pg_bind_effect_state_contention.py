@@ -1075,8 +1075,9 @@ async def test_keycloak_dispatch_commitment_respects_restore_fence(
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1", reason="requires PostgreSQL backup clients")
-async def test_restore_replays_keycloak_revocation_of_existing_reservation(
-    keycloak_signed_reservations, tmp_path,
+@pytest.mark.parametrize("source_outcome", ["revoked", "committed"])
+async def test_restore_reconciles_keycloak_ordering(
+    keycloak_signed_reservations, tmp_path, source_outcome,
 ) -> None:
     import subprocess
     from pathlib import Path
@@ -1086,15 +1087,18 @@ async def test_restore_replays_keycloak_revocation_of_existing_reservation(
     from scripts.governance.reconcile_sandbox_restore import SandboxRestoreError, reconcile, recovery_digest
     from veritas_os.policy.bind_effect_reconciliation import KeycloakDispatchOrder
     from veritas_os.policy.keycloak_dispatch_reservation import (
+        reserve_and_commit_keycloak_dispatch,
         reserve_keycloak_dispatch,
         revoke_keycloak_authorization,
     )
     from veritas_os.storage import db, sandbox_restore
 
     args = keycloak_signed_reservations[0]
-    assert await PostgresAtomicAuthorizationConsumptionStore().consume_once(args["consumption"])
-    reservation = await reserve_keycloak_dispatch(**args)
-    assert reservation is not None
+    consumption_store = PostgresAtomicAuthorizationConsumptionStore()
+    if source_outcome == "revoked":
+        assert await consumption_store.consume_once(args["consumption"])
+        reservation = await reserve_keycloak_dispatch(**args)
+        assert reservation is not None
     source_dsn = db.build_conninfo()
     database = f"keycloak_restore_{uuid4().hex}"
     target_dsn = make_conninfo(source_dsn, dbname=database)
@@ -1114,8 +1118,13 @@ async def test_restore_replays_keycloak_revocation_of_existing_reservation(
         env=env, capture_output=True, text=True, timeout=60, check=True,
     )
     (archive,) = tmp_path.glob("veritas_*.dump")
-    cancellation = {key: value for key, value in args.items() if key != "consumption"}
-    assert await revoke_keycloak_authorization(**cancellation) == KeycloakDispatchOrder.REVOKED
+    if source_outcome == "revoked":
+        cancellation = {key: value for key, value in args.items() if key != "consumption"}
+        assert await revoke_keycloak_authorization(**cancellation) == KeycloakDispatchOrder.REVOKED
+    else:
+        assert await consumption_store.consume_once(args["consumption"])
+        reservation = await reserve_and_commit_keycloak_dispatch(**args)
+        assert reservation is not None
     await asyncio.to_thread(
         subprocess.run,
         ["bash", str(scripts / "restore_postgres.sh"), "--mode=test", "--test-db", database, str(archive)],
@@ -1127,6 +1136,15 @@ async def test_restore_replays_keycloak_revocation_of_existing_reservation(
         digest = recovery_digest(source)
         select = "SELECT resolution FROM bind_sandbox_dispatch_order WHERE authorization_id = %s"
         key = (reservation.authorization_id,)
+        if source_outcome == "committed":
+            assert source.execute(select, key).fetchone() == (KeycloakDispatchOrder.COMMITTED.value,)
+            assert target.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+            assert target.execute(select, key).fetchone() is None
+            with pytest.raises(SandboxRestoreError, match="backup lacks committed dispatch history"):
+                reconcile(source, target, digest)
+            assert target.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+            assert target.execute(select, key).fetchone() is None
+            return
         assert target.execute(select, key).fetchone() == (KeycloakDispatchOrder.RESERVED.value,)
         with target.transaction(force_rollback=True):
             target.execute(
