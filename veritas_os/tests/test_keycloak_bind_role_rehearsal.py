@@ -1128,6 +1128,13 @@ async def lab_db_pool(monkeypatch):
     [
         "cancel_first",
         "restore_pending",
+        pytest.param(
+            "restore_after_grant",
+            marks=pytest.mark.skipif(
+                os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1",
+                reason="requires PostgreSQL backup clients",
+            ),
+        ),
         "lost_commit",
         "contention",
         "substituted",
@@ -1405,6 +1412,64 @@ async def test_keycloak_lab_executor_https_boundary(
                                 "ALTER DATABASE {} RESET veritas.sandbox_restore_pending"
                             ).format(database)
                         )
+            elif scenario == "restore_after_grant":
+                import psycopg
+                from psycopg.conninfo import conninfo_to_dict, make_conninfo
+
+                from scripts.governance.reconcile_sandbox_restore import (
+                    SandboxRestoreError,
+                    reconcile,
+                    recovery_digest,
+                )
+                from veritas_os.storage import db, sandbox_restore
+
+                source_dsn = db.build_conninfo()
+                database = f"keycloak_restore_{uuid4().hex}"
+                target_dsn = make_conninfo(source_dsn, dbname=database)
+                env = os.environ.copy()
+                for key, value in conninfo_to_dict(source_dsn).items():
+                    if key in {"host", "port", "user", "password", "dbname", "sslmode"}:
+                        name = "PGDATABASE" if key == "dbname" else f"PG{key.upper()}"
+                        env[name] = value
+                scripts = Path(__file__).resolve().parents[2] / "scripts"
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["bash", str(scripts / "backup_postgres.sh"), "--output", str(tmp_path)],
+                    env=env, check=True, capture_output=True, timeout=60,
+                )
+                (archive,) = tmp_path.glob("veritas_*.dump")
+                bridge = KeycloakBridge(upstream, keycloak, None)
+                assert await bridge.audit_events(require_available=True) == []
+                assert await bridge.mappings() == []
+                result = await executor.execute(**args)
+                assert result is not None and result.observation == "HTTP_204_UNVERIFIED"
+                assert posts == [first[1].body]
+                before_events = await bridge.audit_events(require_available=True)
+                before_mappings = await bridge.mappings()
+                assert len(before_events) == 1
+                assert before_mappings == [
+                    {"id": keycloak["role"]["id"], "name": keycloak["role"]["name"]}
+                ]
+                await asyncio.to_thread(
+                    subprocess.run,
+                    [
+                        "bash", str(scripts / "restore_postgres.sh"),
+                        "--mode=test", "--test-db", database, str(archive),
+                    ],
+                    env=env, check=True, capture_output=True, timeout=60,
+                )
+                with (
+                    psycopg.connect(source_dsn, autocommit=True) as source,
+                    psycopg.connect(target_dsn, autocommit=True) as restored,
+                ):
+                    with pytest.raises(
+                        SandboxRestoreError, match="backup lacks committed dispatch history"
+                    ):
+                        reconcile(source, restored, recovery_digest(source))
+                    assert restored.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+                assert posts == [first[1].body]
+                assert await bridge.audit_events(require_available=True) == before_events
+                assert await bridge.mappings() == before_mappings
             elif scenario == "lost_commit":
                 commit = module.reserve_and_commit_keycloak_dispatch
                 committed = False
@@ -1466,5 +1531,5 @@ async def test_keycloak_lab_executor_https_boundary(
                     assert clock_advanced
 
             assert len(posts) == (
-                1 if scenario in {"contention", "lost_response"} else 0
+                1 if scenario in {"contention", "lost_response", "restore_after_grant"} else 0
             )
