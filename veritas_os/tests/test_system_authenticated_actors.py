@@ -19,6 +19,7 @@ from veritas_os.security.hash import sha256_of_canonical_json
 
 @pytest.fixture()
 def management_state(monkeypatch):
+    monkeypatch.setattr(auth, "_auth_fail_bucket", {})
     keys = ["management-actor-one", "management-actor-two"]
     monkeypatch.setenv("VERITAS_API_KEY", keys[0])
     monkeypatch.setenv("VERITAS_API_KEYS", json.dumps([

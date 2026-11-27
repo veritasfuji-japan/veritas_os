@@ -48,6 +48,33 @@ jobs:
           cache: pip
       - name: Install test dependencies
         run: python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt pytest pytest-asyncio httpx cryptography
+      - name: Use PostgreSQL 16 clients for the recovery test
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euxo pipefail
+          # Use the same image as the service and mount only recovery scratch files.
+          client_image=$(docker inspect --format '{{.Image}}' "$POSTGRES_SERVICE_ID")
+          echo "SANDBOX_PG_CLIENT_IMAGE=$client_image" >> "$GITHUB_ENV"
+          export SANDBOX_PG_CLIENT_IMAGE="$client_image"
+          client_bin="$RUNNER_TEMP/sandbox-pg-client-bin"
+          mkdir -p "$client_bin" "$RUNNER_TEMP/sandbox-pg-restore"
+          cat > "$client_bin/run-client" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          scratch="$RUNNER_TEMP/sandbox-pg-restore"
+          exec docker run --rm -i --network host \
+            --user "$(id -u):$(id -g)" --volume "$scratch:$scratch" \
+            --env PGHOST --env PGPORT --env PGUSER --env PGPASSWORD --env PGDATABASE --env PGSSLMODE \
+            --entrypoint "${0##*/}" "$SANDBOX_PG_CLIENT_IMAGE" "$@"
+          BASH
+          chmod +x "$client_bin/run-client"
+          for tool in pg_dump pg_restore psql; do
+            ln -s run-client "$client_bin/$tool"
+            "$client_bin/$tool" --version
+          done
+          echo "$client_bin" >> "$GITHUB_PATH"
+
       - name: Apply reservation schema
         run: alembic upgrade head
       - name: Start disposable Keycloak on loopback
@@ -71,7 +98,30 @@ jobs:
       - name: Verify scoped grant and read-only reconciliation
         env:
           VERITAS_KEYCLOAK_EVIDENCE_DIR: ${{ runner.temp }}/keycloak-rehearsal-cases
-        run: python -m pytest -q veritas_os/tests/test_keycloak_bind_role_rehearsal.py --tb=short
+          VERITAS_SANDBOX_RESTORE_E2E: "1"
+          TMPDIR: ${{ runner.temp }}/sandbox-pg-restore
+        run: |
+          set -euo pipefail
+          python -m pytest -q veritas_os/tests/test_keycloak_bind_role_rehearsal.py --tb=short \
+            --junitxml="$RUNNER_TEMP/keycloak-rehearsal.xml"
+          python - "$RUNNER_TEMP/keycloak-rehearsal.xml" <<'PYTHON'
+          import sys
+          from xml.etree import ElementTree
+
+          cases = [
+              case for case in ElementTree.parse(sys.argv[1]).iter("testcase")
+              if case.get("name") == "test_keycloak_lab_executor_https_boundary[restore_after_grant-True]"
+          ]
+          if len(cases) != 1 or any(cases[0].find(tag) is not None for tag in ("failure", "error", "skipped")):
+              raise SystemExit("The Keycloak restore-after-grant case must run and pass.")
+          PYTHON
+      - name: Upload Keycloak rehearsal test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-rehearsal-junit-${{ github.sha }}
+          path: ${{ runner.temp }}/keycloak-rehearsal.xml
+          if-no-files-found: warn
       - name: Assemble crash rehearsal evidence
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
