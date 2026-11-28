@@ -1,0 +1,152 @@
+name: Keycloak Staging Lifecycle Rehearsal
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/keycloak-staging-lifecycle-rehearsal.yml'
+      - 'scripts/validation/run_keycloak_staging_rehearsal.py'
+      - 'veritas_os/api/keycloak_staging_rehearsal.py'
+      - 'veritas_os/tests/keycloak_staging_ci_support.py'
+      - 'veritas_os/tests/test_keycloak_bind_role_rehearsal.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keycloak-staging-lifecycle-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_rehearsal_source
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      VERITAS_KEYCLOAK_REHEARSAL: "1"
+      VERITAS_KEYCLOAK_STAGING_CI: "1"
+      VERITAS_AUTH_SECURITY_STORE: redis
+      VERITAS_AUTH_REDIS_URL: redis://127.0.0.1:6379/0
+      VERITAS_DATABASE_URL: postgresql+psycopg://veritas:veritas_test@127.0.0.1:5432/veritas_rehearsal_source
+      KC_BOOTSTRAP_ADMIN_USERNAME: fixture-admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt pytest pytest-asyncio httpx cryptography redis==5.2.1
+      - name: Use PostgreSQL 16 clients for the recovery test
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euxo pipefail
+          # Use the same image as the service and mount only recovery scratch files.
+          client_image=$(docker inspect --format '{{.Image}}' "$POSTGRES_SERVICE_ID")
+          echo "SANDBOX_PG_CLIENT_IMAGE=$client_image" >> "$GITHUB_ENV"
+          export SANDBOX_PG_CLIENT_IMAGE="$client_image"
+          client_bin="$RUNNER_TEMP/sandbox-pg-client-bin"
+          mkdir -p "$client_bin" "$RUNNER_TEMP/sandbox-pg-restore"
+          cat > "$client_bin/run-client" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          scratch="$RUNNER_TEMP/sandbox-pg-restore"
+          exec docker run --rm -i --network host \
+            --user "$(id -u):$(id -g)" --volume "$scratch:$scratch" \
+            --env PGHOST --env PGPORT --env PGUSER --env PGPASSWORD --env PGDATABASE --env PGSSLMODE \
+            --entrypoint "${0##*/}" "$SANDBOX_PG_CLIENT_IMAGE" "$@"
+          BASH
+          chmod +x "$client_bin/run-client"
+          for tool in pg_dump pg_restore psql; do
+            ln -s run-client "$client_bin/$tool"
+            "$client_bin/$tool" --version
+          done
+          echo "$client_bin" >> "$GITHUB_PATH"
+
+      - name: Apply reservation schema
+        run: alembic upgrade head
+      - name: Start dedicated authentication Redis on loopback
+        run: |
+          set -euo pipefail
+          docker run -d --name keycloak-staging-redis -p 127.0.0.1:6379:6379 \
+            redis:7-alpine redis-server --appendonly yes --appendfsync always
+          for attempt in $(seq 1 30); do
+            if docker exec keycloak-staging-redis redis-cli ping | grep -qx PONG; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Start disposable Keycloak on loopback
+        run: |
+          set -euo pipefail
+          KC_BOOTSTRAP_ADMIN_PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$KC_BOOTSTRAP_ADMIN_PASSWORD"
+          echo "KC_BOOTSTRAP_ADMIN_PASSWORD=$KC_BOOTSTRAP_ADMIN_PASSWORD" >> "$GITHUB_ENV"
+          export KC_BOOTSTRAP_ADMIN_PASSWORD
+          docker run -d --name keycloak-bind-proof -p 127.0.0.1:18080:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME -e KC_BOOTSTRAP_ADMIN_PASSWORD \
+            quay.io/keycloak/keycloak:26.8.2 start-dev
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --max-time 2 \
+              http://127.0.0.1:18080/realms/master/.well-known/openid-configuration > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Verify staging startup, authenticated resume and recovery
+        env:
+          VERITAS_KEYCLOAK_WORKER_EVIDENCE_DIR: ${{ runner.temp }}/keycloak-staging-evidence
+          VERITAS_SANDBOX_RESTORE_E2E: "1"
+          TMPDIR: ${{ runner.temp }}/sandbox-pg-restore
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python -m pytest -q veritas_os/tests/test_keycloak_bind_role_rehearsal.py \
+            -k restore_then_resume_staging --tb=short \
+            --junitxml="$RUNNER_TEMP/keycloak-staging.xml"
+          python - "$VERITAS_KEYCLOAK_WORKER_EVIDENCE_DIR/restore_then_resume_staging.json" <<'PYTHON'
+          import json
+          import os
+          from pathlib import Path
+          import sys
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if report["tested_sha"] != os.environ["GITHUB_SHA"]:
+              raise SystemExit("Unexpected checkout SHA in staging evidence.")
+          expected = {
+              "restore_pending": {"posts": 0, "grant_events": 0},
+              "processed_authorization": {
+                  "posts": 0, "grant_events": 0, "reason": "ALREADY_CONSUMED",
+              },
+              "new_authorization": {"posts": 1, "grant_events": 1},
+          }
+          if any(report[phase] != value for phase, value in expected.items()):
+              raise SystemExit("Unexpected Keycloak write counts or rejection reason.")
+          PYTHON
+      - name: Upload staging JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-staging-junit-${{ github.sha }}
+          path: ${{ runner.temp }}/keycloak-staging.xml
+      - name: Upload staging worker evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-staging-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/keycloak-staging-evidence/restore_then_resume_staging.json
+          if-no-files-found: error
+      - name: Remove disposable services
+        if: always()
+        run: docker rm -f keycloak-bind-proof keycloak-staging-redis || true
