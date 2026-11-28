@@ -1,6 +1,7 @@
 """Opt-in integration proof against an isolated, disposable Keycloak server."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 import json
@@ -95,13 +96,16 @@ def keycloak(request):
     realm_id = str(uuid4())
     resource = f"/admin/realms/{realm}"
     with httpx.Client(base_url=ORIGIN, trust_env=False, timeout=10) as client:
-        admin = expect(client.post("/realms/master/protocol/openid-connect/token", data={
-            "client_id": "admin-cli",
-            "grant_type": "password",
-            "username": os.environ["KC_BOOTSTRAP_ADMIN_USERNAME"],
-            "password": os.environ["KC_BOOTSTRAP_ADMIN_PASSWORD"],
-        }), 200).json()["access_token"]
-        auth = bearer(admin)
+        def bootstrap_headers() -> dict[str, str]:
+            token = expect(client.post("/realms/master/protocol/openid-connect/token", data={
+                "client_id": "admin-cli",
+                "grant_type": "password",
+                "username": os.environ["KC_BOOTSTRAP_ADMIN_USERNAME"],
+                "password": os.environ["KC_BOOTSTRAP_ADMIN_PASSWORD"],
+            }), 200).json()["access_token"]
+            return bearer(token)
+
+        auth = bootstrap_headers()
         expect(client.post("/admin/realms", headers=auth, json={
             "id": realm_id, "realm": realm, "enabled": True,
         }), 201)
@@ -197,7 +201,9 @@ def keycloak(request):
                 fixture.update(
                     audit_reader=audit_reader, audit_reader_client=audit_reader_client
                 )
-                if request.node.callspec.params.get("scenario") == "restore_then_resume":
+                if request.node.callspec.params.get("scenario") in {
+                    "restore_then_resume", "restore_then_resume_worker",
+                }:
                     resume_role = "report-editor"
                     create(f"/clients/{application}/roles", {"name": resume_role})
                     role_data = expect(client.get(
@@ -206,7 +212,8 @@ def keycloak(request):
                     fixture["resume_role"] = {"id": role_data["id"], "name": resume_role}
             yield fixture
         finally:
-            expect(client.delete(resource, headers=auth), 204)
+            # Long restore rehearsals can outlive the setup admin token.
+            expect(client.delete(resource, headers=bootstrap_headers()), 204)
 
 
 class KeycloakPostTimeout(httpx.AsyncHTTPTransport):
@@ -1116,6 +1123,52 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
         (output / f"{scenario}.json").write_text(json.dumps(evidence), encoding="utf-8")
 
 
+def _run_lab_dispatch_worker(
+    dispatch: Callable[[], Awaitable[str | None]], ready,
+) -> None:
+    from veritas_os.storage import db, sandbox_restore
+
+    async def run() -> str | None:
+        try:
+            pool = await db.get_pool()
+            async with pool.connection() as connection:
+                state = await connection.execute(sandbox_restore.RECOVERY_PENDING)
+                if await state.fetchone() != (False,):
+                    return "RESTORE_PENDING"
+            return await dispatch()
+        finally:
+            await close_pool()
+
+    with ready:
+        ready.send_bytes(json.dumps([os.getpid(), asyncio.run(run())]).encode("ascii"))
+
+
+async def _dispatch_in_new_lab_worker(
+    dispatch: Callable[[], Awaitable[str | None]],
+) -> tuple[int, str | None]:
+    # Never inherit the parent's live PostgreSQL connections.
+    await close_pool()
+    context = get_context("fork")
+    result, ready = context.Pipe(duplex=False)
+    with result, ready:
+        worker = context.Process(target=_run_lab_dispatch_worker, args=(dispatch, ready))
+        worker.start()
+        ready.close()
+        try:
+            await asyncio.to_thread(worker.join, 30)
+            assert worker.exitcode == 0, "lab worker failed to finish successfully"
+            assert result.poll(), "lab worker did not publish an outcome"
+            pid, observation = json.loads(result.recv_bytes(256))
+            assert pid == worker.pid and pid != os.getpid()
+            return pid, observation
+        finally:
+            if worker.is_alive():
+                worker.kill()
+                await asyncio.to_thread(worker.join, 10)
+            assert worker.exitcode is not None, "lab worker did not stop"
+            worker.close()
+
+
 @pytest_asyncio.fixture
 async def lab_db_pool(monkeypatch):
     """Bind each lab scenario's connection pool to its own pytest event loop."""
@@ -1147,6 +1200,14 @@ async def lab_db_pool(monkeypatch):
             marks=pytest.mark.skipif(
                 os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1",
                 reason="requires PostgreSQL backup clients",
+            ),
+        ),
+        pytest.param(
+            "restore_then_resume_worker",
+            marks=pytest.mark.skipif(
+                os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1"
+                or "fork" not in get_all_start_methods(),
+                reason="requires PostgreSQL backup clients and fork",
             ),
         ),
         "lost_commit",
@@ -1365,6 +1426,22 @@ async def test_keycloak_lab_executor_https_boundary(
                 )
 
             executor, args = wiring(first)
+            use_worker = scenario == "restore_then_resume_worker"
+            resume = scenario in {"restore_then_resume", "restore_then_resume_worker"}
+            worker_pids: list[int] = []
+
+            async def observe(issued, *, deployment=deployment, event_id=event_id):
+                async def dispatch() -> str | None:
+                    sender, inputs = wiring(issued, deployment=deployment, event_id=event_id)
+                    result = await sender.execute(**inputs)
+                    return result.observation if result is not None else None
+
+                if use_worker:
+                    pid, observation = await _dispatch_in_new_lab_worker(dispatch)
+                    worker_pids.append(pid)
+                    return observation
+                return await dispatch()
+
             if scenario == "lost_response":
                 for reader in ("reader", "audit_reader"):
                     headers = bearer(keycloak[reader])
@@ -1426,7 +1503,7 @@ async def test_keycloak_lab_executor_https_boundary(
                                 "ALTER DATABASE {} RESET veritas.sandbox_restore_pending"
                             ).format(database)
                         )
-            elif scenario in {"restore_after_grant", "restore_then_resume"}:
+            elif scenario == "restore_after_grant" or resume:
                 from urllib.parse import urlsplit
 
                 import psycopg
@@ -1466,8 +1543,7 @@ async def test_keycloak_lab_executor_https_boundary(
                 bridge = KeycloakBridge(upstream, keycloak, None)
                 assert await bridge.audit_events(require_available=True) == []
                 assert await bridge.mappings() == []
-                result = await executor.execute(**args)
-                assert result is not None and result.observation == "HTTP_204_UNVERIFIED"
+                assert await observe(first) == "HTTP_204_UNVERIFIED"
                 assert posts == [first[1].body]
                 before_events = await bridge.audit_events(require_available=True)
                 before_mappings = await bridge.mappings()
@@ -1475,7 +1551,7 @@ async def test_keycloak_lab_executor_https_boundary(
                 assert before_mappings == [
                     {"id": keycloak["role"]["id"], "name": keycloak["role"]["name"]}
                 ]
-                if scenario == "restore_then_resume":
+                if resume:
                     archive = await backup()
                 await asyncio.to_thread(
                     subprocess.run,
@@ -1485,6 +1561,22 @@ async def test_keycloak_lab_executor_https_boundary(
                     ],
                     env=env, check=True, capture_output=True, timeout=60,
                 )
+                target_url = urlsplit(source_dsn)._replace(path=f"/{database}").geturl()
+                if use_worker:
+                    with psycopg.connect(target_dsn, autocommit=True) as pending_db:
+                        assert pending_db.execute(sandbox_restore.RECOVERY_PENDING).fetchone() == (True,)
+                    pending_event_id = f"lab-{uuid4()}"
+                    pending = issue(tmp_path / "pending", event_id=pending_event_id)
+                    with monkeypatch.context() as restored_env:
+                        restored_env.setenv("VERITAS_DATABASE_URL", target_url)
+                        assert await observe(pending, event_id=pending_event_id) == "RESTORE_PENDING"
+                    assert posts == [first[1].body]
+                    pending_counts = (
+                        len(posts) - 1,
+                        len(await bridge.audit_events(require_available=True)) - len(before_events),
+                    )
+                    assert pending_counts == (0, 0)
+
                 with (
                     psycopg.connect(source_dsn, autocommit=True) as source,
                     psycopg.connect(target_dsn, autocommit=True) as restored,
@@ -1503,44 +1595,56 @@ async def test_keycloak_lab_executor_https_boundary(
                 assert posts == [first[1].body]
                 assert await bridge.audit_events(require_available=True) == before_events
                 assert await bridge.mappings() == before_mappings
-                if scenario == "restore_then_resume":
+                if resume:
                     consumption_store = PostgresAtomicAuthorizationConsumptionStore()
                     authorization_id = args["authorization"].authorization_id
                     original_consumption = await consumption_store.get(authorization_id)
                     assert original_consumption is not None
 
                     await close_pool()
-                    target_url = urlsplit(source_dsn)._replace(path=f"/{database}").geturl()
                     monkeypatch.setenv("VERITAS_DATABASE_URL", target_url)
                     pool = await db.get_pool()
                     async with pool.connection() as conn:
                         assert conn.info.dbname == database
                     assert await consumption_store.get(authorization_id) == original_consumption
 
-                    consume = module.consume_native_bind_authorization
-                    rejection_reasons: list[str] = []
+                    async def reject_replay() -> None:
+                        consume = module.consume_native_bind_authorization
+                        rejection_reasons: list[str] = []
 
-                    async def observe_consumption(*consume_args, **consume_kwargs):
-                        try:
-                            return await consume(*consume_args, **consume_kwargs)
-                        except NativeAuthorizationConsumptionError as error:
-                            rejection_reasons.append(str(error))
-                            raise
+                        async def observe_consumption(*consume_args, **consume_kwargs):
+                            try:
+                                return await consume(*consume_args, **consume_kwargs)
+                            except NativeAuthorizationConsumptionError as error:
+                                rejection_reasons.append(str(error))
+                                raise
 
-                    with monkeypatch.context() as replay_patch:
-                        replay_patch.setattr(
-                            module, "consume_native_bind_authorization", observe_consumption
-                        )
-                        with pytest.raises(
-                            module.KeycloakLabExecutionError,
-                            match="^KGR_LAB_EXECUTION_STOPPED$",
-                        ):
-                            await executor.execute(**args)
-                    assert rejection_reasons == ["NABC_ALREADY_CONSUMED"]
+                        sender, replay_args = wiring(first)
+                        with monkeypatch.context() as replay_patch:
+                            replay_patch.setattr(
+                                module, "consume_native_bind_authorization", observe_consumption
+                            )
+                            with pytest.raises(
+                                module.KeycloakLabExecutionError,
+                                match="^KGR_LAB_EXECUTION_STOPPED$",
+                            ):
+                                await sender.execute(**replay_args)
+                        assert rejection_reasons == ["NABC_ALREADY_CONSUMED"]
+
+                    if use_worker:
+                        pid, observation = await _dispatch_in_new_lab_worker(reject_replay)
+                        worker_pids.append(pid)
+                        assert observation is None
+                    else:
+                        await reject_replay()
                     assert posts == [first[1].body]
                     assert await bridge.audit_events(require_available=True) == before_events
                     assert await bridge.mappings() == before_mappings
 
+                    replay_counts = (
+                        len(posts) - 1,
+                        len(await bridge.audit_events(require_available=True)) - len(before_events),
+                    )
                     role = keycloak["resume_role"]
                     resume_deployment = replace(
                         deployment,
@@ -1552,11 +1656,11 @@ async def test_keycloak_lab_executor_https_boundary(
                         deployment=resume_deployment,
                         event_id=resume_event_id,
                     )
-                    resumed_executor, resumed_args = wiring(
+                    assert await observe(
                         resumed, deployment=resume_deployment, event_id=resume_event_id
-                    )
-                    result = await resumed_executor.execute(**resumed_args)
-                    assert result is not None and result.observation == "HTTP_204_UNVERIFIED"
+                    ) == "HTTP_204_UNVERIFIED"
+                    if use_worker:
+                        assert len(set(worker_pids)) == 4
                     assert posts == [first[1].body, resumed[1].body]
                     after_events = await bridge.audit_events(require_available=True)
                     assert len(after_events) == 2 and before_events[0] in after_events
@@ -1571,6 +1675,26 @@ async def test_keycloak_lab_executor_https_boundary(
                     assert sorted(item["id"] for item in await bridge.mappings()) == sorted(
                         [keycloak["role"]["id"], role["id"]]
                     )
+                    evidence_dir = os.getenv("VERITAS_KEYCLOAK_WORKER_EVIDENCE_DIR")
+                    if use_worker and evidence_dir:
+                        evidence = {
+                            "worker_pids": worker_pids,
+                            "restore_pending": dict(zip(("posts", "grant_events"), pending_counts, strict=True)),
+                            "processed_authorization": dict(
+                                zip(("posts", "grant_events"), replay_counts, strict=True)
+                            ),
+                            "new_authorization": {
+                                "posts": len(posts) - 1,
+                                "grant_events": len(after_events) - len(before_events),
+                            },
+                            "original_event_id": event_id,
+                            "new_event_id": resume_event_id,
+                        }
+                        directory = Path(evidence_dir)
+                        directory.mkdir(parents=True, exist_ok=True)
+                        (directory / "restore_then_resume_worker.json").write_text(
+                            json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+                        )
             elif scenario == "lost_commit":
                 commit = module.reserve_and_commit_keycloak_dispatch
                 committed = False
@@ -1636,5 +1760,6 @@ async def test_keycloak_lab_executor_https_boundary(
                 "lost_response": 1,
                 "restore_after_grant": 1,
                 "restore_then_resume": 2,
+                "restore_then_resume_worker": 2,
             }
             assert len(posts) == expected_posts.get(scenario, 0)
