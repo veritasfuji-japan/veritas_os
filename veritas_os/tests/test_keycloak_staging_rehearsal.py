@@ -9,19 +9,25 @@ import pytest
 from psycopg import OperationalError
 
 from veritas_os.api import keycloak_staging_rehearsal as rehearsal
-from veritas_os.api import server
+from veritas_os.api import auth, server
 from veritas_os.policy.keycloak_role_grant_binding import (
     KeycloakLabDeployment,
     KeycloakRoleGrantTarget,
 )
+
+from veritas_os.security.hash import sha256_hex
 
 pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
 def staging(monkeypatch):
+    redis_url = "redis://127.0.0.1:6381/0"
     settings = {
         "VERITAS_ENV": "staging",
+        "VERITAS_AUTH_SECURITY_STORE": "redis",
+        "VERITAS_AUTH_REDIS_URL": redis_url,
+        "VERITAS_KEYCLOAK_STAGING_AUTH_REDIS_SHA256": sha256_hex(redis_url),
         "VERITAS_POSTURE": "staging",
         "VERITAS_ENABLE_KEYCLOAK_STAGING_REHEARSAL": "1",
         "VERITAS_HALT_BACKEND": "postgresql",
@@ -65,6 +71,13 @@ def staging(monkeypatch):
         finally:
             events.append("shutdown")
 
+    redis_settings = {"host": "127.0.0.1", "port": 6381, "db": 0}
+    redis_client = SimpleNamespace(connection_pool=SimpleNamespace(
+        connection_kwargs=redis_settings,
+    ))
+    monkeypatch.setattr(auth, "_get_effective_auth_store", Mock(
+        return_value=auth.RedisAuthSecurityStore(redis_client),
+    ))
     monkeypatch.setattr(server.app.router, "lifespan_context", lifespan)
     monkeypatch.setattr(rehearsal.db, "get_pool", AsyncMock(return_value=SimpleNamespace(
         connection=connection,
@@ -78,6 +91,7 @@ def staging(monkeypatch):
     monkeypatch.setattr(rehearsal, "KeycloakLabExecutor", executor)
     return SimpleNamespace(
         events=events, connection=conn, execute=execute, executor=executor, halt=halt,
+        redis_settings=redis_settings,
         worker=lambda: rehearsal.keycloak_staging_rehearsal_worker(
             deployment,
             authorization=object(),
@@ -107,6 +121,10 @@ def rehearsal_target():
 
 @pytest.mark.parametrize(("key", "value", "reason"), [
     ("VERITAS_ENV", "production", "DISABLED"),
+    ("VERITAS_AUTH_SECURITY_STORE", "memory", "AUTH_REDIS_INVALID"),
+    ("VERITAS_AUTH_REDIS_URL", "redis://example.invalid:6381/0", "AUTH_REDIS_INVALID"),
+    ("VERITAS_AUTH_REDIS_URL", "redis://127.0.0.1:6381/1", "AUTH_REDIS_INVALID"),
+    ("VERITAS_KEYCLOAK_STAGING_AUTH_REDIS_SHA256", "", "AUTH_REDIS_INVALID"),
     ("VERITAS_ENABLE_KEYCLOAK_STAGING_REHEARSAL", "0", "DISABLED"),
     ("VERITAS_POSTURE", "prod", "DISABLED"),
     ("VERITAS_KEYCLOAK_STAGING_DEPLOYMENT_SHA256", "different", "DEPLOYMENT_MISMATCH"),
@@ -167,4 +185,39 @@ async def test_one_dispatch_runs_inside_normal_lifespan(staging):
     with pytest.raises(rehearsal.KeycloakStagingRehearsalBlocked, match="DISPATCH_UNAVAILABLE"):
         await dispatch()
     assert staging.events == ["startup", "dispatch", "shutdown", "pool-close"]
+    staging.execute.assert_awaited_once()
+
+
+async def test_redis_url_with_override_is_rejected_even_if_pinned(staging, monkeypatch):
+    url = "redis://127.0.0.1:6381/0?host=example.invalid"
+    monkeypatch.setenv("VERITAS_AUTH_REDIS_URL", url)
+    monkeypatch.setenv("VERITAS_KEYCLOAK_STAGING_AUTH_REDIS_SHA256", sha256_hex(url))
+    with pytest.raises(rehearsal.KeycloakStagingRehearsalBlocked, match="AUTH_REDIS_INVALID"):
+        async with staging.worker():
+            pytest.fail("startup must be refused")
+    assert staging.events == []
+
+
+async def test_cached_auth_store_must_match_approved_redis(staging):
+    staging.redis_settings["port"] = 6379
+    with pytest.raises(rehearsal.KeycloakStagingRehearsalBlocked, match="AUTH_REDIS_MISMATCH"):
+        async with staging.worker():
+            pytest.fail("startup must be refused")
+    assert staging.events == ["pool-close"]
+
+
+async def test_harness_waits_for_operator_and_dispatches_once(staging, monkeypatch):
+    from scripts.validation import run_keycloak_staging_rehearsal as harness
+
+    factory = Mock(return_value={})
+    monkeypatch.setattr(harness.importlib, "import_module", Mock(
+        return_value=SimpleNamespace(make_inputs=factory),
+    ))
+    monkeypatch.setattr(harness, "keycloak_staging_rehearsal_worker", lambda: staging.worker())
+    staging.halt.side_effect = ({"halted": True}, {"halted": False}, {"halted": False})
+    staging.execute.side_effect = None
+    staging.execute.return_value = SimpleNamespace(observation="HTTP_204_UNVERIFIED")
+
+    assert await harness.run("stage_fixture:make_inputs") == 0
+    assert staging.halt.call_count == 3
     staging.execute.assert_awaited_once()

@@ -8,6 +8,7 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from psycopg import Error
 from psycopg.conninfo import conninfo_to_dict
@@ -31,6 +32,7 @@ from veritas_os.policy.native_bind_authorization import (
     NativeAuthorizationSourceInputs,
 )
 from veritas_os.policy.sandbox_pre_effect import SandboxClockReading, SandboxCurrentInputs
+from veritas_os.security.hash import sha256_hex
 from veritas_os.storage import db, sandbox_restore
 
 _LOOPBACK = {"127.0.0.1", "::1"}
@@ -41,7 +43,8 @@ class KeycloakStagingRehearsalBlocked(RuntimeError):
     """The rehearsal was stopped before handing the request to the executor."""
 
 
-def _require_isolated_configuration(deployment: KeycloakLabDeployment) -> str:
+def require_staging_rehearsal_environment() -> None:
+    """Validate staging posture and the dedicated authentication Redis URL."""
     if (
         os.getenv("VERITAS_ENV") != "staging"
         or resolve_posture() is not PostureLevel.STAGING
@@ -55,6 +58,33 @@ def _require_isolated_configuration(deployment: KeycloakLabDeployment) -> str:
         or deployment_id == "veritas-rehearsal-"
     ):
         raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_HALT_SCOPE_INVALID")
+    redis_url = (os.getenv("VERITAS_AUTH_REDIS_URL") or "").strip()
+    try:
+        redis = urlsplit(redis_url)
+        valid_address = (
+            redis.scheme in {"redis", "rediss"}
+            and redis.hostname in _LOOPBACK
+            and redis.port is not None
+            and redis.port > 0
+            and not redis.query
+            and not redis.fragment
+            and re.fullmatch(r"/[0-9]+", redis.path)
+            and redis_url.isascii()
+        )
+    except ValueError:
+        valid_address = False
+    if (
+        os.getenv("VERITAS_AUTH_SECURITY_STORE") != "redis"
+        or not valid_address
+        or sha256_hex(redis_url.encode("ascii")) != os.getenv(
+            "VERITAS_KEYCLOAK_STAGING_AUTH_REDIS_SHA256"
+        )
+    ):
+        raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_AUTH_REDIS_INVALID")
+
+
+def _require_isolated_configuration(deployment: KeycloakLabDeployment) -> str:
+    require_staging_rehearsal_environment()
     if type(deployment) is not KeycloakLabDeployment or deployment.digest() != os.getenv(
         "VERITAS_KEYCLOAK_STAGING_DEPLOYMENT_SHA256"
     ):
@@ -154,6 +184,20 @@ async def keycloak_staging_rehearsal_worker(
     try:
         await _require_recovery_complete(database)
         from veritas_os.api.server import app
+
+        from veritas_os.api.auth import RedisAuthSecurityStore, _get_effective_auth_store
+
+        auth_store = _get_effective_auth_store()
+        if not isinstance(auth_store, RedisAuthSecurityStore):
+            raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_AUTH_REDIS_UNAVAILABLE")
+        redis = urlsplit(os.environ["VERITAS_AUTH_REDIS_URL"].strip())
+        settings = auth_store._redis.connection_pool.connection_kwargs
+        if (settings.get("host"), settings.get("port"), settings.get("db")) != (
+            redis.hostname,
+            redis.port,
+            int(redis.path[1:]),
+        ):
+            raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_AUTH_REDIS_MISMATCH")
 
         async with app.router.lifespan_context(app):
             available = True

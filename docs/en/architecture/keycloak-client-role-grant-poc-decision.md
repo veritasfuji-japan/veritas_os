@@ -212,18 +212,28 @@ an unresolved effect cannot create another send authority.
 
 The internal `keycloak_staging_rehearsal_worker` context shares the normal API
 lifespan in a dedicated rehearsal process. A trusted local harness provisions
-a synthetic user and role in the disposable loopback realm, constructs the
-existing lab deployment and signed authorization inputs, and enters the
-context. No HTTP route is registered.
+a synthetic user and role in the disposable loopback realm and supplies the
+existing lab deployment and signed authorization inputs. Its zero-argument
+factory returns keyword arguments for the worker context. Invoke the harness
+in a fresh process with
+`python -m scripts.validation.run_keycloak_staging_rehearsal module:function`,
+using a reviewed local factory. No HTTP route is registered.
 
 This entry point requires staging posture, explicit
 `VERITAS_ENABLE_KEYCLOAK_STAGING_REHEARSAL=1`, and the reviewed deployment digest
 in `VERITAS_KEYCLOAK_STAGING_DEPLOYMENT_SHA256`. It accepts a numeric loopback
 PostgreSQL host and a dedicated `veritas_rehearsal_*` database. The shared
 PostgreSQL halt backend uses a dedicated `veritas-rehearsal-*` deployment ID.
-Normal startup arms the halt. The operator uses the existing authenticated
-resume flow before the harness calls the yielded dispatch function once in
-the same task. The entry point cannot resume the deployment.
+Use a dedicated loopback authentication Redis instance with an explicit port
+and database index. Set `VERITAS_KEYCLOAK_STAGING_AUTH_REDIS_SHA256` to the
+SHA-256 of the reviewed Redis URL through deployment configuration. The
+runner validates this URL before importing the API server and confirms the
+active auth store before invoking the lifespan.
+
+Normal startup arms the halt. The harness waits up to five minutes for an
+operator to use the existing authenticated resume flow, then calls the
+yielded dispatch function once in the same task. The harness only reads halt
+state and never approves or applies a resume.
 
 The worker checks the database recovery state before startup and again before
 handing the request to the existing executor. Run the restore and dispatch
