@@ -98,6 +98,7 @@ jobs:
       - name: Verify scoped grant and read-only reconciliation
         env:
           VERITAS_KEYCLOAK_EVIDENCE_DIR: ${{ runner.temp }}/keycloak-rehearsal-cases
+          VERITAS_KEYCLOAK_WORKER_EVIDENCE_DIR: ${{ runner.temp }}/keycloak-worker-evidence
           VERITAS_SANDBOX_RESTORE_E2E: "1"
           TMPDIR: ${{ runner.temp }}/sandbox-pg-restore
         run: |
@@ -109,7 +110,7 @@ jobs:
           from xml.etree import ElementTree
 
           report = ElementTree.parse(sys.argv[1])
-          for scenario in ("restore_after_grant", "restore_then_resume"):
+          for scenario in ("restore_after_grant", "restore_then_resume", "restore_then_resume_worker"):
               name = f"test_keycloak_lab_executor_https_boundary[{scenario}-True]"
               cases = [case for case in report.iter("testcase") if case.get("name") == name]
               if len(cases) != 1 or any(
@@ -124,6 +125,36 @@ jobs:
           name: keycloak-rehearsal-junit-${{ github.sha }}
           path: ${{ runner.temp }}/keycloak-rehearsal.xml
           if-no-files-found: warn
+      - name: Verify and bind worker restore evidence
+        env:
+          WORKER_EVIDENCE_DIR: ${{ runner.temp }}/keycloak-worker-evidence
+        run: |
+          set -euo pipefail
+          tested_sha="$(git rev-parse HEAD)"
+          test "$tested_sha" = "$GITHUB_SHA"
+          python - "$WORKER_EVIDENCE_DIR/restore_then_resume_worker.json" "$tested_sha" <<'PYTHON'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          expected = {"restore_pending": 0, "processed_authorization": 0, "new_authorization": 1}
+          for phase, count in expected.items():
+              if evidence.get(phase) != {"posts": count, "grant_events": count}:
+                  raise SystemExit(f"Unexpected Keycloak write counts for {phase}.")
+          pids = evidence["worker_pids"]
+          if len(pids) != 4 or len(set(pids)) != 4:
+              raise SystemExit("Expected four distinct worker processes.")
+          evidence["tested_sha"] = sys.argv[2]
+          path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+          PYTHON
+      - name: Upload worker restore evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-worker-restore-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/keycloak-worker-evidence/restore_then_resume_worker.json
+          if-no-files-found: error
       - name: Assemble crash rehearsal evidence
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
