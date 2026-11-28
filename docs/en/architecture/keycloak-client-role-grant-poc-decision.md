@@ -208,6 +208,49 @@ task rechecks governance after TLS and spends its internal permit immediately
 before the sole write. The local acknowledgement, a restored reservation, and
 an unresolved effect cannot create another send authority.
 
+### Staging worker lifecycle rehearsal
+
+The internal `keycloak_staging_rehearsal_worker` context shares the normal API
+lifespan in a dedicated rehearsal process. A trusted local harness provisions
+a synthetic user and role in the disposable loopback realm and supplies the
+existing lab deployment and signed authorization inputs. Its zero-argument
+factory returns the reviewed `deployment` and a zero-argument
+`load_attempt` callback. The worker calls the loader once after it observes
+operator resume, so the loader can read a currently valid signed attempt.
+Invoke the harness
+in a fresh process with
+`python -m scripts.validation.run_keycloak_staging_rehearsal module:function`,
+using a reviewed local factory. No HTTP route is registered.
+
+This entry point requires staging posture, explicit
+`VERITAS_ENABLE_KEYCLOAK_STAGING_REHEARSAL=1`, and the reviewed deployment digest
+in `VERITAS_KEYCLOAK_STAGING_DEPLOYMENT_SHA256`. It accepts a numeric loopback
+PostgreSQL host and a dedicated `veritas_rehearsal_*` database. The shared
+PostgreSQL halt backend uses a dedicated `veritas-rehearsal-*` deployment ID.
+Use a dedicated loopback authentication Redis instance with an explicit port
+and database index. Set `VERITAS_KEYCLOAK_STAGING_AUTH_REDIS_SHA256` to the
+SHA-256 of the reviewed Redis URL through deployment configuration. The
+runner validates this URL before importing the API server and confirms the
+active auth store before invoking the lifespan.
+
+Normal startup arms the halt. The harness waits up to five minutes for an
+operator to use the existing authenticated resume flow, then calls the
+yielded dispatch function once in the same task. The harness only reads halt
+state and never approves or applies a resume. The loader uses the existing
+approval process; it cannot refresh signed validity or mint its own approval.
+The CLI reports `ALREADY_CONSUMED` separately from
+`OUTSIDE_VALIDITY_WINDOW`. A replay case only counts as a consumed-approval
+rejection when it records `ALREADY_CONSUMED`; use a still-valid original
+authorization for that case.
+
+The worker checks the database recovery state before startup and again before
+handing the request to the existing executor. Run the restore and dispatch
+phases in sequence. For the staging acceptance test, record zero grants while
+recovery is pending, zero additional grants for an already consumed
+authorization, and one grant for a newly approved authorization. Record
+both write requests and independent Keycloak admin events. Concurrent restore
+and live worker execution require separate verification.
+
 ### Database ordering prerequisite
 
 Migration `0019` records Keycloak reservations, cancellations and dispatch

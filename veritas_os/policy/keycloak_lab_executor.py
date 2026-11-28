@@ -38,12 +38,14 @@ from veritas_os.policy.live_adapter_bind_authorization_contracts import (
 )
 from veritas_os.policy.native_bind_authorization import NativeAuthorizationSourceInputs
 from veritas_os.policy.native_bind_authorization_consumption import (
+    NativeAuthorizationConsumptionError,
     _recheck_native_consumption_inputs,
     consume_native_bind_authorization,
 )
 from veritas_os.policy.sandbox_pre_effect import (
     SandboxClockReading,
     SandboxCurrentInputs,
+    SandboxPreEffectError,
     _window,
 )
 from veritas_os.security.hash import sha256_of_canonical_json
@@ -54,6 +56,15 @@ _REQUEST_TIMEOUT = 5
 
 class KeycloakLabExecutionError(ValueError):
     """Sanitized pre-dispatch error. Consumption is never released."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: Literal["ALREADY_CONSUMED", "OUTSIDE_VALIDITY_WINDOW"] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 @dataclass(frozen=True)
@@ -125,8 +136,21 @@ class KeycloakLabExecutor:
             )
         except asyncio.CancelledError:
             raise
-        except Exception:
-            raise KeycloakLabExecutionError("KGR_LAB_EXECUTION_STOPPED") from None
+        except Exception as exc:
+            reason = None
+            if isinstance(exc, NativeAuthorizationConsumptionError):
+                if str(exc) == "NABC_ALREADY_CONSUMED":
+                    reason = "ALREADY_CONSUMED"
+                elif str(exc) == "NABC_AUTHORIZATION_EXPIRED":
+                    reason = "OUTSIDE_VALIDITY_WINDOW"
+            elif (
+                isinstance(exc, SandboxPreEffectError)
+                and str(exc) == "SPE_AUTHORIZATION_OUTSIDE_TIME_WINDOW"
+            ):
+                reason = "OUTSIDE_VALIDITY_WINDOW"
+            raise KeycloakLabExecutionError(
+                "KGR_LAB_EXECUTION_STOPPED", reason=reason
+            ) from None
 
     async def _execute(
         self,
