@@ -208,6 +208,31 @@ task rechecks governance after TLS and spends its internal permit immediately
 before the sole write. The local acknowledgement, a restored reservation, and
 an unresolved effect cannot create another send authority.
 
+### Staging worker lifecycle rehearsal
+
+The internal `keycloak_staging_rehearsal_worker` context shares the normal API
+lifespan in a dedicated rehearsal process. A trusted local harness provisions
+a synthetic user and role in the disposable loopback realm, constructs the
+existing lab deployment and signed authorization inputs, and enters the
+context. No HTTP route is registered.
+
+This entry point requires staging posture, explicit
+`VERITAS_ENABLE_KEYCLOAK_STAGING_REHEARSAL=1`, and the reviewed deployment digest
+in `VERITAS_KEYCLOAK_STAGING_DEPLOYMENT_SHA256`. It accepts a numeric loopback
+PostgreSQL host and a dedicated `veritas_rehearsal_*` database. The shared
+PostgreSQL halt backend uses a dedicated `veritas-rehearsal-*` deployment ID.
+Normal startup arms the halt. The operator uses the existing authenticated
+resume flow before the harness calls the yielded dispatch function once in
+the same task. The entry point cannot resume the deployment.
+
+The worker checks the database recovery state before startup and again before
+handing the request to the existing executor. Run the restore and dispatch
+phases in sequence. For the staging acceptance test, record zero grants while
+recovery is pending, zero additional grants for an already consumed
+authorization, and one grant for a newly approved authorization. Record
+both write requests and independent Keycloak admin events. Concurrent restore
+and live worker execution require separate verification.
+
 ### Database ordering prerequisite
 
 Migration `0019` records Keycloak reservations, cancellations and dispatch
