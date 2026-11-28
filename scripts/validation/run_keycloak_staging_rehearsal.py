@@ -59,7 +59,10 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO)
     try:
         return asyncio.run(run(args.factory))
-    except (KeycloakStagingRehearsalBlocked, KeycloakLabExecutionError) as exc:
+    except KeycloakLabExecutionError as exc:
+        logger.error("Staging rehearsal stopped: %s", exc.reason or exc)
+        return 1
+    except KeycloakStagingRehearsalBlocked as exc:
         logger.error("Staging rehearsal stopped: %s", exc)
         return 1
 

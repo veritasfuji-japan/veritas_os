@@ -214,7 +214,10 @@ The internal `keycloak_staging_rehearsal_worker` context shares the normal API
 lifespan in a dedicated rehearsal process. A trusted local harness provisions
 a synthetic user and role in the disposable loopback realm and supplies the
 existing lab deployment and signed authorization inputs. Its zero-argument
-factory returns keyword arguments for the worker context. Invoke the harness
+factory returns the reviewed `deployment` and a zero-argument
+`load_attempt` callback. The worker calls the loader once after it observes
+operator resume, so the loader can read a currently valid signed attempt.
+Invoke the harness
 in a fresh process with
 `python -m scripts.validation.run_keycloak_staging_rehearsal module:function`,
 using a reviewed local factory. No HTTP route is registered.
@@ -233,7 +236,12 @@ active auth store before invoking the lifespan.
 Normal startup arms the halt. The harness waits up to five minutes for an
 operator to use the existing authenticated resume flow, then calls the
 yielded dispatch function once in the same task. The harness only reads halt
-state and never approves or applies a resume.
+state and never approves or applies a resume. The loader uses the existing
+approval process; it cannot refresh signed validity or mint its own approval.
+The CLI reports `ALREADY_CONSUMED` separately from
+`OUTSIDE_VALIDITY_WINDOW`. A replay case only counts as a consumed-approval
+rejection when it records `ALREADY_CONSUMED`; use a still-valid original
+authorization for that case.
 
 The worker checks the database recovery state before startup and again before
 handing the request to the existing executor. Run the restore and dispatch

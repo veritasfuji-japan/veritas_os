@@ -15,6 +15,9 @@ from veritas_os.policy.keycloak_role_grant_binding import (
     KeycloakRoleGrantTarget,
 )
 
+from veritas_os.policy.keycloak_lab_executor import KeycloakLabExecutionError, KeycloakLabExecutor
+from veritas_os.policy.native_bind_authorization_consumption import NativeAuthorizationConsumptionError
+from veritas_os.policy.sandbox_pre_effect import SandboxPreEffectError
 from veritas_os.security.hash import sha256_hex
 
 pytestmark = pytest.mark.asyncio
@@ -89,21 +92,26 @@ def staging(monkeypatch):
     execute = AsyncMock(return_value=None, side_effect=lambda *_a, **_kw: events.append("dispatch"))
     executor = Mock(return_value=SimpleNamespace(execute=execute))
     monkeypatch.setattr(rehearsal, "KeycloakLabExecutor", executor)
+    def make_attempt():
+        events.append("load-attempt")
+        return {
+            "authorization": object(),
+            "event_id": "synthetic-event",
+            "attempt_id": "synthetic-attempt",
+            "issuance_source_inputs": object(),
+            "governance_inputs": object(),
+            "trust_inputs": object(),
+            "trusted_clock": Mock(),
+            "load_current_inputs": Mock(),
+            "resolve_writer": AsyncMock(),
+        }
+
+    load_attempt = Mock(side_effect=make_attempt)
+    worker_inputs = {"deployment": deployment, "load_attempt": load_attempt}
     return SimpleNamespace(
         events=events, connection=conn, execute=execute, executor=executor, halt=halt,
-        redis_settings=redis_settings,
-        worker=lambda: rehearsal.keycloak_staging_rehearsal_worker(
-            deployment,
-            authorization=object(),
-            event_id="synthetic-event",
-            attempt_id="synthetic-attempt",
-            issuance_source_inputs=object(),
-            governance_inputs=object(),
-            trust_inputs=object(),
-            trusted_clock=Mock(),
-            load_current_inputs=Mock(),
-            resolve_writer=AsyncMock(),
-        ),
+        redis_settings=redis_settings, load_attempt=load_attempt, worker_inputs=worker_inputs,
+        worker=lambda: rehearsal.keycloak_staging_rehearsal_worker(**worker_inputs),
     )
 
 
@@ -184,7 +192,7 @@ async def test_one_dispatch_runs_inside_normal_lifespan(staging):
             await dispatch()
     with pytest.raises(rehearsal.KeycloakStagingRehearsalBlocked, match="DISPATCH_UNAVAILABLE"):
         await dispatch()
-    assert staging.events == ["startup", "dispatch", "shutdown", "pool-close"]
+    assert staging.events == ["startup", "load-attempt", "dispatch", "shutdown", "pool-close"]
     staging.execute.assert_awaited_once()
 
 
@@ -209,15 +217,51 @@ async def test_cached_auth_store_must_match_approved_redis(staging):
 async def test_harness_waits_for_operator_and_dispatches_once(staging, monkeypatch):
     from scripts.validation import run_keycloak_staging_rehearsal as harness
 
-    factory = Mock(return_value={})
+    factory = Mock(return_value=staging.worker_inputs)
     monkeypatch.setattr(harness.importlib, "import_module", Mock(
         return_value=SimpleNamespace(make_inputs=factory),
     ))
-    monkeypatch.setattr(harness, "keycloak_staging_rehearsal_worker", lambda: staging.worker())
-    staging.halt.side_effect = ({"halted": True}, {"halted": False}, {"halted": False})
+    observations = iter((True, False, False, False))
+
+    def shared_status():
+        if staging.halt.call_count <= 3:
+            staging.load_attempt.assert_not_called()
+        else:
+            staging.load_attempt.assert_called_once_with()
+        return {"halted": next(observations)}
+
+    staging.halt.side_effect = shared_status
     staging.execute.side_effect = None
     staging.execute.return_value = SimpleNamespace(observation="HTTP_204_UNVERIFIED")
 
     assert await harness.run("stage_fixture:make_inputs") == 0
-    assert staging.halt.call_count == 3
+    assert staging.halt.call_count == 4
+    staging.load_attempt.assert_called_once_with()
     staging.execute.assert_awaited_once()
+
+
+@pytest.mark.parametrize(("error", "reason"), [
+    (NativeAuthorizationConsumptionError("NABC_ALREADY_CONSUMED"), "ALREADY_CONSUMED"),
+    (NativeAuthorizationConsumptionError("NABC_AUTHORIZATION_EXPIRED"), "OUTSIDE_VALIDITY_WINDOW"),
+    (SandboxPreEffectError("SPE_AUTHORIZATION_OUTSIDE_TIME_WINDOW"), "OUTSIDE_VALIDITY_WINDOW"),
+    (ValueError("opaque internal detail"), None),
+])
+async def test_executor_preserves_only_allowlisted_rejection_reasons(monkeypatch, error, reason):
+    executor = object.__new__(KeycloakLabExecutor)
+    monkeypatch.setattr(executor, "_execute", AsyncMock(side_effect=error))
+
+    with pytest.raises(KeycloakLabExecutionError, match="^KGR_LAB_EXECUTION_STOPPED$") as blocked:
+        await executor.execute(
+            object(), event_id="synthetic-event", attempt_id="synthetic-attempt",
+            issuance_source_inputs=object(), governance_inputs=object(), trust_inputs=object(),
+        )
+    assert blocked.value.reason == reason
+
+
+async def test_halt_after_loading_blocks_dispatch(staging):
+    staging.halt.side_effect = ({"halted": False}, {"halted": True})
+    async with staging.worker() as dispatch:
+        with pytest.raises(rehearsal.KeycloakStagingRehearsalBlocked, match="STAGING_HALTED"):
+            await dispatch()
+    staging.load_attempt.assert_called_once_with()
+    staging.executor.assert_not_called()

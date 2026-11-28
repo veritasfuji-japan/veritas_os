@@ -8,6 +8,7 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import TypedDict
 from urllib.parse import urlsplit
 
 from psycopg import Error
@@ -129,25 +130,40 @@ async def _require_recovery_complete(expected_database: str) -> None:
         raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_RESTORE_PENDING")
 
 
+class StagingRehearsalAttempt(TypedDict):
+    """Inputs for a single attempt, loaded after the operator resumes."""
+
+    authorization: NativeBindAuthorizationArtifact
+    event_id: str
+    attempt_id: str
+    issuance_source_inputs: NativeAuthorizationSourceInputs
+    governance_inputs: RealBindAuthorizationGovernanceInputs
+    trust_inputs: BindAuthorizationTrustInputs
+    trusted_clock: Callable[[], SandboxClockReading]
+    load_current_inputs: Callable[[datetime], SandboxCurrentInputs]
+    resolve_writer: Callable[[], Awaitable[KeycloakLabWriterCredential]]
+
+
+async def _require_operator_resume() -> None:
+    try:
+        halted = await asyncio.to_thread(shared_halt.status)
+    except shared_halt.HaltStoreUnavailable:
+        raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_HALT_UNAVAILABLE") from None
+    if halted.get("halted") is not False:
+        raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_HALTED")
+
+
 @asynccontextmanager
 async def keycloak_staging_rehearsal_worker(
     deployment: KeycloakLabDeployment,
     *,
-    authorization: NativeBindAuthorizationArtifact,
-    event_id: str,
-    attempt_id: str,
-    issuance_source_inputs: NativeAuthorizationSourceInputs,
-    governance_inputs: RealBindAuthorizationGovernanceInputs,
-    trust_inputs: BindAuthorizationTrustInputs,
-    trusted_clock: Callable[[], SandboxClockReading],
-    load_current_inputs: Callable[[datetime], SandboxCurrentInputs],
-    resolve_writer: Callable[[], Awaitable[KeycloakLabWriterCredential]],
+    load_attempt: Callable[[], StagingRehearsalAttempt],
 ) -> AsyncIterator[Callable[[], Awaitable[KeycloakLabDispatchObservation | None]]]:
     """Yield one dispatch within the normal API lifespan of a dedicated process.
 
-    The trusted staging harness supplies the signed input and existing lab
-    dependencies. The ordinary operator resume still applies to the isolated
-    staging deployment. This entry point has no HTTP route.
+    Signed inputs are loaded once, after the shared halt permits dispatch.
+    The ordinary operator resume still applies to the isolated staging
+    deployment. This entry point has no HTTP route.
     """
     database = _require_isolated_configuration(deployment)
     available = False
@@ -158,27 +174,25 @@ async def keycloak_staging_rehearsal_worker(
         if not available or asyncio.current_task() is not owner:
             raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_DISPATCH_UNAVAILABLE")
         available = False
-        try:
-            halted = await asyncio.to_thread(shared_halt.status)
-        except shared_halt.HaltStoreUnavailable:
-            raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_HALT_UNAVAILABLE") from None
-        if halted.get("halted") is not False:
-            raise KeycloakStagingRehearsalBlocked("KEYCLOAK_STAGING_HALTED")
+        await _require_operator_resume()
         await _require_recovery_complete(database)
 
+        attempt = load_attempt()
+        await _require_operator_resume()
+        await _require_recovery_complete(database)
         executor = KeycloakLabExecutor(
             deployment,
-            trusted_clock=trusted_clock,
-            load_current_inputs=load_current_inputs,
-            resolve_writer=resolve_writer,
+            trusted_clock=attempt["trusted_clock"],
+            load_current_inputs=attempt["load_current_inputs"],
+            resolve_writer=attempt["resolve_writer"],
         )
         return await executor.execute(
-            authorization,
-            event_id=event_id,
-            attempt_id=attempt_id,
-            issuance_source_inputs=issuance_source_inputs,
-            governance_inputs=governance_inputs,
-            trust_inputs=trust_inputs,
+            attempt["authorization"],
+            event_id=attempt["event_id"],
+            attempt_id=attempt["attempt_id"],
+            issuance_source_inputs=attempt["issuance_source_inputs"],
+            governance_inputs=attempt["governance_inputs"],
+            trust_inputs=attempt["trust_inputs"],
         )
 
     try:
