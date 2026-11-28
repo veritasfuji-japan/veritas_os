@@ -203,6 +203,7 @@ def keycloak(request):
                 )
                 if request.node.callspec.params.get("scenario") in {
                     "restore_then_resume", "restore_then_resume_worker",
+                    "restore_then_resume_staging",
                 }:
                     resume_role = "report-editor"
                     create(f"/clients/{application}/roles", {"name": resume_role})
@@ -1124,17 +1125,18 @@ def test_keycloak_durable_reservation_recovers_using_only_read_operations(
 
 
 def _run_lab_dispatch_worker(
-    dispatch: Callable[[], Awaitable[str | None]], ready,
+    dispatch: Callable[[], Awaitable[str | None]], ready, *, lab_recovery_check: bool,
 ) -> None:
     from veritas_os.storage import db, sandbox_restore
 
     async def run() -> str | None:
         try:
-            pool = await db.get_pool()
-            async with pool.connection() as connection:
-                state = await connection.execute(sandbox_restore.RECOVERY_PENDING)
-                if await state.fetchone() != (False,):
-                    return "RESTORE_PENDING"
+            if lab_recovery_check:
+                pool = await db.get_pool()
+                async with pool.connection() as connection:
+                    state = await connection.execute(sandbox_restore.RECOVERY_PENDING)
+                    if await state.fetchone() != (False,):
+                        return "RESTORE_PENDING"
             return await dispatch()
         finally:
             await close_pool()
@@ -1144,14 +1146,18 @@ def _run_lab_dispatch_worker(
 
 
 async def _dispatch_in_new_lab_worker(
-    dispatch: Callable[[], Awaitable[str | None]],
+    dispatch: Callable[[], Awaitable[str | None]], *, lab_recovery_check: bool = True,
 ) -> tuple[int, str | None]:
     # Never inherit the parent's live PostgreSQL connections.
     await close_pool()
     context = get_context("fork")
     result, ready = context.Pipe(duplex=False)
     with result, ready:
-        worker = context.Process(target=_run_lab_dispatch_worker, args=(dispatch, ready))
+        worker = context.Process(
+            target=_run_lab_dispatch_worker,
+            args=(dispatch, ready),
+            kwargs={"lab_recovery_check": lab_recovery_check},
+        )
         worker.start()
         ready.close()
         try:
@@ -1216,7 +1222,17 @@ async def lab_db_pool(monkeypatch):
         "slow_recheck",
         "risk_expires",
         "lost_response",
-    ],
+    ] + (
+        [pytest.param(
+            "restore_then_resume_staging",
+            marks=pytest.mark.skipif(
+                os.getenv("VERITAS_SANDBOX_RESTORE_E2E") != "1"
+                or "fork" not in get_all_start_methods(),
+                reason="requires dedicated staging services, PostgreSQL backup clients and fork",
+            ),
+        )]
+        if os.getenv("VERITAS_KEYCLOAK_STAGING_CI") == "1" else []
+    ),
 )
 async def test_keycloak_lab_executor_https_boundary(
     keycloak,
@@ -1367,7 +1383,9 @@ async def test_keycloak_lab_executor_https_boundary(
             expected_path = first[1].endpoint_url.removeprefix(target.origin)
             clock_advanced = False
 
-            def wiring(issued, *, deployment=deployment, event_id=event_id):
+            staging = scenario == "restore_then_resume_staging"
+
+            def wiring(issued, *, deployment=deployment, event_id=event_id, staging_inputs=False):
                 attempt_id, _, artifact, inputs = issued
                 gov, source = inputs["governance_inputs"], inputs["source_inputs"]
                 initial = gov.verification_now + timedelta(seconds=1)
@@ -1410,13 +1428,12 @@ async def test_keycloak_lab_executor_https_boundary(
                         clock().now + timedelta(seconds=15),
                     )
 
-                executor = module.KeycloakLabExecutor(
-                    deployment,
+                executor_inputs = dict(
                     trusted_clock=clock,
                     load_current_inputs=load_current,
                     resolve_writer=credential,
                 )
-                return executor, dict(
+                attempt = dict(
                     authorization=artifact,
                     event_id=event_id,
                     attempt_id=attempt_id,
@@ -1424,20 +1441,35 @@ async def test_keycloak_lab_executor_https_boundary(
                     governance_inputs=gov,
                     trust_inputs=inputs["trust_inputs"],
                 )
+                if staging_inputs:
+                    return attempt | executor_inputs
+                return module.KeycloakLabExecutor(deployment, **executor_inputs), attempt
 
             executor, args = wiring(first)
-            use_worker = scenario == "restore_then_resume_worker"
-            resume = scenario in {"restore_then_resume", "restore_then_resume_worker"}
+            use_worker = staging or scenario == "restore_then_resume_worker"
+            resume = use_worker or scenario == "restore_then_resume"
             worker_pids: list[int] = []
 
             async def observe(issued, *, deployment=deployment, event_id=event_id):
                 async def dispatch() -> str | None:
+                    if staging:
+                        from veritas_os.tests.keycloak_staging_ci_support import run_staging_attempt
+
+                        return await run_staging_attempt(
+                            deployment,
+                            lambda: wiring(
+                                issued, deployment=deployment, event_id=event_id, staging_inputs=True
+                            ),
+                            tmp_path,
+                        )
                     sender, inputs = wiring(issued, deployment=deployment, event_id=event_id)
                     result = await sender.execute(**inputs)
                     return result.observation if result is not None else None
 
                 if use_worker:
-                    pid, observation = await _dispatch_in_new_lab_worker(dispatch)
+                    pid, observation = await _dispatch_in_new_lab_worker(
+                        dispatch, lab_recovery_check=not staging,
+                    )
                     worker_pids.append(pid)
                     return observation
                 return await dispatch()
@@ -1520,7 +1552,8 @@ async def test_keycloak_lab_executor_https_boundary(
                 from veritas_os.storage import db, sandbox_restore
 
                 source_dsn = db.build_conninfo()
-                database = f"keycloak_restore_{uuid4().hex}"
+                prefix = "veritas_rehearsal_" if staging else "keycloak_restore_"
+                database = f"{prefix}{uuid4().hex}"
                 target_dsn = make_conninfo(source_dsn, dbname=database)
                 env = os.environ.copy()
                 for key, value in conninfo_to_dict(source_dsn).items():
@@ -1631,7 +1664,9 @@ async def test_keycloak_lab_executor_https_boundary(
                                 await sender.execute(**replay_args)
                         assert rejection_reasons == ["NABC_ALREADY_CONSUMED"]
 
-                    if use_worker:
+                    if staging:
+                        assert await observe(first) == "ALREADY_CONSUMED"
+                    elif use_worker:
                         pid, observation = await _dispatch_in_new_lab_worker(reject_replay)
                         worker_pids.append(pid)
                         assert observation is None
@@ -1692,7 +1727,12 @@ async def test_keycloak_lab_executor_https_boundary(
                         }
                         directory = Path(evidence_dir)
                         directory.mkdir(parents=True, exist_ok=True)
-                        (directory / "restore_then_resume_worker.json").write_text(
+                        if staging:
+                            evidence["processed_authorization"]["reason"] = "ALREADY_CONSUMED"
+                            evidence["tested_sha"] = subprocess.check_output(
+                                ["git", "rev-parse", "HEAD"], text=True
+                            ).strip()
+                        (directory / f"{scenario}.json").write_text(
                             json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
                         )
             elif scenario == "lost_commit":
@@ -1761,5 +1801,6 @@ async def test_keycloak_lab_executor_https_boundary(
                 "restore_after_grant": 1,
                 "restore_then_resume": 2,
                 "restore_then_resume_worker": 2,
+                "restore_then_resume_staging": 2,
             }
             assert len(posts) == expected_posts.get(scenario, 0)
