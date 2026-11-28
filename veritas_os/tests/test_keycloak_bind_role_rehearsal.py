@@ -96,13 +96,16 @@ def keycloak(request):
     realm_id = str(uuid4())
     resource = f"/admin/realms/{realm}"
     with httpx.Client(base_url=ORIGIN, trust_env=False, timeout=10) as client:
-        admin = expect(client.post("/realms/master/protocol/openid-connect/token", data={
-            "client_id": "admin-cli",
-            "grant_type": "password",
-            "username": os.environ["KC_BOOTSTRAP_ADMIN_USERNAME"],
-            "password": os.environ["KC_BOOTSTRAP_ADMIN_PASSWORD"],
-        }), 200).json()["access_token"]
-        auth = bearer(admin)
+        def bootstrap_headers() -> dict[str, str]:
+            token = expect(client.post("/realms/master/protocol/openid-connect/token", data={
+                "client_id": "admin-cli",
+                "grant_type": "password",
+                "username": os.environ["KC_BOOTSTRAP_ADMIN_USERNAME"],
+                "password": os.environ["KC_BOOTSTRAP_ADMIN_PASSWORD"],
+            }), 200).json()["access_token"]
+            return bearer(token)
+
+        auth = bootstrap_headers()
         expect(client.post("/admin/realms", headers=auth, json={
             "id": realm_id, "realm": realm, "enabled": True,
         }), 201)
@@ -209,7 +212,8 @@ def keycloak(request):
                     fixture["resume_role"] = {"id": role_data["id"], "name": resume_role}
             yield fixture
         finally:
-            expect(client.delete(resource, headers=auth), 204)
+            # Long restore rehearsals can outlive the setup admin token.
+            expect(client.delete(resource, headers=bootstrap_headers()), 204)
 
 
 class KeycloakPostTimeout(httpx.AsyncHTTPTransport):
